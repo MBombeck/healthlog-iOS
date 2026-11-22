@@ -1,6 +1,6 @@
 import Foundation
 
-// SYMPTOM (1.5.0, #144, server #1237) — the person's own symptom
+// The person's own symptom
 // occurrences (`/api/symptoms/events`) and the symptoms they defined
 // (`/api/symptoms/definitions`), as OpenAPI v1.47.0 describes them
 // (`SymptomEvent`, `SymptomEventList`, `SymptomDefinition`).
@@ -22,6 +22,12 @@ public struct SymptomEvent: Codable, Sendable, Equatable, Identifiable, Hashable
     public let intensity: Int
     public let note: String?
     public let episodeId: String?
+    /// #191 (server 1.49.0, key `day.dose-offset`) — the occurrence's
+    /// distance to the day's nearest dose, as the day view words it. `nil`
+    /// on an older server, without a timed dose that day, with the
+    /// medications module off or a grant that does not reach it, and on the
+    /// single read and the write answers. Never recomputed here.
+    public let doseOffset: DayDoseOffset?
 
     public init(
         id: String,
@@ -29,7 +35,8 @@ public struct SymptomEvent: Codable, Sendable, Equatable, Identifiable, Hashable
         occurredAt: String,
         intensity: Int,
         note: String?,
-        episodeId: String?
+        episodeId: String?,
+        doseOffset: DayDoseOffset? = nil
     ) {
         self.id = id
         self.definitionId = definitionId
@@ -37,10 +44,11 @@ public struct SymptomEvent: Codable, Sendable, Equatable, Identifiable, Hashable
         self.intensity = intensity
         self.note = note
         self.episodeId = episodeId
+        self.doseOffset = doseOffset
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, definitionId, occurredAt, intensity, note, episodeId
+        case id, definitionId, occurredAt, intensity, note, episodeId, doseOffset
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,6 +59,8 @@ public struct SymptomEvent: Codable, Sendable, Equatable, Identifiable, Hashable
         intensity = try c.decodeIfPresent(Int.self, forKey: .intensity) ?? 0
         note = try c.decodeIfPresent(String.self, forKey: .note)
         episodeId = try c.decodeIfPresent(String.self, forKey: .episodeId)
+        // Optional everywhere: an unreadable offset costs the offset, never the row.
+        doseOffset = try? c.decodeIfPresent(DayDoseOffset.self, forKey: .doseOffset)
     }
 
     /// The instant, or `nil` when the server sent something unreadable.
@@ -91,16 +101,27 @@ public struct SymptomDefinition: Decodable, Sendable, Equatable, Identifiable, H
     public let label: String?
     public let sortOrder: Int
     public let isActive: Bool
+    /// How the person used the symptom lately (`recent`, server v1.40): the
+    /// count over 30 days and the last occurrence. `nil` when the server
+    /// sends none; the symptom then sorts with the unused ones.
+    public let recent: SymptomRecentUse?
 
-    public init(id: String, label: String?, sortOrder: Int = 0, isActive: Bool = true) {
+    public init(
+        id: String,
+        label: String?,
+        sortOrder: Int = 0,
+        isActive: Bool = true,
+        recent: SymptomRecentUse? = nil
+    ) {
         self.id = id
         self.label = label
         self.sortOrder = sortOrder
         self.isActive = isActive
+        self.recent = recent
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, label, sortOrder, isActive
+        case id, label, sortOrder, isActive, recent
     }
 
     public init(from decoder: Decoder) throws {
@@ -109,19 +130,61 @@ public struct SymptomDefinition: Decodable, Sendable, Equatable, Identifiable, H
         label = try c.decodeIfPresent(String.self, forKey: .label)
         sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        // An odd summary costs the summary, never the symptom.
+        recent = try? c.decodeIfPresent(SymptomRecentUse.self, forKey: .recent)
     }
 }
 
-/// `SymptomDefinitionList`: the definitions in display order.
-struct SymptomDefinitionList: Decodable, Sendable {
-    let definitions: [SymptomDefinition]
+/// The 30-day summary the server keeps per symptom (`SymptomRecentSummary`):
+/// how often it was logged in the last 30 days and when it was last felt at
+/// all. The server's figures, never recounted here.
+public struct SymptomRecentUse: Decodable, Sendable, Equatable, Hashable {
+    public let count30d: Int
+    /// ISO-8601 instant of the last occurrence over all time, `nil` for never.
+    public let lastOccurredAt: String?
+
+    public init(count30d: Int, lastOccurredAt: String?) {
+        self.count30d = count30d
+        self.lastOccurredAt = lastOccurredAt
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case definitions
+        case count30d, lastOccurredAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count30d = (try? c.decodeIfPresent(Int.self, forKey: .count30d)) ?? 0
+        lastOccurredAt = try? c.decodeIfPresent(String.self, forKey: .lastOccurredAt)
+    }
+
+    /// The last occurrence as an instant, `nil` for never or unreadable.
+    public var lastOccurredDate: Date? {
+        guard let lastOccurredAt else { return nil }
+        return ISO8601DateFormatter.fractional.date(from: lastOccurredAt) ?? ISO8601DateFormatter.plain.date(from: lastOccurredAt)
+    }
+}
+
+/// `SymptomDefinitionList`: the definitions in display order, and how many
+/// active ones of the person's own the server admits (`limit`).
+struct SymptomDefinitionList: Decodable, Sendable {
+    let definitions: [SymptomDefinition]
+    /// Server 1.48.4 answers 30. An older server sends no `limit` and
+    /// admitted 8, so a missing or unreadable value is 8, never a number
+    /// written into a screen (#187).
+    let limit: Int
+
+    /// The limit of every server before 1.48.4.
+    static let legacyLimit = 8
+
+    private enum CodingKeys: String, CodingKey {
+        case definitions, limit
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         definitions = try c.decodeIfPresent([SymptomDefinition].self, forKey: .definitions) ?? []
+        let sent = try? c.decodeIfPresent(Int.self, forKey: .limit)
+        limit = sent.flatMap { $0 > 0 ? $0 : nil } ?? Self.legacyLimit
     }
 }

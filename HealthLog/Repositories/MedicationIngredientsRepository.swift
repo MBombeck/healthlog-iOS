@@ -4,7 +4,7 @@ import ImageIO
     import UIKit
 #endif
 
-/// SUPP-EDIT (1.5.0, #131 P3) — editing a supplement's composition
+/// Editing a supplement's composition
 /// (server v1.43).
 ///
 ///   * `GET /api/nutrients/catalog`: the form's nutrients and their input

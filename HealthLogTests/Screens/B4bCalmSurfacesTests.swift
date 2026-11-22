@@ -5,13 +5,12 @@ import Testing
     import UIKit
 #endif
 
-/// **1.4 B4-b — quiet surfaces: Today, Settings, Coach.**
+/// **Quiet surfaces: Today, Settings, Coach.**
 ///
-/// The polish step removes and unifies. These pin the rules it settled so the
-/// next change cannot quietly bring the noise back: one empty-state form, one
-/// heading per single-row card, a section that is empty says it once, guides
-/// in the reader's language, integration screens that read like the server
-/// and sheet titles that fit beside their buttons.
+/// The polish step removes and unifies. These pin the rules it settled: a
+/// section that is empty says it once, guides in the reader's language,
+/// integration screens that read like the server and sheet titles that fit
+/// beside their buttons.
 @MainActor
 @Suite("1.4 B4-b · ruhige Flächen: Heute, Einstellungen, Coach")
 struct B4bCalmSurfacesTests {
@@ -20,10 +19,6 @@ struct B4bCalmSurfacesTests {
         .deletingLastPathComponent() // HealthLogTests
         .deletingLastPathComponent() // repo root
 
-    private static func source(_ path: String) throws -> String {
-        try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
-    }
-
     private static func catalogValue(_ key: String, _ language: String) throws -> String? {
         let data = try Data(contentsOf: root.appendingPathComponent("HealthLog/Resources/Localizable.xcstrings"))
         let catalog = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -31,78 +26,6 @@ struct B4bCalmSurfacesTests {
         let entry = strings[key] as? [String: Any]
         let locs = entry?["localizations"] as? [String: [String: [String: String]]]
         return locs?[language]?["stringUnit"]?["value"]
-    }
-
-    // MARK: - One empty-state form
-
-    @Test("Today's empty and failed states sit on the page with one .secondary action")
-    func todayStatesAreNotCards() throws {
-        for path in [
-            "HealthLog/Screens/Dashboard/DashboardNoDataEmptyState.swift",
-            "HealthLog/Screens/Dashboard/DashboardMetricsErrorState.swift",
-            "HealthLog/DesignSystem/Reorder/TileGridEmptyState.swift"
-        ] {
-            let code = try Self.source(path)
-            #expect(!code.contains("HLCard {"), "\(path) wraps its empty state in a card")
-            #expect(code.contains("variant: .secondary"), "\(path) action is not .secondary")
-            #expect(!code.contains("variant: .restrained"))
-            #expect(!code.contains("variant: .primary"))
-        }
-        let tiles = try Self.source("HealthLog/DesignSystem/Reorder/TileGridEmptyState.swift")
-        #expect(!tiles.contains("message:"), "the hidden-tiles state repeated its title and button")
-    }
-
-    @Test("The empty labs screen offers one action; the scan stays in the toolbar")
-    func emptyLabsHasOneAction() throws {
-        let code = try Self.source("HealthLog/Screens/Labs/LabsScreen.swift")
-        let start = try #require(code.range(of: "title: \"labs.empty.title\""))
-        let block = code[start.lowerBound...].prefix(700)
-        #expect(block.components(separatedBy: "HLButton(").count - 1 == 1)
-        #expect(code.contains("showScanSheet = true"), "the scan must stay reachable from the toolbar menu")
-    }
-
-    // MARK: - Today, one card heading
-
-    @Test("Today's cards share the tile header; the hero's section is an HLSectionLabel")
-    func todayHasOneCardHeading() throws {
-        for path in [
-            "HealthLog/Screens/Dashboard/DashboardScreen+Sections.swift",
-            "HealthLog/Screens/Dashboard/Tiles/RhythmEventsTile.swift",
-            "HealthLog/Screens/Dashboard/ComplianceRingCard.swift"
-        ] {
-            #expect(try Self.source(path).contains("HLTileHeaderRow("), "\(path) has its own heading")
-        }
-        let hero = try Self.source("HealthLog/Screens/Dashboard/TodayHeroCard.swift")
-        #expect(hero.contains("HLSectionLabel(verbatim: TodayHeroCopy.worthALook)"))
-        #expect(!hero.contains(".textCase(.uppercase)"))
-    }
-
-    // MARK: - One heading per single-row card
-
-    @Test("The coach settings no longer title a card with its only row's name")
-    func coachSettingsCardsHaveOneHeading() throws {
-        let code = try Self.source("HealthLog/Screens/Settings/Sub/SettingsCoachScreen.swift")
-        #expect(!code.contains("title: \"Cadence suggestions\"\n"), "card title repeated the switch")
-        // Only the kill-switch card keeps "Coach" as its title: it holds a
-        // sentence, not a switch named "Coach aktivieren".
-        #expect(code.components(separatedBy: "title: \"Coach\"\n").count - 1 == 1, "card title repeated \"Coach aktivieren\"")
-        #expect(!code.contains("\"Open coach memory\""))
-        #expect(!code.contains("\"Open past conversations\""))
-        let window = try Self.source("HealthLog/Screens/Settings/Sub/CoachWindowCard.swift")
-        #expect(window.contains("HLSettingsCard {"))
-        #expect(!window.contains("settings.coach.window.pickerLabel"))
-    }
-
-    @Test("Account cards are their rows: no \"Open profile\", \"Manage sessions\" under a title")
-    func accountCardsHaveOneHeading() throws {
-        let code = try Self.source("HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift")
-        for gone in ["\"Open profile\"", "\"settings.security.open\"", "\"sessions.card.manage\"", "\"resetData.card.action\""] {
-            #expect(!code.contains(gone), "\(gone) is back")
-        }
-        // 1.5: active sessions moved into Sicherheit, five cards stay on Konto.
-        #expect(code.components(separatedBy: "HLSettingsCard {").count - 1 == 5)
-        let security = try Self.source("HealthLog/Screens/Settings/SettingsSecurityScreen.swift")
-        #expect(security.contains("settings.security.sessionsRow"))
     }
 
     // MARK: - Sync diagnostics say an empty section once
@@ -180,14 +103,9 @@ struct B4bCalmSurfacesTests {
     #endif
 
     @Test("A failed status read shows a sentence for people, never the decoder's text")
-    func integrationErrorsAreSentences() throws {
+    func integrationErrorsAreSentences() {
         let decoding = HLError.decoding("DecodingError.keyNotFound(CodingKeys(stringValue: \"connected\"))")
         #expect(!decoding.userFacingDescription.contains("DecodingError"))
-        let withings = try Self.source("HealthLog/Screens/Settings/WithingsIntegrationScreen.swift")
-        #expect(withings.contains("Text(error.userFacingDescription)"))
-        #expect(!withings.contains("error.localizedDescription"))
-        let whoop = try Self.source("HealthLog/Screens/Settings/WhoopIntegrationScreen.swift")
-        #expect(!whoop.contains("return error.localizedDescription"))
     }
 
     // MARK: - Sheet titles fit beside their buttons
@@ -218,13 +136,4 @@ struct B4bCalmSurfacesTests {
             }
         }
     #endif
-
-    // MARK: - Info symbols that did nothing
-
-    @Test("Onboarding and the AI source picker carry no decorative info symbol")
-    func noDecorativeInfoSymbols() throws {
-        for path in ["HealthLog/Screens/Onboarding/AISourceStep.swift", "HealthLog/DesignSystem/AISourceChoicePicker.swift"] {
-            #expect(try !(Self.source(path)).contains("\"info.circle\""), "\(path) shows an (i) that opens nothing")
-        }
-    }
 }

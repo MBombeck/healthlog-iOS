@@ -3,9 +3,6 @@ import Foundation
 
 public extension MeasurementsRepository {
     func recent(limit: Int = 50) async throws -> [Measurement] {
-        if isStandalone {
-            return try await standaloneRecentUnion(kind: nil, limit: limit)
-        }
         if let swr {
             return try await swr.fetchCachingFirst(
                 .measurementsRecent(limit: limit),
@@ -32,7 +29,7 @@ public extension MeasurementsRepository {
     /// larger page and filter client-side. `limit=400` is generous enough for
     /// ~1y of weekly readings without paging UI.
     ///
-    /// **W1-1:** the underlying `recent(limit:)` is SWR-wrapped, so the
+    /// The underlying `recent(limit:)` is SWR-wrapped, so the
     /// per-kind filter is computed off the cached page on warm hits — no
     /// separate cache key for the kind-filter itself (same network request,
     /// just sliced differently for each caller).
@@ -52,16 +49,13 @@ public extension MeasurementsRepository {
     /// caller (`limit >= 2000`) gets the full ~10y history; the default
     /// `limit=400` keeps the ~1y behaviour.
     func recent(kind: MetricKind, limit: Int = 400) async throws -> [Measurement] {
-        if isStandalone {
-            return try await standaloneRecentUnion(kind: kind, limit: limit)
-        }
         if kind.prefersSeriesForRecent {
             // v0.7.0 W-STEPS Layer 3 — routed through the series path. See
             // `recentCumulative(kind:limit:)` in
             // `MeasurementsRepository+Cumulative.swift`.
             return try await recentCumulative(kind: kind, limit: limit)
         }
-        // I-0 Item 5 — cumulative HK kinds whose `/series` endpoint is NOT wired
+        // Cumulative HK kinds whose `/series` endpoint is NOT wired
         // (active energy / flights / walking-distance / time-in-daylight: server
         // returns 422, so `kindSupportsSeries == false`). The PLAIN
         // `?type=X&limit=N` list page (the `recentKindScoped` path below) hits
@@ -77,7 +71,7 @@ public extension MeasurementsRepository {
             // `recentKindScoped(groupByDay:)`.
             return try await recentKindScoped(typeKey: typeKey, kind: kind, limit: limit, groupByDay: true)
         }
-        // v0.14.10 BP-PAIR FIX — blood pressure is TWO wire rows (SYS + DIA)
+        // Blood pressure is TWO wire rows (SYS + DIA)
         // merged by `MeasurementAggregator.mergeBloodPressure` on exact
         // `measuredAt`. The generic kind-scoped arm below would query
         // `?type=BLOOD_PRESSURE_SYS` (BP's `availabilitySummaryKey`), so the
@@ -93,7 +87,7 @@ public extension MeasurementsRepository {
         if kind == .bloodPressure {
             return try await recentBloodPressurePairScoped(limit: limit)
         }
-        // v0.14 DATA — no-series / aggregate / low-frequency HK kinds (incl. the
+        // No-series / aggregate / low-frequency HK kinds (incl. the
         // v1.10 IC kinds: falls, six-minute-walk, stair-*, breathing-
         // disturbances, cardio-recovery, wrist-temperature) get their chart from
         // `recentInRange` (no `/series`). Reading those off the global,
@@ -111,7 +105,7 @@ public extension MeasurementsRepository {
         return all.filter { $0.kind == kind }
     }
 
-    /// v0.14 DATA — server-side kind-scoped page via `?type=<MeasurementType>`.
+    /// Server-side kind-scoped page via `?type=<MeasurementType>`.
     /// The route accepts a `type` filter (`src/app/api/measurements/route.ts`),
     /// so this returns ONLY the requested kind's rows — a kind-scoped wide
     /// window that survives a HK power-user's high-frequency noise in other
@@ -119,7 +113,7 @@ public extension MeasurementsRepository {
     /// (BP sys/dia share a `type` family). A failure falls back to the global
     /// page so the chart never regresses to worse than before.
     ///
-    /// I-0 Item 5 — `groupByDay` opts into the server's `groupBy=day` collapse
+    /// `groupByDay` opts into the server's `groupBy=day` collapse
     /// mode for cumulative HK kinds (active energy / flights / walking-distance /
     /// time-in-daylight). Those are partial-day increments: the plain page hits
     /// the raw per-sample fall-through (empty/noisy chart), while `groupBy=day`
@@ -145,7 +139,7 @@ public extension MeasurementsRepository {
         let fetch: @Sendable () async throws -> [Measurement] = { [api] in
             var query: [(String, String)] = [("limit", String(limit)), ("type", typeKey)]
             if groupByDay { query.append(("groupBy", "day")) }
-            // Audit B-4 — `__UNKNOWN__` is not a server `MeasurementSource` and
+            // `__UNKNOWN__` is not a server `MeasurementSource` and
             // must never reach a query string; the route validates `sourceEq`
             // against `measurementSourceEnum` and answers 400. The measurement
             // list's source chip DOES reach here with `.unknown`, so the page is
@@ -175,7 +169,7 @@ public extension MeasurementsRepository {
             let all = try await recent(limit: limit)
             return all.filter { $0.kind == kind && (sourceEq == nil || $0.source == sourceEq) }
         }
-        // Audit B-4 — the source narrowing happens here too, not only inside
+        // The source narrowing happens here too, not only inside
         // `fetch`: for `.unknown` the server was never asked to narrow, and the
         // page cached under the `:src:__UNKNOWN__` key is an ALL-source page
         // that would otherwise be served back whole on the next cache hit.
@@ -283,9 +277,6 @@ public extension MeasurementsRepository {
         // clamped value drives BOTH cache key + wire query so warm + cold
         // agree.
         let cappedDays = Self.clampDays(days)
-        if isStandalone {
-            return try await standaloneSeries(kind: kind, days: cappedDays)
-        }
         if let swr {
             return try await swr.fetchCachingFirst(
                 .measurementSeries(kind: kind, days: cappedDays),
@@ -305,7 +296,7 @@ public extension MeasurementsRepository {
         return try await api.send(req)
     }
 
-    /// v0.13.1 IC — per-kind **has-data availability**, the signal the Insights
+    /// Per-kind **has-data availability**, the signal the Insights
     /// strip gates each metric pill on. Sourced from the cheap slim summaries
     /// slice (`GET /api/analytics?slice=summaries`) — the SAME per-kind
     /// `count` map the web tab-strip uses (`metric-availability.ts`). Crucially
@@ -315,25 +306,20 @@ public extension MeasurementsRepository {
     /// recent rows are all steps/energy/HR — the operator-reported "BP and pulse
     /// just aren't in the Insights list" bug.
     ///
-    /// Returns the set of `MetricKind`s with `count > 0`. **Standalone:** no
-    /// `/api/*` request fires (server analytics is unreachable offline); returns
-    /// an empty set — the caller unions it with the on-device `recent` snapshot,
-    /// which is already the standalone HealthKit ∪ local union, so standalone
-    /// availability is unchanged.
+    /// Returns the set of `MetricKind`s with `count > 0`.
     func availableKinds() async throws -> Set<MetricKind> {
-        if isStandalone { return [] }
-        return try await Self.kinds(withDataIn: availabilitySummaries())
+        try await Self.kinds(withDataIn: availabilitySummaries())
     }
 
-    /// **1.4 B4** — the server's mean of the last 30 days for `kind`, from the
+    /// The server's mean of the last 30 days for `kind`, from the
     /// same summaries slice and the same SWR row as ``availableKinds()``. This
     /// is what the metric page's "30 Tage Durchschnitt" card shows when the
     /// comprehensive digest (AI-gated, so often absent) carries no average.
-    /// `nil` in standalone, on a failed read, and when the server reports no
+    /// `nil` on a failed read, and when the server reports no
     /// reading in the last 30 days: the card then has no average to show,
     /// never the latest reading in its place.
     func average30(for kind: MetricKind) async -> Double? {
-        guard !isStandalone, let key = kind.availabilitySummaryKey,
+        guard let key = kind.availabilitySummaryKey,
               let summaries = try? await availabilitySummaries() else { return nil }
         return summaries.summaries[key]?.avg30.flatMap { $0.isFinite ? $0 : nil }
     }
@@ -419,13 +405,13 @@ private extension MetricKind {
         case .audioExposureEnvironment: "environmentalAudioExposure"
         case .audioExposureHeadphone: "headphoneAudioExposure"
         case .bmi: "bodyMassIndex"
-        // v0.8.3 W-D — camelCase form the server series route *would* accept;
+        // camelCase form the server series route *would* accept;
         // today `kindSupportsSeries` short-circuits before the query fires.
         case .activeEnergy: "activeEnergyBurned"
         case .flightsClimbed: "flightsClimbed"
         case .distanceWalkingRunning: "walkingRunningDistance"
         case .timeInDaylight: "timeInDaylight"
-        // v0.11 W21 — server/Withings-sourced web-parity kinds. camelCase form
+        // Server/Withings-sourced web-parity kinds. camelCase form
         // the series route *would* accept; today `kindSupportsSeries`
         // short-circuits before the query fires (detail reads off the list page).
         case .fatFreeMass: "fatFreeMass"
@@ -437,7 +423,7 @@ private extension MetricKind {
         case .visceralFat: "visceralFat"
         case .walkingHeartRate: "walkingHeartRateAverage"
         case .fatMass: "fatMass"
-        // v0.13.1 IC — v1.10.0 additive signals. camelCase form the series
+        // v1.10.0 additive signals. camelCase form the series
         // route *would* accept; today `kindSupportsSeries` short-circuits before
         // the query fires (detail reads off the list page + HK cache).
         case .falls: "fallCount"
@@ -447,12 +433,12 @@ private extension MetricKind {
         case .breathingDisturbances: "breathingDisturbances"
         case .cardioRecovery: "cardioRecovery"
         case .wristTemperature: "wristTemperature"
-        // v0.14.6 — v1.12.8 WHOOP-native read types. camelCase form; detail
+        // v1.12.8 WHOOP-native read types. camelCase form; detail
         // reads off the list page (no dedicated series query for these today).
         case .averageHeartRate: "averageHeartRate"
         case .maxHeartRate: "maxHeartRate"
         case .sleepDisturbanceCount: "sleepDisturbanceCount"
-        // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+        // v1.17.1 source-fixed render-only signals.
         // camelCase form the series route *would* accept; today these are
         // list/detail-only (no dedicated series query), so the key is unused at
         // runtime but kept exhaustive + auditable.
@@ -460,7 +446,7 @@ private extension MetricKind {
         case .cardioLoad: "cardioLoad"
         case .sleepScore: "sleepScore"
         case .bodyTemperatureDeviation: "bodyTemperatureDeviation"
-        // v0158 — v1.25 clinical types. camelCase form the series route *would*
+        // v1.25 clinical types. camelCase form the series route *would*
         // accept; today these are list/detail-only (no dedicated series query —
         // server `surfaces.detailPage == false`), so the key is unused at runtime
         // but kept exhaustive + auditable.
@@ -493,24 +479,30 @@ private extension MetricKind {
         case .lowHeartRateEvent: "lowHeartRateEvent"
         case .walkingSteadinessEvent: "walkingSteadinessEvent"
         case .breathingDisturbanceEvent: "breathingDisturbanceEvent"
-        // #162 — Garmin types: no series kind server-side (list page only),
+        // Garmin types: no series kind server-side (list page only),
         // so `kindSupportsSeries` short-circuits before these keys are used.
         case .bodyBattery: "bodyBattery"
         case .stressLevel: "stressLevel"
         case .trainingReadiness: "trainingReadiness"
         case .acuteTrainingLoad: "acuteTrainingLoad"
-        // HK-NEW (1.5) — no series kind server-side either (list page only).
+        // No series kind server-side either (list page only).
         case .exerciseMinutes: "exerciseMinutes"
         case .standMinutes: "standMinutes"
         case .standHours: "standHours"
         case .mindfulMinutes: "mindfulMinutes"
         case .stateOfMindValence: "stateOfMindValence"
         case .afibBurden: "afibBurden"
+        // Read-only types: list page only, no series kind is sent.
+        case .bloodKetones: "bloodKetones"
+        case .basalEnergy: "basalEnergy"
+        case .indoorCO2: "indoorCO2"
+        case .indoorTemperature: "indoorTemperature"
+        case .indoorHumidity: "indoorHumidity"
         // Build 7 / item 7.3 — mood is not a `Measurement` and has no
         // `/api/measurements/series` kind; `kindSupportsSeries` short-circuits
         // before this key is ever used, so the token is unused-but-auditable.
         case .mood: "mood"
-        // Audit B-4 — neither is a `/api/measurements/series` kind: the
+        // Neither is a `/api/measurements/series` kind: the
         // audio-exposure event is categorical, and `.unknown` has no name to
         // send. `kindSupportsSeries` short-circuits before either key is used,
         // so both stay unused-but-auditable like their predecessors.

@@ -23,7 +23,7 @@ public struct APIRequest<Response: Sendable>: Sendable {
     public let extraHeaders: [String: String]
     public let idempotencyKey: IdempotencyKey
     public let maxRetries: Int
-    /// #96 — route this request through `APIClient`'s FAIL-FAST auth session
+    /// Route this request through `APIClient`'s FAIL-FAST auth session
     /// (`waitsForConnectivity = false`, short timeout) instead of the patient
     /// outbox session. Set only on interactive auth legs (passkey/login/
     /// register/refresh) so a no-connectivity attempt fails the login door
@@ -31,7 +31,7 @@ public struct APIRequest<Response: Sendable>: Sendable {
     /// resource timeout. Defaults `false` — every existing call keeps the
     /// patient session unchanged.
     public let failFast: Bool
-    /// W-COACH-SSE — route this request through `APIClient`'s dedicated
+    /// Route this request through `APIClient`'s dedicated
     /// STREAMING session instead of the patient outbox session. The streaming
     /// session uses ``CoachStreamTimeoutPolicy`` values: a generous *inactivity*
     /// request timeout that URLSession resets on every chunk received (so a
@@ -74,7 +74,7 @@ public struct APIRequest<Response: Sendable>: Sendable {
 }
 
 public extension APIRequest {
-    /// R2 / #115 A3 — this request carrying a single-use step-up elevation in
+    /// This request carrying a single-use step-up elevation in
     /// `X-Step-Up`, or unchanged when there is none. A request that carries one
     /// is never re-sent by the transport (`maxRetries: 0`): the server spends
     /// the elevation when it acts, so a replay could only be refused.
@@ -180,4 +180,37 @@ public extension JSONEncoder {
         e.dateEncodingStrategy = .iso8601
         return e
     }()
+}
+
+/// **The account a request must be sent for.**
+///
+/// The outbox replay sends rows of one account. The bearer of every request is
+/// read from the Keychain when the request is built, so a sign-out of A and a
+/// sign-in of B that land while a pass still works through A's backlog (or
+/// sits in a 429 pause) would otherwise send A's rows under B's token. The pass
+/// binds each row's owner around its dispatch; `APIClient` builds a request
+/// under a binding only while the signed-in user is still that owner, and every
+/// rebuild (a retry after a refresh, a rotated bearer) asks again.
+///
+/// Task-local, so it reaches every request the dispatch makes through the
+/// repositories without a parameter on each of them, and nothing outside the
+/// bound task.
+enum RequestOwnerBinding {
+    @TaskLocal static var owner: String?
+
+    /// Whether `signedIn` may send for the bound owner. No binding admits
+    /// anyone. Nobody signed in admits too: that request carries no bearer,
+    /// so it can reach no account and comes back 401, which the replay holds
+    /// uncounted. Only another account is refused.
+    static func admits(signedIn: String?) -> Bool {
+        guard let owner = canonical(owner), let signedIn = canonical(signedIn) else { return true }
+        return signedIn == owner
+    }
+
+    static func canonical(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
 }

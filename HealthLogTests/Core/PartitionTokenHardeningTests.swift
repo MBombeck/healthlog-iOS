@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// M-6 (v0.6.2) — locks the strict `[A-Za-z0-9_-]` allowlist + 64-char cap
+/// Locks the strict `[A-Za-z0-9_-]` allowlist + 64-char cap
 /// shared by `HealthKitBackfillWindowStore.partitionToken` and
 /// `HealthKitService.partitionToken`. The two implementations are deliberately
 /// duplicated (the store lives in the iOS-free core; the service requires

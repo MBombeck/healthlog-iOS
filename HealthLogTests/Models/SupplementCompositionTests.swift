@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// SUPP (1.5.0, #131) — reading a supplement's composition and the
+/// Reading a supplement's composition and the
 /// nutrient split by source (server v1.43). Everything shown is the server's:
 /// no unit conversion, no sum, no limit of the app's own.
 @Suite("Supplement composition and nutrient sources")
@@ -248,7 +248,7 @@ struct SupplementCompositionTests {
         #expect(!body.contains("\"dha\"") && !body.contains("\"epa\""))
     }
 
-    // MARK: - No reference (POLISH-A A1)
+    // MARK: - No reference
 
     /// The server sends `reference: null` for DHA and EPA because EFSA sets one
     /// intake for both together (v1.43 `supplementOnly`), not because the

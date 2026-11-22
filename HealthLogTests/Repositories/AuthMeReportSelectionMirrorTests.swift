@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-01** — the read-only `reportSelection` mirror on `GET /api/auth/me`
+/// The read-only `reportSelection` mirror on `GET /api/auth/me`
 /// (server v1.32.39).
 ///
 /// The `/me` payload is consumed by five narrow, purpose-built projections

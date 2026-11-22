@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - v0.7.3 notifications + badge wiring (cluster C9, UIKit-gated)
+// MARK: - Notifications + badge wiring (UIKit-gated)
 
 #if canImport(UserNotifications) && canImport(UIKit)
     extension AppContainer {
@@ -14,7 +14,7 @@ import Foundation
         /// The purge is detached so the launch tick doesn't pay for the
         /// UN-center read (gated on a UserDefaults flag inside the helper).
         ///
-        /// Factored out of `AppContainer.init` (v0.7.3) to keep the init body
+        /// Factored out of `AppContainer.init` to keep the init body
         /// inside its lint budget. The `notifications` handle stays on
         /// `AppContainer`; construction args are VERBATIM from the prior
         /// inline block.
@@ -49,7 +49,7 @@ import Foundation
         /// `NotificationService`, coalesced through the single-slot
         /// `BadgeRefreshCoalescer`.
         ///
-        /// **v0.6.1.3 Y4.1 + Y8.** The store fires `onIntakesDidChange` after
+        /// The store fires `onIntakesDidChange` after
         /// every load + mark + synth mutation; the closure recomputes
         /// `dueOrMissedCount` and pushes the absolute number to the system
         /// icon. A single Genommen tap can fire 2-3 times (optimistic patch →

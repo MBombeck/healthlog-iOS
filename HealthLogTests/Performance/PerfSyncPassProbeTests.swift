@@ -48,7 +48,8 @@
                 cycleImport: make(.cycleImport),
                 heartHealthEvents: make(.heartHealthEvents),
                 outboxDrain: make(.outboxDrain),
-                serverMirror: make(.serverMirror)
+                serverMirror: make(.serverMirror),
+                clinicalLabRecords: make(.clinicalLabRecords)
             )
         }
 

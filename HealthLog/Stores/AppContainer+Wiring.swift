@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Runtime-hook wiring (extracted from `AppContainer.init`)
 
 extension AppContainer {
-    // 09-08 — composition-root wiring, and the one place the relative order of
+    // Composition-root wiring, and the one place the relative order of
     // the hooks is visible. This body is already the *result* of an extraction
     // (it was inline in the designated init); splitting it again would scatter
     // an ordering contract that a reader currently checks by scrolling once.
@@ -22,6 +22,14 @@ extension AppContainer {
     /// (the logout cascade hooks must stay last — they weakly capture a fully
     /// initialised `self`).
     func configureRuntimeWiring(apiClient: APIClient, bgSync: BackgroundSyncCoordinator) {
+        // The owner-bound wipes of stores built after the core phase; both
+        // sign-out hooks run them with the leaving account's id.
+        let dailyStats = healthKitDailyStatsSync
+        ownerPartitionCleanup.install { previousUserID in
+            ClinicalLabRecordCursorStore().clear(owner: previousUserID)
+            await dailyStats?.clearCache(ownerUserID: previousUserID)
+        }
+        let ownerCleanup = ownerPartitionCleanup
         // HK-Anchor-Cleanup-Hook für Logout (incl. 401-Bridge). 401 wipes the
         // token from Keychain via `AuthStore.handleUnauthorized` — we must wipe
         // the per-user HK anchors there too, else the next user's samples land
@@ -31,19 +39,24 @@ extension AppContainer {
                 HealthKitService.clearAnchors(for: previousUserID)
             #endif
             HealthKitBackfillWindowStore.clear(for: previousUserID)
-            // W-HR-BUCKET-UPLOAD / GH #34 — re-arm HR-bucket cutover on re-login,
+            // Re-arm HR-bucket cutover on re-login,
             // and drop the operator's raw/bucket schedule with it: it describes
             // one account's server rows, so the next account starts from the
             // shipping default instead of inheriting a choice nobody made there.
             HRBucketCutoverStore.clear(for: previousUserID)
             HRUploadModeSchedule.clear(for: previousUserID)
-            // GH #86 — the workout-HR backfill cursor is user-bound too; the
+            // The workout-HR backfill cursor is user-bound too; the
             // next account starts its own walk over its own history.
             WorkoutHRBackfillStore.clear(for: previousUserID)
+            // The own-copy ledger and the re-armed reminders name the leaving account's rows.
+            HealthKitOwnCopyLedger.shared.clear()
+            MedicationReminderReopen.clearOnLogout()
+            CriticalAlarmSnoozeLedger().clear() // D3 #1
+            await ownerCleanup.run(previousUserID: previousUserID)
         }
 
         #if canImport(UserNotifications) && canImport(UIKit)
-            // v0.6.1.3 Y4.1 + Y8 — badge-recompute path + foreground-banner
+            // Badge-recompute path + foreground-banner
             // store accessor (single-slot coalescer; `[weak]` captures).
             Self.wireBadgeRefresh(
                 notifications: notifications,
@@ -59,7 +72,7 @@ extension AppContainer {
             }
         #endif
 
-        // v0.9.0 W2 — feed the per-med critical-alarm opt-in predicate provider
+        // Feed the per-med critical-alarm opt-in predicate provider
         // into the medications store so its Spezi-reconcile pass can route
         // alarm-owned meds onto the AlarmKit channel (REPLACE) and exclude them
         // from the UNNotification set. A fresh @Sendable snapshot is produced on
@@ -75,7 +88,7 @@ extension AppContainer {
             deliveryPreferencesStore?.ingestServerDefaults(from: medications)
         }
         #if canImport(ActivityKit)
-            // v0.8.4 WWIDGET-1 — hook the Live Activity controller onto the
+            // Hook the Live Activity controller onto the
             // intake-change path so the soonest due dose surfaces / updates /
             // clears as the user acts.
             Self.wireMedicationLiveActivity(
@@ -83,7 +96,7 @@ extension AppContainer {
                 medicationsStore: medicationsStore,
                 deliveryPreferences: deliveryPreferencesStore
             )
-            // v0.16.1 W-LA-BG (LIVE-ACTIVITY BACKGROUND START) — also reconcile
+            // Also reconcile
             // the Live Activity from the guaranteed-sync BGProcessingTask so a
             // dose that becomes due *while the app is backgrounded* STARTS its
             // Live Activity (not only the local notification). Awaited inline in
@@ -97,13 +110,13 @@ extension AppContainer {
                 deliveryPreferences: deliveryPreferencesStore
             )
         #endif
-        // v0.8.4 WWIDGET-2 — refresh the App Group widget snapshot + reload the
+        // Refresh the App Group widget snapshot + reload the
         // Home / Lock-Screen widget timelines on every intake change.
         Self.wireWidgetSnapshot(
             writer: widgetSnapshotWriter,
             medicationsStore: medicationsStore
         )
-        // 09-03 — the logout clear closes the widget writer's admission so a
+        // The logout clear closes the widget writer's admission so a
         // callback belonging to the account being torn down cannot land after
         // the placeholder. The next admitted authenticated owner is what
         // re-opens it; the registry's admission signal is the one statement
@@ -111,7 +124,7 @@ extension AppContainer {
         authenticatedSessionRegistry.observeAdmissions { [widgetSnapshotWriter] _ in
             Task { @MainActor in widgetSnapshotWriter.admitNextAccount() }
         }
-        // W-B187 QOL-2 — drive the CoreSpotlight index off the stores' settle
+        // Drive the CoreSpotlight index off the stores' settle
         // hooks (med NAMES + neutral measured-kind titles, NO PHI). The med hook
         // is the dedicated `onMedicationsListSettled` slot (NOT
         // `onMedicationsDidChange`, which the delivery-prefs wiring owns).
@@ -134,7 +147,14 @@ extension AppContainer {
             backgroundSync: bgSync,
             medicationsStore: medicationsStore
         )
-        // Reliability M1 (audit-v0162) — drain the encrypted Outbox from the
+        // A dose recorded anywhere silences its pending local reminder.
+        Self.wireReminderCompletion(medicationsStore: medicationsStore)
+        Self.wireCriticalAlarmIntakeSuspension(medicationsStore: medicationsStore)
+        Self.wireResolvedReminderWithdrawal(medicationsStore: medicationsStore)
+        Self.wireResolvedBeyondToday(medicationsStore: medicationsStore) // D3 #4
+        // D3 #12 — a hidden medication's reminder opens its page.
+        appRouter.isHiddenFromMedicationsList = { [medicationVisibilityStore] id in medicationVisibilityStore.isHidden(id) }
+        // Reliability M1 — drain the encrypted Outbox from the
         // guaranteed-sync BGTask so an offline-logged user write replays on a BG
         // wake instead of waiting for the next app foreground. Probe-gated on
         // `confirmedReachable()` inside the hook.
@@ -143,6 +163,8 @@ extension AppContainer {
         // trigger so the frequent AppRefresh wake pulls the ~28 manual-collector
         // HK types toward the server without waiting for a foreground.
         wireBGRefreshCollectionHook(backgroundSync: bgSync)
+        // A wake without HealthKit still carries reminders, outbox and snapshots.
+        wireBackgroundWakeScope(backgroundSync: bgSync)
         // Direct HKWorkout collection is not part of Spezi's sample collector
         // DSL. Prepare it here from authenticated composition-root state so a
         // cold BG launch does not depend on RootView mounting first.
@@ -158,7 +180,7 @@ extension AppContainer {
         // HealthKit path that is already enabled, not only Spezi collectors.
         // The optional stores keep their explicit-consent gates: calling these
         // methods never flips a toggle or requests sensitive authorization.
-        // **Phase 07 / plan 07-09** — one route, not a list. This used to
+        // One route, not a list. This used to
         // enumerate three calls (`runManualHealthSyncPass`, the Mood mirror, the
         // Apple-medication mirror), which is how "Jetzt syncen" came to mean a
         // different set of importers than a foreground tick or a background wake
@@ -168,7 +190,7 @@ extension AppContainer {
         hkReadinessStore.attachHealthSyncRoute { [weak self] trigger in
             await self?.runHealthSyncPass(trigger)
         }
-        // #10 — "Last synced" in Settings → Apple Health. Until 1.1.0 (284) the
+        // "Last synced" in Settings → Apple Health. Until 1.1.0 (284) the
         // uploader's notifier existed and was tested, and nothing here set it.
         // Both HealthKit measurement delivery paths stamp through one fenced
         // sink: the live batch POST (every importer, the daily statistics, the
@@ -182,12 +204,19 @@ extension AppContainer {
         outboxReplay.setHealthKitDeliveryNotifier { deliveredAt, ownerUserID in
             await syncStamp(deliveredAt, ownerUserID)
         }
-        // v0.10.0 W-Mood-B — refresh the mood widget glance on every entry change.
+        #if canImport(UserNotifications) && canImport(UIKit)
+            // #12 — a queued take the server answers "already taken" says so,
+            // like the banner path does.
+            outboxReplay.setAlreadyTakenNotifier { [weak notifications] already in
+                await notifications?.confirmAlreadyTaken(already)
+            }
+        #endif
+        // Refresh the mood widget glance on every entry change.
         Self.wireMoodWidgetSnapshot(
             writer: widgetSnapshotWriter,
             moodStore: moodStore
         )
-        // v0.12 P2 — wire the watchOS companion onto the live stores: watch
+        // Wire the watchOS companion onto the live stores: watch
         // intake/mood actions funnel into the canonical store methods; the phone
         // re-pushes a fresh snapshot on change.
         Self.wireWatchCompanion(
@@ -197,7 +226,7 @@ extension AppContainer {
             measurementsStore: measurementsStore,
             keychain: keychain
         )
-        // b177 W-SYNCPROGRESS — feed the sync-status footer's honest quantities:
+        // Feed the sync-status footer's honest quantities:
         // live outbox backlog + in-flight SWR revalidation count.
         serverStatsStores.syncState.bindOutbox(outbox)
         serverStatsStores.syncState.bindRevalidations(swr)
@@ -214,7 +243,7 @@ extension AppContainer {
             measurementsStore: measurementsStore,
             unitPreferences: { [settingsStore] in settingsStore.unitPreferences }
         )
-        // v0.15.2 W-WATCH-COMPLICATIONS — feed the watch-face score-ring +
+        // Feed the watch-face score-ring +
         // latest-measurement complications from the SAME score / measurement
         // sources the phone widgets use (read lazily on every push).
         Self.wireWatchGlances(
@@ -224,7 +253,7 @@ extension AppContainer {
             unitPreferences: { [settingsStore] in settingsStore.unitPreferences }
         )
         #if canImport(UserNotifications) && canImport(UIKit)
-            // W-THRESHOLD-NUDGE — MDR-safe out-of-range nudge onto the labs
+            // MDR-safe out-of-range nudge onto the labs
             // store. Acts ONLY on the server's own range verdict, opt-in
             // (default off), defers while the server holds Rest Mode
             // (POLISH-B B5), and debounces a standing breach.
@@ -232,7 +261,7 @@ extension AppContainer {
                 notifications: notifications,
                 healthScoreStore: healthScoreStore
             )
-            // v1.18.6 (#32) — Vorsorge reminder server-completion seam so the
+            // v1.18.6 — Vorsorge reminder server-completion seam so the
             // foreground "Erledigt" notification action POSTs `…/{id}/complete`
             // (server-authoritative) instead of only dismissing the banner.
             notifications.measurementReminderCompleter = { [weak measurementRemindersStore] id in
@@ -245,13 +274,18 @@ extension AppContainer {
             notifications.measurementReminderRefresher = { [weak measurementRemindersStore] in
                 await measurementRemindersStore?.load(force: true)
             }
-            // LOGOUT-NOTIF — default the logout notification-clear seam to the
+            // #191 — every notification interaction compares
+            // `medications.lastUpdatedAt` and reloads on a difference.
+            notifications.medicationFreshnessCheck = { [weak self] in
+                await self?.checkMedicationFreshness()
+            }
+            // Default the logout notification-clear seam to the
             // real NotificationService purge (delivered + pending + badge).
             notificationClearOnLogoutHook = { [weak notifications] in
                 await notifications?.clearAllNotificationsOnLogout()
             }
         #endif
-        // #115 B5 — account zone + glucose unit for the widget extension (App
+        // Account zone + glucose unit for the widget extension (App
         // Group, per account) and the glucose unit for the wrist.
         Self.wireSharedAccountPrefs(
             settingsStore: settingsStore,
@@ -267,12 +301,12 @@ extension AppContainer {
             measurementsRepo: measurementsRepo,
             profileTimeZoneBox: profileTimeZoneBox
         )
-        // Audit B-8 — a device that crosses into another time zone re-arms its
+        // A device that crosses into another time zone re-arms its
         // medication reminders instead of waiting for the next foreground load.
         // Debounced on the resolved zone inside the store; the token is dropped
         // deliberately, the observation lasts as long as the app does.
         medicationsStore.startObservingSystemTimeZoneChanges()
-        // audit-v0162 M-7 — WIRE the derived-intake synthesis gate. It shipped
+        // WIRE the derived-intake synthesis gate. It shipped
         // as `= { true }` with a "until wired" note and was never connected, so
         // the client synthesised placeholders on EVERY server — including the
         // slot-materialising ones, where a >5-min `scheduledFor` divergence
@@ -282,18 +316,10 @@ extension AppContainer {
         // re-building the store; the gate persists its last-known verdict, so
         // the pre-probe window is a once-per-installation event, not a
         // once-per-cold-launch one.
-        //
-        // Standalone mode is OR'd back in: there is no server there at all, so
-        // the local mirror only ever holds doses the operator already logged
-        // and the synthesis is the ONLY source of "due today". Suppressing it
-        // in standalone would empty the due surfaces outright. Captured as a
-        // value (the store already owns this closure) so no cycle is created.
-        let medicationsAreStandalone = medicationsStore.isStandalone
         medicationsStore.derivedIntakeSynthesisEnabledProvider = { [weak medicationSlotGate] in
-            if medicationsAreStandalone() { return true }
-            return medicationSlotGate?.synthesisEnabled ?? false
+            medicationSlotGate?.synthesisEnabled ?? false
         }
-        // v0.10.0 W-Mood-B — reconcile the iOS-local evening mood reminder
+        // Reconcile the iOS-local evening mood reminder
         // whenever the mood entries change in-session (log / edit / delete): a
         // fresh today-entry cancels the pending reminder so it never
         // double-fires with the server APNs push.
@@ -302,7 +328,7 @@ extension AppContainer {
             notifications: notifications,
             settingsStore: settingsStore
         )
-        // v0.15.5 AUD-1 F4 — also re-arm the local evening mood reminder from the
+        // Also re-arm the local evening mood reminder from the
         // guaranteed-sync BGProcessingTask wakeup, so the non-repeating
         // `mood-reminder-local` trigger keeps firing on days the app is never
         // opened.
@@ -312,45 +338,46 @@ extension AppContainer {
             notifications: notifications,
             settingsStore: settingsStore
         )
-        // v0.5.5 W-A3 — hand the live flags to the legacy HKService + wire the
+        // Hand the sync seams to the HKService + wire the
         // Spezi-side uploader.
-        Self.attachLiveFlagsAndSpeziUploader(
+        Self.attachHealthKitSeamsAndSpeziUploader(
             healthKit: healthKit,
             uploader: healthKitUploader,
-            featureFlagsStore: featureFlagsStore,
             keychain: keychain,
-            // A360-5 M-1 — the repo conforms to `MeasurementDeletionReconciler`;
+            // The repo conforms to `MeasurementDeletionReconciler`;
             // thread it so Apple-Health deletions propagate to the server
             // delete-by-external-id endpoint.
             deletionReconciler: measurementsRepo,
-            // Phase 07 Wave 2 — a page the server did not terminally accept
+            // A page the server did not terminally accept
             // becomes a durable owner-bound row rather than a stalled anchor,
             // and the app-owned collector admits through the Phase-06 registry.
             retryQueue: outbox,
             authenticatedSessionRegistry: authenticatedSessionRegistry,
             aggregates: (healthKitHRBucketSync, healthKitDailyStatsSync),
-            // 1.3 (#128) — how far the server already holds each type, asked
+            // How far the server already holds each type, asked
             // once for a 1.2.0 installation's upgraded partitions.
             serverFreshness: { [settingsRepo] in
                 await HealthSampleReplayFloor.freshnessAnswer {
                     try await settingsRepo.healthKitConfig().metricFreshness
                 }
-            }
+            },
+            installsAppOwnedCollection: HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).readsHealthKit,
+            ingestModuleProbe: Self.ingestModuleProbe(moduleGate: moduleGate)
         )
         Self.attachWriteBackPolicy(healthKit: healthKit, swr: swr, settingsRepo: settingsRepo) // B5 (1.4)
         Self.wireAIRefusalMirror(apiClient: apiClient, gate: aiCapabilityGate, moduleGate: moduleGate) // #115 0.2
         Self.wireAICapabilityGates(gate: aiCapabilityGate, dailyBriefing: dailyBriefingStore, narrative: serverStatsStores.narrative)
         Self.wireModuleDisabledMirror(apiClient: apiClient, gate: moduleGate) // #30
-        // R-A2 (1.4) — the dose and State-of-Mind observers start at launch,
+        // The dose and State-of-Mind observers start at launch,
         // not from `RootView`, so a background launch registers them too.
         armOptInHealthObserversAtLaunch()
-        // N1 — last, so it wraps the final `onMedicationsDidChange` chain.
+        // Last, so it wraps the final `onMedicationsDidChange` chain.
         wireMedicationReminderDelivery()
     }
 
     // swiftlint:enable function_body_length
 
-    /// **Phase 09 / plan 09-02 — the launch sweep for owned import residue.**
+    /// **The launch sweep for owned import residue.**
     ///
     /// The Apple-Health import assembles its multipart body into an app-owned,
     /// complete-protected temp file and deletes it on every exit it controls. A
@@ -400,7 +427,7 @@ extension AppContainer {
             onDeadLettered: { count in
                 await syncState.noteDeadLettered(count)
             },
-            // Audit B-3 — the discard lane reaches the same honest footer as the
+            // The discard lane reaches the same honest footer as the
             // dead-letter lane; without this it reached nothing at all.
             onDiscarded: { notices in
                 await syncState.noteDiscarded(notices)
@@ -414,7 +441,7 @@ extension AppContainer {
     /// one task; adding an independent fire-and-forget attachment would reopen
     /// the immediate-online race.
     ///
-    /// **Phase 09 / plan 09-05 — the ordinary foreground open lives here.**
+    /// **The ordinary foreground open lives here.**
     /// Three things happen in one owned task, in one order, and the order is the
     /// contract:
     ///
@@ -447,7 +474,7 @@ extension AppContainer {
     ) -> Task<Void, Never> {
         Task.detached {
             await replay.attachDeadLetterSink(onDeadLettered)
-            // Audit B-3 — attached in the same breath, before the first pass can
+            // Attached in the same breath, before the first pass can
             // run through this task, for the same reason the DLQ sink is.
             await replay.attachDiscardSink(onDiscarded)
             guard !Task.isCancelled, ownerIsAlive() else { return }

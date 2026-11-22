@@ -106,7 +106,7 @@ struct MeasurementSourceWireTests {
         // Regression guard for the #42 confirm item: before adding the COMPUTED
         // case the source enum threw on decode, so `TolerantMeasurementWire`
         // dropped every screening (COMPUTED) row — the same failure mode as
-        // GOOGLE_HEALTH (#40). The row must now decode + render.
+        // GOOGLE_HEALTH. The row must now decode + render.
         let json = """
         { "measurements": [
           { "id": "m1", "type": "WEIGHT", "value": 12, "measuredAt": "2026-07-01T08:00:00Z", "source": "COMPUTED" },

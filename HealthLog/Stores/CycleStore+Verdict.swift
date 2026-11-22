@@ -1,6 +1,6 @@
 import Foundation
 
-/// **The verdict half of ``CycleStore`` (Z1 / #72).**
+/// **The verdict half of ``CycleStore``.**
 ///
 /// Split out of `CycleStore.swift` under the repo's file-length discipline. Pure
 /// movement plus the ``CycleStore/publishVerdict(_:restored:)`` seam, which

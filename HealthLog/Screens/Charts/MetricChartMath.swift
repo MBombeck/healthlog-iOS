@@ -29,7 +29,7 @@ enum MetricChartMath {
         }
     }
 
-    /// #20 — the target row whose band may sit next to `kind`'s own values.
+    /// The target row whose band may sit next to `kind`'s own values.
     ///
     /// The server `PULSE` target is the RESTING-pulse band (`label: "Resting
     /// pulse"`; `current`, `average30` and the in-range days all come from the

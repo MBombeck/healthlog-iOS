@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 BP-TOD** — wraps `GET /api/measurements/blood-pressure/time-of-day`
+/// Wraps `GET /api/measurements/blood-pressure/time-of-day`
 /// (server v1.47.0, route `src/app/api/measurements/blood-pressure/time-of-day/route.ts`).
 ///
 /// A thin read-only `actor` like ``IntradayPulseRepository``: no outbox kind
@@ -13,7 +13,7 @@ import Foundation
 /// delegate without that grant gets the local sharing denial (403) from
 /// `APIClient` before anything goes out.
 public actor BloodPressureTimeOfDayRepository {
-    /// The first server that ships the route (#1331).
+    /// The first server that ships the route.
     public static let minimumServerVersion = "1.47.0"
     /// The server's own bounds for `days`.
     public static let daysRange = 1 ... 3650

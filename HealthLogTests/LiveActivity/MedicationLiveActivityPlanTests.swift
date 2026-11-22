@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.8.4 WWIDGET-1** — pins the pure Live-Activity lifecycle decisions
+/// Pins the pure Live-Activity lifecycle decisions
 /// (`MedicationLiveActivityPlan`). These are the start / update / end
 /// decisions the `@MainActor` controller is a thin shell over — covering
 /// them here keeps the lifecycle logic verifiable without a live
@@ -137,7 +137,7 @@ struct MedicationLiveActivityPlanTests {
         #expect(dose?.medicationId == "sooner")
     }
 
-    // MARK: - v0.8.5 WFIX-LA — per-medication Live-Activity gate
+    // MARK: - Per-medication Live-Activity gate
 
     @Test("Does not surface a due dose when its per-med Live-Activity toggle is OFF")
     func skipsDoseWhenLiveActivityDisabled() {
@@ -253,7 +253,7 @@ struct MedicationLiveActivityPlanTests {
         #expect(hour == 9)
     }
 
-    // MARK: - v0.10 R1 §3.6 — engine-driven surfacing + per-schedule grace
+    // MARK: - Engine-driven surfacing + per-schedule grace
 
     private func entryMed(
         id: String = "med-roll",
@@ -342,7 +342,7 @@ struct MedicationLiveActivityPlanTests {
     }
 }
 
-// MARK: - W-B183 — server-gated overdue carried into the ContentState
+// MARK: - Server-gated overdue carried into the ContentState
 
 /// **W-B183 (dose-safety coherence — the Trulicity Live-Activity bug).**
 ///

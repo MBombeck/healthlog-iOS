@@ -65,7 +65,7 @@ public actor AccountSecurityRepository {
 
     //
     // Verified against server v1.32.9 on 2026-07-24, re-audited against v1.34.3
-    // on 2026-07-31 (CU-22): contract unchanged. Every mutation below carries a
+    // on 2026-07-31: contract unchanged. Every mutation below carries a
     // single-use step-up **elevation** in the `X-Step-Up` header — an explicit
     // per-call parameter, never global `APIClient` state, so an elevation can
     // never leak onto an unrelated request. All are interactive, rate-limited,

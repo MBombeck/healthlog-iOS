@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-THRESHOLD-NUDGE — per-breach debounce so a standing out-of-range value
+/// **Per-breach debounce so a standing out-of-range value
 /// does not nudge on every reading.**
 ///
 /// Keyed on the `(kind, breach-direction)` debounce key

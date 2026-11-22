@@ -21,7 +21,7 @@
 // Anchor; Server dedupliziert via externalId → erfolgreiche Chunks landen als
 // `duplicate`, neue/fehlgeschlagene werden frisch versucht.
 //
-// W2: `unmappable_identifier` ist TRANSIENT (der Server kennt den HK-Typ noch
+// `unmappable_identifier` ist TRANSIENT (der Server kennt den HK-Typ noch
 // nicht) — würde der Anchor advancen, ginge das Sample dauerhaft + still
 // verloren. `value_out_of_range` bleibt terminal, sonst loopte ein einzelnes
 // bogus-Sample endlos.

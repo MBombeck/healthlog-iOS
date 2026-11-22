@@ -1,6 +1,6 @@
 import XCTest
 
-/// 1.5 POLISH-C (C6) — Settings, Assistant with a configured provider
+/// Settings, Assistant with a configured provider
 /// (`-uitest-citations`), once at the default text size and once at the
 /// largest accessibility size, where the provider's state pill used to break
 /// into four lines beside the name. Runs with the sweep's language and

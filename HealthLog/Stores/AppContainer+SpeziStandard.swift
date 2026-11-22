@@ -5,8 +5,7 @@
     extension AppContainer {
         /// Resolve the running `HealthLogStandard` (booted by
         /// `HealthLogSpeziDelegate`) and hand it the live
-        /// `MeasurementBatchUploader` + feature-flag reader so the
-        /// `handleNewSamples` callback can route Steps + ActiveEnergy
+        /// `MeasurementBatchUploader` so the `handleNewSamples` callback can route Steps + ActiveEnergy
         /// through the same upload path the legacy `HealthKitService`
         /// uses for everything else.
         ///
@@ -17,7 +16,7 @@
         /// `AppContainer.swift` file. Isolating the attach logic here
         /// keeps the Spezi dependency surface explicit + grep-able and
         /// matches the existing `AppContainer+HealthKitStats.swift` /
-        /// `AppContainer+FeatureFlags.swift` extension-file pattern.
+        /// `AppContainer+AIWiring.swift` extension-file pattern.
         ///
         /// Declared `static` so the call-site can run BEFORE
         /// `AppContainer.init` finishes initializing all stored
@@ -30,19 +29,18 @@
         /// stored references on every call.
         static func attachSpeziStandardUploader(
             uploader: MeasurementBatchUploader,
-            featureFlags: any FeatureFlagsServicing,
             userIDProvider: @escaping @Sendable () -> String?,
             deletionReconciler: (any MeasurementDeletionReconciler)?,
             retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
             hrBucketSync: (any HealthKitHRBucketSyncing)? = nil,
             dailyStatsSync: (any HealthKitDailyStatsSyncing)? = nil
         ) {
-            // #12 — every hand-off of heart rate requests the bucket sweep.
+            // Every hand-off of heart rate requests the bucket sweep.
             var hrBucketKick: (@Sendable () -> Void)?
             if let hrBucketSync {
                 hrBucketKick = { @Sendable in hrBucketSync.requestHRBucketSweep() }
             }
-            // V1 — every hand-off of a cumulative type requests the recent
+            // Every hand-off of a cumulative type requests the recent
             // statistics sweep, under the page's trigger.
             var dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)?
             if let dailyStatsSync {
@@ -62,26 +60,25 @@
                         .info("HealthLogStandard not registered — attachUploader skipped")
                     return
                 }
-                // Phase 07 Wave 2 — hand the Standard the durable retry queue
+                // Hand the Standard the durable retry queue
                 // instead of an anchor handle. A page the server did not
                 // terminally accept becomes an owner-bound outbox row under a
                 // derived idempotency key; rewinding SpeziHealthKit's anchor was
                 // never able to recover such a page.
                 // userIDProvider drives the HR-bucket cutover partition
-                // (W-HR-BUCKET-UPLOAD / GH #34) so the per-sample HR gate reads
+                // so the per-sample HR gate reads
                 // the same per-User cutover boundary the bucket sweep arms.
-                // #113 — a row the server refuses is remembered in the skip
+                // A row the server refuses is remembered in the skip
                 // register before the cursor may pass it.
                 await standard.attachUploader(
                     uploader,
-                    featureFlags: featureFlags,
                     userIDProvider: userIDProvider,
                     retryQueue: retryQueue,
                     skipRegister: .shared,
                     hrBucketKick: hrBucketKick,
                     dailyStatsKick: dailyStatsKick
                 )
-                // A360-5 M-1, A5 (1.4) — hand the server-deletion reconciler
+                // Hand the server-deletion reconciler
                 // to the Standard so the collector's page deletions reach the
                 // server delete-by-external-id (was a one-way mirror, so
                 // orphaned server rows). nil-safe: unwired, a deletion waits

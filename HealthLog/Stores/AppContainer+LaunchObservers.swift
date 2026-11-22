@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - R-A2 (1.4) — the two opt-in HealthKit observers start at launch
+// MARK: - The two opt-in HealthKit observers start at launch
 
 extension AppContainer {
     /// Arms the Apple Health dose observer and the State-of-Mind observer from
@@ -34,5 +34,34 @@ extension AppContainer {
               let userID = keychain.getString(forKey: KeychainKey.userID), !userID.isEmpty else { return }
         await moodHealthSyncStore.activateIfEnabled()
         await medicationHealthSyncStore.startObservingIfEnabled()
+    }
+}
+
+// MARK: - Workout and heart-event observers and the ECG sweep at launch
+
+extension AppContainer {
+    /// Starts the workout and heart-event importers (each registers its own
+    /// HealthKit observer) and runs one ECG sweep, for a launch without a
+    /// scene. `RootView` used to be the only caller, so a workout recorded
+    /// while the process was dead waited for the app to be opened.
+    ///
+    /// Without the workout-read re-auth migration: it shows the HealthKit
+    /// sheet and needs a window, so it stays with `RootView`. Both importers
+    /// are idempotent, so the view's later call starts nothing twice.
+    func startHealthImportsAtLaunch() async {
+        guard let healthKit,
+              let token = keychain.getString(forKey: KeychainKey.authToken), !token.isEmpty,
+              let userID = keychain.getString(forKey: KeychainKey.userID), !userID.isEmpty else { return }
+        let workoutsStore = serverStatsStores.workouts
+        await healthKit.startWorkoutImportIfNeeded(
+            repo: serverStatsRepos.workouts,
+            userID: userID,
+            forceFullSweep: false,
+            onIngest: { @Sendable in
+                await workoutsStore.revalidateIfStale()
+            }
+        )
+        await healthKit.startEventImportIfNeeded(userID: userID)
+        await ecgHealthSyncStore.activateIfEnabled()
     }
 }

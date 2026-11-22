@@ -5,7 +5,7 @@ import Observation
 /// Insights-overview **wellness score cards** (Daily condition / Sleep score /
 /// Recovery / Stress / Daily load / Cardio fitness / Vascular age / HRV balance).
 ///
-/// **Parity Build 4 · 4.3 — this store no longer owns every card.** Three of the
+/// **This store no longer owns every card.** Three of the
 /// eight ids (`READINESS` / `SLEEP_SCORE` / `RECOVERY_SCORE`) are also members of
 /// the server-synced `selectedScoreRings` set, so before Build 4 the same card
 /// had two independent visibility controls with no defined winner — and one of

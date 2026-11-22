@@ -7,7 +7,7 @@ import Testing
 #endif
 
 /// Locks the v1.16.x tolerant-first briefing slot decode off
-/// `GET /api/dashboard/snapshot` (GH issue #15):
+/// `GET /api/dashboard/snapshot`:
 ///
 /// 1. Unknown `briefingState` raw values map to `.unknown` — NEVER a
 ///    `DecodingError` that would poison the whole snapshot.

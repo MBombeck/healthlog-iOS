@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#115 1.5 — the profile-zone day calendar and its sites.**
+/// **The profile-zone day calendar and its sites.**
 ///
 /// Every test pins the zone and the instant. The instant used throughout,
 /// 2026-06-19T03:00Z, is 2026-06-18 20:00 in Los Angeles, 2026-06-19 05:00 in
@@ -117,7 +117,7 @@ struct ProfileDayTests {
     }
 }
 
-/// **#115 1.5 — the mood list request carries the account's days.** Drives the
+/// **The mood list request carries the account's days.** Drives the
 /// real `MoodRepository` over the real `APIClient`; the zone is injected, the
 /// clock is live, so the two zones (25 h apart) cannot both match any single
 /// device zone — a device-zone `from`/`to` fails at least one of them.

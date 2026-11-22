@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.5.4-SP4 — Two-Axis Source-Priority Editor.
+/// Two-Axis Source-Priority Editor.
 ///
 /// Erreichbar via `Settings → Quellen → Reihenfolge bearbeiten`. Mirror of
 /// the web's `sources-section.tsx` per-metric ladder editor, in iOS-native
@@ -29,14 +29,6 @@ import SwiftUI
 /// SwiftUI's `.onMove`-Default).
 struct SourcePriorityEditorScreen: View {
     @Environment(SourcePriorityStore.self) private var store
-    /// v0.11 W3 — the per-metric source ladder is persisted + arbitrated
-    /// server-side (`pickCanonicalSource()`); the editor PUTs to the server.
-    /// Standalone has a single local source, so this surface yields to
-    /// `HLCloudDerivedPlaceholder`. `hasServer` is always `true` in paired mode
-    /// → inert there. (§4 matrix: source-priority = (B)/hide.)
-    @Environment(BackendAvailability.self) private var backend
-    /// v0.11 W3 — shared "Server verbinden" CTA path for the placeholder.
-    @Environment(AuthStore.self) private var authStore
 
     /// Trigger value for the success-haptic; bumps on every successful PUT.
     @State private var saveTickCount: Int = 0
@@ -50,17 +42,7 @@ struct SourcePriorityEditorScreen: View {
 
     var body: some View {
         Group {
-            if !backend.hasServer {
-                ScrollView {
-                    HLCloudDerivedPlaceholder(
-                        variant: .hero,
-                        surfaceName: String(localized: "cloud_derived.surface.source_priority"),
-                        onConnect: { authStore.beginServerPairing() }
-                    )
-                    .padding(HLSpace.lg)
-                }
-                .hlScreenBackground()
-            } else if store.isLoading, store.ladder == nil {
+            if store.isLoading, store.ladder == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .hlScreenBackground()
@@ -70,27 +52,25 @@ struct SourcePriorityEditorScreen: View {
         }
         .navigationTitle(Text("Source priority"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button(role: .destructive) {
-                        showResetConfirm = true
-                    } label: {
-                        Label(
-                            String(localized: "Reset to default"),
-                            systemImage: "arrow.uturn.backward"
-                        )
-                    }
-                    .disabled(store.isSaving)
+        .hlPageActions([
+            .more(label: "More actions") {
+                Button(role: .destructive) {
+                    showResetConfirm = true
                 } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .accessibilityLabel(Text("More actions"))
+                    Label(
+                        String(localized: "Reset to default"),
+                        systemImage: "arrow.uturn.backward"
+                    )
                 }
+                .disabled(store.isSaving)
             }
-            ToolbarItem(placement: .topBarLeading) {
+        ])
+        // Every move saves at once. The running save is a state, not an
+        // action: the bar's default place, not the leading edge beside back.
+        .toolbar {
+            ToolbarItem {
                 if store.isSaving {
-                    ProgressView()
-                        .controlSize(.small)
+                    HLInlineProgress()
                         .accessibilityLabel(Text("Saving"))
                 }
             }
@@ -112,8 +92,8 @@ struct SourcePriorityEditorScreen: View {
         )
         .sensoryFeedback(.success, trigger: saveTickCount)
         .sensoryFeedback(.impact(weight: .medium), trigger: dropTickCount)
-        // K1 — the banner below still presents as this overlay; this
-        // reserves its height at the top so it covers nothing (H2).
+        // The banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing.
         .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
@@ -121,10 +101,7 @@ struct SourcePriorityEditorScreen: View {
             }
         }
         .task {
-            // v0.11 W3 — standalone has no server ladder to fetch; firing
-            // `store.load()` would 401. Gate on `hasServer` so the placeholder
-            // branch never triggers a doomed request.
-            if backend.hasServer, store.ladder == nil {
+            if store.ladder == nil {
                 await store.load()
             }
         }
@@ -133,7 +110,7 @@ struct SourcePriorityEditorScreen: View {
     // MARK: - Editor list
 
     private var editorList: some View {
-        // 1.4 B2-c — no empty lead and tail sections: "order your sources"
+        // No empty lead and tail sections: "order your sources"
         // repeated the screen before, and "changes are saved immediately" is
         // what the drag already shows (spinner and haptic).
         List {
@@ -141,11 +118,9 @@ struct SourcePriorityEditorScreen: View {
                 metricSection(row)
             }
         }
+        .hlPageMargins()
         .listStyle(.insetGrouped)
         .environment(\.editMode, .constant(.active))
-        .scrollContentBackground(.hidden)
-        .hlScreenBackground()
-        .hlScrollEdgeSoft()
     }
 
     private func metricSection(_ row: SourcePriorityRow) -> some View {
@@ -158,11 +133,9 @@ struct SourcePriorityEditorScreen: View {
                 handleMove(offsets: offsets, destination: destination, in: row, augmented: augmented)
             }
         } header: {
-            Text(LocalizedStringKey(row.label))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .textCase(nil)
+            HLSectionHeader(LocalizedStringKey(row.label))
         }
+        .hlFormRowSurface()
         // Audit-Gruppe 12 — hier stand „Reihenfolge per langem Drücken
         // anpassen." als Section-Footer, also **einmal je Metrik**: bei rund
         // zehn Metriken zehnmal derselbe Satz auf einer Seite. R2 verbietet
@@ -173,29 +146,23 @@ struct SourcePriorityEditorScreen: View {
     }
 
     private func editorRow(rank: Int, source: String, isCanonical: Bool) -> some View {
-        HStack(spacing: HLSpace.md) {
-            Text("\(rank).")
-                .font(.hlBody.weight(.semibold))
-                .foregroundStyle(HLText.tertiary)
-                .monospacedDigit()
-                .frame(width: 20, alignment: .leading)
-            Image(systemName: sourceIcon(for: source))
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.secondary)
-                .hlInfoIconColumn()
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(LocalizedStringKey(SourcePriorityRow.displayLabel(forSource: source)))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                if !isCanonical {
-                    Text("No values from this source yet")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
+        // Rank in the row's title type, as on the source overview; symbol in
+        // the row's symbol column.
+        HLRowLayout(
+            title: Text(LocalizedStringKey(SourcePriorityRow.displayLabel(forSource: source))),
+            subtitle: isCanonical ? nil : Text("No values from this source yet")
+        ) {
+            EmptyView()
+        } leading: {
+            HStack(spacing: HLSpace.sm) {
+                Text("\(rank).")
+                    .font(HLRowTitle.font)
+                    .foregroundStyle(HLText.tertiary)
+                    .monospacedDigit()
+                    .frame(width: 20, alignment: .leading)
+                HLRowGlyph(symbol: sourceIcon(for: source))
             }
-            Spacer()
         }
-        .padding(.vertical, HLSpace.xxs)
         .accessibilityElement(children: .combine)
         // v0.14 i18n P3 — was a German literal ("Rang …") that leaked to VoiceOver
         // under EN. Routed through a localized key (EN "Rank %lld: %@" / DE
@@ -236,7 +203,7 @@ struct SourcePriorityEditorScreen: View {
     private func augmentedSources(_ wire: [String]) -> [String] {
         var seen = Set(wire.map { $0.uppercased() })
         var augmented = wire
-        // POLISH-C (C5) — Garmin only on a server that takes it in a ladder.
+        // Garmin only on a server that takes it in a ladder.
         for token in SourcePriorityStore.offeredSourceTokens() {
             let upper = token.uppercased()
             if !seen.contains(upper) {

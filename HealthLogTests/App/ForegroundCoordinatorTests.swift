@@ -7,13 +7,13 @@
     @testable import HealthLog
     import Testing
 
-    /// **Phase 09 / plan 09-06 — the foreground pass, and the proof that it is one.**
+    /// **The foreground pass, and the proof that it is one.**
     ///
     /// Everything asserted here is a **count or an ordering**: how many members
     /// started before another finished, how many of them were left in flight when
     /// the pass returned, how many stale publications got through, how many
     /// intervals closed and with which outcome. The `≤ 300 ms p95` foreground
-    /// budget (B2) is a duration, is not claimable off a simulator, and is
+    /// budget is a duration, is not claimable off a simulator, and is
     /// physical-device evidence for plan 09-09. Not one figure below is a clock
     /// reading — the clock this suite injects records the budget it is asked for
     /// and never spends it.
@@ -55,7 +55,7 @@
             }
             #expect(independentWorkFinished, "independent legs must not wait on the medication leg")
             #expect(await phase09AwaitCondition { spy.hasStarted(.moodRevalidate) })
-            // 22-02 (D-20-EXEC-A) — this was the ONE bare assertion in the
+            // This was the ONE bare assertion in the
             // neighbourhood: both expectations around it settle through the
             // barrier, this one read the spy directly. Under parallel-test CPU
             // pressure the medication leg's task can still be unscheduled when
@@ -83,7 +83,7 @@
             #expect(spy.endCount(of: .badgeRefresh) == 1, "the badge must still run")
             #expect(
                 orderingViolations == 0,
-                "EXPECTED_RED: medication did not complete before badge refresh"
+                "medication did not complete before badge refresh"
             )
         }
 
@@ -150,7 +150,7 @@
             let latePublications = published.count(of: "generation") + published.count(of: "account")
             #expect(
                 latePublications == 0,
-                "EXPECTED_RED: cancelled foreground generation published late state"
+                "cancelled foreground generation published late state"
             )
         }
 
@@ -225,7 +225,7 @@
             #expect(!Task.isCancelled, "the test's own task must still be alive")
             #expect(
                 violations == 0,
-                "EXPECTED_RED: foreground pass exceeded deadline and drain allowance"
+                "foreground pass exceeded deadline and drain allowance"
             )
         }
 
@@ -299,43 +299,6 @@
             let closed = recorder.records(for: .foregroundPass)
             #expect(closed.count == 3, "one closed interval per pass, no more and no fewer")
             #expect(closed.map(\.outcome) == [.completed, .failed, .cancelled])
-        }
-
-        /// **Every route to the thing being ordered, enumerated.**
-        ///
-        /// 09-05's finding, applied before this plan's ordering claim is made:
-        /// `OutboxReplayService.runOnce` had three callers and only one of them
-        /// was the one the ordering claim was about. The badge has four production
-        /// routes — the ordered foreground step, the `onIntakesDidChange`
-        /// coalescer that the medication load itself drives, the `willPresent`
-        /// delegate recompute, and the logout purge — and only the first is
-        /// ordered by this plan. The other three are named here so a future
-        /// reader of "medication before badge" knows exactly what it does and does
-        /// not cover.
-        ///
-        /// Verdicts are bound to a `Bool` before the `#expect`: a `#expect` on a
-        /// `contains` over source pastes whole production files into the failure
-        /// log, and a production-source paste inside a RED log is how a
-        /// behavioural gate comes to look like a compile failure to the regex that
-        /// reads it.
-        @Test("the badge has exactly four production routes, and this plan orders one of them")
-        func everyRouteToTheBadgeIsEnumerated() throws {
-            let routes = try FirstFrameSignalTests.productionFiles(naming: "refreshBadge")
-            let alwaysPresent = [
-                "HealthLog/Services/NotificationService+Badge.swift",
-                "HealthLog/Services/NotificationService+Handler.swift",
-                "HealthLog/Stores/AppContainer+Notifications.swift"
-            ]
-            let routeCountIsFour = routes.count == 4
-            let theThreeUnorderedRoutesAreIntact = alwaysPresent.allSatisfy { routes.contains($0) }
-            // The fourth is the foreground pass itself, wherever it currently
-            // lives — `RootView` before Task 2, the pass plan after it.
-            let foregroundRoute = routes.filter { !alwaysPresent.contains($0) }
-            let exactlyOneForegroundRoute = foregroundRoute.count == 1
-
-            #expect(routeCountIsFour, "the badge route inventory moved: \(routes.count) files name refreshBadge")
-            #expect(theThreeUnorderedRoutesAreIntact)
-            #expect(exactlyOneForegroundRoute)
         }
     }
 

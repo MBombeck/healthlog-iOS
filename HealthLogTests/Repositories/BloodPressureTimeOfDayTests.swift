@@ -168,25 +168,24 @@ struct BloodPressureTimeOfDayTests {
 
     // MARK: - Placement gate (Regel 10)
 
-    @Test("only on the blood pressure page of a paired server that has the route")
+    @Test("only on the blood pressure page of a server that has the route")
     func placementGate() throws {
         let defaults = try #require(UserDefaults(suiteName: "bp-tod-\(UUID().uuidString)"))
         // Unknown version: no.
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, defaults: defaults))
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, defaults: defaults))
         KnownServerVersion.record(ServerVersionInfo(version: "1.46.6"), defaults: defaults)
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, defaults: defaults))
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, defaults: defaults))
         KnownServerVersion.record(ServerVersionInfo(version: "1.47.0"), defaults: defaults)
-        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, defaults: defaults))
+        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, defaults: defaults))
         KnownServerVersion.record(ServerVersionInfo(version: "1.48.2"), defaults: defaults)
-        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, defaults: defaults))
+        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, defaults: defaults))
         // The observed form the view reads: the same answers from the raw value.
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, serverVersion: nil))
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, serverVersion: "1.46.9"))
-        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: true, serverVersion: "1.47.0"))
-        // Not without a server, not on another page.
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, hasServer: false, defaults: defaults))
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .pulse, hasServer: true, defaults: defaults))
-        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .weight, hasServer: true, defaults: defaults))
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, serverVersion: nil))
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, serverVersion: "1.46.9"))
+        #expect(BloodPressureTimeOfDaySection.isAvailable(for: .bloodPressure, serverVersion: "1.47.0"))
+        // Not on another page.
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .pulse, defaults: defaults))
+        #expect(!BloodPressureTimeOfDaySection.isAvailable(for: .weight, defaults: defaults))
     }
 
     // MARK: - Section state
@@ -259,10 +258,10 @@ struct BloodPressureTimeOfDayTests {
     @Test("hour windows come from the server's hours; evening runs past midnight")
     func hourWindows() throws {
         let dto = try Self.decode(Self.fullBody)
-        let morning = BloodPressureTimeOfDaySection.hours(dto.parts[0])
+        let morning = BloodPressureTimeOfDaySection.hours(dto.parts[0], locale: Locale(identifier: "de_DE"))
         #expect(morning.contains("04:00"))
         #expect(morning.contains("11:59"))
-        let evening = BloodPressureTimeOfDaySection.hours(dto.parts[2])
+        let evening = BloodPressureTimeOfDaySection.hours(dto.parts[2], locale: Locale(identifier: "de_DE"))
         #expect(evening.contains("18:00"))
         // 01:15 belongs to the evening before: the window ends at 03:59.
         #expect(evening.contains("03:59"))

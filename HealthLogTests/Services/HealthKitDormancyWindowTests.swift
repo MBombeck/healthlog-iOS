@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Build 273 (A12) — window-based day totals (daily statistics, nutrients)
+/// Window-based day totals (daily statistics, nutrients)
 /// must catch up from the last completed sweep after dormancy instead of a
 /// fixed lookback. Neither partition is incremental, so a phone left alone for
 /// nine days lost days two to nine forever with a 7-day (stats) or 1-day

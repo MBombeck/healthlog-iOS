@@ -72,13 +72,13 @@
             return host.sizeThatFits(in: CGSize(width: Self.width, height: .greatestFiniteMagnitude)).height
         }
 
-        /// 1.4 B2 — the BP card carries one line more than the pulse card: the
+        /// The BP card carries one line more than the pulse card: the
         /// pulse pressure and mean pressure derived from the same reading. Its
         /// own fitted height (inside the card's padding, plus the strip's row
         /// spacing) is allowed on top; a wrapped number still is not.
         private func derivedLineHeight(typeSize: DynamicTypeSize) -> CGFloat {
             let readout = BPDerivedReadout.derive(systolic: 128, diastolic: 93)!
-            let view = Text("insights.bp.derived.line \(readout.pulsePressure) \(readout.meanArterialPressure)")
+            let view = Text("insights.bp.derived.units \(readout.pulsePressure) \(readout.meanArterialPressure)")
                 .font(.hlCaption)
                 .fixedSize(horizontal: false, vertical: true)
                 .environment(\.locale, Locale(identifier: "de_DE"))

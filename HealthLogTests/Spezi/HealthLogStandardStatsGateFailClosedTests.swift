@@ -5,17 +5,14 @@
     import SpeziHealthKit
     import Testing
 
-    /// AUD-3 D-1 — the HK-STATS gate must FAIL CLOSED in the unconfigured
-    /// window (`featureFlags == nil`, before the live flag reader is attached).
+    /// The per-sample path never uploads a cumulative type.
     ///
     /// Raw cumulative samples upload with `externalId = uuid`; the daily-stats
     /// coordinator uploads the same day's sum with
     /// `externalId = "stats:<id>:<day>"`. These are DIFFERENT externalIds the
     /// server cannot collapse, so a day that gets BOTH double-counts in the
-    /// nightly rollup. `enableDailyStats` defaults ON and the stats path is
-    /// authoritative for the cumulative types, so when the flag reader is not
-    /// yet attached the gate must behave as if ON — drop the cumulative
-    /// identifiers — never let them through.
+    /// nightly rollup. The stats path is authoritative for the cumulative
+    /// types, so the standard drops them as soon as an uploader is attached.
     @Suite("HealthLogStandard — AUD-3 D-1 stats gate fails closed")
     struct HealthLogStandardStatsGateFailClosedTests {
         /// Captures every entry batch the standard forwards to the uploader.
@@ -79,13 +76,11 @@
             )
         }
 
-        @Test("featureFlags == nil ⇒ cumulative stepCount is DROPPED (fail closed)")
-        func nilFlagsDropsCumulative() async {
+        @Test("cumulative stepCount is DROPPED from the per-sample path")
+        func cumulativeIsDropped() async {
             let api = CapturingAPI()
             let standard = HealthLogStandard()
-            // Attach the uploader but NO feature-flag reader (the unconfigured
-            // window). Pre-fix this let cumulative through (`?? false`).
-            await standard.attachUploader(makeUploader(api: api), featureFlags: nil)
+            await standard.attachUploader(makeUploader(api: api))
 
             await standard.handleNewSamples([stepSample(500)], ofType: SampleType.stepCount)
 
@@ -95,11 +90,11 @@
             #expect(!api.entryIdentifiers.contains(HKQuantityTypeIdentifier.stepCount.rawValue))
         }
 
-        @Test("featureFlags == nil ⇒ a NON-cumulative type still flows (only cumulative is gated)")
-        func nilFlagsKeepsNonCumulative() async {
+        @Test("a NON-cumulative type still flows (only cumulative is gated)")
+        func nonCumulativeFlows() async {
             let api = CapturingAPI()
             let standard = HealthLogStandard()
-            await standard.attachUploader(makeUploader(api: api), featureFlags: nil)
+            await standard.attachUploader(makeUploader(api: api))
 
             await standard.handleNewSamples([heartRateSample(72)], ofType: SampleType.heartRate)
 

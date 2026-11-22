@@ -265,7 +265,7 @@
 
             // (b) Widget reload triggered — proxy: the snapshot was (re)written
             // (the writer only writes + reloads when the dose/compliance moved).
-            // 09-03 — the write is queued off the main actor now, so drain the
+            // The write is queued off the main actor now, so drain the
             // writer before reading the file it is about to produce.
             await writer.drainPendingWrites()
             #expect(widgetStore.read() != nil, "Widget snapshot must be written so the timeline reloads")

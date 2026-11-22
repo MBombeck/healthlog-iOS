@@ -50,7 +50,7 @@ struct IntakeHistoryRow: View {
     /// confirmation alert before calling
     /// `MedicationsStore.deleteIntake`.
     let onDelete: () -> Void
-    /// **15-01 (B1)** — called when the operator chooses "Zeit bearbeiten".
+    /// Called when the operator chooses "Zeit bearbeiten".
     /// Parent opens the inline time picker and, on save, sends `takenAt` over
     /// the intake PUT (`MedicationsStore.editIntakeTakenAt`). Optional so a
     /// preview / a future host that offers no edit surface can leave it out;
@@ -65,52 +65,29 @@ struct IntakeHistoryRow: View {
         onEditTime != nil && event.takenAt != nil && !event.skipped
     }
 
-    /// **POLISH-MED (v0.5.5.6).** Slimmed from the prior `.hlHeadline`
+    /// Slimmed from the prior `.hlHeadline`
     /// timestamp + `HLBadge` chip layout (~64 pt) to a ~52 pt row with
     /// `.hlSubhead.weight(.semibold)` timestamp + inline 14 pt SF Symbol
     /// status. The `HLBadge` pills duplicated the colour the icon now
     /// carries and read as visual noise in a dense history list.
+    /// One history entry in the shared form: date and time as the title,
+    /// one detail line (auto-recorded, injection site), the status symbol
+    /// on the right. The actions live in the row's context menu, so the row
+    /// carries no second control beside the status (Z18, Z22).
+    /// The medication's configured dose, shown on the right of a taken row.
+    var dose: String = ""
+
+    /// One intake as a history row (Z22), like the ledger rows: date and
+    /// time as the title, the dose of a taken row on the right, the state as
+    /// its status text.
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(timestamp)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(1)
-                if event.isAutoRecordedTake {
-                    Text("med.history.auto_recorded")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .lineLimit(1)
-                }
-                if let site = event.injectionSite {
-                    Text(siteLabel(site))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .lineLimit(1)
-                }
+        Group {
+            if let shown = Self.shownDose(event: event, dose: dose) {
+                HLHistoryRow(date: Text(timestamp), detail: detail, value: Text(verbatim: shown), status: status)
+            } else {
+                HLRow(title: Text(timestamp), detail: detail, status: status)
             }
-            Spacer()
-            statusIcon
-            // v0.6.1.18 Y10.4 — operator brief 2026-05-24: "Genommene
-            // Medikamente können nicht mehr bearbeitet oder gelöscht
-            // werden." The original `.contextMenu` (long-press) was
-            // not discoverable after the Y4 redesign moved the
-            // at-a-glance read onto VerlaufGlyphTrack — the operator
-            // didn't realise rows below were still tappable. Surface
-            // a visible trailing menu button so edit + delete are
-            // one-tap reachable. The same actions remain reachable via
-            // long-press for muscle-memory users.
-            //
-            // v0.14.8 — the menu now renders on *every* row: past/due
-            // rows carry the full retro-mark + delete set, future rows
-            // carry delete only (operator brief 2026-06-07).
-            retroMutateMenuButton
         }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(menuAccessibilityHint)
-        .contentShape(Rectangle())
         .modifier(RetroMutateContextMenu(
             canRetroMark: canRetroMark,
             currentlyTaken: event.takenAt != nil && !event.skipped,
@@ -122,146 +99,62 @@ struct IntakeHistoryRow: View {
         ))
     }
 
-    /// A11y hint reflecting what the trailing menu actually offers on
-    /// this row: edit-or-delete for retro-markable rows, delete-only for
-    /// future/planned rows.
-    private var menuAccessibilityHint: Text {
-        canRetroMark
-            ? Text(String(localized: "Tap the menu to edit or delete"))
-            : Text(String(localized: "Tap the menu to delete the entry"))
-    }
-
-    /// v0.6.1.18 Y10.4 — visible trailing menu button so retro-mutate
-    /// edit/delete actions don't depend on the operator discovering
-    /// long-press. `Menu` opens a popover sheet anchored on the
-    /// trailing edge, mirroring iOS Mail / Reminders row patterns.
-    private var retroMutateMenuButton: some View {
-        Menu {
-            // v0.19 / 15-01 (B1) — the edit the row's own doc comment and its
-            // "Edit or delete entry" label have promised since T-3: correct the
-            // time a logged dose was actually taken.
-            if canEditTime, let onEditTime {
-                Button {
-                    onEditTime()
-                } label: {
-                    Label(
-                        String(localized: "med.history.edit_time.action"),
-                        systemImage: "clock.arrow.circlepath"
-                    )
-                }
-            }
-            // Retro-mark actions only on past/due rows. `showMarkTaken`
-            // / `showMarkSkipped` mirror the current state so the menu
-            // only carries actions that actually flip something.
-            if canRetroMark {
-                if event.takenAt == nil || event.skipped {
-                    Button {
-                        onMarkTaken()
-                    } label: {
-                        Label(
-                            String(localized: "Mark as taken"),
-                            systemImage: "checkmark.circle"
-                        )
-                    }
-                }
-                if !event.skipped {
-                    Button {
-                        onMarkSkipped()
-                    } label: {
-                        Label(
-                            String(localized: "Mark as skipped"),
-                            systemImage: "xmark.circle"
-                        )
-                    }
-                }
-                // A retro-markable row always offers at least one mark
-                // action above (taken when skipped/pending, skipped when
-                // not-skipped), so the divider never orphans. A delete-only
-                // (future) menu skips this whole block → no stray divider.
-                Divider()
-            }
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label(
-                    String(localized: "Delete entry"),
-                    systemImage: "trash"
-                )
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.hlIcon(HLIconSize.lg, weight: .regular))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-                .accessibilityLabel(menuButtonAccessibilityLabel)
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-    }
-
-    /// Trailing-menu button label: full edit-or-delete affordance on
-    /// retro-markable rows, delete-only on future/planned rows.
-    private var menuButtonAccessibilityLabel: Text {
-        canRetroMark
-            ? Text(String(localized: "Edit or delete entry"))
-            : Text(String(localized: "Delete entry"))
+    private var detail: Text? {
+        HLRowDetail.text([
+            event.isAutoRecordedTake ? String(localized: "med.history.auto_recorded") : nil,
+            event.injectionSite.map(siteLabel)
+        ])
     }
 
     private var timestamp: String {
         let date = event.takenAt ?? event.scheduledFor
-        // M3 — date part keeps the locale order; the clock honours the user's
+        // Date part keeps the locale order; the clock honours the user's
         // time-format preference via the central `HLTimeFormat` helper.
-        let datePart = date.formatted(.dateTime.day().month(.abbreviated))
+        let datePart = HLDateFormat.dayMonth(date)
         return "\(datePart), \(HLTimeFormat.time(date))"
     }
 
-    /// Inline 14 pt SF Symbol status, status-tinted. Replaces the prior
-    /// `HLBadge` chip cluster (POLISH-MED v0.5.5.6). REG-10 auto-skip
-    /// branch preserved.
-    @ViewBuilder
-    private var statusIcon: some View {
-        // REG-10 (v0.5.6): treat past-due-pending rows older than the grace
-        // window as visually skipped. Server still carries `skipped: false`
-        // + `takenAt: null` until a cron worker reconciles (see B2-report);
-        // this is the iOS-side visual fix so the operator stops seeing
-        // March entries chip-rendered as "Offen" in mid-May.
+    /// The dose a taken row reports; a skipped, planned or open intake took
+    /// nothing and shows none.
+    nonisolated static func shownDose(event: PaginatedIntakeEvent, dose: String) -> String? {
+        guard event.takenAt != nil, !event.skipped else { return nil }
+        let trimmed = dose.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// The state as text under the value. Past-due-pending rows older than
+    /// the grace window read as skipped: the server keeps `skipped: false`
+    /// until a cron worker reconciles them.
+    private var status: HLRowStatus {
+        // Term list (#191): Übersprungen, Genommen, Ausstehend, Fällig.
         if event.skipped || event.isEffectivelySkipped(now: now) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityLabel(String(localized: "medications.history.intake.skipped_a11y"))
-        } else if event.takenAt != nil {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLColor.statusOK)
-                .accessibilityLabel(String(localized: "medications.history.intake.taken_a11y"))
-        } else if event.scheduledFor > now {
-            Image(systemName: "clock")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityLabel(String(localized: "medications.history.intake.scheduled_a11y"))
-        } else {
-            Image(systemName: "circle.dotted")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityLabel(String(localized: "medications.history.intake.pending_a11y"))
+            return HLRowStatus(MedicationDosePhase.skipped.title)
         }
+        if event.takenAt != nil {
+            return HLRowStatus(MedicationDosePhase.taken.title)
+        }
+        if event.scheduledFor > now {
+            return HLRowStatus(MedicationDosePhase.pending.title)
+        }
+        return HLRowStatus(MedicationDosePhase.due.title)
     }
 
     private func siteLabel(_ site: String) -> String {
-        // Server emits canonical strings (`abdomen`, `thigh_left`, etc.) —
-        // the catalog of localized names lives in the Settings/InjectionSites
-        // module (out of Delta scope); fall back to capitalised raw for now.
-        let cleaned = site.replacingOccurrences(of: "_", with: " ")
-        return cleaned.prefix(1).uppercased() + cleaned.dropFirst()
+        Self.injectionSiteLabel(site)
+    }
+
+    /// The injection site in the person's language. The server sends its own
+    /// enum (`ABDOMEN_UPPER_LEFT`) or a legacy local string; a site this build
+    /// cannot name reads "unknown site" rather than the raw code.
+    nonisolated static func injectionSiteLabel(_ raw: String) -> String {
+        (InjectionSite.parse(raw) ?? .unknown).localizedLabel
     }
 }
 
 /// Wrapper modifier so the context menu logic stays out of the row
 /// body — keeps the row's `body` reviewable as pure layout.
 ///
-/// v0.14.8 — the long-press menu now attaches to *every* row (the
+/// The long-press menu now attaches to *every* row (the
 /// trailing menu button mirrors it). Future/planned rows
 /// (`canRetroMark == false`) carry **delete only**; past/due rows carry
 /// the retro-mark + delete set, eliding the "already taken" / "already
@@ -275,7 +168,7 @@ private struct RetroMutateContextMenu: ViewModifier {
     let onMarkTaken: () -> Void
     let onMarkSkipped: () -> Void
     let onDelete: () -> Void
-    /// 15-01 (B1) — `nil` on rows where a time correction is meaningless
+    /// `nil` on rows where a time correction is meaningless
     /// (skipped, or never taken). Mirrors the trailing menu exactly.
     var onEditTime: (() -> Void)?
 
@@ -314,19 +207,15 @@ private struct RetroMutateContextMenu: ViewModifier {
                 }
                 Divider()
             }
-            Button(role: .destructive) {
+            // #188 (7): deleted at once, undone from the toast.
+            HLDeleteMenuItem(.undoable {
                 onDelete()
-            } label: {
-                Label(
-                    String(localized: "Delete entry"),
-                    systemImage: "trash"
-                )
-            }
+            })
         }
     }
 }
 
-// MARK: - REG-10 auto-skip grace
+// MARK: - Auto-skip grace
 
 extension PaginatedIntakeEvent {
     /// Grace window after which a still-pending scheduled intake should
@@ -353,7 +242,7 @@ extension PaginatedIntakeEvent {
 
 // MARK: - Preview
 
-// v0.14.8 — renders the three menu shapes side by side so the operator's
+// Renders the three menu shapes side by side so the operator's
 // device walkthrough can confirm: a future/planned row's trailing menu +
 // long-press carries **only "Löschen"**, while past taken / past pending
 // rows keep the full retro-mark + delete set. Tap the ⋯ button (or

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.5.5.7 RECONCILE-COMPARE — benchmark comparison band for the
+/// Benchmark comparison band for the
 /// `PersonalRecordsScreen`.
 ///
 /// #135 (server v1.43) — the band is the server's `benchmark` on the record
@@ -26,17 +26,12 @@ struct ComparisonBand: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                header
-                bar
-                summary
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HLSpace.lg)
-            .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                    .stroke(HLColor.separator, lineWidth: 0.5)
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    header
+                    bar
+                    summary
+                }
             }
         }
         .buttonStyle(HLPressableButtonStyle())
@@ -48,7 +43,7 @@ struct ComparisonBand: View {
 
     // MARK: - Subviews
 
-    /// 1.4 B2 — the metric names the card; the "Vergleichsbereich" eyebrow
+    /// The metric names the card; the "Vergleichsbereich" eyebrow
     /// repeated the section heading right above it.
     private var header: some View {
         HStack(spacing: HLSpace.xs) {
@@ -171,7 +166,7 @@ extension ComparisonBand {
         static let trackHeight: CGFloat = 10
         static let tickWidth: CGFloat = 6
 
-        /// L1 — catalog keys, never German literals rendered verbatim.
+        /// Catalog keys, never German literals rendered verbatim.
         static let accessibilityHint = "records.comparison.a11yHint"
     }
 }

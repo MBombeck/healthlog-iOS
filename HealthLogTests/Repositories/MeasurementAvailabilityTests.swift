@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// v0.13.1 IC — locks the per-kind has-data availability contract that fixes the
+/// Locks the per-kind has-data availability contract that fixes the
 /// operator-reported "blood-pressure / pulse just aren't in the Insights list"
 /// bug. The Insights strip used to gate pills on the last-400 `/api/measurements`
 /// recency window, which under-reports low-frequency kinds on a HealthKit
@@ -92,7 +92,7 @@ struct MeasurementAvailabilityTests {
         // itself (the mood card is emitted only when `entryCount > 0`), not by this
         // measurement-availability path — so it is exempt here.
         //
-        // Audit B-4 — `.unknown` is exempt for the mirror-image reason: it is no
+        // `.unknown` is exempt for the mirror-image reason: it is no
         // server `MeasurementType`, so there is no `count` that could ever gate
         // it. It reaches the app only as a row the server already sent.
         for kind in MetricKind.allCases where kind != .mood && !kind.isUnknown {
@@ -117,7 +117,7 @@ struct MeasurementAvailabilityTests {
     }
 }
 
-/// v0.13.1 IC — locks the reverse slug helper the Dashboard tile tap uses to
+/// Locks the reverse slug helper the Dashboard tile tap uses to
 /// drive the `.insights(metric:)` deep link (nav unification). Every chartable
 /// kind must round-trip slug → kind → slug so the tap lands on the right page.
 @Suite("InsightsTabSlug reverse mapping (IC nav unification)")

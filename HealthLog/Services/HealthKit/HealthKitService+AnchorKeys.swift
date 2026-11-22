@@ -56,7 +56,7 @@ import Foundation
         /// `HKReadinessStore` / `HealthKitBackfillWindowStore` for their
         /// own per-User partitioning logic.
         ///
-        /// **M-6 hardening (v0.6.2):** legacy behaviour only stripped dots, so
+        /// **M-6 hardening:** legacy behaviour only stripped dots, so
         /// a user-id containing `/`, `..`, or unicode look-alikes would have
         /// survived into the UserDefaults key (`hl.healthkit.anchor.<token>.<type>`).
         /// We now apply a strict `[A-Za-z0-9_-]` allowlist + cap at 64 chars.

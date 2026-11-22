@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// MEDS-QUICK-MARK-UNDO sibling (v0.11 W26) — measurement-delete undo.
+/// MEDS-QUICK-MARK-UNDO sibling — measurement-delete undo.
 ///
 /// `MeasurementListScreen` now routes deletes through
 /// `MeasurementsStore.delete`, which optimistically removes the row, enqueues

@@ -9,7 +9,7 @@ import Foundation
 /// - `POST   /api/mcp/tokens`           — mint one (raw secret returned ONCE).
 /// - `DELETE /api/mcp/tokens/:id`       — revoke one.
 ///
-/// **Why this exists (Build 2 / 2.7):** until now zero files in the iOS source
+/// **Why this exists:** until now zero files in the iOS source
 /// mentioned MCP, so a user could not see — let alone cut — an external
 /// assistant's live connection to their health record from the device they
 /// actually carry. Revocation is the security-critical half.
@@ -61,7 +61,7 @@ public actor McpRepository {
     /// **once** — it is unrecoverable afterwards, so the caller must surface it
     /// immediately and must never persist or log it.
     ///
-    /// R2 / #115 A3 — `elevation` rides as `X-Step-Up` (single use). Server
+    /// `elevation` rides as `X-Step-Up` (single use). Server
     /// v1.39.3 still takes the token alone here and will require the
     /// elevation later; on `401 auth.stepup.required` the store asks for proof
     /// and retries with one.

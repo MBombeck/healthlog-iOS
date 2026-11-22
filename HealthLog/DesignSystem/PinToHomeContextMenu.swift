@@ -13,23 +13,18 @@ import SwiftUI
 /// fires a light haptic, and surfaces a brief confirmation toast through the
 /// app-wide `UndoCoordinator` (tap "Undo" to reverse the pin).
 ///
-/// **Honest gating** — the menu action is only offered when:
-/// 1. The metric maps to a real server widget id
-///    (`DashboardWidgetId.id(forMetricKind:)` is non-nil). Metrics without an
-///    id (the v1.10 additive signals, derived/composite tiles) can't be
-///    persisted server-side, so we omit the action entirely rather than show a
-///    dead button.
-/// 2. The app is NOT in standalone mode. The layout PUT has no offline
-///    persistence path today (the layout store always round-trips the server);
-///    in standalone we omit the action rather than silently drop the toggle.
+/// **Honest gating** — the menu action is only offered when the metric maps
+/// to a real server widget id (`DashboardWidgetId.id(forMetricKind:)` is
+/// non-nil). Metrics without an id (the v1.10 additive signals,
+/// derived/composite tiles) can't be persisted server-side, so we omit the
+/// action entirely rather than show a dead button.
 struct PinToHomeContextMenu: ViewModifier {
     let kind: MetricKind
     let container: AppContainer?
 
     func body(content: Content) -> some View {
         if let container,
-           let widgetId = DashboardWidgetId.id(forMetricKind: kind),
-           container.syncModeStore.isStandalone == false
+           let widgetId = DashboardWidgetId.id(forMetricKind: kind)
         {
             content.contextMenu {
                 PinToHomeButton(
@@ -101,8 +96,8 @@ private struct PinToHomeButton: View {
 
 extension View {
     /// Attaches the shared "pin to home" long-press menu for a metric tile.
-    /// No-op (returns self) for metrics without a server widget id or in
-    /// standalone mode — see `PinToHomeContextMenu`.
+    /// No-op (returns self) for metrics without a server widget id — see
+    /// `PinToHomeContextMenu`.
     func pinToHomeContextMenu(kind: MetricKind, container: AppContainer?) -> some View {
         modifier(PinToHomeContextMenu(kind: kind, container: container))
     }

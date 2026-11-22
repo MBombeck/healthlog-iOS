@@ -1,4 +1,4 @@
-// 14-02 (A3) — the PK section stops jumping in.
+// The PK section stops jumping in.
 //
 // The operator's A3 is "Das Chart auf der Medikamentenseite lädt immer nach und
 // springt dann ins Bild hinein". `MDRGatedDrugLevelSection` has exactly two
@@ -176,7 +176,7 @@
 
             #expect(
                 handedAnUnsettledInput == false,
-                "EXPECTED_RED: the section pops from empty to chart with no loading branch"
+                "the section pops from empty to chart with no loading branch"
             )
             // The settled state is unaffected either way — this is about when.
             #expect(store.pkDoseEvents().count == Self.totalEvents)
@@ -210,7 +210,7 @@
 
             #expect(
                 observed.count == 1,
-                "EXPECTED_RED: the drain recomputes the curve per append"
+                "the drain recomputes the curve per append"
             )
             #expect(observed.last == Self.totalEvents)
         }

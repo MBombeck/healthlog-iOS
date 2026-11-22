@@ -8,13 +8,13 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// W-SERVER-SYNC — locks the wire contract for the server-first Settings
+/// Locks the wire contract for the server-first Settings
 /// toggle wired in this wave:
 ///
 /// - **moodReminderEnabled** → `PATCH /api/user/profile { moodReminderEnabled }`
 ///   (`SettingsRepository.patchProfile`), reflected back in the GET profile.
 ///
-/// D-12-05-A — the second toggle this suite guarded was Research Mode. The
+/// The second toggle this suite guarded was Research Mode. The
 /// server retired it in `0160052289e4` and iOS followed; its two cases went
 /// with the repository they exercised.
 ///

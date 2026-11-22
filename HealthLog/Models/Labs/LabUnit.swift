@@ -63,8 +63,50 @@ enum LabUnit {
     }
 }
 
+// MARK: - The unit of a marker
+
+/// A marker minted from a text result (OCR, CSV, document inbox) stores an
+/// empty unit: none chosen yet, its first number would set it. The editor
+/// treats it like "No unit", and a save sends the unit only when it really
+/// changes, so a rename never touches it.
 extension LabUnit {
-    /// POLISH-A F-LAB-2 — where a reading came from, in words. The server's
+    /// The first server that lets a marker with an empty unit take a unit
+    /// while only text results are linked. Older servers refuse any unit
+    /// change on a marker with readings (`biomarkers.unit.locked`).
+    static let emptyMarkerUnitMinimumServerVersion = "1.47.7"
+
+    /// `true` for a marker without a unit: none chosen yet (empty) or the unity.
+    static func isNoUnit(_ unit: String?) -> Bool {
+        let trimmed = unit?.trimmingCharacters(in: .whitespaces) ?? ""
+        return trimmed.isEmpty || trimmed == unity
+    }
+
+    /// Two marker units that mean the same: equal after trimming, or both
+    /// "no unit" (the empty unit and the unity).
+    static func sameMarkerUnit(_ lhs: String?, _ rhs: String?) -> Bool {
+        if isNoUnit(lhs), isNoUnit(rhs) { return true }
+        return lhs?.trimmingCharacters(in: .whitespaces) == rhs?.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The `unit` of a marker update: `nil` (key left out, unit untouched)
+    /// unless the edited unit is a real change of the stored one.
+    static func markerPatchUnit(stored: String, edited: String?) -> String? {
+        guard let edited, !sameMarkerUnit(stored, edited) else { return nil }
+        return edited
+    }
+
+    /// Whether the editor may change the unit of `stored`. Only a marker
+    /// with an empty unit on a server before 1.47.7 is held: that server
+    /// counts its text results and answers every change with 422. An unknown
+    /// server version holds it too.
+    static func markerUnitEditable(stored: String?, defaults: UserDefaults = .standard) -> Bool {
+        guard let stored, stored.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
+        return KnownServerVersion.isAtLeast(emptyMarkerUnitMinimumServerVersion, defaults: defaults)
+    }
+}
+
+extension LabUnit {
+    /// Where a reading came from, in words. The server's
     /// `source` is a free string ("MANUAL" by default, "OCR" from a read
     /// report, "DOCUMENT" from a filed document, import paths their own);
     /// the detail page showed it raw. Anything unknown is "another source".

@@ -29,7 +29,7 @@ public struct FeatureDisabledCard: View {
     }
 
     public let variant: Variant
-    /// **Audit A-7 — the server's own sentence, when it sent one.**
+    /// **The server's own sentence, when it sent one.**
     ///
     /// The generic subtitle explains nothing: it is the same text whether the
     /// operator turned the module off instance-wide or the sharing grant the
@@ -54,7 +54,7 @@ public struct FeatureDisabledCard: View {
                     Text(String(localized: "feature_disabled.title"))
                         .font(.hlHeadline)
                         .foregroundStyle(HLText.secondary)
-                    // 1.4 B2 — only the server's own reason; without one the
+                    // Only the server's own reason; without one the
                     // title stands alone (the old fallback named an internal
                     // "Operator" the reader does not know).
                     if let reason {

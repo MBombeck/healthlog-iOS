@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - AUD-2 H4 — memoized context line
+// MARK: - Memoized context line
 
 /// The tile's secondary "context line" ("Last measurement X days ago" /
 /// "No data yet" / source-filtered) is derived through `MetricDisplay`,
@@ -37,7 +37,7 @@ extension HLDashboardTile {
     /// `now` keeps the rendered line consistent with the `dayAnchor` baked into
     /// `contextLineKey` (BH-final-diff M2).
     ///
-    /// 1.4 B2 — an empty tile's dash already says "no data", so the line only
+    /// An empty tile's dash already says "no data", so the line only
     /// paints when it gives a reason: an old last reading or a source filter.
     /// VoiceOver keeps "No data yet" through the tile's own label.
     func computeContextLine() -> String? {

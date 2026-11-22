@@ -210,6 +210,32 @@ public actor EcgRepository {
         return response
     }
 
+    /// Sends recordings deleted in Apple Health to the ECG delete route
+    /// (contract §3), under the sweep's pinned bearer. A repeat is a no-op.
+    func deleteAppleHealthRecordings(
+        _ externalIDs: [String],
+        requiring authLease: EcgUploadAuthenticationLease
+    ) async throws {
+        guard !externalIDs.isEmpty else { return }
+        let base: APIRequest<EmptyResponse> = try .delete(
+            AppleHealthDeleteDomain.ecg.path,
+            body: ExternalIDBatch(externalIds: externalIDs)
+        )
+        try authLease.validate()
+        let request = APIRequest<EmptyResponse>(
+            method: base.method,
+            path: base.path,
+            body: base.body,
+            extraHeaders: ["Authorization": authLease.authorizationHeader],
+            idempotencyKey: base.idempotencyKey,
+            maxRetries: 0,
+            allowsAuthenticationRecovery: false
+        )
+        _ = try await api.send(request)
+        try authLease.validate()
+        await invalidateCache()
+    }
+
     /// Drops the cached list (logout wipe).
     public func invalidateCache() async {
         await swr?.invalidate([.insightsEcg(day: BerlinDayKey.string())])

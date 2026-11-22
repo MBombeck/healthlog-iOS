@@ -25,7 +25,7 @@ public protocol AppleHealthMedicationSyncing: Sendable {
 ///     as `externalId`). A replay yields per-entry `duplicate` → the cursor
 ///     advances, never a retry.
 ///
-/// **CU-10 — why step 2 skips.** This used to re-post *every* annotated
+/// **Why step 2 skips.** This used to re-post *every* annotated
 /// medication on *every* sweep and lean on server idempotency alone to dedup.
 /// That made the whole feature hostage to `externalId` stability: once the key
 /// rotated (it did — `String(describing:)` on an opaque HK type returns a memory
@@ -40,7 +40,7 @@ public protocol AppleHealthMedicationSyncing: Sendable {
 /// rejects a chunk with that code, the run stops WITHOUT advancing the cursor so
 /// the doses retry once their med is mirrored.
 ///
-/// **Phase 07 / plan 07-05 — per-dose durable progression.** The sweep used to
+/// **Per-dose durable progression.** The sweep used to
 /// keep one `Date` watermark and move it to the newest dose it managed to
 /// import. A dose held back for a not-yet-mirrored concept therefore vanished
 /// behind the next success, and an equal-timestamp sibling was dropped by the
@@ -62,8 +62,13 @@ public actor AppleHealthMedicationImporter {
     /// in contexts with no session at all, where every sweep refuses: without an
     /// owner there is no partition to write and no one to attribute a dose to.
     private let admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?
-    private let ledgerStorage: HealthSyncCursorStorage
-    /// **W3 (1.3)** — where the bulk POST reads its top-level `syncTrigger`
+    let ledgerStorage: HealthSyncCursorStorage
+    /// Where deleted doses are read (iOS 26 HealthKit); `nil` for readers
+    /// that cannot say, which then send no deletion.
+    let deletionReader: (any AppleHealthDoseDeletionReading)?
+    /// Whether the server takes the delete route now (`features.appleHealthDeletes`).
+    let deletesRouteOpen: @Sendable () -> Bool
+    /// Where the bulk POST reads its top-level `syncTrigger`
     /// (server v1.42.4 records it on the `MEDICATION_DOSE` arrival entry). The
     /// same context and the same wire mapping the measurement batches use, so
     /// `manual` only reaches a server that knows it. Injectable for tests.
@@ -103,7 +108,8 @@ public actor AppleHealthMedicationImporter {
         clock: @escaping @Sendable () -> Date = { Date() },
         admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?,
         ledgerStorage: HealthSyncCursorStorage = .standard,
-        syncTrigger: SyncTriggerContext = .shared
+        syncTrigger: SyncTriggerContext = .shared,
+        deletesRouteOpen: @escaping @Sendable () -> Bool = { AppleHealthIngestCapability.isAvailable(.appleHealthDeletes) }
     ) {
         self.syncTrigger = syncTrigger
         self.reader = reader
@@ -113,6 +119,8 @@ public actor AppleHealthMedicationImporter {
         self.clock = clock
         self.admission = admission
         self.ledgerStorage = ledgerStorage
+        deletionReader = reader as? any AppleHealthDoseDeletionReading
+        self.deletesRouteOpen = deletesRouteOpen
     }
 
     /// Run one full sweep. Returns a summary the tests assert against.
@@ -175,10 +183,18 @@ public actor AppleHealthMedicationImporter {
         // 1.4 / iOS 27 — asked before the read, so the ledger judges absences
         // against the window this read actually had. The read starts no earlier
         // than the window, as Apple asks for limited access.
+        //
+        // The read also covers a trailing window behind the horizon, so a dose
+        // logged late with an earlier time still arrives; the ledger's settled
+        // set keeps the re-read from sending a dose twice. A medication shared
+        // with HealthLog since the last sweep has its doses read in full once.
         let doseWindow = await reader.doseReadWindow()
-        let resumeAt = ledger.resumeInstant()
+        let readStart = ledger.readStart()
         let medicationRecords = await readMedicationRecords()
-        let doseRecords = await readDoseRecords(since: doseWindow.clamp(resumeAt))
+        let seenConcepts = medicationRecords.map { Set($0.map(\.conceptIdentifier)) }
+        let newConcepts = Self.newConcepts(seen: seenConcepts, known: ledger.knownConcepts())
+        let doseRecords = await readDoseRecords(since: doseWindow.clamp(newConcepts.isEmpty ? readStart : nil))
+            .map { Self.doses($0, from: readStart, orIn: newConcepts) }
 
         // 2) Mirror the medications the server does not already carry.
         if let medicationRecords {
@@ -200,18 +216,20 @@ public actor AppleHealthMedicationImporter {
                 doses: doseRecords,
                 ledger: ledger,
                 readWindow: doseWindow,
+                knownConcepts: seenConcepts,
                 maxChunks: maxDoseChunks,
                 requiring: lease
             )
         }
-        // Phase 07 / plan 07-07 — 07-05's handoff: the pending set is the only
+        // 4) Doses deleted in Apple Health, after the import so a dose that
+        //    landed in this pass and was deleted meanwhile goes too.
+        if doseRecords != nil { await forwardDoseDeletions(ledger: ledger, requiring: lease) }
+        // 07-05's handoff: the pending set is the only
         // signal that Apple doses are being withheld for a concept the user
         // never mirrored, and it was readable only from a debugger. It is an
         // integer here, next to the quarantine count the stats sweep reports.
         let stillPending = ledger.pendingIdentities().count
-        await MainActor.run {
-            HKSyncDiagnostics.shared.recordWithheldCounts(pendingAppleDoses: stillPending)
-        }
+        await MainActor.run { HKSyncDiagnostics.shared.recordWithheldCounts(pendingAppleDoses: stillPending) }
         Self.logSweep(summary)
         return summary
     }
@@ -233,6 +251,28 @@ public actor AppleHealthMedicationImporter {
                 heldBack=\(heldBack, privacy: .public)
                 """
             )
+    }
+
+    /// Concepts in this sweep's medication list that no earlier sweep saw.
+    /// Without a recorded list (a ledger from 1.6) every concept counts as
+    /// new: a medication shared after the last 1.6 sweep was only read from the
+    /// horizon on, so one full read catches up. The server folds the repeats
+    /// on the dose UUID.
+    static func newConcepts(seen: Set<String>?, known: Set<String>?) -> Set<String> {
+        guard let seen else { return [] }
+        guard let known else { return seen }
+        return seen.subtracting(known)
+    }
+
+    /// The doses one sweep works on: everything from `start` on, plus every
+    /// dose of a newly shared concept, however old.
+    static func doses(
+        _ doses: [AppleHealthDoseRecord],
+        from start: Date?,
+        orIn newConcepts: Set<String>
+    ) -> [AppleHealthDoseRecord] {
+        guard let start, !newConcepts.isEmpty else { return doses }
+        return doses.filter { $0.recordedAt >= start || newConcepts.contains($0.conceptIdentifier) }
     }
 
     // MARK: - Server reconciliation

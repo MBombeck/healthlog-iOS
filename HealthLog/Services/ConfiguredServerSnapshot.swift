@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-03 — the configured server, as a value.**
+/// **The configured server, as a value.**
 ///
 /// The audited render surfaces (onboarding auth, Settings → About, Settings →
 /// Server, Settings → Security) all needed the same thing from the same place:
@@ -78,7 +78,7 @@ struct ConfiguredServerSnapshot: Sendable, Equatable {
         AppEnvironment.supportsPasskeys(host: host)
     }
 
-    /// #65 — should sign-in hand off to the browser? Self-hosted **and** not
+    /// Should sign-in hand off to the browser? Self-hosted **and** not
     /// covered by this build's associated domains.
     var prefersWebHandoff: Bool {
         guard let baseURL else { return false }

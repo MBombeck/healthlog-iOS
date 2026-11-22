@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.3 — hard-coded clinical bands are gone. A band is drawn or named
+/// Hard-coded clinical bands are gone. A band is drawn or named
 /// only when the server sent it (BP target caption from `bpTargets` of
 /// `GET /api/insights/comprehensive`); a fixed constant never stands in.
 @Suite("Clinical bands — server-only (#115 1.3)")

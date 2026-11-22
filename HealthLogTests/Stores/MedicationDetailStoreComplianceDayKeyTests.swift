@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit B-6 — one day-key zone for the `dailyCompliance` overlay.**
+/// **One day-key zone for the `dailyCompliance` overlay.**
 ///
 /// `MedicationDetailStore.verlaufGlyphs()` reads the server's per-day
 /// `dailyCompliance` map to suppress / mark days that carry no loaded intake.

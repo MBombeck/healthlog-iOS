@@ -1,7 +1,7 @@
 import Foundation
 @testable import HealthLog
 
-/// **1.5 L10N-CORE — which languages a catalogue test holds to.**
+/// **Which languages a catalogue test holds to.**
 ///
 /// Tests used to name `["de", "en"]`. They now start from
 /// ``AppLanguage/allCases`` (the languages the code knows) and read the gate

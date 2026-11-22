@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 18 / 18-02 — producing the chosen output, through the same stores as
+/// **Producing the chosen output, through the same stores as
 /// before.**
 ///
 /// Nothing here talks to the network. Each branch hands the values
@@ -51,7 +51,8 @@ public extension UnifiedSharingStore {
     /// the one action's disabled state; a builder that returns `nil` is the
     /// single source of that answer, so the button and the request agree.
     var canProduce: Bool {
-        switch outputForm {
+        guard let outputForm else { return false }
+        return switch outputForm {
         case .link: shareLinkBody() != nil
         case .zip: packageRequest() != nil
         // Both of these have an on-device path that works with no server at
@@ -64,6 +65,7 @@ public extension UnifiedSharingStore {
     /// Run the chosen output. Resets the shared feedback first so a second
     /// attempt never renders beside the first one's result.
     func produce(_ context: OutputContext) async {
+        guard let outputForm else { return }
         outcome = .working
         artifacts = []
         artifactSource = nil
@@ -107,13 +109,13 @@ public extension UnifiedSharingStore {
 
     // MARK: - PDF
 
-    /// Prefer-server with the on-device fallback (FW5-C), exactly as the doctor
+    /// Prefer-server with the on-device fallback, exactly as the doctor
     /// report did: a server render that throws falls through to the local
     /// renderer so the output never dead-ends — except for the one refusal that
     /// is a contract mismatch rather than a hiccup, where the scope is rebuilt
     /// from a fresh capabilities read and the user retries.
     private func producePDF(_ context: OutputContext) async {
-        // L10N-REPORT — `context.locale` is the chosen report language; the
+        // `context.locale` is the chosen report language; the
         // server takes Dutch only from 1.43.7 and reads English before that.
         let serverLocale = ReportLocale(AppLanguage.resolve(context.locale)).exportServerCode()
         if context.isBackendReachable, let arguments = pdfArguments(locale: serverLocale) {

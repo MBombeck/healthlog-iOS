@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B187 — the memoized dashboard ordering lookup.**
+/// **The memoized dashboard ordering lookup.**
 ///
 /// `DashboardScreen.orderedMetrics(_:)` used to rebuild TWO
 /// `Dictionary(uniqueKeysWithValues:)` on every body eval; since the dashboard

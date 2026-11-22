@@ -1,6 +1,6 @@
 import SwiftUI
 
-// v0141 — extracted verbatim from `InsightsScoreCardsBlock.swift` to keep that
+// Extracted verbatim from `InsightsScoreCardsBlock.swift` to keep that
 // file under the 600-line file-length lint budget after the per-card
 // hide/show additions landed (project file-length discipline: split into
 // thematic section files rather than let one file grow). Pure move — the
@@ -38,7 +38,7 @@ enum WellnessRingPalette {
     nonisolated static let trackOpacity: Double = 0.25
     nonisolated static let track: Color = .white.opacity(trackOpacity)
     /// Soft dark text shadow so white never disappears on the lightest gradient
-    /// corner. v0.14.9 §4 — the −45% gradient softening lifts every tile lighter
+    /// corner. The −45% gradient softening lifts every tile lighter
     /// (esp. in light mode), so the safeguard is strengthened (0.25→0.38 opacity,
     /// radius 2→3) to keep the white ring + value legible on the now-softer tiles
     /// without un-softening the gradient itself. Still a single soft touch — premium.

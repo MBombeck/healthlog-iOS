@@ -25,7 +25,7 @@ import Foundation
 //   * **Legacy (upgrades only).** A 1.2.0 installation's forward cursor, moved
 //     aside on the first 1.3.0 pass. When the server says how far it already
 //     holds a type (`metricFreshness[].lastSeenAt`), the history walk stops at
-//     that point minus seven days (#128) and the legacy cursor finishes the
+//     that point minus seven days and the legacy cursor finishes the
 //     dates below it, narrowed to exactly those dates. It retires the first
 //     time it comes back short.
 //
@@ -61,7 +61,7 @@ struct HealthSampleSplitState: Codable, Sendable, Equatable {
     /// `true` when samples starting exactly at `historyEnd` still need reading
     /// (the last page ended in the middle of that instant).
     var historyEndInclusive: Bool
-    /// #128 — `lastSeenAt` minus the safety margin for an upgraded partition,
+    /// `lastSeenAt` minus the safety margin for an upgraded partition,
     /// once resolved. `nil` = no shortcut, the walk goes to the chosen window.
     var replayFloor: Date?
     /// `false` while an upgraded partition still waits for the server's
@@ -69,16 +69,21 @@ struct HealthSampleSplitState: Codable, Sendable, Equatable {
     var replayFloorResolved: Bool
     /// The legacy forward cursor still owes the dates below the replay floor.
     var legacyLegActive: Bool
-    /// "Sync everything now" (public #25): walk to the chosen window, ignore
+    /// "Sync everything now": walk to the chosen window, ignore
     /// the replay shortcut.
     var fullCatchUp: Bool
     var updatedAt: Date
-    /// 1.4 (S1) — the lower bound of the chosen window, pinned once for this
+    /// The lower bound of the chosen window, pinned once for this
     /// partition. 1.3.0 recomputed it from "now" on every pass, so it moved
     /// forward while the walk moved back, and the two met before the oldest
     /// part of the window was read. `nil` in a state 1.3.0 wrote and while no
     /// window is chosen; ``DurableHealthCursorStore/establishSplit`` pins it.
     var windowFloor: Date?
+    /// #10 — the oldest reading of this type the server says it holds, once
+    /// it says so (`metricFreshness[].oldestSeenAt`). `nil` = unknown: a walk
+    /// that meets only folded pages goes on, because below the server's
+    /// oldest reading it holds nothing and would insert every sample.
+    var serverOldestReading: Date?
 
     /// The window's lower bound for this partition: the pinned one, never
     /// later than the bound the caller passes. "Alle" (and no choice yet)
@@ -158,7 +163,7 @@ enum HealthSampleSplitPolicy {
     /// How far before "now" a new live stream starts. Two days: last night's
     /// sleep, yesterday's readings, and a watch that synced late.
     static let liveLookback: TimeInterval = 2 * 86400
-    /// #128 — how far below the server's newest stored reading an upgraded
+    /// How far below the server's newest stored reading an upgraded
     /// partition's history walk reaches. Generous on purpose: the server folds
     /// anything re-sent.
     static let replayMargin: TimeInterval = 7 * 86400
@@ -174,7 +179,7 @@ enum HealthSampleSplitPolicy {
         lastSeenAt.map { $0.addingTimeInterval(-replayMargin) }
     }
 
-    /// 1.4 (S1) — a leap day and a daylight-saving hour: how far a window
+    /// A leap day and a daylight-saving hour: how far a window
     /// bound reconstructed by ``pinnedWindowFloor(cutoff:liveStart:now:)``
     /// can be off. Applied towards overlap.
     static let windowPinMargin: TimeInterval = 25 * 3600
@@ -188,12 +193,12 @@ enum HealthSampleSplitPolicy {
         return cutoff.addingTimeInterval(-(age + windowPinMargin))
     }
 
-    /// A2 (1.4, R3 3.2) — history pages in a row that came back as nothing
+    /// History pages in a row that came back as nothing
     /// but `folded_window` duplicates before a type's walk stops. One page can
     /// straddle the fold boundary; three in a row (1 500 samples) cannot.
     static let foldedPagesBeforeStop = 3
 
-    /// A2 (1.4, R-A8) — whether the statistics path owns a type's history:
+    /// Whether the statistics path owns a type's history:
     /// the summed types travel as day and hour totals (`stats:` rows) while
     /// the daily-statistics switch is on, and the per-sample gate drops every
     /// raw row of them, so walking their raw history sends nothing.
@@ -245,7 +250,7 @@ struct HealthSampleHistoryStatus: Sendable, Equatable {
     }
 }
 
-/// 1.3 (#127, public #25) — what the history walk has reached, for the
+/// What the history walk has reached, for the
 /// account that is signed in. Dates and counts only.
 struct HealthHistoryOverview: Sendable, Equatable {
     let types: [HealthSampleHistoryStatus]
@@ -301,7 +306,7 @@ extension DurableHealthCursorStore {
     static let splitSuffix = ".split"
     static let legacySuffix = ".legacy"
 
-    // MARK: - Sibling records (1.3, #127)
+    // MARK: - Sibling records
 
     /// A versioned record stored beside the partition's cursor under
     /// `storageKey + suffix`. An empty or undecodable blob reads as absent.
@@ -400,7 +405,7 @@ extension DurableHealthCursorStore {
         return state
     }
 
-    /// 1.4 (S1) — pins the window bound of a partition that has none: one
+    /// Pins the window bound of a partition that has none: one
     /// 1.3.0 established, or one established before a window was chosen. It
     /// gets the bound as it stood when the partition was established, so the
     /// days a moving bound skipped are walked now. An upgraded partition whose

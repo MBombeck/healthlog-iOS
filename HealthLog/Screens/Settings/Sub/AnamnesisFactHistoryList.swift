@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **CU-32 — der Verlauf einer Fakten-Art.**
+/// **Der Verlauf einer Fakten-Art.**
 ///
 /// Jede Zeile ist eine Fassung mit ihrem Gültigkeitszeitraum und ihrer
 /// Provenienz. Eine **Korrektur** ist etwas anderes als eine Änderung: sie sagt
@@ -16,7 +16,7 @@ struct AnamnesisFactHistoryList: View {
     }
 
     var body: some View {
-        // 1.4 B2-c — the card shows this list only when it has rows; the
+        // The card shows this list only when it has rows; the
         // closing "nothing is overwritten" line is gone, the dated rows show it.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             ForEach(rows) { row in
@@ -30,8 +30,8 @@ struct AnamnesisFactHistoryList: View {
             Image(systemName: row.isCurrent ? "circle.fill" : "circle")
                 .font(.hlCaption2)
                 .foregroundStyle(row.isCurrent ? HLAccent.primary : HLText.secondary)
-                .padding(.top, 3)
-            VStack(alignment: .leading, spacing: 2) {
+                .padding(.top, HLSpace.xxs + HLSpace.hair)
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 HStack(spacing: HLSpace.xs) {
                     Text(LocalizedStringKey(row.labelKey))
                         .font(.hlFootnote.weight(row.isCurrent ? .semibold : .regular))

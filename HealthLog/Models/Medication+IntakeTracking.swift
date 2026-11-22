@@ -1,11 +1,11 @@
 import Foundation
 
-/// **v1.39.1 (#1033) — intake tracking.** Split out of `Medication.swift`
+/// **v1.39.1 — intake tracking.** Split out of `Medication.swift`
 /// (file_length discipline): the derived reads of the server's `trackIntake`
 /// and the helpers every planning surface uses to leave a medication kept as a
 /// record out.
 public extension Medication {
-    /// **v1.39.1 (#1033)** — whether intake is tracked for this medication.
+    /// **v1.39.1** — whether intake is tracked for this medication.
     /// `false` only when the server said so: the medication is then kept as a
     /// record, with no due dose, no reminder on any channel, no intake buttons
     /// and no adherence figure.
@@ -13,7 +13,7 @@ public extension Medication {
         trackIntake != false
     }
 
-    /// **v1.39.4 (#1040)** — the server's `intakeActionable`; a server that
+    /// **v1.39.4** — the server's `intakeActionable`; a server that
     /// predates the field (`nil`) reads as `true`. The server resolves it as
     /// `active && trackIntake && courseStatus == CURRENT` on the account's
     /// clock, so it is never re-derived here from `startsOn` / `endsOn`.
@@ -39,7 +39,7 @@ public extension Medication {
 }
 
 public extension Medication {
-    /// **E1** — whether the server behind `medications` knows `trackIntake`
+    /// Whether the server behind `medications` knows `trackIntake`
     /// (v1.39.1+): any row it served carries the field. The add sheet offers
     /// the switch only then; with no row to tell, it does not guess.
     /// #126 P2 (v1.42.0) — on an account with no medication yet the server's
@@ -51,7 +51,7 @@ public extension Medication {
         features?.trackIntake == true || medications.contains { $0.trackIntake != nil }
     }
 
-    /// **v1.39.1 (#1033)** — this medication with ``schedule`` swapped for
+    /// **v1.39.1** — this medication with ``schedule`` swapped for
     /// `schedule`, every other field kept. The medication editor opens a
     /// medication kept as a record on its STORED schedule
     /// (``displaySchedule``), so a save that touches the schedule edits what
@@ -64,16 +64,8 @@ public extension Medication {
         return copy
     }
 
-    /// v1.42.2: a field-by-field copy keeps the server's reminder decision
-    /// (``remindersActive`` is not part of the memberwise initialiser either).
-    func carryingRemindersActive(_ value: Bool?) -> Medication {
-        var copy = self
-        copy.remindersActive = value
-        return copy
-    }
-
     func replacingSchedule(_ schedule: MedicationSchedule) -> Medication {
-        // MED (1.5.0): a copy, not a rebuild, so every `var` field (the
+        // A copy, not a rebuild, so every `var` field (the
         // category label, the course actions and whatever later waves add)
         // travels along.
         var copy = self
@@ -83,12 +75,12 @@ public extension Medication {
 }
 
 public extension MedicationIntake {
-    /// **v1.39.1 (#1033)** — drops the rows of every medication the server
+    /// **v1.39.1** — drops the rows of every medication the server
     /// keeps as a record (`trackIntake: false`). Such a medication has nothing
     /// due: no dose card entry, no ring slot, no widget or watch dose. A row
     /// whose medication is not in `medications` is kept, as before.
     ///
-    /// **v1.39.4 (#1040)** — also drops the still-open rows (neither taken nor
+    /// **v1.39.4** — also drops the still-open rows (neither taken nor
     /// skipped) of a medication the server calls not actionable today
     /// (`intakeActionable: false`, e.g. an ended course), so no surface built
     /// from these rows offers Taken / Skip for it. Its resolved rows stay.

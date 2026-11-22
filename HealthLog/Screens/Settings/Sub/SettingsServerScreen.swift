@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// `/settings/server` — Server. v0.5.5.2 W-IMPL-SERVER-EDITOR: lets the
+/// `/settings/server` — Server. Lets the
 /// operator inspect the currently-targeted server (host + region) and
 /// the running build version, and edit the server URL post-onboarding
 /// without re-running the whole onboarding flow.
@@ -23,23 +23,18 @@ import SwiftUI
 /// deliberately does **not** call `AuthService.logout()` — the
 /// server-side revoke would hit the *new* host with the *old* refresh
 /// token and either fail or contaminate the new server's audit log.
-///
-/// **Standalone-mode:** the screen still renders the read-only host
-/// + version cards (so the operator can confirm "where would my data
-/// go if I paired now"), but the "Server wechseln" action is hidden
-/// — standalone has no tokens to wipe and the URL only matters once
-/// pairing fires.
 struct SettingsServerScreen: View {
     @Environment(\.appContainer) private var container
     @Environment(AuthStore.self) private var authStore
 
     @State private var versionState: VersionState = .loading
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Only without a container (previews). Otherwise the sheet is open while
-    /// the container's draft holds an address (#153), so it reopens with
+    /// the container's draft holds an address, so it reopens with
     /// what was typed after the privacy shield rebuilt the window.
     @State private var localSheetPresented = false
-    /// GH-iOS #27 — how many proxy headers are stored; read on every appear
+    /// How many proxy headers are stored; read on every appear
     /// (also after Access headers pops), so a body evaluation never hits the Keychain.
     @State private var accessHeaderCount = 0
     @State private var refreshTick: Int = 0
@@ -51,15 +46,15 @@ struct SettingsServerScreen: View {
     }
 
     var body: some View {
-        HLSettingsPage(title: "Server") {
+        HLPage {
             currentServerCard
             versionCard
         }
         // QoL-A2 (Glass H1) — scroll-edge glass now owned centrally by the
-        // `HLSettingsPage` inner ScrollView; no outer-layer patch here.
+        // `HLPage` inner ScrollView; no outer-layer patch here.
         .navigationTitle("Server")
         .navigationBarTitleDisplayMode(.inline)
-        // 09-03 — the task identity is the configured-server value snapshot, so
+        // The task identity is the configured-server value snapshot, so
         // an environment revision (a server switch) re-runs the version probe
         // while an ordinary body evaluation costs no Keychain query at all.
         .task(id: currentBaseURL) {
@@ -69,7 +64,7 @@ struct SettingsServerScreen: View {
             await loadVersion()
             refreshTick &+= 1
         }
-        // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
+        // Success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
         .onAppear {
             if let container {
@@ -80,23 +75,19 @@ struct SettingsServerScreen: View {
             ChangeServerSheet(onCommitted: {
                 changeServerPresented.wrappedValue = false
             })
-            .hlSheetPresentation(.form)
         }
     }
 
     // MARK: - Cards
 
     private var currentServerCard: some View {
-        HLSettingsCard(
-            icon: "server.rack",
-            title: "Current server"
-        ) {
-            statRow(label: "Address", value: currentHostDisplay)
+        HLCard("Current server") {
+            identifierRow(label: "Address", value: currentHostDisplay)
                 .accessibilityIdentifier("settings.server.hostRow")
             statRow(label: "Region", value: regionLabel)
                 .accessibilityIdentifier("settings.server.regionRow")
             accessHeadersRow
-            // 1.4 B2-c — the switch is a row of the card it changes; its own
+            // The switch is a row of the card it changes; its own
             // card repeated "Change server" as title and row.
             if isPairedAuth {
                 changeServerRow
@@ -108,10 +99,7 @@ struct SettingsServerScreen: View {
     /// („Server version" ⇄ „The build currently running on the server.") und
     /// fällt die Abdeck-Probe.
     private var versionCard: some View {
-        HLSettingsCard(
-            icon: "tag.fill",
-            title: "Server version"
-        ) {
+        HLCard("Server version") {
             versionCardContent
         }
     }
@@ -149,19 +137,10 @@ struct SettingsServerScreen: View {
                         .foregroundStyle(HLText.primary)
                 }
                 Text(message)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
-                Button {
+                HLLinkButton(HLControlWord.retry.key) {
                     Task { await loadVersion() }
-                } label: {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.hlIcon(HLIconSize.sm))
-                        Text("Try again")
-                            .font(.hlSubhead)
-                    }
-                    .foregroundStyle(.tint)
                 }
                 .accessibilityIdentifier("settings.server.versionRetry")
             }
@@ -174,8 +153,8 @@ struct SettingsServerScreen: View {
     /// wortgleich einen Tap weiter im Sheet, wo der Wechsel unmittelbar
     /// bevorsteht; R3 gibt die Aussage dem Ort der Handlung.
     ///
-    /// R9 — der frühere `.ghost`-Vollbreitenknopf war in Wahrheit eine Zeile
-    /// in einer Karte, die ein Sheet öffnet. 1.4 B2-c — die Zeile steht jetzt
+    /// Der frühere `.ghost`-Vollbreitenknopf war in Wahrheit eine Zeile
+    /// in einer Karte, die ein Sheet öffnet. Die Zeile steht jetzt
     /// in der Karte „Aktueller Server"; die eigene Karte trug denselben Titel
     /// wie ihre einzige Zeile.
     private var changeServerRow: some View {
@@ -188,9 +167,8 @@ struct SettingsServerScreen: View {
         .accessibilityIdentifier("settings.server.changeServerButton")
     }
 
-    /// GH-iOS #27 — proxy credentials for a server behind Cloudflare Access,
-    /// Pangolin or a similar gate. Shown in every mode: a standalone install
-    /// may need them before it can pair at all.
+    /// Proxy credentials for a server behind Cloudflare Access,
+    /// Pangolin or a similar gate.
     private var accessHeadersRow: some View {
         HLSettingsActionRow(
             title: "Access headers",
@@ -198,7 +176,7 @@ struct SettingsServerScreen: View {
                 ? "For Cloudflare Access, Pangolin and similar proxies"
                 : "Headers set: \(accessHeaderCount)",
             presents: .push,
-            // #153 follow-up (SET-ROUTE) — a value on the More stack, so the
+            // #153 follow-up — a value on the More stack, so the
             // page comes back after the privacy shield. The count above is
             // re-read from the Keychain when this page appears again.
             value: SettingsRoute.serverAccessHeaders
@@ -228,7 +206,7 @@ struct SettingsServerScreen: View {
         )
     }
 
-    /// 09-03 — one in-memory read of the already-resolved configured server.
+    /// One in-memory read of the already-resolved configured server.
     /// The host row, the region row and the version task's identity all derive
     /// from this value; none of them queries the Keychain.
     private var currentBaseURL: URL? {
@@ -257,25 +235,26 @@ struct SettingsServerScreen: View {
     }
 
     private func statRow(label: LocalizedStringKey, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            // b146 — match the canonical `HLSettingsRow` label scale
-            // (`.hlSubhead`, 15pt). Was `.hlBody` (17pt), which read 2pt larger
-            // than every sibling Settings row and lost the label→value step-down
-            // (operator: "Server area font feels bigger"). Value stays `.hlBody`.
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.md)
-            // v0.11.0 W37-P4: value uses the semantic `.hlBody` token like the
-            // rest of Settings. The previous `.hlMetric(.body)` + monospaced
-            // digits is a numeric/chart font and read visibly different from
-            // the surrounding rows for non-numeric values (Address, Region,
-            // Version string).
-            Text(value)
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.trailing)
-        }
+        HLSettingsStatRow(label: Text(label), value: value)
+    }
+
+    /// The address is read off and typed into another device, so it breaks
+    /// only at its dots, never with a hyphen; under its label at AX sizes.
+    private func identifierRow(label: LocalizedStringKey, value: String) -> some View {
+        HLRowLayout(
+            title: Text(label),
+            subtitle: nil,
+            indicator: .hidden,
+            configuration: .stat,
+            leading: { EmptyView() },
+            trailing: {
+                if dynamicTypeSize.isAccessibilitySize {
+                    HLIdentifierText(value)
+                } else {
+                    HLIdentifierText(value).trailing()
+                }
+            }
+        )
     }
 
     private func loadVersion() async {
@@ -292,7 +271,7 @@ struct SettingsServerScreen: View {
         }
     }
 
-    /// The sentence under "Version unavailable". H2 (1.1.0): `HLError` does not
+    /// The sentence under "Version unavailable". `HLError` does not
     /// conform to `LocalizedError`, so `localizedDescription` printed
     /// "(HealthLog.HLError-Fehler 2.)" here — the shared user-facing sentence
     /// instead, like every store.
@@ -317,7 +296,6 @@ struct SettingsServerScreen: View {
 /// against the new host.
 private struct ChangeServerSheet: View {
     @Environment(\.appContainer) private var container
-    @Environment(\.dismiss) private var dismiss
 
     let onCommitted: () -> Void
 
@@ -335,28 +313,25 @@ private struct ChangeServerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // The commit is the primary button in the content, not the bar: it
+        // probes the address before it switches. The bar keeps only the X.
+        HLSheetScaffold(
+            "Change server",
+            closeWord: HLControlWord.cancel.key,
+            closeIdentifier: "settings.server.changeSheet.cancel"
+        ) {
             ScrollView {
-                // 1.4 B2-c — no lead card: it held only "you must sign in
+                // No lead card: it held only "you must sign in
                 // again", which the button "Switch and sign in again" says.
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
+                VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     urlInputCard
                     statusRow
                     Spacer(minLength: HLSpace.lg)
                     actionButtons
                 }
-                .padding(.horizontal, HLSpace.lg)
+                .padding(.horizontal, HLLayout.cardInset)
                 .padding(.top, HLSpace.md)
-                .padding(.bottom, HLSpace.xxxl)
-            }
-            .background(HLSurface.primary)
-            .navigationTitle("Change server")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .accessibilityIdentifier("settings.server.changeSheet.cancel")
-                }
+                .padding(.bottom, HLLayout.pageBottom)
             }
         }
         .onAppear {
@@ -364,7 +339,7 @@ private struct ChangeServerSheet: View {
         }
     }
 
-    /// #153 — the typed address, kept in the container's draft.
+    /// The typed address, kept in the container's draft.
     private var urlString: String {
         get { container?.onboardingDraft.changeServerAddress ?? localURLString }
         nonmutating set {
@@ -381,9 +356,8 @@ private struct ChangeServerSheet: View {
     }
 
     private var urlInputCard: some View {
-        HLSettingsCard(
-            icon: "link",
-            title: "Address",
+        HLCard(
+            "Address",
             subtitle: "https:// is added automatically."
         ) {
             TextField("e.g. myserver.example.com", text: urlBinding)
@@ -392,8 +366,7 @@ private struct ChangeServerSheet: View {
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
                 .textContentType(.URL)
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
+                .hlText(.objectName)
                 .padding(HLSpace.md)
                 .background(HLSurface.tertiary)
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
@@ -423,11 +396,11 @@ private struct ChangeServerSheet: View {
 
     private var actionButtons: some View {
         VStack(spacing: HLSpace.sm) {
-            // R9 — der abschließende Commit dieses Ablaufs; genau ein
+            // Der abschließende Commit dieses Ablaufs; genau ein
             // `.primary` auf dem Sheet.
             HLButton(
-                String(localized: "Switch and sign in again"),
-                icon: "arrow.right",
+                "Switch and sign in again",
+                systemImage: "arrow.right",
                 variant: .primary,
                 isLoading: probeState == .probing
             ) {
@@ -442,8 +415,7 @@ private struct ChangeServerSheet: View {
             Image(systemName: systemImage)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -475,7 +447,7 @@ private struct ChangeServerSheet: View {
         switch probed {
         case .reachable:
             do {
-                // 06-05 — the container coordinator is the sole switch-server
+                // The container coordinator is the sole switch-server
                 // terminal path: it holds the account boundary, completes the
                 // old session's invalidate → drain → cleanup cascade FIRST,
                 // wipes the old session's tokens (deliberately without a
@@ -486,7 +458,7 @@ private struct ChangeServerSheet: View {
                 probeState = .reachable
                 onCommitted()
             } catch {
-                probeState = .unreachable(String(localized: "Couldn't save URL: \(error.localizedDescription)"))
+                probeState = .unreachable(String(localized: "Couldn't save URL: \(HLError.userFacingText(for: error))"))
             }
         case let .unreachable(reason):
             probeState = .unreachable(reason)
@@ -505,7 +477,7 @@ private struct ChangeServerSheet: View {
     /// session; self-hosted hosts fall back to default server-trust
     /// validation. See H-2.
     private func probe(url: URL) async -> ProbeState {
-        // v0.7.1 H-1 — transport + cert-pinning extracted to the shared
+        // Transport + cert-pinning extracted to the shared
         // `ServerReachabilityProbe` (Services layer). The View only maps
         // the typed outcome onto its own localized copy.
         let outcome = await ServerReachabilityProbe().probe(

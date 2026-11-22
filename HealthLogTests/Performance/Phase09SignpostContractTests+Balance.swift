@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 09 Wave 0 — the fixture bench and the behavioural balance proofs.**
+/// **The fixture bench and the behavioural balance proofs.**
 ///
 /// Split out of `Phase09SignpostContractTests.swift` as an extension rather than
 /// as a second suite: the RED gate and every later Phase-9 plan address this
@@ -245,7 +245,7 @@ extension Phase09SignpostContractTests {
     /// Widget persistence opens its interval and the reload seam sees the kinds
     /// WidgetKit would have been asked to rebuild.
     ///
-    /// **09-03** — the persist is queued rather than synchronous now, so the
+    /// The persist is queued rather than synchronous now, so the
     /// interval is recorded when the queued operation runs. The case drains the
     /// writer before reading the recorder; without the drain it would assert
     /// against a measurement that had not happened yet.
@@ -272,7 +272,7 @@ extension Phase09SignpostContractTests {
     // which now pins the coordinator as the interval's single owner. It is not
     // re-emitted from here on purpose: `HLPerfSignpost.installRecorder` is a
     // process-global single slot, and two suites recording `foreground.pass`
-    // concurrently would each be reading the other's records (D-09-06-B).
+    // concurrently would each be reading the other's records.
 
     /// The outbox factory is a real seam: it is asked exactly once, and the
     /// measured wrapper closes its interval around the open.

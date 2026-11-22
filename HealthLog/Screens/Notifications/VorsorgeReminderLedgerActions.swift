@@ -35,7 +35,7 @@ struct VorsorgeReminderLedgerActions: View {
     /// because a tile action and a sheet's full-width action are two different
     /// roles under R9 (and R9/E2-A1 for the tile one).
     enum Placement {
-        /// Inside a reminder tile — quiet `HLTileActionButton` pair (G2).
+        /// Inside a reminder tile — quiet `HLTileActions` pair.
         case tile
         /// Inside the detail sheet — the pre-existing full-width `.secondary`.
         case sheet
@@ -54,51 +54,58 @@ struct VorsorgeReminderLedgerActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // K1 — the medication card's twin, so the same row: equal halves
+            // The medication card's twin, so the same row: equal halves
             // while the longer label fits, stacked when it would break.
-            HLTileActionRow(spacing: HLSpace.sm) {
-                if store.supports(.skip, id: row.id) { skipButton }
-                if store.supports(.snooze, id: row.id) { snoozeButton }
+            switch placement {
+            case .tile:
+                HLTileActions(tileItems)
+                    .disabled(isBusy)
+            case .sheet:
+                HLTileActionRow(spacing: HLSpace.sm) {
+                    if store.supports(.skip, id: row.id) { skipButton }
+                    if store.supports(.snooze, id: row.id) { snoozeButton }
+                }
             }
             if isPickingSnoozeDay, store.supports(.snooze, id: row.id) { snoozePicker }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder
-    private var skipButton: some View {
-        switch placement {
-        case .tile:
-            HLTileActionButton("vorsorge.card.action.skip", icon: "forward.end") {
-                Task { await store.skip(id: row.id) }
-            }
-            .disabled(isBusy)
-            .accessibilityIdentifier("vorsorge.card.action.skip")
-        case .sheet:
-            HLButton(String(localized: "vorsorge.action.skip"), icon: "forward.end", variant: .secondary) {
-                Task { await store.skip(id: row.id) }
-            }
-            .disabled(isBusy)
-            .accessibilityIdentifier("vorsorge.detail.skip")
+    /// The tile's pair, as the medication card's: only what the server
+    /// still allows for this reminder.
+    private var tileItems: [HLTileAction.Item] {
+        var items: [HLTileAction.Item] = []
+        if store.supports(.skip, id: row.id) {
+            items.append(HLTileAction.Item(
+                "vorsorge.card.action.skip",
+                icon: "forward.end",
+                identifier: "vorsorge.card.action.skip"
+            ) { Task { await store.skip(id: row.id) } })
         }
+        if store.supports(.snooze, id: row.id) {
+            items.append(HLTileAction.Item(
+                "vorsorge.card.action.snooze",
+                icon: "clock.badge",
+                identifier: "vorsorge.card.action.snooze"
+            ) { isPickingSnoozeDay.toggle() })
+        }
+        return items
     }
 
-    @ViewBuilder
-    private var snoozeButton: some View {
-        switch placement {
-        case .tile:
-            HLTileActionButton("vorsorge.card.action.snooze", icon: "clock.badge") {
-                isPickingSnoozeDay.toggle()
-            }
-            .disabled(isBusy)
-            .accessibilityIdentifier("vorsorge.card.action.snooze")
-        case .sheet:
-            HLButton(String(localized: "vorsorge.action.snooze"), icon: "clock.badge", variant: .secondary) {
-                isPickingSnoozeDay.toggle()
-            }
-            .disabled(isBusy)
-            .accessibilityIdentifier("vorsorge.detail.snooze")
+    private var skipButton: some View {
+        HLButton("vorsorge.action.skip", systemImage: "forward.end", variant: .secondary) {
+            Task { await store.skip(id: row.id) }
         }
+        .disabled(isBusy)
+        .accessibilityIdentifier("vorsorge.detail.skip")
+    }
+
+    private var snoozeButton: some View {
+        HLButton("vorsorge.action.snooze", systemImage: "clock.badge", variant: .secondary) {
+            isPickingSnoozeDay.toggle()
+        }
+        .disabled(isBusy)
+        .accessibilityIdentifier("vorsorge.detail.snooze")
     }
 
     /// The day picker plus its confirm. The **range** is the published bound
@@ -109,11 +116,12 @@ struct VorsorgeReminderLedgerActions: View {
     private var snoozePicker: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             DatePicker(
-                "vorsorge.action.snooze.day",
                 selection: $snoozeDay,
                 in: Self.selectableRange(),
                 displayedComponents: .date
-            )
+            ) {
+                HLRowTitle("vorsorge.action.snooze.day")
+            }
             .datePickerStyle(.compact)
             .accessibilityIdentifier("vorsorge.detail.snooze.day")
             snoozeConfirmButton {
@@ -127,20 +135,12 @@ struct VorsorgeReminderLedgerActions: View {
         }
     }
 
-    /// The confirm, in the placement's own shape. Same closure, same day
-    /// arithmetic, same store call — only the chrome differs.
-    @ViewBuilder
+    /// The confirm: one action on its own, so the secondary button in both
+    /// placements; only the identifier tells them apart.
     private func snoozeConfirmButton(action: @escaping () -> Void) -> some View {
-        switch placement {
-        case .tile:
-            HLTileActionButton("vorsorge.action.snooze.confirm", action: action)
-                .disabled(isBusy)
-                .accessibilityIdentifier("vorsorge.card.action.snooze.confirm")
-        case .sheet:
-            HLButton(String(localized: "vorsorge.action.snooze.confirm"), variant: .secondary, action: action)
-                .disabled(isBusy)
-                .accessibilityIdentifier("vorsorge.detail.snooze.confirm")
-        }
+        HLButton("vorsorge.action.snooze.confirm", variant: .secondary, action: action)
+            .disabled(isBusy)
+            .accessibilityIdentifier(placement == .tile ? "vorsorge.card.action.snooze.confirm" : "vorsorge.detail.snooze.confirm")
     }
 
     /// Tomorrow, in the person's own calendar — the earliest day the accepted

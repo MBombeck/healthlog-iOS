@@ -19,18 +19,17 @@ struct DocumentDetailScreen: View {
     @State var document: InboundDocument
     @State var isLoading = true
     @State var actionError: String?
-    @State var showDeleteConfirm = false
     @State var shareURL: URL?
     @State var showConditionEditor = false
     @State var availableEpisodes: [IllnessEpisodeDTO] = []
     /// The detail's staged facts — kept so the "N Laborwerte" jump can count
-    /// non-rejected OBSERVATION facts without a second request (Wave 4.5).
+    /// non-rejected OBSERVATION facts without a second request.
     @State var facts: [ExtractedFact] = []
-    /// #151 — the staged facts may leave part of the document out.
+    /// The staged facts may leave part of the document out.
     @State var extractionIncomplete = false
-    /// #151 — why the automatic read produced nothing to show yet.
+    /// Why the automatic read produced nothing to show yet.
     @State var readNotice: DocumentReadNotice?
-    /// #141 — related records from the detail read (`nil` from an older server).
+    /// Related records from the detail read (`nil` from an older server).
     @State var related: [RelatedLink] = []
 
     // Inline metadata edit state. The filing date is edited directly via an
@@ -66,47 +65,34 @@ struct DocumentDetailScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                // Wave 4.3 — web tier order: preview → persisted summary → the
-                // (collapsible) AI action block → the editable fields. The
-                // metadata card used to sit directly under the preview, which
-                // buried the AI narrative below the form.
-                DocumentPreviewView(store: store, document: document)
-                summarySection
-                if aiAssistEnabled, showsAssistActions {
-                    assistCard
-                }
-                metadataCard
-                conditionsCard
-                labValuesLink
-                RelatedRecordsSection(links: RelatedLinks.excludingEpisodes(
-                    related,
-                    linkedOn: Set(document.conditionLinks.map(\.episodeId))
-                ))
-                if let actionError {
-                    HLFormErrorText(actionError)
-                }
-                // 1.4 B2-c — "added on …" is the metadata card's last row and
-                // "read by AI" is the summary card's title; no loose captions
-                // under the cards.
+        HLPage {
+            // The order of the reference pages: the document itself in
+            // place of a figure, then what was read from it (summary, the
+            // AI actions, the lab values), then the background: the
+            // editable details, the linked conditions, related records.
+            DocumentPreviewView(store: store, document: document)
+            summarySection
+            if aiAssistEnabled, showsAssistActions {
+                assistCard
             }
-            .padding(HLSpace.lg)
+            labValuesSection
+            HLSectionHeader("documents.detail.section.details", rank: .area)
+            metadataCard
+            conditionsCard
+            RelatedRecordsSection(links: RelatedLinks.excludingEpisodes(
+                related,
+                linkedOn: Set(document.conditionLinks.map(\.episodeId))
+            ))
+            if let actionError {
+                HLFormErrorText(actionError)
+            }
         }
-        .hlScreenBackground()
         .navigationTitle(Text(verbatim: document.resolvedTitle ?? String(localized: "documents.card.untitled")))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .hlPageActions(pageActions)
         .task { await onAppear() }
-        .hlConfirmDestructive(
-            Text("documents.detail.deleteConfirm.title"),
-            isPresented: $showDeleteConfirm,
-            confirm: Text("documents.detail.delete"),
-            cancel: Text("documents.action.cancel"),
-            action: {
-                Task { await performDelete() }
-            }
-        )
+        // Asks for the delete entry of the bar's menu.
+        .hlDeleteConfirmation()
         .sheet(isPresented: $showConditionEditor) {
             DocumentConditionLinkEditor(
                 linkedEpisodeIds: Set(document.conditionLinks.map(\.episodeId)),
@@ -135,36 +121,40 @@ struct DocumentDetailScreen: View {
         showChat = true
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+    /// Asking the document sits on the place of the coach; download and
+    /// delete wait in the more menu, outermost.
+    private var pageActions: HLTabHeaderActions {
+        var items: [HLTabHeaderAction] = []
         if canAskDocument {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    openChat()
-                } label: {
-                    Label("documents.chat.open", systemImage: "bubble.left.and.text.bubble.right")
-                }
-                .accessibilityIdentifier("documents.chat.open")
-            }
+            items.append(HLTabHeaderAction(
+                role: .coach,
+                systemImage: "bubble.left.and.text.bubble.right",
+                label: "documents.chat.open",
+                identifier: "documents.chat.open",
+                isSelected: false,
+                kind: .button(openChat)
+            ))
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Button {
-                    Task { await prepareShare() }
-                } label: {
-                    Label("documents.detail.download", systemImage: "square.and.arrow.down")
-                }
-                Button(role: .destructive) {
-                    showDeleteConfirm = true
-                } label: {
-                    Label("documents.detail.delete", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .accessibilityLabel(Text("documents.action.more"))
+        items.append(.more(label: "documents.action.more", identifier: "documents.detail.menu") {
+            Button("documents.detail.download", systemImage: "square.and.arrow.down") {
+                Task { await prepareShare() }
             }
-            .accessibilityIdentifier("documents.detail.menu")
-        }
+            // #187 — the original in the archive it came from, in the browser.
+            if let source = document.sourceLink {
+                Link(destination: source.url) {
+                    Label {
+                        Text("documents.detail.openInSource \(source.archive.displayName)")
+                    } icon: {
+                        Image(systemName: "arrow.up.right")
+                    }
+                }
+                .accessibilityIdentifier("documents.detail.openInSource")
+            }
+            HLDeleteMenuItem(.confirmed(title: "documents.detail.deleteConfirm.title") {
+                await performDelete()
+            })
+        })
+        return HLTabHeaderActions(items)
     }
 
     var uploadedText: String {
@@ -186,7 +176,7 @@ struct DocumentDetailScreen: View {
         store.assistAvailable && (container?.documentExternalAIConsentGranted ?? false) && documentAICapable
     }
 
-    /// #115 · 0.2 — the server's `documentAi` capability (`/api/auth/me` `ai`).
+    /// The server's `documentAi` capability (`/api/auth/me` `ai`).
     /// Unknown container (previews) reads as available, like the module reads.
     var documentAICapable: Bool {
         container?.aiCapabilityGate.isAvailable(.documentAi) ?? true
@@ -224,7 +214,7 @@ struct DocumentDetailScreen: View {
     }
 
     /// The per-document Q&A entry point. Promoted out of the buried assist-card
-    /// row into the toolbar (Wave 4.4) so it reads as a first-class action, like
+    /// row into the toolbar so it reads as a first-class action, like
     /// the web's footer "Ask the Coach". The sheet itself stays the bespoke
     /// `DocumentChatSheet` — the platform-native stand-in for the web's coach
     /// drawer. Gated on the assist/consent gate AND a content index (the indexed
@@ -269,7 +259,7 @@ struct DocumentDetailScreen: View {
     /// quiet background nicety, never a surfaced error. On success the detail is
     /// re-read so the flipped `hasContentIndex` unlocks the chat affordance.
     ///
-    /// #151 — a document the server found too large to read
+    /// A document the server found too large to read
     /// (`lastIndexOutcome: resource-limit`) is not tried again. A busy reader
     /// or a read cut off before any value replaces the spinner with one
     /// sentence (``DocumentReadNotice``); every other failure stays quiet.
@@ -346,18 +336,15 @@ struct DocumentDetailScreen: View {
         )
     }
 
+    /// The wire's calendar day, `yyyy-MM-dd` in UTC.
+    private static let wireDay = Date.ISO8601FormatStyle(timeZone: .gmt).year().month().day()
+
     static func parseDay(_ raw: String) -> Date? {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "UTC")
-        return f.date(from: String(raw.prefix(10)))
+        try? Date(String(raw.prefix(10)), strategy: wireDay)
     }
 
     static func formatDay(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "UTC")
-        return f.string(from: date)
+        date.formatted(wireDay)
     }
 
     private static func fileExtension(for mimeType: String, response: HTTPURLResponse) -> String {

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 · 1.3 — the detail KPI is the server's `compliance30`, verbatim.**
+/// **The detail KPI is the server's `compliance30`, verbatim.**
 ///
 /// Until 1.0.3 the KPI tallied "on time" on the client (ledger rows, else the
 /// drained intake table with a ±30 min rule) and ranked that above the

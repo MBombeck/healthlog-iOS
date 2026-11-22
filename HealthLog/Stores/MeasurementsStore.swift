@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 public final class MeasurementsStore {
-    /// v0.14.8 W3 — `internal(set)` (not `private(set)`) so the focused
+    /// `internal(set)` (not `private(set)`) so the focused
     /// `MeasurementsStore+BulkDelete.swift` extension can apply the optimistic
     /// multi-row removal (mirrors the `seriesBackedByKind` seam below).
     public internal(set) var recent: [Measurement] = [] {
@@ -33,20 +33,19 @@ public final class MeasurementsStore {
     /// the focused `MeasurementsStore+SeriesBacked.swift` extension can write it.
     public internal(set) var seriesBackedByKind: [MetricKind: [Measurement]] = [:]
     public private(set) var isLoading: Bool = false
-    /// v0.14.8 W3 — `internal(set)` so `+BulkDelete.swift` can surface its
+    /// `internal(set)` so `+BulkDelete.swift` can surface its
     /// failure through the same banner binding every other write uses.
     public internal(set) var error: HLError?
-    /// v0.13.1 IC — per-kind **has-data availability**, sourced from the cheap
+    /// Per-kind **has-data availability**, sourced from the cheap
     /// all-time summaries slice (`repo.availableKinds()`). The Insights strip
     /// gates each metric pill on this set UNION the live `recent` snapshot —
     /// the slice catches low-frequency kinds (blood-pressure / weight) that fall
     /// out of the last-400 `recent` window on a HealthKit power-user (the
     /// operator-reported "BP/pulse missing" bug), while `recent` keeps freshly
     /// captured kinds lit instantly before the slice revalidates. Empty until
-    /// `loadAvailability()` lands; empty in standalone (the repo no-ops offline
-    /// and `recent` already carries the on-device union there).
+    /// `loadAvailability()` lands.
     public internal(set) var availableKinds: Set<MetricKind> = []
-    /// W-B187 QOL-2 — fires with `availableKinds` on availability (re)load so
+    /// Fires with `availableKinds` on availability (re)load so
     /// `AppContainer` re-indexes the kinds into CoreSpotlight (neutral title +
     /// Insights deep-link, no value).
     public var onAvailabilityDidChange: (@MainActor (Set<MetricKind>) -> Void)?
@@ -55,17 +54,17 @@ public final class MeasurementsStore {
     /// on `DashboardStore` / `ChartsStore` so a future "showing cached"
     /// affordance can read a single property. Stays `false` when no SWR
     /// coordinator is wired (tests / headless contexts).
-    /// `internal(set)` (audit-v0162 H-3) so the focused
+    /// `internal(set)` so the focused
     /// `MeasurementsStore+GenerationGuard.swift` extension can flip it from the
     /// generation-guarded apply helpers.
     public internal(set) var isShowingStaleCache: Bool = false
     /// Wall-clock when the visible `recent` page was last refreshed —
     /// cache write time for cached emits, network response time for
     /// fresh emits. `nil` until the first `load()` lands. `internal(set)`
-    /// (audit-v0162 H-3) for the `+GenerationGuard.swift` apply helpers.
+    /// for the `+GenerationGuard.swift` apply helpers.
     public internal(set) var lastUpdatedAt: Date?
 
-    /// **audit-v0162 H-3 — optimistic-mutation generation guard.** Bumped on
+    /// **Optimistic-mutation generation guard.** Bumped on
     /// every optimistic `recent` write; an SWR observe stream captures it at
     /// load-start and drops any payload from a superseded generation, so a fetch
     /// that began before a concurrent delete can't resurrect the removed row.
@@ -90,7 +89,7 @@ public final class MeasurementsStore {
     /// delete-undo wiring stays inert outside the live app. Internal for
     /// `MeasurementsStore+ReadingDelete.swift`.
     let undoCoordinator: UndoCoordinator?
-    /// v0.5.5.6 RECONCILE-CELEBRATE — optional PR celebration channel +
+    /// Optional PR celebration channel +
     /// snapshot source. When the composition-root wires both, the
     /// capture-success path compares the freshly-saved value against the
     /// existing max-per-kind from the enriched records and fires a
@@ -99,39 +98,26 @@ public final class MeasurementsStore {
     /// without a second dependency.
     private let celebrationCoordinator: CelebrationCoordinator?
     private let personalRecordsSnapshot: (@MainActor () -> [PersonalRecord])?
-    /// v0.6.2.3 F2-CHARTLAG — SWR coordinator wired by `AppContainer`.
+    /// SWR coordinator wired by `AppContainer`.
     /// Routes `load()` through the standard `.empty → .cached → .fresh`
     /// observe ladder so the Trends/Charts list first-paint hits the
     /// cached page instantly instead of swallowing a cold network
     /// round-trip. `nil` keeps the legacy direct-fetch behaviour for
     /// unit tests that don't construct a coordinator.
     private let swr: SWRCoordinator?
-    /// v0.14 RISK-1 (dedup option B) — standalone-mode predicate. When `true`,
-    /// a manually-captured measurement is NOT mirror-written to HealthKit. The
-    /// reason: in offline/standalone mode the row is uploaded as `MANUAL` on the
-    /// later pair; if we ALSO wrote it to HK, the HK observer would re-ingest it
-    /// as `APPLE_HEALTH` on pair, producing a duplicate of the same physical
-    /// reading. Suppressing the mirror-write at the source keeps exactly one row
-    /// (the MANUAL upload). Reads the persisted sync-mode live (the same
-    /// `@Sendable` predicate the repos/gate use), so a Settings standalone↔paired
-    /// flip is observed without rebuilding the store. `nil` → never standalone
-    /// (tests + the paired default), so the existing mirror path is unchanged.
-    /// Internal (not private) so the `MeasurementsStore+QuickCapture.swift`
-    /// extension can gate the HK-mirror write in standalone mode.
-    let isStandalone: (@Sendable () -> Bool)?
-    /// **W-HKBACKFILL** — current keychain user-id, read fresh per call (no
+    /// Current keychain user-id, read fresh per call (no
     /// caching) so a logout + re-login as a different user partitions the
     /// one-shot historical-backfill run-once marker correctly. `nil` (tests +
     /// the legacy default) partitions under `_anonymous`. Internal (not private)
     /// so the `MeasurementsStore+HistoricalBackfill.swift` extension can key the
     /// per-user run-once flag.
     let userIDProvider: (@Sendable () -> String?)?
-    /// **W-HKBACKFILL** — UserDefaults the historical-backfill run-once marker
+    /// UserDefaults the historical-backfill run-once marker
     /// is persisted in. Injectable so the test suite can pin the gate against an
     /// isolated suite store. Defaults to `.standard`. Internal so the
     /// `+HistoricalBackfill.swift` extension reaches it.
     let backfillDefaults: UserDefaults
-    /// 1.5 FIX-DATA: where ``KnownServerVersion`` is read for the reading delete.
+    /// Where ``KnownServerVersion`` is read for the reading delete.
     let serverVersionDefaults: UserDefaults
     private(set) var authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry?
 
@@ -142,7 +128,6 @@ public final class MeasurementsStore {
         celebrationCoordinator: CelebrationCoordinator? = nil,
         personalRecordsSnapshot: (@MainActor () -> [PersonalRecord])? = nil,
         swr: SWRCoordinator? = nil,
-        isStandalone: (@Sendable () -> Bool)? = nil,
         userIDProvider: (@Sendable () -> String?)? = nil,
         backfillDefaults: UserDefaults = .standard,
         serverVersionDefaults: UserDefaults = .standard
@@ -153,7 +138,6 @@ public final class MeasurementsStore {
         self.celebrationCoordinator = celebrationCoordinator
         self.personalRecordsSnapshot = personalRecordsSnapshot
         self.swr = swr
-        self.isStandalone = isStandalone
         self.userIDProvider = userIDProvider
         self.backfillDefaults = backfillDefaults
         self.serverVersionDefaults = serverVersionDefaults
@@ -168,7 +152,7 @@ public final class MeasurementsStore {
     /// suspension. Legacy/headless stores without a registry receive a
     /// cancellation-aware local lease so their established behavior remains
     /// unchanged; live AppContainer stores must match the active registry owner.
-    /// **14-06 — the settle-and-account epilogue of an SWR load.**
+    /// **The settle-and-account epilogue of an SWR load.**
     ///
     /// `.empty` raises `isLoading`, and before this both other exits — the
     /// bare-return lease fence and the stream simply ending under cancellation
@@ -183,7 +167,7 @@ public final class MeasurementsStore {
     /// lines instead of eight — inlining it pushed `load` over
     /// `function_body_length` and would have meant recording new lint debt for
     /// a comment.
-    /// 14-06 — `captureAuthenticatedSessionLease()` returning nil was a silent
+    /// `captureAuthenticatedSessionLease()` returning nil was a silent
     /// `return`. Doing nothing is correct; doing it invisibly is what made a
     /// store that shows nothing undiagnosable.
     private func captureLeaseOrRecordRefusal() -> AuthenticatedSessionLease? {
@@ -194,7 +178,7 @@ public final class MeasurementsStore {
         return lease
     }
 
-    /// 14-06 — the per-emission fence, with the refusal made countable. Returns
+    /// The per-emission fence, with the refusal made countable. Returns
     /// `false` when this emission belongs to an account that is no longer here.
     private func admitsPublication(_ lease: AuthenticatedSessionLease) -> Bool {
         guard authenticatedEffectIsCurrent(lease) else {
@@ -204,7 +188,7 @@ public final class MeasurementsStore {
         return true
     }
 
-    /// **14-06 — the settle-and-account epilogue of the SWR load.**
+    /// **The settle-and-account epilogue of the SWR load.**
     ///
     /// `.empty` raises `isLoading`, and before this both other exits — the
     /// bare-return lease fence and the stream ending under cancellation — left
@@ -285,7 +269,7 @@ public final class MeasurementsStore {
             await hydrateSeriesBackedKinds(lease: lease)
         }
         seriesHydrationTask = hydrationTask
-        // v0.6.2.3 F2-CHARTLAG — SWR-aware path. Same `.empty → .cached →
+        // SWR-aware path. Same `.empty → .cached →
         // .fresh` ladder `DashboardStore` / `ChartsStore` use so the
         // Trends/Charts tab + Insights tab paint the cached page on
         // first frame instead of waiting for the cold round-trip. The
@@ -297,7 +281,7 @@ public final class MeasurementsStore {
             return
         }
         let repo = repo
-        // audit-v0162 H-3 — capture the mutation generation at observe-start.
+        // Capture the mutation generation at observe-start.
         // A `.cached`/`.fresh` emission whose fetch began before a concurrent
         // optimistic delete/edit (which bumps the generation) is dropped so it
         // can't resurrect the removed row or clobber the edit.
@@ -323,20 +307,17 @@ public final class MeasurementsStore {
                 applyCachedRecent(value, loadGeneration: loadGeneration)
                 isLoading = false
             case let .fresh(value):
-                // H-3 — drop a stale fresh that a concurrent mutation superseded.
+                // Drop a stale fresh that a concurrent mutation superseded.
                 let applied = applyFreshRecent(value, loadGeneration: loadGeneration)
                 isLoading = false
                 error = nil
-                // W-HKMIRROR — mirror server-origin readings (web / other
+                // Mirror server-origin readings (web / other
                 // device / import) into Apple Health so this iPhone's Health
                 // app isn't missing rows the user didn't type here. Anti-dup +
-                // idempotency live in the writer; suppressed in standalone (no
-                // server page would mean nothing to mirror anyway, but the
-                // create-time guard reasoning applies symmetrically). Detached
-                // off the critical path so the HK round-trip can't gate paint.
-                // Skipped when the fresh page was dropped (H-3) — mirroring a
+                // idempotency live in the writer. Detached off the critical path so the HK round-trip can't gate paint.
+                // Skipped when the fresh page was dropped — mirroring a
                 // superseded page would re-introduce the deleted row into HK.
-                if applied, isStandalone?() != true, let healthKit {
+                if applied, let healthKit {
                     let page = value
                     if let previousMirror = latestPageMirrorTask {
                         previousMirror.cancel()
@@ -347,17 +328,16 @@ public final class MeasurementsStore {
                         guard let self, authenticatedEffectIsCurrent(lease) else { return }
                         await healthKit.mirrorServerMeasurements(page)
                     }
-                    // W-HKBACKFILL — one-shot historical backfill. The
+                    // One-shot historical backfill. The
                     // latest-page mirror above only ever sees this 400-row page;
                     // server-origin history older than the page (Withings /
                     // import) never reaches Apple Health without this pass. Gated
-                    // by a per-user run-once marker, standalone-suppressed (same
-                    // guard above), and kicked off detached at `.utility` so the
+                    // by a per-user run-once marker and kicked off detached at `.utility` so the
                     // full-history walk can NEVER gate first paint.
                     runHistoricalHealthKitBackfillIfNeeded(healthKit: healthKit)
                 }
             case let .failed(err, lastKnown):
-                // H-3 — `lastKnown` is the pre-fetch cached page; applying it
+                // `lastKnown` is the pre-fetch cached page; applying it
                 // after a concurrent delete would resurrect the removed row.
                 // Only repaint it when no optimistic mutation intervened.
                 if let lastKnown, mutationGeneration == loadGeneration {
@@ -409,18 +389,15 @@ public final class MeasurementsStore {
     /// version, replaces with the server response on success, restores the
     /// original snapshot on failure.
     ///
-    /// **BP-pair (T-1):** wenn `value` ein BP-Tupel ist, trägt der Patch
+    /// **BP-pair:** wenn `value` ein BP-Tupel ist, trägt der Patch
     /// beide Werte und Repo fanoutet auf sys + dia Server-Rows (sofern
     /// `measurement.bloodPressureDiastolicId` gesetzt ist).
     ///
-    /// **Glucose-context (T-2):** wenn `measurement.kind == .glucose` und
-    /// der Caller einen `glucoseContext` setzt, trägt er als client-side
-    /// Intent durch den Patch und landet auf dem optimistic Domain-Row.
-    /// Wire-Suppression: der Server kennt das Feld auf PATCH noch nicht
-    /// (SB-25), daher überlebt die Intent nur via Outbox-Payload — der
-    /// Server-Returned Row trägt weiterhin den ursprünglich gespeicherten
-    /// Context. Bei nil bleibt der Server-Wert unverändert auf dem
-    /// optimistic Row.
+    /// **Glucose-context:** wenn `measurement.kind == .glucose` und
+    /// der Caller einen `glucoseContext` setzt, landet er auf dem optimistic
+    /// Domain-Row und, wenn er sich geändert hat und der Server ihn annimmt
+    /// (1.48.0, ``GlucoseContextEdit``), auch auf dem Wire. Bei nil bleibt
+    /// der Server-Wert unverändert.
     public func update(
         _ measurement: Measurement,
         value: MeasurementValue,
@@ -446,19 +423,15 @@ public final class MeasurementsStore {
             bloodPressureDiastolicId: measurement.bloodPressureDiastolicId,
             glucoseContext: effectiveContext
         )
-        // audit-v0162 H-3 — bump so an in-flight stale `.fresh` can't clobber
+        // Bump so an in-flight stale `.fresh` can't clobber
         // this optimistic edit back to the server-cached (pre-edit) value.
         bumpMutationGeneration()
         if let i = recent.firstIndex(where: { $0.id == measurement.id }) {
             recent[i] = optimistic
         }
-        let diastolicIntent: Double? = if case let .bloodPressure(_, d) = value { d } else { nil }
-        let patch = MeasurementPatch(
-            value: value.primaryComponent,
-            measuredAt: recordedAt,
-            notes: note,
-            diastolic: diastolicIntent,
-            glucoseContext: measurement.kind == .glucose ? glucoseContext : nil
+        let patch = MeasurementPatch.edit(
+            measurement, to: value, at: recordedAt, notes: note, context: effectiveContext,
+            serverTakesContext: GlucoseContextEdit.isSupported(defaults: serverVersionDefaults)
         )
         do {
             try lease.requireCurrent()
@@ -469,8 +442,9 @@ public final class MeasurementsStore {
                 diastolicId: measurement.bloodPressureDiastolicId
             )
             try lease.requireCurrent()
+            replaceOwnHealthKitCopy(of: measurement, with: saved)
             if let i = recent.firstIndex(where: { $0.id == measurement.id }) {
-                // A360-5 H-2 — preserve the diastolic peer id across the merge.
+                // Preserve the diastolic peer id across the merge.
                 // The non-fanout PUT response (or a server that doesn't echo the
                 // dia row id) can return a `saved` row with a nil
                 // `bloodPressureDiastolicId`, which would unlink the BP pair so a
@@ -478,7 +452,7 @@ public final class MeasurementsStore {
                 // the diastolic row drifts. Carry the original peer id forward
                 // whenever the server didn't echo one. The glucose path likewise
                 // re-applies its optimistic context until SB-25 lands wire-side
-                // support (T-2); for non-glucose, non-BP rows both branches are
+                // support; for non-glucose, non-BP rows both branches are
                 // no-ops over `saved`.
                 let mergedDiastolicId = saved.bloodPressureDiastolicId
                     ?? measurement.bloodPressureDiastolicId
@@ -526,7 +500,7 @@ public final class MeasurementsStore {
         }
     }
 
-    // MARK: - Personal-record detection (RECONCILE-CELEBRATE)
+    // MARK: - Personal-record detection
 
     /// Compares the freshly-committed measurement against the existing
     /// max-per-kind bucket leader from the wired `PersonalRecordsStore`

@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// INT-P (1.3.0) — W1 and W2 together: the history walk (W2, #127) runs
+    /// W1 and W2 together: the history walk runs
     /// every page through the real `HealthSampleConsumption`, whose W1 rules
     /// decide what a failed POST means.
     ///

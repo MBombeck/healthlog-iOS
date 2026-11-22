@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.4 B1 — which face ``ChartCard`` shows, as a pure function.**
+/// **Which face ``ChartCard`` shows, as a pure function.**
 ///
 /// The card used to fall back to „Noch keine Daten" three seconds into a load
 /// that had not finished, and after every failed load. Both told the user there

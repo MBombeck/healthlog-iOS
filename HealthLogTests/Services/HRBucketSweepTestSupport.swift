@@ -21,7 +21,7 @@
         func drainedBarrier() {}
     }
 
-    /// SYNC-HR — shared doubles for the heart-rate sweep stall and resume
+    /// Shared doubles for the heart-rate sweep stall and resume
     /// suites: a settable clock, a HealthKit read that can hang, a server
     /// that accepts every bucket, and a health store that never answers.
     enum HRBucketSweepTestSupport {
@@ -216,12 +216,6 @@
             }
         }
 
-        struct Flags: FeatureFlagsServicing {
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                flag == .enableHRBuckets ? true : flag.defaultValue
-            }
-        }
-
         struct Harness {
             let suite: String
             let clock: Clock
@@ -242,8 +236,8 @@
             }
         }
 
-        /// A coordinator with an armed cutover, a token and the bucket flag
-        /// on, reading from `service`.
+        /// A coordinator with an armed cutover and a token, reading from
+        /// `service`.
         static func harness(
             service: any HealthKitHRBucketReading,
             cutover: Date,
@@ -263,9 +257,7 @@
             let coordinator = HealthKitHRBucketSyncCoordinator(
                 service: service,
                 uploader: MeasurementBatchUploader(api: api, throttle: BatchSyncThrottle()),
-                featureFlags: Flags(),
                 keychain: keychain,
-                isStandalone: { false },
                 clock: { clock.now },
                 // swiftlint:disable:next force_unwrapping
                 defaultsProvider: { UserDefaults(suiteName: suite)! },

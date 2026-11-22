@@ -68,7 +68,7 @@ enum HLQuickAction: String, CaseIterable {
     /// Home-Screen shortcut reads as the same affordance.
     var systemImageName: String {
         switch self {
-        case .measurement: "plus.circle.fill"
+        case .measurement: "list.bullet.rectangle"
         case .medication: "pills.fill"
         case .mood: "face.smiling"
         }

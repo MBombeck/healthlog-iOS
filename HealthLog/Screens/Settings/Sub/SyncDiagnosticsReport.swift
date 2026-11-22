@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W5 (1.3.0, #126 1.4) — "Bericht kopieren", a precursor to #134.**
+/// **"Bericht kopieren", a precursor to #134.**
 ///
 /// A plain-text summary of the Sync Diagnostics screen that a tester can paste
 /// into an issue. It carries the same story the screen tells, grouped by
@@ -30,14 +30,14 @@ struct SyncDiagnosticsReport: Equatable {
         var lastCollectionTriggerAt: Date?
         var lastCollectionTriggerSource: String?
         var kinds: [KindRow]
-        /// INT-Q (X1, #134) — the last failures the server answered this
+        /// The last failures the server answered this
         /// session, newest first (``RecentFailureLog/snapshot()``): route
         /// template, status, error code, request id. No body, no value.
         var recentFailures: [RecentFailure] = []
-        /// INT-Q (X4, #138) — the hourly backfill's progress for this
+        /// The hourly backfill's progress for this
         /// account; `nil` when the server does not take hourly rows.
         var hourly: HourlyStatsStatus?
-        /// 1.4 B4 — the heart-rate bucket path (#12). The screen shows its
+        /// The heart-rate bucket path. The screen shows its
         /// gates in words only; the identifiers a tester quotes back live
         /// here. `nil` leaves the block out.
         var hrBuckets: HRBucketDiagnosticsSnapshot?
@@ -58,7 +58,7 @@ struct SyncDiagnosticsReport: Equatable {
         lines += Self.storedSection(input)
         lines.append("")
         lines += Self.sessionSection(input)
-        // INT-Q — X1's error ids, in the same words as "Support-Info kopieren".
+        // X1's error ids, in the same words as "Support-Info kopieren".
         lines.append("")
         lines += RecentFailureLines.lines(input.recentFailures)
         text = lines.joined(separator: "\n") + "\n"
@@ -73,7 +73,7 @@ struct SyncDiagnosticsReport: Equatable {
     /// The Apple Health block of `GET /api/integrations/healthkit`: state,
     /// reason and since, delivery, background sync, then per type the arrival
     /// facts (no values, no reading times). Shared with "Support-Info
-    /// kopieren" (#134), so both reports say it in the same words.
+    /// kopieren", so both reports say it in the same words.
     static func appleHealthLines(_ server: HKServerSyncHealthSummary?, loadFailed: Bool) -> [String] {
         var lines = ["[server] GET /api/integrations/healthkit"]
         guard let server else {
@@ -156,7 +156,7 @@ struct SyncDiagnosticsReport: Equatable {
         return lines
     }
 
-    /// 1.4 B4 — the heart-rate bucket path with its gate identifiers
+    /// The heart-rate bucket path with its gate identifiers
     /// (`cutoverPending`, `uploaded`, …), the words Console prints after
     /// `gate=`. No reading, only dates, gates and counts.
     static func heartRateBucketLines(_ snapshot: HRBucketDiagnosticsSnapshot) -> [String] {
@@ -167,7 +167,7 @@ struct SyncDiagnosticsReport: Equatable {
             "  last run: \(gateEvent(snapshot.ledger.lastEvent))",
             "  last held by: \(gateEvent(snapshot.ledger.lastSuppression))",
             "  raw fallback days: \(snapshot.rawFallbackDayCount)",
-            // SYNC-HR — the sweep in flight with its age and generation.
+            // The sweep in flight with its age and generation.
             "  in flight: \(inFlight(snapshot.activity, now: Date()))"
         ]
     }
@@ -194,7 +194,7 @@ struct SyncDiagnosticsReport: Equatable {
         if let trigger = row.lastTrigger, facts.lastChecked != nil { parts[0] += " (\(trigger))" }
         parts.append("new value \(stampOrNever(facts.lastNewValue))")
         parts.append("background \(stampOrNever(row.lastBackgroundAt))")
-        // INT-Q — v1.43's backfill stamp, only where the server sends one.
+        // v1.43's backfill stamp, only where the server sends one.
         if let backfill = row.lastBackfillAt { parts.append("backfill \(stamp(backfill))") }
         if row.stale { parts.append("stale") }
         return parts.joined(separator: ", ")

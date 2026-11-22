@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// W-HR-BUCKET-UPLOAD / GH #34 — the per-day-exclusivity boundary.
+/// The per-day-exclusivity boundary.
 ///
 /// These tests pin the cutover-marker mechanics that GUARANTEE no UTC day ever
 /// carries both raw per-sample HR rows AND hourly `stats:` rows: the boundary is

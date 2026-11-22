@@ -7,7 +7,7 @@ import Foundation
 /// - `GET  /api/share-links`  → list active + past links (token-less).
 /// - `DELETE /api/share-links/{id}` → revoke; a re-revoke returns **404**.
 ///
-/// **Idempotency contract (B1).** Revoke uses `updateMany where { id, userId,
+/// **Idempotency contract.** Revoke uses `updateMany where { id, userId,
 /// revokedAt: null }`, so an unknown / cross-user / already-revoked id all return
 /// 404. ``revoke(id:)`` therefore treats a 404 as **success-equivalent** ("already
 /// gone") rather than surfacing it as an error — a second tap or a stale list never
@@ -43,7 +43,7 @@ public actor ShareLinkRepository {
     ///   (`422 share-link.selection.*`); any other failure passes through as the
     ///   original ``HLError``.
     ///
-    /// R2 / #115 A3 — `elevation` is a single-use step-up elevation sent as
+    /// `elevation` is a single-use step-up elevation sent as
     /// `X-Step-Up`. Server v1.39.3 still accepts the token alone here
     /// (`requireRecentProof({ bearer: "token" })`) and will require the
     /// elevation once a build that can answer `401 auth.stepup.required` is

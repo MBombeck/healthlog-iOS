@@ -23,9 +23,13 @@ struct SourcesLinkSurfaceCoverageTests {
 
     @Test("the lab result detail cites the reference ranges it judges against")
     func labResultDetailCarriesItsCitation() throws {
+        // The page mounts the shared source line of the lab pages, which
+        // carries the caption and the link.
         let screen = try source("HealthLog/Screens/Labs/LabResultDetailScreen.swift")
-        #expect(screen.contains("HLSourcesLink(topic: .labReferenceRanges)"))
-        #expect(screen.contains("labs.detail.reference.caption"))
+        #expect(screen.contains("LabReferenceSourceLine(topic: .labReferenceRanges)"))
+        let line = try source("HealthLog/Screens/Labs/LabFormField.swift")
+        #expect(line.contains("HLSourcesLink(topic: topic)"))
+        #expect(line.contains("labs.detail.reference.caption"))
         #expect(HLSourcesLink.isRenderable(.labReferenceRanges))
 
         // The caption has to be real copy, not a key echoing itself.
@@ -33,7 +37,7 @@ struct SourcesLinkSurfaceCoverageTests {
         #expect(caption != "labs.detail.reference.caption")
     }
 
-    /// 1.4 B4 — DESIGN-HINTS rule 3: sources belong to a statement. The
+    /// DESIGN-HINTS rule 3: sources belong to a statement. The
     /// Vorsorge list states screening cadences and cites them; its empty state
     /// states nothing, so a lone "Quellen" there cited nothing.
     @Test("the Vorsorge list cites its cadences while it shows reminders, not in the empty state")

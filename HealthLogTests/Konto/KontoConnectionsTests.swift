@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// 1.5 KONTO (#149, #151, #157) — connections, notifications, Coach copy and
+/// Connections, notifications, Coach copy and
 /// the account payload. Each point once against a server that sends the field
 /// and once against one that does not (rule 10).
 @MainActor
@@ -52,7 +52,7 @@ struct KontoConnectionsTests {
         OAuthIntegrationCore(repo: OAuthIntegrationRepository(api: makeAPI(), provider: .fitbit), provider: .fitbit)
     }
 
-    // MARK: - Fitbit turndown (#149)
+    // MARK: - Fitbit turndown
 
     @Test("Fitbit: retirement from the consolidated status ends connect, sync and test; the date is the published day")
     func fitbitRetiredByStatus() async throws {
@@ -71,13 +71,13 @@ struct KontoConnectionsTests {
         #expect(retirement.notice != String(localized: "integration.fitbit.retired.endedNoDate"), "a known day is named")
     }
 
-    @Test("Fitbit: a server without retirement keeps the row exactly as before")
+    @Test("Fitbit: a server without retirement keeps the row, but no longer offers to connect")
     func fitbitWithoutField() async {
         Self.install(consolidated: #"{"data":{"integrations":[{"integration":"fitbit","connected":true}]},"error":null}"#)
         let core = Self.fitbitCore()
         await core.loadStatus()
-        #expect(core.retirement == nil)
-        #expect(!core.isRetired)
+        #expect(core.retirement == .retiredByRefusal, "the Fitbit Web API is off whatever the server knows")
+        #expect(core.isRetired)
         #expect(core.isOffered)
         #expect(core.error == nil)
 
@@ -85,6 +85,7 @@ struct KontoConnectionsTests {
         let older = Self.fitbitCore()
         await older.loadStatus()
         #expect(older.retirement == nil)
+        #expect(older.isOffered, "a connected account keeps its row to disconnect")
         #expect(older.error == nil, "a missing consolidated route is not the connection's error")
     }
 
@@ -129,7 +130,7 @@ struct KontoConnectionsTests {
         #expect(!FitbitRetirement.isRetiredRefusal(HLError.server(status: 500, code: nil, message: "")))
     }
 
-    // MARK: - already_linked (#149)
+    // MARK: - already_linked
 
     @Test("WHOOP: already_linked and the old owner_conflict share one sentence; other reasons keep theirs")
     func alreadyLinked() {
@@ -144,7 +145,7 @@ struct KontoConnectionsTests {
         #expect(OAuthConnectReason.message(for: "state", provider: "Oura") == nil)
     }
 
-    // MARK: - eventDefaults and BACKUP_HEALTH (#149, #151)
+    // MARK: - eventDefaults and BACKUP_HEALTH
 
     @Test("eventDefaults from the server win; without them the mirrored table answers")
     func eventDefaults() throws {
@@ -186,7 +187,7 @@ struct KontoConnectionsTests {
         #expect(NotificationEventPriority.rank(of: "BACKUP_HEALTH") < NotificationEventPriority.rank(of: "SOMETHING_NEW"))
     }
 
-    // MARK: - Coach (#151)
+    // MARK: - Coach
 
     @Test("Coach: reasoning_only gets its own sentence; an unknown code keeps the generic one")
     func coachReasoningOnly() {
@@ -215,7 +216,7 @@ struct KontoConnectionsTests {
         }
     }
 
-    // MARK: - Account payload (#149, #157)
+    // MARK: - Account payload
 
     @Test("displayName from the account wins for the initials when the profile has none; without it the username")
     func initialsFromDisplayName() {

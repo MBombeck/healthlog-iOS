@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **CU-32 — eine Fakten-Art als Karte.**
+/// **Eine Fakten-Art als Karte.**
 ///
 /// Aufbau von oben nach unten: der aktuelle Zustand (mit Gültigkeit und
 /// Provenienz), die Auswahl der Werte, das Entfernen, der Verlauf.
@@ -32,14 +32,11 @@ struct AnamnesisFactCard: View {
         // buchstabierten ihre eigenen Auswahlknöpfe nach („Ob du rauchst — und
         // ob du früher geraucht hast." über den Knöpfen Ja/Nein/Früher).
         // Kartentitel plus Auswahlwerte tragen die Karte allein.
-        HLSettingsCard(
-            icon: kind.symbolName,
-            title: LocalizedStringKey(kind.titleKey)
-        ) {
+        HLCard(LocalizedStringKey(kind.titleKey)) {
             currentStateRow
             valueChoices
             if state.isRecorded { removeRow }
-            // 1.4 B2-c — no history yet, no disclosure: an empty fold-out that
+            // No history yet, no disclosure: an empty fold-out that
             // explained what would appear in it is gone.
             if !history.isEmpty { historyDisclosure }
         }
@@ -54,7 +51,7 @@ struct AnamnesisFactCard: View {
     private var currentStateRow: some View {
         switch state {
         case .neverRecorded:
-            // 1.4 B2-c — what "never recorded" means against "none" is said
+            // What "never recorded" means against "none" is said
             // once, in the screen's (i), not under each of the three cards.
             HLBadge(String(localized: "anamnesis.state.neverRecorded"), icon: "questionmark.circle", tone: .neutral)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,8 +62,7 @@ struct AnamnesisFactCard: View {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 HLBadge(String(localized: "anamnesis.state.unreadable"), icon: "lock.slash", tone: .warning)
                 Text("anamnesis.state.unreadable.hint")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                 validityLine(revision)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -75,9 +71,7 @@ struct AnamnesisFactCard: View {
         case let .recorded(revision, value):
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 HStack(spacing: HLSpace.sm) {
-                    Text(LocalizedStringKey(kind.labelKey(for: value)))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
+                    HLRowTitle(Text(LocalizedStringKey(kind.labelKey(for: value))))
                     if let provenanceKey = revision.provenance.labelKey {
                         HLBadge(
                             String(localized: String.LocalizationValue(provenanceKey)),
@@ -98,14 +92,13 @@ struct AnamnesisFactCard: View {
     /// die halbe Aussage wäre.
     private func validityLine(_ revision: AnamnesisFactRevision) -> some View {
         Text(revision.validityText)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
     }
 
     // MARK: - Choices
 
     private var valueChoices: some View {
-        VStack(spacing: HLSpace.xs) {
+        VStack(spacing: 0) {
             ForEach(kind.allowedValues, id: \.rawValue) { value in
                 choiceRow(value)
             }
@@ -115,37 +108,23 @@ struct AnamnesisFactCard: View {
 
     private func choiceRow(_ value: AnamnesisFactValue) -> some View {
         let isSelected = state.value == value
-        return Button {
+        return HLChoiceRow(LocalizedStringKey(kind.labelKey(for: value)), isSelected: isSelected, mode: .singleOpen) {
             guard !isSelected else { return }
             Task { await store.setValue(value, for: kind) }
-        } label: {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? HLAccent.primary : HLText.secondary)
-                Text(LocalizedStringKey(kind.labelKey(for: value)))
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityIdentifier("anamnesis.choice.\(kind.rawValue).\(value.rawValue)")
     }
 
     // MARK: - Remove
 
     private var removeRow: some View {
-        Button(role: .destructive) {
-            Task { await store.removeCurrent(for: kind) }
-        } label: {
-            Text("anamnesis.action.remove")
-                .font(.hlFootnote)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(HLColor.statusBad)
+        HLDeleteButton(
+            "anamnesis.action.remove",
+            form: .row,
+            action: .confirmed(title: "settings.anamnesis.remove.confirm.title") {
+                await store.removeCurrent(for: kind)
+            }
+        )
         .disabled(store.pendingKind != nil)
         .accessibilityIdentifier("anamnesis.remove.\(kind.rawValue)")
     }
@@ -160,8 +139,7 @@ struct AnamnesisFactCard: View {
         } label: {
             HStack(spacing: HLSpace.xs) {
                 Text("anamnesis.history.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.groupHeader)
                 if !history.isEmpty {
                     Text(verbatim: "\(history.count)")
                         .font(.hlCaption2.weight(.semibold))

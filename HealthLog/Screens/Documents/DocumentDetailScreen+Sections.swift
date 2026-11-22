@@ -5,7 +5,7 @@ import SwiftUI
 // screen file within the length budget.
 
 extension DocumentDetailScreen {
-    // MARK: - Persisted summary section (Wave 4.2)
+    // MARK: - Persisted summary section
 
     /// The server's PERSISTED background AI summary — generated once after
     /// upload by the auto-read job, not the session-only "Zusammenfassen" panel
@@ -20,42 +20,39 @@ extension DocumentDetailScreen {
     /// for, so the whole section collapses.
     @ViewBuilder
     var summarySection: some View {
-        // 1.4 B2-c — the card's title says the summary comes from AI (it was a
+        // The card's title says the summary comes from AI (it was a
         // loose "Read by AI" caption at the end of the page), and the pending
         // state is the same card with a spinner instead of a loose line.
         if let prose = document.resolvedSummary {
+            HLSectionHeader("documents.detail.summary.aiTitle", rank: .area)
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    HLSectionLabel("documents.detail.summary.aiTitle")
                     // Web parity: the AI narrative is FOREGROUND content, not
                     // muted meta (only the generation date below is muted).
                     HLInsightProse(text: prose, color: HLText.primary)
                     if let generatedAt = document.summaryGeneratedAt, !generatedAt.isEmpty {
                         Text(verbatim: DocumentFormat.mediumDate(generatedAt))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityIdentifier("documents.detail.summary")
         } else if contentIndexEnabled {
+            HLSectionHeader("documents.detail.summary.aiTitle", rank: .area)
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    HLSectionLabel("documents.detail.summary.aiTitle")
-                    // #151 — a read that cannot finish here says why
+                    // A read that cannot finish here says why
                     // instead of spinning forever.
                     if let notice = summaryNotice {
                         Text(notice.message)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         HStack(spacing: HLSpace.sm) {
                             ProgressView().controlSize(.small)
                             Text("documents.detail.summary.pending")
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                         }
                     }
                 }
@@ -75,36 +72,38 @@ extension DocumentDetailScreen {
         return readNotice
     }
 
-    // MARK: - Lab-values jump (Wave 4.5)
+    // MARK: - Lab-values jump
 
     /// The web's `…lab-values-link`: when the labs module is on and this
     /// document staged ≥ 1 non-rejected OBSERVATION fact, a direct jump into
     /// Labs. Counted from the detail's own `facts` (already loaded) — the client
-    /// never re-derives lab VALUES, only how many there are.
+    /// never re-derives lab VALUES, only how many there are. A read that
+    /// stopped early says so in the same card, above the jump.
     @ViewBuilder
-    var labValuesLink: some View {
+    var labValuesSection: some View {
         let count = InboundDocumentDetail.labFactCount(in: facts)
-        // #151 — the read stopped before the end of the document, so the
-        // values below may be incomplete. One line above them, no badge.
-        if extractionIncomplete, labsModuleEnabled {
-            Text("documents.detail.extractIncomplete")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("documents.detail.extractIncomplete")
-        }
-        if count > 0, labsModuleEnabled {
-            NavigationLink {
-                LabsScreen()
-            } label: {
-                Label {
-                    Text(String(format: String(localized: "documents.detail.labValuesLink"), count))
-                } icon: {
-                    Image(systemName: "testtube.2")
+        let showsNote = extractionIncomplete && labsModuleEnabled
+        let showsLink = count > 0 && labsModuleEnabled
+        if showsNote || showsLink {
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    if showsNote {
+                        HLEmptyNote("documents.detail.extractIncomplete")
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("documents.detail.extractIncomplete")
+                    }
+                    if showsLink {
+                        HLRow(
+                            title: Text(String(format: String(localized: "documents.detail.labValuesLink"), count)),
+                            accessory: .chevron
+                        ) {
+                            HLRowGlyph(symbol: "testtube.2")
+                        }
+                        .hlRowLink { LabsScreen() }
+                        .accessibilityIdentifier("documents.detail.labValues")
+                    }
                 }
-                .font(.hlSubhead)
             }
-            .accessibilityIdentifier("documents.detail.labValues")
         }
     }
 
@@ -113,72 +112,57 @@ extension DocumentDetailScreen {
     var metadataCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // Title.
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    fieldLabel("documents.detail.titleLabel")
-                    TextField("documents.detail.titlePlaceholder", text: $titleDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.hlBody)
-                        .submitLabel(.done)
-                        .onSubmit { Task { await commitTitle() } }
-                        .accessibilityIdentifier("documents.detail.title")
-                }
-                // Kind — a plain menu picker (no toggle).
-                HStack {
-                    fieldLabel("documents.detail.kindLabel")
-                    Spacer()
-                    Menu {
-                        ForEach(DocumentKindMeta.order) { kind in
-                            Button {
-                                Task { await commitKind(kind) }
-                            } label: {
-                                Label(DocumentKindMeta.labelKey(kind), systemImage: DocumentKindMeta.icon(kind))
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: HLSpace.xxs) {
-                            Image(systemName: DocumentKindMeta.icon(document.kind))
-                                .font(.hlSubhead)
-                            Text(DocumentKindMeta.labelKey(document.kind))
-                                .font(.hlSubhead)
-                        }
-                        .foregroundStyle(HLText.primary)
-                    }
+                // Title: the labelled field of the app's forms, on the
+                // card's plate instead of a dark bordered box.
+                HLTextField(title: String(localized: "documents.detail.titleLabel"), text: $titleDraft, kind: .plain)
+                    .submitLabel(.done)
+                    .onSubmit { Task { await commitTitle() } }
+                    .accessibilityIdentifier("documents.detail.title")
+                // Kind: the form's menu row, committed on pick.
+                HLFormPicker(
+                    "documents.detail.kindLabel",
+                    selection: Binding(get: { document.kind }, set: { kind in Task { await commitKind(kind) } }),
+                    options: DocumentKindMeta.order
+                ) { Text(DocumentKindMeta.labelKey($0)) }
                     .accessibilityIdentifier("documents.detail.kind")
-                }
                 // Filing date — a direct inline DatePicker (no toggle).
                 DocumentFilingDateRow(date: $filingDate)
                     .onChange(of: filingDate) { _, _ in Task { await commitDate() } }
-                // 1.4 B2-c — when and how big, as the card's last line.
+                // When and how big, as the card's last line. A scheduled
+                // doctor report (server 1.49.0) says where it came from.
+                if document.isScheduledReport {
+                    Text("documents.detail.scheduledReport")
+                        .hlText(.rowSubtitle)
+                        .accessibilityIdentifier("documents.detail.scheduledReport")
+                }
                 Text(uploadedText)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.rowSubtitle)
             }
         }
     }
 
-    /// The shared card-field label — routed through the app-wide canonical
-    /// `HLSectionLabel` (audit-01 C3) so the Documents detail speaks the same
-    /// section-label language as every other screen.
-    func fieldLabel(_ key: LocalizedStringKey) -> some View {
-        HLSectionLabel(key)
-    }
-
     // MARK: - Conditions card
 
+    /// The linked conditions as tags, and linking as an ordinary row. With
+    /// no condition to link and none linked the card has nothing to say.
+    @ViewBuilder
     var conditionsCard: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                fieldLabel("documents.detail.conditionsLabel")
-                // 1.4 B2-c — no "not linked" line: the label and the button
-                // below say it.
-                if !document.conditionLinks.isEmpty {
-                    HLFlowChips(items: document.conditionLinks.map(\.name))
+        if !document.conditionLinks.isEmpty || !availableEpisodes.isEmpty {
+            HLCard("documents.detail.conditionsLabel") {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    if !document.conditionLinks.isEmpty {
+                        HLFlowLayout(spacing: HLSpace.xs) {
+                            ForEach(document.conditionLinks, id: \.episodeId) { link in
+                                HLBadge(link.name)
+                            }
+                        }
+                    }
+                    HLSettingsActionRow(icon: "link", title: "documents.detail.linkCondition", presents: .sheet) {
+                        showConditionEditor = true
+                    }
+                    .disabled(availableEpisodes.isEmpty)
+                    .accessibilityIdentifier("documents.detail.linkCondition")
                 }
-                HLButton("documents.detail.linkCondition", icon: "link", variant: .secondary, size: .compact) {
-                    showConditionEditor = true
-                }
-                .disabled(availableEpisodes.isEmpty)
             }
         }
     }
@@ -222,8 +206,6 @@ extension DocumentDetailScreen {
 /// caller's illness episodes on/off, then commit the whole set (PATCH
 /// `episodeIds`). Server contract caps the set at 20.
 struct DocumentConditionLinkEditor: View {
-    @Environment(\.dismiss) private var dismiss
-
     let linkedEpisodeIds: Set<String>
     let available: [IllnessEpisodeDTO]
     let onCommit: (Set<String>) -> Void
@@ -242,48 +224,39 @@ struct DocumentConditionLinkEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "documents.detail.conditionsSheetTitle",
+            action: .save(isEnabled: isDirty) {
+                onCommit(selection)
+                return true
+            },
+            isDirty: isDirty
+        ) {
             List {
-                if available.isEmpty {
-                    HLEmptyState(
-                        icon: "cross.case",
-                        title: "documents.linkPicker.noEpisodes"
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(available) { episode in
-                        Button {
-                            toggle(episode.id)
-                        } label: {
-                            HStack {
-                                Text(verbatim: episode.label)
-                                    .foregroundStyle(HLText.primary)
-                                Spacer()
-                                if selection.contains(episode.id) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(HLAccent.userBrandTint)
-                                }
+                Section {
+                    if available.isEmpty {
+                        HLEmptyState(
+                            icon: "cross.case",
+                            title: "documents.linkPicker.noEpisodes"
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    } else {
+                        // Several conditions at once: the circles of a multiple choice.
+                        ForEach(available) { episode in
+                            HLChoiceRow(
+                                title: Text(verbatim: episode.label),
+                                isSelected: selection.contains(episode.id),
+                                mode: .multiple
+                            ) {
+                                toggle(episode.id)
                             }
                         }
-                        .accessibilityAddTraits(selection.contains(episode.id) ? [.isSelected] : [])
                     }
                 }
+                .hlFormRowSurface()
             }
-            .navigationTitle(Text("documents.detail.conditionsSheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("documents.action.cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("documents.action.save") {
-                        onCommit(selection)
-                        dismiss()
-                    }
-                    .disabled(!isDirty)
-                }
-            }
+            .hlPageMargins()
         }
     }
 
@@ -292,71 +265,6 @@ struct DocumentConditionLinkEditor: View {
             selection.remove(id)
         } else if selection.count < 20 {
             selection.insert(id)
-        }
-    }
-}
-
-// MARK: - HLFlowChips
-
-/// A simple wrapping row of read-only capsule chips (condition names).
-struct HLFlowChips: View {
-    let items: [String]
-
-    var body: some View {
-        HLWrapLayout(spacing: HLSpace.xxs) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, name in
-                Text(verbatim: name)
-                    .font(.hlCaption)
-                    .lineLimit(1)
-                    .padding(.horizontal, HLSpace.xs)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(HLSurface.secondary))
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
-    }
-}
-
-/// Minimal flow layout that wraps its children onto new lines.
-struct HLWrapLayout: Layout {
-    var spacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var rows: [CGFloat] = [0]
-        var rowWidth: CGFloat = 0
-        var totalHeight: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if rowWidth + size.width > maxWidth, rowWidth > 0 {
-                totalHeight += rowHeight + spacing
-                rowWidth = 0
-                rowHeight = 0
-                rows.append(0)
-            }
-            rowWidth += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        totalHeight += rowHeight
-        return CGSize(width: maxWidth == .infinity ? rowWidth : maxWidth, height: totalHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        let maxWidth = proposal.width ?? bounds.width
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.minX + maxWidth, x > bounds.minX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
         }
     }
 }
@@ -411,7 +319,7 @@ struct DocumentFilingDateRow: View {
     }
 
     private var label: some View {
-        HLSectionLabel("documents.detail.dateLabel")
+        HLRowTitle("documents.detail.dateLabel")
     }
 
     private var picker: some View {

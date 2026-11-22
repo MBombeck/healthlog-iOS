@@ -1,6 +1,6 @@
 import Foundation
 
-/// #141 / #126 3.2 — the push `url` (server `tap-target.ts`, a same-origin web
+/// The push `url` (server `tap-target.ts`, a same-origin web
 /// path) mapped to the native screen.
 ///
 /// The server resolves one path per delivery: `/` (system alerts, the daily
@@ -28,23 +28,51 @@ extension DeepLinkRoute {
             // here opens a write form"); the plain page has no native twin.
             let wantsSheet = parts.count == 1 && query.contains { $0.name == "add" && $0.value == "1" }
             return wantsSheet ? .mood : .dashboard
+        case "medications" where parts.count == 1:
+            // Server 1.48.3: a dose reminder opens `/medications?highlight=<id>`.
+            return medicationsListRoute(highlight: query.first { $0.name == "highlight" }?.value)
         case "medications":
             return medicationsRoute(parts: Array(parts.dropFirst()))
-        case "checkups" where parts.count == 1:
-            return checkupsRoute(query: query)
-        case "cycle" where parts.count == 1:
-            return .cycle
-        case "coach" where parts.count == 1:
-            return .coach
-        case "settings" where parts.count == 2:
-            switch parts[1] {
-            case "security": return .settingsSecurity
-            case "integrations": return .settingsIntegrations
-            default: return .dashboard
-            }
+        case let page? where parts.count == 1 && queryPageRoute(page, query: query) != nil:
+            return queryPageRoute(page, query: query) ?? .dashboard
+        case let page? where parts.count == 1 && singlePageRoutes[page] != nil:
+            return singlePageRoutes[page] ?? .dashboard
+        case let section? where parts.count == 2:
+            return subpageRoute(section: section, page: parts[1])
         default:
             return .dashboard
         }
+    }
+
+    /// The paths that name one page and nothing more.
+    private static let singlePageRoutes: [String: DeepLinkRoute] = [
+        "cycle": .cycle,
+        "coach": .coach,
+        "timeline": .timeline,
+        // SEIZURE_CLUSTER (server v1.48.0, `tap-target.ts`): the diary.
+        "seizures": .seizures,
+        // Server 1.49.0: `MEASUREMENT_ANOMALY` opens `/insights`.
+        "insights": .insights(metric: nil)
+    ]
+
+    /// `/settings/<page>` and `/insights/<slug>`; any other two-part path
+    /// opens home.
+    private static func subpageRoute(section: String, page: String) -> DeepLinkRoute {
+        switch (section, page) {
+        case ("settings", "security"): .settingsSecurity
+        case ("settings", "integrations"): .settingsIntegrations
+        // Server 1.49.0: a notable value opens its metric's page.
+        case ("insights", _): insightsMetricRoute(slug: page)
+        default: .dashboard
+        }
+    }
+
+    /// `/insights/<slug>`: that metric's Insights page, the overview when
+    /// the slug does not pass the same allowlist as `healthlog://insights/<slug>`.
+    private static func insightsMetricRoute(slug: String) -> DeepLinkRoute {
+        guard let url = URL(string: "healthlog://insights/\(slug)"),
+              case let .insights(metric)? = DeepLinkRoute(url: url) else { return .insights(metric: nil) }
+        return .insights(metric: metric)
     }
 
     /// `/medications` opens the list; `/medications/<id>` (and a deeper tab
@@ -65,6 +93,25 @@ extension DeepLinkRoute {
             return .checkups
         }
         return .checkupsVisit(id: id)
+    }
+
+    /// The single pages whose query names a record: `/checkups?visit=<id>`
+    /// and `/seizures?event=<id>`. `nil` for every other page.
+    private static func queryPageRoute(_ page: String, query: [URLQueryItem]) -> DeepLinkRoute? {
+        switch page {
+        case "checkups": checkupsRoute(query: query)
+        case "seizures": seizuresRoute(query: query)
+        default: nil
+        }
+    }
+
+    /// `/seizures?event=<id>` opens that seizure; the id passes the record
+    /// allowlist. Anything else opens the diary.
+    private static func seizuresRoute(query: [URLQueryItem]) -> DeepLinkRoute {
+        guard let id = query.first(where: { $0.name == "event" })?.value, isAllowedRecordId(id) else {
+            return .seizures
+        }
+        return .seizureEvent(id: id)
     }
 
     static func isAllowedRecordId(_ id: String) -> Bool {

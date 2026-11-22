@@ -5,8 +5,6 @@ import SwiftUI
 /// are required; `ageAtOnset` (0–120) + `note` are optional and tri-state-clearable
 /// on edit.
 struct FamilyHistoryEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: FamilyHistoryStore
     let record: FamilyHistoryEntryDTO?
 
@@ -17,9 +15,7 @@ struct FamilyHistoryEditorSheet: View {
     @State private var note: String
     @State private var isSaving = false
     @State private var saveError: String?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial-focus + submit-chain across the text fields.
+    /// Initial-focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
     /// Server bound for `ageAtOnset` (INV-B caveat). The stepper clamps to it.
@@ -47,7 +43,7 @@ struct FamilyHistoryEditorSheet: View {
         !condition.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving
     }
 
-    /// FORM-1 — any field diverges from the initial (create-default or prefilled)
+    /// Any field diverges from the initial (create-default or prefilled)
     /// value.
     private var isDirty: Bool {
         relationship != (record?.relationship ?? .mother)
@@ -58,25 +54,36 @@ struct FamilyHistoryEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "familyHistory.edit.title" : "familyHistory.add.sheetTitle",
+            action: isEditing ? .save(isEnabled: canSave) { await save() } : .add(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                Section("familyHistory.add.section.about") {
-                    Picker("familyHistory.field.relationship", selection: $relationship) {
+                Section {
+                    Picker(selection: $relationship) {
                         ForEach(FamilyRelationship.allCases) { r in
                             Text(r.localizedLabel).tag(r)
                         }
+                    } label: {
+                        HLRowTitle("familyHistory.field.relationship")
                     }
                     TextField("familyHistory.field.condition", text: $condition)
                         .focused($focusedField, equals: .condition)
                         .submitLabel(.next)
                         .onSubmit { focusedField = .note }
+                } header: {
+                    HLSectionHeader("familyHistory.add.section.about")
                 }
-                Section("familyHistory.add.section.onset") {
-                    Toggle("familyHistory.field.ageAtOnsetToggle", isOn: $hasAgeAtOnset.animation())
+                .hlFormRowSurface()
+                Section {
+                    Toggle(isOn: $hasAgeAtOnset.animation()) {
+                        HLRowTitle("familyHistory.field.ageAtOnsetToggle")
+                    }
                     if hasAgeAtOnset {
                         Stepper(value: $ageAtOnset, in: Self.ageRange) {
                             HStack {
-                                Text("familyHistory.field.ageAtOnset")
+                                HLRowTitle("familyHistory.field.ageAtOnset")
                                 Spacer()
                                 Text(verbatim: "\(ageAtOnset)")
                                     .foregroundStyle(HLText.secondary)
@@ -84,53 +91,42 @@ struct FamilyHistoryEditorSheet: View {
                         }
                         .accessibilityIdentifier("familyHistory.field.ageAtOnsetStepper")
                     }
+                } header: {
+                    HLSectionHeader("familyHistory.add.section.onset")
                 }
-                Section("familyHistory.add.section.note") {
+                .hlFormRowSurface()
+                Section {
                     TextField("familyHistory.field.note", text: $note, axis: .vertical)
                         .lineLimit(2 ... 5)
                         .focused($focusedField, equals: .note)
+                } header: {
+                    HLSectionHeader("familyHistory.add.section.note")
                 }
+                .hlFormRowSurface()
                 if let saveError {
                     Section { HLFormErrorText(saveError) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(Text(isEditing ? "familyHistory.edit.title" : "familyHistory.add.sheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("records.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("records.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave)
-                }
-            }
-            // FORM-2 — seed focus onto the condition field once the sheet settles.
+            .hlPageMargins()
+            // Seed focus onto the condition field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = .condition
             }
         }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
     }
 
-    private func save() async {
+    /// `true` when the record went out and the sheet may close.
+    private func save() async -> Bool {
         isSaving = true
         saveError = nil
         defer { isSaving = false }
         let succeeded = isEditing ? await saveEdit() : await saveCreate()
-        if succeeded {
-            dismiss()
-        } else {
+        if !succeeded {
             saveError = store.lastError ?? String(localized: "familyHistory.save.failed")
         }
+        return succeeded
     }
 
     private func saveCreate() async -> Bool {

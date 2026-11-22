@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// **The Insights score-tile style — now a single shipped concept (P9).**
+/// **The Insights score-tile style — now a single shipped concept.**
 ///
-/// **v0152 T1 (ship blocker)** — the b182 dev-switchable tile-style picker was an
+/// The b182 dev-switchable tile-style picker was an
 /// internal-only affordance (a runtime `Picker` over thirteen concepts) that the
 /// App-Store production-readiness audit flagged as the ONE hard review blocker
 /// (dev UI in a Release build). The operator picked **P9 · `prismUniform`** as the
@@ -50,18 +50,11 @@ struct InsightsTileAppearance {
     enum Surface: Equatable {
         /// Flat `HLCard` mono surface (A + the ring-effect concepts P1/P2/P3/P5x).
         case mono
-        /// Liquid Glass surface on iOS 26+, flat fallback on 18–25 (C).
-        case glass
         /// One shared neutral warm gradient on every tile (F).
         case restrainedGradient
-        /// Native iOS-26 `glassEffect` on the tile SURFACE inside a
-        /// `GlassEffectContainer` (P4 `glassTile`); `.ultraThinMaterial` fallback
-        /// on iOS 18–25. The ring stays a crisp gradient stroke on top (HIG —
-        /// glass on the surface, never on the data ring stroke).
-        case glassTile
     }
 
-    /// **b182 — the optical/motion treatment layered over the `HLScoreRing`.**
+    /// **The optical/motion treatment layered over the `HLScoreRing`.**
     ///
     /// Orthogonal to `Surface`: the surface decides the card chrome, the
     /// `ringEffect` decides what rides on top of the ring (a prism rim, a
@@ -72,27 +65,27 @@ struct InsightsTileAppearance {
     /// path inside its view.
     enum RingEffect: Equatable {
         case none
-        /// P1 — `AngularGradient` spectrum stroked on the rim, `.plusLighter`,
+        /// `AngularGradient` spectrum stroked on the rim, `.plusLighter`,
         /// masked thin, slowly hue-cycled. Jank-free, safe on all tiles.
         case prismOverlay
-        /// P2 / P7 / P8 — one-shot bright specular glint glides the fill arc on
+        /// One-shot bright specular glint glides the fill arc on
         /// value-land. `dimmed` applies the ~12 % tile-local dim the operator asked
         /// for (P2/P7/P8 all run dimmed). `tint` carries the metric's signal so the
-        /// glint can read as a green/amber/red sheen (P8); `nil` keeps it mono
+        /// glint can read as a green/amber/red sheen; `nil` keeps it mono
         /// (P2/P7). The dot vs no-dot difference lives in `ringSignal`, not here.
         case specularSweep(dimmed: Bool, tint: HLScoreRing.HLSignal?)
-        /// P3 — `HLBloomHalo` behind the arc head, intensity mapped to the score.
+        /// `HLBloomHalo` behind the arc head, intensity mapped to the score.
         case scoreBloom
-        /// P5x — EXPERIMENTAL real Metal `.layerEffect` chromatic rim shader, the
+        /// EXPERIMENTAL real Metal `.layerEffect` chromatic rim shader, the
         /// chromatic break-up masked to the FILLED arc (0…fraction) only.
         case prismShader
-        /// P5b — P5's chromatic prism PLUS a specular glow riding the filled arc.
+        /// P5's chromatic prism PLUS a specular glow riding the filled arc.
         case prismShaderGlow
-        /// P6 — STATIC native `MeshGradient` prism masked to the ring rim. No
+        /// STATIC native `MeshGradient` prism masked to the ring rim. No
         /// driver, no animation, no Metal — renders once. (Renders in the
         /// Simulator, unlike P4/P5.)
         case prismStatic
-        /// P9 (W-B190) — the SHIPPING prism: a pure-SwiftUI `MeshGradient` spectral
+        /// The SHIPPING prism: a pure-SwiftUI `MeshGradient` spectral
         /// wash masked STRICTLY to the FILLED arc (`0…fraction`, the same trim as
         /// `HLScoreRing`) plus a subtle STEADY glow on that arc. NO Metal, NO
         /// `.layerEffect` — renders identically on every tile (hero + small) on
@@ -114,7 +107,7 @@ struct InsightsTileAppearance {
 
     init(style: InsightsTileStyle, signal _: HLScoreRing.HLSignal?) {
         self.style = style
-        // P9 `prismUniform` is the sole shipped look (v0152 T1): plain mono
+        // P9 `prismUniform` is the sole shipped look: plain mono
         // surface + the pure-SwiftUI arc-masked prism (uniform on hero AND small
         // tiles), no cap dot (the operator asked for "kein Punkt vorne im Kreis").
         surface = .mono
@@ -124,7 +117,7 @@ struct InsightsTileAppearance {
     }
 
     /// The ring fill colour override — white off-ink on the gradient surface,
-    /// `nil` (primitive default graphite, dark-mode-flipping) on mono / glass.
+    /// `nil` (primitive default graphite, dark-mode-flipping) on mono.
     var ringFill: Color? {
         usesGradientInk ? WellnessRingPalette.fill : nil
     }
@@ -142,7 +135,7 @@ struct InsightsTileAppearance {
     }
 
     /// The under-ring metric label colour — calm off-white on the gradient,
-    /// primary ink on the mono / glass surfaces.
+    /// primary ink on the mono surface.
     var labelColor: Color {
         usesGradientInk ? WellnessRingPalette.label : HLText.primary
     }

@@ -52,7 +52,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **GH #86** — HealthKit producer for ``WorkoutHRBackfillSweep``: hands out
+    /// HealthKit producer for ``WorkoutHRBackfillSweep``: hands out
     /// the workout history newest-first, page by page, each entry already mapped
     /// to ``WorkoutIngestDTO`` WITH its HR series attached.
     ///

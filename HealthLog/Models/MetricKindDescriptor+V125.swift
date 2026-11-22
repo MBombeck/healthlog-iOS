@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0158 — v1.25 clinical measurement-type descriptors.
+/// v1.25 clinical measurement-type descriptors.
 ///
 /// Split out of `MetricKindDescriptor.swift` to keep that file under the
 /// 1000-line `file_length` budget. `MetricKindDescriptor.catalog` concatenates

@@ -58,10 +58,10 @@ struct AppleHealthMedicationWakeTests {
         #expect(fixture.ledger.pendingIdentities() == ["DOSE-0500"])
 
         // The next sweep has no budget and settles the one that waited. (The
-        // fake reader ignores `since`, so it re-offers all 501; the server
-        // folds repeats on the dose UUID.)
+        // fake reader ignores `since`, so it re-offers all 501; the 500 the
+        // ledger already settled are not sent again.)
         let next = await fixture.importer.sync()
-        #expect(recorder.bulkEntryCounts == [500, 500, 1])
+        #expect(recorder.bulkEntryCounts == [500, 1])
         #expect(next.dosesDeferredToNextSweep == 0)
         #expect(fixture.ledger.pendingIdentities().isEmpty)
     }
@@ -117,9 +117,11 @@ struct AppleHealthMedicationWakeTests {
         }
         #expect(recorder.lastBulkBody?["syncTrigger"] as? String == "foreground")
 
+        // A second installation: the first one settled its dose and sends nothing more.
         context.noteServerVersion(ServerVersionInfo(version: "1.42.4"))
+        let second = try MedFixtures.makeImporter(api: api, keychain: keychain, reader: reader, syncTrigger: context)
         await context.bind(.manual) {
-            _ = await fixture.importer.sync()
+            _ = await second.importer.sync()
         }
         #expect(recorder.lastBulkBody?["syncTrigger"] as? String == "manual")
     }

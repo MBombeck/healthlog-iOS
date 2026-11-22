@@ -5,11 +5,11 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.12 W8-4 / W8-6** — locks the cache-sweep + off-main-downsample work.
+/// Locks the cache-sweep + off-main-downsample work.
 ///
-/// W8-4: `SWRCoordinator.sweepOlderThan` (the passthrough the BGTask cache-sweep
+/// `SWRCoordinator.sweepOlderThan` (the passthrough the BGTask cache-sweep
 /// hook calls) must drop rows older than the window and keep fresh rows.
-/// W8-6: moving `SeriesDownsampler` off the main actor must produce byte-for-byte
+/// Moving `SeriesDownsampler` off the main actor must produce byte-for-byte
 /// identical output (it's a pure function over value types).
 @Suite("W8 — cache sweep + off-main downsample")
 struct W8CacheSweepTests {
@@ -60,7 +60,7 @@ struct W8CacheSweepTests {
         #expect(dropped == 0)
     }
 
-    // MARK: - AUD-8 H-1 — row-count cap + foreground maintenance sweep
+    // MARK: - Row-count cap + foreground maintenance sweep
 
     @Test("SWRCoordinator.sweepKeepingNewest enforces the row cap (AUD-8 H-1)")
     func coordinatorCapEvictsOldest() async throws {

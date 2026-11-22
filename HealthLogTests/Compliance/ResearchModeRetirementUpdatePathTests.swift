@@ -8,7 +8,7 @@
     import SwiftData
     import Testing
 
-    /// **D-12-05-A — Research Mode is retired server-side; prove iOS followed.**
+    /// **Research Mode is retired server-side; prove iOS followed.**
     ///
     /// The server deleted `/api/auth/me/research-mode` on 2026-08-08 in
     /// `0160052289e4` ("retire Research Mode — the switch governed nothing") and
@@ -124,7 +124,7 @@
         func stringCatalogueCarriesNoResearchModeCopy() throws {
             let catalogue = try Self.stringCatalogue()
             let languages = Self.languages(in: catalogue)
-            // 1.5 L10N-CORE: the census covers every language the code knows;
+            // The census covers every language the code knows;
             // a catalogue language outside `AppLanguage` would be skipped.
             #expect(
                 Set(languages).isSubset(of: Set(AppLanguage.allCases.map(\.rawValue))),
@@ -319,6 +319,11 @@
                 || lowered.contains("researchmode")
                 || lowered.contains("forschungsmodus")
                 || lowered.contains("drug-level view")
+                || lowered.contains("연구 모드")
+                || lowered.contains("연구모드")
+                || lowered.contains("약물 농도 보기")
+                || lowered.contains("modo de investigación")
+                || lowered.contains("modo investigación")
         }
 
         static func markRed(case identifier: String, detail: String) {

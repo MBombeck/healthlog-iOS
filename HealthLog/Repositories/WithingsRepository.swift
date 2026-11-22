@@ -62,7 +62,7 @@ public actor WithingsRepository {
         try await api.sendVoid(req)
     }
 
-    /// #139 — clear a parked connection (`health.action == "resume"`):
+    /// Clear a parked connection (`health.action == "resume"`):
     /// `POST /api/integrations/withings/resume`, no body, same response as
     /// WHOOP's resume route.
     public func resume() async throws {

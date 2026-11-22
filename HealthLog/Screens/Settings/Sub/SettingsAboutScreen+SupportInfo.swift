@@ -18,10 +18,10 @@ extension SettingsAboutScreen {
         case copied
     }
 
-    /// 1.4 B4 — one row, one heading: "Support-Info kopieren" names it, the
+    /// One row, one heading: "Support-Info kopieren" names it, the
     /// footer says what goes on the clipboard.
     var supportCard: some View {
-        HLSettingsCard(footer: "settings.about.support.footer") {
+        HLCard(footer: "settings.about.support.footer") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSettingsActionRow(
                     icon: "doc.on.doc",
@@ -34,8 +34,7 @@ extension SettingsAboutScreen {
                 .accessibilityIdentifier("settings.about.copySupportInfo")
                 if supportInfoState == .copied {
                     Text("settings.about.support.copied")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("settings.about.supportInfoCopied")
                 }
@@ -53,7 +52,7 @@ extension SettingsAboutScreen {
             generatedAt: Date(),
             build: Self.buildMetadata(),
             osVersion: Self.osVersion,
-            deviceClass: Self.deviceClass,
+            deviceClass: container?.deviceProfile.model ?? "unknown",
             appLanguage: Bundle.main.preferredLocalizations.first,
             server: server,
             lastKnownServerVersion: UserDefaults.standard.string(forKey: KnownServerVersion.defaultsKey),
@@ -89,7 +88,7 @@ extension SettingsAboutScreen {
 
     private static let serverVersionBudget: Duration = .seconds(4)
 
-    /// #134 — `GET /api/integrations/healthkit` for the Apple Health block,
+    /// `GET /api/integrations/healthkit` for the Apple Health block,
     /// fresh and within the same budget. `failed` when it did not answer.
     private static func appleHealthSummary(repo: SettingsRepository?) async -> (summary: HKServerSyncHealthSummary?, failed: Bool) {
         guard let repo else { return (nil, true) }
@@ -109,15 +108,5 @@ extension SettingsAboutScreen {
     private static var osVersion: String {
         let version = ProcessInfo.processInfo.operatingSystemVersion
         return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-    }
-
-    /// `iPhone` or `iPad`: the model class, never the name the owner gave
-    /// the device.
-    private static var deviceClass: String {
-        #if canImport(UIKit)
-            UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
-        #else
-            "unknown"
-        #endif
     }
 }

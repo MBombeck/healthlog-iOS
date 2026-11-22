@@ -10,7 +10,7 @@ public enum MfaMethod: String, Sendable, Equatable, CaseIterable {
     case webauthn
 }
 
-/// #37 — the outcome of `POST /api/auth/login`. The 200 body is
+/// The outcome of `POST /api/auth/login`. The 200 body is
 /// `anyOf [LoginResponse, MfaRequiredResponse]`: either a full token bundle
 /// (``session``) or a "password accepted, second factor required" challenge
 /// (``mfaRequired``). Before #37 the MFA branch fell through to a raw decode
@@ -22,7 +22,7 @@ public enum LoginOutcome: Sendable {
 }
 
 public actor AuthService {
-    // 24-01 — internal, not `private`: Swift's `private` is file-scoped and the
+    // Internal, not `private`: Swift's `private` is file-scoped and the
     // blanked-identity repair lives in `AuthService+IdentityRecovery.swift`.
     // Still actor-isolated; no caller reaches either without awaiting the actor.
     let api: APIClientProtocol
@@ -32,9 +32,9 @@ public actor AuthService {
     /// Monotonic lease for suspended credential writes. A refresh captures the
     /// current value before its network hop and may persist only if no confirmed
     /// account deletion advanced the boundary in the meantime.
-    private var credentialPersistenceGeneration: UInt64 = 0
+    private(set) var credentialPersistenceGeneration: UInt64 = 0
 
-    /// 13-02 — the web-login route verdict, remembered per host so the auth
+    /// The web-login route verdict, remembered per host so the auth
     /// step probes on step transitions rather than on renders. Keyed on the
     /// host it was measured against: re-targeting the app at another server
     /// re-asks instead of reusing a verdict about somebody else's instance.
@@ -60,7 +60,7 @@ public actor AuthService {
         // Server liefert bei `X-Client-Type: native` (von APIClient gesetzt)
         // `{ user, token, tokenExpiresAt }` zurück.
         // `maxRetries: 0` — auth endpoints rate-limit aggressively (5/15min);
-        // a user-action must equal one network call. #96 — `failFast: true` →
+        // a user-action must equal one network call. `failFast: true` →
         // APIClient's no-wait-for-connectivity auth session, so a no-network
         // sign-in fails the door immediately.
         let req: APIRequest<NativeLoginResponse> = try .post(
@@ -69,14 +69,14 @@ public actor AuthService {
             maxRetries: 0,
             failFast: true
         )
-        // #37 — read the envelope's `meta` (not just `data`). The 200 is
+        // Read the envelope's `meta` (not just `data`). The 200 is
         // `anyOf [LoginResponse, MfaRequiredResponse]`; an MFA-enrolled user's
         // password login returns `data: null` + `meta.mfaRequired: true`. The
         // mfaTicket is **sensitive** — it is held transiently by the caller and
         // never logged here.
         let (payload, meta) = try await api.sendEnvelope(req)
         if let meta, meta.mfaRequired == true {
-            // L1 — a challenge MUST carry its ticket; a `mfaRequired:true` with a
+            // A challenge MUST carry its ticket; a `mfaRequired:true` with a
             // missing `mfaTicket` is a malformed server response. Surface it as an
             // explicit error instead of falling through to the old "no Bearer
             // token" message (which misleads the user into a credentials retry).
@@ -94,7 +94,7 @@ public actor AuthService {
         return .session(session)
     }
 
-    /// #37 — completes a TOTP / recovery-code second-factor challenge against
+    /// Completes a TOTP / recovery-code second-factor challenge against
     /// `POST /api/auth/mfa/verify`. The response `data` is the SAME
     /// `AccessRefreshBundle` the password path issues, so it decodes through the
     /// existing ``NativeLoginResponse`` DTO unchanged → persists the session and
@@ -173,7 +173,7 @@ public actor AuthService {
         return session
     }
 
-    /// #37 — completes a WebAuthn (security-key / platform-passkey) second
+    /// Completes a WebAuthn (security-key / platform-passkey) second
     /// factor. Two legs, both presenting the login `mfaTicket`:
     /// 1. `POST /api/auth/mfa/webauthn/verify/options` → assertion options +
     ///    `challengeId`.
@@ -260,7 +260,7 @@ public actor AuthService {
     /// token (web is cookie-based), so iOS chains a `POST /api/auth/login`
     /// against the same credentials for the Bearer token. Both rate-limited
     /// (5/15min/IP) → `maxRetries: 0` (one user-action == one network call).
-    /// b182 W-B182-INVITE (GH #16) — `inviteToken` (server invite `hlv_<64 hex>`)
+    /// `inviteToken` (server invite `hlv_<64 hex>`)
     /// is threaded into the register body. The server's `registerSchema` accepts
     /// it as an optional field; on a closed-registration instance it is the door
     /// key (missing/invalid → `403`), on an open instance it is consumed for
@@ -291,7 +291,7 @@ public actor AuthService {
                 inviteToken: inviteToken
             ),
             maxRetries: 0,
-            failFast: true // #96 — interactive auth door, fail fast on no connectivity.
+            failFast: true // Interactive auth door, fail fast on no connectivity.
         )
         try await api.sendVoid(registerReq)
         // Server returned 201 — chain login to get the Bearer token. A freshly
@@ -318,7 +318,7 @@ public actor AuthService {
             method: .get,
             path: "/api/auth/registration-status",
             maxRetries: 0,
-            failFast: true // #96 — onboarding pre-flight, fail fast on no connectivity.
+            failFast: true // Onboarding pre-flight, fail fast on no connectivity.
         )
         do {
             let resp = try await api.send(req)
@@ -330,7 +330,7 @@ public actor AuthService {
         }
     }
 
-    /// parity 2.9 — probe `GET /api/auth/oidc/status` so the auth step renders
+    /// Probe `GET /api/auth/oidc/status` so the auth step renders
     /// only the doors this instance actually opens. Un-authenticated, pure env
     /// reads server-side ("nothing here can throw" — `oidc/status/route.ts`),
     /// safe to call before any login attempt.
@@ -351,7 +351,7 @@ public actor AuthService {
             method: .get,
             path: "/api/auth/oidc/status",
             maxRetries: 0,
-            failFast: true // #96 — onboarding pre-flight, fail fast on no connectivity.
+            failFast: true // Onboarding pre-flight, fail fast on no connectivity.
         )
         do {
             let resp = try await api.send(req)
@@ -366,6 +366,9 @@ public actor AuthService {
         // §8.1`): wenn vorhanden, schicken wir `{ refreshToken, revoke: true }`,
         // sonst Fallback auf den (cookie-orientierten) `/logout`-Pfad. Beide
         // Fehler werden geschluckt — Keychain-Wipe passiert immer.
+        // D3 #2: zuerst die eigene Gerätezeile samt APNs-Token löschen, solange
+        // die Sitzung noch gilt; danach widerrufen.
+        await deleteOwnDeviceRow()
         if let refresh = keychain.getString(forKey: KeychainKey.refreshToken) {
             struct RevokeBody: Encodable {
                 let refreshToken: String
@@ -406,7 +409,7 @@ public actor AuthService {
     public func passkeyLogin(presentationAnchor: ASPresentationAnchorProvider) async throws -> AuthSession {
         // Server-Form: `{ options: PublicKeyCredentialRequestOptionsJSON, challengeId }`.
         // `maxRetries: 0` for the same rate-limit reason as `/api/auth/login`.
-        // #96 — `failFast: true` → no-wait-for-connectivity auth session
+        // `failFast: true` → no-wait-for-connectivity auth session
         // (immediate `HLError.offline` with no network); the `withTimeout(12s)`
         // race below stays as a watchdog for the slow-but-CONNECTED case.
         let optsReq: APIRequest<PasskeyLoginOptionsResponse> = APIRequest(
@@ -449,7 +452,7 @@ public actor AuthService {
             "/api/auth/passkey/login-verify",
             body: body,
             maxRetries: 0,
-            failFast: true // #96 — same fail-fast auth session as login-options.
+            failFast: true // Same fail-fast auth session as login-options.
         )
         let response = try await Self.withTimeout(seconds: 12) { // belt-and-suspenders watchdog
             try await self.api.send(verifyReq)
@@ -513,10 +516,11 @@ public actor AuthService {
     /// - ``RefreshOutcome/refreshed`` — neues Token-Paar persistiert, Caller
     ///   wiederholt mit frischem Bearer.
     /// - ``RefreshOutcome/authFailure`` — Server hat den Refresh-Token als tot
-    ///   verworfen (`revoked` / `reuse` / `invalid`, Server v1.7.0 errorCodes
-    ///   `auth.refresh.*`, oder generisch 4xx auf der Refresh-Route). Session
-    ///   muss abgerissen werden → Caller feuert `onUnauthorized`.
-    /// - ``RefreshOutcome/transient`` — Netzwerk/Offline/5xx/Rate-Limit. Token
+    ///   verworfen (`401` mit `revoked` / `reuse` / `invalid`, Server v1.7.0
+    ///   errorCodes `auth.refresh.*`). Session muss abgerissen werden → Caller
+    ///   feuert `onUnauthorized`.
+    /// - ``RefreshOutcome/transient`` — Netzwerk/Offline/5xx/Rate-Limit und
+    ///   jedes andere 4xx (Proxy, WAF, fehlerhafte Anfrage). Token
     ///   ist mit hoher Wahrscheinlichkeit noch gültig; **kein** Logout. Das ist
     ///   die 401-Cascade-Schutzschicht: ein transienter Refresh-Fehler darf
     ///   nicht in einen Spurious-Logout-Storm kippen (siehe `05-auth-flows.md
@@ -532,15 +536,13 @@ public actor AuthService {
             return .transient
         }
         let capturedPersistenceGeneration = credentialPersistenceGeneration
-        struct Body: Encodable {
-            let refreshToken: String
-        }
+        struct Body: Encodable { let refreshToken: String }
         // `maxRetries: 0` — `/api/auth/refresh` ist rate-limited (60/15min/IP)
         // und ein zweiter Request mit demselben one-time-use-Token wäre ein
         // sofortiger 401 + revokeAllForUser. Wir müssen jeden Refresh als
         // genau einen Network-Call halten.
-        // #96 — fail-fast auth session (no-connectivity → `.transient` at once).
-        // R2 / #115 A6 — never without `X-Device-Id` (v1.39.3 answers a device-
+        // Fail-fast auth session (no-connectivity → `.transient` at once).
+        // Never without `X-Device-Id` (v1.39.3 answers a device-
         // bound token without it `401 auth.refresh.invalid` → sign-out).
         guard let deviceID = await deviceIDForRefresh(),
               let req: APIRequest<NativeLoginResponse> = try? Self.refreshRequest(
@@ -560,7 +562,10 @@ public actor AuthService {
             try persist(session)
             return .refreshed
         } catch {
-            let outcome = RefreshOutcome.classify(error)
+            // #191: a lost refresh race adopts the winner's stored pair.
+            let outcome = await RefreshOutcome.isSuperseded(error)
+                ? adoptWinnerOfRefreshRace(sentRefreshToken: refreshToken, generation: capturedPersistenceGeneration)
+                : RefreshOutcome.classify(error)
             HLLog.auth.warning(
                 "Refresh fehlgeschlagen (\(String(describing: outcome), privacy: .public)): \(String(describing: error), privacy: .private)"
             )
@@ -603,7 +608,7 @@ public actor AuthService {
         if let refreshExpires = session.refreshTokenExpiresAt {
             pendingWrites.append((KeychainKey.refreshTokenExpiresAt, isoFormatter.string(from: refreshExpires)))
         }
-        // 24-01 — the same guard the `userDisplayName` write below has carried
+        // The same guard the `userDisplayName` write below has carried
         // all along, against the same input. The refresh route answers without
         // a `user` block (contract, W2a-A2 §3.1), so `asAuthSession()` hands us
         // a stub `User(id: "")`. Harmless until Phase 06 made this slot a GATE:
@@ -792,7 +797,7 @@ public extension AuthService {
         await webLoginRouteStatus().isAvailable
     }
 
-    /// **13-02** — the gate's reasoning, not just its verdict. Callers that
+    /// The gate's reasoning, not just its verdict. Callers that
     /// only need yes/no use ``webLoginAvailable()``; this exists so a failure
     /// can be *named* in a log line and in a summary rather than collapsing
     /// into a silent `false`.

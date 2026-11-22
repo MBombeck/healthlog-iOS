@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **Parity Build 4 · 4.8 — `heroRingOrder` on the wire.**
+/// **`heroRingOrder` on the wire.**
 ///
 /// iOS could not express the hero ring order at all: the field was absent from
 /// the wire model, so the health-score anchor was effectively pinned to the

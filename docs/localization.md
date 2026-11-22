@@ -1,6 +1,6 @@
 # Localization
 
-HealthLog speaks German, English and Dutch (Dutch thanks to the contribution in #29). This page describes how the app decides which language it speaks, what it tells the server, the rules for medical text, the on-device model, the doctor report, and how a new language gets in. The checklist at the end was walked through with Dutch in 1.5.
+HealthLog speaks German, English, Dutch, Korean and Spanish (Dutch thanks to the contribution in #29, Korean to #34). This page describes how the app decides which language it speaks, what it tells the server, the rules for medical text, the on-device model, the doctor report, and how a new language gets in. The checklist at the end was walked through with Dutch in 1.5, then with Korean, then with Spanish in 1.7.
 
 ## How the app picks its language
 
@@ -12,14 +12,14 @@ What `AppLanguage` offers:
 
 | | Use |
 |---|---|
-| `AppLanguage.current` | the interface language (`de`, `en`, `nl`) |
+| `AppLanguage.current` | the interface language (`de`, `en`, `nl`, `ko`, `es`) |
 | `serverCode` | the `locale` for every server route that takes all interface languages |
 | `chatServerCode()` | the `locale` for the Coach and document chat bodies, see below |
 | `regionTag` | `<language>-<REGION>` from the device region (`nl-BE`, `de-AT`, `en-PT`), for fields that take a free tag |
 | `formattingLocale` | language plus device region when that pair is a real locale (`nl_BE`, `en_DE`), else the language's home locale (`nl` on a German phone formats as `nl_NL`) |
 | `locale` | the bare language as a `Locale` |
 
-The pinned day-month-year date preference uses a day-first locale in the interface language (`de_DE`, `en_GB`, `nl_NL`), so month names match the copy around them.
+The pinned day-month-year date preference uses a day-first locale in the interface language (`de_DE`, `en_GB`, `nl_NL`, `es_ES`), so month names match the copy around them. Korean has no day-first locale and spells a date year first whatever the pick: under a Korean interface the pick governs the numeric style only (`en_GB`), and `HLDateFormat` renders the spelled-out styles in Korean.
 
 **The guard.** `scripts/i18n-guard.py` fails the lint step when app code outside `AppLanguage.swift` asks for `.languageCode`, `preferredLocalizations` or `Locale.preferredLanguages`. The exceptions live in `_LANGUAGE_ALLOWLIST` in the script, each with a reason and the exact number of hits; the list only shrinks. Today it holds only the support info (it reports the raw bundle localization and decides nothing). `python3 scripts/i18n-guard.py --self-test` shows the rule biting.
 
@@ -50,11 +50,11 @@ scripts/l10n/sync-questionnaire-wording.py --self-test
 
 It reads the server repository at a tag (`--server-repo`, else `$HEALTHLOG_SERVER_REPO`, else `../../HealthLog` from the main checkout) and writes `HealthLog/Resources/Questionnaires/questionnaire-wording.<language>.json` for every `AppLanguage` case. Each file names the tag, the commit and the blob of every module it came from. A new language needs its modules on the server first; the script fails when one is missing. After a run, paste the SHA-256 values it prints into `QuestionnaireWordingLockstepTests`, which fails on any hand edit. `scripts/check-strings.sh` fails if a questionnaire key (`mentalHealth.items.*`, `stems`, `options`, `who5Options`, `sciOptions`, `functional`) comes back into the catalog.
 
-**Punctuation.** The visible-punctuation gate allows no em dash, en dash, middle dot or arrow and gets no exception for questionnaires. Where a printed form uses one, the script applies a reasoned entry of its `PUNCTUATION` table (PHQ-9 item 6 in English and Dutch: the dash before "or"/"of" becomes a comma; item 8 in English: a colon) and turns a range between two numbers in the SCI answers into the language's range word ("46 to 60 min", "46 bis 60 Min.", "46 tot 60 min"). Every change is recorded in the file. A dash the table does not cover fails the run.
+**Punctuation.** The visible-punctuation gate allows no em dash, en dash, middle dot or arrow and gets no exception for questionnaires. Where a printed form uses one, the script applies a reasoned entry of its `PUNCTUATION` table (PHQ-9 item 6 in English and Dutch: the dash before "or"/"of" becomes a comma; item 8 in English: a colon) and turns a range between two numbers in the SCI answers into the language's range word ("46 to 60 min", "46 bis 60 Min.", "46 tot 60 min"; Korean writes a tilde without spaces, "46~60분"). Every change is recorded in the file. A dash the table does not cover fails the run.
 
 **Unvalidated translations.** Where the reader's text is HealthLog's own translation (server 1.46.6: the SCI in German and Dutch), the form says so in one line and offers a centred text link to the English original and back. A reader who answered in the original sends `englishOriginal: true` (server 1.46.0+). Results and history rows read `wording` from the server and say once when the answers were given in an unvalidated translation; a row without the field (before 1.46) looks as it did.
 
-**Crisis contacts.** On a positive PHQ-9 item 9 the set in the server's response is shown. Offline, on a failed or older server, and when a flagged history row is reopened, the app resolves its bundled copy (`CrisisResourceFallback`), a line-for-line copy of `crisisResourcesForLocale` in `src/lib/mental-health/crisis-resources.ts` at v1.46.6 (`CrisisResourceFallbackLockstepTests`). Because the app sends `regionTag`, a Belgian Dutch reader gets 1813, a Dutch one 113, an Austrian 142, a US reader 988, and an English interface on a Portuguese phone the international set, never the Brazilian lines alone. The server derives a country only from German, Portuguese and Dutch tags or a bare country code; an English interface in Belgium gets the international set until the server reads the region of every tag. Resource names are medical keys (`mentalHealth.crisisResource.<id>.name`), taken word for word from the server's `messages/<language>.json`. A resource a newer server adds before the app knows its name shows its contact lines without a name, never a raw key.
+**Crisis contacts.** On a positive PHQ-9 item 9 the set in the server's response is shown. Offline, on a failed or older server, and when a flagged history row is reopened, the app resolves its bundled copy (`CrisisResourceFallback`), a line-for-line copy of `crisisResourcesForLocale` in `src/lib/mental-health/crisis-resources.ts` at v1.47.2 (`CrisisResourceFallbackLockstepTests`). Since 1.47.2 the region subtag decides first, whatever the language, then a bare country code, then the language. Because the app sends `regionTag`, a Belgian Dutch reader gets 1813, a Dutch one 113, an Austrian 142, a US reader 988, a Korean one 109 with 119 as the emergency number, and an English interface on a Portuguese phone Portugal's lines, never the Brazilian lines alone. A Korean interface in a country with its own set (`ko-US`, `ko-DE`) gets that country; Korean without a region, or in a country without a set, gets South Korea. The server has no set for a Spanish-speaking country, so Spanish in Spain or Latin America gets the international set (112, the EU line 116 123 and findahelpline.com) and Spanish in the US gets 988. Resource names are medical keys (`mentalHealth.crisisResource.<id>.name`), taken word for word from the server's `messages/<language>.json`. A resource a newer server adds before the app knows its name shows its contact lines without a name, never a raw key.
 
 To update: bump the tag in the script call and in `QuestionnaireWordingCatalog.serverRef`, rerun, re-pin the hashes, compare `crisis-resources.ts` with `CrisisResourceFallback` and update both the copy and the lockstep fixtures, then add the names of new resources in every language.
 
@@ -63,13 +63,13 @@ To update: bump the tag in the script call and in `QuestionnaireWordingCatalog.s
 - `AppLanguageTests` and `AppLanguageRequestLocaleTests` pin the rules above, including a French device (resolved with the same algorithm iOS uses at launch) and the chat bodies against servers 1.46.1, 1.46.2 and an unknown one.
 - `AppLanguage.$pinned.withValue(.nl) { ... }` runs code under another interface language inside a unit test. The unit suite itself runs German (`-testLanguage de -testRegion DE`), because it checks German copy.
 - Catalog tests take their languages from `AppLanguage.allCases` and the gate status in `scripts/l10n/languages.json` (`HealthLogTests/Support/CatalogLanguages.swift`): `required` languages must be complete, `pending` ones are only checked for what is there.
-- UI tests launch a language through `UITestLanguage` (`HealthLogUITests/Support/UITestLanguage.swift`): `de`, `en`, `nl`, and `pseudoDouble`, the English interface with every string doubled (`-NSDoubleLocalizedStrings YES`) to find truncation before a longer language exists. The screenshot sweep takes `HL_SWEEP_LANG=de|en|nl|pseudo`, the marketing rig `HL_MARKETING_LANG`.
+- UI tests launch a language through `UITestLanguage` (`HealthLogUITests/Support/UITestLanguage.swift`): `de`, `en`, `nl`, `ko`, `es`, and `pseudoDouble`, the English interface with every string doubled (`-NSDoubleLocalizedStrings YES`) to find truncation before a longer language exists. The screenshot sweep takes `HL_SWEEP_LANG=de|en|nl|ko|es|pseudo`, the marketing rig `HL_MARKETING_LANG`.
 
 ## Medical text
 
 1. Validated questionnaire items come only from the server's wording modules, never from a translation and never from the string catalog.
 2. Crisis numbers come only from the server's crisis resources, never typed by hand.
-3. Disclaimers, crisis names, questionnaire notes and anything with a threshold are medical keys (`scripts/l10n/medical-keys.json`). A value in any language other than German lands as `needs_review` (`scripts/xcstrings-add.py` sets it), and the release gate (`check-catalog-format.py --release`) stops while a required language still has one. A person signs it off by setting the state to `translated`, with name and date in the change that does it.
+3. Disclaimers, crisis names, questionnaire notes and anything with a threshold are medical keys (`scripts/l10n/medical-keys.json`). A value in any language other than German lands as `needs_review` (`scripts/xcstrings-add.py` sets it), and the App Store gate (`check-catalog-format.py --release`, run by hand before a build is submitted for App Store review, not by the release producer, because TestFlight builds carry open reviews on purpose) stops while a required language still has one. A person signs it off by setting the state to `translated`, with name and date in the change that does it.
 4. No diagnosis, recommendation or prediction, in any language. On-device text only runs in a language that has safety filter rows.
 5. Word choice follows the server's `messages/<language>.json`; the app addresses the reader informally, like the German "du" (Dutch "je", not "u").
 
@@ -125,7 +125,7 @@ python3 scripts/l10n/signoff-medical.py --language nl --by "Name" --date 2026-11
 python3 scripts/l10n/signoff-medical.py --self-test
 ```
 
-It sets the remaining medical `needs_review` values of that language to `translated` and appends a line to `scripts/l10n/medical-signoff.json`: name, date, number of values, and a SHA-256 fingerprint of exactly the text that was approved. It never signs an English placeholder (`l10n_common.is_placeholder`): it lists it and exits 2, because a placeholder is not a translation. After the sign-off, `check-catalog-format.py --release` (freeze pregates) passes for that language.
+It sets the remaining medical `needs_review` values of that language to `translated` and appends a line to `scripts/l10n/medical-signoff.json`: name, date, number of values, and a SHA-256 fingerprint of exactly the text that was approved. It never signs an English placeholder (`l10n_common.is_placeholder`): it lists it and exits 2, because a placeholder is not a translation. After the sign-off, `check-catalog-format.py --release` (the App Store gate) passes for that language.
 
 ## Checklist: a new language
 
@@ -140,7 +140,13 @@ Walked through with Dutch in 1.5 (units L10N-CORE to L10N-FINAL). In order:
 7. **Fixtures.** The hermetic server (`HealthLog/App/HermeticFixtures+*`) answers prose in the interface language, as the real server does; add the language wherever it branches on `AppLanguage`.
 8. **Make it `required`** once the placeholder count is 0. From then on every gap fails the gates and the catalog tests hold the language to completeness.
 9. **Check.** The language suites with `-testLanguage <language>`, the screenshot sweep with `HL_SWEEP_LANG=<language>` (light, dark, `pseudo` and accessibility sizes), looking at every picture for raw keys, English and cut text. The unit suite itself stays German.
-10. **Before the freeze.** A person reads the review sheet, `signoff-medical.py` records it, `check-catalog-format.py --release` passes. Then the App Store entry of the language (store texts, screenshots).
+10. **Before the App Store submission.** A person reads the review sheet, `signoff-medical.py` records it, `check-catalog-format.py --release` passes. Then the App Store entry of the language (store texts, screenshots). TestFlight builds do not wait for this: the release producer runs `check-catalog-format.py` without `--release`.
+
+## Spanish (1.7)
+
+Spanish (`es`) came in with 1.7 (#185). Its strings were seeded from the web's `messages/es.json` (server `release/v1.49.0`) wherever the English text and its meaning match an app key, so the app and the web use the same words; the rest was translated for the app in neutral Spanish that reads in Spain and Latin America alike, with tú. One bundle serves every Spanish region (`es-ES`, `es-MX`, `es-419`). Plurals carry `one`, `many` and `other` (CLDR); `many` repeats `other`.
+
+The PHQ-9, GAD-7 and WHO-5 are the validated Spanish versions the server reproduces (server v1.46.6 wording modules); the SCI is HealthLog's own translation and offers the English original, as in German and Dutch. The AUDIT-C stays in English with `validatedLocale: false`, as the server sends it. Every medical key (the list above, and every key that is `needs_review` in Dutch or Korean) stays `needs_review` in Spanish until a Spanish speaker has read it, so `check-catalog-format.py --release` stops on Spanish until `signoff-medical.py --language es` has run.
 
 ## Siri and Shortcuts phrases
 

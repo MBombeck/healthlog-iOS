@@ -1,5 +1,6 @@
 "NSHealthShareUsageDescription" = "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health (darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente), um sie anzuzeigen, zu synchronisieren und Trends zu berechnen.";
 "NSHealthUpdateUsageDescription" = "HealthLog speichert von dir erfasste Messungen, Stimmungs- und Zykluseinträge sowie Messungen aus von dir verbundenen Geräten oder Importen in Apple Health, wenn du HealthLog Schreibzugriff erlaubst.";
+"NSHealthClinicalHealthRecordsShareUsageDescription" = "HealthLog liest Laborbefunde aus deinen Gesundheitsakten in Apple Health, wenn du das bei den Laborwerten einschaltest, und speichert sie auf deinem HealthLog-Server, damit du sie dort zusammen mit deinen übrigen Laborwerten siehst.";
 "NSFaceIDUsageDescription" = "HealthLog nutzt Face ID, um deine Daten zu schützen.";
 "NSUserNotificationsUsageDescription" = "HealthLog erinnert dich an Medikamente und Messungen.";
 "NSAlarmKitUsageDescription" = "HealthLog stellt laute Alarme für zeitkritische Medikamente, die du ausdrücklich aktivierst. Sie durchbrechen Stummschaltung und Fokus, damit du keine wichtige Dosis verpasst.";

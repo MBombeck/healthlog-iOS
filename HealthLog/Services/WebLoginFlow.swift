@@ -5,7 +5,7 @@ import Foundation
 /// `healthlog://login-callback?error=…`. Each maps to a localized, surfaced
 /// message — the app never renders a web error page.
 ///
-/// Mirror of ``OidcErrorReason`` (#49), but a DISTINCT vocabulary: the
+/// Mirror of ``OidcErrorReason``, but a DISTINCT vocabulary: the
 /// web-login contract uses **underscore** tokens (`invalid_state`,
 /// `no_session`, `stale_session`, `rate_limited`) where OIDC used hyphens.
 /// Don't cross-wire them.
@@ -59,7 +59,7 @@ public enum WebLoginErrorReason: Sendable, Equatable {
     }
 }
 
-/// The parsed outcome of a `healthlog://login-callback?…` redirect (#65). One
+/// The parsed outcome of a `healthlog://login-callback?…` redirect. One
 /// of: a one-time handoff `code`, a closed-set `error`, or an unrecognized
 /// shape. **No MFA branch** — the second factor is handled entirely inside the
 /// browser session, so the native side only ever sees a finished `code`.
@@ -120,7 +120,7 @@ public enum WebLoginNativeFlow {
     /// web-login entry opened inside the auth session. The server sets an
     /// encrypted state cookie and 307-redirects to `/auth/login?flow=native`.
     ///
-    /// 13-02 — forwards to ``WebLoginRoute/loginURL(baseURL:codeChallenge:)``.
+    /// Forwards to ``WebLoginRoute/loginURL(baseURL:codeChallenge:)``.
     /// The availability probe lives in `HealthLogCore`, where this type does
     /// not, and a probe measuring a *different* address than the one the
     /// browser opens would be worse than no probe at all. One builder, two

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.4 B2 — the one (i) per screen.**
+/// **The one (i) per screen.**
 ///
 /// Sits once in the screen's header or toolbar and opens ``HLInfoSheet`` with
 /// everything the cards do not say themselves (the 1.4 design
@@ -22,6 +22,7 @@ struct HLInfoButton: View {
 
     @Environment(\.hlInsideSheetStack) private var insideSheetStack
     @State private var isPresented = false
+    @Namespace private var zoom
 
     var body: some View {
         if !content.isEmpty {
@@ -39,8 +40,10 @@ struct HLInfoButton: View {
                     glyph
                 }
                 .modifier(InfoButtonTraits(content: content, style: style, identifier: accessibilityIdentifier))
+                .hlZoomSource(accessibilityIdentifier, in: zoom)
                 .sheet(isPresented: $isPresented) {
                     HLInfoSheet(content: content)
+                        .hlZoomTransition(from: accessibilityIdentifier, in: zoom)
                 }
             }
         }
@@ -78,13 +81,34 @@ private struct InfoButtonTraits: ViewModifier {
 }
 
 extension View {
-    /// The 44 pt glass circle of the Insights header actions (gear, coach,
-    /// info): one diameter and one treatment, so the circles cannot drift.
+    /// The glass circle of a page header's actions (gear, coach, info): the
+    /// size and the treatment of ``HLIconButton`` in the `.bar` style, so the
+    /// circles of one header stay equal at every text size.
     func hlHeaderCircle() -> some View {
-        font(.hlTitle3)
+        modifier(HLHeaderCircle())
+    }
+}
+
+private struct HLHeaderCircle: ViewModifier {
+    @ScaledMetric(relativeTo: .title3) private var scaledSide: CGFloat = HLLayout.iconButton
+    /// In a tab header's action group the group is the glass.
+    @Environment(\.hlInHeaderActionGroup) private var inGroup
+
+    func body(content: Content) -> some View {
+        let side = HLIconButton.side(forScaled: scaledSide)
+        let sized = content
+            .font(.hlTitle3)
             .foregroundStyle(HLText.secondary)
-            .frame(width: 44, height: 44)
-            .hlGlassEffect(in: Circle(), interactive: true, fallback: HLColor.backgroundEleva)
-            .contentShape(Circle())
+            // The symbol stops growing where the circle does, as in the icon button.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .frame(width: side, height: side)
+        Group {
+            if inGroup {
+                sized
+            } else {
+                sized.hlGlassEffect(in: Circle(), interactive: true, fallback: HLColor.backgroundEleva)
+            }
+        }
+        .contentShape(Circle())
     }
 }

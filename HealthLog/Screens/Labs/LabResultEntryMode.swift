@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **Item 1.5 — numeric vs. qualitative lab result entry.**
+/// **Numeric vs. qualitative lab result entry.**
 ///
 /// The server has carried `value: number | null` + `valueText: string | null`
 /// since v1.18.9; the web form exposes the choice as a two-button segmented
@@ -58,12 +58,15 @@ struct LabResultTypePicker: View {
     @Binding var resultType: LabResultType
 
     var body: some View {
-        Picker("labs.form.resultType", selection: $resultType) {
+        HLAdaptiveSegmentedPicker(
+            "labs.form.resultType",
+            selection: $resultType,
+            labels: LabResultType.allCases.map(\.pickerLabel)
+        ) {
             ForEach(LabResultType.allCases) { type in
                 Text(type.pickerLabel).tag(type)
             }
         }
-        .pickerStyle(.segmented)
         .accessibilityIdentifier("labs.form.resultType.picker")
     }
 }
@@ -76,31 +79,11 @@ struct LabQualitativeSuggestionChips: View {
         // POLISH-A (SHOTS F-PSEUDO-LABOCR) — the chips wrap onto further lines
         // instead of a sideways scroll that hid "borderline" past the edge at
         // longer translations and large text.
-        HLWrapLayout(spacing: HLSpace.sm) {
-            Group {
-                ForEach(LabQualitativeSuggestion.allCases) { suggestion in
-                    let label = suggestion.text
-                    Button {
-                        text = label
-                    } label: {
-                        Text(verbatim: label)
-                            .font(.hlSubhead)
-                            .padding(.horizontal, HLSpace.md)
-                            .padding(.vertical, HLSpace.chip)
-                            .foregroundStyle(text == label ? HLColor.background : HLText.primary)
-                            .background(
-                                Capsule()
-                                    .fill(text == label ? AnyShapeStyle(HLText.primary) : AnyShapeStyle(Color.clear))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(text == label ? Color.clear : HLText.tertiary.opacity(0.3), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
+        HLFlowLayout {
+            ForEach(LabQualitativeSuggestion.allCases) { suggestion in
+                let label = suggestion.text
+                HLChip(verbatim: label, isSelected: text == label) { text = label }
                     .accessibilityIdentifier("labs.form.qualSuggestion.\(suggestion.rawValue)")
-                    .accessibilityAddTraits(text == label ? .isSelected : [])
-                }
             }
         }
     }

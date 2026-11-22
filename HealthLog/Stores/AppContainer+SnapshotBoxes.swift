@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.5.5.6 RECONCILE-CELEBRATE — late-bound snapshot pointer.
+/// Late-bound snapshot pointer.
 ///
 /// `MeasurementsStore` is built before `PersonalRecordsStore` exists in
 /// `AppContainer.init`, so we can't capture the store directly at
@@ -19,7 +19,7 @@ final class PersonalRecordsSnapshotBox {
 }
 
 #if canImport(UserNotifications) && canImport(UIKit)
-    /// Y8 — single-slot Task coalescer for the badge refresh dispatch.
+    /// Single-slot Task coalescer for the badge refresh dispatch.
     /// A single Genommen tap can fire `onIntakesDidChange` 2-3 times
     /// (optimistic patch → server confirm → invalidate); spawning a
     /// fresh unstructured Task per call hammered

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **GH #74 — die vier Fehlerklassen und die Ankerdisziplin.**
+/// **Die vier Fehlerklassen und die Ankerdisziplin.**
 ///
 /// Zweite Hälfte von ``EcgSyncCoordinatorTests`` (file_length-Disziplin,
 /// `PROJECT_GUIDE.md`). Hier steht die Unterscheidung, die die Einheit trägt:
@@ -102,7 +102,7 @@ struct EcgSyncErrorClassTests {
             source: source,
             defaultsProvider: defaults
         )
-        // S2 — the sweep now sits a short wait out; this wake's window ends
+        // The sweep now sits a short wait out; this wake's window ends
         // at the first pause, which is the "stop and hold" case.
         let windowEnds: @Sendable (TimeInterval) async throws -> Void = { _ in throw CancellationError() }
         let summary = await EcgSyncPause.$sleep.withValue(windowEnds) {

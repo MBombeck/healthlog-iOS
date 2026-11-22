@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-37 — the ECG empty state must state what is actually true.**
+/// **The ECG empty state must state what is actually true.**
 ///
 /// The surface it guards was empty for a reason nobody could read off it. When
 /// CU-37 rewrote the copy there was no HealthKit ECG reader and no JSON ingest
@@ -49,7 +49,7 @@ struct EcgEmptyStateHonestyTests {
         "insights.ecg.empty.pathStep2",
         "insights.ecg.empty.pathStep3",
         "insights.ecg.empty.cta",
-        // GH #74 — the third reason the surface can be empty, and the only one
+        // The third reason the surface can be empty, and the only one
         // with an action behind it. Joins the list rather than sitting outside
         // it, so every guard below (no phantom sync, no dated promise, no
         // assessment) covers it too.
@@ -106,7 +106,7 @@ struct EcgEmptyStateHonestyTests {
         // copy explicitly denies the wrong reading.
         #expect(de.contains("nicht, weil keine existiert"))
         #expect(en.lowercased().contains("not because none exists"))
-        // 1.4 B1 — the body used to add that HealthLog does not fetch ECGs
+        // The body used to add that HealthLog does not fetch ECGs
         // from Apple Health on its own. Since GH #74 it does, behind the
         // switch ``uploadOff`` names, so that sentence was the new phantom:
         // a denial of a transfer that now exists. It must not come back.
@@ -139,7 +139,7 @@ struct EcgEmptyStateHonestyTests {
 
     // MARK: - 2. The hardware case stays out of the cause sentence
 
-    /// 1.4 B2 — the separate hardware sentence ("Aufzeichnen kann ein EKG nur
+    /// The separate hardware sentence ("Aufzeichnen kann ein EKG nur
     /// ein Gerät mit EKG-Funktion … Das ist kein Fehler.") is gone: the ECG
     /// page only appears once a recording exists, so the empty branch is for
     /// the rare latched case, and the sentence explained the obvious. What
@@ -169,7 +169,7 @@ struct EcgEmptyStateHonestyTests {
         #expect(step2En.contains("Settings"))
     }
 
-    // MARK: - GH #74 — die zweite Ursache, und ihr Absprung
+    // MARK: - Die zweite Ursache, und ihr Absprung
 
     @MainActor
     @Test("Der Schalter-Absprung landet auf Mehr → Einstellungen → Integrationen → Apple Health")
@@ -249,7 +249,7 @@ struct EcgEmptyStateHonestyTests {
         // `EcgAttributionFooter` auf jeder bestückten EKG-Fläche nicht-abweisbar
         // gerendert (1.4 B2: am Fuß der Karte, die er zuschreibt).
         //
-        // UI-Standard R17 (U1): was der Satz trägt, ist die URHEBERSCHAFT des
+        // UI-Standard R17: was der Satz trägt, ist die URHEBERSCHAFT des
         // Urteils — es stammt vom Aufzeichnungsgerät, und HealthLog liest die
         // Kurve nicht. Genau das wird hier festgenagelt. Der angehängte
         // Pauschalteil („und stellt keine Diagnose") ist gefallen; er lebt am

@@ -3,13 +3,13 @@
 // password instead" link must actually reveal something.
 //
 // Build 266's server answers a valid S256 challenge with
-// `307 → https://0.0.0.0:3000/auth/login?flow=native` (issue #96): a redirect
+// `307 → https://0.0.0.0:3000/auth/login?flow=native`: a redirect
 // built from the process bind address instead of the forwarded host. The
 // client cannot reach that address and does not try to correct it — the
 // server's bug stays the server's. What IS the client's is what happens next.
 //
 // Drives the REAL `AuthStore` over a stub authenticator and a session-scoped
-// `MockURLProtocolSession` (09-13), per the no-mock-server doctrine.
+// `MockURLProtocolSession`, per the no-mock-server doctrine.
 
 // swiftlint:disable force_unwrapping
 
@@ -64,11 +64,11 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 
-        /// The address the operator's instance actually redirects to (#96),
+        /// The address the operator's instance actually redirects to,
         /// verbatim from the measurement.
         private static let deadEndRedirect = "https://0.0.0.0:3000/auth/login?flow=native"
 
@@ -118,7 +118,7 @@
 
             #expect(
                 store.lastError != nil && store.passwordFallbackRevealed,
-                "EXPECTED_RED: a dead-ended web login strands the user with no way back"
+                "a dead-ended web login strands the user with no way back"
             )
             // Nothing was signed in and nothing was stored — the leg failed,
             // it did not half-succeed.
@@ -156,7 +156,7 @@
 
             #expect(
                 hiddenBeforeTap && visibleAfterTap,
-                "EXPECTED_RED: the fallback link has nothing to reveal because the form latched open"
+                "the fallback link has nothing to reveal because the form latched open"
             )
             #expect(visibility().showsWebHandoffCTA)
         }

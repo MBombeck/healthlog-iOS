@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — Celebration overlay fired on a new PR.
+/// Celebration overlay fired on a new PR.
 ///
 /// Renders a translucent confetti burst over the screen via `Canvas`
 /// + 60 deterministic particles. Auto-dismisses after 2.5 s (or
@@ -28,7 +28,7 @@ struct CelebrationOverlay: View {
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// #115 P2 — the record figure reads in the account's unit.
+    /// The record figure reads in the account's unit.
     @Environment(\.unitPreferences) private var unitPreferences
     @State private var t: Double = 0
     @State private var particles: [Particle] = []
@@ -55,7 +55,7 @@ struct CelebrationOverlay: View {
 
             if !reduceMotion {
                 confettiCanvas
-                    // 08-11 — the confetti is decoration. It carries no
+                    // The confetti is decoration. It carries no
                     // information the announcement does not, and sixty particles
                     // in the reading order would bury the one thing that does.
                     .accessibilityHidden(true)
@@ -67,7 +67,7 @@ struct CelebrationOverlay: View {
         .sensoryFeedback(.impact(weight: .heavy), trigger: heavyTick)
         .onAppear { celebrate() }
         .onDisappear { celebrationTask?.cancel() }
-        // 08-11 — ONE element that speaks the record it is celebrating. The
+        // ONE element that speaks the record it is celebrating. The
         // label is composed from the same DTO the announcement prints, so
         // VoiceOver hears the metric and the value that are on screen instead
         // of a fixed "something happened" phrase. `.ignore` rather than
@@ -81,7 +81,7 @@ struct CelebrationOverlay: View {
         .accessibilityAction(.default) { onDismiss() }
     }
 
-    // MARK: - Spoken and printed content (08-11)
+    // MARK: - Spoken and printed content
 
     /// The record's value and unit as one printed string — the figure the
     /// celebration shows and, verbatim, the figure it speaks.
@@ -90,7 +90,7 @@ struct CelebrationOverlay: View {
     /// whole number drops its fraction, and a non-finite server value prints the
     /// em dash the rest of the app uses rather than `inf`.
     ///
-    /// #115 P2 — in the account's unit (`units`); the row itself is canonical.
+    /// In the account's unit (`units`); the row itself is canonical.
     nonisolated static func valueText(for dto: PersonalRecordDTO, units: UnitPreferences = .standard) -> String {
         let value = dto.displayValue(units)
         guard value.isFinite else { return "—" }
@@ -165,7 +165,7 @@ struct CelebrationOverlay: View {
                 // full-screen celebration moment with no accompanying scaling body text.
                 .foregroundStyle(PersonalRecordKindTint.color(for: record.kind))
                 .symbolEffect(.bounce, value: t)
-                // 08-11 — a medallion glyph beside its own headline; it says
+                // A medallion glyph beside its own headline; it says
                 // nothing the headline does not.
                 .accessibilityHidden(true)
             Text("New record!")
@@ -174,7 +174,7 @@ struct CelebrationOverlay: View {
             Text(MetricTypeLocalisation.label(forType: record.base.metricType))
                 .font(.hlSubhead.weight(.semibold))
                 .foregroundStyle(HLColor.recordHeroInk.opacity(0.9))
-            // 08-11 — the figure the record is FOR. It was on the card and in
+            // The figure the record is FOR. It was on the card and in
             // the share image but never in the moment itself, so the spoken
             // label had nothing visible to match; now both read the one
             // `valueText` above.
@@ -183,8 +183,10 @@ struct CelebrationOverlay: View {
                 .foregroundStyle(HLColor.recordHeroInk)
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, HLSpace.xl)
-        .padding(.vertical, HLSpace.xl)
+        .padding(HLSpace.xl)
+        // The medallion floats over the dimmed full-screen celebration, a
+        // moment above the content layer rather than a content card.
+        // swiftlint:disable:next hl_no_glass_in_content
         .hlGlassBackground(in: RoundedRectangle(cornerRadius: HLRadius.sheet, style: .continuous), fallback: HLSurface.secondary)
     }
 

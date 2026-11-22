@@ -1,6 +1,6 @@
 import Foundation
 
-/// b182 (AUDIT-COACH-PARITY F1) — the pure decision behind the Insights Coach
+/// The pure decision behind the Insights Coach
 /// re-engage affordance, extracted from `InsightsScreen.swift` to keep that file
 /// under the file_length ceiling (PROJECT_GUIDE.md file_length discipline). Kept as a
 /// `static` pure function (like `InsightsScreen+Helpers`) so the call site — which
@@ -18,7 +18,7 @@ extension InsightsScreen {
     /// BYPASSES the `wasDeclined` suppression, so a declined user can re-engage and
     /// a grant can land.
     ///
-    /// **W-B186 COACH-1 (#24) — admin/server-managed providers are now in scope.**
+    /// **Admin/server-managed providers are now in scope.**
     /// Server v1.16.16 reports `aiAvailable == true` && `managedBy == "server"`
     /// even when `GET /api/user/ai-provider` exposes no per-user provider. In that
     /// case the re-engage CTA targets the **server-managed consent scope** (not a
@@ -28,11 +28,10 @@ extension InsightsScreen {
     ///
     /// - Parameters:
     ///   - aiMode: the resolved `AIMode` (the affordance is only for `.none`).
-    ///   - coachCapability: the server-resolved `coach` capability (#115 · 0.2),
+    ///   - coachCapability: the server-resolved `coach` capability,
     ///     `nil` on a server older than v1.39. When present it is the only
     ///     signal: re-engage is offered exactly when the server says the Coach
     ///     waits on consent (`reason == consent_required`).
-    ///   - hasServer: `BackendAvailability.hasServer` (server-only path).
     ///   - resolvedProvider: the server-resolved `AIProvider`.
     ///   - hasConsentForProvider: whether consent is already granted for it.
     ///   - isServerManagedAvailable: `config.usesProviderOpaqueAIConsent`.
@@ -40,19 +39,18 @@ extension InsightsScreen {
     static func isCoachReengageAvailable(
         aiMode: AIMode,
         coachCapability: AICapabilityState? = nil,
-        hasServer: Bool,
         resolvedProvider: AIProvider,
         hasConsentForProvider: Bool,
         isServerManagedAvailable: Bool = false,
         hasServerManagedConsent: Bool = false,
         isAIExplicitlyUnavailable: Bool = false
     ) -> Bool {
-        guard aiMode == .none, hasServer else { return false }
+        guard aiMode == .none else { return false }
         if let coachCapability {
             return coachCapability.reason == .consentRequired
         }
         guard !isAIExplicitlyUnavailable else { return false }
-        // W-B186 COACH-1 — server/admin-managed external AI: offer the re-engage
+        // Server/admin-managed external AI: offer the re-engage
         // CTA against the server-managed scope when consent hasn't landed yet.
         if isServerManagedAvailable {
             return !hasServerManagedConsent

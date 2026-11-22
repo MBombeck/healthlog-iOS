@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-// v1.18.6 (DISC-02) — locks the one-time medical-disclaimer acknowledgment.
+// v1.18.6 — locks the one-time medical-disclaimer acknowledgment.
 //
 // Covers:
 // 1. **Decode** — `AuthMeDisclaimer` is decode-tolerant: a missing/null
@@ -134,7 +134,7 @@ struct DisclaimerAckStoreTests {
         ) == false)
     }
 
-    // MARK: - W-RECONCILE MED-1: the `-uitest-ack-disclaimer` bypass is DEBUG-only
+    // MARK: - The `-uitest-ack-disclaimer` bypass is DEBUG-only
 
     /// The test runner does NOT pass `-uitest-ack-disclaimer`, so `refresh()` must
     /// reflect the SERVER state, never short-circuit to acknowledged. This locks
@@ -150,18 +150,6 @@ struct DisclaimerAckStoreTests {
         await store.refresh()
         // Server says not-acknowledged → store must NOT be force-acknowledged.
         #expect(store.isAcknowledged == false)
-    }
-
-    @Test("standalone: no launch-arg → refreshStandalone honours local flag")
-    func standaloneBypassRequiresLaunchArg() throws {
-        #expect(ProcessInfo.processInfo.arguments.contains("-uitest-ack-disclaimer") == false)
-        let api = StubAPIClient()
-        let defaults = try #require(UserDefaults(suiteName: "disclaimer-bypass-\(UUID().uuidString)"))
-        let store = DisclaimerAckStore(repo: DisclaimerAckRepository(api: api), defaults: defaults)
-        store.refreshStandalone()
-        // No local ack stored + no DEBUG bypass arg → not acknowledged.
-        #expect(store.isAcknowledged == false)
-        #expect(store.hasLoaded == true)
     }
 }
 
@@ -185,95 +173,5 @@ struct DisclaimerAckGateDecisionTests {
     func loadedAcknowledgedNoGate() {
         #expect(DisclaimerAckStore.shouldGate(hasLoaded: true, isAcknowledged: false) == true)
         #expect(DisclaimerAckStore.shouldGate(hasLoaded: true, isAcknowledged: true) == false)
-    }
-}
-
-// MARK: - 4. Standalone (local) path — G1, flag-safe wiring
-
-@MainActor
-@Suite("DisclaimerAckStore — standalone (local) path")
-struct DisclaimerAckStandaloneTests {
-    /// Isolated, per-test UserDefaults suite so the local ack flag never leaks
-    /// into `.standard` or across cases.
-    private func makeIsolatedStore() -> (DisclaimerAckStore, UserDefaults) {
-        let suiteName = "DisclaimerAckStandaloneTests.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            // A named suite never fails to allocate; fall back to standard so the
-            // type checks, then clear our key to keep cases isolated.
-            let fallback = UserDefaults.standard
-            fallback.removeObject(forKey: DisclaimerAckStore.standaloneAckKey)
-            let api = StubAPIClient()
-            return (DisclaimerAckStore(repo: DisclaimerAckRepository(api: api), defaults: fallback), fallback)
-        }
-        defaults.removePersistentDomain(forName: suiteName)
-        // The repo is never touched on the standalone path; a never-handler stub
-        // proves that (any send() would throw).
-        let api = StubAPIClient()
-        let store = DisclaimerAckStore(repo: DisclaimerAckRepository(api: api), defaults: defaults)
-        return (store, defaults)
-    }
-
-    private final class StubAPIClient: APIClientProtocol, @unchecked Sendable {
-        func send<T: Decodable & Sendable>(_: APIRequest<T>) async throws -> T {
-            throw HLError.unknown("standalone path must not hit the network")
-        }
-
-        func sendVoid(_: APIRequest<EmptyPayload>) async throws {}
-        func download(_: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
-            throw HLError.canceled
-        }
-    }
-
-    @Test("fresh standalone install → refreshStandalone gates (would gate if flag on)")
-    func freshStandaloneGates() {
-        let (store, _) = makeIsolatedStore()
-        store.refreshStandalone()
-        // Local read always resolves → hasLoaded true; no prior ack → gate shown.
-        #expect(store.hasLoaded == true)
-        #expect(store.isAcknowledged == false)
-        #expect(DisclaimerAckStore.shouldGate(
-            hasLoaded: store.hasLoaded,
-            isAcknowledged: store.isAcknowledged
-        ) == true)
-    }
-
-    @Test("acknowledgeStandalone persists locally + dismisses the gate")
-    func acknowledgeStandalonePersists() {
-        let (store, defaults) = makeIsolatedStore()
-        store.refreshStandalone()
-        #expect(store.isAcknowledged == false)
-        store.acknowledgeStandalone()
-        #expect(store.isAcknowledged == true)
-        #expect(defaults.string(forKey: DisclaimerAckStore.standaloneAckKey) != nil)
-        #expect(DisclaimerAckStore.shouldGate(
-            hasLoaded: store.hasLoaded,
-            isAcknowledged: store.isAcknowledged
-        ) == false)
-    }
-
-    @Test("already-acked standalone → no double-prompt across a fresh store")
-    func standaloneAlreadyAckedNoDoublePrompt() {
-        let (store, defaults) = makeIsolatedStore()
-        store.refreshStandalone()
-        store.acknowledgeStandalone()
-        // Simulate a relaunch: a NEW store over the SAME persisted defaults must
-        // read back the ack and NOT re-gate.
-        let api = StubAPIClient()
-        let reborn = DisclaimerAckStore(repo: DisclaimerAckRepository(api: api), defaults: defaults)
-        reborn.refreshStandalone()
-        #expect(reborn.isAcknowledged == true)
-        #expect(DisclaimerAckStore.shouldGate(
-            hasLoaded: reborn.hasLoaded,
-            isAcknowledged: reborn.isAcknowledged
-        ) == false)
-    }
-
-    @Test("clearOnLogout purges the local standalone flag")
-    func clearOnLogoutPurgesLocal() {
-        let (store, defaults) = makeIsolatedStore()
-        store.acknowledgeStandalone()
-        #expect(defaults.string(forKey: DisclaimerAckStore.standaloneAckKey) != nil)
-        store.clearOnLogout()
-        #expect(defaults.string(forKey: DisclaimerAckStore.standaloneAckKey) == nil)
     }
 }

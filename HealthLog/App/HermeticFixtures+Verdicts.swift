@@ -107,7 +107,7 @@
             """
         }
 
-        /// #151 — the seven-day slope is `null` (too few days), the 30-day
+        /// The seven-day slope is `null` (too few days), the 30-day
         /// one is there.
         private static let comprehensiveJSON = """
         {"summaries":{
@@ -119,7 +119,7 @@
         }}
         """
 
-        /// #151 — the mood summary without a slope: no trend, no arrow.
+        /// The mood summary without a slope: no trend, no arrow.
         private static let moodAnalyticsJSON = """
         {"entries":[],"summary":{"slope7":null,"slope30":null,"slope90":null,"avg30LastMonth":null,"avg30LastYear":null}}
         """
@@ -140,8 +140,15 @@
             }
             switch kind {
             case "weight":
+                // The window's own first and last day, so the caption and the
+                // line agree on every range.
+                let values = (series["points"] as? [[String: Any]] ?? []).compactMap { $0["value"] as? Double }
                 series["direction"] = direction("up-bad", "inside", "personal_target")
-                series["change"] = change(73.0, 72.4, "positive")
+                if let first = values.first, let last = values.last, values.count > 1 {
+                    series["change"] = change(first, last, "positive")
+                } else {
+                    series["change"] = NSNull() // the server's "under two days" answer
+                }
                 series["referenceLines"] = [Any]()
             case "bloodPressure":
                 series["direction"] = direction("up-bad", "above", "personal_target")

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A360-5 H-4 — locale-aware decimal parsing for typed numeric input. Locks the
+/// Locale-aware decimal parsing for typed numeric input. Locks the
 /// behaviours the naive `Double(text.replacing(",","."))` idiom got wrong:
 /// German comma decimals, grouped thousands, and explicit parse failure.
 @Suite("LocaleDecimalParser (A360-5 H-4)")

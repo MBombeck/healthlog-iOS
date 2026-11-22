@@ -1,11 +1,11 @@
 import Foundation
 
-/// **I-2 — pure presentation model for the wellness-score rings + detail sheet.**
+/// **Pure presentation model for the wellness-score rings + detail sheet.**
 ///
 /// Maps a server `DerivedMetricDTO` onto the inputs `HLScoreRing` + the score
 /// cards + the detail sheet need, WITHOUT any view dependency, so the
 /// archetype/fraction/band/contributor resolution is unit-testable off the main
-/// actor. HONEST-ONLY: every field derives from the server envelope; nothing is
+/// actor. Every field derives from the server envelope; nothing is
 /// fabricated. The confidence gate is explicit (``isInsufficient``).
 enum WellnessScorePresentation {
     /// The render archetype for a derived metric — picks the ring shape + which
@@ -73,7 +73,7 @@ enum WellnessScorePresentation {
         return base
     }
 
-    /// **W-B187 #29 — recovery source authority (server-resolved).**
+    /// **Recovery source authority (server-resolved).**
     ///
     /// `true` when the server resolved this `RECOVERY_SCORE` headline from a
     /// WHOOP-native recovery (vs the computed HRV proxy). The server v1.17 W2b
@@ -118,7 +118,7 @@ enum WellnessScorePresentation {
         return max(0, min(1, (vo2 - lo) / (hi - lo)))
     }
 
-    /// v0.14.9 §2 — the 0…1 ring fill for the HRV-balance band ring. HRV balance
+    /// The 0…1 ring fill for the HRV-balance band ring. HRV balance
     /// carries NO 0–100 score, only a server band (`low` / `balanced` /
     /// `unbalanced`); the ring fill positions that band on the arc so "balanced"
     /// reads as a comfortable centred fill, `low`/`unbalanced` as off-centre.
@@ -133,7 +133,7 @@ enum WellnessScorePresentation {
         }
     }
 
-    /// v0.14.9 §2 — the SHORT centre word for the HRV-balance ring. Kept terse so
+    /// The SHORT centre word for the HRV-balance ring. Kept terse so
     /// it fits the ring centre at the big metric font without truncating ("Even" /
     /// "High" / "Low"); the full band sentence is on the detail sheet + a11y. The
     /// short word maps the server band, never reinterprets it. `nil` ⇒ no band.
@@ -146,7 +146,7 @@ enum WellnessScorePresentation {
         }
     }
 
-    /// v0.14.9 §2 — the 0…1 ring fill for the vascular-age years-delta ring,
+    /// The 0…1 ring fill for the vascular-age years-delta ring,
     /// mirroring the Cardio-Fitness placement: a delta of 0 sits mid-arc, younger
     /// (negative) below, older (positive) above, with ±15 yr mapped to the arc
     /// ends so the fill reads the direction at a glance. HONEST: the delta is the
@@ -189,9 +189,9 @@ enum WellnessScorePresentation {
         return raw
             .compactMap { row -> Contributor? in
                 if row.value != nil { return Contributor(key: row.key, value: row.value, weight: row.weight) }
-                // v0.14.3 F4 — honest-only: a null contributor the server gives
+                // Honest-only: a null contributor the server gives
                 // no reason for stays hidden, so no empty "—" row shows.
-                // #145 — a withheld sleep sub-score whose `gap` the server
+                // A withheld sleep sub-score whose `gap` the server
                 // names keeps its row and says why, in place of its weight.
                 guard let reason = SleepScoreGap(rawValue: row.gap ?? "")?.reasonLine(nights: nights, minimum: minimum) else {
                     return nil
@@ -214,7 +214,7 @@ enum WellnessScorePresentation {
         let key: String
         let value: Double?
         let weight: Double
-        /// #145 — why a withheld sub-score has no value, shown in its row
+        /// Why a withheld sub-score has no value, shown in its row
         /// instead of the weight. `nil` on every scored row.
         var gapReason: String?
         var id: String {
@@ -298,7 +298,7 @@ enum WellnessScorePresentation {
         )
     }
 
-    /// **v0.14.8 Item-3 (b184 M4) — the single "Signale des Tages" show predicate.**
+    /// **v0.14.8 Item-3 — the single "Signale des Tages" show predicate.**
     ///
     /// `deviationSummary` resolves to a non-nil summary even for the CALM state
     /// (`fired == false` / zero contributing vitals — the "all within range"

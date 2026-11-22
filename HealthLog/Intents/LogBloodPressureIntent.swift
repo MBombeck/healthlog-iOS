@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.7.1 W-APPINTENTS** — "Log blood pressure" Siri / Shortcuts intent.
+/// "Log blood pressure" Siri / Shortcuts intent.
 ///
 /// Records a systolic/diastolic pair through the same
 /// `MeasurementsRepository.create` path the manual-entry sheet uses. The

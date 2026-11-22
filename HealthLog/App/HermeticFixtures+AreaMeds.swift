@@ -32,21 +32,21 @@
             method: String,
             query: [URLQueryItem] = []
         ) -> (status: Int, body: Data)? {
-            // RELATED (1.5.0) — single reads with `related`, only under `-uitest-related`;
-            // MED-PLUS (1.5.0) — the course routes, only under `-uitest-med-plus`.
+            // Single reads with `related`, only under `-uitest-related`;
+            // MED-PLUS — the course routes, only under `-uitest-med-plus`.
             if let related = RelatedFixtures.response(forPath: path, method: method)
                 ?? MedPlusFixtures.response(forPath: path, method: method) { return related }
-            // SUPP (1.5.0) — a supplement and the nutrient split, only under `-uitest-supp`;
+            // A supplement and the nutrient split, only under `-uitest-supp`;
             // SUPP-EDIT — the catalogue, the composition PUT and a label read, only under `-uitest-supp-edit`.
             if let supp = SuppEditFixtures.response(forPath: path, method: method)
                 ?? SuppFixtures.response(forPath: path, method: method, query: query) { return supp }
-            // SYMPTOM (1.5.0) — symptoms filed against the episodes, only under `-uitest-symptom`.
+            // Symptoms filed against the episodes, only under `-uitest-symptom`.
             if let cycleOrSymptom = SymptomFixtures.response(forPath: path, method: method, query: query)
                 ?? AreaCycleFixtures.response(forPath: path, method: method) { return cycleOrSymptom }
             if let illness = AreaIllnessFixtures.response(forPath: path, method: method, query: query) { return illness }
-            // 1.4 B4-c — the per-medication routes and the notification settings.
+            // The per-medication routes and the notification settings.
             if let detail = AreaMedsDetailFixtures.response(forPath: path, method: method, query: query) { return detail }
-            // POLISH-C (F-REL-1) — and the single read behind "Related": the list's row.
+            // And the single read behind "Related": the list's row.
             if let other = AreaNotificationsFixtures.response(forPath: path, method: method)
                 ?? (method == "GET" ? singleMedication(forPath: path) : nil) { return other }
             return switch (method, path) {
@@ -74,24 +74,14 @@
         /// The marketing world's three medications plus one kept as a record.
         /// Trulicity carries its treatment class here, so its detail shows the
         /// GLP-1 sections (the marketing world leaves the class out).
-        ///
-        /// 1.4 B4-c — "Letzte Einnahme" and today's count come from the same
-        /// invented history the detail reads (`AreaMedsDetailFixtures`). The
-        /// marketing rows stamp this morning's 08:05 whatever the clock says,
-        /// so a capture before eight showed a last intake after the next one.
+        /// "Letzte Einnahme" and today's count come with the marketing rows,
+        /// from the same invented history the detail reads.
         private static func medications() -> (Int, Data)? {
             let marketing = Data(MarketingFixtures.medicationsJSON.utf8)
             let extra = Data(recordOnlyJSON.utf8)
             guard let list = (try? JSONSerialization.jsonObject(with: marketing)) as? [[String: Any]],
                   let recordOnly = (try? JSONSerialization.jsonObject(with: extra)) as? [String: Any] else { return nil }
-            let iso = ISO8601DateFormatter()
             let classed = list.map { row -> [String: Any] in
-                var row = row
-                if let id = row["id"] as? String {
-                    row["lastTakenAt"] = AreaMedsDetailFixtures.lastTakenAt(medicationID: id).map { iso.string(from: $0) }
-                        ?? NSNull()
-                    row["todayEventCount"] = AreaMedsDetailFixtures.todayEventCount(medicationID: id)
-                }
                 guard row["name"] as? String == "Trulicity" else { return MedPlusFixtures.decorate(row) }
                 return row.merging(["treatmentClass": "GLP1"]) { _, new in new }
             }
@@ -122,12 +112,14 @@
         // MARK: - Mood
 
         /// Thirty days, one entry a day at 20:00 local, a calm wave between
-        /// "okay" and "great" with a workout tag on every third day.
+        /// "okay" and "great" with a workout tag on every third day. The newest
+        /// is the last evening already past, never one later today.
         static var moodEntriesJSON: String {
             let iso = ISO8601DateFormatter()
             let levels = ["GUT", "OKAY", "SUPER_GUT", "GUT", "GUT", "OKAY", "SCHLECHT"]
             let calendar = Calendar.current
-            let evening = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: .now) ?? .now
+            let tonight = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: .now) ?? .now
+            let evening = tonight <= .now ? tonight : calendar.date(byAdding: .day, value: -1, to: tonight) ?? tonight
             let rows = (0 ..< 30).map { offset -> String in
                 let day = calendar.date(byAdding: .day, value: -offset, to: evening) ?? evening
                 let tags = offset % 3 == 0 ? #"["worked_out"]"# : "[]"
@@ -170,10 +162,10 @@
           ],
           "patterns": [
             { "id": "weekend", "kind": "weekend", "strength": "moderate", "direction": "higher",
-              "values": { "subject": 7.2, "comparison": 6.4, "delta": 0.8 },
+              "values": { "subject": 3.9, "comparison": 3.5, "delta": 0.4 },
               "sampleSize": { "subject": 8, "comparison": 22 } },
             { "id": "best_weekday", "kind": "best_weekday", "strength": "weak", "direction": "higher",
-              "values": { "subject": 7.6, "comparison": 6.5, "delta": 1.1, "weekday": 5 },
+              "values": { "subject": 4.1, "comparison": 3.5, "delta": 0.6, "weekday": 5 },
               "sampleSize": { "subject": 4, "comparison": 26 } }
           ]
         }

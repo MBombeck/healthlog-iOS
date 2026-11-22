@@ -1,6 +1,6 @@
 import Foundation
 
-/// HK-NEW (1.5) — the server's own list of HealthKit types its batch route
+/// The server's own list of HealthKit types its batch route
 /// maps, as `acceptedTypes: string[]` on `GET /api/integrations/healthkit`
 /// (requested in HealthLog#1340, not in any release yet).
 ///
@@ -51,10 +51,9 @@ enum HealthKitAcceptedTypes {
     /// version. Height belongs to the profile, dietary energy, macros and
     /// sodium stay closed, water and caffeine go through
     /// `POST /api/nutrients/batch` (the nutrient sync, not this path). Basal
-    /// energy is the one without a decision (HealthLog#1340).
+    /// energy left the list with server v1.47.1 (``HealthKitBasalEnergy``).
     static let deferredIdentifiers: Set<String> = [
         "HKQuantityTypeIdentifierHeight",
-        "HKQuantityTypeIdentifierBasalEnergyBurned",
         "HKQuantityTypeIdentifierDietaryEnergyConsumed",
         "HKQuantityTypeIdentifierDietaryProtein",
         "HKQuantityTypeIdentifierDietaryCarbohydrates",

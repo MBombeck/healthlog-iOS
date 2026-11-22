@@ -12,7 +12,7 @@ public extension HKSyncDiagnostics {
         /// observer/anchor pipeline.
         public var samplesReadTotal: Int = 0
         /// Subset of `samplesReadTotal` the server stored (`inserted`,
-        /// `updated`, `duplicate`). Nothing else counts (#113).
+        /// `updated`, `duplicate`). Nothing else counts.
         public var samplesUploadedTotal: Int = 0
         /// Rows the server refused for a deterministic reason
         /// (`value_out_of_range`, …). They sit in the skip register.

@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **POLISH-C (C7)** — the one-word alcohol answer asked before AUDIT-C
+/// The one-word alcohol answer asked before AUDIT-C
 /// (`ALCOHOL_PATTERN`) is still part of the record. Like the web's
 /// `audit-c-panel.tsx` (v1.47.0), the alcohol section shows it with a way to
 /// remove it, read from `GET /api/anamnesis/facts`, and nothing when there is

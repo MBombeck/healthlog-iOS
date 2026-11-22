@@ -38,7 +38,14 @@ check_workflow() {
 
       hosted_if = "env.HEALTHLOG_RUNNER == '"'"'hosted'"'"'"
       {
-        "Select Xcode (hosted runner)" => ['"'"'app="/Applications/Xcode_27.2.app"'"'"', '"'"'sudo xcode-select -s "$app/Contents/Developer"'"'"', "exit 1"],
+        "Install Xcode (hosted runner)" => [
+          '"'"'version="27.2"'"'"',
+          '"'"'app="/Applications/Xcode_${version}.app"'"'"',
+          "pkgutil --check-signature",
+          '"'"'sudo xcode-select -s "$app/Contents/Developer"'"'"',
+          "exit 1"
+        ],
+        "Restore pinned Xcode archive (hosted runner)" => [],
         "Install pinned tooling (hosted runner)" => [
           "XcodeGen/releases/download/2.46.0/xcodegen.zip 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806",
           "SwiftFormat/releases/download/0.63.0/swiftformat.zip 28c7802e11fa5ae113d903066439c6bb1be20a8ac1ad9709c42616a7e273fb0f",
@@ -52,6 +59,15 @@ check_workflow() {
         abort("#{name} must run only on the hosted runner") unless found.first["if"] == hosted_if
         needles.each { |needle| abort("#{name} lacks #{needle.inspect}") unless found.first.fetch("run").include?(needle) }
       end
+      # #168: the hosted run takes the archive from the cache only; the
+      # job that fills it runs by hand, hosted, without the repository code.
+      restore = job.fetch("steps").find { |step| step["name"] == "Restore pinned Xcode archive (hosted runner)" }
+      abort("the hosted Xcode archive must come from actions/cache/restore") unless restore["uses"].to_s.start_with?("actions/cache/restore@")
+      cache_job = workflow.fetch("jobs").fetch("xcode-cache", nil)
+      abort("the xcode-cache job is missing") if cache_job.nil?
+      abort("xcode-cache must run only on workflow_dispatch") unless cache_job["if"] == "github.event_name == '"'"'workflow_dispatch'"'"'"
+      abort("xcode-cache must run on a hosted runner") unless cache_job["runs-on"] == "macos-26"
+      abort("xcode-cache must not check out the repository") if cache_job.fetch("steps").any? { |step| step["uses"].to_s.start_with?("actions/checkout") }
       # The verify steps check both runners; they must stay unconditional.
       ["Verify Xcode", "Verify Tooling"].each do |name|
         step = job.fetch("steps").find { |s| s["name"] == name }
@@ -88,7 +104,16 @@ check_workflow() {
         "python3 scripts/l10n/check-catalog-format.py --self-test",
         "python3 scripts/l10n/fill-placeholders.py --self-test",
         "python3 scripts/l10n/signoff-medical.py --self-test",
-        "python3 scripts/l10n/check-catalog-format.py"
+        "python3 scripts/l10n/check-catalog-format.py",
+        "scripts/check-missing-strings.sh --self-test",
+        "scripts/check-missing-strings.sh",
+        "bash scripts/verify-function-body-baseline.sh --self-test",
+        "bash scripts/verify-function-body-baseline.sh",
+        "bash scripts/test-design-ratchets.sh",
+        "bash scripts/design-ratchet.sh --check ${HL_RATCHET_BASE:+--base \"$HL_RATCHET_BASE\"}",
+        "HL_RATCHET_BASE=\"$(git merge-base HEAD FETCH_HEAD 2>/dev/null || true)\"",
+        "bash scripts/check-sheet-scaffold.sh --strict",
+        "bash scripts/check-delete-ladder.sh --strict"
       ]
       required_commands.each do |command|
         count = lint_lines.count(command)
@@ -114,6 +139,32 @@ check_workflow() {
 
       i18n_self_test_index = lint_lines.index("python3 scripts/i18n-guard.py --self-test")
       abort("i18n-guard self-test must run before the live i18n gate") unless i18n_self_test_index < lint_lines.index("python3 scripts/i18n-guard.py HealthLog")
+
+      # The release producer refuses on these two; CI runs them so that a
+      # branch learns of a miss before a release does. Self-test first.
+      [
+        ["scripts/check-missing-strings.sh --self-test", "scripts/check-missing-strings.sh"],
+        ["bash scripts/verify-function-body-baseline.sh --self-test", "bash scripts/verify-function-body-baseline.sh"]
+      ].each do |self_test, gate|
+        abort("#{self_test} must run before #{gate}") unless lint_lines.index(self_test) < lint_lines.index(gate)
+      end
+
+      # The design ratchet self-test runs before the three live checks, and the
+      # ratchet in CI only compares: a run that rewrote it would pass on a
+      # stale file.
+      ratchet_self_test_index = lint_lines.index("bash scripts/test-design-ratchets.sh")
+      [
+        "bash scripts/design-ratchet.sh --check ${HL_RATCHET_BASE:+--base \"$HL_RATCHET_BASE\"}",
+        "bash scripts/check-sheet-scaffold.sh --strict",
+        "bash scripts/check-delete-ladder.sh --strict"
+      ].each do |gate|
+        abort("the design ratchet self-test must run before #{gate}") unless ratchet_self_test_index < lint_lines.index(gate)
+      end
+      if lint_lines.any? { |line| line.match?(%r{\Abash scripts/design-ratchet\.sh(\s|\z)}) && !line.include?("--check") }
+        abort("CI must run the design ratchet with --check only")
+      end
+      base_index = lint_lines.index("HL_RATCHET_BASE=\"$(git merge-base HEAD FETCH_HEAD 2>/dev/null || true)\"")
+      abort("the ratchet base must be set before the ratchet runs") unless base_index < lint_lines.index("bash scripts/design-ratchet.sh --check ${HL_RATCHET_BASE:+--base \"$HL_RATCHET_BASE\"}")
 
       self_test_index = lint_lines.index("bash scripts/lint-strict-baseline.sh --self-test")
       live_gate_index = lint_lines.index("bash scripts/lint-strict-baseline.sh")
@@ -167,6 +218,88 @@ check_workflow() {
       abort("the symbol check must read the Release build it follows") unless symbol_lines.index(release_build) < symbol_lines.index(symbol_gate)
       free_index = steps.index { |step| step["name"] == "Free the gate caches" }
       abort("the symbol check must run before the gate caches are freed") unless free_index.nil? || steps.index(symbol_step) < free_index
+
+      # One Debug compile per run, like the release producer: build once for
+      # testing, then both test gates run from those products. A `test` or a
+      # second Debug `build` through the gate is the rebuild this removed.
+      gate = "scripts/run-serialized-xcode-gate.sh \"ci-${{ github.run_id }}\""
+      debug = "-configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=-"
+      locale = "-testLanguage de -testRegion DE"
+      build_for_testing = "#{gate} -- build-for-testing #{debug} -enableCodeCoverage YES"
+      unit_gate = "#{gate} --result-label unit -- test-without-building #{debug} #{locale} -enableCodeCoverage YES -only-testing:HealthLogTests"
+      ui_classes = ["AuthJourneyUITest", "LoginBounceUITests", "WebLoginJourneyUITest"].map { |name| "-only-testing:HealthLogUITests/#{name}" }.join(" ")
+      ui_gate = "#{gate} --result-label ui -- test-without-building #{debug} #{locale} -retry-tests-on-failure -test-iterations 2 #{ui_classes}"
+      [build_for_testing, unit_gate, ui_gate].each do |command|
+        count = run_lines.count(command)
+        abort("expected exactly one #{command.inspect}, found #{count}") unless count == 1
+      end
+      abort("the Debug build must come before the unit gate") unless run_lines.index(build_for_testing) < run_lines.index(unit_gate)
+      abort("the unit gate must come before the UI gate") unless run_lines.index(unit_gate) < run_lines.index(ui_gate)
+      gate_actions = run_lines.select { |line| line.start_with?("scripts/run-serialized-xcode-gate.sh ") }.map { |line| line[/ -- (\S+)/, 1] }
+      expected_actions = ["build-for-testing", "test-without-building", "test-without-building", "build"]
+      abort("the gate must be entered for #{expected_actions.inspect}, found #{gate_actions.inspect}") unless gate_actions == expected_actions
+      unless free_index.nil?
+        test_steps = steps.each_index.select { |index| steps[index]["run"].to_s.include?(" -- test-without-building ") }
+        abort("the test gates must run before the gate caches are freed") unless test_steps.all? { |index| index < free_index }
+      end
+
+      # The third static gate of the producer is not in the public mirror, so
+      # it sits in a step of its own that runs where the script exists.
+      quote = 39.chr
+      wiring = steps.select { |step| step["name"] == "Verify citation wiring" }
+      abort("expected exactly one Verify citation wiring step") unless wiring.length == 1
+      abort("the citation wiring step must run the gate") unless wiring.first["run"].to_s.strip == "bash scripts/verify-sources-wired.sh"
+      wiring_if = "hashFiles(#{quote}scripts/verify-sources-wired.sh#{quote}) != #{quote}#{quote}"
+      abort("the citation wiring step may only depend on the script being there, found #{wiring.first["if"].inspect}") unless wiring.first["if"] == wiring_if
+
+      tooling = steps.select { |step| step["name"] == "Release tooling self-tests" }
+      abort("expected exactly one Release tooling self-tests step") unless tooling.length == 1
+      tooling_lines = tooling.first.fetch("run").lines.map(&:strip)
+      [
+        "bash scripts/test-run-serialized-xcode-gate.sh",
+        "bash scripts/test-gate-watchos.sh",
+        "bash scripts/refresh-baselines.sh --self-test",
+        "bash scripts/test-release.sh",
+        "bash scripts/test-resolve-gate-destination.sh",
+        "bash scripts/validate-phase07-handoff.sh --self-test",
+        "bash scripts/test-allocate-build-number.sh",
+        "bash scripts/test-asc-build-inventory.sh",
+        "bash scripts/test-export-asc-contact.sh",
+        "bash scripts/test-assert-release-behavioral-red.sh",
+        "bash scripts/test-release-selectors.sh",
+        "python3 scripts/verify-release-selectors.py",
+        "bash scripts/test-candidate-manifest.sh",
+        "bash scripts/test-upload-existing-testflight.sh"
+      ].each do |command|
+        abort("Release tooling self-tests lacks #{command.inspect}") unless tooling_lines.count(command) == 1
+      end
+      abort("the selector self-test must run before the live selector check") unless tooling_lines.index("bash scripts/test-release-selectors.sh") < tooling_lines.index("python3 scripts/verify-release-selectors.py")
+
+      # Gates that ran nowhere in CI until 1.7 (WO17 gates). Each sits in a
+      # step that depends only on its inputs being there, self-tests first.
+      {
+        "Scan tracked secrets" => ["hashFiles(#{quote}scripts/scan-tracked-secrets.sh#{quote}) != #{quote}#{quote}",
+          ["bash scripts/scan-tracked-secrets.sh"]],
+        "Frozen phase 06 inventories" => ["hashFiles(#{quote}.planning/phases/06-account-and-privacy-boundaries/06-AUTHENTICATED-EFFECT-INVENTORY.md#{quote}) != #{quote}#{quote}",
+          ["bash scripts/test-validate-phase06-effect-inventory.sh",
+           "bash scripts/test-validate-phase06-presentation-inventory.sh",
+           "scripts/validate-phase06-effect-inventory.sh --verify-frozen .planning/phases/06-account-and-privacy-boundaries/06-AUTHENTICATED-EFFECT-INVENTORY.md",
+           "scripts/validate-phase06-presentation-inventory.sh --verify-frozen .planning/phases/06-account-and-privacy-boundaries/06-PHI-PRESENTATION-INVENTORY.md"]],
+        "Release manifests and pins" => ["hashFiles(#{quote}scripts/release-ui-tests.json#{quote}) != #{quote}#{quote}",
+          ["python3 scripts/pin-relay-keys.py --check",
+           "python3 scripts/refresh-ui-standard-baseline.py --check",
+           "python3 scripts/l10n/sync-questionnaire-wording.py --self-test",
+           "bash scripts/test-release-ui-manifest.sh",
+           "python3 scripts/verify-release-ui-manifest.py"]]
+      }.each do |name, (condition, commands)|
+        found = steps.select { |step| step["name"] == name }
+        abort("expected exactly one #{name} step") unless found.length == 1
+        abort("#{name} may only depend on its inputs being there, found #{found.first["if"].inspect}") unless found.first["if"] == condition
+        lines = found.first.fetch("run").lines.map(&:strip).reject { |line| line.empty? || line.start_with?("#") }
+        abort("#{name} must run exactly #{commands.inspect}, found #{lines.inspect}") unless lines == commands
+        abort("#{name} must run before anything is built") unless steps.index(found.first) < steps.index { |step| step["run"].to_s.include?(" -- build-for-testing ") }
+      end
+      abort("the release tooling self-tests must run before anything is built") unless steps.index(tooling.first) < steps.index { |step| step["run"].to_s.include?(" -- build-for-testing ") }
     ' "$workflow_path"
 }
 
@@ -309,6 +442,70 @@ awk '
 ' "$WORKFLOW_PATH" >"$fixture_dir/symbol-mini-only.yml"
 if check_workflow "$fixture_dir/symbol-mini-only.yml" >/dev/null 2>&1; then
     fail "contract accepted the symbol check on one runner only"
+fi
+
+# One Debug compile per run: a test gate that builds again, a plain Debug build
+# in front of the tests, and a missing result label must all be rejected.
+awk '{ sub(/--result-label unit -- test-without-building/, "-- test"); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/unit-rebuilds.yml"
+if check_workflow "$fixture_dir/unit-rebuilds.yml" >/dev/null 2>&1; then
+    fail "contract accepted a unit gate that builds again"
+fi
+
+awk '{ sub(/-- build-for-testing /, "-- build "); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/plain-debug-build.yml"
+if check_workflow "$fixture_dir/plain-debug-build.yml" >/dev/null 2>&1; then
+    fail "contract accepted a Debug build that leaves no test products"
+fi
+
+awk '{ sub(/--result-label ui -- /, "-- "); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/ui-without-label.yml"
+if check_workflow "$fixture_dir/ui-without-label.yml" >/dev/null 2>&1; then
+    fail "contract accepted a UI gate that replaces the unit result bundle"
+fi
+
+# The producer's static gates stay in CI, each behind its self-test.
+awk '{ if ($0 !~ /^ *scripts\/check-missing-strings\.sh$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-missing-strings-gate.yml"
+if check_workflow "$fixture_dir/no-missing-strings-gate.yml" >/dev/null 2>&1; then
+    fail "contract accepted a Lint step without the string reference gate"
+fi
+
+awk '{ if ($0 !~ /bash scripts\/verify-function-body-baseline\.sh --self-test$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-function-body-self-test.yml"
+if check_workflow "$fixture_dir/no-function-body-self-test.yml" >/dev/null 2>&1; then
+    fail "contract accepted the function body ledger without its self-test"
+fi
+
+awk '{ sub(/run: bash scripts\/verify-sources-wired\.sh$/, "run: true"); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-citation-wiring.yml"
+if check_workflow "$fixture_dir/no-citation-wiring.yml" >/dev/null 2>&1; then
+    fail "contract accepted a citation wiring step that checks nothing"
+fi
+
+awk '{ if ($0 !~ /bash scripts\/test-release\.sh$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-release-self-test.yml"
+if check_workflow "$fixture_dir/no-release-self-test.yml" >/dev/null 2>&1; then
+    fail "contract accepted a workflow without the release tooling self-test"
+fi
+
+# The gates that ran nowhere until 1.7 stay in, and stay behind their inputs.
+awk '{ if ($0 !~ /python3 scripts\/verify-release-ui-manifest\.py$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-ui-manifest.yml"
+if check_workflow "$fixture_dir/no-ui-manifest.yml" >/dev/null 2>&1; then
+    fail "contract accepted a workflow without the release UI manifest gate"
+fi
+
+awk '{ if ($0 !~ /bash scripts\/test-candidate-manifest\.sh$/) print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-candidate-self-test.yml"
+if check_workflow "$fixture_dir/no-candidate-self-test.yml" >/dev/null 2>&1; then
+    fail "contract accepted a workflow without the candidate core self-test"
+fi
+
+awk '{ sub(/run: bash scripts\/scan-tracked-secrets\.sh$/, "run: true"); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/no-secret-scan.yml"
+if check_workflow "$fixture_dir/no-secret-scan.yml" >/dev/null 2>&1; then
+    fail "contract accepted a secret scan step that scans nothing"
 fi
 
 printf 'ci-workflow-contract: PASS\n'

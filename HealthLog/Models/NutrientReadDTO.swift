@@ -22,7 +22,7 @@ import Foundation
 /// nutrient WITH data (the server omits empty nutrients).
 public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable {
     public let nutrient: NutrientCode
-    /// **Audit B-4 — the raw server catalogue code, verbatim.**
+    /// **The raw server catalogue code, verbatim.**
     ///
     /// For a nameable code this is just ``nutrient``'s raw value. For a code
     /// this build cannot name it is the ONLY thing that distinguishes the row:
@@ -45,7 +45,7 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
     public let upperLimit: NutrientUpperLimit?
     public let latestAboveUpperLimit: Bool?
 
-    /// Audit B-4 — keyed on the RAW code, not the case: two rows carrying two
+    /// Keyed on the RAW code, not the case: two rows carrying two
     /// different unnameable codes are two rows, and a `ForEach` over the case
     /// would have collapsed them onto one id.
     public var id: String {
@@ -79,7 +79,7 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         case latestBySource, upperLimit, latestAboveUpperLimit
     }
 
-    /// **Audit B-4** — the raw code is decoded first and kept; the case is
+    /// The raw code is decoded first and kept; the case is
     /// resolved from it. A code this build cannot name lands on
     /// ``NutrientCode/unknown`` and the row survives, labelled by its raw code,
     /// instead of being dropped by the lossy list wrapper with nothing said.
@@ -97,7 +97,7 @@ public struct NutrientOverviewRowDTO: Codable, Sendable, Equatable, Identifiable
         latestAboveUpperLimit = (try? c.decodeIfPresent(Bool.self, forKey: .latestAboveUpperLimit)).flatMap { $0 }
     }
 
-    /// **Audit B-4** — writes the RAW code back, never the case.
+    /// Writes the RAW code back, never the case.
     ///
     /// This shape is re-encoded into the SWR cache, so a synthesized encode
     /// would have hit ``NutrientCode``'s sentinel refusal and failed the cache
@@ -167,7 +167,7 @@ public enum NutrientReferenceKind: String, Codable, Sendable, Equatable, Toleran
     case ai = "AI"
     /// Safe-level ceiling (caffeine).
     case safeLevel
-    /// #115 B6 — an EFSA value kind this build does not know. The kind only
+    /// An EFSA value kind this build does not know. The kind only
     /// NAMES the value in the headline; the value, its direction and the
     /// citation still hold, so the reference is kept and shown without a name
     /// instead of vanishing with the whole reference line.
@@ -203,6 +203,91 @@ public struct NutrientReferenceDTO: Codable, Sendable, Equatable {
         self.direction = direction
         self.value = value
         self.source = source
+    }
+}
+
+// MARK: - Personal targets (`GET` / `PATCH /api/nutrients/targets`, v1.48)
+
+/// Whether a personal target is an amount to reach or one to stay under.
+public enum NutrientTargetDirection: String, Codable, Sendable, Equatable, CaseIterable {
+    case target
+    case limit
+}
+
+/// The target a person set for one nutrient, in the code's canonical unit
+/// (#182 A2). There are no defaults: a code without one is absent.
+public struct NutrientPersonalTarget: Codable, Sendable, Equatable {
+    public let value: Double
+    public let direction: NutrientTargetDirection
+
+    public init(value: Double, direction: NutrientTargetDirection) {
+        self.value = value
+        self.direction = direction
+    }
+}
+
+/// `GET /api/nutrients/targets` and the PATCH echo: `{ targets: { code: … } }`.
+/// Keyed by the RAW code; an entry this build cannot read is left out, the
+/// rest stays.
+public struct NutrientTargetsDTO: Decodable, Sendable, Equatable {
+    public let targets: [String: NutrientPersonalTarget]
+
+    public init(targets: [String: NutrientPersonalTarget]) {
+        self.targets = targets
+    }
+
+    private enum CodingKeys: String, CodingKey { case targets }
+
+    private struct Lossy: Decodable {
+        let value: NutrientPersonalTarget?
+        init(from decoder: Decoder) {
+            value = try? NutrientPersonalTarget(from: decoder)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rows = (try? c.decodeIfPresent([String: Lossy].self, forKey: .targets)).flatMap { $0 } ?? [:]
+        targets = rows.compactMapValues(\.value)
+    }
+}
+
+/// `PATCH /api/nutrients/targets` body. A code mapped to `nil` clears its
+/// target (sent as JSON `null`); codes left out stay as they are.
+public struct NutrientTargetsPatchDTO: Encodable, Sendable, Equatable {
+    public let targets: [String: NutrientPersonalTarget?]
+
+    public init(targets: [String: NutrientPersonalTarget?]) {
+        self.targets = targets
+    }
+
+    private struct CodeKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? {
+            nil
+        }
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+        }
+
+        init?(intValue _: Int) {
+            nil
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case targets }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        var rows = c.nestedContainer(keyedBy: CodeKey.self, forKey: .targets)
+        for (code, target) in targets {
+            if let target {
+                try rows.encode(target, forKey: CodeKey(stringValue: code))
+            } else {
+                try rows.encodeNil(forKey: CodeKey(stringValue: code))
+            }
+        }
     }
 }
 
@@ -244,7 +329,7 @@ public struct NutrientDayPointDTO: Codable, Sendable, Equatable, Identifiable {
 /// malformed reference nils rather than failing the whole decode.
 public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
     public let nutrient: NutrientCode
-    /// Audit B-4 — see ``NutrientOverviewRowDTO/rawNutrient``.
+    /// See ``NutrientOverviewRowDTO/rawNutrient``.
     public let rawNutrient: String
     public let unit: String
     public let windowDays: Int
@@ -253,6 +338,10 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
     /// SUPP (v1.43): the nutrient's upper intake level; `nil` without one or
     /// from an older server.
     public let upperLimit: NutrientUpperLimit?
+    /// #182 A2 (v1.48): the target the person set for this nutrient; the
+    /// chart prefers it over ``reference``. `nil` without one or from an
+    /// older server.
+    public let personalTarget: NutrientPersonalTarget?
 
     public init(
         nutrient: NutrientCode,
@@ -261,7 +350,8 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         days: [NutrientDayPointDTO],
         reference: NutrientReferenceDTO?,
         rawNutrient: String? = nil,
-        upperLimit: NutrientUpperLimit? = nil
+        upperLimit: NutrientUpperLimit? = nil,
+        personalTarget: NutrientPersonalTarget? = nil
     ) {
         self.nutrient = nutrient
         self.rawNutrient = rawNutrient ?? nutrient.rawValue
@@ -270,15 +360,16 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         self.days = days
         self.reference = reference
         self.upperLimit = upperLimit
+        self.personalTarget = personalTarget
     }
 
     private enum CodingKeys: String, CodingKey {
-        case nutrient, unit, windowDays, days, reference, upperLimit
+        case nutrient, unit, windowDays, days, reference, upperLimit, personalTarget
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // Audit B-4 — no lossy wrapper exists on this shape at all, so an
+        // No lossy wrapper exists on this shape at all, so an
         // unnameable code used to fail the WHOLE series response.
         let raw = try c.decode(String.self, forKey: .nutrient)
         rawNutrient = raw
@@ -286,14 +377,30 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         unit = try c.decodeIfPresent(String.self, forKey: .unit) ?? ""
         windowDays = try c.decodeIfPresent(Int.self, forKey: .windowDays) ?? 0
         days = try c.decodeIfPresent([NutrientDayPointDTO].self, forKey: .days) ?? []
-        // An unknown kind decodes to `.unknown` (#115 B6) and keeps the line. An
+        // An unknown kind decodes to `.unknown` and keeps the line. An
         // unknown direction still nils the reference: target vs. ceiling is a
         // claim, and guessing it would colour the progress wrongly.
         reference = (try? c.decodeIfPresent(NutrientReferenceDTO.self, forKey: .reference)).flatMap { $0 }
         upperLimit = (try? c.decodeIfPresent(NutrientUpperLimit.self, forKey: .upperLimit)).flatMap { $0 }
+        personalTarget = (try? c.decodeIfPresent(NutrientPersonalTarget.self, forKey: .personalTarget)).flatMap { $0 }
     }
 
-    /// Audit B-4 — writes the RAW code back; see
+    /// The same series with another personal target, for the moment between
+    /// a saved target and the next read.
+    public func withPersonalTarget(_ target: NutrientPersonalTarget?) -> NutrientDailySeriesDTO {
+        NutrientDailySeriesDTO(
+            nutrient: nutrient,
+            unit: unit,
+            windowDays: windowDays,
+            days: days,
+            reference: reference,
+            rawNutrient: rawNutrient,
+            upperLimit: upperLimit,
+            personalTarget: target
+        )
+    }
+
+    /// Writes the RAW code back; see
     /// ``NutrientOverviewRowDTO/encode(to:)``.
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -303,6 +410,7 @@ public struct NutrientDailySeriesDTO: Codable, Sendable, Equatable {
         try c.encode(days, forKey: .days)
         try c.encodeIfPresent(reference, forKey: .reference)
         try c.encodeIfPresent(upperLimit, forKey: .upperLimit)
+        try c.encodeIfPresent(personalTarget, forKey: .personalTarget)
     }
 
     /// The latest day carrying data (highest non-empty `day`), or `nil` when the

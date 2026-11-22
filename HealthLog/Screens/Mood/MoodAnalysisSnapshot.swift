@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-04 — what a Mood analysis is a function of.**
+/// **What a Mood analysis is a function of.**
 ///
 /// Before this key existed, `MoodAnalysisContent` recomputed the whole insight
 /// set from `store.entries` on every read of a computed property, six or seven
@@ -71,6 +71,9 @@ struct MoodAnalysisSnapshot: Sendable {
     /// The trend series, pre-sorted and pre-mapped, so no body evaluation sorts
     /// a 10,000-entry history to draw a chart.
     let trend: [MoodTrendChart.Entry]
+    /// The chart's daily series, moving average and mean, derived from
+    /// `trend` in the same off-main pass (D5 #9).
+    let trendSeries: MoodTrendSeries
 }
 
 /// **The main-actor gate the analysis is published through.**

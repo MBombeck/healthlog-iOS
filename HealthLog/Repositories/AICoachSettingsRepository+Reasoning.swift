@@ -1,7 +1,7 @@
 import Foundation
 
 public extension AICoachSettingsRepository {
-    /// 1.5 COACH-R — `coachReasoning` from `GET /api/auth/me`; `nil` on a
+    /// `coachReasoning` from `GET /api/auth/me`; `nil` on a
     /// server older than v1.41.
     func fetchCoachReasoning() async throws -> CoachReasoningState? {
         let request: APIRequest<AuthMeCoachReasoning> = .get("/api/auth/me")

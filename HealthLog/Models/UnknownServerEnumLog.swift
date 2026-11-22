@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// Audit B-4 — logs each unrecognised server enum token **once per process**.
+/// Logs each unrecognised server enum token **once per process**.
 ///
 /// One shared register for the enums W3b made tolerant (mood level, nutrient
 /// code, injection site, container type, schedule type, side-effect entry).

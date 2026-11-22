@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-// Phase 07 Wave 0 — executable contracts for HealthKit durability and complete
+// Executable contracts for HealthKit durability and complete
 // sync.
 //
 // This file is deliberately behaviour-free. It names the vocabulary every later
@@ -46,6 +46,9 @@ enum HealthSyncCapability: String, CaseIterable, Sendable {
     case outboxDrain
     /// MIRROR (1.5) — server rows into Apple Health, App Refresh and Processing only.
     case serverMirror
+    /// 1.7 (#180) — lab results from Health Records into Labs, behind the
+    /// separate Health Records permission the Labs screen offers.
+    case clinicalLabRecords
 
     var source: HealthSyncSource {
         switch self {
@@ -61,6 +64,7 @@ enum HealthSyncCapability: String, CaseIterable, Sendable {
         case .heartHealthEvents: .heartEvent
         case .outboxDrain: .outbox
         case .serverMirror: .serverMirror
+        case .clinicalLabRecords: .clinicalLabRecords
         }
     }
 
@@ -75,7 +79,8 @@ enum HealthSyncCapability: String, CaseIterable, Sendable {
     /// omitted: an opt-out is reported as `.disabled`.
     var requiresExplicitOptIn: Bool {
         switch self {
-        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .nutrientDailyTotals:
+        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .nutrientDailyTotals,
+             .clinicalLabRecords:
             true
         default:
             false
@@ -116,7 +121,7 @@ enum HealthSyncTrigger: String, CaseIterable, Sendable {
 /// Bounded work allowance for one trigger. `incrementalOnly` forbids a first
 /// history walk inside a short wake.
 ///
-/// **1.3 (#127)** — `maxPagesPerType` is the live stream's allowance, served
+/// `maxPagesPerType` is the live stream's allowance, served
 /// first on every trigger. History gets `historyPagesPerType` and
 /// `historyTimeBudget` from what is left, and only where
 /// `allowsFirstHistoryImport` (a history walk) is allowed at all.
@@ -344,9 +349,9 @@ struct HealthSyncPageOutcome: Sendable, Equatable {
     let durableRetryFailed: Bool
     let leaseIsCurrent: Bool
     let wasCancelled: Bool
-    /// A2 (1.4, R3 S6) — no answer could come: offline or in backoff.
+    /// No answer could come: offline or in backoff.
     var serverUnreachable = false
-    /// A2 (1.4, R3 3.2) — rows the server answered `duplicate`/`folded_window`.
+    /// Rows the server answered `duplicate`/`folded_window`.
     var foldedWindowDuplicates = 0
 
     var hasNonterminalEntry: Bool {
@@ -365,8 +370,11 @@ enum HealthSyncHoldReason: String, Sendable, Equatable {
     case retryPersistenceFailed
     case leaseLost
     case cancelled
-    /// A2 (1.4, R3 S6) — offline or in backoff: held, never parked.
+    /// Offline or in backoff: held, never parked.
     case serverUnreachable
+    /// Another run moved the cursor after this one read it; the later cursor
+    /// stands.
+    case superseded
 }
 
 enum HealthSyncCommitDecision: Sendable, Equatable {
@@ -396,22 +404,10 @@ struct DurableHealthSyncCursorCommitPolicy: HealthSyncCursorCommitPolicy {
     }
 }
 
-/// A faithful model of the rule the app runs today.
-///
-/// SpeziHealthKit 1.4.2 persists the query anchor once the app handler returns;
-/// `MoodStateOfMindImporter` saves its anchor after a swallowed per-item
-/// failure; `HeartHealthEventImporter` holds only because the uploader throws.
-/// In all three, nothing except a raised transport error is consulted.
-struct LegacyTransportOnlyCursorCommitPolicy: HealthSyncCursorCommitPolicy {
-    func decide(_ outcome: HealthSyncPageOutcome) -> HealthSyncCommitDecision {
-        outcome.transportThrew ? .hold(reason: .nonterminalEntry) : .commit
-    }
-}
-
 /// The commit rule installed in production.
 ///
 /// **Repointed by plan 07-03, in the commit that made it true.** Until that
-/// commit the app ran ``LegacyTransportOnlyCursorCommitPolicy`` and this value
+/// commit the app ran a transport-only rule (hold only on a thrown upload) and this value
 /// said so, because the only thing standing between a HealthKit page and its
 /// cursor was SpeziHealthKit's unconditional post-callback anchor write. Three
 /// production changes landed together and made the durable rule the one that
@@ -461,7 +457,7 @@ enum HealthSyncCompositionPlan {
     /// short wake: the sweep posts at most one bulk chunk and leaves the rest
     /// pending in the dose ledger for the next wake.
     ///
-    /// **MIRROR (1.5, public #28)** — and the bounded server→Apple-Health mirror,
+    /// And the bounded server→Apple-Health mirror,
     /// which itself runs on App Refresh only (``ServerMirrorBackgroundPass``).
     static let incrementalSet: Set<HealthSyncCapability> = [
         .speziSampleCollection,
@@ -554,8 +550,7 @@ enum HealthSyncCompositionPlan {
     /// invalidates it for an owner that goes away. Every real admission —
     /// `bootstrap()`, password/passkey/MFA/SSO/web-login, `register`,
     /// `completeOnboarding()`, a sharing-recovery actor change — passes through
-    /// it, and so do the transitions that previously left a live registry behind
-    /// an unauthenticated shell (`enterStandaloneMode()`, `beginServerPairing()`).
+    /// it.
     ///
     /// `CompleteHealthSyncCompositionTests` compares this constant against the
     /// production sources with comment lines stripped, so it cannot drift from

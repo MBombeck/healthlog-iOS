@@ -85,11 +85,11 @@ private final class BodyBox: @unchecked Sendable {
     }
 }
 
-/// **Phase 18 / 18-01 — the one sharing surface's model (D2, D3 per E1).**
+/// **The one sharing surface's model (D2, D3 per E1).**
 ///
 /// Four claims, one per question the consolidation has to answer:
 ///   1. the surface asks exactly *what* and *for which period*, and puts the
-///      output form LAST (E1.1),
+///      output form LAST,
 ///   2. the default selection is EMPTY and "Alles auswählen" is an explicit act
 ///      (E1.2 — the operator's answered decision, chosen AGAINST the
 ///      walkthrough's literal "standardmäßig alles"),
@@ -157,7 +157,7 @@ struct UnifiedSharingModelTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: no unified sharing model exists
+            no unified sharing model exists
 
             E1.1. D2's complaint was four surfaces asking overlapping questions and \
             answering them differently. One model, two questions, the form last. Offen: \(violations)
@@ -180,7 +180,7 @@ struct UnifiedSharingModelTests {
         var violations: [String] = []
 
         // The default, before anything is loaded and after a load that found no
-        // saved profile. Both are the operator's answered decision (E1.2).
+        // saved profile. Both are the operator's answered decision.
         if !store.chosen.isEmpty {
             violations.append("a fresh model preselected \(store.chosen.sorted())")
         }
@@ -208,7 +208,7 @@ struct UnifiedSharingModelTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: no one-tap select-all over an empty default exists
+            no one-tap select-all over an empty default exists
 
             E1.2 (.planning/active/v1-readiness/DECISIONS.md, 2026-08-22). The operator's \
             walkthrough sentence asked for "standardmäßig alles"; shown that this inverts the \
@@ -244,7 +244,7 @@ struct UnifiedSharingModelTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the model does not round-trip the report-selection profile
+            the model does not round-trip the report-selection profile
 
             The four old surfaces already shared this profile without admitting it; the \
             unified model owns it in the open. Offen: \(violations)
@@ -343,7 +343,7 @@ struct UnifiedSharingModelTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: period and expiry are not yet modeled apart
+            period and expiry are not yet modeled apart
 
             Period bounds WHAT the recipient sees; expiry bounds WHEN the link dies. \
             Conflating them is the one thing the unified surface must not do. Offen: \(violations)

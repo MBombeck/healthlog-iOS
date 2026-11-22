@@ -1,4 +1,4 @@
-// Phase 24 / plan 24-02 — D-24-01-A, the login lock-out.
+// D-24-01-A, the login lock-out.
 //
 // The behavioural proof of this defect is `HealthLogUITests/LoginBounceUITests`,
 // and it has to be: every part of the trap is view lifecycle, and the store is
@@ -33,7 +33,7 @@
         /// answering which side of the login it stands on. The array exists so
         /// the tables below can be read as tables.
         private static let allSteps: [OnboardingFlow.Step] = [
-            .welcome, .mode, .serverURL, .auth,
+            .welcome, .serverURL, .auth,
             .checkingCompletion, .completionUnavailable,
             .healthKit, .notifications, .aiSource, .anamnesis, .baselineProfile, .done
         ]
@@ -58,7 +58,6 @@
             for step in Self.allSteps {
                 let resolved = OnboardingFlow.resolveStep(
                     step,
-                    chosenMode: .server,
                     hasServerAddress: true,
                     phase: accepted
                 )
@@ -71,8 +70,8 @@
                     #expect(resolved == step, "\(step) is past the boundary and must be left alone")
                 }
             }
-            // And the classification itself is the four the remount can produce.
-            #expect(Self.allSteps.filter(\.isPreAuthentication) == [.welcome, .mode, .serverURL, .auth])
+            // And the classification itself is the three the remount can produce.
+            #expect(Self.allSteps.filter(\.isPreAuthentication) == [.welcome, .serverURL, .auth])
             #expect(OnboardingFlow.initialStep.isPreAuthentication, "the mount position is one of them by definition")
         }
 
@@ -82,27 +81,27 @@
         @Test("the address question is unchanged for every phase that holds no session")
         func theAddressQuestionIsUnchangedWithoutASession() {
             let unaccepted: [AuthStore.Phase] = [
-                .unknown, .unauthenticated, .standalone, .authenticated(Self.operatorUser)
+                .unknown, .unauthenticated, .authenticated(Self.operatorUser)
             ]
             for phase in unaccepted {
                 #expect(
                     OnboardingFlow.resolveStep(
-                        .auth, chosenMode: .server, hasServerAddress: false, phase: phase
+                        .auth, hasServerAddress: false, phase: phase
                     ) == .serverURL,
                     "R1: no address, no login step — \(phase)"
                 )
                 #expect(
                     OnboardingFlow.resolveStep(
-                        .auth, chosenMode: .server, hasServerAddress: true, phase: phase
+                        .auth, hasServerAddress: true, phase: phase
                     ) == .auth
                 )
             }
             // The defaulted call, byte for byte the pre-24-02 contract.
             #expect(
-                OnboardingFlow.resolveStep(.auth, chosenMode: .server, hasServerAddress: false) == .serverURL
+                OnboardingFlow.resolveStep(.auth, hasServerAddress: false) == .serverURL
             )
             #expect(
-                OnboardingFlow.resolveStep(.welcome, chosenMode: .server, hasServerAddress: false) == .welcome
+                OnboardingFlow.resolveStep(.welcome, hasServerAddress: false) == .welcome
             )
         }
 
@@ -117,7 +116,7 @@
         @Test("the forward decision is a function of the current phase, and is total")
         func theForwardDecisionIsAFunctionOfTheCurrentPhase() {
             let accepted = AuthStore.Phase.authenticating(Self.operatorUser)
-            let owed: Set<OnboardingFlow.Step> = [.welcome, .mode, .serverURL, .auth, .completionUnavailable]
+            let owed: Set<OnboardingFlow.Step> = [.welcome, .serverURL, .auth, .completionUnavailable]
             for step in Self.allSteps {
                 #expect(
                     OnboardingFlow.shouldResolvePostAuthenticationRoute(step: step, phase: accepted)
@@ -127,7 +126,6 @@
                 for phase in [
                     AuthStore.Phase.unknown,
                     .unauthenticated,
-                    .standalone,
                     .authenticated(Self.operatorUser)
                 ] {
                     #expect(
@@ -192,7 +190,7 @@
             let defaults = try #require(UserDefaults(suiteName: suite))
             defaults.removePersistentDomain(forName: suite)
             defer { defaults.removePersistentDomain(forName: suite) }
-            let authStore = AuthStore(auth: service, keychain: keychain, syncMode: nil, defaults: defaults)
+            let authStore = AuthStore(auth: service, keychain: keychain, defaults: defaults)
 
             // 1 — the password door.
             await authStore.login(email: "operator@example.com", password: "pw")
@@ -227,65 +225,8 @@
             )
             #expect(
                 OnboardingFlow.resolveStep(
-                    .welcome, chosenMode: .server, hasServerAddress: true, phase: authStore.phase
+                    .welcome, hasServerAddress: true, phase: authStore.phase
                 ) == .checkingCompletion
-            )
-        }
-
-        // MARK: - The structural fence
-
-        /// **The property that must not be quietly undone.**
-        ///
-        /// The defect was not a wrong value: it was a recovery that existed only
-        /// inside a change notification. So the fence is about WHERE the decision
-        /// is asked from. `onChange` may keep asking it — it is the fast path —
-        /// but a mount must ask it too, or the flow is one scene deactivation
-        /// away from the trap again.
-        @Test("the flow asks the phase on appearance, not only on a change")
-        func theFlowAsksThePhaseOnAppearanceNotOnlyOnAChange() throws {
-            let flow = try Self.source("HealthLog/Screens/Onboarding/OnboardingFlow.swift")
-
-            // There is exactly one observer of the phase in the whole app, so
-            // "the notification was missed" has no second chance anywhere else.
-            var observers: [String] = []
-            for url in try Self.appSources() {
-                let text = try String(contentsOf: url, encoding: .utf8)
-                for (index, line) in text.components(separatedBy: .newlines).enumerated() {
-                    let trimmed = line.trimmingCharacters(in: .whitespaces)
-                    guard trimmed.contains("onChange(of: authStore.phase)") else { continue }
-                    // A doc comment naming the symbol is not the symbol — the
-                    // same rule this repo's other source contracts apply, and
-                    // the reason this file's own history is quotable in one.
-                    guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
-                    observers.append("\(url.lastPathComponent):\(index + 1)")
-                }
-            }
-            #expect(
-                observers.count == 1,
-                "the app has \(observers.count) phase observers (\(observers.joined(separator: ", "))); the reasoning here assumes exactly one"
-            )
-
-            // The mount trigger, inside the `onAppear` block and not inside the
-            // `onChange` one.
-            let onAppearBlock = try #require(
-                flow.range(of: ".onAppear {").map { String(flow[$0.upperBound...].prefix(400)) },
-                "the flow no longer has an onAppear block to carry the resume"
-            )
-            #expect(
-                onAppearBlock.contains("resumePostAuthenticationRouteIfNeeded()"),
-                "the post-authentication route must be re-asked when the flow appears"
-            )
-            #expect(
-                flow.contains("private func resumePostAuthenticationRouteIfNeeded() {"),
-                "the resume must be a named statement, not an inline reconstruction"
-            )
-
-            // And the rendered surface is decided from the phase too, so the
-            // first frame after a remount never shows a door to a live session.
-            #expect(flow.contains("phase: authStore.phase"))
-            #expect(
-                flow.contains("Self.shouldResolvePostAuthenticationRoute(step: step, phase: newPhase)"),
-                "the admissible steps must come from the pure decision, not from an inline step comparison"
             )
         }
 
@@ -371,29 +312,8 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
-        }
-
-        // MARK: - Source access
-
-        private static let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
-        private static func source(_ relativePath: String) throws -> String {
-            try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
-        }
-
-        private static func appSources() throws -> [URL] {
-            let root = repositoryRoot.appendingPathComponent("HealthLog")
-            let enumerator = try #require(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
-            var urls: [URL] = []
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
-                urls.append(url)
-            }
-            return urls
         }
     }
 

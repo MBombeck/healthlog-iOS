@@ -1,6 +1,6 @@
 import Foundation
 
-// X4 (1.3, #138 / #77) — hourly sums of the summed types for the server's
+// Hourly sums of the summed types for the server's
 // same-time baseline.
 //
 // Server contract, `MBombeck/HealthLog` `release/v1.43.0` (`d06ce3604`,
@@ -140,7 +140,7 @@ public struct HealthKitHourlyStatsRead: Sendable, Equatable {
 }
 
 /// How much history one pass may give the hourly backfill. Built from the
-/// pass's history budget (W2): only triggers that may walk history at all get
+/// pass's history budget: only triggers that may walk history at all get
 /// one, so a short wake or an observer delivery never pays for it.
 public struct HourlyStatsBackfillAllowance: Sendable {
     /// Closed days one run may read and post.

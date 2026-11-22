@@ -5,7 +5,7 @@
     import Foundation
     @testable import HealthLog
 
-    /// **Phase 09 / plan 09-05 — an open census, with a thread column.**
+    /// **An open census, with a thread column.**
     ///
     /// The claim 09-05 has to support is "the persistent outbox is opened
     /// exactly once, and not before the app drew". Both halves are counts, not
@@ -43,7 +43,7 @@
             }
         }
 
-        /// 1.2 V5 — suspends until at least `count` opens were recorded. The
+        /// Suspends until at least `count` opens were recorded. The
         /// open runs on a detached executor, so a yield budget on the caller's
         /// executor was a race under load (seen in T4). This waits for the
         /// event itself; the suite's time limit is the only bound.
@@ -143,7 +143,7 @@
             return stream
         }
 
-        /// 1.2 V5 — suspends until the bootstrap subscribed at least `count`
+        /// Suspends until the bootstrap subscribed at least `count`
         /// times. Event-driven for the same reason as
         /// ``Phase09OutboxOpenLedger/waitForOpens(atLeast:)``.
         func waitForSubscriptions(atLeast count: Int) async {
@@ -214,7 +214,7 @@
     /// come true and returns whether it did. Callers expect `false` ("nothing
     /// happened"). A positive probe belongs on ``phase09AwaitCondition(timeout:_:)``.
     ///
-    /// T1 (1.4): the window is time, no longer 2,000 yields. Under load a yield
+    /// The window is time, no longer 2,000 yields. Under load a yield
     /// count runs out in microseconds, before the producer has been scheduled
     /// at all. For a positive probe that read "not yet" as "never"
     /// (`StoreLoadingTruthTests`, red after 0.057 s); for a negative probe it

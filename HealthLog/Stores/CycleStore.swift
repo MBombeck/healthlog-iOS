@@ -6,15 +6,14 @@ import Observation
 /// Loads calendar / cycles / profile via ``CycleRepository`` (SWR cache-first)
 /// and exposes the server-authoritative ``CycleVerdictDTO`` + ``CyclePredictionDTO``.
 ///
-/// **Z1 (#72) — forecast and judgement part ways here.** Offline the on-device
+/// **Forecast and judgement part ways here.** Offline the on-device
 /// ``CyclePredictionEngine`` still fills the FORECAST (labelled `.onDevice`);
 /// the VERDICT is restored from the last one the server sent, dated, and never
 /// recomputed — see `CycleStore+Verdict.swift`.
 ///
 /// **Gated.** Every load is a no-op unless ``CycleGate/isCycleTrackingAvailable``
-/// is true (which is itself hard-gated behind `FeatureFlag.cycleTracking`,
-/// default OFF). A `403 cycle.disabled` flips ``isDisabled`` so the surface can
-/// render a clean disabled state instead of an error. No UI is wired yet.
+/// is true. A `403 cycle.disabled` flips ``isDisabled`` so the surface can
+/// render a clean disabled state instead of an error.
 @MainActor
 @Observable
 public final class CycleStore {
@@ -30,7 +29,7 @@ public final class CycleStore {
     public private(set) var insightsError: String?
     public private(set) var isLoadingInsights = false
     private var hasAttemptedInsights = false
-    /// **Z1 (#72) — the cycle VERDICT the UI renders, and when the server made
+    /// **The cycle VERDICT the UI renders, and when the server made
     /// it.** Always server-computed: `state`, `phase` and `overdueDays` are
     /// never derived on the device (the server resolves "today" from the profile
     /// timezone, which this device may not have). Offline this holds the last
@@ -47,15 +46,15 @@ public final class CycleStore {
     /// next start). It may not produce a ``verdict`` — that is the Z1 cut
     /// between forecast and judgement.
     public private(set) var prediction: CyclePredictionDTO?
-    /// CU-25 (#72) — where ``prediction`` came from; `nil` when there is none.
+    /// Where ``prediction`` came from; `nil` when there is none.
     /// See ``CyclePredictionProvenance``.
     public private(set) var predictionProvenance: CyclePredictionProvenance?
-    /// On-device prediction (offline / standalone parity path). Set when the
+    /// On-device prediction (offline parity path). Set when the
     /// server prediction is unavailable, and — since CU-25 — actually bridged
     /// into ``prediction`` (labelled) rather than computed and rendered by
     /// nothing.
     public private(set) var offlinePrediction: CyclePredictionEngine.Prediction?
-    /// CU-25 (#72) — day keys the user answered "no, not a period start" for.
+    /// Day keys the user answered "no, not a period start" for.
     /// In memory only: a date on which someone declined a period prompt is
     /// cycle data, and `UserDefaults` is for UI prefs, not health data.
     public private(set) var flowReconciliationDeclined: Set<String> = []
@@ -136,7 +135,7 @@ public final class CycleStore {
     /// Stop + reset the cycle importer on logout / user-change so the next user
     /// starts from a clean anchor — AND drop the in-memory cycle state.
     ///
-    /// **v0.14.8 W3 (AUDIT-SECURITY-B175 H-1):** this method existed but was
+    /// This method existed but was
     /// never called from `performFullLocalLogout`, so the cycle HK import
     /// observer kept running under the next user's token (device cycle samples
     /// uploaded into the wrong account) and the long-lived container store kept
@@ -162,7 +161,7 @@ public final class CycleStore {
     /// logout-path sweep — the store previously survived logout fully
     /// populated).
     ///
-    /// N5.6 — this store holds NO long-lived tasks today; if a revalidate-task
+    /// This store holds NO long-lived tasks today; if a revalidate-task
     /// pattern is ever added, hold + cancel the handle here (copy the
     /// `DerivedInsightsStore.clearOnLogout()` shape).
     public func clearOnLogout() {
@@ -510,9 +509,9 @@ public final class CycleStore {
         isLoading = true
         defer { isLoading = false }
 
-        // Offline / standalone → skip the network entirely. The FORECAST is
+        // Offline → skip the network entirely. The FORECAST is
         // recomputed on-device (labelled); the VERDICT is not — it is restored
-        // from the last one the server sent, dated (Z1 / #72).
+        // from the last one the server sent, dated.
         if availability?.isReachable == false {
             await restoreStoredVerdict()
             await computeOfflinePrediction()
@@ -565,7 +564,7 @@ public final class CycleStore {
         }
     }
 
-    // MARK: - Verdict plumbing (Z1 / #72)
+    // MARK: - Verdict plumbing
 
     /// The single publishing seam for the cycle verdict, so the plumbing can
     /// live in `CycleStore+Verdict.swift` (file-length discipline) without
@@ -575,7 +574,7 @@ public final class CycleStore {
         verdictIsRestored = restored
     }
 
-    /// CU-25 (#72) — the single publishing seam for the on-device forecast, so
+    /// The single publishing seam for the on-device forecast, so
     /// ``computeOfflinePrediction(today:)`` can live in its own file without
     /// relaxing `private(set)` on the app's most sensitive store.
     func publishOfflinePrediction(
@@ -588,7 +587,7 @@ public final class CycleStore {
         predictionProvenance = provenance
     }
 
-    /// CU-25 (#72) — remember a declined period prompt for `date` (in memory
+    /// Remember a declined period prompt for `date` (in memory
     /// only, see ``flowReconciliationDeclined``).
     public func declineFlowReconciliation(for date: String) {
         flowReconciliationDeclined.insert(date)

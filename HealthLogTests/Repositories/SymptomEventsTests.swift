@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping file_length type_body_length
 
-/// **SYMPTOM (1.5.0, #144, server #1237)** — symptoms on an illness
+/// Symptoms on an illness
 /// episode: the wire contract of `/api/symptoms/events` and
 /// `/api/symptoms/definitions`, the read by link (never by time span), the
 /// linking rule, the partial edit, the refusals, the placement gate (server
@@ -117,7 +117,7 @@ struct SymptomEventsTests {
         #expect(bare.intensity == 0)
     }
 
-    // MARK: - Read by link (server #1237)
+    // MARK: - Read by link
 
     /// The fixture of #1237: a long-running condition and a short infection
     /// overlap. Each holds its own filed symptom, and one symptom inside both
@@ -381,14 +381,13 @@ struct SymptomEventsTests {
 
     // MARK: - Placement gate (Regel 10)
 
-    @Test("only with a paired server that filters by link (v1.43.4 or later)")
+    @Test("only with a server that filters by link (v1.43.4 or later)")
     func placementGate() {
-        #expect(!EpisodeSymptomsSection.isAvailable(isPaired: true, serverVersion: nil))
-        #expect(!EpisodeSymptomsSection.isAvailable(isPaired: true, serverVersion: "1.43.3"))
-        #expect(!EpisodeSymptomsSection.isAvailable(isPaired: true, serverVersion: "1.40.0"))
-        #expect(EpisodeSymptomsSection.isAvailable(isPaired: true, serverVersion: "1.43.4"))
-        #expect(EpisodeSymptomsSection.isAvailable(isPaired: true, serverVersion: "1.47.0"))
-        #expect(!EpisodeSymptomsSection.isAvailable(isPaired: false, serverVersion: "1.47.0"))
+        #expect(!EpisodeSymptomsSection.isAvailable(serverVersion: nil))
+        #expect(!EpisodeSymptomsSection.isAvailable(serverVersion: "1.43.3"))
+        #expect(!EpisodeSymptomsSection.isAvailable(serverVersion: "1.40.0"))
+        #expect(EpisodeSymptomsSection.isAvailable(serverVersion: "1.43.4"))
+        #expect(EpisodeSymptomsSection.isAvailable(serverVersion: "1.47.0"))
     }
 
     // MARK: - Section state

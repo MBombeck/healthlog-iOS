@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// W-B180 — pure layout decisions behind the hypnogram timeline.
+    /// Pure layout decisions behind the hypnogram timeline.
     ///
     /// RCA "alle Balken kleben rechts": summary-shaped sources (WHOOP) store
     /// one row per stage with `measuredAt = sleep end`, so the reconstructed

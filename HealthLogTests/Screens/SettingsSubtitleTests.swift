@@ -62,7 +62,7 @@ struct SettingsSubtitleTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: five rows still carry the U7 nil
+            five rows still carry the U7 nil
 
             R5-A1 supersedes the U7 decision BY NAME: on a hub row the subtitle no longer \
             „falls when it only rephrases the title" — it gets rewritten until it carries \
@@ -89,7 +89,7 @@ struct SettingsSubtitleTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: middle-dot and prose subtitles remain
+            middle-dot and prose subtitles remain
 
             I3. The register is one short comma-separated clause. „Profil · Passkeys" is the \
             operator's own example of what reads machine-written. Offen: \(violations)
@@ -119,7 +119,7 @@ struct SettingsSubtitleTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the Mehr tab has the same inconsistency
+            the Mehr tab has the same inconsistency
 
             R5-A1 covers both hub surfaces, because they are one experience to the person \
             using them: the „Mehr" tab and the settings hub are the two places in the app \
@@ -143,9 +143,9 @@ struct SettingsSubtitleTests {
         #expect(
             // 1.0.3 (App Review 1.4.1) — `medical_sources` inserted after `vorsorge`.
             MoreScreen.Layout.renderedRows.map(\.id) == [
-                "about_me", "vorsorge", "medical_sources", "labs", "illness", "documents",
+                "about_me", "vorsorge", "medical_sources", "labs", "illness", "seizures", "documents",
                 "mental_wellbeing", "cycle", "cycle_settings", "nutrition",
-                "environment", "personal_records", "achievements", "workouts",
+                "environment", "timeline", "personal_records", "achievements", "workouts",
                 "measurements", "sign_out", "delete_account"
             ]
         )

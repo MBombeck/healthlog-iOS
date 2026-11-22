@@ -1,6 +1,6 @@
 import Foundation
 
-/// **A360 H1/H2 (v0156)** — the metric/correlation context the user was looking at
+/// **A360 H1/H2** — the metric/correlation context the user was looking at
 /// when they opened the Coach. Mirrors the web `CoachLaunchScope`
 /// (`src/lib/insights/coach-launch-context.tsx`): a primary `metric`, optional
 /// `also` sources (a correlation card spans two metrics), and an optional
@@ -184,7 +184,7 @@ extension MetricKind {
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types have no dedicated coach scope source
+             // v1.25 clinical types have no dedicated coach scope source
              // server-side (surfaces.coachSnapshot == false) → all-source snapshot.
              .painNRS, .gripStrength, .waistCircumference, .waistToHeight,
              // Build 3 / item 3.3 — the 21 decoder catch-up types carry no
@@ -196,10 +196,11 @@ extension MetricKind {
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity,
              // Build 7 / item 7.3 — mood has no dedicated coach-scope source
              // server-side → all-source snapshot.
              .mood,
-             // Audit B-4 — no dedicated coach-scope source for either; the
+             // No dedicated coach-scope source for either; the
              // unnamed kind must never narrow a snapshot to a token the server
              // could not resolve.
              .audioExposureEvent, .unknown:

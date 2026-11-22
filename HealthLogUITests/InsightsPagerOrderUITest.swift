@@ -26,7 +26,7 @@ final class InsightsPagerOrderUITest: XCTestCase {
 
     func test_pager_page_id_sequence_is_folded() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot.
+        // Network-free hermetic boot.
         _ = app.launchHermeticAndWaitForDashboard(timeout: 60)
         Thread.sleep(forTimeInterval: 2)
 

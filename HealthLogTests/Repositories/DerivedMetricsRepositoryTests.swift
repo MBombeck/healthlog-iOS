@@ -79,7 +79,7 @@ struct DerivedMetricsRepositoryTests {
         let dto = try #require(try await repo.fetch(metric: "RECOVERY_SCORE"))
         #expect(dto.value?.score == 64)
         #expect(dto.value?.trendDelta == 7)
-        // 1.4 B4 — the "vs your recent baseline" line belonged to the deleted
+        // The "vs your recent baseline" line belonged to the deleted
         // "More from your data" text lane; only the decode is pinned here.
     }
 
@@ -274,7 +274,7 @@ struct DerivedMetricsRepositoryTests {
         // The missing input decodes as nil-value (never fabricated).
         #expect(contributors.first { $0.key == "respiratory" }?.value == nil)
         #expect(contributors.first { $0.key == "rhr" }?.value == 90)
-        // v0.14.3 F4 — rankByImpact hides null-value rows; the decoded DTO still
+        // rankByImpact hides null-value rows; the decoded DTO still
         // carries all 5 (the missing input is never fabricated, asserted above),
         // but the ranked view drops "respiratory" so no empty "—" row shows.
         let ranked = WellnessScorePresentation.rankedContributors(dto)
@@ -354,7 +354,7 @@ struct DerivedMetricsRepositoryTests {
         )
         // Catalog resolves to the host locale; the window (30) + source come
         // straight from the server provenance, never fabricated.
-        // 1.4 B2 — reads as a sentence now ("täglich-Daten" was a grammar slip).
+        // Reads as a sentence now ("täglich-Daten" was a grammar slip).
         #expect([
             "From daily values over the last 30 days",
             "Aus Tageswerten der letzten 30 Tage"
@@ -370,7 +370,7 @@ struct DerivedMetricsRepositoryTests {
         #expect(line == String(localized: "insights.provenance.window \(90)"))
     }
 
-    // MARK: - W-B187 #29: recovery source authority (WHOOP-native vs computed)
+    // MARK: - Recovery source authority (WHOOP-native vs computed)
 
     /// Builds a RECOVERY_SCORE envelope with the given provenance `inputs`, so the
     /// source-authority resolvers can be exercised off a realistic DTO.
@@ -445,7 +445,7 @@ struct DerivedMetricsRepositoryTests {
         #expect(InsightsDerivedCopy.caveat(for: readiness) == InsightsDerivedCopy.caveat(for: "READINESS"))
     }
 
-    // MARK: - D1: per-score assessment (Einschätzung)
+    // MARK: - Per-score assessment (Einschätzung)
 
     @Test("fetch — decodes the additive per-score assessment (text + source + updatedAt)")
     func fetchDecodesAssessment() async throws {

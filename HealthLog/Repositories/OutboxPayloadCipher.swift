@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// **v0.6.2 W-SEC-A (M-4).** AES-GCM round-trip helper for the SwiftData
+/// AES-GCM round-trip helper for the SwiftData
 /// `OutboxOperation.payload` blob.
 ///
 /// ## Why this exists
@@ -68,7 +68,7 @@ public struct OutboxPayloadCipher: Sendable {
     public static let versionTag: UInt8 = 0x02
 
     /// Keychain account under which the per-install AES-GCM key lives.
-    /// Mirrored as `KeychainKey.outboxPayloadKey` (v0.6.2.3 F3-SEC) so
+    /// Mirrored as `KeychainKey.outboxPayloadKey` so
     /// the logout + account-deletion paths can wipe the key by name
     /// without taking a dependency on this type from the `Stores/` layer.
     /// Drift between the two constants would strand ciphertext rows
@@ -129,7 +129,9 @@ public struct OutboxPayloadCipher: Sendable {
             throw CipherError.unrecognizedFormat
         }
         let body = ciphertext.dropFirst()
-        let key = try fetchOrCreateKey()
+        // Reading never creates a key: a fresh one could not open this blob,
+        // and writing it would replace the key that can.
+        let key = try existingKey()
         let box = try AES.GCM.SealedBox(combined: body)
         return try AES.GCM.open(box, using: key)
     }
@@ -147,7 +149,7 @@ public struct OutboxPayloadCipher: Sendable {
     /// Returns the persisted 256-bit symmetric key, generating + persisting
     /// one on first use.
     ///
-    /// **Concurrency contract (v0.7.0 W-SEC-M-4):** two writers entering
+    /// **Concurrency contract:** two writers entering
     /// this method simultaneously *before* a key has been persisted used
     /// to each call `SymmetricKey(size: .bits256)` and each call
     /// `keychain.setData(...)`. Because `KeychainStore.setData` does
@@ -177,18 +179,14 @@ public struct OutboxPayloadCipher: Sendable {
     ///     gates align.
     public func fetchOrCreateKey() throws -> SymmetricKey {
         // Fast path — already persisted. Lock-free read.
-        if let existing = keychain.getData(forKey: keyAccount), existing.count == 32 {
-            return SymmetricKey(data: existing)
-        }
+        if let existing = try persistedKey() { return existing }
         // Slow path — serialise the read-or-create branch. Second
         // entrant re-checks the keychain under the lock and returns the
         // first entrant's persisted key, so only one random key is ever
         // generated per install.
         Self.firstCallLock.lock()
         defer { Self.firstCallLock.unlock() }
-        if let existing = keychain.getData(forKey: keyAccount), existing.count == 32 {
-            return SymmetricKey(data: existing)
-        }
+        if let existing = try persistedKey() { return existing }
         // First-use: generate a fresh 256-bit random key via the system
         // CSPRNG. `SymmetricKey(size:)` defers to `SecRandomCopyBytes` /
         // `CCRandomGenerateBytes` under the hood, so we don't reach for
@@ -199,8 +197,37 @@ public struct OutboxPayloadCipher: Sendable {
         return key
     }
 
+    /// The persisted key, `nil` when the keychain says there is none.
+    ///
+    /// Throws ``CipherError/keyUnavailable(_:)`` when the keychain could not
+    /// answer. That must never be read as "no key": creating one then replaces
+    /// the real key (`setData` deletes before it adds) and every queued row
+    /// becomes unreadable for good.
+    private func persistedKey() throws -> SymmetricKey? {
+        switch keychain.readData(forKey: keyAccount) {
+        case let .found(data):
+            return data.count == 32 ? SymmetricKey(data: data) : nil
+        case .missing:
+            return nil
+        case let .unavailable(status):
+            throw CipherError.keyUnavailable(status)
+        }
+    }
+
+    /// The key for a read. Never creates one.
+    private func existingKey() throws -> SymmetricKey {
+        guard let key = try persistedKey() else { throw CipherError.keyMissing }
+        return key
+    }
+
     public enum CipherError: Error, Sendable, Equatable {
         case sealFailed
         case unrecognizedFormat
+        /// The keychain holds no key: what was sealed under an earlier one
+        /// cannot be opened any more.
+        case keyMissing
+        /// The keychain did not answer. Nothing is known about the key, so
+        /// nothing may be created, migrated or discarded on this answer.
+        case keyUnavailable(OSStatus)
     }
 }

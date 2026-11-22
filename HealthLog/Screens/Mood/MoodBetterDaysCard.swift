@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.1 — the **"Better days" board** on the Insights → Mood page. Renders
+/// The **"Better days" board** on the Insights → Mood page. Renders
 /// the server's `betterDays` factors (`GET /api/mood/insights`, server v1.11.5):
 /// one ranked, confidence-gated list folding the tag deltas AND the
 /// mood × health-metric correlations into "what is associated with your
@@ -21,8 +21,7 @@ struct MoodBetterDaysCard: View {
     let factors: [BetterDayFactor]
     /// Resolves a structured tag's label from the live catalog.
     @Environment(MoodTagCatalogStore.self) private var catalog
-    /// QoL-2 (A360-4) — gate the expand/collapse spring like the rest of the app.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Gate the expand/collapse spring like the rest of the app.
 
     @State private var expanded = false
 
@@ -36,15 +35,12 @@ struct MoodBetterDaysCard: View {
         if factors.isEmpty {
             EmptyView()
         } else {
-            HLCard {
+            // The title is back. The region heading above ("Was deine
+            // Stimmung prägt") names all three cards, and the two beside this
+            // one carry their own title; without one this card read as a
+            // stray list between them.
+            HLCard("mood.betterDays.title") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    // 1.4 B4 — the title is back. The region heading above
-                    // ("Was deine Stimmung prägt") names all three cards, and the
-                    // two beside this one carry their own title; without one this
-                    // card read as a stray list between them.
-                    Text("mood.betterDays.title")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleFactors) { factor in
                             MoodBetterDayRowView(
@@ -56,15 +52,8 @@ struct MoodBetterDaysCard: View {
                     }
 
                     if factors.count > Self.collapsedCap {
-                        Button {
-                            withAnimation(reduceMotion ? nil : HLMotion.spring) { expanded.toggle() }
-                        } label: {
-                            Text(expanded ? "Show fewer" : "Show more")
-                                .font(.hlSubhead.weight(.medium))
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("insights.mood.betterDays.toggle")
+                        MoodShowMoreLink(isExpanded: $expanded)
+                            .accessibilityIdentifier("insights.mood.betterDays.toggle")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,15 +105,13 @@ struct MoodBetterDayRowView: View {
     var body: some View {
         HStack(spacing: HLSpace.sm) {
             Image(systemName: resolvedSymbol)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .frame(width: 22, alignment: .center)
 
-            // 1.4 B2 — the arrow says the direction; the caption that spelled
+            // The arrow says the direction; the caption that spelled
             // it out under every row is VoiceOver's alone now.
             Text(resolvedLabel)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .lineLimit(1)
 
             Spacer(minLength: HLSpace.sm)

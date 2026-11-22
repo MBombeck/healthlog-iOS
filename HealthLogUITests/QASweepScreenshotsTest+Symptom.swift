@@ -1,6 +1,6 @@
 import XCTest
 
-/// **SYMPTOM (1.5.0, #144) — symptoms on an illness episode, photographed.**
+/// **Symptoms on an illness episode, photographed.**
 ///
 /// Opens the open Bronchitis (`-uitest-area-meds`), whose symptoms come from
 /// `SymptomFixtures` under `-uitest-symptom`: the section with its three

@@ -1,6 +1,6 @@
 import Foundation
 
-/// #115 · 1.3 — the server's day-to-day mood stability (`GET /api/mood/insights`
+/// The server's day-to-day mood stability (`GET /api/mood/insights`
 /// → `stability`, `src/lib/insights/mood-patterns.ts` `computeMoodStability`).
 /// The app used to compute its own score from the device-calendar daily means
 /// with a different formula (`(1 − sd/2)·100`, five bands); the server's is
@@ -44,7 +44,7 @@ public struct MoodStability: Equatable, Hashable, Sendable, Codable {
         public static let unknownFallback = Band.unknown
         public static let wireVocabulary: StaticString = "mood stability band"
 
-        /// `true` when the band warms the gauge marker (DESIGN-B §3.4).
+        /// `true` when the band warms the gauge marker.
         public var isFlagged: Bool {
             self == .veryVariable
         }

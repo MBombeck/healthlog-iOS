@@ -1,10 +1,11 @@
+import CryptoKit
 import Foundation
 import WatchConnectivity
 
 // MARK: - Phone-side WatchConnectivity coordinator
 
 ///
-/// **v0.12 P2 — watchOS companion.** Owns the iPhone end of the WC session.
+/// **watchOS companion.** Owns the iPhone end of the WC session.
 /// Pushes the latest `WatchSnapshot` to the watch (latest-wins application
 /// context) and receives `WatchAction`s the watch sends (durable
 /// `transferUserInfo`, or a live `sendMessage` when foregrounded), funnelling
@@ -20,24 +21,36 @@ final class WatchSessionCoordinator: NSObject {
     /// Perform a medication intake transition. Wired by `AppContainer` to
     /// `MedicationsStore.markIntakeQuick` (handles real + synth ids). Returns
     /// the honest outcome so the coordinator can ack the watch (WW/F2).
-    var onMarkIntake: ((_ intakeId: String, _ status: WatchIntakeStatus) async -> WatchAckOutcome)?
+    /// #9 — `at` is when the wrist was tapped; a durable transfer can arrive
+    /// hours later.
+    var onMarkIntake: ((_ intakeId: String, _ status: WatchIntakeStatus, _ at: Date) async -> WatchAckOutcome)?
 
     /// Quick-log a mood. Wired by `AppContainer` to `MoodStore.logReturningOutcome`.
     /// Returns the honest outcome so the coordinator can ack the watch (WW/F2).
-    var onLogMood: ((_ score: Int) async -> WatchAckOutcome)?
+    var onLogMood: ((_ score: Int, _ at: Date) async -> WatchAckOutcome)?
 
     /// Quick-capture a manual measurement. Wired by `AppContainer` to
     /// `MeasurementsStore.captureReturningOutcome` (the SAME path the app's
     /// `MeasureSheet` uses). Returns the honest outcome so the coordinator can
     /// ack the watch.
-    var onLogMeasurement: ((_ kind: WatchMeasurementKind, _ value: Double, _ secondary: Double?) async -> WatchAckOutcome)?
+    var onLogMeasurement: ((
+        _ kind: WatchMeasurementKind,
+        _ value: Double,
+        _ secondary: Double?,
+        _ at: Date
+    ) async -> WatchAckOutcome)?
+
+    /// #9 — the ``WatchOwnerHash`` of the signed-in account, `nil` while
+    /// signed out. Stamped into every snapshot and checked on every action.
+    var ownerHashProvider: (() -> String?)?
 
     /// Build the current snapshot on demand (activation / reachability /
     /// watch-state changes re-derive + push without waiting for a store
-    /// mutation).
-    var snapshotProvider: (() -> WatchSnapshot)?
+    /// mutation). `nil` from the closure means "nothing trustworthy to send
+    /// yet" (see ``WatchSnapshotPushGate``): the watch keeps what it has.
+    var snapshotProvider: (() -> WatchSnapshot?)?
 
-    /// **v0.15.2 W-WATCH-COMPLICATIONS** — supply the latest server health score
+    /// Supply the latest server health score
     /// + the newest measurement (formatted via the live unit prefs) to enrich
     /// the snapshot the watch-face score-ring + latest-measurement complications
     /// read. Wired by `AppContainer` AFTER the score / measurement / settings
@@ -46,12 +59,12 @@ final class WatchSessionCoordinator: NSObject {
     /// glance is absent (complication shows its em-dash placeholder).
     var scoreProvider: (() -> WatchSnapshot.HealthScoreGlance?)?
     var latestMeasurementProvider: (() -> WatchSnapshot.LatestMeasurement?)?
-    /// #115 B5 — the account's glucose unit, which the wrist enters glucose in.
+    /// The account's glucose unit, which the wrist enters glucose in.
     /// `nil` ⇒ mg/dL (wired after the settings store exists).
     var glucoseUnitProvider: (() -> GlucoseUnit)?
 
     private let session: WCSession?
-    /// A-SEC M-1 — route through the central `HLLog` (LogSanitizer-backed)
+    /// Route through the central `HLLog` (LogSanitizer-backed)
     /// instead of a raw `os.Logger`. The WC channel carries med-snapshot PHI,
     /// so a future debug log here would otherwise leak verbatim; `HLLog.watch`
     /// funnels every line through `LogSanitizer.redact()` like the rest of the app.
@@ -64,7 +77,7 @@ final class WatchSessionCoordinator: NSObject {
     /// still delivering the freshest state. Set while a coalesced push is
     /// pending; cleared when it fires.
     private var pushCoalesced = false
-    /// Build 273 (B3) — remembers the outcome per watch action id.
+    /// Remembers the outcome per watch action id.
     private let replayGuard = WatchActionReplayGuard()
 
     /// The last snapshot the coordinator *attempted* to push, recorded before
@@ -74,6 +87,11 @@ final class WatchSessionCoordinator: NSObject {
     /// cascade pushes the PHI-free placeholder. Not a functional dependency of
     /// the push itself.
     private(set) var lastPushedSnapshot: WatchSnapshot?
+
+    /// Whether the medication store has delivered a today list since sign-in.
+    /// The list arrives after the medications, and a snapshot built in that
+    /// gap shows zero doses (``WatchSnapshotPushGate``).
+    var hasSeenTodayIntakes = false
 
     override init() {
         session = WCSession.isSupported() ? .default : nil
@@ -101,7 +119,7 @@ final class WatchSessionCoordinator: NSObject {
         }
     }
 
-    /// **Privacy H4 (audit-v0162) — clear the watch on phone logout / account
+    /// **Privacy H4 — clear the watch on phone logout / account
     /// deletion.** Push the PHI-free ``WatchSnapshot/placeholder`` so the
     /// previous user's medication names, doses, mood and latest measurement stop
     /// rendering in the watch app and its complications after a phone-side sign-
@@ -115,6 +133,7 @@ final class WatchSessionCoordinator: NSObject {
     /// complication timelines to the empty glance. Best-effort — the underlying
     /// `push` swallows WC failures so the logout cascade always proceeds.
     func pushLogoutReset() {
+        hasSeenTodayIntakes = false
         push(.placeholder)
     }
 
@@ -122,7 +141,7 @@ final class WatchSessionCoordinator: NSObject {
     /// activation / reachability / watch-state callbacks where there's no burst
     /// to coalesce and we want the freshest paint at once).
     func pushCurrent() {
-        guard let snapshot = snapshotProvider?() else { return }
+        guard let provider = snapshotProvider, let snapshot = provider() else { return }
         push(snapshot)
     }
 
@@ -139,26 +158,38 @@ final class WatchSessionCoordinator: NSObject {
     }
 
     private func handle(_ action: WatchAction) async {
-        // Build 273 (B3) — at-least-once transport: a redelivered action is
+        // At-least-once transport: a redelivered action is
         // answered with the outcome it already got, never handled twice.
         if let prior = replayGuard.priorOutcome(for: action.id) {
             log.info("watch action redelivered — answered from memory")
             sendAck(WatchAck(id: action.id, outcome: prior))
             return
         }
-        let outcome: WatchAckOutcome = switch action.kind {
-        case let .markIntake(intakeId, status, _):
-            await onMarkIntake?(intakeId, status) ?? .failed
-        case let .logMood(score, _):
-            await onLogMood?(score) ?? .failed
-        case let .logMeasurement(kind, value, secondary, _):
-            await onLogMeasurement?(kind, value, secondary) ?? .failed
-        }
+        let outcome = await outcome(of: action)
         // WW/F2 — ack the watch so it shows honest state (saved / will-sync /
         // couldn't-save) instead of a blind optimistic check. Durable so it
         // survives an unreachable watch.
         replayGuard.remember(action.id, outcome: outcome)
         sendAck(WatchAck(id: action.id, outcome: outcome))
+    }
+
+    /// What the phone did with `action`. #9 — an action tapped on another
+    /// account's snapshot is not written into this one; the wrist shows
+    /// "couldn't save". The tap time is what the entry records.
+    func outcome(of action: WatchAction) async -> WatchAckOutcome {
+        if let tappedFor = action.ownerHash, tappedFor != ownerHashProvider?() {
+            log.warning("watch action for another account — dropped")
+            return .failed
+        }
+        let at = min(action.tappedAt, Date())
+        return switch action.kind {
+        case let .markIntake(intakeId, status, _):
+            await onMarkIntake?(intakeId, status, at) ?? .failed
+        case let .logMood(score, _):
+            await onLogMood?(score, at) ?? .failed
+        case let .logMeasurement(kind, value, secondary, _):
+            await onLogMeasurement?(kind, value, secondary, at) ?? .failed
+        }
     }
 
     /// Send a phone→watch acknowledgement. Durable `transferUserInfo`; failure
@@ -205,5 +236,33 @@ extension WatchSessionCoordinator: WCSessionDelegate {
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in self.pushCurrent() }
+    }
+}
+
+// MARK: - Push gate
+
+/// Whether the phone may push a snapshot built from the medication store now.
+///
+/// A process woken in the background (HealthKit delivery, silent push, a watch
+/// action) has not loaded the store yet. A snapshot built from it carries zero
+/// doses, a fresh `generatedAt` and `signedIn: true`, which the watch reads as
+/// "all done today". Signed out there is nothing to protect: the placeholder is
+/// the truth.
+enum WatchSnapshotPushGate {
+    static func allowsPush(signedIn: Bool, hasLoadedMedications: Bool, hasLoadedTodayList: Bool) -> Bool {
+        !signedIn || (hasLoadedMedications && hasLoadedTodayList)
+    }
+}
+
+// MARK: - Owner hash
+
+/// **#9 — which account a watch action was tapped for.** An opaque hash of
+/// the user id, so the watch never holds the id itself. Stable per account,
+/// different across accounts, and meaningless off the phone.
+enum WatchOwnerHash {
+    static func of(userID: String?) -> String? {
+        guard let id = userID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+        let digest = SHA256.hash(data: Data(("hl.watch.owner|" + id).utf8))
+        return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 }

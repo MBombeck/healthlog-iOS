@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **08-18 — the accepted v1.37.20 measurement-reminder contract, frozen before adoption.**
+/// **The accepted v1.37.20 measurement-reminder contract, frozen before adoption.**
 ///
 /// Pinned to the immutable tag `v1.37.20` (commit
 /// `3a2c0e757e5f0a4ea8bf6be899b3a04547ddd423`), whose `docs/api/openapi.yaml`
@@ -24,8 +24,8 @@ import Testing
 ///
 /// - ``acceptedContractHasNoIOSConsumer()`` is the behavioural RED that Plan
 ///   08-19 closes. It is behavioural rather than a build failure because it
-///   probes the decoded row through `Mirror` and reads the repository as text;
-///   a clause written as `row.skipCount` could not compile today, and
+///   probes the decoded row through `Mirror`; a clause written as
+///   `row.skipCount` could not compile today, and
 ///   `assert-behavioral-red.sh` rightly refuses a compile error as proof of
 ///   nothing.
 /// - The other three pin what the contract *says* and must pass now and after
@@ -95,13 +95,13 @@ struct MeasurementReminderV13720ContractTests {
 
     /// Every clause below is a thing the accepted contract publishes and the iOS
     /// side does not yet consume. None of them asserts a *value* the server
-    /// might change; they assert that a field or route the tag publishes has
-    /// somewhere to land.
+    /// might change; they assert that a field the tag publishes has somewhere
+    /// to land. The routes are exercised in `MeasurementReminderRepositoryTests`.
     @Test("The accepted skip, snooze and ledger contract reaches an iOS consumer")
     func acceptedContractHasNoIOSConsumer() throws {
         var violations: [String] = []
 
-        // 1. The three additive DTO fields. All three are in the published
+        // The three additive DTO fields. All three are in the published
         //    `required` list, so every reminder the server sends carries them —
         //    a client that drops them is discarding truth on every list load.
         let skipped = try Self.reminder("reminderSkipped")
@@ -123,23 +123,7 @@ struct MeasurementReminderV13720ContractTests {
         Self.record(pristine, "lastSkippedAt", .null, "reminderPristine", into: &violations)
         Self.record(pristine, "skipCount", .exactly("0"), "reminderPristine", into: &violations)
 
-        // 2. The three routes. Read from the repository's own source text with
-        //    comments stripped, so the doc block that lists today's five routes
-        //    cannot be mistaken for an implementation of tomorrow's three.
-        let repository = try Self.strippedSource("HealthLog/Repositories/MeasurementReminderRepository.swift")
-        for route in ["/skip", "/snooze", "/history"] where !repository.contains(route) {
-            violations.append("MeasurementReminderRepository calls no \(route) route")
-        }
-
-        // 3. The ledger row model. The server publishes `MeasurementReminderEvent`
-        //    with six required fields; iOS has no type to decode it into, which
-        //    is why `GET /history` has no caller.
-        let models = try Self.strippedSource("HealthLog/Models/MeasurementReminderRow.swift")
-        if !models.contains("MeasurementReminderEvent") {
-            violations.append("no MeasurementReminderEvent model exists to decode a ledger row")
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: accepted skip/snooze/history contract has no iOS consumer")
+        #expect(violations.isEmpty, "accepted skip/snooze/history contract has no iOS consumer")
     }
 
     // MARK: - What the frozen contract says (passes now and after adoption)
@@ -380,24 +364,6 @@ struct MeasurementReminderV13720ContractTests {
             collected.append(line)
         }
         return collected.joined(separator: "\n")
-    }
-
-    /// Swift source with `//` comments removed. The repository's doc block lists
-    /// today's routes in prose, so a clause asking "is there a /skip call" would
-    /// otherwise be answered by a sentence. Block comments are not stripped and
-    /// do not need to be: the assertion below proves the file has none, which
-    /// also keeps this helper clear of the ordering defect that truncates a file
-    /// when a `/*` sits inside a `//` comment.
-    static func strippedSource(_ relativePath: String) throws -> String {
-        let source = try String(contentsOf: repositoryRoot().appendingPathComponent(relativePath), encoding: .utf8)
-        #expect(!source.contains("/*"), "\(relativePath) gained a block comment; the line-only stripper is no longer sound")
-        return source
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { line -> Substring in
-                guard let marker = line.range(of: "//") else { return line }
-                return line[line.startIndex ..< marker.lowerBound]
-            }
-            .joined(separator: "\n")
     }
 
     static func reminder(_ scenario: String) throws -> MeasurementReminderRow {

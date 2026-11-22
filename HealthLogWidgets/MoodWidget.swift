@@ -2,7 +2,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// **v0.10.0 W-Mood-B — interactive mood widget.**
+/// **Interactive mood widget.**
 ///
 /// Home-screen (`systemSmall` / `systemMedium`) + Lock-Screen
 /// (`accessoryRectangular` / `accessoryCircular`). Merges the *glance* and the
@@ -123,7 +123,7 @@ private struct MoodWidgetView: View {
     /// quick-log prompt and tapping anywhere opens the in-app mood
     /// quick-entry sheet via `widgetURL`. No inline `Button(intent:)`s here.
     private var homeSmall: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.stackSpacing) {
             header
             Spacer(minLength: 0)
             glanceLine
@@ -145,10 +145,11 @@ private struct MoodWidgetView: View {
         .labelStyle(.titleAndIcon)
         .foregroundStyle(LAColor.accent)
         .lineLimit(1)
+        .widgetLayer(.actionButton, in: .mood)
     }
 
     private var homeMedium: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.stackSpacing) {
             header
             glanceLine
             Spacer(minLength: 0)
@@ -158,22 +159,14 @@ private struct MoodWidgetView: View {
     }
 
     private var header: some View {
-        Label {
-            Text("widget.mood.header")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(LAColor.textSecondary)
-        } icon: {
-            Image(systemName: "face.smiling")
-                .foregroundStyle(LAColor.accent)
-        }
-        .labelStyle(.titleAndIcon)
+        WidgetHeader(title: Text("widget.mood.header"), symbol: "face.smiling", surface: .mood)
     }
 
     /// "Good · logged 14:20" when there's a today entry, else the quick-log
     /// prompt.
     @ViewBuilder private var glanceLine: some View {
         if let mood = entry.recentMood, mood.isToday() {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
                 Label {
                     Text(moodLevelName(mood.score))
                         .font(.headline)
@@ -181,6 +174,7 @@ private struct MoodWidgetView: View {
                 } icon: {
                     Image(systemName: MoodGlyph.symbol(for: mood.score))
                         .foregroundStyle(LAColor.text)
+                        .widgetLayer(.statusSymbol, in: .mood)
                 }
                 Text(loggedLine(mood.loggedAt))
                     .font(.caption)
@@ -200,16 +194,17 @@ private struct MoodWidgetView: View {
     /// button gets a `minHeight: 44` HIG-compliant tap target (the small
     /// family can't fit five and uses the whole-tile `widgetURL` instead).
     private var faceRow: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: WidgetMetrics.lineSpacing) {
             ForEach(1 ... 5, id: \.self) { score in
                 Button(intent: WidgetIntents.logMood(score: score)) {
                     Image(systemName: MoodGlyph.symbol(for: score))
                         .font(.title3)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: WidgetMetrics.minTapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(LAColor.text)
+                .widgetLayer(.actionButton, in: .mood)
                 .accessibilityLabel(faceA11yLabel(score))
             }
         }
@@ -224,12 +219,13 @@ private struct MoodWidgetView: View {
     // MARK: Lock-Screen accessories (glanceable, non-interactive)
 
     private var accessoryRectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
             if let mood = entry.recentMood, mood.isToday() {
                 Label {
                     Text(moodLevelName(mood.score)).lineLimit(1)
                 } icon: {
                     Image(systemName: MoodGlyph.symbol(for: mood.score))
+                        .widgetLayer(.statusSymbol, in: .mood)
                 }
                 .font(.headline)
                 // Lock-screen accessory: the mood level (face + word) is PHI —
@@ -243,6 +239,7 @@ private struct MoodWidgetView: View {
                     Text("widget.mood.empty")
                 } icon: {
                     Image(systemName: "face.smiling")
+                        .widgetLayer(.statusSymbol, in: .mood)
                 }
                 .font(.headline)
             }
@@ -255,6 +252,7 @@ private struct MoodWidgetView: View {
             AccessoryWidgetBackground()
             Image(systemName: glyphForAccessory)
                 .font(.title2)
+                .widgetLayer(.statusSymbol, in: .mood)
                 // The face glyph encodes the mood level — redact on lock
                 // (QA-b198 Sec-L-3).
                 .privacySensitive()
@@ -272,7 +270,7 @@ private struct MoodWidgetView: View {
 
     private var accessoryLabel: Text {
         if let mood = entry.recentMood, mood.isToday() {
-            Text("widget.mood.header") + Text(": ") + Text(moodLevelName(mood.score))
+            Text("\(Text("widget.mood.header")): \(Text(moodLevelName(mood.score)))")
         } else {
             Text("widget.mood.empty")
         }

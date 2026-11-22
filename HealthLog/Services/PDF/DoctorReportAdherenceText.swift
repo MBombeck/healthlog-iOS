@@ -1,9 +1,9 @@
 import Foundation
 
-/// #115 · 1.2 — the doctor report's adherence wording (split from
+/// The doctor report's adherence wording (split from
 /// `DoctorReportSectionDrawer.swift` for the file-length budget).
 extension LocaleText {
-    /// #115 · 1.2 — the sentences that frame the server's adherence.
+    /// The sentences that frame the server's adherence.
     static func adherenceNotes(for block: DoctorReportSpec.AdherenceBlock, locale: ReportLocale) -> [String] {
         switch block.availability {
         case .unavailable:
@@ -78,7 +78,7 @@ struct DoctorReportAdherenceWindow {
 }
 
 extension LocaleText {
-    /// #126 P2 — the account line under the source note.
+    /// The account line under the source note.
     static func adherenceAccount(
         _ figure: DoctorReportSpec.AdherenceBlock.AccountFigure,
         windowDays: Int,

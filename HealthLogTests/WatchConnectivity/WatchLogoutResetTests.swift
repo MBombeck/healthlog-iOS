@@ -9,7 +9,7 @@
     #endif
     @testable import HealthLog
 
-    /// **Privacy H4 (audit-v0162) — watch snapshot wipe on logout.**
+    /// **Privacy H4 — watch snapshot wipe on logout.**
     ///
     /// The previous user's medication names / doses / mood / latest measurement
     /// lived in the paired watch's App Group `watch-snapshot.json` + complications

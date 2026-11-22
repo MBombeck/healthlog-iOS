@@ -17,11 +17,9 @@ final class OnboardingUITests: XCTestCase {
 
     @MainActor
     func testServerURLStepIsReachedFromWelcome() {
-        // v0.15 — server-connect is mandatory
-        // (`FeatureFlags.standaloneModeAvailable == false`): after the welcome
-        // CTA we land DIRECTLY on the server-URL step. The `ModeSelectionStep`
-        // fork is skipped, so neither the server-mode card nor the standalone
-        // card is presented — the only path forward is connecting a server.
+        // Server-connect is mandatory: after the welcome CTA we land DIRECTLY
+        // on the server-URL step — the only path forward is connecting a
+        // server.
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-skip-bootstrap"]
         app.launch()
@@ -36,12 +34,6 @@ final class OnboardingUITests: XCTestCase {
             "Server-URL field should be reached directly after Welcome"
         )
 
-        // No standalone door anywhere: the mode-selection fork must not appear.
-        XCTAssertFalse(
-            app.buttons["onboarding.modeStandalone"].exists,
-            "Standalone (use-without-a-server) option must be hidden"
-        )
-
         // Capture the server-mandatory onboarding for the audit record.
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "onboarding-server-mandatory"
@@ -49,7 +41,7 @@ final class OnboardingUITests: XCTestCase {
         add(shot)
     }
 
-    /// GH-iOS #27 — a server behind Cloudflare Access or Pangolin rejects the
+    /// A server behind Cloudflare Access or Pangolin rejects the
     /// address check unless its headers are set, so they unfold under
     /// "Advanced" on the server step, before the first request.
     @MainActor

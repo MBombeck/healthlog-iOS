@@ -7,7 +7,7 @@
         import AuthenticationServices
     #endif
 
-    /// **R1 — die Tests, die gefehlt haben.**
+    /// **Die Tests, die gefehlt haben.**
     ///
     /// b249 hat die eingebaute Serveradresse entfernt; seither kommt sie
     /// ausschliesslich aus `KeychainKey.serverURL`. Der Umbau war fuer den
@@ -24,7 +24,7 @@
     /// Adresse".
     @Suite("R1 — Installation ohne Serveradresse", .mockURLSession)
     struct NoServerRecoveryTests {
-        // MARK: - Erkennen (R1 §1)
+        // MARK: - Erkennen
 
         @MainActor
         @Suite("Erkennen: ohne Adresse fuehrt jeder Weg zur Adressfrage")
@@ -32,41 +32,26 @@
             @Test("Anmeldeschritt ohne Adresse wird zum Adress-Schritt")
             func authWithoutAddressBecomesServerURL() {
                 #expect(
-                    OnboardingFlow.resolveStep(.auth, chosenMode: .server, hasServerAddress: false) == .serverURL,
+                    OnboardingFlow.resolveStep(.auth, hasServerAddress: false) == .serverURL,
                     "Ohne Adresse darf kein Anmeldeversuch angeboten werden, von dem die App weiss, dass er scheitert."
-                )
-                // Auch wenn der Nutzer noch gar keinen Modus gewaehlt hat
-                // (Einladungslink, Wiedereintritt) gilt dieselbe Regel.
-                #expect(
-                    OnboardingFlow.resolveStep(.auth, chosenMode: nil, hasServerAddress: false) == .serverURL
                 )
             }
 
             @Test("Mit Adresse bleibt der Anmeldeschritt der Anmeldeschritt")
             func authWithAddressStays() {
                 #expect(
-                    OnboardingFlow.resolveStep(.auth, chosenMode: .server, hasServerAddress: true) == .auth
-                )
-            }
-
-            @Test("Auch ein alter Demo-Modus muss ohne Adresse zur Adressfrage")
-            func legacyDemoBranchRequiresAddress() {
-                // Historic installations may still decode `.demo` from
-                // UserDefaults. It no longer authorizes an embedded-login
-                // bypass; the ordinary configured-server flow wins.
-                #expect(
-                    OnboardingFlow.resolveStep(.auth, chosenMode: .demo, hasServerAddress: false) == .serverURL
+                    OnboardingFlow.resolveStep(.auth, hasServerAddress: true) == .auth
                 )
             }
 
             @Test("Kein anderer Schritt wird umgeleitet")
             func otherStepsUntouched() {
                 for step in [
-                    OnboardingFlow.Step.welcome, .mode, .serverURL,
+                    OnboardingFlow.Step.welcome, .serverURL,
                     .healthKit, .notifications, .aiSource, .anamnesis, .baselineProfile, .done
                 ] {
                     #expect(
-                        OnboardingFlow.resolveStep(step, chosenMode: .server, hasServerAddress: false) == step,
+                        OnboardingFlow.resolveStep(step, hasServerAddress: false) == step,
                         "Nur der Anmeldeschritt haengt an der Adressfrage."
                     )
                 }
@@ -84,11 +69,6 @@
                 )
             }
 
-            @Test("Standalone bleibt ausgenommen — dort ist 'keine Adresse' der Normalzustand")
-            func standaloneIsNotGated() {
-                #expect(RootView.needsServerAddressGate(phase: .standalone, hasServerAddress: false) == false)
-            }
-
             @Test("Vor der Anmeldung uebernimmt der Onboarding-Flow, nicht das Gate")
             func preAuthPhasesAreNotGated() {
                 let user = User(id: "u1", email: nil, username: nil, displayName: nil, createdAt: .now)
@@ -100,7 +80,7 @@
             }
         }
 
-        // MARK: - Die Uebernahme beim Update (R1 §5)
+        // MARK: - Die Uebernahme beim Update
 
         @MainActor
         @Suite("Update: bestehende Anmeldung ohne Adresse", .serialized)
@@ -126,18 +106,13 @@
             }
 
             @Test("Die Anmeldung ueberlebt das Update — und fuehrt trotzdem zur Adressfrage")
-            func sessionSurvivesAndIsRoutedToTheAddressQuestion() async throws {
+            func sessionSurvivesAndIsRoutedToTheAddressQuestion() async {
                 let keychain = upgradedInstallKeychain()
-                let suite = "hl.tests.r1.upgrade.\(UUID().uuidString)"
-                let defaults = try #require(UserDefaults(suiteName: suite))
-                defaults.removePersistentDomain(forName: suite)
-                let syncMode = SyncModeStore(defaults: defaults)
                 let env = AppEnvironment.resolve(keychain: keychain, bundle: Bundle(for: NoServerBundleAnchor.self))
                 let api = APIClient(environment: env, keychain: keychain, sessionConfiguration: .mock())
                 let store = AuthStore(
                     auth: AuthService(api: api, keychain: keychain, passkey: NoopPasskey()),
-                    keychain: keychain,
-                    syncMode: syncMode
+                    keychain: keychain
                 )
 
                 await store.bootstrap()
@@ -162,7 +137,6 @@
             func gateClosesOnceTheAddressIsEntered() throws {
                 let keychain = upgradedInstallKeychain()
                 let availability = BackendAvailability(
-                    syncMode: nil,
                     authStore: nil,
                     hasServerAddress: AppEnvironment
                         .resolve(keychain: keychain, bundle: Bundle(for: NoServerBundleAnchor.self))
@@ -188,7 +162,7 @@
             }
         }
 
-        // MARK: - Nicht abmelden, wenn nur die Adresse fehlt (R1 §3)
+        // MARK: - Nicht abmelden, wenn nur die Adresse fehlt
 
         @MainActor
         @Suite("serverNotConfigured meldet niemanden ab", .serialized)
@@ -198,16 +172,12 @@
                 let keychain = InMemoryKeychain()
                 try keychain.setString("bearer-from-b248", forKey: KeychainKey.authToken)
                 try keychain.setString("user-abc-123", forKey: KeychainKey.userID)
-                let suite = "hl.tests.r1.nologout.\(UUID().uuidString)"
-                let defaults = try #require(UserDefaults(suiteName: suite))
-                defaults.removePersistentDomain(forName: suite)
                 let env = AppEnvironment.resolve(keychain: keychain, bundle: Bundle(for: NoServerBundleAnchor.self))
                 #expect(env.isServerConfigured == false)
                 let api = APIClient(environment: env, keychain: keychain, sessionConfiguration: .mock())
                 let store = AuthStore(
                     auth: AuthService(api: api, keychain: keychain, passkey: NoopPasskey()),
-                    keychain: keychain,
-                    syncMode: SyncModeStore(defaults: defaults)
+                    keychain: keychain
                 )
                 await store.bootstrap()
                 let phaseBefore = store.phase

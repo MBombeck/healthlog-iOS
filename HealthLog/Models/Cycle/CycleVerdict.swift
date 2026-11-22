@@ -11,7 +11,7 @@ import Foundation
 // which a client offline does not necessarily have; a day of slip in a forecast
 // is a rounding error, a day of slip in "overdue" is a false statement about a
 // person's body. That asymmetry is why the judgement half of the on-device
-// engine is gone and only the prediction half remains (Z1 / #72).
+// engine is gone and only the prediction half remains.
 //
 // The grace window that decides `OVERDUE` is deliberately NOT published. Read
 // `state` and `overdueDays`; do not reconstruct the threshold.

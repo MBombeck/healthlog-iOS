@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — All-time milestones strip.
+/// All-time milestones strip.
 ///
 /// Small Apple-Award-sticker row that surfaces broad, all-time-cumulative
 /// achievements that don't belong in the metric-by-metric record grid:
@@ -72,21 +72,22 @@ struct Milestone: Identifiable, Equatable {
         if sparkLong {
             out.append(.init(id: "100days", symbol: "calendar", titleKey: "records.milestone.hundredDays"))
         }
-        let weekStreak = records.contains { record in
-            let slot = (record.base.metricSlot ?? "").lowercased()
-            return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 7
-        }
+        let weekStreak = records.contains { isStreak($0) && $0.base.value >= 7 }
         if weekStreak {
             out.append(.init(id: "week-streak", symbol: "flame.fill", titleKey: "records.milestone.weekStreak"))
         }
-        let monthStreak = records.contains { record in
-            let slot = (record.base.metricSlot ?? "").lowercased()
-            return (slot.contains("serie") || slot.contains("streak")) && record.base.value >= 30
-        }
+        let monthStreak = records.contains { isStreak($0) && $0.base.value >= 30 }
         if monthStreak {
             out.append(.init(id: "month-streak", symbol: "flame.circle.fill", titleKey: "records.milestone.monthStreak"))
         }
         return out
+    }
+
+    /// A streak row from `StreakComputer`: its slot carries the catalog's
+    /// streak word in every language ("Serie", "streak", "reeks", "연속", "racha").
+    private static func isStreak(_ record: PersonalRecord) -> Bool {
+        let slot = (record.base.metricSlot ?? "").lowercased()
+        return ["serie", "streak", "reeks", "연속", "racha"].contains { slot.contains($0) }
     }
 }
 
@@ -113,7 +114,7 @@ private struct MilestoneSticker: View {
                 .foregroundStyle(HLText.secondary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                // 1.4 B4 — a fixed column the label wraps in ("Erste" over
+                // A fixed column the label wraps in ("Erste" over
                 // "Bestleistung"); `maxWidth: 80` in the horizontal scroll
                 // cut it to "Erste Bestl…".
                 .frame(width: 96)

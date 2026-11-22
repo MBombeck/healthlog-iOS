@@ -40,7 +40,7 @@ public struct HLDashboardTile: View {
         case wide // 1×2 (spans both columns)
     }
 
-    // AUD-2 H4 — `metric` / `dataState` / `liveTodayStepsOverride` are
+    // `metric` / `dataState` / `liveTodayStepsOverride` are
     // `internal` (not `private`) so the context-line memo extension in
     // `HLDashboardTile+ContextLine.swift` can read them. They remain
     // immutable `let`s set only at init.
@@ -58,14 +58,14 @@ public struct HLDashboardTile: View {
     /// emptiness from `metric.latestValue` as before — same behaviour as
     /// pre-PB5 builds.
     let dataState: MetricDataState
-    /// W-IMPL-MOTION-POLISH (v0.5.5.1) — matched-geometry namespace owned
+    /// Matched-geometry namespace owned
     /// by `DashboardScreen`. When non-nil, the value text becomes the
     /// source of a shared-element transition that lifts into the
     /// `ChartDetailScreen.HeroStrip` number on tap. `nil` under
     /// reduce-motion + on surfaces that don't host a namespace (previews,
     /// snapshot tests, Charts list path).
     private let matchedNamespace: Namespace.ID?
-    /// v0.6.2.x bug-c10-ios-direct — HK-direct today step total, supplied
+    /// HK-direct today step total, supplied
     /// by `DashboardScreen` via `LiveHealthKitTodayStore`. Honored only
     /// when `metric.kind == .steps`. `nil` falls through to the existing
     /// summary / dataState path so the rest of the tile cohort is
@@ -91,17 +91,15 @@ public struct HLDashboardTile: View {
     /// (target, `tiles.directions`, the card's own `trendSentiment`).
     let trendVerdicts: TileTrendVerdicts
 
-    @ScaledMetric(relativeTo: .title2) private var primaryValueSize: CGFloat = 28
-
-    /// AUD-2 H4 — memoized context line (see `HLDashboardTile+ContextLine`).
+    /// Memoized context line (see `HLDashboardTile+ContextLine`).
     /// The `MetricDisplay` date-math projection runs only when this tile's
     /// inputs change (`.task(id:)`), not on every dashboard body pass.
     @State private var cachedContextLine: String?
 
-    /// v0.11 N1 — user display-unit prefs, injected at the dashboard root.
+    /// User display-unit prefs, injected at the dashboard root.
     /// Drives weight/BP/glucose conversion + the unit suffix shown below the
     /// value. Defaults to `.standard` (canonical SI) for previews/tests.
-    /// AUD-2 H4 — `internal` so the context-line memo extension can read it.
+    /// `internal` so the context-line memo extension can read it.
     @Environment(\.unitPreferences) var unitPreferences
 
     /// `provenance` is accepted for source-compat with existing call sites
@@ -136,7 +134,7 @@ public struct HLDashboardTile: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 headerRow
                 valueRow
-                // v0.14.8 AUDIT-HOME M5 — the context line ("Last measurement
+                // The context line ("Last measurement
                 // X days ago" / "No data yet" / source-filtered) was VoiceOver-
                 // only on the DEFAULT layout: hero + list rendered
                 // `MetricDisplay.secondaryLine`, the cards tile routed it only
@@ -144,8 +142,7 @@ public struct HLDashboardTile: View {
                 // no explanation. Calm tertiary caption, hidden when nil.
                 if let cachedContextLine {
                     Text(cachedContextLine)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("tile.\(metric.kind.rawValue).context")
@@ -163,13 +160,16 @@ public struct HLDashboardTile: View {
                     RangeBandRow(band: targetBand)
                 }
             }
+            // Fills the height its grid row offers, so the tiles of a row
+            // stand equally tall; alone in a column it keeps its own height.
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(combinedAccessibilityLabel)
         .accessibilityHint(descriptor.supportsDrillDown
             ? Text(String(localized: "Double-tap to open detail view"))
             : Text(""))
-        // V0.5.4.3 HP-2 — accessibility identifier for the walkthrough
+        // Accessibility identifier for the walkthrough
         // XCUITest contract. The suffix encodes the sparkline-state directly
         // in the identifier (the children-combine on this element flattens
         // any nested identifier so we cannot use a separate per-row element)
@@ -178,7 +178,7 @@ public struct HLDashboardTile: View {
         .accessibilityIdentifier(
             "tile.\(metric.kind.rawValue).\(sparklineValues.count >= 2 ? "withChart" : "noChart")"
         )
-        // AUD-2 H4 — recompute the `MetricDisplay`-derived context line only
+        // Recompute the `MetricDisplay`-derived context line only
         // when this tile's inputs change, not on every body pass. The memo
         // helpers (`contextLineKey`, `computeContextLine`, `ContextLineKey`)
         // live in `HLDashboardTile+ContextLine.swift`.
@@ -189,10 +189,10 @@ public struct HLDashboardTile: View {
 
     private var headerRow: some View {
         // C-1 (R1 Strategy C, Layer 2 "Content"): icon foreground is monochrome
-        // at rest — `descriptor.tint` no longer paints tile chrome. W6b: glyph +
+        // at rest — `descriptor.tint` no longer paints tile chrome. Glyph +
         // title now route through the shared `HLMetricTileChrome` primitives (the
         // single tile-fragment code path); the polarity-aware `TrendChip` is the
-        // trailing accessory (it itself renders via `HLTileTrendGlyph`).
+        // trailing accessory.
         HLTileHeaderRow(icon: descriptor.sfSymbol, title: Text(descriptor.title)) {
             TrendChip(trend: metric.dashboardTrend, mode: trendVerdicts.mode(for: metric))
         }
@@ -200,47 +200,64 @@ public struct HLDashboardTile: View {
 
     // MARK: - Value + unit
 
+    /// Value and unit on one line; where the tile is too narrow for both
+    /// (the accessibility sizes), the unit goes under the value instead of
+    /// both shrinking into an ellipsis.
     private var valueRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-            Text(formattedValueText)
-                .font(.hlMetric(primaryValueSize))
-                .foregroundStyle(isEmptyForDisplay ? HLText.tertiary : HLText.primary)
-                .monospacedDigit()
-                // v0.8.7 W-TILE-DYNAMICS — digits roll on value update (mirrors
-                // RecordCard). #57: routed through `.hlAnimation` so Reduce-Motion
-                // disables the roll (env-gated, not just the native cross-fade).
-                .contentTransition(.numericText())
-                .hlAnimation(.snappy(duration: 0.25), value: formattedValueText)
-                .lineLimit(1)
-                // v0.8.0 W6 — 0.6 → 0.75: a 60% clamp at AX5 shrank the
-                // headline value below the caption beside it, inverting
-                // hierarchy. 0.75 sits at Apple's practical legibility floor.
-                .minimumScaleFactor(0.75)
-                // V0.5.4.3-HP3: XCUI hook so the walkthrough can read the
-                // rendered value-string per kind (e.g. `tile.steps.value`)
-                // and assert against day-cumulative output. The text node
-                // sits inside `accessibilityElement(children: .combine)`,
-                // but the inner element keeps its own identifier so the
-                // XCUI tree resolves the per-row text leaf cleanly.
-                .accessibilityIdentifier("tile.\(metric.kind.rawValue).value")
-                // W-IMPL-MOTION-POLISH (v0.5.5.1) — shared-element source.
-                // The destination `ChartDetailScreen.HeroStrip` applies the
-                // same id inside the same namespace and the tile number
-                // flies into the chart-detail hero on tap. `matchedNamespace`
-                // is `nil` under reduce-motion → modifier resolves to the
-                // identity branch + no implicit frame animation runs.
-                .matchedTileGeometry(
-                    id: DashboardMatchedGeometryID.value(for: metric.kind),
-                    in: matchedNamespace
-                )
-            Text(metric.unitSuffix(units: unitPreferences))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .lineLimit(1)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
+                valueText
+                unitText
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                valueText
+                unitText
+            }
         }
     }
 
-    // MARK: - Context line (v0.14.8 AUDIT-HOME M5)
+    private var valueText: some View {
+        Text(formattedValueText)
+            .font(HLValueSize.tile.numberFont)
+            .foregroundStyle(isEmptyForDisplay ? HLText.tertiary : HLText.primary)
+            .monospacedDigit()
+            // Digits roll on value update (mirrors
+            // RecordCard). Routed through `.hlAnimation` so Reduce-Motion
+            // disables the roll (env-gated, not just the native cross-fade).
+            .contentTransition(.numericText())
+            .hlAnimation(.snappy(duration: 0.25), value: formattedValueText)
+            .lineLimit(1)
+            // 0.6 → 0.75: a 60% clamp at AX5 shrank the
+            // headline value below the caption beside it, inverting
+            // hierarchy. 0.75 sits at Apple's practical legibility floor.
+            .minimumScaleFactor(0.75)
+            // V0.5.4.3-HP3: XCUI hook so the walkthrough can read the
+            // rendered value-string per kind (e.g. `tile.steps.value`)
+            // and assert against day-cumulative output. The text node
+            // sits inside `accessibilityElement(children: .combine)`,
+            // but the inner element keeps its own identifier so the
+            // XCUI tree resolves the per-row text leaf cleanly.
+            .accessibilityIdentifier("tile.\(metric.kind.rawValue).value")
+            // Shared-element source.
+            // The destination `ChartDetailScreen.HeroStrip` applies the
+            // same id inside the same namespace and the tile number
+            // flies into the chart-detail hero on tap. `matchedNamespace`
+            // is `nil` under reduce-motion → modifier resolves to the
+            // identity branch + no implicit frame animation runs.
+            .matchedTileGeometry(
+                id: DashboardMatchedGeometryID.value(for: metric.kind),
+                in: matchedNamespace
+            )
+    }
+
+    private var unitText: some View {
+        Text(metric.unitSuffix(units: unitPreferences))
+            .font(HLValueSize.tile.unitFont)
+            .foregroundStyle(HLText.secondary)
+            .lineLimit(1)
+    }
+
+    // MARK: - Context line
 
     // Visible secondary line resolved through the SAME `MetricDisplay`
     // projection hero + list already render — the three layouts can't
@@ -277,7 +294,7 @@ public struct HLDashboardTile: View {
             if descriptor.formatStyle == .bloodPressureCompound, metric.secondaryValue == nil {
                 return true
             }
-            // v0.6.2.x bug-c10-ios-direct — Steps tile considers the live
+            // Steps tile considers the live
             // HK value enough to count as "ready" even before the dataState
             // fan-out has landed.
             if metric.kind == .steps, liveTodayStepsOverride != nil {
@@ -299,7 +316,7 @@ public struct HLDashboardTile: View {
     /// so the tile never silently blanks before today's HK upload has
     /// landed.
     var formattedValueText: String {
-        // H2 (1.1.0) — a resolved-empty tile shows the dash, exactly like
+        // A resolved-empty tile shows the dash, exactly like
         // `MetricDisplay` (hero + list). Before, the grey tint and the "No data
         // yet" line came from `.empty` while the number still came from the
         // summary snapshot: "8,421 steps · No data yet".
@@ -314,17 +331,17 @@ public struct HLDashboardTile: View {
                     let sysValue = unitPreferences.convertBloodPressure(s)
                     let diaValue = unitPreferences.convertBloodPressure(d)
                     if unitPreferences.bloodPressure == .mmHg {
-                        // W-CRASHGUARD — em-dash if either operand is non-finite / OOR.
+                        // Em-dash if either operand is non-finite / OOR.
                         return Double.safeServerBPString(systolic: sysValue, diastolic: diaValue)
                     }
-                    return "\(sysValue.formatted(.number.precision(.fractionLength(1))))/\(diaValue.formatted(.number.precision(.fractionLength(1))))"
+                    return "\(HLValueFormat.number(sysValue, fractionDigits: 1 ... 1))/\(HLValueFormat.number(diaValue, fractionDigits: 1 ... 1))"
                 }
                 // Composite metric but the latest sample is not paired —
                 // mirror `isEmptyForDisplay` and render the placeholder.
                 return "—"
             }
             if metric.kind.isCumulative {
-                // v0.6.2.x bug-c10-ios-direct — Steps prefers the HK-direct
+                // Steps prefers the HK-direct
                 // live value over the server-derived day-sum. The server
                 // path is frozen for the rest of today (insert-only batch
                 // route) but HK is monotonic on the device, so the live
@@ -336,7 +353,7 @@ public struct HLDashboardTile: View {
             }
             return formatScalar(latest.primaryValue)
         }
-        // v0.6.2.x bug-c10-ios-direct — even before the dataState fan-out
+        // Even before the dataState fan-out
         // resolves, render the live HK-direct value for Steps so the
         // first-paint cold-launch number is fresh instead of stale.
         if metric.kind == .steps, let liveValue = liveTodayStepsOverride {
@@ -350,7 +367,7 @@ public struct HLDashboardTile: View {
     /// when the value lands via `MetricDataState` instead of the summary
     /// endpoint.
     ///
-    /// v0.11 N1 / #115 P2 — every re-unitable family converts at display
+    /// Every re-unitable family converts at display
     /// time via `unitPreferences`. Blood-pressure is handled in
     /// `formattedValueText` (composite path) so it never reaches here.
     ///
@@ -358,12 +375,12 @@ public struct HLDashboardTile: View {
     /// `HLDashboardTile+SecondaryStats` extension formats the 7-/30-day
     /// averages through the identical unit-conversion path.
     func formatScalar(_ latest: Double) -> String {
-        // W-CRASHGUARD — `latest` is an unsanitized server / HK-direct scalar;
+        // `latest` is an unsanitized server / HK-direct scalar;
         // every `Int(...)` below traps on non-finite AND out-of-`Int.range`.
         // Reject non-finite at the gate; route each conversion through
         // `Int(safeServer:)` → em-dash on an unrepresentable value.
         guard latest.isFinite else { return "—" }
-        // #115 P2 — one central account-unit formatter; the identity branch
+        // One central account-unit formatter; the identity branch
         // keeps the descriptor style (BP never reaches here, see above).
         return MetricValueFormatter.account(latest, kind: metric.kind, units: unitPreferences) { converted in
             MetricValueFormatter.styled(converted, style: descriptor.formatStyle)
@@ -373,7 +390,7 @@ public struct HLDashboardTile: View {
     // MARK: - Sparkline
 
     private var sparklineRow: some View {
-        // C-1 + C-6 + Theme-2.0 (T2-2): sparkline at-rest is monochrome
+        // C-1 + C-6 + Theme-2.0: sparkline at-rest is monochrome
         // (`HLText.tertiary`) and pure `.line` (HLSparkline default per R2
         // §Primitive #3). The per-metric Dracula `descriptor.tint` is gone
         // entirely (T2-2 collapsed it to surfaceSecondary); chart-detail
@@ -387,7 +404,7 @@ public struct HLDashboardTile: View {
         // as ANY data path resolves the kind to `.ready`. No tile with
         // data should ever paint a blank sparkline.
         //
-        // W6b — the single chart-row code path (36pt). Task #36 — `metric.kind`
+        // The single chart-row code path (36pt). `metric.kind`
         // routes it through the SAME `MetricChartContent` engine + `inkGraphite`
         // ink as the Insights page (per-metric vocabulary, not a grey line).
         HLTileSparkline(values: sparklineValues, kind: metric.kind)
@@ -415,7 +432,7 @@ public struct HLDashboardTile: View {
     /// leer, Detail voll" regression across v0.5.1, v0.5.5, v0.5.5.2, and
     /// v0.5.5.3.
     ///
-    /// **V0.5.4.3 HP-2 — kind-aware projection.** The fallback path routes
+    /// **Kind-aware projection.** The fallback path routes
     /// through `MetricSeriesProjection.project(_:kind:)` instead of mapping
     /// `\.value.primaryComponent` inline. For BP this drops unpaired-DIA
     /// artifacts (`MeasurementValue.bloodPressure(systolic: 0, _)`) whose
@@ -537,15 +554,15 @@ public struct HLDashboardTile: View {
         case .flat: String(localized: "Trend stable")
         case .unknown: String(localized: "Trend unknown")
         }
-        // v0.14.8 AUDIT-HOME M5 — the visible recency hint ("Last
+        // The visible recency hint ("Last
         // measurement X days ago" on stale `.ready` values) is spoken too.
-        // AUD-2 H4 — reads the same memoized `cachedContextLine` the visible
+        // Reads the same memoized `cachedContextLine` the visible
         // caption renders, so VoiceOver and the sighted line never diverge.
         // Build 7 / item 7.1 — fold the averages + target band into the spoken
         // label so VoiceOver hears the same secondary stats the sighted user
         // now reads on the tile.
         let stats = statsSpokenClause
-        // #135 — the server's verdict is spoken where the arrow is coloured.
+        // The server's verdict is spoken where the arrow is coloured.
         let trend = trendDesc + metric.spokenVerdictSuffix(trendVerdicts)
         if let cachedContextLine {
             return Text("\(title): \(value). \(trend). \(cachedContextLine).\(stats)")

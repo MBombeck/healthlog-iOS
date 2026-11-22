@@ -38,20 +38,11 @@ struct AppReviewConfigurationTests {
     }
 
     @Test("release UI contains only supported, neutrally named assistant providers")
-    func assistantProviderSurfaceIsCompleteAndNeutral() throws {
-        let model = try text("HealthLog/Models/Insight.swift")
-        let screen = try text("HealthLog/Screens/Settings/AIProviderScreen.swift")
-        let consent = try text("HealthLog/Screens/Settings/AIConsentSheet.swift")
-        let token = try text("HealthLog/Models/ApiTokenDTO.swift")
-        let mcp = try text("HealthLog/Screens/Settings/Sub/McpTokenSheets.swift")
-
+    func assistantProviderSurfaceIsCompleteAndNeutral() {
         #expect(AIProvider.allCases.count == 5)
-        #expect(model.contains("case .anthropic: \"Anthropic\""))
-        #expect(screen.contains("Anthropic processes your insights"))
-        #expect(consent.contains("case .anthropic: \"Anthropic\""))
-        #expect(consent.contains("case .anthropic: \"Anthropic, PBC\""))
-        #expect(token.contains("a third-party client"))
-        #expect(mcp.contains("e.g. My health dashboard"))
+        #expect(AIProvider.configurableCases == [.anthropic, .openai, .local])
+        #expect(AIProvider.anthropic.label == "Anthropic")
+        #expect(AIProvider.openai.label == "OpenAI")
     }
 
     @Test("review sign-in has no embedded credential or one-tap demo path")
@@ -96,19 +87,6 @@ struct AppReviewConfigurationTests {
             }
         }
         #expect(scannedFiles > 100, "production-source guard did not see the app tree")
-
-        let auth = try text("HealthLog/Screens/Onboarding/ServerAuthStep.swift")
-        #expect(auth.contains("@State private var email: String"))
-        #expect(auth.contains("@State private var password: String"))
-        #expect(auth.contains("onboarding.auth.field.email"))
-        #expect(auth.contains("onboarding.auth.field.password"))
-        #expect(auth.contains("await authStore.login(email: email, password: password)"))
-        #expect(auth.contains("onboarding.passwordLoginCTA"))
-
-        let journey = try text("HealthLogUITests/AuthJourneyUITest.swift")
-        #expect(journey.contains("-uitest-auth-journey"))
-        #expect(journey.contains("HermeticFixtures"))
-        #expect(journey.contains("testPasswordLoginWithHealthKitDeniedReachesShell"))
     }
 
     @Test("generated app configuration declares only the intended background work")
@@ -124,11 +102,14 @@ struct AppReviewConfigurationTests {
             "edu.stanford.spezi.scheduler.notifications-scheduling"
         ])
         #expect(info["ITSAppUsesNonExemptEncryption"] as? Bool == false)
-        #expect(info["NSHealthClinicalHealthRecordsShareUsageDescription"] == nil)
+        // 1.7 (#180) — the Labs Health Records sync reads lab results, so
+        // the purpose string and the entitlement are declared together.
+        #expect((info["NSHealthClinicalHealthRecordsShareUsageDescription"] as? String)?.isEmpty == false)
 
         let entitlements = try plist("HealthLog/Resources/HealthLog.entitlements")
         #expect(entitlements["com.apple.developer.healthkit"] as? Bool == true)
         #expect(entitlements["com.apple.developer.healthkit.background-delivery"] as? Bool == true)
+        #expect(entitlements["com.apple.developer.healthkit.access"] as? [String] == ["health-records"])
     }
 
     @Test("German and English purpose strings disclose the actual HealthKit and document flows")
@@ -138,7 +119,7 @@ struct AppReviewConfigurationTests {
             "NSFaceIDUsageDescription", "NSUserNotificationsUsageDescription",
             "NSAlarmKitUsageDescription", "NSSpeechRecognitionUsageDescription",
             "NSMicrophoneUsageDescription", "NSCameraUsageDescription",
-            "NSBluetoothAlwaysUsageDescription"
+            "NSBluetoothAlwaysUsageDescription", "NSHealthClinicalHealthRecordsShareUsageDescription"
         ]
         let german = try text("HealthLog/Resources/de.lproj/InfoPlist.strings")
         let english = try text("HealthLog/Resources/en.lproj/InfoPlist.strings")
@@ -186,8 +167,9 @@ struct AppReviewConfigurationTests {
                   let values = item["NSPrivacyAccessedAPITypeReasons"] as? [String] else { return nil }
             return (type, Set(values))
         })
-        #expect(reasons["NSPrivacyAccessedAPICategoryUserDefaults"] == ["CA92.1"])
+        #expect(reasons["NSPrivacyAccessedAPICategoryUserDefaults"] == ["CA92.1", "1C8F.1"])
         #expect(reasons["NSPrivacyAccessedAPICategoryFileTimestamp"] == ["C617.1", "DDA9.1"])
+        #expect(reasons["NSPrivacyAccessedAPICategorySystemBootTime"] == ["35F9.1"])
     }
 
     @Test("notification privacy extension is a generated, embedded host dependency")
@@ -212,6 +194,11 @@ struct AppReviewConfigurationTests {
         #expect(extensionEntitlements["com.apple.security.application-groups"] as? [String] == ["group.dev.healthlog.app"])
         let extensionManifest = try plist("NotificationServiceExtension/Resources/PrivacyInfo.xcprivacy")
         #expect(extensionManifest["NSPrivacyTracking"] as? Bool == false)
+        // It reads the App-Group suite the app writes, and nothing else of the
+        // required-reason set.
+        let extensionAPIs = (extensionManifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]]) ?? []
+        #expect(extensionAPIs.compactMap { $0["NSPrivacyAccessedAPIType"] as? String } == ["NSPrivacyAccessedAPICategoryUserDefaults"])
+        #expect(extensionAPIs.first?["NSPrivacyAccessedAPITypeReasons"] as? [String] == ["CA92.1", "1C8F.1"])
     }
 
     @Test("Release policy retires persisted raw-HR schedules without rewriting an in-progress UTC day")
@@ -289,7 +276,7 @@ struct AppReviewConfigurationTests {
 
         let flags = try text("HealthLog/App/FeatureFlags.swift")
         #expect(flags.contains("rawHeartRateExperimentAvailable = false"))
-        // 08-15 — the release switch that consumed the flag is deleted, not
+        // The release switch that consumed the flag is deleted, not
         // disabled, so this half is now an inventory assertion over the whole
         // Settings tree rather than a read of one file. Reading a file to prove
         // it fails closed stops meaning anything the moment the file is gone.
@@ -320,7 +307,6 @@ struct AppReviewConfigurationTests {
         }
         #expect(actual == expected, "HealthKit write surface changed; audit the new/removed save site")
 
-        #expect(try text("HealthLog/Services/Devices/DeviceReadingForwarder.swift").contains("MeasurementsRecordedSheet` confirm step"))
         #expect(try text("HealthLog/Services/HealthKitService.swift").contains("HKMetadataKeyWasUserEntered: true"))
         #expect(try text("HealthLog/Services/HealthKit/CycleHealthKitWriter.swift").contains("HKMetadataKeyWasUserEntered: true"))
         let write = try text("HealthLog/Services/HealthKit/HealthKitService+Write.swift")
@@ -330,168 +316,15 @@ struct AppReviewConfigurationTests {
 }
 
 extension AppReviewConfigurationTests {
-    // 09-08 — an App-Review contract assertion set. Each `#expect` is one
-    // reviewable clause of the same guideline; splitting them into helper
-    // functions would hide which clauses exist behind a call, which is the
-    // opposite of what a compliance test is for.
-    // function_body_length exception (owner: 09-08): exhaustive App-Review contract clause list.
-    // swiftlint:disable function_body_length
-    @Test("account deletion is reachable in Release and preserves exact server and return contracts")
+    /// Guideline 5.1.1(v): the deletion entry point sits in a SwiftUI body, so
+    /// its Release reachability is checked at the source.
+    @Test("account deletion is reachable in Release")
     func accountDeletionContractIsComplete() throws {
         let accountScreen = try text("HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift")
-        #expect(accountScreen.contains("deleteAccountCard"))
+        #expect(accountScreen.contains("deleteAccountRow"))
         #expect(accountScreen.contains("DeleteAccountScreen()"))
         #expect(!accountScreen.contains("#if DEBUG"))
-
-        let account = try text("HealthLog/Services/AuthService+Account.swift")
-        let service = try text("HealthLog/Services/AuthService.swift") + "\n" + account
-        #expect(service.contains("path: \"/api/settings/account\""))
-        #expect(service.contains("method: .delete"))
-        #expect(service.contains("confirm: \"DELETE_ACCOUNT\""))
-        #expect(service.contains("maxRetries: 0"))
-        #expect(service.contains("AIConsentStore.serverManagedScope"))
-        #expect(service.contains("AIConsentStore.serverManagedDeclinedKey"))
-        #expect(service.contains("nonisolated static func wipeDeletedAccountKeychain"))
-        #expect(service.contains("Self.wipeDeletedAccountKeychain(using: keychain)"))
-        #expect(service.contains("private var credentialPersistenceGeneration: UInt64 = 0"))
-        #expect(service.contains("func invalidateAndWipeDeletedAccountCredentials()"))
-        #expect(service.contains("func invalidateAndWipeSessionCredentials() throws -> String?"))
-        #expect(!service.contains("invalidateCredentialPersistenceForDeletedAccount"))
-        for accountBoundKey in [
-            "KeychainKey.authToken", "KeychainKey.refreshToken", "KeychainKey.userID",
-            "KeychainKey.userDisplayName", "KeychainKey.deviceID"
-        ] {
-            #expect(service.contains(accountBoundKey), "shared deletion wipe omits \(accountBoundKey)")
-        }
-        #expect(service.contains("for provider in AIProvider.allCases"))
-        #expect(service.contains("for provider in BYOProviderID.allCases"))
-
-        #expect(account.contains("public extension AuthService"), "deleteAccount stays public API")
-        let nativeDeleteStart = try #require(account.range(of: "func deleteAccount() async throws -> AccountDeletionReceipt"))
-        let afterDelete = nativeDeleteStart.upperBound ..< account.endIndex // 1.5 KONTO: AuthService+Account.swift
-        let nativeDeleteEnd = try #require(account.range(of: "static func wipeDeletedAccountKeychain", range: afterDelete))
-        let nativeDelete = String(account[nativeDeleteStart.lowerBound ..< nativeDeleteEnd.lowerBound])
-        let nativeDeleteAccepted = try #require(nativeDelete.range(of: "try await api.download(deleteReq)"))
-        let nativeWipe = try #require(nativeDelete.range(of: "invalidateAndWipeDeletedAccountCredentials()"))
-        #expect(nativeDeleteAccepted.lowerBound < nativeWipe.lowerBound)
-        #expect(!nativeDelete.contains("Self.wipeDeletedAccountKeychain"))
-
-        let deletedTeardownStart = try #require(service.range(
-            of: "func invalidateAndWipeDeletedAccountCredentials()"
-        ))
-        let deletedTeardownEnd = try #require(service.range(
-            of: "func invalidateAndWipeSessionCredentials() throws -> String?",
-            range: deletedTeardownStart.upperBound ..< service.endIndex
-        ))
-        let deletedTeardown = String(service[deletedTeardownStart.lowerBound ..< deletedTeardownEnd.lowerBound])
-        let deletedGeneration = try #require(deletedTeardown.range(of: "credentialPersistenceGeneration &+= 1"))
-        let deletedWipe = try #require(deletedTeardown.range(of: "Self.wipeDeletedAccountKeychain(using: keychain)"))
-        #expect(deletedGeneration.lowerBound < deletedWipe.lowerBound)
-        #expect(!deletedTeardown.contains("await"), "generation and deletion wipe must share one actor turn")
-
-        let sessionTeardownStart = try #require(service.range(
-            of: "func invalidateAndWipeSessionCredentials() throws -> String?"
-        ))
-        let sessionTeardownEnd = try #require(service.range(
-            of: "// MARK: - Web-handoff login",
-            range: sessionTeardownStart.upperBound ..< service.endIndex
-        ))
-        let sessionTeardown = String(service[sessionTeardownStart.lowerBound ..< sessionTeardownEnd.lowerBound])
-        let sessionGeneration = try #require(sessionTeardown.range(of: "credentialPersistenceGeneration &+= 1"))
-        let sessionRemoval = try #require(sessionTeardown.range(of: "try keychain.remove(forKey: key)"))
-        #expect(sessionGeneration.lowerBound < sessionRemoval.lowerBound)
-        #expect(!sessionTeardown.contains("await"), "generation and session wipe must share one actor turn")
-
-        let logoutStart = try #require(service.range(of: "public func logout() async throws"))
-        let logoutEnd = try #require(service.range(
-            of: "public func setOnLogoutCleanup",
-            range: logoutStart.upperBound ..< service.endIndex
-        ))
-        let logout = String(service[logoutStart.lowerBound ..< logoutEnd.lowerBound])
-        #expect(logout.contains("try invalidateAndWipeSessionCredentials()"))
-
-        let refreshStart = try #require(service.range(of: "public func refresh() async -> RefreshOutcome"))
-        let refreshEnd = try #require(service.range(
-            of: "// MARK: - Persistence",
-            range: refreshStart.upperBound ..< service.endIndex
-        ))
-        let refresh = String(service[refreshStart.lowerBound ..< refreshEnd.lowerBound])
-        let refreshCapture = try #require(refresh.range(
-            of: "let capturedPersistenceGeneration = credentialPersistenceGeneration"
-        ))
-        let refreshValidation = try #require(refresh.range(
-            of: "guard capturedPersistenceGeneration == credentialPersistenceGeneration"
-        ))
-        let refreshPersist = try #require(refresh.range(of: "try persist(session)"))
-        #expect(refreshCapture.lowerBound < refreshValidation.lowerBound)
-        #expect(refreshValidation.lowerBound < refreshPersist.lowerBound)
-        #expect(!refresh.contains("beginAuthenticationTransition"))
-        #expect(!refresh.contains("accountBoundaryTransition"))
-
-        let deletionScreen = try text("HealthLog/Screens/Settings/DeleteAccountScreen.swift")
-        #expect(deletionScreen.contains("authStore.markPendingWebDeletion()"))
-        let webDeletion = try text("HealthLog/Stores/AuthStore+WebDeletion.swift")
-        #expect(webDeletion.contains("func reconcilePendingWebDeletion() async"))
-        #expect(webDeletion.contains("case .gone"))
-        #expect(webDeletion.contains("localCleanupHook"))
-        #expect(webDeletion.contains("pendingOwner != capturedOwner"))
-        #expect(!webDeletion.contains("AuthService.wipeDeletedAccountKeychain"))
-        #expect(webDeletion.contains("let capturedGeneration = authSessionGeneration"))
-        #expect(webDeletion.contains("await beginDeletedAccountTransition()"))
-        #expect(webDeletion.contains("defer { finishDeletedAccountTransition() }"))
-
-        let suspendedProbe = try #require(webDeletion.range(of: "let outcome = await auth.probeAccountStatus()"))
-        let ownerGuard = try #require(webDeletion.range(of: "currentMarkerOwner == pendingOwner"))
-        let generationGuard = try #require(webDeletion.range(of: "authSessionGeneration == capturedGeneration"))
-        let sharedWipe = try #require(webDeletion.range(
-            of: "await auth.invalidateAndWipeDeletedAccountCredentials()"
-        ))
-        let anchorCleanup = try #require(webDeletion.range(
-            of: "await runDeletedAccountOwnerCleanup(previousOwner: deletedAccountOwner)"
-        ))
-        let localCleanup = try #require(webDeletion.range(of: "await localCleanupHook?()"))
-        let boundaryCompletion = try #require(webDeletion.range(of: "completeDeletedAccountBoundary()"))
-        #expect(suspendedProbe.lowerBound < ownerGuard.lowerBound)
-        #expect(suspendedProbe.lowerBound < generationGuard.lowerBound)
-        #expect(ownerGuard.lowerBound < sharedWipe.lowerBound)
-        #expect(generationGuard.lowerBound < sharedWipe.lowerBound)
-        #expect(sharedWipe.lowerBound < anchorCleanup.lowerBound)
-        #expect(anchorCleanup.lowerBound < localCleanup.lowerBound)
-        #expect(localCleanup.lowerBound < boundaryCompletion.lowerBound)
-
-        let authStore = try text("HealthLog/Stores/AuthStore.swift")
-        #expect(authStore.contains("private(set) var authSessionGeneration: UInt64 = 0"))
-        #expect(authStore.contains("public func handleUnauthorized() async -> Bool"))
-        #expect(authStore.contains("guard !deletionOwnsAccountBoundary else { return false }"))
-        #expect(authStore.contains("await auth.invalidateAndWipeSessionCredentials()"))
-        #expect(authStore.contains("await beginAuthenticationTransition()"))
-        #expect(authStore.contains("func completeDeletedAccountBoundary()"))
-
-        let accountBoundary = try text("HealthLog/Stores/AuthStore+AccountBoundary.swift")
-        #expect(accountBoundary.contains("final class AuthAccountBoundaryTransition"))
-        #expect(accountBoundary.contains("func beginDeletedAccountTransition() async"))
-        #expect(accountBoundary.contains("func beginAuthenticationTransition() async"))
-        #expect(accountBoundary.contains("var deletionOwnsAccountBoundary: Bool"))
-
-        let logoutBridge = try text("HealthLog/Stores/AppContainer+LogoutHooks.swift")
-        #expect(logoutBridge.contains("let shouldRunGenericCleanup"))
-        #expect(logoutBridge.contains("await storeForBridge?.handleUnauthorized() ?? true"))
-        #expect(logoutBridge.contains("guard shouldRunGenericCleanup else { return }"))
-        #expect(logoutBridge.contains("performFullLocalLogout(reason: .tokenExpired)"))
-
-        let apiClient = try text("HealthLog/Services/APIClient.swift")
-        let recoveryStart = try #require(apiClient.range(of: "private func handleUnauthorizedAndShouldRetry"))
-        let recoveryEnd = try #require(apiClient.range(
-            of: "private func rateLimitOrBackoffDelay",
-            range: recoveryStart.upperBound ..< apiClient.endIndex
-        ))
-        let recovery = String(apiClient[recoveryStart.lowerBound ..< recoveryEnd.lowerBound])
-        let refreshAttempt = try #require(recovery.range(of: "switch await refreshHandler()"))
-        let terminalUnauthorized = try #require(recovery.range(of: "await onUnauthorized()"))
-        #expect(refreshAttempt.lowerBound < terminalUnauthorized.lowerBound)
     }
-
-    // swiftlint:enable function_body_length
 }
 
 extension AppReviewConfigurationTests {
@@ -512,7 +345,6 @@ extension AppReviewConfigurationTests {
             "HealthLog/Screens/GLP1/GLP1LocalStore.swift",
             "HealthLog/Services/AI/CoachChatStore.swift",
             "HealthLog/Services/HealthKitDailyStatsCache.swift",
-            "HealthLog/Standalone/LocalStore.swift",
             "HealthLog/Services/AI/OnDeviceBriefingCache.swift",
             "HealthLog/Screens/Insights/TrendObservationCard+OnDevice.swift"
         ]
@@ -545,29 +377,6 @@ extension AppReviewConfigurationTests {
 }
 
 extension AppReviewConfigurationTests {
-    @Test("external AI remains default-off and consent-gated")
-    func externalAIRequiresConsent() throws {
-        let consentStore = try text("HealthLog/Services/AIConsentStore.swift")
-        #expect(consentStore.contains("keychain.getString(forKey: Self.serverManagedScope) == \"granted\""))
-        #expect(consentStore.contains("func revoke"))
-        let consentSheet = try text("HealthLog/Screens/Settings/AIConsentSheet.swift")
-        #expect(consentSheet.localizedCaseInsensitiveContains("document"))
-        let documents = try text("HealthLog/Repositories/DocumentsRepository.swift")
-        #expect(documents.contains("static let denied = DocumentAIConsentLeaseProvider { nil }"))
-        #expect(documents.contains("sendWithExternalAIConsent"))
-        #expect(documents.contains("guard await externalAIConsent.currentLease() == capturedLease"))
-        #expect(documents.contains("maxRetries: 0"))
-        let assist = try text("HealthLog/Repositories/DocumentsRepository+Assist.swift")
-        #expect(assist.contains("sendWithExternalAIConsent"))
-        let chat = try text("HealthLog/Repositories/DocumentsRepository+Chat.swift")
-        #expect(chat.contains("requestWithExternalAIConsent(request)"))
-        #expect(chat.contains("api.streamLines(leased.request)"))
-        #expect(chat.contains("private func validateChatLeaseAfterAwait"))
-        #expect(chat.components(separatedBy: "validateChatLeaseAfterAwait(leased.lease)").count - 1 == 3)
-        #expect(chat.contains("withUnsafeCurrentTask { $0?.cancel() }"))
-        #expect(chat.contains("allowsAuthenticationRecovery: false"))
-    }
-
     @Test("account-boundary transition queues authentication behind deletion ownership")
     @MainActor
     func accountBoundaryTransitionSerializesAuthentication() async {

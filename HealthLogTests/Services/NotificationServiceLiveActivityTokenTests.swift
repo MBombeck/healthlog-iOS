@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// W-B189 (#22) — wires the ActivityKit Live-Activity push token into the
+    /// Wires the ActivityKit Live-Activity push token into the
     /// existing `POST /api/devices` registration so the server (≥ v1.17.1) can
     /// send a direct `apns-push-type: liveactivity` `end`/`update` push to a
     /// running medication Live Activity.
@@ -114,7 +114,7 @@ import Testing
             // the registration body picks it up. (didReceiveActivityUpdateToken
             // also triggers a re-register, but there is no cached APNs token yet,
             // so that path is a no-op — the registration below is the first POST.)
-            await svc.didReceiveActivityUpdateToken("deadbeefcafef00d", medicationId: "med_abc")
+            await svc.didReceiveActivityUpdateToken("deadbeefcafef00d", owner: Self.owner("med_abc"))
             #expect(recorder.isEmpty) // no APNs token yet → no POST
 
             // Now the APNs token arrives → first real POST carries the LA token.
@@ -146,7 +146,7 @@ import Testing
             #expect(body?.keys.contains("liveActivityPushToken") == false)
         }
 
-        // MARK: - Locale follows the app language (POLISH-C, C4)
+        // MARK: - Locale follows the app language
 
         /// The push copy the server picks for this device must match the
         /// interface the person reads. `Locale.current` is the device
@@ -194,7 +194,7 @@ import Testing
 
             // 2) A LA update token arrives → idempotent re-register with the
             //    cached APNs token, now carrying the LA token.
-            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", medicationId: "med_x")
+            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", owner: Self.owner("med_x"))
             #expect(recorder.count == 2)
             #expect(recorder.decodedLast()?["liveActivityPushToken"] as? String == "aa11bb22cc33")
         }
@@ -214,10 +214,53 @@ import Testing
             #expect(recorder.count == 1)
 
             // Same token twice → first re-registers, second is deduped away.
-            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", medicationId: "med_x")
+            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", owner: Self.owner("med_x"))
             #expect(recorder.count == 2)
-            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", medicationId: "med_x")
+            await svc.didReceiveActivityUpdateToken("aa11bb22cc33", owner: Self.owner("med_x"))
             #expect(recorder.count == 2) // unchanged → no extra POST
+        }
+
+        static func owner(_ medicationId: String, activity: String? = nil, slot: TimeInterval = 1_800_000_000) -> LiveActivityTokenOwner {
+            LiveActivityTokenOwner(
+                activityID: activity ?? "act-\(medicationId)",
+                medicationId: medicationId,
+                slot: Date(timeIntervalSince1970: slot)
+            )
+        }
+
+        @Test("#188: the reported token is the running Activity's, ended ones drop out")
+        func tokenOfRunningActivity() async {
+            let svc = makeService(api: makeAPI(), defaults: makeDefaults())
+            await svc.didReceivePushToStartToken("p2s")
+            // Two medications: the earlier slot is the dose the plan surfaces.
+            await svc.didReceiveActivityUpdateToken("late", owner: Self.owner("med_b", slot: 1_800_007_200))
+            await svc.didReceiveActivityUpdateToken("early", owner: Self.owner("med_a", slot: 1_800_000_000))
+            #expect(svc.currentLiveActivityPushToken == "early")
+            // Ending it hands over to the remaining running Activity, never the ended one.
+            await svc.didEndActivity(activityID: "act-med_a")
+            #expect(svc.currentLiveActivityPushToken == "late")
+            // At launch only the Activities still running keep a token.
+            await svc.retainActivities(ids: [])
+            #expect(svc.currentLiveActivityPushToken == "p2s")
+        }
+
+        @Test("#188: an ended Activity's token change re-registers without it")
+        func endReRegisters() async {
+            let recorder = BodyRecorder()
+            MockURLProtocol.install { req in
+                if let body = req.httpBody ?? req.bodyStreamData() { recorder.record(body) }
+                return (Self.okResponse(req), Data())
+            }
+            let svc = makeService(api: makeAPI(), defaults: makeDefaults())
+            await svc.didRegister(deviceToken: Data(repeating: 0xAB, count: 64))
+            await svc.didReceiveActivityUpdateToken("aa11", owner: Self.owner("med_x"))
+            #expect(recorder.decodedLast()?["liveActivityPushToken"] as? String == "aa11")
+            await svc.didEndActivity(activityID: "act-med_x")
+            #expect(recorder.count == 3)
+            #expect(recorder.decodedLast()?.keys.contains("liveActivityPushToken") == false)
+            // Unknown Activity: nothing to drop, no POST.
+            await svc.didEndActivity(activityID: "gone")
+            #expect(recorder.count == 3)
         }
 
         @Test("currentLiveActivityPushToken prefers update token, falls back to push-to-start")
@@ -229,7 +272,7 @@ import Testing
             #expect(svc.currentLiveActivityPushToken == "p2s-token")
 
             // An update token takes precedence (it can push a *running* Activity).
-            await svc.didReceiveActivityUpdateToken("update-token", medicationId: "med_a")
+            await svc.didReceiveActivityUpdateToken("update-token", owner: Self.owner("med_a"))
             #expect(svc.currentLiveActivityPushToken == "update-token")
         }
 
@@ -269,6 +312,53 @@ import Testing
 
             #expect(await reconcileRan.value == true)
             #expect(result == .newData)
+        }
+
+        /// Records the order the silent-push hooks ran in.
+        private actor StepLog {
+            private(set) var steps: [String] = []
+            func add(_ step: String) {
+                steps.append(step)
+            }
+        }
+
+        @Test("#188 (3): intake sync reconciles meds, then awaits the Live Activity, then tops up")
+        func intakeSyncOrder() async {
+            MockURLProtocol.install { req in (Self.okResponse(req), Data()) }
+            let coordinator = BackgroundSyncCoordinator(healthKit: nil)
+            let log = StepLog()
+            coordinator.attachReminderTopUpHook { await log.add("topUp") }
+            coordinator.attachMedicationReconcileHook {
+                // A slow reload: the Live Activity must still wait for it.
+                try? await Task.sleep(for: .milliseconds(50))
+                await log.add("meds")
+            }
+            coordinator.attachLiveActivityReconcileHook { await log.add("liveActivity") }
+            let svc = makeService(api: makeAPI(), defaults: makeDefaults(), backgroundSync: coordinator)
+
+            let result = await svc.didReceiveSilentNotification(userInfo: RemoteNotificationUserInfo([
+                "aps": ["content-available": 1],
+                "eventType": "MEDICATION_INTAKE_SYNC"
+            ]))
+
+            // Everything ran before the handler answered, in this order.
+            #expect(await log.steps == ["meds", "liveActivity", "topUp"])
+            #expect(result == .newData)
+        }
+
+        @Test("#188 (3): a non-intake push never runs the Live Activity reconcile")
+        func otherPushSkipsLiveActivity() async {
+            MockURLProtocol.install { req in (Self.okResponse(req), Data()) }
+            let coordinator = BackgroundSyncCoordinator(healthKit: nil)
+            let log = StepLog()
+            coordinator.attachReminderTopUpHook { await log.add("topUp") }
+            coordinator.attachLiveActivityReconcileHook { await log.add("liveActivity") }
+            let svc = makeService(api: makeAPI(), defaults: makeDefaults(), backgroundSync: coordinator)
+            _ = await svc.didReceiveSilentNotification(userInfo: RemoteNotificationUserInfo([
+                "aps": ["content-available": 1],
+                "eventType": "SOMETHING_ELSE"
+            ]))
+            #expect(await log.steps == ["topUp"])
         }
 
         @Test("Non-intake silent push does not trigger reconcile")

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.5.4-BF7 — StreakComputer derivation contract tests.
+/// StreakComputer derivation contract tests.
 ///
 /// Pins the two-record output shape (best-day + longest streak ≥
 /// threshold), the consecutive-day gap detection, the threshold filter,

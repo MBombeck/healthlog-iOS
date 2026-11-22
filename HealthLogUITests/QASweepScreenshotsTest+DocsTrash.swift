@@ -1,6 +1,6 @@
 import XCTest
 
-/// **DOCS-TRASH (1.5.0, #151) — Recently deleted documents, photographed.**
+/// **Recently deleted documents, photographed.**
 ///
 /// Opens Documents from More with `DocsTrashFixtures` (`-uitest-docs-trash`):
 /// the list with the centred link under it, Recently deleted with three rows,
@@ -25,8 +25,18 @@ extension QASweepScreenshotsTest {
         if let purge = probe("documents.trash.purge.trash-del-mrt") {
             purge.tap()
             settle(1)
-            shot("22d-trash-confirm\(size)")
-            _ = tap(element("documents.trash.purge.cancel.trash-del-mrt"), "purge cancel")
+            // The purge asks through the delete ladder's alert. Take the picture
+            // without `shot`, whose alert handling taps the first button, and
+            // answer with cancel so nothing is purged.
+            let confirm = URL(fileURLWithPath: outputDir).appendingPathComponent("22d-trash-confirm\(size).png")
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: confirm)
+            let alert = app.alerts.firstMatch
+            let cancel = alert.buttons.matching(NSPredicate(format: "label IN %@", ["Abbrechen", "Cancel", "Annuleren"])).firstMatch
+            if alert.waitForExistence(timeout: 3), cancel.exists {
+                cancel.tap()
+            } else {
+                note("purge question without cancel")
+            }
             settle(1)
         } else {
             note("purge button not found")

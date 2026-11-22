@@ -19,7 +19,9 @@ import Foundation
         /// Request read authorization for the full nutrient catalog. Only reached
         /// once the `nutrients` module is on (mirrors `requestCycleAuthorization`).
         func requestNutrientAuthorization() async throws {
-            let readTypes = Set(NutrientCatalog.all.compactMap { item -> HKObjectType? in
+            // The macros are asked only once the server takes them.
+            let items = NutrientCatalog.syncItems(includingMacros: AppleHealthIngestCapability.isAvailable(.nutrientMacros))
+            let readTypes = Set(items.compactMap { item -> HKObjectType? in
                 HKObjectType.quantityType(
                     forIdentifier: HKQuantityTypeIdentifier(rawValue: item.hkIdentifier)
                 )

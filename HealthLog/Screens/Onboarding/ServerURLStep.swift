@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Server-URL entry step.
 ///
-/// v0.10.0 (D12) — self-hosted-only. There is no managed-cloud product and
+/// Self-hosted-only. There is no managed-cloud product and
 /// the bundled default host is a private instance
 /// that must NOT be teased/offered to other users. The screen is therefore
 /// a clean URL entry: the user types the address of their own HealthLog
@@ -37,7 +37,7 @@ import SwiftUI
 /// through `AppContainer.reloadEnvironment()`, called right before the flow
 /// moves on to the auth step.
 ///
-/// **Draft (#153):** what is typed here lives in the container's
+/// **Draft:** what is typed here lives in the container's
 /// `OnboardingDraftStore` until then, in memory only. The privacy shield
 /// rebuilds the window whenever the scene goes inactive (a password manager,
 /// the app switcher), and the address and header values must be waiting when
@@ -45,7 +45,7 @@ import SwiftUI
 struct ServerURLStep: View {
     let onContinue: () -> Void
 
-    /// **R1 — warum diese Frage jetzt kommt.**
+    /// **Warum diese Frage jetzt kommt.**
     ///
     /// Normalerweise leer: der Titel trägt den Schritt (STANDARD R1/R5). Gesetzt
     /// wird sie nur dort, wo der Nutzer die Frage sonst nicht einordnen könnte —
@@ -71,7 +71,7 @@ struct ServerURLStep: View {
     /// once connectivity returns). Cleared whenever the URL text changes.
     @State private var lastValidatedURL: URL?
     @FocusState private var urlFocused: Bool
-    /// GH-iOS #27 — a server behind Cloudflare Access or Pangolin rejects the
+    /// A server behind Cloudflare Access or Pangolin rejects the
     /// probe below unless its headers are set, so they are offered here, before
     /// the first request, and not only in Settings. Folded away under
     /// "Advanced"; the probe sends them from the draft, and they are stored
@@ -82,7 +82,7 @@ struct ServerURLStep: View {
         case idle
         case probing
         case reachable
-        /// #149 — the server answered 503: it is starting. Offered a retry.
+        /// The server answered 503: it is starting. Offered a retry.
         case starting
         case unreachable(String)
     }
@@ -119,7 +119,7 @@ struct ServerURLStep: View {
                         .accessibilityIdentifier("onboarding.serverurl.notice")
                 }
 
-                // v0.10.0 (D12) — self-hosted-only: the URL editor is the
+                // Self-hosted-only: the URL editor is the
                 // single foreground path. No default-instance chip, no
                 // pre-fill, no cloud/standard framing. The user types the
                 // address of their own HealthLog instance.
@@ -135,14 +135,15 @@ struct ServerURLStep: View {
                         })
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         if let accessHeadersError {
-                            ServerAccessHeadersErrorLine(text: accessHeadersError)
+                            HLFormErrorText(accessHeadersError)
+                                .accessibilityIdentifier(ServerAccessHeadersEditor.errorIdentifier)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
                 .padding(.horizontal, HLSpace.lg)
                 .onAppear {
-                    // #153 — filled from what is stored once per run; a
+                    // Filled from what is stored once per run; a
                     // later visit (back from the sign-in step, or the window
                     // rebuilt by the privacy shield) keeps the user's edits.
                     if !draft.server.isSeeded, let container {
@@ -191,10 +192,7 @@ struct ServerURLStep: View {
                             .foregroundStyle(HLText.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        HLButton(
-                            String(localized: "onboarding.serverurl.continueAnyway"),
-                            variant: .ghost
-                        ) {
+                        HLLinkButton("onboarding.serverurl.continueAnyway") {
                             trustBoundaryURL = IdentifiableURL(url: staged)
                         }
                         .accessibilityIdentifier("onboarding.serverURLContinueAnyway")
@@ -297,40 +295,25 @@ struct ServerURLStep: View {
         }
     }
 
-    /// GH-iOS #27 — a centred text link under the address card; the editor
+    /// A centred text link under the address card; the editor
     /// unfolds beneath it. Most people never need it, so it stays one quiet
     /// word until tapped.
     private var advancedToggle: some View {
-        Button {
+        HLLinkButton("Advanced", isExpanded: draft.server.showsAdvanced) {
             // Unfolding hands the screen to the editor; the keyboard would
             // otherwise cover what just opened.
             if !draft.server.showsAdvanced { urlFocused = false }
             withAnimation(.easeInOut(duration: 0.25)) { draft.server.showsAdvanced.toggle() }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text("Advanced")
-                    .font(.hlSubhead.weight(.semibold))
-                // Same expander glyph as Settings › API tokens.
-                Image(systemName: draft.server.showsAdvanced ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("onboarding.serverURLAccessHeaders")
-        .accessibilityValue(draft.server.showsAdvanced ? Text("Expanded") : Text("Collapsed"))
     }
 
-    /// #149 — the server is starting: the sentence and a retry, nothing
+    /// The server is starting: the sentence and a retry, nothing
     /// about a wrong address.
     private var startingNotice: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             inlineError(text: String(localized: "Your server is starting up. Try again in a moment."))
-            HLButton(String(localized: "Try again"), variant: .secondary) {
+            HLButton(HLControlWord.retry.key, variant: .secondary) {
                 Task { await commit(urlString: draft.server.address) }
             }
             .accessibilityIdentifier("onboarding.serverURLRetry")
@@ -380,8 +363,8 @@ struct ServerURLStep: View {
             validationError = .malformed
             return
         }
-        // GH-iOS #27 — the probe sends the headers from the draft; nothing is
-        // stored before the user confirms the host (#153). An invalid list
+        // The probe sends the headers from the draft; nothing is
+        // stored before the user confirms the host. An invalid list
         // stops here, next to its fields.
         let headers: [ServerAccessHeader]
         do {
@@ -452,7 +435,7 @@ struct ServerURLStep: View {
     /// it to Keychain — see H-2. Self-hosted hosts fall back to default
     /// server-trust validation. Short-timeout, no caching.
     private func probe(url: URL, headers: [ServerAccessHeader]) async -> ProbeState {
-        // v0.7.1 H-1 — transport + cert-pinning extracted to
+        // Transport + cert-pinning extracted to
         // `ServerReachabilityProbe` (Services layer). The View only maps
         // the typed outcome onto its own localized copy.
         let outcome = await ServerReachabilityProbe().probe(
@@ -464,7 +447,7 @@ struct ServerURLStep: View {
     }
 
     /// The typed probe outcome as this step's state and copy. Pure, so the
-    /// sentence a 503 produces is unit-pinned (#149).
+    /// sentence a 503 produces is unit-pinned.
     static func probeState(for outcome: ServerReachabilityProbe.Outcome) -> ProbeState {
         switch outcome {
         case .malformedURL:
@@ -494,7 +477,7 @@ struct ServerURLStep: View {
 /// Modal sheet shown after a successful probe of a typed server URL.
 /// Forces an explicit trust-boundary acknowledgement before the host is
 /// persisted to Keychain — v0.6.2.9 H-2 audit recommendation 2, landed in
-/// v0.7.0. Since D12 (v0.10.0) there is no default-instance bypass: every
+/// v0.7.0. Since D12 there is no default-instance bypass: every
 /// typed host passes through this sheet.
 ///
 /// **Why a sheet and not an inline confirmation:** the user has just
@@ -553,12 +536,8 @@ private struct TrustBoundarySheet: View {
                 )
                 .accessibilityIdentifier("onboarding.trustboundary.confirm")
 
-                HLButton(
-                    String(localized: "onboarding.trustboundary.cancel"),
-                    variant: .ghost,
-                    action: onCancel
-                )
-                .accessibilityIdentifier("onboarding.trustboundary.cancel")
+                HLLinkButton("onboarding.trustboundary.cancel", action: onCancel)
+                    .accessibilityIdentifier("onboarding.trustboundary.cancel")
             }
             .padding(.horizontal, HLSpace.xl)
             .padding(.bottom, HLSpace.xl)

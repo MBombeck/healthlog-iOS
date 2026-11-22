@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// `@MainActor @Observable` ``EnvironmentStore`` behaviour (Build 7 Item 7.7),
+/// `@MainActor @Observable` ``EnvironmentStore`` behaviour,
 /// driven through the **real** ``APIClient`` + `MockURLProtocol`. Covers the
 /// success load, the module-gate "sinnvoll leer" disabled state, the
 /// always-present Open-Meteo attribution, and the logout wipe.

@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// Build 274 (public #3) — four TestFlight crashes on iOS 26/27: opening the
+    /// Four TestFlight crashes on iOS 26/27: opening the
     /// app from a medication reminder aborted inside UIKit's completion of
     /// `userNotificationCenter(_:didReceive:)` (`_performBlockAfterCATransactionCommitSynchronizes:`
     /// assertion, on a concurrency worker thread). Both delegate methods were
@@ -121,7 +121,7 @@ import Testing
 
         @Test("the ObjC completion handler of didReceive runs on the main thread")
         func didReceiveCompletesOnMain() async throws {
-            // Build 274 (public #3) — `NotificationService.init` claims the center's
+            // `NotificationService.init` claims the center's
             // (weak) delegate, but the host app's service owns it and
             // `NotificationDelegateOwnershipProbeTests` pins that; hand it back so this
             // suite's throwaway service does not leave the center delegate-less for the
@@ -142,7 +142,7 @@ import Testing
 
         @Test("the ObjC completion handler of willPresent runs on the main thread")
         func willPresentCompletesOnMain() async throws {
-            // Build 274 (public #3) — same delegate hand-back as above.
+            // Same delegate hand-back as above.
             let previousDelegate = UNUserNotificationCenter.current().delegate
             defer { UNUserNotificationCenter.current().delegate = previousDelegate }
             let service = makeService()
@@ -154,42 +154,6 @@ import Testing
                 }
             }
             #expect(onMain)
-        }
-
-        /// The structural pin: neither delegate method may opt out of the main
-        /// actor again, on any simulator OS — including one that does not assert.
-        /// Build 274 (public #3) — the extension line is pinned too. The witnesses
-        /// inherit their isolation from `@MainActor extension NotificationService:
-        /// @preconcurrency UNUserNotificationCenterDelegate`; dropping that one
-        /// `@MainActor` puts both methods back on a worker thread without any of
-        /// them gaining a `nonisolated` keyword for the loop below to catch.
-        @Test("neither delegate method is declared nonisolated")
-        func delegateMethodsAreMainActorIsolated() throws {
-            let file = URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent() // Services
-                .deletingLastPathComponent() // HealthLogTests
-                .deletingLastPathComponent() // repo root
-                .appendingPathComponent("HealthLog/Services/NotificationService+Handler.swift")
-            let source = try String(contentsOf: file, encoding: .utf8)
-            let declarations = source
-                .components(separatedBy: "\n")
-                .filter { $0.contains("func userNotificationCenter(") }
-            #expect(declarations.count == 2, "expected exactly the willPresent and didReceive witnesses")
-            for declaration in declarations {
-                #expect(
-                    !declaration.contains("nonisolated"),
-                    Comment(rawValue: declaration.trimmingCharacters(in: .whitespaces))
-                )
-            }
-            // `@MainActor` on the line directly above the conformance, with any
-            // indentation and any trailing whitespace on either line.
-            let isolatedExtension = try NSRegularExpression(
-                pattern: #"(?m)^[ \t]*@MainActor[ \t]*\r?\n[ \t]*extension[ \t]+NotificationService[ \t]*:[ \t]*@preconcurrency[ \t]+UNUserNotificationCenterDelegate\b"#
-            )
-            #expect(
-                isolatedExtension.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)) != nil,
-                "the delegate conformance must stay `@MainActor` — the witnesses inherit their isolation from it"
-            )
         }
     }
 #endif

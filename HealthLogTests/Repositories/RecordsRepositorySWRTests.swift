@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// QOL-OFF-2 — locks the SWR cache-first wiring on the second-tier PHI read
+/// Locks the SWR cache-first wiring on the second-tier PHI read
 /// surfaces (`LabsRepository`, `AllergiesRepository`, `FamilyHistoryRepository`,
 /// `MentalHealthRepository`) added so those screens are READABLE on a cold
 /// offline launch instead of rendering the empty "add your first…" state.
@@ -66,7 +66,7 @@ struct RecordsRepositorySWRTests {
         let repo = try LabsRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), swr: swr)
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — only OUR route counts.
+            // The handler is process-global — only OUR route counts.
             if req.targets("/api/labs") { calls += 1 }
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -90,7 +90,7 @@ struct RecordsRepositorySWRTests {
                 Self.envelope(#"{"results":[]}"#)
             )
         }
-        // 1.2 V5 — drain the coordinator that WROTE the row. A freshly made
+        // Drain the coordinator that WROTE the row. A freshly made
         // coordinator owns no pending persist, so draining one returned at once
         // and the offline read below raced the detached cache write (red under
         // load in INT-J and U1). The writer's drain awaits the write itself.

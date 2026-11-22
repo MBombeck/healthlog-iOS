@@ -2,9 +2,9 @@
 import Foundation
 
 extension MedicationDetailStore {
-    // MARK: - 14-02 (A3) — the section's three states
+    // MARK: - The section's three states
 
-    /// **14-02 (A3) — what the drug-level section renders, decided by the store.**
+    /// **What the drug-level section renders, decided by the store.**
     ///
     /// The section used to have exactly two branches: no doses → placeholder,
     /// doses → chart. That was a deliberate 12-10 decision (no skeleton zoo),
@@ -74,19 +74,9 @@ extension MedicationDetailStore {
     ///
     /// Filters out skipped events and any intake with `takenAt == nil`.
     ///
-    /// **14-02 (A3) — settled inputs only.** While the intake collection is
-    /// still being drained this returns `[]` rather than the partial set: a
-    /// dose set that is still growing is not a curve, and handing it out is
-    /// what made the section draw one curve per drain page. The section reads
-    /// ``drugLevelSection`` instead, which distinguishes "still collecting"
-    /// from "collected, and empty".
-    public func pkDoseEvents() -> [Glp1PK.DoseEvent] {
-        guard hasSettledIntakeCollection else { return [] }
-        return settledDoseEvents()
-    }
-
-    /// The dose derivation itself, ungated. Same body `pkDoseEvents()` always
-    /// had; the gate above is the only thing 14-02 added in front of it.
+    /// Ungated: the caller reads it only once the intake collection has
+    /// settled (``hasSettledIntakeCollection``); a dose set that is still
+    /// growing is not a curve.
     func settledDoseEvents() -> [Glp1PK.DoseEvent] {
         let history = (details?.doseChanges ?? []).sorted { $0.effectiveFrom < $1.effectiveFrom }
         let headlineDoseMg = Self.parseHeadlineDose(medication.dose)
@@ -100,7 +90,7 @@ extension MedicationDetailStore {
             }
     }
 
-    // MARK: - 14-02 (A3) — the memoized compute
+    // MARK: - The memoized compute
 
     /// Compute the settled curve ONCE and publish it, fenced.
     ///

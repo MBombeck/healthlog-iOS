@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// **v0.8.5 WFIX-LA — canonical design tokens for the widget extension.**
+/// **Canonical design tokens for the widget extension.**
 ///
 /// Shared source-membership file (compiled into BOTH `HealthLog` and
 /// `HealthLogWidgets`). The widget extension cannot resolve the app's
@@ -137,7 +137,7 @@ enum LAColor {
     }
 }
 
-/// **v0.14 b146 — the canonical widget/Live-Activity "Taken" pill.**
+/// **The canonical widget/Live-Activity "Taken" pill.**
 ///
 /// One source of truth for the dose-confirmation CTA across the widget
 /// extension. Previously the `NextDoseWidget` rolled `.tint(LAColor.accent) +

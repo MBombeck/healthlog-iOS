@@ -1,19 +1,17 @@
 import SwiftUI
 
-/// #112 — the cause of a failed channel test, in plain words: one sentence per
+/// The cause of a failed channel test, in plain words: one sentence per
 /// server `meta.errorCode`, the relay's HTTP status (or SMTP code) when it
 /// answered one, and the relay's own short error text beneath it as plain
-/// characters. Shared by the webhook and ntfy cards.
-struct ChannelTestFailureRow: View {
+/// characters. Shared by the webhook and ntfy cards. A form error under a
+/// channel card, built on HLFormErrorText, not the failed state of a screen.
+struct ChannelTestFailureRow: View { // swiftlint:disable:this hl_no_local_state_view
     let failure: NotificationChannelTestFailure
     let identifier: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(Self.sentence(for: failure))
-                .font(.hlCaption)
-                .foregroundStyle(HLColor.statusBad)
-                .fixedSize(horizontal: false, vertical: true)
+            HLFormErrorText(Self.sentence(for: failure))
             if let relayText = failure.upstreamBody {
                 // The relay's words, verbatim and as text only (the server
                 // bounds them to 200 characters and strips secret shapes).

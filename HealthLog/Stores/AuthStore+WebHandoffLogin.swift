@@ -14,7 +14,7 @@ import Foundation
     extension AuthStore {
         // MARK: - Web-handoff login (#65 / v1.32.11 self-hosted web sign-in)
 
-        /// #65 — starts the native web-handoff login flow for a self-hosted
+        /// Starts the native web-handoff login flow for a self-hosted
         /// instance. Generates app-side PKCE (S256), opens
         /// `…/api/auth/native/login?code_challenge=…` in an
         /// `ASWebAuthenticationSession` (where the instance's own passkeys +
@@ -66,7 +66,7 @@ import Foundation
             switch outcome {
             case .canceled:
                 // Benign user dismissal — no banner (mirrors the SSO cancel).
-                // 13-02: the form still opens. A user who dismissed the sheet
+                // The form still opens. A user who dismissed the sheet
                 // BECAUSE it showed an error page needs the way back to be
                 // there when they look; an unexplained banner they did not ask
                 // for is a different matter, and stays absent.
@@ -77,7 +77,7 @@ import Foundation
                 revealPasswordFallback(for: attempt)
                 HLLog.auth.warning("Web-login web-auth session failed to complete.")
             case let .callback(url):
-                // 13-02 — the session came back with an address instead of our
+                // The session came back with an address instead of our
                 // callback. That is what a dead end looks like from in here:
                 // the sheet navigated somewhere it could not follow (#96 sends
                 // it to the server's own bind address) and handed us the page
@@ -92,7 +92,7 @@ import Foundation
             }
         }
 
-        /// #65 — routes the parsed `healthlog://login-callback` into the correct
+        /// Routes the parsed `healthlog://login-callback` into the correct
         /// finalization path. `codeVerifier` is the in-memory PKCE verifier from
         /// ``loginWithWebLogin(anchor:)``; it is consumed exactly once here and
         /// never logged. `internal` (not `private`) so the flow-routing test can

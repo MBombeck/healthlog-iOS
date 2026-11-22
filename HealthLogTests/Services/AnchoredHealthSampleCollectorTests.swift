@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// Phase 07 Wave 2 — the app-owned collector's transaction.
+    /// The app-owned collector's transaction.
     ///
     /// The properties under test are the ones that only become expressible once the
     /// app issues the query itself: the committed anchor is read *before* the query,
@@ -41,7 +41,7 @@
             )
 
             // The first query resumes from nothing, because a replaying partition
-            // has no committed cursor yet. 1.3 (#127): what bounds it is the live
+            // has no committed cursor yet. What bounds it is the live
             // window (now minus two days, inside the chosen cutoff), not the
             // cutoff itself; the history leg walks the rest.
             #expect(source.resumedAnchors.count == 1)

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **MED-PLUS (1.5.0, #126 3.11) — "record doses automatically" and the
+/// **"record doses automatically" and the
 /// reminder state, as the server publishes them (v1.42.2).**
 ///
 /// With `autoMarkTaken` on, the server records every scheduled dose as taken

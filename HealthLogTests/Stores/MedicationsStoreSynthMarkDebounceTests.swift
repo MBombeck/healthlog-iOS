@@ -6,7 +6,7 @@ import Testing
 
 /// **v0.8.2 W1b (audit B5 + C6) — synth-mark in-flight guard + derived-count revert.**
 ///
-/// B5: `MedicationsStore`'s synth-placeholder mark path is a server CREATE
+/// `MedicationsStore`'s synth-placeholder mark path is a server CREATE
 /// (`recordFromReminder` → `POST /api/medications/intake/bulk`). Without an
 /// in-flight guard, two rapid taps on the same scheduled dose fire two
 /// concurrent CREATEs → two server intake rows for one dose. The store now
@@ -14,7 +14,7 @@ import Testing
 /// before the first `await`; a second tap while the first is pending is
 /// coalesced.
 ///
-/// C6: on a hard (non-retriable) failure of an optimistic synth mark,
+/// On a hard (non-retriable) failure of an optimistic synth mark,
 /// `removeOptimisticSynth` drops the optimistic row. Because the dashboard
 /// ring derives its widened count from `derivedTodayIntakes` (live), the
 /// derived `ComplianceSnapshot.reconciled` count must revert too — not just
@@ -141,7 +141,7 @@ struct MedicationsStoreSynthMarkDebounceTests {
         )
     }
 
-    // MARK: - B5 — sequential re-tap after settle is allowed (guard releases)
+    // MARK: - Sequential re-tap after settle is allowed (guard releases)
 
     @Test("a mark is allowed again after the prior mark settles (guard releases)")
     @MainActor
@@ -170,7 +170,7 @@ struct MedicationsStoreSynthMarkDebounceTests {
         #expect(store.isMarking(intakeId: synthID) == false)
     }
 
-    // MARK: - C6 — hard-failed optimistic synth mark reverts row AND derived count
+    // MARK: - Hard-failed optimistic synth mark reverts row AND derived count
 
     @Test("hard-failed synth mark reverts the optimistic row and the derived reconciled count")
     @MainActor

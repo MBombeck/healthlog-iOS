@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **B5 (1.4) — „LÖSCHEN“ with its umlaut, „LOESCHEN“ still accepted.**
+/// **„LÖSCHEN“ with its umlaut, „LOESCHEN“ still accepted.**
 @Suite("B5 — delete confirmation word")
 struct DeleteConfirmationPhraseTests {
     @Test("German shows LÖSCHEN, English keeps DELETE")

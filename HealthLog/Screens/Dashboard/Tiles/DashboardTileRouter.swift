@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// DASHBOARD-TILE-COMPLETENESS — single decision-point that picks the
+/// Single decision-point that picks the
 /// right tile component per `MetricKind`. Centralises the "which tile
 /// art does this kind get" question so dashboard layouts (Cards, Hero,
 /// List) all stay consistent and a future Audio-Exposure / VO2 Max
@@ -18,18 +18,18 @@ import SwiftUI
 struct DashboardTileRouter: View {
     let metric: DashboardMetric
     let dataState: MetricDataState
-    /// W-IMPL-MOTION-POLISH (v0.5.5.1) — matched-geometry namespace
+    /// Matched-geometry namespace
     /// forwarded into `HLDashboardTile` so its value text can match the
     /// `ChartDetailScreen` hero number on tap. `nil` under reduce-motion
     /// or when the parent surface doesn't host a namespace (e.g. the
     /// Charts list path, which hasn't adopted the transition yet).
-    /// W-IMPL-BACKLOG-CLEANUP (v0.5.5.2): now also forwarded into
+    /// Now also forwarded into
     /// `SleepCompositeTile`, which adopts a "soft" matched-geometry on
     /// the duration text (the most visually dominant element of the
     /// composite shape — the stages strip + legend stay behind because
     /// they have no peer in the chart-detail hero today).
     var matchedNamespace: Namespace.ID?
-    /// v0.6.2.x bug-c10-ios-direct — HK-direct today step total forwarded
+    /// HK-direct today step total forwarded
     /// from `DashboardScreen` (read off `LiveHealthKitTodayStore`). Only
     /// the Steps tile honors it; everything else passes through.
     var liveTodayStepsOverride: Double?
@@ -49,7 +49,7 @@ struct DashboardTileRouter: View {
         TileTrendVerdicts(targets: targets, snapshot: snapshot)
     }
 
-    /// #115 P2 — the account's display units (the same environment value the
+    /// The account's display units (the same environment value the
     /// tile formats its headline with) so the target band converts alongside.
     @Environment(\.unitPreferences) private var unitPreferences
 
@@ -61,7 +61,7 @@ struct DashboardTileRouter: View {
             // emits them on the dashboard summary (A3 §7.1 backlog) —
             // until then SleepCompositeTile falls back to a duration-
             // only tile with a sparkline that matches the regular tile
-            // visual cadence. W-IMPL-BACKLOG-CLEANUP (v0.5.5.2): forward
+            // visual cadence. Forward
             // the matched-geometry namespace so the duration text
             // participates in the same shared-element transition into
             // the chart-detail hero that every other metric tile uses.

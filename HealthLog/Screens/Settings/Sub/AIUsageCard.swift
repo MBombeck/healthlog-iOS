@@ -17,9 +17,8 @@ struct AIUsageCard: View {
     @State private var failed = false
 
     var body: some View {
-        HLSettingsCard(
-            icon: "gauge.with.dots.needle.33percent",
-            title: "settings.ai.usage.title",
+        HLCard(
+            "settings.ai.usage.title",
             subtitle: "settings.ai.usage.explainer"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -28,8 +27,7 @@ struct AIUsageCard: View {
                 }
                 ForEach(AIUsagePresentation.notes(for: usage), id: \.self) { note in
                     Text(verbatim: note)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if failed {
@@ -43,37 +41,17 @@ struct AIUsageCard: View {
         .accessibilityIdentifier("settings.ai.usage.card")
     }
 
+    /// The mark moves at the tap and stays while the server answers; the row
+    /// is locked until then.
     private func optionRow(_ option: AIUsageOption) -> some View {
-        Button {
+        HLChoiceRow(
+            title: Text(verbatim: AIUsagePresentation.label(option.level)),
+            detail: AIUsagePresentation.detail(for: option).map { Text(verbatim: $0) },
+            isSelected: (pending ?? usage.level) == option.level
+        ) {
             Task { await select(option.level) }
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: AIUsagePresentation.label(option.level))
-                        .font(.hlBody)
-                        .foregroundStyle(option.allowed ? HLText.primary : HLText.tertiary)
-                    if let detail = AIUsagePresentation.detail(for: option) {
-                        Text(verbatim: detail)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: HLSpace.sm)
-                if pending == option.level {
-                    ProgressView()
-                } else if usage.level == option.level {
-                    Image(systemName: "checkmark")
-                        .font(.hlIcon(HLIconSize.rowAction))
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                }
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(!option.allowed || pending != nil)
-        .accessibilityAddTraits(usage.level == option.level ? .isSelected : [])
         .accessibilityIdentifier("settings.ai.usage.option.\(option.level.rawValue)")
     }
 

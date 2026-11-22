@@ -6,7 +6,7 @@ import Foundation
 public actor NotificationsRepository {
     private let api: APIClientProtocol
 
-    /// **CU-20 (#69)** — the last `updatedAt` seen from
+    /// The last `updatedAt` seen from
     /// `/api/auth/me/notification-prefs` (GET or PATCH echo). Sent as
     /// `baseUpdatedAt` on the next PATCH so a write built on a stale read is
     /// refused with `409 notification_prefs_conflict` instead of deep-merging
@@ -27,7 +27,7 @@ public actor NotificationsRepository {
         try await api.send(.get("/api/notifications/preferences"))
     }
 
-    /// **AUDIT-G A1-B1 (v0.11)** — cold-read of the evening mood-reminder hour.
+    /// Cold-read of the evening mood-reminder hour.
     /// The hour's source of truth is `GET /api/auth/me/notification-prefs`
     /// (`{ medication, mood: { reminderHour } }`), NOT
     /// `/api/notifications/preferences` (which carries no `mood` block). Reading
@@ -38,12 +38,12 @@ public actor NotificationsRepository {
         let payload: AuthNotificationPrefsPayload = try await api.send(
             .get("/api/auth/me/notification-prefs")
         )
-        // CU-20 — every GET refreshes the token the next PATCH will echo.
+        // Every GET refreshes the token the next PATCH will echo.
         baseUpdatedAt = payload.updatedAt
         return payload
     }
 
-    /// **CU-20 (#69)** — the single guarded PATCH used by all three
+    /// The single guarded PATCH used by all three
     /// notification-prefs writers below.
     ///
     /// Sends `body` plus the held `baseUpdatedAt` (omitted when absent — a
@@ -103,7 +103,7 @@ public actor NotificationsRepository {
         try await api.sendVoid(req)
     }
 
-    /// **v0.10.0 W-Mood-B** — set the per-user evening mood-reminder hour
+    /// Set the per-user evening mood-reminder hour
     /// (0–23). Server v1.7.0 exposes it at `notificationPrefs.mood.reminderHour`
     /// (read via ``preferences()``); the write rides the existing
     /// `PATCH /api/auth/me/notification-prefs` surface with the same nested
@@ -121,7 +121,7 @@ public actor NotificationsRepository {
         try await patchAuthNotificationPrefs(Body(mood: MoodPrefs(reminderHour: clamped)))
     }
 
-    /// **MED-4 / AUDIT-PARITY C3** — set the low-supply runway threshold
+    /// Set the low-supply runway threshold
     /// (`notificationPrefs.medication.lowStockRunwayDays`, 1–60 days, or `null`
     /// to turn the alert off). Rides the same `PATCH /api/auth/me/notification-prefs`
     /// surface as the mood hour, nesting under `medication` exactly as the GET
@@ -154,7 +154,26 @@ public actor NotificationsRepository {
         try await patchAuthNotificationPrefs(Body(medication: MedicationPrefs(lowStockRunwayDays: clamped)))
     }
 
-    /// **W-B189 / #23** — set the preventive-care (Vorsorge) reminder opt-in
+    /// #191 — the account's snooze span for medication reminders
+    /// (`notificationPrefs.medication.snoozeMinutes`, 5 to 240, default 30).
+    /// `PATCH { medication: { snoozeMinutes } }`, deep-merged and guarded by
+    /// `baseUpdatedAt` like every writer here. Answers the span the server
+    /// resolved, or `nil` when the echo does not carry it.
+    @discardableResult
+    public func setMedicationSnoozeMinutes(_ minutes: Int) async throws -> Int? {
+        struct MedicationPrefs: Encodable, Sendable {
+            let snoozeMinutes: Int
+        }
+        struct Body: Encodable, Sendable {
+            let medication: MedicationPrefs
+        }
+        let echoed = try await patchAuthNotificationPrefs(
+            Body(medication: MedicationPrefs(snoozeMinutes: MedicationSnooze.clamped(minutes)))
+        )
+        return echoed.medication?.snoozeMinutes
+    }
+
+    /// Set the preventive-care (Vorsorge) reminder opt-in
     /// (`notificationPrefs.measurementReminder.clientManaged`). Rides the same
     /// `PATCH /api/auth/me/notification-prefs` surface as the mood hour + the
     /// low-stock threshold, nesting under `measurementReminder` exactly as the
@@ -173,7 +192,7 @@ public actor NotificationsRepository {
         )
     }
 
-    /// **CU-20 (#69) — the write the token was introduced for.** Sets
+    /// **The write the token was introduced for.** Sets
     /// `notificationPrefs.medication.clientManaged`: `true` means iOS owns
     /// medication reminder delivery and the server must not also push.
     ///
@@ -184,7 +203,7 @@ public actor NotificationsRepository {
     /// With `baseUpdatedAt` the write either lands or returns 409 having
     /// written nothing.
     ///
-    /// **N1** — returns the state the server resolved after the write (the
+    /// Returns the state the server resolved after the write (the
     /// PATCH echo), or `nil` when the echo does not carry the field. Called by
     /// ``MedicationReminderDeliveryCoordinator`` only, and only when this
     /// device's truth differs from the server's.
@@ -195,7 +214,7 @@ public actor NotificationsRepository {
         ).medicationReminderDelivery
     }
 
-    /// **N1** — take `clientManaged` back while signing out, before the
+    /// Take `clientManaged` back while signing out, before the
     /// refresh token is revoked. Unconditional (no `baseUpdatedAt`): the server
     /// deep-merges this one leaf, so it cannot clobber a sibling, and a sign-out
     /// must not stall in a conflict round. Fail-fast with no retries: sign-out
@@ -233,7 +252,7 @@ public actor NotificationsRepository {
     /// Returns without value — the caller reloads `status` to refresh
     /// the badge.
     ///
-    /// Used by REG-12 (v0.5.6) fix: when the operator sees "Apple Push
+    /// Used by REG-12 fix: when the operator sees "Apple Push
     /// (APNs) — pausiert" in Settings, the row exposes an "Erneut
     /// versuchen" button that calls this method so the next reminder
     /// dispatch tries the upstream again instead of skipping the

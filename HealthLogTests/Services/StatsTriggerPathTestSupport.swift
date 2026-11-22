@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **V1 (1.2)** — fixtures for the `stats:` trigger-path suites.
+    /// Fixtures for the `stats:` trigger-path suites.
     ///
     /// The batch API records every POST (its `syncTrigger` word and the
     /// `externalId`s it carried) and answers each entry `inserted`, so the
@@ -190,7 +190,6 @@ import Testing
                 statisticsService: reader,
                 cache: cache,
                 uploader: uploader,
-                featureFlags: AlwaysOnFeatureFlags(),
                 calendar: calendar,
                 clock: { Self.now },
                 admission: { lease },

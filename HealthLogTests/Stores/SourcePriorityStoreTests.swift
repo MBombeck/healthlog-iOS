@@ -4,14 +4,14 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.3-F3 — `SourcePriorityStore` derivation contract.
+/// `SourcePriorityStore` derivation contract.
 ///
 /// Pins the metric-key set + label translation + row composition so the
 /// read-only ladder card stays stable across waves. The store itself is a
 /// thin wrapper over the actor repo; the meaningful behaviour is the
 /// `metricEntries` derivative and the source-label translation.
 ///
-/// v0.5.4-SP4: erweitert um Write-Path-Tests für den Editor —
+/// Erweitert um Write-Path-Tests für den Editor —
 /// `updateLadder(forMetric:to:)` + `resetToDefaults()` + Rollback-Verhalten.
 @Suite("SourcePriorityStore — metric ladder derivation", .serialized, .mockURLSession)
 @MainActor
@@ -52,7 +52,7 @@ struct SourcePriorityStoreTests {
             "skinTemperature",
             "vo2Max",
             "recovery",
-            // Build 2 / 2.6 — closed the 17-vs-19 gap against the web editor.
+            // Closed the 17-vs-19 gap against the web editor.
             "stress",
             "sleepDebt"
         ]
@@ -173,7 +173,7 @@ struct SourcePriorityStoreTests {
             == ["APPLE_HEALTH", "WITHINGS", "WHOOP", "FITBIT", "OURA", "POLAR", "NIGHTSCOUT", "STRAVA", "MANUAL", "IMPORT"])
     }
 
-    /// POLISH-C (C5) — Garmin joins the editor only on a server that takes
+    /// Garmin joins the editor only on a server that takes
     /// it in a ladder (v1.47.0, `source-priority.ts`). An older or unknown
     /// server would refuse a saved ladder with `GARMIN`, so it is not offered.
     @Test("the editor offers Garmin only on a server from v1.47.0", arguments: [

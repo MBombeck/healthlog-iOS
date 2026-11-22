@@ -52,7 +52,7 @@ public final class AllergiesStore {
         }
         do {
             let fetched = try await repository.list(includeInactive: includeInactive)
-            // L6 — a refresh during the undo window must NOT re-surface a row that
+            // A refresh during the undo window must NOT re-surface a row that
             // is mid-deferred-delete: the pending DELETE still fires and the row
             // would vanish on the next load, a confusing flicker. Filter out any id
             // with a pending delete so the optimistic removal holds until the
@@ -68,7 +68,7 @@ public final class AllergiesStore {
 
     /// Create an allergy, then reload. Returns the created record on success.
     ///
-    /// **H3 — offline create is SUCCESS, not failure.** When the network attempt
+    /// **Offline create is SUCCESS, not failure.** When the network attempt
     /// fails retriably the repo durably enqueues the create under a STABLE
     /// idempotency key and re-throws `HLError.shouldPersistToOutbox`. We treat that
     /// as success (insert an optimistic row, return it) — mirroring `commitDelete`
@@ -79,7 +79,7 @@ public final class AllergiesStore {
     @discardableResult
     public func create(_ body: AllergyCreate) async -> AllergyDTO? {
         lastError = nil
-        // audit-v0162 H-4 — mint the optimistic id UP FRONT and stamp it on the
+        // Mint the optimistic id UP FRONT and stamp it on the
         // queued create so a later offline edit/delete of this record (which
         // targets the same optimistic id) is remapped to the server id when the
         // create replays, instead of 404-ing.
@@ -101,7 +101,7 @@ public final class AllergiesStore {
 
     /// Update an allergy, then reload. Returns `true` on success.
     ///
-    /// **H3 — an offline (durably enqueued) update is SUCCESS.** Same rationale as
+    /// **An offline (durably enqueued) update is SUCCESS.** Same rationale as
     /// `create`: surfacing it as a failure invites a retry that mints a second
     /// idempotency key → a duplicate PATCH on reconnect. The outbox replays the
     /// queued PATCH once; the next online reload reflects the server state.
@@ -201,7 +201,7 @@ public final class AllergiesStore {
 
     // MARK: - Private
 
-    /// Build an optimistic in-memory row for an offline-queued create (H3). Carries
+    /// Build an optimistic in-memory row for an offline-queued create. Carries
     /// a temporary `optimistic-…` id so it never collides with a server id; the
     /// next online reload replaces the whole snapshot with the server records
     /// (under the same idempotency key), so the placeholder is transient.
@@ -222,7 +222,7 @@ public final class AllergiesStore {
         )
     }
 
-    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// The visible error is localized copy, not a Swift description.
     /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
     /// user-facing surface; the sanitized description belongs in the log line,
     /// where triage reads it. `HLError.userFacingText(for:)` resolves the

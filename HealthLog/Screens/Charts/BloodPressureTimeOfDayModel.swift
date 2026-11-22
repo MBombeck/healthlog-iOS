@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **1.5 BP-TOD** — the state behind ``BloodPressureTimeOfDaySection``.
+/// The state behind ``BloodPressureTimeOfDaySection``.
 ///
 /// Owned by the section, so it lives exactly as long as the open blood
 /// pressure page and never outlives an account switch. Stale while

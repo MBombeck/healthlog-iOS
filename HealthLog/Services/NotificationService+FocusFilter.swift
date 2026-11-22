@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// **W-FOCUS-FILTER (v0.15.2)** — the central gated `add()` seam every
+    /// The central gated `add()` seam every
     /// *local* notification scheduling path funnels through, plus the
     /// observability log.
     ///
@@ -44,6 +44,10 @@ import Foundation
         ///   reminder (BH-final-diff M1).
         /// - Urgent requests (`.timeSensitive` / `.critical`) and every request
         ///   when no filter is active are added normally and return `true`.
+        /// - `budgetExempt` (D3 #9) skips the budget check: a snooze the person
+        ///   just asked for. iOS keeps the 64 requests that fire first, so at
+        ///   the cap it drops the latest-firing one, never a snooze due in
+        ///   minutes.
         ///
         /// Throws only what `UNUserNotificationCenter.add` throws — a held-back
         /// or budget-skipped request never throws (it is a deliberate no-op
@@ -52,7 +56,8 @@ import Foundation
         func addLocalNotification(
             _ request: UNNotificationRequest,
             center: UNUserNotificationCenter = .current(),
-            config: FocusFilterConfig = FocusFilterConfigStore.current()
+            config: FocusFilterConfig = FocusFilterConfigStore.current(),
+            budgetExempt: Bool = false
         ) async throws -> Bool {
             if FocusFilterSuppression.shouldSuppress(request: request, config: config) {
                 // Held back by the Focus filter — delivery only, no data touched.
@@ -66,8 +71,9 @@ import Foundation
             // only gate when this id would be a NEW pending entry pushing the
             // total past the cap.
             let pending = await center.pendingNotificationRequests()
+            MedicationReminderRunway.noteForeignPending(in: pending.map(\.identifier))
             let isReplacement = pending.contains { $0.identifier == request.identifier }
-            if !isReplacement, pending.count >= Self.pendingLocalNotificationCap {
+            if !budgetExempt, !isReplacement, pending.count >= Self.pendingLocalNotificationCap {
                 HLLog.notifications
                     .warning(
                         "Pending notification budget exhausted (\(pending.count, privacy: .public)/\(Self.pendingLocalNotificationCap, privacy: .public)) — local add skipped, will re-offer next sweep"

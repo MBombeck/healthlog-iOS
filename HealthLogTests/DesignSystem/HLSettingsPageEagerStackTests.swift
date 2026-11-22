@@ -2,7 +2,7 @@
 import SwiftUI
 import Testing
 
-/// G1 — the Settings page scaffold stacks its cards eagerly.
+/// The Settings page scaffold stacks its cards eagerly.
 ///
 /// With a lazy stack, the Share screen froze the app (main thread at 100 %
 /// inside `LazySubviewPlacements.placeSubviews` → `LazyStack.place`) when it
@@ -16,15 +16,26 @@ import Testing
 @Suite("HLSettingsPage eager stack (G1)")
 @MainActor
 struct HLSettingsPageEagerStackTests {
-    @Test("the page body stacks its cards in a VStack, never a LazyVStack")
-    func pageBodyIsEager() {
+    @Test("the settings page stands on the shared page frame")
+    func settingsPageUsesSharedFrame() {
         let page = HLSettingsPage(title: "Account") {
-            HLSettingsCard(icon: "person.fill", title: "Profile") {
+            HLCard("Profile") {
                 Text("Body")
             }
         }
         let bodyType = String(reflecting: type(of: page.body))
-        #expect(!bodyType.contains("LazyVStack"), "HLSettingsPage is lazy again: \(bodyType)")
-        #expect(bodyType.contains("VStack"), "HLSettingsPage lost its card stack: \(bodyType)")
+        #expect(bodyType.contains("HLPage"), "HLSettingsPage left the shared page frame: \(bodyType)")
+    }
+
+    @Test("the page frame stacks its cards in a VStack, never a LazyVStack")
+    func pageBodyIsEager() {
+        let page = HLPage {
+            HLCard("Profile") {
+                Text("Body")
+            }
+        }
+        let bodyType = String(reflecting: type(of: page.body))
+        #expect(!bodyType.contains("LazyVStack"), "HLPage is lazy again: \(bodyType)")
+        #expect(bodyType.contains("VStack"), "HLPage lost its card stack: \(bodyType)")
     }
 }

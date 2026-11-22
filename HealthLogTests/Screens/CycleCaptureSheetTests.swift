@@ -149,10 +149,10 @@ struct CycleCaptureSheetTests {
         return SettingsStore(repo: repo, defaults: defaults)
     }
 
-    @Test("saveDayLog is a no-op while the gate is closed (flag OFF default)")
+    @Test("saveDayLog is a no-op while the gate is closed")
     func saveNoOpWhenGateClosed() async throws {
         let repo = try CycleRepository(api: makeClient(), outbox: OutboxQueue(inMemory: true))
-        // No FeatureFlagsStore → cycleTracking defaults OFF → gate closed.
+        // No profile gender, no opt-in → gate closed.
         let gate = CycleGate(settings: makeSettings())
         let store = CycleStore(repository: repo, gate: gate)
         #expect(gate.isCycleTrackingAvailable == false)
@@ -186,12 +186,6 @@ struct CycleCaptureSheetTests {
         }
     }
 
-    private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let store = FeatureFlagsStore()
-        store.setOverride(.cycleTracking, enabled: true)
-        return store
-    }
-
     private func makeFemaleSettings() async -> SettingsStore {
         let settings = makeSettings()
         let profileJSON = """
@@ -220,9 +214,8 @@ struct CycleCaptureSheetTests {
     /// Open-gate store + a recorder. The handler returns benign 2xx for every
     /// write/read endpoint and records the path so a test can assert hits.
     private func makeOpenStore() async throws -> (CycleStore, HitRecorder) {
-        let flags = await makeFlagsEnabled()
         let settings = await makeFemaleSettings()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
         let repo = try CycleRepository(api: makeClient(), outbox: OutboxQueue(inMemory: true))

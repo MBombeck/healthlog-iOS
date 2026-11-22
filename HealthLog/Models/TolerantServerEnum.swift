@@ -84,13 +84,6 @@ public extension KeyedDecodingContainer {
         }
         return result
     }
-
-    /// Like ``decodeLossyArray(_:forKey:)`` but keeps "absent" distinct from
-    /// "empty": returns `nil` when the key is missing or `null`.
-    func decodeLossyArrayIfPresent<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> [T]? {
-        guard contains(key), try decodeNil(forKey: key) == false else { return nil }
-        return try decodeLossyArray(type, forKey: key)
-    }
 }
 
 /// Swallows exactly one JSON value so a lossy loop can step past an element

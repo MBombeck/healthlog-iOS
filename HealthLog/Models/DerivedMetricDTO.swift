@@ -24,7 +24,7 @@ import Foundation
 /// (route not deployed) maps to `nil` at the repository.
 ///
 /// **Server-derived (paired only).** Pure server compute — no on-device
-/// fallback — so the derived block hides in standalone / no-server.
+/// fallback — so the derived block hides without a server.
 public struct DerivedMetricDTO: Codable, Sendable, Equatable {
     /// The metric id this envelope describes (echoes the requested id).
     public let metric: String
@@ -44,7 +44,7 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
     /// Short machine reason on the `insufficient` arm (localise prose
     /// client-side); `nil` on `ok`.
     public let reason: String?
-    /// **D1 — per-score "Einschätzung".** Server v1.14.0 additive field
+    /// **Per-score "Einschätzung".** Server v1.14.0 additive field
     /// (`src/lib/insights/derived/derived-assessment.ts:DerivedAssessment`,
     /// `src/app/api/insights/derived/route.ts`): a short "why is this score what
     /// it is" explanation, keyed to the SAME requested id (only emitted for the
@@ -56,7 +56,7 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
     /// fabricated). Decoded leniently (`decodeIfPresent`) so older servers that
     /// omit the field stay forward-compatible.
     public let assessment: Assessment?
-    /// **v0.14.1 — warm-in-flight flag.** Mirrors the narrative route's
+    /// **Warm-in-flight flag.** Mirrors the narrative route's
     /// `revalidating` contract (`NarrativeDTO.revalidating`): `true` when the
     /// server is still computing this score / assessment out of band (a cold
     /// first-login session where the daily derived compute has not landed yet),
@@ -319,14 +319,14 @@ public struct DerivedMetricDTO: Codable, Sendable, Equatable {
         /// open-bottom gauge's band ticks. `nil` without demographics.
         public let referenceBand: ReferenceBand?
 
-        // Ranked contributor breakdown (I-2). READINESS emits `components`,
+        // Ranked contributor breakdown. READINESS emits `components`,
         // SLEEP_SCORE emits `subScores` — same row shape. Both decode here; the
         // `contributors` accessor unifies them so callers never branch on which
         // array the server populated. STRAIN/RECOVERY/STRESS emit neither
         // (provenance-only) → both stay `nil`.
         public let components: [Contributor]?
         public let subScores: [Contributor]?
-        /// #145 — SLEEP_SCORE: nights in the window with a main sleep on the
+        /// SLEEP_SCORE: nights in the window with a main sleep on the
         /// clock (what consistency and timing are computed from), and how many
         /// they need before they are scored. `nil` on an older server.
         public let rhythmNights: Int?

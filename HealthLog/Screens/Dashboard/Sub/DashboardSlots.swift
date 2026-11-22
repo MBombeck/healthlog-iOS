@@ -1,6 +1,6 @@
 import SwiftUI
 
-// INV-3 (v0157) — store-scoped leaf hosts for the Home dashboard.
+// Store-scoped leaf hosts for the Home dashboard.
 //
 // **Why these exist.** Under the Observation framework, every `@Observable`
 // property read DURING a view's `body` registers a dependency on THAT view. The
@@ -19,7 +19,7 @@ import SwiftUI
 // they replaced. No visual or behavioural change; only the invalidation scope
 // shrank.
 
-// MARK: - Vorsorge host — REMOVED (Wave 2 / 2.6)
+// MARK: - Vorsorge host — REMOVED
 
 //
 // `DashboardVorsorgeHost` + its `VorsorgeTile` were deleted. The host gated on
@@ -43,13 +43,13 @@ struct DashboardSyncFooterHost: View {
     @Environment(DashboardStore.self) private var store
 
     var body: some View {
-        // v0.14.1 — discreet last-synced caption (operator: "nett, nicht
+        // Discreet last-synced caption (operator: "nett, nicht
         // überfrachtet"): "Wird synchronisiert…" during a refresh, otherwise
-        // "Zuletzt synchronisiert HH:MM". v0.14.8 W2-SYNCUX — routed through the
+        // "Zuletzt synchronisiert HH:MM". Routed through the
         // shared `HLSyncStatusFooter` so placement can't drift.
         // 1.4 decision 3 — Today is the one screen that keeps the settled
         // "Zuletzt synchronisiert" line; every other footer shows real states only.
-        // 1.4 B2 — no first-login "Deine Daten werden vorbereitet…" here: the
+        // No first-login "Deine Daten werden vorbereitet…" here: the
         // `FirstLoginSyncBanner` above the tab bar says it at the same moment.
         HLSyncStatusFooter(screenLoading: store.isLoading, scope: .today)
     }
@@ -78,6 +78,18 @@ struct DashboardSyncFooterHost: View {
 /// move WITH `orderedMetrics` (via `DashboardMetricOrdering`, called inside THIS
 /// body so the deps register here).
 struct DashboardMetricsHost: View {
+    /// Which half of the composition this host draws. Today splits it over
+    /// its two columns: the lead cards stand with the hero, the tiles in the
+    /// trailing column. Stacked, the lead stands right above the tiles, the
+    /// order it always had.
+    enum Part {
+        /// The highlight card and the compliance ring.
+        case lead
+        /// The tiles (or their empty state or skeleton) and the quick actions.
+        case tiles
+    }
+
+    let part: Part
     let matchedNamespace: Namespace.ID?
     let zoomNamespace: Namespace.ID
     let allowsMotion: Bool
@@ -89,9 +101,8 @@ struct DashboardMetricsHost: View {
     let onShowCustomize: () -> Void
     /// Requests the capture flow (`router.requestCapture()`).
     let onRequestCapture: () -> Void
-    /// #67 — retries the summary load + per-kind tile fan-out when the metrics
-    /// section failed with no cached fallback (drives `DashboardMetricsErrorState`).
-    let onRetry: () -> Void
+    /// #186 — pushes the symptom quick entry (host's `@State showSymptomEntry`).
+    var onLogSymptom: () -> Void = {}
 
     @Environment(DashboardStore.self) private var store
     @Environment(DashboardLayoutStore.self) private var layoutStore
@@ -104,17 +115,31 @@ struct DashboardMetricsHost: View {
     // dependency is a cold cost, not a per-frame one.
     @Environment(InsightsStore.self) private var insights
     @Environment(InsightsTargetsStore.self) private var insightsTargets
-    /// #115 · 1.1 — the snapshot slot this store already fetches carries the
+    /// The snapshot slot this store already fetches carries the
     /// server's weight verdict; no extra request.
     @Environment(DailyBriefingStore.self) private var briefingStore
+    /// The hero's digest: when it names today's medications, the
+    /// compliance card would repeat it.
+    @Environment(DailyDigestStore.self) private var digestStore
     @Environment(\.appContainer) private var container
+    /// Observed so the symptom row appears as soon as the version probe lands.
+    @AppStorage(KnownServerVersion.defaultsKey) private var serverVersion: String?
 
     var body: some View {
-        metrics
+        switch part {
+        case .lead:
+            lead
+        case .tiles:
+            tilesWithRefresh
+        }
+    }
+
+    private var tilesWithRefresh: some View {
+        tiles
             // The summary is re-read after the person marks a dose. Attached
             // to the host, not the compliance card: the card renders nothing
             // while there is nothing to count, and the first dose must still
-            // bring it in (1.4 B2).
+            // bring it in.
             .onChange(of: DashboardIntakeSignature(medicationsStore)) { old, new in
                 guard DashboardIntakeSignature.shouldRefreshSummary(from: old, to: new) else { return }
                 Task { await store.refresh(force: true) }
@@ -122,20 +147,34 @@ struct DashboardMetricsHost: View {
     }
 
     @ViewBuilder
-    private var metrics: some View {
+    private var lead: some View {
         if let summary = store.summary {
             HighlightInsightCard(insight: summary.highlightInsight)
-            // #115 · 1.3 — the ring renders the server's `compliance`
+            // The ring renders the server's `compliance`
             // (`scheduledToday` / `takenToday`, profile-zone day, projected
             // slots included since v1.4.39) verbatim. The client no longer
             // recounts today from local intakes; after the person marks a
             // dose, the summary is re-read instead (see `.onChange` below).
             // The ring honours the customize screen's "Medications" toggle.
-            if medicationsTileVisible {
-                ComplianceRingCard(snapshot: summary.compliance) {
+            if medicationsTileVisible, !ComplianceRingCard.heroNamesMedications(digestStore.digest) {
+                // 1.7: the ring counts the confirmed today rows the card
+                // shows; the summary only stands in before they are loaded.
+                let today = medicationsStore.todayState
+                ComplianceRingCard(
+                    snapshot: ComplianceRingCard.snapshot(summary: summary.compliance, state: today),
+                    openToday: ComplianceRingCard.openToday(state: today),
+                    scheduledTodayAt: briefingStore.snapshotBriefing?.scheduledTodayAt,
+                    openDoses: ComplianceRingCard.openDoseSlots(medicationsStore.todayIntakes)
+                ) {
                     onShowIntakes()
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var tiles: some View {
+        if let summary = store.summary {
             let visibleMetrics = orderedMetrics(summary.metrics)
             if visibleMetrics.isEmpty {
                 emptyMetricsState
@@ -159,7 +198,8 @@ struct DashboardMetricsHost: View {
             // would be a redundant second copy there.
             if !orderedMetrics(summary.metrics).isEmpty {
                 DashboardQuickActionsFooter(
-                    onShowCustomize: onShowCustomize
+                    onShowCustomize: onShowCustomize,
+                    onLogSymptom: symptomEntryOffered ? onLogSymptom : nil
                 )
             }
         } else if DashboardMetricsSectionState.resolve(
@@ -167,17 +207,25 @@ struct DashboardMetricsHost: View {
             hasError: store.error != nil,
             isLoading: store.isLoading
         ) == .error {
-            // #67 — the summary subrequest failed with no cached fallback.
-            // Show an honest error + retry instead of an indefinite skeleton;
-            // the score rings / hero / compliance sections above render through
-            // their own stores and are unaffected.
-            DashboardMetricsErrorState(onRetry: onRetry)
+            // The summary subrequest failed with no cached fallback. The rest
+            // of Home stands, so the failure is the top banner with its retry
+            // (`DashboardScreen`), not a second message here and not an
+            // endless skeleton.
+            EmptyView()
         } else {
             SkeletonContent()
         }
     }
 
-    /// v0.14.8 AUDIT-HOME H2 — honest empty branch for the metric area, shared by
+    /// #186 — Today offers "Symptom erfassen" where symptoms can be logged.
+    private var symptomEntryOffered: Bool {
+        SymptomQuickEntryState.isOffered(
+            illnessEnabled: container?.moduleGate.isEnabled(.illness) ?? false,
+            serverVersion: serverVersion
+        )
+    }
+
+    /// Honest empty branch for the metric area, shared by
     /// the cards layout. Distinguishes the two reasons `orderedMetrics` can come
     /// back empty:
     ///
@@ -195,9 +243,14 @@ struct DashboardMetricsHost: View {
                 onShowCustomize()
             }
         } else {
-            DashboardNoDataEmptyState {
-                onRequestCapture()
+            // Title and button only: the Apple Health banner above already
+            // asks for the connection, and the button says the rest.
+            HLEmptyState(icon: "heart.text.square", title: "No data yet") {
+                HLButton("Capture first value", systemImage: "plus", variant: .secondary) {
+                    onRequestCapture()
+                }
             }
+            .accessibilityIdentifier("dashboard.noDataEmptyState")
         }
     }
 
@@ -213,5 +266,77 @@ struct DashboardMetricsHost: View {
             layoutStore: layoutStore,
             container: container
         )
+    }
+}
+
+// MARK: - Today's one column
+
+/// Today's one column: the head (the Apple Health cards and the hero), the
+/// day's cards (rhythm events, highlight, compliance ring) and the tiles.
+/// On the phone the day's cards stand above the tiles, as they always did;
+/// on a wide page the tiles follow the hero (``TodayLayout/order(contentWidth:)``).
+/// The order comes from the width offered in the same layout pass, so
+/// nothing jumps after a first frame.
+struct TodayStack<Head: View, Cards: View, Tiles: View>: View {
+    let head: Head
+    let cards: Cards
+    let tiles: Tiles
+
+    /// The width last laid out, only for the reading order: VoiceOver and Full
+    /// Keyboard Access follow the blocks as they stand.
+    @State private var order: TodayLayout.Order = .dayFirst
+
+    var body: some View {
+        TodayStackLayout {
+            block(priority: 3) { head }
+            block(priority: order == .dayFirst ? 2 : 1) { cards }
+            block(priority: order == .dayFirst ? 1 : 2) { tiles }
+        }
+        .onGeometryChange(for: TodayLayout.Order.self) { proxy in
+            TodayLayout.order(contentWidth: proxy.size.width)
+        } action: { order = $0 }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func block(priority: Double, @ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+            content()
+        }
+        .hlContainerGap(HLLayout.cardGap)
+        .accessibilityElement(children: .contain)
+        .accessibilitySortPriority(priority)
+    }
+}
+
+/// Stacks Today's three blocks (head, cards, tiles) in the order of
+/// ``TodayLayout/order(contentWidth:)`` at the width it is offered. An empty
+/// block takes no gap.
+struct TodayStackLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout Void) -> CGSize {
+        let width = proposal.width ?? subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        let row = ProposedViewSize(width: width, height: nil)
+        let heights = subviews.map { $0.sizeThatFits(row).height }
+        let visible = heights.filter { $0 > 0 }.count
+        return CGSize(width: width, height: heights.reduce(0, +) + HLLayout.cardGap * CGFloat(max(0, visible - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout Void) {
+        let row = ProposedViewSize(width: bounds.width, height: nil)
+        var y = bounds.minY
+        for index in Self.placementOrder(TodayLayout.order(contentWidth: bounds.width), count: subviews.count) {
+            let subview = subviews[index]
+            let height = subview.sizeThatFits(row).height
+            subview.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading, proposal: row)
+            if height > 0 { y += height + HLLayout.cardGap }
+        }
+    }
+
+    /// The indices of head (0), cards (1) and tiles (2) from the top down.
+    static func placementOrder(_ order: TodayLayout.Order, count: Int) -> [Int] {
+        guard count == 3 else { return Array(0 ..< count) }
+        switch order {
+        case .dayFirst: return [0, 1, 2]
+        case .tilesFirst: return [0, 2, 1]
+        }
     }
 }

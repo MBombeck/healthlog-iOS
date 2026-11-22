@@ -74,9 +74,9 @@ public struct MoodTagSuggestion: Sendable, Equatable, Hashable, Identifiable {
 /// itself never persists, never auto-applies, never speaks in clinical
 /// terms — it stays at a lexical extraction layer (R4 §5 extended).
 ///
-/// **Availability:** the public type compiles on iOS 18+ so callers don't
-/// need `#available` guards. The runtime path that actually invokes
-/// FoundationModels is gated by `#available(iOS 26.0, *)`. On older OS /
+/// **Availability:** callers don't need availability guards. The path that
+/// actually invokes FoundationModels sits behind `#if canImport(FoundationModels)`
+/// and checks `SystemLanguageModel.default.availability`. On
 /// non-Apple-Intelligence devices the outcome maps to
 /// `.fallback(.deviceIneligible)`. The caller hides the "Tags vorschlagen"
 /// affordance entirely on unsupported devices.
@@ -85,7 +85,7 @@ public struct MoodTagSuggestion: Sendable, Equatable, Hashable, Identifiable {
 /// brief — re-uses the same operator-flag that governs trend observations
 /// since both surfaces are derivations over per-day data).
 public actor MoodTagExtractionService {
-    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// The server-resolved AI capabilities (`/api/auth/me` `ai`).
     /// This service runs only while `.statusText` allows on-device work
     /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
     /// never consults anything a previous build persisted.
@@ -135,22 +135,17 @@ public actor MoodTagExtractionService {
         }
 
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                return await extractUsingFoundationModels(
-                    rawNote: trimmed,
-                    existingTags: existingTags,
-                    locale: locale
-                )
-            } else {
-                return .fallback(.deviceIneligible)
-            }
+            return await extractUsingFoundationModels(
+                rawNote: trimmed,
+                existingTags: existingTags,
+                locale: locale
+            )
         #else
             return .fallback(.frameworkUnavailable)
         #endif
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func extractUsingFoundationModels(
             rawNote: String,
             existingTags: [String],
@@ -202,7 +197,6 @@ public actor MoodTagExtractionService {
             }
         }
 
-        @available(iOS 26.0, *)
         private func mapAvailabilityReason(_ reason: SystemLanguageModel.Availability.UnavailableReason)
             -> MoodTagSuggestionOutcome.FallbackReason
         {
@@ -260,9 +254,8 @@ public struct MoodTagsExtraction: Sendable, Equatable, BriefingTextProvider {
 
 #if canImport(FoundationModels)
     /// `@Generable` mirror of `MoodTagsExtraction`. Lives behind the
-    /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
-    /// because Apple's macro requires both. Converted to the always-available
-    /// POD shell via `toExtraction()`.
+    /// `canImport(FoundationModels)` gate because Apple's macro requires
+    /// the framework. Converted to the always-available POD shell via `toExtraction()`.
     ///
     /// The labels become the user's own free-text tags verbatim
     /// (`MoodFreeTextTagRules.insert`), with no canonical-key mapping, so they
@@ -270,7 +263,6 @@ public struct MoodTagsExtraction: Sendable, Equatable, BriefingTextProvider {
     /// `@Guide` description is language-neutral English for that reason: it
     /// is baked in at compile time and its old German examples pulled a Dutch
     /// session's labels into German.
-    @available(iOS 26.0, *)
     @Generable
     struct GenerableMoodTagsExtraction {
         @Guide(
@@ -302,7 +294,9 @@ enum MoodTagExtractionPrompt {
             existingClause = language.pick(
                 de: "\n\nBereits gesetzte Tags (NICHT wiederholen): \(joined)",
                 en: "\n\nTags already on the entry (do NOT repeat): \(joined)",
-                nl: "\n\nTags die al bij de registratie staan (NIET herhalen): \(joined)"
+                nl: "\n\nTags die al bij de registratie staan (NIET herhalen): \(joined)",
+                ko: "\n\n이 기록에 이미 붙은 태그(반복하지 마라): \(joined)",
+                es: "\n\nEtiquetas que ya tiene el registro (NO repetir): \(joined)"
             )
         }
         switch language {
@@ -344,7 +338,44 @@ enum MoodTagExtractionPrompt {
             Diagnostiziere NICHTS. Empfehle NICHTS. Sage NICHTS vorher. \
             Wenn nichts sauber extrahierbar ist, gib eine leere Liste zurück.
             """
+        case .ko:
+            return koreanPrompt(rawNote: rawNote, existingClause: existingClause)
+        case .es:
+            return spanishPrompt(rawNote: rawNote, existingClause: existingClause)
         }
+    }
+
+    /// The Spanish user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func spanishPrompt(rawNote: String, existingClause: String) -> String {
+        """
+        Nota libre de una persona que usa un diario de estado de ánimo:
+        \"\"\"
+        \(rawNote)
+        \"\"\"\(existingClause)
+
+        Extrae hasta 5 etiquetas breves (de 1-2 palabras cada una, sin frases) que nombren los \
+        temas sobre los que escribió la persona. \
+        Usa solo etiquetas neutras y descriptivas en español. \
+        NO des ningún diagnóstico. NO recomiendes nada. NO hagas predicciones. \
+        Si no hay nada que extraer con claridad, devuelve una lista vacía.
+        """
+    }
+
+    /// The Korean user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func koreanPrompt(rawNote: String, existingClause: String) -> String {
+        """
+        기분 기록 사용자가 자유롭게 쓴 메모:
+        \"\"\"
+        \(rawNote)
+        \"\"\"\(existingClause)
+
+        메모에서 사용자가 다룬 주제를 나타내는 짧은 태그를 최대 5개 뽑아라(각 1-2단어, 문장 금지). \
+        중립적이고 묘사적인 한국어 태그만 쓴다. \
+        아무것도 진단하지 마라. 아무것도 권하지 마라. 아무것도 예측하지 마라. \
+        깔끔하게 뽑을 것이 없으면 빈 목록을 돌려준다.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
@@ -354,11 +385,16 @@ enum MoodTagExtractionPrompt {
     /// as the user's free-text tags, so they must read in the interface
     /// language rather than as canonical keys.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(
+            de: germanInstructions,
+            en: englishInstructions,
+            nl: dutchInstructions,
+            ko: koreanInstructions,
+            es: spanishInstructions
+        )
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
             let text = instructionText(for: AppLanguage.resolve(locale))
             return Instructions {
@@ -416,5 +452,37 @@ enum MoodTagExtractionPrompt {
     - Als er niets zuiver uit te halen is, geef dan een lege lijst terug en verzin GEEN labels.
 
     STIJL: lexicaal, niet adviserend. Je haalt onderwerpen uit tekst, je bent geen arts.
+    """
+
+    private static let koreanInstructions = """
+    너는 기분 기록 앱의 어휘 추출 도구다. \
+    너의 유일한 일은 자유롭게 쓴 기분 메모에서 짧은 태그를 뽑는 것이다. \
+    태그는 항상 한국어로 쓴다.
+
+    절대 원칙:
+    - 짧은 태그만 출력한다(각 1-2단어, 문장은 절대 안 된다).
+    - 진단하지 않고, 예측하지 않고, 처방하지 않는다.
+    - 질환, 질병, 증상, 적응증을 임상 용어로 언급하지 않는다.
+    - 행동을 권하지 않는다.
+    - 수치 사이의 인과 관계를 주장하지 않는다.
+    - 깔끔하게 뽑을 것이 없으면 빈 목록을 돌려주고, 태그를 지어내지 않는다.
+
+    문체: 조언이 아니라 어휘 추출. 너는 의사가 아니라 주제를 뽑는 도구다.
+    """
+
+    private static let spanishInstructions = """
+    Eres una herramienta de extracción léxica para una app de diario de estado de ánimo. \
+    Tu única tarea: extraer etiquetas breves de una nota libre sobre el estado de ánimo. \
+    Escribe las etiquetas SIEMPRE en español.
+
+    NO NEGOCIABLE:
+    - Devuelve solo etiquetas breves (de 1-2 palabras cada una, nunca frases).
+    - Nunca des un diagnóstico, no hagas predicciones y no recetes nada.
+    - No nombres ninguna afección, enfermedad, síntoma o indicación por su nombre clínico.
+    - No recomiendes ninguna acción.
+    - No afirmes relaciones causales entre valores.
+    - Si no hay nada que extraer con claridad, devuelve una lista vacía y NO inventes etiquetas.
+
+    ESTILO: léxico, no de consejo. Extraes temas de un texto, no eres médico.
     """
 }

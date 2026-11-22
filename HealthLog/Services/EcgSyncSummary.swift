@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 / plan 07-06 — the ECG sweep's result vocabulary.
+// The ECG sweep's result vocabulary.
 //
 // Split out of `EcgSyncCoordinator.swift` under the `PROJECT_GUIDE.md` file
 // budget once the coordinator gained its captured-owner teardown. These three
@@ -48,7 +48,7 @@ public enum EcgSyncStopReason: String, Sendable, Equatable, CaseIterable {
     /// refresh/re-login path owns the recovery, and the anchor waits.
     case unauthorized
     /// `429` — too many recordings per minute for this account, and the wait
-    /// the server named did not fit into this sweep's pause budget (S2). The
+    /// the server named did not fit into this sweep's pause budget. The
     /// confirmed recordings stay confirmed; the next wake resumes after the
     /// named instant with the first unconfirmed one.
     case rateLimited
@@ -70,7 +70,7 @@ public struct EcgSyncSummary: Sendable, Equatable {
     public var skipped: [EcgSyncSkipReason: Int] = [:]
     public var stoppedBecause: EcgSyncStopReason?
     /// Recordings this pass did not send because the server confirmed them in
-    /// an earlier wake while the anchor was held (S2). They count toward the
+    /// an earlier wake while the anchor was held. They count toward the
     /// anchor like a success, but are not in ``accepted``.
     public var alreadyConfirmed: Int = 0
 

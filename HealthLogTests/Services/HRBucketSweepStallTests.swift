@@ -3,7 +3,7 @@
     @testable import HealthLog
     import Testing
 
-    /// SYNC-HR (1.5) — #159 / HealthLog#1326 (mills1975): the 10-minute
+    /// Dev #159 / HealthLog#1326 (mills1975): the 10-minute
     /// heart rate stopped for most of a day, pull to refresh did not bring it
     /// back, a force-quit did.
     ///
@@ -172,7 +172,8 @@
                 cycleImport: make(.cycleImport),
                 heartHealthEvents: make(.heartHealthEvents),
                 outboxDrain: make(.outboxDrain),
-                serverMirror: make(.serverMirror)
+                serverMirror: make(.serverMirror),
+                clinicalLabRecords: make(.clinicalLabRecords)
             )
             let orchestrator = HealthSyncOrchestrator(registry: registry)
             let pass = Task {

@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "package": "E3",
+  "rules": [
+    "hl_no_button_tint",
+    "hl_no_choice_glyph",
+    "hl_no_clear_glyph",
+    "hl_no_custom_back",
+    "hl_no_form_label_button",
+    "hl_no_literal_more_toggle",
+    "hl_no_plain_buttonstyle",
+    "hl_no_raw_hit_frame",
+    "hl_no_raw_ok_alert",
+    "hl_no_remove_glyph",
+    "hl_no_underline",
+    "hl_tile_action_button_direct",
+    "hl_toolbar_via_page_actions"
+  ],
+  "counts": {
+    "hl_no_button_tint": {},
+    "hl_no_choice_glyph": {},
+    "hl_no_clear_glyph": {},
+    "hl_no_custom_back": {},
+    "hl_no_form_label_button": {},
+    "hl_no_literal_more_toggle": {},
+    "hl_no_plain_buttonstyle": {
+      "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift": 2
+    },
+    "hl_no_raw_hit_frame": {},
+    "hl_no_raw_ok_alert": {},
+    "hl_no_remove_glyph": {},
+    "hl_no_underline": {},
+    "hl_tile_action_button_direct": {},
+    "hl_toolbar_via_page_actions": {}
+  }
+}

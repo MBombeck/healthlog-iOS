@@ -12,8 +12,6 @@ import SwiftUI
 /// carries its consequence in the sentence directly beneath it.
 struct UnifiedSharingSelectionSection: View {
     let store: UnifiedSharingStore
-    let hasServer: Bool
-    let onConnect: () -> Void
 
     @State private var isSelectionExpanded = false
 
@@ -55,18 +53,10 @@ struct UnifiedSharingSelectionSection: View {
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        if hasServer {
-            HLButton(String(localized: "report.selection.retry"), variant: .secondary, size: .compact) {
-                Task { await store.reload() }
-            }
-            .accessibilityIdentifier("sharing.unified.retry")
-        } else {
-            HLCloudDerivedPlaceholder(
-                variant: .inline,
-                surfaceName: String(localized: "sharing.unified.surfaceName"),
-                onConnect: onConnect
-            )
+        HLButton("report.selection.retry", variant: .secondary) {
+            Task { await store.reload() }
         }
+        .accessibilityIdentifier("sharing.unified.retry")
     }
 
     @ViewBuilder
@@ -76,7 +66,7 @@ struct UnifiedSharingSelectionSection: View {
             .foregroundStyle(HLText.secondary)
             .accessibilityIdentifier("sharing.unified.summary")
 
-        // 1.4 B2-c — "nothing chosen means no health data rides" is said once,
+        // "nothing chosen means no health data rides" is said once,
         // in the action card next to the button it is about.
 
         if let notice = store.profile.notice {
@@ -114,27 +104,21 @@ struct UnifiedSharingSelectionSection: View {
     /// is always available next to it.
     private func bulkControls() -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(spacing: HLSpace.sm) {
-                HLButton(
-                    String(localized: "sharing.unified.selectAll"),
-                    variant: .secondary,
-                    size: .compact
-                ) {
+            HLButtonPair {
+                HLButton("sharing.unified.selectAll", variant: .secondary) {
                     store.selectAll()
                     isSelectionExpanded = true
                 }
                 .accessibilityIdentifier("sharing.unified.selectAll")
-
-                HLButton(
-                    String(localized: "sharing.unified.clear"),
-                    variant: .secondary,
-                    size: .compact
-                ) {
+            } secondary: {
+                HLButton("sharing.unified.clear", variant: .secondary) {
                     store.clearSelection()
                 }
+                // Nothing to clear, nothing to tap.
+                .disabled(store.chosen.isEmpty)
                 .accessibilityIdentifier("sharing.unified.clear")
             }
-            // 1.4 B2-c — the consequence of "Select everything" appears when
+            // The consequence of "Select everything" appears when
             // it is true (everything is ticked), not as a standing line under
             // the buttons. The screen holds no dialog on purpose (see
             // `UnifiedSharingScreen`), so there is no confirmation to put it in.
@@ -152,22 +136,13 @@ struct UnifiedSharingSelectionSection: View {
     /// list, and a checkmark reads as membership where a switch reads as a
     /// setting.
     private func leafRow(_ leaf: String) -> some View {
-        Button {
+        HLChoiceRow(
+            title: Text(verbatim: ReportLeafDisplay.label(for: leaf)),
+            isSelected: store.isChosen(leaf),
+            mode: .multiple
+        ) {
             store.toggle(leaf)
-        } label: {
-            HStack(spacing: HLSpace.md) {
-                Image(systemName: store.isChosen(leaf) ? "checkmark.circle.fill" : "circle")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(store.isChosen(leaf) ? HLColor.statusOK : HLText.tertiary)
-                Text(verbatim: ReportLeafDisplay.label(for: leaf))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("sharing.unified.leaf.\(leaf)")
     }
 }

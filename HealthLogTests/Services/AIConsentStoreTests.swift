@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// PB1 Reconcile (H3) — locks the new decline-persistence contract that
+/// PB1 Reconcile — locks the new decline-persistence contract that
 /// closes the nag-loop after a user declines `AIConsentSheet`. Pre-PB1
 /// the decline only cleared the sheet's `pendingConsentProvider`; on the
 /// next tab switch `evaluateConsentGate` re-presented unconditionally.
@@ -128,7 +128,7 @@ struct AIConsentStoreTests {
         #expect(afterTwo != afterOne, "successive calls must produce distinct tokens")
     }
 
-    // MARK: - Task #49 — single remote-AI master opt-in
+    // MARK: - Single remote-AI master opt-in
 
     @Test("isAnyProviderGranted() is false on a fresh store (undecided user → OFF)")
     func anyProviderGrantedDefaultsFalse() {
@@ -188,7 +188,7 @@ struct AIConsentStoreTests {
         #expect(store.hasConsent(for: .unconfigured))
     }
 
-    // MARK: - Task #53 — three-way AI source choice (mode → gating)
+    // MARK: - Three-way AI source choice (mode → gating)
 
     /// Builds a store with an isolated UserDefaults suite so the on-device flag
     /// never leaks across tests or into the host app's standard defaults.
@@ -301,7 +301,7 @@ struct AIConsentStoreTests {
         #expect(secondLaunch.isOnDeviceEnabled)
     }
 
-    // MARK: - M1 (Audit-2) — pending `.online` intent without a provider
+    // MARK: - Pending `.online` intent without a provider
 
     @Test("M1: picking .online without a provider persists a pending intent, aiMode stays .none")
     func onlineWithoutProviderPersistsIntent() {
@@ -373,7 +373,7 @@ struct AIConsentStoreTests {
     }
 }
 
-/// v0.13 — locks the BYO-key (client-side device→provider) arm of ``AIMode``.
+/// Locks the BYO-key (client-side device→provider) arm of ``AIMode``.
 /// The contract: `grantBYO` is the only thing that flips `aiMode` to `.byoKey`;
 /// the arms stay mutually exclusive (BYO revokes server + on-device, and the
 /// other arms revoke BYO); one BYO provider is active at a time; the pending
@@ -586,7 +586,7 @@ struct AIConsentStoreRevisionTests {
             { $0.revoke(for: .anthropic) },
             { $0.grantBYO(for: .gemini) },
             { $0.revokeBYO(for: .gemini) },
-            // N5.1 — decline changes wasDeclined()/declinedAt() output, so the
+            // Decline changes wasDeclined()/declinedAt() output, so the
             // consent-gate readers must be invalidated too.
             { $0.decline(for: .anthropic) }
         ]

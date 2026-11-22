@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **v0.13 WS Item 2 — SWR in-flight revalidation post-purge leak.**
+/// **SWR in-flight revalidation post-purge leak.**
 ///
 /// `invalidateAll()` (logout / switch-server) purges the cache, but an
 /// in-flight revalidation issued against the OLD user/server resolves its
@@ -115,7 +115,7 @@ struct SWRSessionEpochTests {
         #expect(peeked?.value == Payload(id: "fresh", value: 7), "uninterrupted revalidation must write through normally")
     }
 
-    /// W-RECONCILE M-1 — `invalidateAll()` now DRAINS (awaits) pending detached
+    /// `invalidateAll()` now DRAINS (awaits) pending detached
     /// writes before purging, instead of only cancelling. This locks that the
     /// drain completes (no hang) and that a write-through landed BEFORE the
     /// invalidate is gone after the purge — the cache is empty, with no late

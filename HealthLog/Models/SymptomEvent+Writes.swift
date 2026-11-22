@@ -1,6 +1,6 @@
 import Foundation
 
-// SYMPTOM (1.5.0, #144) — the write bodies of `/api/symptoms/events` and
+// The write bodies of `/api/symptoms/events` and
 // the one rule for linking an occurrence to an illness episode.
 
 /// A field of a partial edit that can also be cleared: `note: null` clears

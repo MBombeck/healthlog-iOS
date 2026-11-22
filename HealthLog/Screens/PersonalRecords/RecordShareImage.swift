@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// v0.5.5.6 POLISH-PR — share-sheet image rendering.
+/// Share-sheet image rendering.
 ///
 /// Wraps `ImageRenderer` (iOS 16+) so the screen can synthesise a
 /// shareable PNG of a record card to drop into the system share-sheet.
@@ -20,7 +20,7 @@ import SwiftUI
 /// cropping. Operators don't have to worry about which platform they're
 /// sharing to.
 enum RecordShareImage {
-    // Fixed pixel fonts are CORRECT inside `Surface` (audit-01 M1): it renders
+    // Fixed pixel fonts are CORRECT inside `Surface`: it renders
     // onto a fixed 1080×1080 export canvas via `ImageRenderer` — Dynamic Type
     // has no meaning for a share PNG and scaling would break the composition.
     // swiftlint:disable dynamic_type_bypass
@@ -28,7 +28,7 @@ enum RecordShareImage {
     /// Off-screen view rendered into a UIImage for sharing.
     struct Surface: View {
         let record: PersonalRecord
-        /// #115 P2 — handed in explicitly: `ImageRenderer` renders outside the
+        /// Handed in explicitly: `ImageRenderer` renders outside the
         /// app's environment, so an `@Environment` read would fall back to
         /// the metric identity and share a kg image from an lb account.
         var units: UnitPreferences = .standard
@@ -55,6 +55,9 @@ enum RecordShareImage {
                         Spacer()
                     }
                     Spacer(minLength: 0)
+                    // A label inside the rendered share image, not a heading
+                    // of the app: the poster sets it in capitals.
+                    // swiftlint:disable:next hl_no_uppercase_header
                     Text(metricLabel.uppercased())
                         .font(.system(size: 24, weight: .semibold, design: .rounded))
                         .foregroundStyle(HLColor.recordHeroInk.opacity(0.85))
@@ -99,10 +102,7 @@ enum RecordShareImage {
         }
 
         private var dateLabel: String {
-            let f = DateFormatter()
-            f.locale = Locale.current
-            f.dateStyle = .long
-            return f.string(from: record.base.achievedAt)
+            HLDateFormat.date(record.base.achievedAt, style: .long)
         }
     }
 

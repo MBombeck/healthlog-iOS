@@ -22,7 +22,7 @@ import SwiftUI
 /// never send a competing copy.
 struct LabScanReviewList: View {
     @Bindable var scan: LabScanStore
-    /// #160 — the "No unit" switch per row, from server 1.46.6 on.
+    /// The "No unit" switch per row, from server 1.46.6 on.
     @State private var offersNoUnit = LabUnit.offersNoUnit()
 
     var body: some View {
@@ -32,6 +32,7 @@ struct LabScanReviewList: View {
                 rowSection(row: $row)
             }
         }
+        .hlPageMargins()
     }
 
     // MARK: - Header
@@ -39,22 +40,23 @@ struct LabScanReviewList: View {
     private var headerSection: some View {
         Section {
             DatePicker(
-                "labs.scan.review.batchDate",
                 selection: $scan.takenAt,
                 in: ...scan.takenAtBound,
                 displayedComponents: [.date]
-            )
+            ) {
+                HLRowTitle("labs.scan.review.batchDate")
+            }
             .accessibilityIdentifier("labs.scan.review.batchDate")
             // Discard the whole batch and photograph the report again. Nothing
             // has been written at this point, so this is a pure local reset.
-            Button("labs.scan.retake") { scan.retake() }
+            HLButton("labs.scan.retake", systemImage: "camera", variant: .secondary) { scan.retake() }
                 .accessibilityIdentifier("labs.scan.retake")
                 .disabled(scan.step == .saving)
         } header: {
             Text("labs.scan.review.header")
         } footer: {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                // LAB-OCR (#151) — what a server read could not read, one
+                // What a server read could not read, one
                 // calm line each, above everything else that is said here.
                 ForEach(scan.readLimits, id: \.self) { limit in
                     Text(verbatim: limit.message)
@@ -69,6 +71,7 @@ struct LabScanReviewList: View {
                 }
             }
         }
+        .hlFormRowSurface()
     }
 
     // MARK: - One reviewable row
@@ -76,7 +79,7 @@ struct LabScanReviewList: View {
     private func rowSection(row: Binding<LabScanRow>) -> some View {
         Section {
             Toggle(isOn: row.isIncluded) {
-                Text("labs.scan.review.include")
+                HLRowTitle("labs.scan.review.include")
             }
             .accessibilityIdentifier("labs.scan.review.include")
 
@@ -94,19 +97,24 @@ struct LabScanReviewList: View {
         } footer: {
             footer(row: row.wrappedValue)
         }
+        .hlFormRowSurface()
     }
 
     @ViewBuilder
     private func analyteField(row: Binding<LabScanRow>) -> some View {
         if row.wrappedValue.isLinked {
-            LabeledContent("labs.scan.review.analyte") {
+            LabeledContent {
                 Text(verbatim: row.wrappedValue.analyte)
                     .foregroundStyle(HLText.secondary)
+            } label: {
+                HLRowTitle("labs.scan.review.analyte")
             }
         } else {
-            TextField("labs.scan.review.analyte", text: row.analyte)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
+            LabFormField("labs.scan.review.analyte") {
+                TextField("labs.scan.review.analyte", text: row.analyte)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+            }
         }
     }
 
@@ -114,9 +122,11 @@ struct LabScanReviewList: View {
     private func resultField(row: Binding<LabScanRow>) -> some View {
         switch row.wrappedValue.resultType {
         case .numeric:
-            TextField("labs.add.value", text: row.value)
-                .keyboardType(.decimalPad)
-                .accessibilityIdentifier("labs.scan.review.value")
+            LabFormField("labs.add.value") {
+                TextField("labs.add.value", text: row.value)
+                    .keyboardType(.decimalPad)
+                    .accessibilityIdentifier("labs.scan.review.value")
+            }
         case .qualitative:
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 TextField("labs.form.qualitativePlaceholder", text: row.qualitativeText)
@@ -128,10 +138,12 @@ struct LabScanReviewList: View {
 
     @ViewBuilder
     private func unitField(row: Binding<LabScanRow>) -> some View {
-        TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: row.unit, noUnit: row.wrappedValue.noUnit))
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .disabled(row.wrappedValue.noUnit)
+        LabFormField("labs.add.unit") {
+            TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: row.unit, noUnit: row.wrappedValue.noUnit))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .disabled(row.wrappedValue.noUnit)
+        }
         if offersNoUnit {
             LabNoUnitToggle(isOn: row.noUnit)
         }
@@ -139,10 +151,14 @@ struct LabScanReviewList: View {
 
     @ViewBuilder
     private func referenceFields(row: Binding<LabScanRow>) -> some View {
-        TextField("labs.add.referenceLow", text: row.referenceLow)
-            .keyboardType(.decimalPad)
-        TextField("labs.add.referenceHigh", text: row.referenceHigh)
-            .keyboardType(.decimalPad)
+        LabFormField("labs.add.referenceLow") {
+            TextField("labs.add.referenceLow", text: row.referenceLow)
+                .keyboardType(.decimalPad)
+        }
+        LabFormField("labs.add.referenceHigh") {
+            TextField("labs.add.referenceHigh", text: row.referenceHigh)
+                .keyboardType(.decimalPad)
+        }
     }
 
     /// Header line: the flags this row carries, if any.
@@ -168,14 +184,13 @@ struct LabScanReviewList: View {
     }
 
     /// Footer: the verbatim line the scan read (a server read: the range as
-    /// printed). 1.4 B2-c: the per-row
+    /// printed). The per-row
     /// "linked to a catalog marker" note is gone (no badge in its place).
     private func footer(row: LabScanRow) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             if !row.rawLine.isEmpty {
                 Text(verbatim: row.rawLine)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
             }
         }
     }

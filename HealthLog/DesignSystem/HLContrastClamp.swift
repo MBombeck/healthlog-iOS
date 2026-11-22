@@ -41,7 +41,7 @@ import SwiftUI
 /// canvas / secondary surfaces should route through `clampedAccent(...)`
 /// rather than `.foregroundStyle(.tint)` directly when contrast is at risk.
 ///
-/// **Concurrency (v0.6.0.6):** annotated `@MainActor` — every method
+/// **Concurrency:** annotated `@MainActor` — every method
 /// reaches into `UIColor(_:)` and `getRed(...)` which resolve dynamic
 /// trait collections on the main actor under iOS 18+. Every current
 /// call-site is already MainActor-bound (HLButton body, SwiftUI views,

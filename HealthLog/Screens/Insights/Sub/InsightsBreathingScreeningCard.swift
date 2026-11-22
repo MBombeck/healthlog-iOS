@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v1.25 (GH iOS #38) — the sleep-breathing screening awareness card.
+/// v1.25 — the sleep-breathing screening awareness card.
 ///
 /// Renders `GET /api/insights/breathing-screening`
 /// (`InsightsBreathingScreeningDTO`): the device's own per-night
@@ -16,22 +16,18 @@ struct InsightsBreathingScreeningCard: View {
 
     var body: some View {
         if let screening, screening.hasContent {
-            HLCard(style: .elevated) {
+            // A card head (15 semibold), not the label over a key figure.
+            HLCard("clinicalSignals.breathing.title") {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("clinicalSignals.breathing.title")
-
                     HStack(alignment: .top, spacing: HLSpace.sm) {
                         Image(systemName: "lungs.fill")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: HLSpace.xxs) {
                             Text(classificationText)
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
+                                .hlText(.rowTitle)
                             Text(detailLine)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowSubtitle)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
@@ -65,7 +61,7 @@ struct InsightsBreathingScreeningCard: View {
             parts.append(String(format: String(localized: "clinicalSignals.breathing.events"), screening.eventCount))
         }
         if let trend = trendText { parts.append(trend) }
-        // 1.4 B2 — who computed it, in the line itself instead of a separate
+        // Who computed it, in the line itself instead of a separate
         // "Ein Screening-Signal, das dein Gerät … berechnet hat." caption.
         parts.append(String(localized: "clinicalSignals.breathing.byDevice"))
         return parts.joined(separator: ", ")

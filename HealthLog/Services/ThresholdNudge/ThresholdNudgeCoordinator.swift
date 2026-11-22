@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-THRESHOLD-NUDGE (v0.15.2) — wires the pure decision to delivery on a
+/// **Wires the pure decision to delivery on a
 /// successful lab log.**
 ///
 /// Called from ``LabsStore`` right after a lab result lands (and the
@@ -76,7 +76,7 @@ struct ThresholdNudgeCoordinator {
         return decision
     }
 
-    /// **POLISH-B B5 (1.5, server #1216, REG §8).** Whether the server is
+    /// Whether the server is
     /// escalating right now: its own Rest Mode flag on the Health Score
     /// (`restMode.active`), nothing the app derives. Until 1.5 the probe was
     /// "any illness episode without `resolvedAt`", and a chronic, ongoing

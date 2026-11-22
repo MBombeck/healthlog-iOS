@@ -20,8 +20,8 @@ import SwiftData
 /// signed in on the same device never sees the previous operator's
 /// transcript. The HK-anchor + backfill-window stores follow the
 /// same per-user-partition pattern; we mirror it for chat hygiene.
-/// `userID` is non-optional so cold-launch standalone-mode turns can
-/// still partition under a stable sentinel — `CoachChatMessage.standaloneUserID`
+/// `userID` is non-optional so turns without a signed-in user can
+/// still partition under a stable sentinel — `CoachChatMessage.signedOutUserID`
 /// supplies the value when no Keychain user is present.
 ///
 /// **What lands on disk:** only the raw user text + the assistant
@@ -97,11 +97,11 @@ public enum CoachChatRole: String, Codable, Sendable {
 
 public extension CoachChatMessage {
     /// Sentinel partition value used when no keychain user is present
-    /// (standalone-mode + pre-auth). Distinct from any UUID-shaped user
-    /// id so a future paired login can't accidentally collide. The
-    /// transcript under this key clears on `clearOnLogout` the same way
-    /// authenticated transcripts do.
-    static let standaloneUserID: String = "__standalone__"
+    /// (pre-auth). Distinct from any UUID-shaped user id so a login can't
+    /// accidentally collide. The literal is the persisted partition key of
+    /// existing transcripts and stays as it is. The transcript under this
+    /// key clears on `clearOnLogout` the same way authenticated ones do.
+    static let signedOutUserID: String = "__standalone__"
 }
 
 // MARK: - Versioned schema

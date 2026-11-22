@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 08 Wave 0 — the release surfaces and the native audit, hermetically.**
+/// **The release surfaces and the native audit, hermetically.**
 ///
 /// Every case boots through `-uitest-hermetic` + `-uitest-phase8`, so no login,
 /// no network and no real HealthKit, APNs or credential is involved. Each test
@@ -40,7 +40,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
         record(violations, for: "medication-cards-only")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI medication table choice remained visible"
+            "UI medication table choice remained visible"
         )
     }
 
@@ -92,7 +92,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
             violations.append("About claims the installed version is current without checking anything")
         }
         record(violations, for: "about")
-        XCTAssertTrue(violations.isEmpty, "EXPECTED_RED: 08-02 UI About omitted exact version or build")
+        XCTAssertTrue(violations.isEmpty, "UI About omitted exact version or build")
     }
 
     // MARK: RED — operator tools need a deliberate session
@@ -101,7 +101,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
     /// purpose is to attribute a sign-off — sits one tap below Settings for
     /// every consumer, and opens with no confirmation of any kind.
     ///
-    /// **08-15 — the case now walks the surfaces its name always claimed.**
+    /// **The case now walks the surfaces its name always claimed.**
     /// Until this plan its only probe was the LOINC reviewer row, so when 08-06
     /// deleted that row the case went green while
     /// `Phase8ReleaseSurfaceTests.diagnosticsRespectConsumerBoundary` was still
@@ -118,7 +118,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
         record(violations, for: "support-gate")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI deep diagnostics opened without confirmation"
+            "UI deep diagnostics opened without confirmation"
         )
     }
 
@@ -152,7 +152,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
         if app.phase8Element("onboarding.passwordLoginCTA").waitForExistence(timeout: 10) {
             violations.append("the session was already dropped before any confirmation could be answered")
         }
-        // 08-09 — the cancel half this case is named after. Until this plan a
+        // The cancel half this case is named after. Until this plan a
         // sign-out tap raised nothing, so there was no answer to give and the
         // two clauses above were the whole test. Now that a dialog exists, the
         // non-destructive answer has to leave the session standing — otherwise
@@ -161,7 +161,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
         record(violations, for: "logout")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI logout occurred before destructive confirmation"
+            "UI logout occurred before destructive confirmation"
         )
     }
 
@@ -209,9 +209,9 @@ final class Phase8AccessibilityUITests: XCTestCase {
             extraArguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         )
 
-        // **12-12 — the audit states which Dashboard it is auditing.**
+        // **The audit states which Dashboard it is auditing.**
         //
-        // D-09-16-A: the HealthKit-connect banner was on the audited Dashboard
+        // The HealthKit-connect banner was on the audited Dashboard
         // in one reading of ten, and the two screens it produces carry
         // *disjoint* finding sets — the banner pushes the medication-adherence
         // card past the audited fold and contributes two findings of its own in
@@ -295,7 +295,7 @@ final class Phase8AccessibilityUITests: XCTestCase {
             // attachment on the result bundle rather than into the gate log,
             // which stays identifier-only.
             detailed.append(issue.detailedDescription)
-            // 08-12 — the finding, and *which element* produced it. Until this
+            // The finding, and *which element* produced it. Until this
             // plan the log carried only `compactDescription`, so three dashboard
             // findings were reported for two years' worth of plans without ever
             // naming the view that had to change. Element type, identifier and

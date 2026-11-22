@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.3 — mood day means and stability come from the server's mood
+/// Mood day means and stability come from the server's mood
 /// analytics, not from bucketing entries on the device calendar with the app's
 /// own formula. Shapes follow `MoodDailySeries` (`GET /api/mood/analytics`) and
 /// `MoodAggregates.stability` (`GET /api/mood/insights`) in
@@ -56,7 +56,7 @@ struct MoodServerAnalyticsTests {
         let entries = [MoodEntry(id: "e1", recordedAt: Self.now, score: 5, tags: [])]
         let insight = MoodInsights.compute(entries: entries, now: Self.now, calendar: Self.utc, enrichment: series)
         #expect(insight.trendDirection == .up)
-        #expect(MoodHeroSummary.symbol(for: insight.trendDirection) == "arrow.up.right")
+        #expect(MoodHeroSummary.symbol(for: insight.trendDirection) == "arrow.up")
     }
 
     @Test("#151 — a null slope is no trend: no arrow, no own slope in its place")

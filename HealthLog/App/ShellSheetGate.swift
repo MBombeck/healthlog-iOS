@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// #115 · 1.1 T1 — serialises every sheet the authenticated shell presents.
+/// Serialises every sheet the authenticated shell presents.
 ///
 /// TestFlight 1.1.0 (286) aborted on iOS 27 inside
 /// `SheetBridge.present(…isPreempting:)` → `dismissViewControllerAnimated:` →
@@ -111,7 +111,7 @@ struct ShellSheetGate: Equatable {
     }
 }
 
-/// #115 · 1.1 T1 — what the window's root controller is doing right now, read
+/// What the window's root controller is doing right now, read
 /// immediately before the shell flips a sheet flag.
 ///
 /// The gate above only knows the shell's own sheets. A presentation raised by a

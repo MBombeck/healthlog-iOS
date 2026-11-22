@@ -1,6 +1,6 @@
 import XCTest
 
-/// **13-04 — the coverage gap that let K7 ship.**
+/// **The coverage gap that let K7 ship.**
 ///
 /// The web-handoff login leg had unit tests against a stubbed authenticator and
 /// nothing else: no UI test and no device-UAT row anywhere for
@@ -180,7 +180,7 @@ final class WebLoginJourneyUITest: XCTestCase {
 
         // And the way back is a way IN, not just a visible control.
         submitPasswordLogin(app)
-        let skipHealthKit = app.buttons["onboarding.healthKit.skip"]
+        let skipHealthKit = app.buttons[OnboardingTail.firstSkip]
         let signedIn = skipHealthKit.waitForExistence(timeout: 30)
         if !signedIn { attachFailureDiagnostics(app: app, label: "deadend-fallback-login-failed") }
         XCTAssertTrue(signedIn, "The password fallback did not sign the user in after the dead end")

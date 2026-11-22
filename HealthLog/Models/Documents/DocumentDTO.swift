@@ -205,6 +205,16 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
     /// server value (`resource-limit`, `provider-error`, …), `nil` when it
     /// succeeded, never ran, or the server predates the field.
     public let lastIndexOutcome: String?
+    /// #187 (server 1.48.4) — the archive an imported document came from
+    /// (`PAPERLESS`, `PAPRA`, `OTHER`), `nil` for an upload or an older server.
+    /// Server 1.49.0 adds `REPORT_SCHEDULE`, the scheduled doctor report the
+    /// server files itself (``isScheduledReport``). Kept raw, so a value this
+    /// build does not know never costs the row.
+    public let sourceSystem: String?
+    /// #187 (server 1.48.4) — the document in that archive, filled for the
+    /// owner alone while the archive is connected; `nil` everywhere else.
+    /// Read through ``sourceLink`` only, which admits http(s) alone.
+    public let sourceUrl: String?
     public let createdAt: String
     public let updatedAt: String
 
@@ -212,6 +222,18 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
     /// read. The server does not retry it, and neither does the app.
     public var isTooLargeToRead: Bool {
         lastIndexOutcome == "resource-limit"
+    }
+
+    /// The way back to the original in Paperless-ngx or Papra: the archive's
+    /// name and an http(s) address. `nil` for any other source or scheme, so
+    /// nothing but a web page ever opens from it.
+    public var sourceLink: DocumentSourceLink? {
+        DocumentSourceLink(system: sourceSystem, url: sourceUrl)
+    }
+
+    /// Server 1.49.0: the doctor report the account's report schedule wrote.
+    public var isScheduledReport: Bool {
+        sourceSystem?.uppercased() == "REPORT_SCHEDULE"
     }
 
     /// True when the content index came from an AI provider reading the original
@@ -264,6 +286,8 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         summary: String? = nil,
         summaryGeneratedAt: String? = nil,
         lastIndexOutcome: String? = nil,
+        sourceSystem: String? = nil,
+        sourceUrl: String? = nil,
         createdAt: String,
         updatedAt: String
     ) {
@@ -287,6 +311,8 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         self.summary = summary
         self.summaryGeneratedAt = summaryGeneratedAt
         self.lastIndexOutcome = lastIndexOutcome
+        self.sourceSystem = sourceSystem
+        self.sourceUrl = sourceUrl
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -319,6 +345,10 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         summaryGeneratedAt = try c.decodeIfPresent(String.self, forKey: .summaryGeneratedAt)
         // A wrong-typed value costs only this field, never the document.
         lastIndexOutcome = try? c.decodeIfPresent(String.self, forKey: .lastIndexOutcome)
+        // Optional for the app: an older server omits both, a wrong type
+        // costs only the link.
+        sourceSystem = try? c.decodeIfPresent(String.self, forKey: .sourceSystem)
+        sourceUrl = try? c.decodeIfPresent(String.self, forKey: .sourceUrl)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
     }
@@ -348,7 +378,7 @@ public struct InboundDocument: Codable, Sendable, Equatable, Identifiable, Hasha
         case id, kind, title, filename, mimeType, byteSize, status, providerType
         case reportDate, documentDate, errorReason, factCount, pendingCount
         case conditionLinks, servingClass, hasContentIndex, contentIndexSource
-        case summary, summaryGeneratedAt, lastIndexOutcome, createdAt, updatedAt
+        case summary, summaryGeneratedAt, lastIndexOutcome, sourceSystem, sourceUrl, createdAt, updatedAt
     }
 }
 
@@ -438,13 +468,13 @@ public struct DocumentUsage: Decodable, Sendable, Equatable {
     public let maxFileBytes: Int
     public let acceptedExtensions: [String]
     public let linkedEpisodes: [DocumentConditionLink]
-    /// Phase 2: the server side of the assist gate (a document-scan provider is
+    /// The server side of the assist gate (a document-scan provider is
     /// configured + the module/consent server checks pass). The client still
     /// ANDs this with its own AI-consent gate before offering any AI action.
     public let assistAvailable: Bool
-    /// Phase 2: content-search index coverage, or `nil` on a pre-P2 server.
+    /// Content-search index coverage, or `nil` on a pre-P2 server.
     public let contentIndex: DocumentContentIndex?
-    /// v1.46.0 (#151): deleted documents not purged yet; `nil` before, and
+    /// v1.46.0: deleted documents not purged yet; `nil` before, and
     /// always 0 inside somebody else's record. Only a count above 0 offers the link.
     public let deletedCount: Int?
 

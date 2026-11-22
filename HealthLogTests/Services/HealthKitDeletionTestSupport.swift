@@ -7,7 +7,7 @@
 
     // swiftlint:disable force_unwrapping
 
-    // A5 (1.4, R3 S4) — doubles for the Apple Health deletion suites: a server
+    // Doubles for the Apple Health deletion suites: a server
     // that keeps every delete-by-external-ids body, and the fixtures that put
     // a real `HealthLogStandard` with a real repository and outbox behind the
     // collector.
@@ -149,7 +149,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 MeasurementBatchUploader(api: api, throttle: BatchSyncThrottle(maxPerWindow: 1000, jitter: 0 ... 0)),
-                featureFlags: nil,
                 retryQueue: retryQueue ?? outbox
             )
             await standard.attachDeletionReconciler(reconciler)
@@ -189,7 +188,7 @@
             )
         }
 
-        /// A6 — what HealthKit keeps of an object it deleted: its UUID and,
+        /// What HealthKit keeps of an object it deleted: its UUID and,
         /// of all its metadata, only the sync identifier and version (Apple,
         /// `HKDeletedObject.metadata`).
         static func deletedObject(of object: HKObject) -> (uuid: UUID, metadata: [String: Any]?) {
@@ -197,7 +196,7 @@
             return (object.uuid, kept?.isEmpty == false ? kept : nil)
         }
 
-        /// A6 — a page that reports deleted objects, split the way the live
+        /// A page that reports deleted objects, split the way the live
         /// source splits them (``HealthKitCopySyncIdentity/split(_:)``).
         static func deletions(
             of objects: [(uuid: UUID, metadata: [String: Any]?)],
@@ -214,7 +213,7 @@
             )
         }
 
-        /// A6 — a copy as 1.3.0 wrote it: the server id and the origin marker,
+        /// A copy as 1.3.0 wrote it: the server id and the origin marker,
         /// no sync identifier.
         static func legacyCopy(of measurement: HealthLog.Measurement, kilograms: Double) -> HKQuantitySample {
             HKQuantitySample(

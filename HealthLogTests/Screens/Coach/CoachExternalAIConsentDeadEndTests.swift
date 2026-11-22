@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.1 — pins the fix for the AI Coach External-AI consent dead-end:
+/// Pins the fix for the AI Coach External-AI consent dead-end:
 /// "Frag den Coach → Externe KI → Coach starten → Akzeptieren" used to bounce
 /// the user BACK to the chooser, because the demo user has no server AI provider
 /// → the consent sheet opened with `provider == .unconfigured`, and

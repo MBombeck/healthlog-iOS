@@ -103,7 +103,7 @@ struct AuthenticatedDocumentsBoundaryTests {
             && store.lastError == nil
         #expect(
             accountBRemainsCurrent,
-            "EXPECTED_RED: late A document read or write affected B"
+            "late A document read or write affected B"
         )
     }
 

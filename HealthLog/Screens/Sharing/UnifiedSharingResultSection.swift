@@ -19,9 +19,28 @@ struct UnifiedSharingResultSection: View {
     let linkStore: ShareLinkStore?
     let baseURL: URL?
 
+    /// The width the preview gets, measured on the result's own column.
+    @State private var columnWidth: CGFloat?
+
     var body: some View {
         outcomeBody
     }
+
+    /// Height of the inline report preview at a measured column width. On a
+    /// phone it is the 280 pt it always was; where the column is wide (an
+    /// iPad, an open Duo) the report is shown at a reading size, about as
+    /// tall as it is wide, never more than 640 pt, so a page of the report is
+    /// legible without opening the file.
+    nonisolated static func previewHeight(width: CGFloat?) -> CGFloat {
+        guard let width, width >= regularPreviewMinimum else { return compactPreviewHeight }
+        return min(maximumPreviewHeight, (width * 0.9).rounded())
+    }
+
+    /// Column width from which the preview grows. A phone's card holds at most
+    /// 376 pt, the narrowest regular window more than 480.
+    nonisolated static let regularPreviewMinimum: CGFloat = 480
+    nonisolated static let compactPreviewHeight: CGFloat = 280
+    nonisolated static let maximumPreviewHeight: CGFloat = 640
 
     @ViewBuilder
     private var outcomeBody: some View {
@@ -33,7 +52,7 @@ struct UnifiedSharingResultSection: View {
                 .accessibilityIdentifier("sharing.unified.error")
         }
         if let hasSelection = store.emptyBundleHasSelection {
-            // CU-13 — an empty server bundle is a contract-correct answer that
+            // An empty server bundle is a contract-correct answer that
             // needs an instruction, not an error and not a file.
             Text(
                 hasSelection
@@ -64,7 +83,7 @@ struct UnifiedSharingResultSection: View {
                 // silent downgrade — so the preview came along.
                 if store.outputForm == .pdf, let pdf = store.artifacts.first(where: { $0.pathExtension == "pdf" }) {
                     PDFInlinePreview(url: pdf)
-                        .frame(height: 280)
+                        .frame(height: Self.previewHeight(width: columnWidth))
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
                 }
@@ -76,31 +95,21 @@ struct UnifiedSharingResultSection: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            // 1.4 B2-c — no "Source: your server (rendered PDF)" line: which
+            // No "Source: your server (rendered PDF)" line: which
             // machine rendered the file is a technical detail.
             ShareLink(items: store.artifacts) {
-                HStack(spacing: HLSpace.md) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(HLColor.statusOK)
-                    Text("sharing.unified.result.share")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .contentShape(Rectangle())
+                HLButtonLabel("sharing.unified.result.share", systemImage: "square.and.arrow.up")
             }
-            .buttonStyle(.plain)
+            .hlPressable()
             .accessibilityIdentifier("sharing.unified.result.share")
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
     }
 }
 
 #if canImport(UIKit)
 
-    /// Moved here with the doctor report it belonged to (18-03). A thumbnail of
+    /// Moved here with the doctor report it belonged to. A thumbnail of
     /// what is about to leave the device is worth more on the sharing surface
     /// than it was on a screen that only made PDFs.
     private struct PDFInlinePreview: UIViewRepresentable {

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Build 274 (public #4) — build 271 was killed by RunningBoard (`0xdead10cc`)
+/// Build 271 was killed by RunningBoard (`0xdead10cc`)
 /// while a HealthKit observer wake persisted a retry row into the outbox store
 /// in the shared app-group container: a SQLite lock held while suspending.
 /// Every outbox write now runs under a background-execution lease; when the
@@ -10,7 +10,7 @@ import Testing
 /// "not persisted" and holds its cursor) instead of gambling with the lock.
 @Suite("OutboxQueue — background-execution lease around persistence")
 struct OutboxQueueBackgroundLeaseTests {
-    /// Build 274 (public #4) — records the lease name and whether the body ran,
+    /// Records the lease name and whether the body ran,
     /// so a test can prove the write happens INSIDE the lease and never outside.
     final class RecordingLease: BackgroundExecutionLeasing, @unchecked Sendable {
         private let lock = NSLock()
@@ -55,7 +55,7 @@ struct OutboxQueueBackgroundLeaseTests {
     func refusedLeasePersistsNothingAndThrows() async throws {
         let lease = RecordingLease(grants: false)
         let queue = try OutboxQueue(inMemory: true, backgroundLease: lease)
-        // Build 274 (public #4) — the refusal is its own error type, not a
+        // The refusal is its own error type, not a
         // `HLError.unknown` string: a caller that wants to tell "no background
         // time" apart from a real write failure must be able to.
         await #expect(throws: OutboxQueue.WriteRefusal.noBackgroundExecutionTime) {

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// v0.8.0 W10 — server-first Insights tile layout (order + visibility).
+/// Server-first Insights tile layout (order + visibility).
 ///
 /// Replaces the prior iOS-local `@AppStorage` persistence
 /// (`InsightsTileCatalogue.tileOrderStorageKey` / `enabledTilesStorageKey`)
@@ -37,7 +37,7 @@ public final class InsightsLayoutStore {
     /// the cold-launch paint would silently fall back to `.default`.
     static let layoutCacheKey = "hl.insights.layoutCache.v1"
 
-    /// v0.8.1 WB — `UserDefaults` key for the intra-mood-pair order
+    /// `UserDefaults` key for the intra-mood-pair order
     /// (`MOOD_SCORE` ↔ `MOOD_STABILITY` left/right). Both mood halves share the
     /// single server `stimmung` slug, so the server layout can't express which
     /// half is first — this iOS-local UI-pref does (PROJECT_GUIDE.md allows UI-prefs
@@ -56,7 +56,7 @@ public final class InsightsLayoutStore {
         moodHalfOrder = (defaults.array(forKey: Self.moodHalfOrderKey) as? [String]) ?? []
     }
 
-    /// v0.8.1 WB — persist the intra-mood-pair left/right order (iOS-local).
+    /// Persist the intra-mood-pair left/right order (iOS-local).
     /// Filtered to the two known mood half types so a stray id can't poison it.
     public func setMoodHalfOrder(_ order: [String]) {
         let allowed: Set = ["MOOD_SCORE", "MOOD_STABILITY"]
@@ -106,7 +106,7 @@ public final class InsightsLayoutStore {
         await persist(next, rollbackTo: previous)
     }
 
-    // MARK: - Sections (parity Build 4 · 4.5)
+    // MARK: - Sections
 
     /// The overview sections in render order, defaults-merged. The Insights
     /// overview composes itself from this; the customisation screen edits it.

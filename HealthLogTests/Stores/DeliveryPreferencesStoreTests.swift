@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.9.0 RA3** — pins the unified `DeliveryPreferencesStore`: effective
+/// Pins the unified `DeliveryPreferencesStore`: effective
 /// resolution (`localOverride ?? serverDefault ?? hardcodedDefault`), scope
 /// writes, the `Sendable` predicate snapshot, the legacy Live-Activity
 /// migration round-trip, and the stub-provider fallback (== today's
@@ -123,7 +123,7 @@ struct DeliveryPreferencesStoreTests {
         // Stub provider throws .unsupported → degrades to local-only.
         #expect(ok == false)
         // The user's choice is still effective on this device, AND the
-        // picker remembers the intended "Alle Geräte" scope (HIGH-6) even
+        // picker remembers the intended "Alle Geräte" scope even
         // though the value degraded to a local override.
         let pref = store.effective(medicationId: "m1", channel: .criticalAlarm)
         #expect(pref.enabled == true)

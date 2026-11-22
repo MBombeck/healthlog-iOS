@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **H4 — watch-target logic tests (audit-v0162).**
+/// **Watch-target logic tests.**
 ///
 /// The shared `WatchPayload` contract is compiled into the watch app, its
 /// complication, AND the phone app. The phone side of the contract is tested in

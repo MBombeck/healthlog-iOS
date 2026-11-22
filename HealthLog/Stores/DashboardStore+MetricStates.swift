@@ -1,6 +1,6 @@
 import Foundation
 
-/// AUD-7 H2 — one bounded-parallel series-fallback task's output. `Sendable`
+/// One bounded-parallel series-fallback task's output. `Sendable`
 /// so it crosses the task-group boundary; the caller applies the `staging`
 /// write + sparkline hydration on the main actor in deterministic `kinds`
 /// order after the group settles.
@@ -12,7 +12,7 @@ private struct SeriesFallbackResult {
 
 // MARK: - Per-metric MetricDataState machinery
 
-/// W-FILELEN — the PA4 unified-data-source per-kind `MetricDataState` pipeline
+/// The PA4 unified-data-source per-kind `MetricDataState` pipeline
 /// (tile-completeness synthesis, wide-page derive + series fallback, the sticky
 /// state machine, sparkline hydration, the post-settle policy tick) lifted
 /// verbatim out of `DashboardStore.swift` into this same-module extension to keep
@@ -20,7 +20,7 @@ private struct SeriesFallbackResult {
 /// behaviour change. The store's stored state these methods write uses
 /// `internal(set)` for exactly this reason.
 extension DashboardStore {
-    /// **V052-R3 A-H1.** Test-only seam — drives the post-settle tick
+    /// Test-only seam — drives the post-settle tick
     /// without sleeping through wall-clock 1.6s in the unit suite. The
     /// production path schedules a `Task.sleep` that ends up calling this
     /// same method on the main actor.
@@ -36,7 +36,7 @@ extension DashboardStore {
         policyTick &+= 1
     }
 
-    /// **V052-R3 A-H1.** Schedules the post-settle policy tick.
+    /// Schedules the post-settle policy tick.
     /// Idempotent: if a tick is already scheduled and not yet fired, this
     /// call is a no-op. The 1.6s delay is one frame past the
     /// `DashboardEmptyTilePolicy.loadingTimeoutSeconds = 1.5s` grace so
@@ -75,7 +75,7 @@ extension DashboardStore {
         await task?.value
     }
 
-    /// DASHBOARD-TILE-COMPLETENESS — synthesise placeholder `DashboardMetric`s
+    /// Synthesise placeholder `DashboardMetric`s
     /// for every layout entry with `tileVisible: true` that is missing from
     /// `summary.metrics`. Solves the operator-reported "großes Nichts" for
     /// BP / Puls / Schlaf where the server's `/api/dashboard/summary`
@@ -95,7 +95,7 @@ extension DashboardStore {
     public func synthesiseMissingTiles(layout: DashboardWidgetLayout) {
         guard let current = summary else { return }
         let existingKinds: Set<MetricKind> = Set(current.metrics.map(\.kind))
-        // #20 — the rows include the resting series a visible pulse tile may show
+        // The rows include the resting series a visible pulse tile may show
         // (`DashboardPulseTileSource.tileRows`), even while its own tile is hidden.
         let synthesised: [DashboardMetric] = DashboardPulseTileSource.tileRows(in: layout).compactMap { row in
             guard !existingKinds.contains(row.kind) else { return nil }
@@ -164,7 +164,7 @@ extension DashboardStore {
     /// `MeasurementsRepository.deriveState` over the in-memory slice per
     /// kind. One round-trip instead of N; per-kind derivation is pure.
     ///
-    /// **DASHBOARD-BUG-FIX-2 — per-kind series-endpoint fallback.** For
+    /// **Per-kind series-endpoint fallback.** For
     /// high-volume HK users (~40 measurements/day from Apple Watch),
     /// `recentAll(limit: 400)` returns roughly the last 10 days dominated
     /// by one or two HK-streamed kinds (Steps, Pulse-every-few-seconds).
@@ -228,7 +228,7 @@ extension DashboardStore {
             // forever after a network or auth failure.
             let detail = LogSanitizer.redact(String(describing: error))
             HLLog.api.warning("Dashboard recentAll() failed: \(detail, privacy: .public)")
-            // W-TILEHOTFIX (v0.6.2) — set-once anchor mirrors the happy path.
+            // Set-once anchor mirrors the happy path.
             // See the happy-path comment for the operator-walkthrough context.
             if fanOutSettledAt == nil {
                 fanOutSettledAt = now
@@ -306,7 +306,7 @@ extension DashboardStore {
                   kind == .mood || summaryHasEmptySparkline(for: kind) else { continue }
             hydrateSparkline(for: kind, from: samples)
         }
-        // **W-TILEHOTFIX (v0.6.2) — set-once `fanOutSettledAt`.** Operator
+        // **Set-once `fanOutSettledAt`.** Operator
         // on v0.6.1.28 build 68: "wenn ich von einer anderen Karte komme,
         // immer Kurzkacheln dargestellt werden, die danach weg sind." Every
         // `.task` re-fire on nav-pop / tab-return rewrote `fanOutSettledAt`
@@ -380,7 +380,7 @@ extension DashboardStore {
 
     /// `true` when the metric's `sparkline` has fewer than two points (the
     /// `HLSparkline` rendering threshold — less collapses to a hairline).
-    /// **REG-11 (v0.5.6):** pre-fix this was `.isEmpty`, so `sparkline: [124]`
+    /// Pre-fix this was `.isEmpty`, so `sparkline: [124]`
     /// (one daily bucket — realistic for low-frequency manual entry) skipped
     /// hydration and rendered as "no chart" while detail showed the chart.
     func summaryHasEmptySparkline(for kind: MetricKind) -> Bool {
@@ -414,7 +414,7 @@ extension DashboardStore {
         staging: inout [MetricKind: MetricDataState]
     ) async {
         guard !kinds.isEmpty else { return }
-        // **AUD-7 H2 — bounded-parallel fan-out.** The fallback previously ran
+        // **Bounded-parallel fan-out.** The fallback previously ran
         // SERIALLY (one `series()` round-trip after another); on a high-volume
         // HealthKit user up to ~11 manual kinds fall through, adding ~300ms+ to
         // the cold dashboard first-paint path against the ≤100ms tile / ≤200ms
@@ -493,11 +493,11 @@ extension DashboardStore {
         }
     }
 
-    /// AUD-7 H2 — concurrency cap for the series-fallback fan-out. Mirrors
+    /// Concurrency cap for the series-fallback fan-out. Mirrors
     /// `AppContainer.prefetchFanoutConcurrency` / the compliance fan-out window.
     static let seriesFallbackConcurrency = 4
 
-    /// AUD-7 H2 — pure (nonisolated) per-kind series fetch + state derivation,
+    /// Pure (nonisolated) per-kind series fetch + state derivation,
     /// run inside the bounded task group. Returns `nil` on fetch failure or an
     /// empty series so the caller leaves the wide-page-derived state intact
     /// (identical to the serial path's `continue`).
@@ -559,7 +559,9 @@ extension DashboardStore {
                 unit: metric.unit,
                 trend: metric.trend,
                 sparkline: values,
-                updatedAt: metric.updatedAt, trendSentiment: metric.trendSentiment, direction: metric.direction
+                updatedAt: metric.updatedAt, trendSentiment: metric.trendSentiment, direction: metric.direction,
+                titleKey: metric.titleKey, unitKey: metric.unitKey,
+                trendWindow: metric.deliversTrendWindow ? .delivered(metric.trendWindowDays) : .absent
             )
         }
         guard didReplace else { return }
@@ -577,7 +579,7 @@ extension DashboardStore {
     /// server returns 422 for it — see `MeasurementsRepository.seriesKindKey`
     /// for the canonical list.
     ///
-    /// **v0.5.2 F2** — the three server-backed F2 additions
+    /// The three server-backed F2 additions
     /// (`restingHeartRate`, `hrv`, `vo2Max`) route through the series
     /// endpoint once the server's zod schema picks them up. The four
     /// iOS-local F2 additions (`walkingSpeed`, `walkingAsymmetry`,
@@ -588,25 +590,25 @@ extension DashboardStore {
         case .bodyTemperature, .walkingSpeed, .walkingAsymmetry, .walkingStepLength, .walkingDoubleSupport,
              .walkingSteadiness,
              .respiratoryRate, .audioExposureEnvironment, .audioExposureHeadphone, .bmi,
-             // v0.8.3 W-D — server persists these rows but `/api/measurements/series`
+             // Server persists these rows but `/api/measurements/series`
              // doesn't accept them yet (kindEnum 422); detail renders from the list
              // page + HK cache until the server widens the series schema.
              .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight,
-             // v0.11 W21 — server/Withings-sourced web-parity kinds; series
+             // Server/Withings-sourced web-parity kinds; series
              // endpoint doesn't accept them, so the tile reads off the list/HK cache.
              .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
              .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
              .fatMass,
-             // v0.13.1 IC — v1.10.0 additive signals: series endpoint doesn't
+             // v1.10.0 additive signals: series endpoint doesn't
              // accept them; tile reads off the list page + HK cache.
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native types: no series endpoint.
+             // v1.12.8 WHOOP-native types: no series endpoint.
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
-             // v0.14.1 W-B189 — v1.17.1 source-fixed signals (#23): no series
+             // v1.17.1 source-fixed signals: no series
              // endpoint; tile reads off the list page + HK cache.
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types: no series endpoint (server
+             // v1.25 clinical types: no series endpoint (server
              // `surfaces.detailPage == false`); tile reads off the list page.
              .painNRS, .gripStrength, .waistCircumference, .waistToHeight,
              // Build 3 / item 3.3 — the 21 read-only decoder catch-up types:
@@ -617,10 +619,11 @@ extension DashboardStore {
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity,
              // Build 7 / item 7.3 — mood is not a `Measurement`; no series
              // endpoint. The tile renders from the summary snapshot.
              .mood,
-             // Audit B-4 — the audio-exposure event is not in the series kind
+             // The audio-exposure event is not in the series kind
              // enum, and `.unknown` has no kind name to send at all.
              .audioExposureEvent, .unknown:
             false

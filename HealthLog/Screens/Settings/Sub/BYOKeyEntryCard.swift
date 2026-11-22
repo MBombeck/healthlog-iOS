@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.13 W4 — the inline "Own key" (BYO) entry card revealed in
+/// The inline "Own key" (BYO) entry card revealed in
 /// Settings → Assistant when the user picks the `.byoKey` source. Collects a
 /// provider + secret key (+ optional model override + an https base URL when the
 /// provider needs one), runs **Validate & save** against the provider, and on
@@ -14,26 +14,21 @@ import SwiftUI
 struct BYOKeyEntryCard: View {
     @State private var model: BYOKeyEntryModel
     @State private var presentConsent = false
-    @State private var confirmRemove = false
-
     init(model: BYOKeyEntryModel) {
         _model = State(initialValue: model)
     }
 
-    /// R12 — die Karte war das einzige `HLCard` in den Einstellungen: anderes
+    /// Die Karte war das einzige `HLCard` in den Einstellungen: anderes
     /// Karten-Primitive, anderer Innenabstand (16 statt 14), 1-pt- statt
     /// 0,5-pt-Kontur, Glass- statt flacher Fläche, und ein selbstgebauter
     /// 17-pt-Kartenkopf, weil `HLCard` keinen Titel mitbringt. Jetzt
-    /// `HLSettingsCard`: Titel und Ränder kommen vom Primitive, und die
+    /// `HLCard`: Titel und Ränder kommen vom Primitive, und die
     /// Datenschutz-Zusage sitzt im Footer-Slot, der nach R5 für Rechtliches
     /// vorgesehen ist (Wortlaut unverändert).
     var body: some View {
-        // 1.4 B2-c — no footer: the "Own key" option right above says the
+        // No footer: the "Own key" option right above says the
         // requests go straight from the device to the provider.
-        HLSettingsCard(
-            icon: "key.horizontal.fill",
-            title: "Your own AI key"
-        ) {
+        HLCard("Your own AI key") {
             if model.isConfigured, model.phase != .editing {
                 configuredState
             } else {
@@ -80,8 +75,7 @@ struct BYOKeyEntryCard: View {
         } label: {
             HStack(spacing: HLSpace.xs) {
                 Text(model.provider.displayName)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.hlIcon(HLIconSize.xs))
                     .foregroundStyle(HLText.tertiary)
@@ -149,15 +143,14 @@ struct BYOKeyEntryCard: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(tint)
             Text(text)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// R9 — `.restrained` ist gefallen. Die Assistent-Seite hat genau **eine**
+    /// `.restrained` ist gefallen. Die Assistent-Seite hat genau **eine**
     /// `.primary`-Fläche, und das ist „Speichern" am Ende der Provider-Sektion
     /// (die abschließende Commit-Aktion der Seite). „Prüfen & speichern" ist der
     /// Commit eines Unter-Flusses, der als Folge der Quellen-Auswahl darüber
@@ -167,7 +160,7 @@ struct BYOKeyEntryCard: View {
     /// akademisch.
     private var validateButton: some View {
         HLButton(
-            String(localized: "Validate & save"),
+            "Validate & save",
             variant: .secondary,
             isLoading: model.phase == .validating
         ) {
@@ -187,46 +180,33 @@ struct BYOKeyEntryCard: View {
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: HLSpace.xxs) {
                     Text(model.provider.displayName)
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.rowTitle)
                     if let last4 = model.savedKeyLast4 {
                         Text(String(localized: "Key ····\(last4) · \(model.resolvedModel)"))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     } else {
                         Text(model.resolvedModel)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     }
                 }
                 Spacer(minLength: 0)
             }
-            // R8 — der 12-pt-Rot-Text als destruktive Affordanz ist gefallen;
-            // in einer Karte ist eine Aktion eine Zeile. R13 — das Entfernen
+            // Der 12-pt-Rot-Text als destruktive Affordanz ist gefallen;
+            // in einer Karte ist eine Aktion eine Zeile. Das Entfernen
             // eines gespeicherten Schlüssels ist ein Einzelobjekt-Widerruf und
             // bekommt damit einen `confirmationDialog` (vorher feuerte es
             // direkt).
-            HLSettingsActionRow(
-                icon: "trash",
-                title: "Remove key",
-                role: .destructive,
-                presents: .confirm
-            ) {
-                confirmRemove = true
-            }
+            HLDeleteButton(
+                "Remove key",
+                form: .row,
+                action: .confirmed(
+                    title: "Remove this key?",
+                    message: "The assistant stops answering until you enter a key again."
+                ) {
+                    model.removeKey()
+                }
+            )
             .accessibilityIdentifier("BYOKeyEntryCard.removeButton")
         }
-        .hlConfirmDestructive(
-            Text("Remove this key?"),
-            isPresented: $confirmRemove,
-            message: Text("The assistant stops answering until you enter a key again."),
-            confirm: Text("Remove key"),
-            confirmIdentifier: "BYOKeyEntryCard.confirmRemove",
-            cancel: Text("Cancel"),
-            onCancel: { confirmRemove = false },
-            action: {
-                model.removeKey()
-            }
-        )
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - 21-03 (D-14-06-C) — the bounded attach
+// MARK: - The bounded attach
 
 /// The machinery behind `RefreshIntent.userInitiated`, in its own file.
 ///

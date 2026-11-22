@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-02 — the owner of the Apple-Health import's temp bodies.**
+/// **The owner of the Apple-Health import's temp bodies.**
 ///
 /// The import assembles its multipart envelope into a file the app owns rather
 /// than into memory. That file is the user's entire Apple-Health export

@@ -1,8 +1,8 @@
 import Foundation
 
 /// `GET /api/ai-runs/{id}`: waits for one background AI run (server v1.40) and
-/// returns its result. Shared by the lab-report read (LAB-OCR) and the
-/// supplement label read (SUPP-EDIT); the wire types are the ones the document
+/// returns its result. Shared by the lab-report read and the
+/// supplement label read; the wire types are the ones the document
 /// reads introduced (``DocumentAIRun``, ``DocumentAIRunFailure``).
 ///
 /// A poll is a plain read of the caller's own run (the server calls no model

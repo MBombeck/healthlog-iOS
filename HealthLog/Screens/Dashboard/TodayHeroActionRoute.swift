@@ -12,7 +12,7 @@ enum TodayHeroActionRoute: Equatable {
     case coachKeep(planId: String)
     case coachLetGo(planId: String)
     case coach
-    /// The upcoming-intakes sheet (Wave 2 / 2.5).
+    /// The upcoming-intakes sheet.
     case intakes
     case integrations
     /// `checkup.view`: straight to doing the due check-up where it can be

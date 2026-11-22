@@ -8,70 +8,53 @@ import SwiftUI
 /// chip is purely a quantitative read-out of what the user has logged.
 public struct SideEffectsLogbookSection: View {
     @State private var store: SideEffectsLogbookStore
-    @State private var showingAdd: Bool = false
-    /// 1.4 B2 — with nothing logged the section is one row in the GLP-1
+    /// Opens the add sheet. The sheet lives on `GLP1DetailStack`, which stays
+    /// on screen when this section swaps between its add row and its full form.
+    private let onAdd: () -> Void
+    /// The entry waiting for the delete confirmation.
+    /// With nothing logged the section is one row in the GLP-1
     /// stack's shared "add" card (``GLP1DetailStack``).
     private let showsAddRowOnly: Bool
 
-    public init(store: SideEffectsLogbookStore, showsAddRowOnly: Bool = false) {
+    public init(store: SideEffectsLogbookStore, showsAddRowOnly: Bool = false, onAdd: @escaping () -> Void) {
         _store = State(initialValue: store)
+        self.onAdd = onAdd
         self.showsAddRowOnly = showsAddRowOnly
     }
 
     public var body: some View {
         Group {
             if showsAddRowOnly {
-                GLP1AddRow(title: "Log side effect", systemImage: "list.bullet.rectangle") { showingAdd = true }
+                GLP1AddRow(title: "Log side effect", systemImage: "list.bullet.rectangle", identifier: "glp1.add.sideEffect") { onAdd() }
             } else {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // The page's gap, so the header keeps its own room.
+                VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     header
                     content
                 }
             }
         }
-        .sheet(isPresented: $showingAdd) {
-            SideEffectLogSheet { loggedAt, kind, severity, note in
-                Task {
-                    await store.log(
-                        loggedAt: loggedAt,
-                        kind: kind,
-                        severity: severity,
-                        note: note
-                    )
-                }
-            }
-            .hlSheetPresentation(.form)
-        }
-        .task {
-            await store.load()
-        }
+        // Each row's delete asks first; the question hangs here, not on the menu.
+        .hlDeleteConfirmation()
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            // T2-4: section label Withings rhythm.
-            HLSectionLabel("Side effects")
-            Spacer()
-            Button {
-                showingAdd = true
-            } label: {
-                Label(
-                    String(localized: "Add entry"),
-                    systemImage: "plus.circle.fill"
-                )
-                .labelStyle(.iconOnly)
-                .font(.hlTitle3)
-                .foregroundStyle(.tint)
-            }
-            .accessibilityLabel(Text(String(localized: "Log side effect")))
-        }
+        HLSectionHeader("Side effects", rank: .area)
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             summaryChips
+            // Logging comes first in the logbook, as a row with the plus in
+            // front (Z18); the days follow.
+            HLCard(layout: .rows) {
+                HLSettingsActionRow(title: "Log side effect", presents: .create) { onAdd() }
+                    .accessibilityIdentifier("glp1.sideEffect.add")
+            }
             logbookList
         }
+        // The day headers keep their room above and below in this stack.
+        .hlContainerGap(HLSpace.md)
     }
 
     private var summaryChips: some View {
@@ -92,17 +75,32 @@ public struct SideEffectsLogbookSection: View {
         }
     }
 
+    /// One header per day and the day's entries as rows of one card.
     private var logbookList: some View {
-        HLCard {
-            VStack(spacing: 0) {
-                let groups = store.entriesByDay
-                ForEach(Array(groups.enumerated()), id: \.element.day) { _, group in
-                    DayBlock(day: group.day, rows: group.rows) { id in
-                        Task { await store.delete(id: id) }
-                    }
+        ForEach(store.entriesByDay, id: \.day) { group in
+            HLSectionHeader(verbatim: Self.dayLabel(group.day))
+            HLCard(layout: .rows) {
+                ForEach(group.rows, id: \.id) { row in
+                    LogRow(row: row, delete: deleteAction(id: row.id))
                 }
             }
         }
+    }
+
+    private func deleteAction(id: String) -> HLDeleteAction {
+        .confirmed(title: "Delete entry?", message: "The history entry will be removed. This action cannot be undone.") {
+            await store.delete(id: id)
+        }
+    }
+
+    static func dayLabel(_ day: Date) -> String {
+        if Calendar.current.isDateInToday(day) {
+            return String(localized: "Today")
+        }
+        if Calendar.current.isDateInYesterday(day) {
+            return String(localized: "Yesterday")
+        }
+        return HLDateFormat.date(day, style: .abbreviated)
     }
 
     static func kindLabel(_ kind: SideEffectKind) -> String {
@@ -131,6 +129,18 @@ public struct SideEffectsLogbookSection: View {
         return .neutral
     }
 
+    /// The severity as the row's status; an unknown grade shows none.
+    static func severityStatus(_ severity: Int) -> HLRowStatus? {
+        let tone: HLBadge.Tone
+        switch severity {
+        case 3: tone = .critical
+        case 2: tone = .warning
+        case 1: tone = .info
+        default: return nil
+        }
+        return HLRowStatus(severityLabel(severity), tone: tone)
+    }
+
     static func severityLabel(_ severity: Int) -> String {
         switch severity {
         case 1: String(localized: "Mild")
@@ -141,80 +151,22 @@ public struct SideEffectsLogbookSection: View {
     }
 }
 
-// MARK: - Day block
-
-private struct DayBlock: View {
-    let day: Date
-    let rows: [SideEffectEntrySnapshot]
-    let onDelete: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(dayLabel)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .padding(.top, HLSpace.sm)
-            ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
-                LogRow(row: row, onDelete: { onDelete(row.id) })
-                if idx < rows.count - 1 {
-                    Divider().background(HLColor.separator)
-                }
-            }
-        }
-    }
-
-    private var dayLabel: String {
-        // W-PERF-SWR (High) — dropped a per-access `RelativeDateTimeFormatter()`
-        // allocation here: it was configured but never used (`dayLabel` returns
-        // localized "Today"/"Yesterday" or an absolute `day.formatted(...)`), so
-        // the alloc was dead weight on every row access. Output is unchanged.
-        if Calendar.current.isDateInToday(day) {
-            return String(localized: "Today")
-        }
-        if Calendar.current.isDateInYesterday(day) {
-            return String(localized: "Yesterday")
-        }
-        return HLDateFormat.date(day, style: .abbreviated)
-    }
-}
+// MARK: - Row
 
 private struct LogRow: View {
     let row: SideEffectEntrySnapshot
-    let onDelete: () -> Void
+    let delete: HLDeleteAction
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                HStack(spacing: HLSpace.xs) {
-                    Text(label)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    severityChip
-                }
-                if let note = row.note, !note.isEmpty {
-                    Text(note)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(row.loggedAt.formatted(date: .omitted, time: .shortened))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .monospacedDigit()
-            }
-            Spacer()
-            Menu {
-                Button(role: .destructive, action: onDelete) {
-                    Label(String(localized: "Delete"), systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(HLText.secondary)
-            }
-            .accessibilityLabel(Text(String(localized: "Entry actions")))
-        }
-        .padding(.vertical, HLSpace.sm)
-        .accessibilityElement(children: .combine)
+        HLRow(
+            title: Text(verbatim: label),
+            detail: HLRowDetail.text([
+                HLTimeFormat.time(row.loggedAt),
+                row.note?.replacingOccurrences(of: "\n", with: " ")
+            ]),
+            status: SideEffectsLogbookSection.severityStatus(row.severity)
+        )
+        .glp1RowActions(delete: delete)
     }
 
     private var label: String {
@@ -223,48 +175,68 @@ private struct LogRow: View {
         }
         return String(localized: "Unknown")
     }
-
-    @ViewBuilder
-    private var severityChip: some View {
-        let tone: HLBadge.Tone = switch row.severity {
-        case 3: .critical
-        case 2: .warning
-        case 1: .info
-        default: .neutral
-        }
-        HLBadge(SideEffectsLogbookSection.severityLabel(row.severity), tone: tone)
-    }
 }
 
 // MARK: - Log sheet
 
 struct SideEffectLogSheet: View {
-    let onSave: (Date, SideEffectKind, Int, String?) -> Void
+    /// Saves the entry; `nil` means saved, otherwise the sheet stays open and
+    /// shows the failure.
+    let onSave: (Date, SideEffectKind, Int, String?) async -> HLError?
 
-    @Environment(\.dismiss) private var dismiss
-    @State private var loggedAt: Date = .now
+    @State private var loggedAt: Date
     @State private var kind: SideEffectKind = .nausea
     @State private var severity: Double = 1
     @State private var note: String = ""
+    @State private var saveGate = FormSaveGate()
+    private let openedAt: Date
+
+    init(onSave: @escaping (Date, SideEffectKind, Int, String?) async -> HLError?) {
+        self.onSave = onSave
+        let now = Date.now
+        openedAt = now
+        _loggedAt = State(initialValue: now)
+    }
+
+    private var isDirty: Bool {
+        !Calendar.current.isDate(loggedAt, equalTo: openedAt, toGranularity: .minute)
+            || kind != .nausea
+            || Int(severity) != 1
+            || !note.isEmpty
+    }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "glp1.sideEffect.sheet.title",
+            action: .add { await save() },
+            isDirty: isDirty,
+            confirmIdentifier: "glp1.sheet.save"
+        ) {
             Form {
-                Section(String(localized: "When")) {
+                Section {
                     DatePicker(
-                        String(localized: "Date"),
                         selection: $loggedAt,
                         displayedComponents: [.date, .hourAndMinute]
-                    )
+                    ) {
+                        HLRowTitle("Date")
+                    }
+                } header: {
+                    HLSectionHeader("When")
                 }
-                Section(String(localized: "What")) {
-                    Picker(String(localized: "Type"), selection: $kind) {
+                .hlFormRowSurface()
+                Section {
+                    Picker(selection: $kind) {
                         ForEach(SideEffectKind.pickerCases, id: \.self) { kind in
                             Text(SideEffectsLogbookSection.kindLabel(kind)).tag(kind)
                         }
+                    } label: {
+                        HLRowTitle("Type")
                     }
+                } header: {
+                    HLSectionHeader("What")
                 }
-                Section(String(localized: "Severity")) {
+                .hlFormRowSurface()
+                Section {
                     VStack(alignment: .leading, spacing: HLSpace.xs) {
                         Slider(
                             value: $severity,
@@ -272,31 +244,35 @@ struct SideEffectLogSheet: View {
                             step: 1
                         )
                         Text(SideEffectsLogbookSection.severityLabel(Int(severity)))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     }
+                } header: {
+                    HLSectionHeader("Severity")
                 }
-                Section(String(localized: "Note")) {
+                .hlFormRowSurface()
+                Section {
                     TextField(String(localized: "Optional"), text: $note, axis: .vertical)
                         .lineLimit(3 ... 6)
+                } header: {
+                    HLSectionHeader("Note")
+                }
+                .hlFormRowSurface()
+                if let error = saveGate.error {
+                    Section { HLFormErrorText(error.userFacingDescription) }
+                        .hlFormRowSurface()
                 }
             }
-            // 1.4 B4 — its own key: between "Abbrechen" and "Speichern" the
+            .hlPageMargins()
+            // Its own key: between "Abbrechen" and "Speichern" the
             // German "Nebenwirkung erfassen" was cut.
-            .navigationTitle(String(localized: "glp1.sideEffect.sheet.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Save")) {
-                        let cleaned = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        onSave(loggedAt, kind, Int(severity), cleaned.isEmpty ? nil : cleaned)
-                        dismiss()
-                    }
-                }
-            }
+        }
+    }
+
+    /// `true` once the entry went out and the sheet may close.
+    private func save() async -> Bool {
+        let cleaned = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        return await saveGate.submit {
+            await onSave(loggedAt, kind, Int(severity), cleaned.isEmpty ? nil : cleaned)
         }
     }
 }

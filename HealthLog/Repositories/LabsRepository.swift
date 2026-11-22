@@ -6,7 +6,7 @@ import Foundation
 /// clean `module.disabled` (403) discriminator so a non-enabled account renders
 /// the disabled surface instead of a hard error.
 ///
-/// **Reads are SWR cache-first when a coordinator is supplied (QOL-OFF-2).** The
+/// **Reads are SWR cache-first when a coordinator is supplied.** The
 /// unfiltered labs list (`.labsResults`) and the biomarker catalog
 /// (`.biomarkers`) route through `swr.fetchCachingFirst`, so the Labs screen is
 /// READABLE on a cold offline launch instead of rendering the empty "add your
@@ -71,7 +71,7 @@ public actor LabsRepository {
     /// `GET /api/labs` with the optional analyte / panel / biomarker / date-range
     /// / pagination filters. Returns the `{ results, meta }` payload.
     ///
-    /// **QOL-OFF-2:** the UNFILTERED default page (no analyte/panel/biomarker/
+    /// The UNFILTERED default page (no analyte/panel/biomarker/
     /// date filter, `offset == 0`, `sortDir == "desc"` — the exact read the
     /// `LabsStore` list uses) routes through `swr.fetchCachingFirst(.labsResults)`
     /// so the Labs screen paints from disk on a cold offline launch. Any filtered
@@ -113,7 +113,7 @@ public actor LabsRepository {
         return try await networkFetch()
     }
 
-    /// #130 — `GET /api/labs/overview` (server v1.42.4+): one entry per marker
+    /// `GET /api/labs/overview` (server v1.42.4+): one entry per marker
     /// over the whole history, the source of the labs list.
     ///
     /// Returns `nil` when the server does not have the route (before v1.42.4
@@ -130,8 +130,21 @@ public actor LabsRepository {
         }
     }
 
+    /// `GET /api/settings/module-list-layout` — the person's own list
+    /// presentation; only `lists.labs` is read. `nil` on a server without the
+    /// route (the list then keeps its old behaviour). Network-direct: a
+    /// failure leaves the previous layout in place.
+    public func labsListLayout() async throws -> LabsListLayout? {
+        let req: APIRequest<ModuleListLayoutResponse> = .get("/api/settings/module-list-layout")
+        do {
+            return try await api.send(req).labs
+        } catch let HLError.server(status, _, _) where [400, 404, 405].contains(status) {
+            return nil
+        }
+    }
+
     /// `GET /api/biomarkers` — the user's biomarker catalog (name-ordered).
-    /// SWR cache-first (`.biomarkers`) for offline readability (QOL-OFF-2).
+    /// SWR cache-first (`.biomarkers`) for offline readability.
     public func biomarkers() async throws -> ListBiomarkersResponse {
         let api = api
         @Sendable func networkFetch() async throws -> ListBiomarkersResponse {
@@ -178,27 +191,18 @@ public actor LabsRepository {
         clientEntityId: String? = nil
     ) async throws -> LabResultDTO {
         let key = idempotencyKey ?? IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createLab, payload: OutboxQueue.Payloads.CreateLab(body: body),
+            key: key, clientEntityId: clientEntityId
+        ) { [self] in
             let req: APIRequest<LabResultDTO> = try .post("/api/labs", body: body, idempotencyKey: key)
             let created = try await api.send(req)
             await invalidate([.labsResults])
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .createLab, payload: OutboxQueue.Payloads.CreateLab(body: body),
-                key: key, clientEntityId: clientEntityId
-            )
-            throw err
         }
     }
 
-    /// Replay drain for `createLab`. Re-issues `POST /api/labs` under the
-    /// persisted key.
-    public func replayCreateLab(_ body: LabResultCreate, idempotencyKey: String) async throws {
-        _ = try await replayCreateLabReturningServerId(body, idempotencyKey: idempotencyKey)
-    }
-
-    /// audit-v0162 H-4 — replay drain returning the server-assigned lab id so a
+    /// Replay drain returning the server-assigned lab id so a
     /// queued update/delete referencing the optimistic id can be remapped.
     @discardableResult
     public func replayCreateLabReturningServerId(_ body: LabResultCreate, idempotencyKey: String) async throws -> String {
@@ -212,17 +216,14 @@ public actor LabsRepository {
     @discardableResult
     public func updateLab(id: String, _ patch: LabResultPatch) async throws -> LabResultDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateLab, payload: OutboxQueue.Payloads.UpdateLab(id: id, patch: patch),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<LabResultDTO> = try .put("/api/labs/\(id)", body: patch, idempotencyKey: key)
             let updated = try await api.send(req)
             await invalidate([.labsResults])
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .updateLab, payload: OutboxQueue.Payloads.UpdateLab(id: id, patch: patch),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -237,16 +238,13 @@ public actor LabsRepository {
     /// `DELETE /api/labs/{id}` (soft, idempotent).
     public func deleteLab(id: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(
+            .deleteLab, payload: OutboxQueue.Payloads.DeleteLab(id: id),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<DeletedFlagResponse> = .delete("/api/labs/\(id)", idempotencyKey: key)
             _ = try await api.send(req)
             await invalidate([.labsResults])
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .deleteLab, payload: OutboxQueue.Payloads.DeleteLab(id: id),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -266,16 +264,13 @@ public actor LabsRepository {
         guard !ids.isEmpty else { return 0 }
         precondition(ids.count <= Self.restoreCap, "labs restore capped at \(Self.restoreCap)")
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(.restoreLabs, payload: OutboxQueue.Payloads.RestoreLabs(ids: ids), key: key) { [self] in
             let req: APIRequest<RestoreLabResultsResponse> = try .post(
                 "/api/labs/restore", body: RestoreLabResultsRequest(ids: ids), idempotencyKey: key
             )
             let restored = try await api.send(req).restored
             await invalidate([.labsResults])
             return restored
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.restoreLabs, payload: OutboxQueue.Payloads.RestoreLabs(ids: ids), key: key)
-            throw err
         }
     }
 
@@ -295,14 +290,11 @@ public actor LabsRepository {
     @discardableResult
     public func createBiomarker(_ body: BiomarkerCreate) async throws -> BiomarkerDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(.createBiomarker, payload: OutboxQueue.Payloads.CreateBiomarker(body: body), key: key) { [self] in
             let req: APIRequest<BiomarkerDTO> = try .post("/api/biomarkers", body: body, idempotencyKey: key)
             let created = try await api.send(req)
             await invalidate([.biomarkers])
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.createBiomarker, payload: OutboxQueue.Payloads.CreateBiomarker(body: body), key: key)
-            throw err
         }
     }
 
@@ -318,16 +310,17 @@ public actor LabsRepository {
     @discardableResult
     public func updateBiomarker(id: String, _ patch: BiomarkerPatch) async throws -> BiomarkerDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateBiomarker,
+            payload: OutboxQueue.Payloads.UpdateBiomarker(id: id, patch: patch),
+            key: key
+        ) { [self] in
             let req: APIRequest<BiomarkerDTO> = try .put("/api/biomarkers/\(id)", body: patch, idempotencyKey: key)
             let updated = try await api.send(req)
             // The server resolves each linked row's analyte/unit/range from the
             // catalog, so an edit flows to the lab rows too — drop both keys.
             await invalidate([.biomarkers, .labsResults])
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.updateBiomarker, payload: OutboxQueue.Payloads.UpdateBiomarker(id: id, patch: patch), key: key)
-            throw err
         }
     }
 
@@ -345,15 +338,12 @@ public actor LabsRepository {
     /// say so.
     public func deleteBiomarker(id: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(.deleteBiomarker, payload: OutboxQueue.Payloads.DeleteBiomarker(id: id), key: key) { [self] in
             let req: APIRequest<DeletedFlagResponse> = .delete("/api/biomarkers/\(id)", idempotencyKey: key)
             _ = try await api.send(req)
             // `onDelete: SetNull` unlinks every reading (rows keep legacy
             // analyte/unit), so the lab list repaints too — drop both keys.
             await invalidate([.biomarkers, .labsResults])
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.deleteBiomarker, payload: OutboxQueue.Payloads.DeleteBiomarker(id: id), key: key)
-            throw err
         }
     }
 
@@ -374,7 +364,7 @@ public actor LabsRepository {
         return false
     }
 
-    // MARK: - Cache invalidation (QOL-OFF-2)
+    // MARK: - Cache invalidation
 
     /// Drop the given cached SWR snapshots after a successful write so a mutation
     /// is never masked by a fresh-enough cached row (the store's post-write
@@ -383,34 +373,23 @@ public actor LabsRepository {
         await swr?.invalidate(keys)
     }
 
-    // MARK: - Outbox enqueue helper
+    // MARK: - Outbox write-ahead helper
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
-        clientEntityId: String? = nil
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(
-                kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
-            ))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Labs outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        clientEntityId: String? = nil,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(
+            kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
+        )
+        return try await outbox.writeAhead(op, send: send)
     }
 }

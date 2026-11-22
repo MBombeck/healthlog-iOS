@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **LIFE (1.5.0, #132) — the life circumstances, writable.**
+    /// **The life circumstances, writable.**
     ///
     /// Under `-uitest-life` the fixture server says it has
     /// `features.lifeCircumstances` and keeps the answers in memory: a POST,
@@ -25,7 +25,7 @@
         }
 
         private static let lock = NSLock()
-        /// POLISH-C (C7): the one-word alcohol answer from before AUDIT-C,
+        /// The one-word alcohol answer from before AUDIT-C,
         /// kept in the record and shown in the alcohol section.
         private nonisolated(unsafe) static var facts: [Fact] = [
             Fact(id: "life-legacy-alcohol", kind: "ALCOHOL_PATTERN", value: "WEEKLY", validFrom: "2025-03-01T12:00:00.000Z")
@@ -183,6 +183,7 @@
           "disclaimerAcknowledgedAt": "2024-01-01T00:00:00.000Z",
           "onboardingTourCompleted": true,
           "moodReminderEnabled": false,
+          "unitPreference": "metric",
           "modules": {},
           "moduleAccess": {},
           "features": { "lifeCircumstances": true }

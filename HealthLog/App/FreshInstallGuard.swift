@@ -13,7 +13,7 @@ import Foundation
 /// domain and without a real Keychain: `FreshInstallGuard` never touches
 /// either type directly.
 ///
-/// **13-05** adds the second reading the rule turned out to need. The domain
+/// Adds the second reading the rule turned out to need. The domain
 /// does not only carry the sentinel; it also carries everything *older* builds
 /// wrote into it, and iOS carries all of it across an update. Those older keys
 /// are what separates "this app is new on this device" from "this sentinel is
@@ -41,7 +41,7 @@ extension UserDefaults: InstallSentinelDefaults {
     }
 }
 
-/// **13-05.** Evidence, taken from the app's own container, that this
+/// Evidence, taken from the app's own container, that this
 /// installation has been launched before.
 ///
 /// A witness may only be read from a store iOS destroys together with the app.
@@ -134,7 +134,7 @@ enum FreshInstallGuard {
     static let sentinelDefaultsKey = "hl.install.sentinel"
     static let sentinelValue = "1"
 
-    /// **13-05.** Keys that builds *older than the sentinel* wrote into
+    /// Keys that builds *older than the sentinel* wrote into
     /// `UserDefaults.standard`. Any one of them present, with no sentinel
     /// beside it, is the signature of an installation that has been here all
     /// along and has just met the sentinel for the first time.
@@ -155,12 +155,11 @@ enum FreshInstallGuard {
     ///   (`SettingsStore.swift:222-228`), and `AppContainer` composes a
     ///   `SettingsStore` on every launch. This one alone covers every
     ///   installation that has run any build for roughly the last year.
-    /// - `hl.syncMode` — `AuthStore.bootstrap` writes `.paired` for any install
-    ///   holding a token (`AuthStore.swift:109`), and the onboarding choice
-    ///   writes it for standalone. Every *authenticated* install has it, which
-    ///   is exactly the population that owns a server address.
-    /// - `hl.onboarding.mode` — written when the mode picker is answered, and
-    ///   deliberately *not* cleared on logout.
+    /// - `hl.syncMode` — builds before 1.6 wrote it for every install holding
+    ///   a token, which is exactly the population that owns a server address.
+    /// - `hl.onboarding.mode` — written by builds before 1.6 when onboarding
+    ///   was answered, and deliberately *not* cleared on logout.
+    ///   `StandaloneRetirement` drops both keys after this guard has run.
     /// - `hl.settings.appearance` — written whenever an appearance is chosen or
     ///   re-asserted; the oldest of the four.
     static let defaultsKeysOlderThanTheSentinel = [
@@ -183,7 +182,7 @@ enum FreshInstallGuard {
         /// The sentinel was already present — an ordinary relaunch. Nothing
         /// was read from or written to the Keychain.
         case returningInstall
-        /// **13-05.** No sentinel, but the container carries evidence of an
+        /// No sentinel, but the container carries evidence of an
         /// earlier launch: this is the first launch after the *update* that
         /// introduced the sentinel, not after an install. The Keychain is left
         /// exactly as it was; only the sentinel is recorded.
@@ -196,7 +195,7 @@ enum FreshInstallGuard {
     /// Runs the rule. Returns what it decided, so the launch prologue can
     /// record it without the guard needing to log or observe anything.
     ///
-    /// **13-05 — why the sentinel's absence is not enough.** As 13-01 wrote it,
+    /// **Why the sentinel's absence is not enough.** As 13-01 wrote it,
     /// this rule read a missing sentinel as proof of a deleted-and-reinstalled
     /// app. That inference is only sound once the sentinel has already shipped
     /// in some earlier build. On the build that *introduces* it — 267 — every
@@ -215,7 +214,8 @@ enum FreshInstallGuard {
     static func wipeInheritedServerIdentityIfNeeded(
         defaults: InstallSentinelDefaults,
         keychain: KeychainStoring,
-        containerWitness: PriorLaunchWitnessing = ApplicationSupportPriorLaunchWitness.production()
+        containerWitness: PriorLaunchWitnessing = ApplicationSupportPriorLaunchWitness.production(),
+        wipePushKeys: () -> Void = { RelayKeyring.production().wipe() }
     ) -> Outcome {
         guard defaults.installSentinel(forKey: sentinelDefaultsKey) == nil else {
             // An ordinary relaunch. Not one Keychain read, not one write —
@@ -246,8 +246,13 @@ enum FreshInstallGuard {
         let inherited = keychain.getString(forKey: KeychainKey.serverURL)?.nilIfEmpty != nil
         try? keychain.remove(forKey: KeychainKey.serverURLExplicitHostFingerprint)
         try? keychain.remove(forKey: KeychainKey.serverURL)
-        // GH-iOS #27 — proxy credentials belong to that inherited server too.
+        // Proxy credentials belong to that inherited server too.
         try? keychain.remove(forKey: KeychainKey.serverAccessHeaders)
+        // D1 (1): so do the push keys. The `dev.healthlog.app.push` item
+        // outlives the app; without this a reinstall kept the envelope key of
+        // the account before, and the next account could open its pushes.
+        // An unconfirmed relay revocation stays, it can only revoke.
+        wipePushKeys()
         // The sentinel goes in last. A crash between the removal and this
         // write costs the next launch one more (idempotent) wipe of an
         // already-empty slot — the harmless direction.
@@ -255,7 +260,7 @@ enum FreshInstallGuard {
         return .freshInstall(wipedInheritedServerIdentity: inherited)
     }
 
-    /// **13-05.** The second premise: does any store that iOS destroys with the
+    /// The second premise: does any store that iOS destroys with the
     /// app remember an earlier launch?
     ///
     /// Two independent stores are asked, defaults first — it is the same domain

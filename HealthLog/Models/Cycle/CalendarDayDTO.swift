@@ -43,7 +43,7 @@ public struct CalendarDayDTO: Codable, Sendable, Equatable, Hashable, Identifiab
     public let cervixPosition: String?
     public let cervixFirmness: String?
     public let cervixOpening: String?
-    /// v1.39.1 (#1032) — the rest of the day log, carried on the calendar read
+    /// v1.39.1 — the rest of the day log, carried on the calendar read
     /// so the grid can show that something was logged. Each defaults to "not
     /// logged" when absent (a server older than v1.39.1) or malformed.
     /// Spotting or bleeding outside the period.
@@ -61,7 +61,7 @@ public struct CalendarDayDTO: Codable, Sendable, Equatable, Hashable, Identifiab
     }
 
     /// Typed flow accessor — the calendar day's logged flow. Drives the CU-25
-    /// (#72) flow-without-period reconciliation check, which needs to know
+    /// flow-without-period reconciliation check, which needs to know
     /// whether the PRECEDING day already carried bleeding.
     public var flowLevel: CycleFlowLevel? {
         flow.flatMap(CycleFlowLevel.init)

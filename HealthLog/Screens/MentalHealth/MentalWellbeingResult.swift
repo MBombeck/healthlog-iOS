@@ -24,7 +24,7 @@ struct MentalWellbeingResult: View {
                         .accessibilityIdentifier("mentalHealth.crisisCard")
                 }
 
-                HLButton(String(localized: "mentalHealth.result.takeAnother"), variant: .secondary) {
+                HLButton("mentalHealth.result.takeAnother", variant: .secondary) {
                     store.backToChoose()
                 }
                 .accessibilityIdentifier("mentalHealth.result.takeAnother")
@@ -32,66 +32,39 @@ struct MentalWellbeingResult: View {
         }
     }
 
-    /// 1.4 B2 — everything that belongs to the result stands in its card: the
+    /// Everything that belongs to the result stands in its card: the
     /// offline note under the title (only when the result is not the server's
     /// yet; "Saved" no longer says the obvious), the score and band, the
     /// screening disclaimer where the score is read (1.0.3, App Review 1.4.1),
     /// and at the foot the required attribution with the validation paper.
     private func resultCard(_ result: MentalHealthStore.Result) -> some View {
-        HLCard {
+        HLCard("mentalHealth.result.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text("mentalHealth.result.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    if !result.serverDerived {
-                        Text("mentalHealth.result.provisionalNote")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("mentalHealth.result.status")
-                    }
+                if !result.serverDerived {
+                    Text("mentalHealth.result.provisionalNote")
+                        .hlText(.note)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("mentalHealth.result.status")
                 }
-                HStack(alignment: .firstTextBaseline) {
-                    Text("mentalHealth.result.totalLabel")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer()
-                    Text("\(result.totalScore)")
-                        .font(.hlTitle2)
-                        .foregroundStyle(HLText.primary)
-                        .accessibilityIdentifier("mentalHealth.result.totalScore")
-                }
-                HStack(alignment: .firstTextBaseline) {
-                    Text("mentalHealth.result.bandLabel")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer()
-                    Text(bandKey(result))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                }
+                scoreBlock(result)
                 if result.showConsiderProfessional {
-                    // 1.4 B4 — a line of the card in body ink instead of a
+                    // A line of the card in body ink instead of a
                     // grey box inside it; the stronger ink keeps it noticed.
                     Text(considerKey(result))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.prose)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if result.wording == .unvalidatedTranslation {
-                    // L10N-MH — answered in HealthLog's own translation: said
+                    // Answered in HealthLog's own translation: said
                     // once, where the score is read.
                     Text("mentalHealth.wording.resultUnvalidated")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.note)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("mentalHealth.result.wordingNote")
                 }
                 Text("mentalHealth.disclaimer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.note)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("mentalHealth.result.disclaimer")
                 VStack(alignment: .leading, spacing: 0) {
@@ -103,26 +76,49 @@ struct MentalWellbeingResult: View {
         }
     }
 
+    /// The score is the page's one key figure; the band is its status, as a
+    /// capsule at the trailing edge like on every detail head. At the
+    /// accessibility sizes the band moves under the score.
+    private func scoreBlock(_ result: MentalHealthStore.Result) -> some View {
+        HLAdaptiveStack(alignment: .top) { stacked in
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                HLCardLabel("mentalHealth.result.totalLabel")
+                HLValueText(Double(result.totalScore), unit: .plain, size: .hero)
+                    .accessibilityIdentifier("mentalHealth.result.totalScore")
+            }
+            if !stacked { Spacer(minLength: HLSpace.sm) }
+            HLBadge(Self.bandLabel(instrument: result.instrument, band: result.severityBand))
+        }
+    }
+
+    /// The localized band name ("Mild"), looked up as a whole key.
+    nonisolated static func bandLabel(instrument: MentalHealthInstrument, band: String) -> String {
+        // A plain String first: an interpolated LocalizationValue would turn
+        // the parts into format arguments and miss the catalogue.
+        let key = "mentalHealth.band.\(instrument.rawValue).\(band)"
+        return String(localized: String.LocalizationValue(key))
+    }
+
     private func attribution(_ result: MentalHealthStore.Result) -> some View {
         // Required source attribution — rendered VERBATIM, never translated.
         // Per-instrument: PHQ/GAD carry the Pfizer grant, WHO-5 the WHO CC notice.
-        (Text(LocalizedStringKey("mentalHealth.attributionLabel")).font(.hlCaption2.weight(.semibold)) +
-            Text(": ").font(.hlCaption2) +
-            Text(result.instrument.attribution).font(.hlCaption2))
-            .foregroundStyle(HLText.tertiary)
+        let label = Text("mentalHealth.attribution.preface").fontWeight(.semibold)
+        let attribution = Text(result.instrument.attribution)
+        return Text("\(label) \(attribution)")
+            .hlText(.footnote)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Instrument-specific, direction-aware follow-up wording from the current
     /// web contract. Every message remains a suggestion, never a diagnosis.
     private func considerKey(_ result: MentalHealthStore.Result) -> LocalizedStringKey {
-        LocalizedStringKey("mentalHealth.followUpHint.\(result.instrument.keySegment)")
+        LocalizedStringKey(Self.followUpHintKey(result.instrument))
     }
 
-    private func bandKey(_ result: MentalHealthStore.Result) -> LocalizedStringKey {
-        // Resolve the dotted key as a plain String first, then wrap — so the lookup
-        // key is `mentalHealth.band.PHQ9.moderate`, not the `…%@` format string.
-        let key = "mentalHealth.band.\(result.instrument.rawValue).\(result.severityBand)"
-        return LocalizedStringKey(key)
+    /// The catalog key of the follow-up hint, built as a plain String first:
+    /// an interpolated literal would be looked up as the format
+    /// `mentalHealth.followUpHint.%@`, which the catalog does not have.
+    nonisolated static func followUpHintKey(_ instrument: MentalHealthInstrument) -> String {
+        "mentalHealth.followUpHint.\(instrument.keySegment)"
     }
 }

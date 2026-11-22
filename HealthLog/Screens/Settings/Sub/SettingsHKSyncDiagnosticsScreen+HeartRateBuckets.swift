@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// #12 — what the heart-rate bucket path has done for the signed-in account.
+/// What the heart-rate bucket path has done for the signed-in account.
 ///
 /// Since the cutover the app sends heart rate as 10-minute values instead of
 /// single readings. When those values stop arriving, the questions are always
@@ -11,7 +11,7 @@ import SwiftUI
 struct HRBucketDiagnosticsSnapshot: Equatable, Sendable {
     let cutover: Date?
     let ledger: HRBucketSyncLedger
-    /// SYNC-HR — the sweep running in this process when the screen loaded.
+    /// The sweep running in this process when the screen loaded.
     var activity: HRBucketSweepActivity?
 
     static func load(userId: String?, defaults: UserDefaults = .standard) -> HRBucketDiagnosticsSnapshot {
@@ -50,11 +50,8 @@ struct HRBucketDiagnosticsSnapshot: Equatable, Sendable {
 
 extension SettingsHKSyncDiagnosticsScreen {
     var heartRateBucketCard: some View {
-        // 1.4 B2-c — what the cutover means is in the (i).
-        HLSettingsCard(
-            icon: "heart.text.square",
-            title: "settings.hkdiag.hrbuckets.title"
-        ) {
+        // What the cutover means is in the (i).
+        HLCard("settings.hkdiag.hrbuckets.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 statRow(label: "settings.hkdiag.hrbuckets.cutover", value: hrBucketCutoverLabel)
                 statRow(
@@ -62,7 +59,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                     value: hrBucketDateLabel(hrBucketSnapshot?.lastAccepted(freshness: serverSummary?.freshness))
                 )
                 statRow(label: "settings.hkdiag.hrbuckets.last_run", value: hrBucketLastRunLabel)
-                // 1.4 B4 — when the last run was itself the hold, the row
+                // When the last run was itself the hold, the row
                 // below said the same gate and time a second time.
                 if hrBucketSnapshot?.ledger.lastSuppression != hrBucketSnapshot?.ledger.lastEvent {
                     statRow(
@@ -93,10 +90,10 @@ extension SettingsHKSyncDiagnosticsScreen {
 
     private func hrBucketDateLabel(_ date: Date?) -> String {
         guard let date else { return String(localized: "settings.hkdiag.never") }
-        return date.formatted(.dateTime.day().month().hour().minute())
+        return HLDateFormat.dateTime(date)
     }
 
-    /// SYNC-HR — a sweep past its deadline is named as such, with its start.
+    /// A sweep past its deadline is named as such, with its start.
     private var hrBucketLastRunLabel: String {
         if let overdue = hrBucketSnapshot?.overdueSweep(now: Date()) {
             return HKSyncDiagnosticsVocabulary.heartRateBucketRunningSince(overdue.startedAt)

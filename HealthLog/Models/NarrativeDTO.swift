@@ -42,7 +42,7 @@ public struct NarrativeDTO: Codable, Sendable, Equatable {
 
     /// One generated period narrative.
     ///
-    /// **`provenance` is deliberately NOT modelled (v0.14.7 A2).** The server's
+    /// **`provenance` is deliberately NOT modelled.** The server's
     /// `provenance` field is a structured OBJECT (`{metrics, window, pairsTested,
     /// fdrQ, computedAt}`), not the `String` an earlier draft assumed — decoding
     /// it as `String?` threw `DecodingError` the moment a real narrative row

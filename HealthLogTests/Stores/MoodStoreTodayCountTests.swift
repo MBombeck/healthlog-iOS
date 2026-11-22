@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.2 FW8 — watch multi-log.** The wrist now logs mood unlimited
+/// **Watch multi-log.** The wrist now logs mood unlimited
 /// times/day and surfaces an "N today" subhead. `MoodStore.todayCount` is the
 /// authoritative phone-side count the snapshot ships; this verifies it counts
 /// only today's entries (caller-locale day) and reflects multiple same-day logs.

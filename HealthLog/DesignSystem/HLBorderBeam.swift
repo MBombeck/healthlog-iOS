@@ -26,7 +26,7 @@ struct HLBorderBeam: ViewModifier {
     let cornerRadius: CGFloat
     /// Stroke width of the travelling beam.
     var lineWidth: CGFloat = 2
-    /// **v0.14.1 ITEM-B** — beam comet tint. Defaults to silver (`.white`) for
+    /// Beam comet tint. Defaults to silver (`.white`) for
     /// the "Genommen" confirm; the "Überspringen" sweep passes
     /// `HLColor.skipBeam` (sanctioned dark orange) so a skip reads as a
     /// distinct signal while reusing the exact same one-shot sweep.

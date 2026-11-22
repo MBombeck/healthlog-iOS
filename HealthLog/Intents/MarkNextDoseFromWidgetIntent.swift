@@ -2,33 +2,23 @@ import AppIntents
 import Foundation
 import WidgetKit
 
-/// **v0.10.0 W-Widget-2Tap — the Home-screen next-dose widget's "Genommen"
+/// **The Home-screen next-dose widget's "Genommen"
 /// button.**
 ///
-/// Mirrors the Live Activity's anti-accidental two-step confirm
-/// (``MarkDoseFromLiveActivityIntent``) for a surface that has **no** running
-/// Activity to hold the armed state. Where the LA reads its `Activity`'s
-/// `ContentState`, this intent reads a tiny App Group marker
-/// (``WidgetPendingConfirmStore``) the first tap writes:
-///
-/// - **FIRST tap** → ``WidgetPendingConfirmStore/arm(medicationId:scheduledFor:now:)``
-///   writes the pending marker (NO intake recorded), then reloads the
-///   next-dose timeline so the button re-renders as "Erneut tippen zum
-///   Bestätigen". One accidental tap therefore never records a dose.
-/// - **SECOND tap** (marker present + fresh) → records the intake against the
-///   dose's **canonical slot instant** via the same server-first
-///   `MedicationsRepository.recordFromReminder(...)` the in-app card, the
-///   Live Activity, the Siri intent, and the notification action handler use
-///   — idempotency-keyed, Outbox fallback on a retriable error, **no parallel
-///   write path** — then clears the marker and reloads.
-/// - A **stale** marker (older than the confirm window) is treated as absent
-///   by both the store read and the timeline render, so the button
-///   auto-reverts to the plain "Genommen".
+/// **#188 (7) — one tap.** The first tap records the intake against the
+/// dose's **canonical slot instant** via the same server-first
+/// `MedicationsRepository.recordFromReminder(...)` the in-app card, the Live
+/// Activity, the Siri intent, and the notification action handler use
+/// (idempotency-keyed, Outbox fallback on a retriable error, **no parallel
+/// write path**), and notes the take in ``ExternalTakeLog`` so the next open
+/// of the app offers an undo. The two-step confirm through
+/// ``WidgetPendingConfirmStore`` guarded against an accidental tap that
+/// nothing could undo; a marker an older build armed is simply cleared.
 ///
 /// Runs in the widget-extension process (`openAppWhenRun = false`) via the
 /// shared Keychain token, exactly like the other widget intents.
 struct MarkNextDoseFromWidgetIntent: AppIntent {
-    static let title: LocalizedStringResource = "widget.next_dose.taken"
+    static let title: LocalizedStringResource = "med.dose.action.take"
     static let openAppWhenRun: Bool = false
 
     @Parameter(title: "Medication ID")
@@ -57,46 +47,55 @@ struct MarkNextDoseFromWidgetIntent: AppIntent {
     /// ``MarkNextDoseTakenIntent/snapshotStoreOverride``).
     @MainActor static var pendingStoreOverride: WidgetPendingConfirmStore?
 
+    /// Test seam for the outcome marker, like ``pendingStoreOverride``.
+    @MainActor static var outcomeStoreOverride: WidgetDoseOutcomeStore?
+
+    /// Test seam for the external-take log (never the live App Group).
+    @MainActor static var externalTakeLogOverride: ExternalTakeLog?
+
     @MainActor
     func perform() async throws -> some IntentResult {
         let store = Self.pendingStoreOverride ?? WidgetPendingConfirmStore()
         let scheduledFor = Date(timeIntervalSince1970: scheduledForEpoch)
-
-        // Build 273 (A17) — the confirm is bound to the slot the first tap armed.
-        if store.armed(for: medicationId, scheduledFor: scheduledFor) {
-            // SECOND tap — the button was armed: record the intake, then clear.
-            store.clear()
-            await commit(scheduledFor: scheduledFor)
-        } else {
-            // FIRST tap — only arm the confirm state; NO intake recorded.
-            try? store.arm(medicationId: medicationId, scheduledFor: scheduledFor)
-        }
-
-        // Re-render the button into its new state ("Bestätigen?" after the
-        // arm, plain "Genommen" after the commit/clear).
+        store.clear()
+        await commit(scheduledFor: scheduledFor)
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.nextDose)
         return .result()
     }
 
-    /// Record the intake server-first against the slot instant — the SAME
-    /// path every other "taken" surface uses. Errors are swallowed with
-    /// context: retriable ones are already enqueued on the Outbox inside
-    /// `recordFromReminder`; the marker is already cleared either way (the
-    /// user DID confirm).
     @MainActor
     private func commit(scheduledFor: Date) async {
+        let outcomes = Self.outcomeStoreOverride ?? WidgetDoseOutcomeStore()
         let deps = IntentDependencies.resolve()
-        guard IntentDependencies.isSignedIn(deps) else { return }
+        guard IntentDependencies.isSignedIn(deps) else {
+            outcomes.record(medicationId: medicationId, scheduledFor: scheduledFor, kind: .notSaved)
+            return
+        }
+        var failure: Error?
+        var receipt: ReminderIntakeReceipt?
+        let idempotencyKey = IdempotencyKey()
         do {
-            try await deps.medicationsRepo.recordFromReminder(
+            receipt = try await deps.medicationsRepo.recordFromReminderReturningReceipt(
                 medicationId: medicationId,
                 scheduledFor: scheduledFor,
-                status: .taken
+                status: .taken,
+                idempotencyKey: idempotencyKey
             )
         } catch {
+            failure = error
             HLLog.notifications.error(
                 "Widget mark-taken failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
             )
         }
+        let kind = WidgetDoseOutcomeStore.kind(signedIn: true, error: failure)
+        outcomes.record(medicationId: medicationId, scheduledFor: scheduledFor, kind: kind)
+        // R1 (1): only the row this tap wrote is offered for undo; a slot
+        // taken already (`alreadyTaken`) belongs to someone else.
+        (Self.externalTakeLogOverride ?? ExternalTakeLog()).record(
+            medicationId: medicationId,
+            scheduledFor: scheduledFor,
+            source: .widget,
+            binding: ExternalTakeLog.Binding.forCommit(error: failure, receipt: receipt, idempotencyKey: idempotencyKey.raw)
+        )
     }
 }

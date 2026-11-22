@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **1.5 BP-TOD — a 1.47 server with blood pressure by time of day.**
+    /// **A 1.47 server with blood pressure by time of day.**
     /// Under `-uitest-bp-tod` the fixture server reports version 1.47.0 and
     /// answers `GET /api/measurements/blood-pressure/time-of-day` per range:
     /// 30 days with all three parts and a difference, 7 days with midday and

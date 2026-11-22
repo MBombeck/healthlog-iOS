@@ -3,7 +3,7 @@ import SwiftUI
 /// Presented from `MoodHistoryScreen` row swipe-action "Bearbeiten" (and the
 /// Insights mood page / recent-section edit affordances).
 ///
-/// **v0.14.9 (W-B187) — edit reuses the SAME structured surface as capture.**
+/// **Edit reuses the SAME structured surface as capture.**
 /// The legacy hardcoded `defaultTags`/`rawTags` chip grid is gone: editing an
 /// entry now drives the SAME ``MoodTagPicker`` (structured `tagKeys`, server
 /// catalog) that `MoodScreen`'s capture panel uses, so a re-save round-trips
@@ -27,6 +27,7 @@ struct EditMoodSheet: View {
     /// Insights/History editor reaches the same Mood-v2 contract.
     @Environment(MoodTagCatalogStore.self) private var tagCatalog
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var score: Int = 3
     @State private var recordedAt: Date = .now
@@ -41,31 +42,37 @@ struct EditMoodSheet: View {
     /// Structured tag-key selection (the `MoodTagPicker` grid), prefilled from
     /// `entry.tagKeys` and round-tripped on save.
     @State private var tagKeys: Set<String> = []
-    @State private var isSaving: Bool = false
     @State private var error: HLError?
-    // D-2 — on-device tag-suggestion state
+    // On-device tag-suggestion state
     @State private var suggestions: [MoodTagSuggestion] = []
     @State private var isSuggesting = false
     @State private var suggestionError: MoodTagSuggestionOutcome.FallbackReason?
     /// Bumped when a tag suggestion is accepted so the light impact plays
     /// declaratively via `.sensoryFeedback` (reduce-motion aware).
     @State private var acceptPulse: Int = 0
-    /// #115 R3 — the save landed but the server dropped some tag/factor keys.
+    /// The save landed but the server dropped some tag/factor keys.
     @State private var showDroppedKeys = false
+    /// The entry as prefilled, for the discard guard.
+    @State private var baseline: [AnyHashable]?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "Edit",
+            action: .save { await save() },
+            isDirty: isDirty
+        ) {
             Form {
                 Section("Mood") {
                     moodPickerRow
                 }
+                .hlFormRowSurface()
                 // The Mood-v2 RATED sliders (Arbeit / Schlafqualität /
                 // Traurigkeit), mirroring `MoodScreen`'s inline annotate panel so
                 // editing from Insights/History shows + round-trips the saved
                 // ratings. Self-suppresses when the catalog ships no rated factor.
                 if !ratedFactors.isEmpty {
                     Section("mood.ratedFactors.title") {
-                        VStack(alignment: .leading, spacing: HLSpace.lg) {
+                        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                             ForEach(ratedFactors) { factor in
                                 MoodRatedFactorRow(factor: factor, rating: Binding(
                                     get: { ratings[factor.key] },
@@ -75,8 +82,9 @@ struct EditMoodSheet: View {
                         }
                         .padding(.vertical, HLSpace.xxs)
                     }
+                    .hlFormRowSurface()
                 }
-                // W-B187 — the SAME structured Daylio-style tag grid capture
+                // The SAME structured Daylio-style tag grid capture
                 // uses (`MoodScreen.annotatePanel`). Edits the entry's REAL
                 // `tagKeys` against the server catalog; no hardcoded list, no
                 // clobber.
@@ -84,9 +92,13 @@ struct EditMoodSheet: View {
                     MoodTagPicker(selectedKeys: $tagKeys)
                         .padding(.vertical, HLSpace.xxs)
                 }
+                .hlFormRowSurface()
                 Section("Time") {
-                    DatePicker("Recorded at", selection: $recordedAt, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker(selection: $recordedAt, displayedComponents: [.date, .hourAndMinute]) {
+                        HLRowTitle("Recorded at")
+                    }
                 }
+                .hlFormRowSurface()
                 Section("Note") {
                     // Fold the on-device tag-suggest onto the note row itself (a
                     // quiet trailing sparkle button), mirroring MoodScreen's
@@ -104,23 +116,13 @@ struct EditMoodSheet: View {
                         suggestionFallbackRow(fallback)
                     }
                 }
+                .hlFormRowSurface()
                 if let error {
-                    Section { HLFormErrorText(error.localizedDescription) }
+                    Section { HLFormErrorText(error.userFacingDescription) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle("Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await save() }
-                    }
-                    .disabled(isSaving)
-                }
-            }
+            .hlPageMargins()
             .onAppear(perform: prefill)
             .sensoryFeedback(.impact(weight: .light), trigger: acceptPulse)
             .hlAcknowledgeAlert(
@@ -130,30 +132,49 @@ struct EditMoodSheet: View {
                 onAcknowledge: onDismiss
             )
         }
-        .interactiveDismissDisabled(isSaving)
+    }
+
+    /// Every field the person can change, in one comparable value.
+    private var formFingerprint: [AnyHashable] {
+        [score, recordedAt, note, acceptedTags, ratings, tagKeys]
+    }
+
+    private var isDirty: Bool {
+        guard let baseline else { return false }
+        return baseline != formFingerprint
     }
 
     /// The kanonical Mood-Icon-Pack (`Image(MoodCopy.iconName(for:))`, the PNG
     /// assets the capture picker (`MoodScreen.iconRow`) + history rows render)
     /// with the SAME labelled score vocabulary (`MoodCopy.scoreLabel`) capture
-    /// shows — icon-only/divergent-vocabulary is retired (W-B187). Form-Section
+    /// shows — icon-only/divergent-vocabulary is retired. Form-Section
     /// is tighter than the capture card → 40pt glyph + a caption label, tap
     /// target still ≥44pt via `minHeight`.
+    ///
+    /// At the accessibility sizes the faces stand one under the other with
+    /// the word beside them, like the capture picker.
     private var moodPickerRow: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: HLSpace.sm))
+        return layout {
             ForEach(1 ... 5, id: \.self) { value in
-                moodPickerButton(value)
+                moodPickerButton(value, stacked: stacked)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, HLSpace.xs)
     }
 
-    private func moodPickerButton(_ value: Int) -> some View {
+    private func moodPickerButton(_ value: Int, stacked: Bool) -> some View {
         Button {
             score = value
         } label: {
-            VStack(spacing: HLSpace.xs) {
+            let layout = stacked
+                ? AnyLayout(HStackLayout(spacing: HLSpace.md))
+                : AnyLayout(VStackLayout(spacing: HLSpace.xs))
+            layout {
                 ZStack {
                     Circle()
                         .stroke(
@@ -172,79 +193,57 @@ struct EditMoodSheet: View {
                 Text(MoodCopy.scoreLabel(value))
                     .font(.hlCaption)
                     .foregroundStyle(score == value ? AnyShapeStyle(.tint) : AnyShapeStyle(HLText.secondary))
-                    // 1.4 B4 — a second line instead of a smaller word.
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                    // A second line instead of a smaller word.
+                    .lineLimit(stacked ? nil : 2)
+                    .multilineTextAlignment(stacked ? .leading : .center)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: stacked ? .leading : .center)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hlRow)
         .accessibilityLabel(Text(MoodCopy.accessibilityLabel(for: value)))
         .accessibilityValue(Text("\(value) of 5"))
         .accessibilityAddTraits(score == value ? .isSelected : [])
     }
 
-    // MARK: - D-2 on-device tag-suggestion UX
+    // MARK: - On-device tag-suggestion UX
 
     /// The on-device tag-suggest as a compact trailing button folded onto the
     /// note row (quiet sparkle / spinner). Same `runSuggest()` behaviour +
     /// disabled state as capture.
     private var suggestTagsButton: some View {
-        Button {
+        HLIconButton(systemImage: "sparkles", label: "Suggest tags", size: .inline, isLoading: isSuggesting) {
             Task { await runSuggest() }
-        } label: {
-            Group {
-                if isSuggesting {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "sparkles")
-                        .font(.hlIcon(HLIconSize.rowAction))
-                }
-            }
-            .foregroundStyle(.tint)
-            .frame(width: 28, height: 28)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(isSuggesting || note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        .accessibilityLabel(Text("Suggest tags"))
+        .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .accessibilityHint(Text("Suggests tags from your note text with an on-device model. You confirm each tag yourself."))
     }
 
     private var suggestionsPanel: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             HStack(spacing: HLSpace.sm) {
-                HLSectionLabel("Suggestions")
+                HLCardLabel("Suggestions")
                 Spacer()
-                Button {
+                HLIconButton(systemImage: "xmark", label: "Hide suggestions", size: .inline) {
                     suggestions = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.hlIcon(HLIconSize.sm, weight: .regular))
-                        .foregroundStyle(HLText.tertiary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("Hide suggestions"))
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: HLSpace.sm) {
-                    ForEach(suggestions) { suggestion in
-                        SuggestedTagChip(label: suggestion.label) {
-                            accept(suggestion)
-                        }
+            HLFlowLayout {
+                ForEach(suggestions) { suggestion in
+                    HLChip(verbatim: suggestion.label, systemImage: "sparkles", isSelected: false) {
+                        accept(suggestion)
                     }
+                    .accessibilityLabel(Text("Suggestion \(suggestion.label)"))
+                    .accessibilityHint(Text("Tap to apply the tag."))
                 }
-                .padding(.vertical, HLSpace.xxs)
             }
-            // 1.4 B2 — the chips are plainly offers; no line says so.
+            // The chips are plainly offers; no line says so.
         }
     }
 
     private func suggestionFallbackRow(_ reason: MoodTagSuggestionOutcome.FallbackReason) -> some View {
         Text(suggestionFallbackMessage(reason))
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
     }
 
     private func suggestionFallbackMessage(_ reason: MoodTagSuggestionOutcome.FallbackReason) -> String {
@@ -316,7 +315,7 @@ struct EditMoodSheet: View {
     }
 
     private func prefill() {
-        // Audit B-4 — an entry whose level this build cannot name pre-fills the
+        // An entry whose level this build cannot name pre-fills the
         // picker at the neutral middle. That is a suggestion the person then
         // confirms with their own tap, not a claim the app files on their
         // behalf: saving the sheet is an explicit re-statement of the level.
@@ -336,11 +335,12 @@ struct EditMoodSheet: View {
             uniquingKeysWith: { first, _ in first }
         )
         tagKeys = Set(entry.tagKeys)
+        if baseline == nil { baseline = formFingerprint }
     }
 
-    private func save() async {
-        isSaving = true
-        defer { isSaving = false }
+    /// `true` closes the sheet. A save whose keys the server dropped stays
+    /// open until the person has read why; the alert then closes it.
+    private func save() async -> Bool {
         error = nil
         // Single-write: `note` als dediziertes Feld, kein `tags["note:..."]`
         // Hack mehr. Pass the Mood-v2 args (structured tagKeys + clamped rated
@@ -356,46 +356,15 @@ struct EditMoodSheet: View {
             note: note.isEmpty ? nil : note
         )
         if ok, !store.lastWriteDroppedKeys.isEmpty {
-            // #115 R3 — saved, but tell the person before closing.
+            // Saved, but tell the person before closing.
             showDroppedKeys = true
+            return false
         } else if ok {
             onDismiss()
+            return true
         } else {
             error = store.error ?? .unknown(String(localized: "Could not save"))
+            return false
         }
-    }
-}
-
-// MARK: - Suggested-tag chip (D-2)
-
-/// Visually distinct from `TagChip`: dashed purple outline + sparkle glyph,
-/// makes "this is a suggestion, not a confirmed tag" unmistakable. Tap
-/// promotes it into `acceptedTags` and removes it from the suggestion row.
-struct SuggestedTagChip: View {
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "sparkles")
-                    .font(.hlIcon(HLIconSize.xs))
-                Text(label)
-                    .font(.hlCaption)
-            }
-            .padding(.horizontal, HLSpace.md)
-            .padding(.vertical, HLSpace.chip)
-            .foregroundStyle(.tint)
-            .overlay(
-                Capsule()
-                    .strokeBorder(
-                        .tint.opacity(0.5),
-                        style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("Suggestion \(label)"))
-        .accessibilityHint(Text("Tap to apply the tag."))
     }
 }

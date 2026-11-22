@@ -1,6 +1,6 @@
 import Foundation
 
-// #115 B6 — the composition note ("Sleep left the score") could be read but
+// The composition note ("Sleep left the score") could be read but
 // never put away: the app decoded `compositionNotice.dismissed` and had no way
 // to set it. The server takes the dismissal on the same route the web uses,
 // `POST /api/daily/digest/dismiss` with the notice's `itemKey`

@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// b178 W-SYNCVIS — locks the perceivable handshake-phase machine on
+/// Locks the perceivable handshake-phase machine on
 /// `SyncStateStore` (`SyncPhase`: `.idle → .syncing → .done → .idle`):
 ///
 /// - every `handshake()` enters `.syncing` and HOLDS it for at least the

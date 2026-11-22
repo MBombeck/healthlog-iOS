@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.13 W2 — ``BYOLLMService`` end-to-end coverage through a stubbed
+/// ``BYOLLMService`` end-to-end coverage through a stubbed
 /// `URLSession` (the repo's `MockURLProtocol`, never a mock server). Asserts
 /// the actor reads the stored key, builds the right request via the adapter,
 /// parses success, maps HTTP errors to ``BYOLLMError``, and validates keys.
@@ -88,7 +88,7 @@ struct BYOLLMServiceTests {
         }
     }
 
-    /// v0.13 W4 — consent enforcement (Apple 5.1.2(i)). With a consent gate that
+    /// Consent enforcement (Apple 5.1.2(i)). With a consent gate that
     /// denies, `generate` must THROW before any network call — even with a stored
     /// key. The MockURLProtocol handler records whether it was ever invoked; it
     /// must NOT be, proving no un-consented transmission can fire.

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **09-15 — the day boundary.**
+/// **The day boundary.**
 ///
 /// 09-01 recorded that `MedicationDueNowRenderTests` fails near midnight and
 /// left the interesting question open: is that only the test's construction, or
@@ -164,7 +164,7 @@ struct MedicationWindowStatusMidnightTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: a dose window crossing midnight loses its declared band (\(violations))"
+            "a dose window crossing midnight loses its declared band (\(violations))"
         )
     }
 

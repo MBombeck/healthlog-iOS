@@ -238,7 +238,7 @@ struct MedicationsStoreDerivedIntakesTests {
         #expect(derived[3].id == "server-late")
     }
 
-    // MARK: - v0.10 R1 §3.3 — cadence-aware synthesis (the "fires daily" fix)
+    // MARK: - Cadence-aware synthesis (the "fires daily" fix)
 
     private static func entryMed(
         id: String,
@@ -297,7 +297,7 @@ struct MedicationsStoreDerivedIntakesTests {
         #expect(derived.allSatisfy(\.isSynthesizedPlaceholder) == true)
     }
 
-    // MARK: - W10 M4 — placeholder uses serverNextDueAt so it agrees with the reminder
+    // MARK: - Placeholder uses serverNextDueAt so it agrees with the reminder
 
     @Test("Rolling med: today-placeholder uses serverNextDueAt, matching the reminder slot")
     func rollingPlaceholderPrefersServerNextDueAt() throws {

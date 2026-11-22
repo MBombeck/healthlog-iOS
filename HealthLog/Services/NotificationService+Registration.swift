@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 #if canImport(UserNotifications)
     import UserNotifications
@@ -57,20 +58,15 @@ import Foundation
         /// diagnostics surface always reflects the most recent attempt.
         /// Internal (not `private`) so the Live-Activity token sink in
         /// `NotificationService+LiveActivity.swift` can re-issue registration on
-        /// a token change (W-B189 #22) without re-implementing the dedup loop.
+        /// a token change without re-implementing the dedup loop.
         func register(tokenHex: String, env: APNsEnvironment, forceFresh: Bool) async {
-            // W-B189 (#22) — capture the current LA push token into the dedup
+            // Capture the current LA push token into the dedup
             // key so a *new* token re-fires the POST while an unchanged one
             // short-circuits. Read once here so the value POSTed matches the
             // value compared (no TOCTOU between the dedup check and the body).
-            let liveActivityPushToken = currentLiveActivityPushToken
-            let next = RegistrationState(
-                tokenHex: tokenHex,
-                env: env,
-                liveActivityPushToken: liveActivityPushToken
-            )
-            let attemptAt = Date.now
-            if !forceFresh, next == lastRegistration {
+            let (next, pushFields) = registrationAttempt(tokenHex: tokenHex, env: env)
+            let attemptAt = registrationClock()
+            if !forceFresh, isAlreadySent(next, now: attemptAt) {
                 HLLog.notifications.debug("APNs-Token unverändert — kein POST.")
                 // Refresh the attempt timestamp so the operator can see
                 // the registration loop ran even when the dedup short-
@@ -81,12 +77,8 @@ import Foundation
                 return
             }
             do {
-                try await postDevice(
-                    tokenHex: tokenHex,
-                    env: env,
-                    liveActivityPushToken: liveActivityPushToken
-                )
-                lastRegistration = next
+                try await postDevice(next, pushFields: pushFields)
+                remember(next, at: attemptAt)
                 HLLog.notifications.info("APNs-Token registriert env=\(env.rawValue) tokenLen=\(tokenHex.count)")
                 persistSnapshot(
                     tokenHex: tokenHex,
@@ -96,11 +88,14 @@ import Foundation
                     errorMessage: nil
                 )
             } catch let HLError.server(status, _, msg) where status == 409 {
+                relayRegistrationFailed?()
                 HLLog.notifications
                     .warning(
                         "APNs-Token 409 — anderem User zugeordnet, recovery via Server-Feedback. msg=\(LogSanitizer.redact(msg), privacy: .public)"
                     )
-                lastRegistration = next
+                // D3 #2: not remembered as sent. This account has no push
+                // registration yet, so the next launch or token callback tries
+                // again instead of waiting a day.
                 persistSnapshot(
                     tokenHex: tokenHex,
                     env: env,
@@ -108,7 +103,9 @@ import Foundation
                     serverStatus: 409,
                     errorMessage: LogSanitizer.redact(msg)
                 )
-            } catch let HLError.server(status, _, msg) {
+            } catch let HLError.server(status, code, msg) {
+                if status == 422, let code, code.hasPrefix("devices.push.") { await relayRegistrationRejected?(code) }
+                relayRegistrationFailed?()
                 HLLog.notifications
                     .error("APNs-Registrierung server-error status=\(status) msg=\(LogSanitizer.redact(msg), privacy: .public)")
                 persistSnapshot(
@@ -119,6 +116,7 @@ import Foundation
                     errorMessage: LogSanitizer.redact(msg)
                 )
             } catch {
+                relayRegistrationFailed?()
                 HLLog.notifications.error("APNs-Registrierung fehlgeschlagen: \(error.localizedDescription)")
                 persistSnapshot(
                     tokenHex: tokenHex,
@@ -128,6 +126,128 @@ import Foundation
                     errorMessage: LogSanitizer.redact(String(describing: error))
                 )
             }
+        }
+
+        /// Whether this account's registration reached the server within the day.
+        private func isAlreadySent(_ state: RegistrationState, now: Date) -> Bool {
+            Self.registrationIsCurrent(state, owner: registrationOwner, sent: Self.loadSentRegistration(from: defaults), now: now)
+        }
+
+        /// The registration the server now has, and when it got it. Kept on
+        /// disk, so a relaunch within the day does not post it again.
+        private func remember(_ state: RegistrationState, at sentAt: Date) {
+            lastRegistration = state
+            let sent = SentRegistration(fingerprint: Self.fingerprint(state, owner: registrationOwner), sentAt: sentAt)
+            if let data = try? JSONEncoder().encode(sent) {
+                defaults.set(data, forKey: Self.sentRegistrationDefaultsKey)
+            }
+        }
+
+        /// How long an unchanged registration counts as sent. A foreground
+        /// after that re-posts it once, which keeps `Device.lastSeen` fresh.
+        static let registrationRefreshInterval: TimeInterval = 24 * 60 * 60
+
+        /// What last reached the server: a fingerprint of account and
+        /// registration (never the token itself) and when it was sent.
+        struct SentRegistration: Codable, Equatable {
+            let fingerprint: String
+            let sentAt: Date
+        }
+
+        /// Its own key, apart from the diagnostics snapshot, which also
+        /// records failed attempts.
+        static let sentRegistrationDefaultsKey = "dev.healthlog.app.notif.sentRegistration.v1"
+
+        static func loadSentRegistration(from defaults: UserDefaults) -> SentRegistration? {
+            guard let data = defaults.data(forKey: sentRegistrationDefaultsKey) else { return nil }
+            return try? JSONDecoder().decode(SentRegistration.self, from: data)
+        }
+
+        /// SHA-256 over account, token, environment and Live-Activity token.
+        static func fingerprint(_ state: RegistrationState, owner: String) -> String {
+            // The per-Activity list only when sent (an empty list too, which
+            // clears the server's): without it a registration keeps the
+            // fingerprint it had before 1.7, so an update does not re-post.
+            var parts = [owner, state.tokenHex, state.env.rawValue, state.liveActivityPushToken ?? ""]
+            if let list = state.liveActivityTokens {
+                parts.append("la:" + list.map { "\($0.medicationId)@\(Int($0.slotInstant.timeIntervalSince1970))=\($0.token)" }
+                    .joined(separator: ","))
+            }
+            // The device's own fields (#179, #190) likewise only when there
+            // are any.
+            if !state.pushFingerprint.isEmpty { parts.append(state.pushFingerprint) }
+            let digest = SHA256.hash(data: Data(parts.joined(separator: "|").utf8))
+            return digest.map { String(format: "%02x", $0) }.joined()
+        }
+
+        /// Whether `next` for `owner` was already sent and is younger than a day.
+        static func registrationIsCurrent(
+            _ next: RegistrationState,
+            owner: String,
+            sent: SentRegistration?,
+            now: Date
+        ) -> Bool {
+            guard let sent, sent.fingerprint == fingerprint(next, owner: owner) else { return false }
+            let age = now.timeIntervalSince(sent.sentAt)
+            return age >= 0 && age < registrationRefreshInterval
+        }
+
+        /// The dedup key and the body additions of one attempt. The Live
+        /// Activity token is read once, so the value posted matches the value
+        /// compared; the relay provider is asked once, so a binding counter
+        /// moves once per attempt.
+        func registrationAttempt(tokenHex: String, env: APNsEnvironment) -> (RegistrationState, DeviceRegistrationPushFields) {
+            let liveActivityPushToken = currentLiveActivityPushToken
+            // #190 5.4: with the relay on, each entry carries its signed
+            // activity statement; the relay sees it only inside the `end`.
+            let liveActivityTokens = currentLiveActivityTokens?.map { entry in
+                var signed = entry
+                signed.relayProof = relayActivityProof?(entry.token)
+                return signed
+            }
+            let pushFields = currentPushFields(tokenHex: tokenHex)
+            let state = RegistrationState(
+                tokenHex: tokenHex,
+                env: env,
+                liveActivityPushToken: liveActivityPushToken,
+                liveActivityTokens: liveActivityTokens,
+                pushFingerprint: pushFields.fingerprint
+            )
+            return (state, pushFields)
+        }
+
+        func postDevice(_ state: RegistrationState, pushFields: DeviceRegistrationPushFields) async throws {
+            try await postDevice(
+                tokenHex: state.tokenHex,
+                env: state.env,
+                liveActivityPushToken: state.liveActivityPushToken,
+                liveActivityTokens: state.liveActivityTokens,
+                pushFields: pushFields
+            )
+        }
+
+        /// The fields this device adds on its own behalf (#179, #190).
+        func currentPushFields(tokenHex: String) -> DeviceRegistrationPushFields {
+            var fields = relayRegistrationProvider?(tokenHex) ?? DeviceRegistrationPushFields()
+            fields.medicationDelivery = medicationDeliveryReport
+            return fields
+        }
+
+        /// #179 — the device's delivery changed: post it once with the cached
+        /// token (the dedup drops an unchanged value).
+        func noteMedicationDelivery(_ report: DeviceMedicationDeliveryReport) async {
+            guard medicationDeliveryReport != report else { return }
+            medicationDeliveryReport = report
+            await reRegisterWithCachedToken()
+        }
+
+        /// Re-posts with the token the OS delivered this launch; a no-op
+        /// before it did.
+        func reRegisterWithCachedToken() async {
+            guard let snapshot = lastRegistrationSnapshot,
+                  let tokenHex = snapshot.fullTokenHex,
+                  let env = APNsEnvironment(rawValue: snapshot.environment ?? "") else { return }
+            await register(tokenHex: tokenHex, env: env, forceFresh: false)
         }
 
         func didFailToRegister(error: any Error) async {
@@ -145,15 +265,47 @@ import Foundation
 
         func didReceiveSilentNotification(userInfo: RemoteNotificationUserInfo) async -> UIBackgroundFetchResult {
             let payload = APNsPayload.parse(userInfo: userInfo.raw)
-            HLLog.notifications.info("Silent push empfangen — eventType=\(payload?.eventType ?? "nil")")
+            var eventType = payload?.eventType
+            // #190 5.3: with the relay on, only an opened envelope counts; its
+            // template replaces anything the plaintext payload claims.
+            switch await relaySilentGate?(userInfo.raw) ?? .notInEnvelopeMode {
+            case .notInEnvelopeMode:
+                break
+            case .handled:
+                return .noData
+            case .refused:
+                HLLog.notifications.notice("Silent push without a valid envelope: no sync")
+                return .noData
+            case let .opened(template):
+                eventType = template
+            }
+            // 1.7: a plaintext confirmation delivered silently resolves its
+            // dose in the ledger the widget and the next start read (the relay
+            // records its opened envelope itself).
+            if MedicationIntakeRecordedGate.isOpen(), let dose = MedicationIntakeRecordedPush.parse(userInfo: userInfo.raw) {
+                ResolvedDoseLedger().record(dose)
+            }
+            HLLog.notifications.info("Silent push empfangen — eventType=\(eventType ?? "nil")")
             // #66 P0.1 (Baustein 4) — honest evidence: a silent-push wake fired.
             HKSyncDiagnostics.shared.recordWake(.push)
+            // iOS ends the wake after about 30 s; answering late costs future
+            // pushes. The pass learns when its time is up and holds its cursors.
+            let resolvedEventType = eventType
+            return await SilentPushWakeBudget.run(limit: silentPushBudget, fallback: .failed) { [self] isExpired in
+                await runSilentPushWork(eventType: resolvedEventType, isExpired: isExpired)
+            }
+        }
+
+        private func runSilentPushWork(
+            eventType: String?,
+            isExpired: @escaping @Sendable () -> Bool
+        ) async -> UIBackgroundFetchResult {
             // #66 P0.1 (Baustein 3) — the silent push is a THIRD HK wake channel
             // (alongside BGProcessing + BGAppRefresh). Every server wake runs one
             // incremental pass, so HK data + queued user writes reach the server
             // without waiting for a foreground.
             //
-            // **Phase 07 / plan 07-09** — one named trigger, one pass. This used
+            // One named trigger, one pass. This used
             // to be three calls: a `.push` collection trigger (which already ran
             // the orchestrated `silentPush` pass), then the workout pass, then
             // the outbox drain — the last two of which that pass also contains.
@@ -173,31 +325,47 @@ import Foundation
             // R5 — every silent push extends the local medication reminders
             // from the cached list (no request), not only the intake-sync push
             // below. A push is a wake the app gets without being opened.
-            await backgroundSync?.runReminderTopUp()
-            let answered = await backgroundSync?
-                .runHealthSyncPass(HealthSyncTrigger.silentPush) ?? []
-            let didSync = !answered.isEmpty
-            // b182 W-B182 (#22): a server intake push (eventType
-            // MEDICATION_INTAKE_SYNC, sent to the user's other devices when a
-            // dose is marked taken on the web/another device) reconciles the
-            // medications store immediately — ends the remotely-taken dose's
-            // Live Activity + reloads widgets + refreshes state without waiting
-            // for the next foreground or BGProcessingTask wake. Server side
-            // tracked in GH #22; until it ships no such push arrives and this
-            // stays a no-op. Deliberately outside the pass: reconciling a store
-            // is not a HealthKit capability.
-            if payload?.eventType == "MEDICATION_INTAKE_SYNC" {
-                let didReconcile = await backgroundSync?.runMedicationReconcile() ?? false
-                return (didReconcile || didSync) ? .newData : .noData
+            //
+            // #188 (3): a server intake push (eventType MEDICATION_INTAKE_SYNC,
+            // sent to the user's other devices when a dose is marked taken on
+            // the web/another device) reconciles the medications store FIRST and
+            // awaits the Live Activity end and the reminder completion it
+            // drives. It used to run after the reminder top-up and the whole
+            // HealthKit pass, inside the same ~30 s wake, and its Live Activity
+            // end was a task nobody awaited. HealthKit follows only while the
+            // wake has time left. The push is a shortcut; the foreground reload
+            // stays the path that does not depend on it.
+            // #191: new readings on the server. The stores, widgets and the
+            // Watch reload (coalesced); no HealthKit pass, nothing went up.
+            if eventType == RelayDataChange.template {
+                let reloaded = await relayDataChanged?() ?? false
+                // R1 (11): like every other silent push, this wake extends
+                // the local medication reminders (cached list, no request).
+                await backgroundSync?.runReminderTopUp()
+                return reloaded ? .newData : .noData
             }
-            return didSync ? .newData : .noData
+            // 1.7: a confirmation delivered silently reconciles like the
+            // intake sync (its dose went to the ledger on receipt).
+            let isIntakeSync = eventType == RelayTemplate.intakeSync || eventType == RelayTemplate.intakeRecorded
+            var didReconcile = false
+            if isIntakeSync {
+                didReconcile = await backgroundSync?.runMedicationIntakeSync() ?? false
+            }
+            await backgroundSync?.runReminderTopUp()
+            guard !(isIntakeSync && isExpired()) else {
+                return didReconcile ? .newData : .noData
+            }
+            let answered = await backgroundSync?
+                .runHealthSyncPass(HealthSyncTrigger.silentPush, isExpired: isExpired) ?? []
+            let didSync = !answered.isEmpty
+            return (didReconcile || didSync) ? .newData : .noData
         }
 
         // MARK: - Local fallback reminder
 
         /// Schedules a local notification at a wall-clock date.
         ///
-        /// **W-MED fix (v0.5.5):** previously omitted `category` + `userInfo`
+        /// **W-MED fix:** previously omitted `category` + `userInfo`
         /// parameters so a medication-reminder banner scheduled via the
         /// smart-reminder wrapper rendered without the 3-button chrome.
         /// Both fields are now first-class with backwards-compatible
@@ -219,7 +387,7 @@ import Foundation
                 category: category,
                 userInfo: userInfo
             )
-            // W-FOCUS-FILTER — route through the gate so a HealthLog Focus filter
+            // Route through the gate so a HealthLog Focus filter
             // can hold this back when it is a routine reminder. Urgent levels
             // (.timeSensitive/.critical) always pass; the schedule is untouched.
             try await addLocalNotification(req)
@@ -231,7 +399,7 @@ import Foundation
         /// `add(...)` call in the test runner silently drops the request
         /// when no permission is granted, which masks the trigger shape.
         ///
-        /// v0.5.5 NOTIF-FIX: previously this built a
+        /// Previously this built a
         /// `UNCalendarNotificationTrigger` keyed on minute precision
         /// (`[.year, .month, .day, .hour, .minute]`) with
         /// `repeats: false`. iOS treats such a trigger as "fire at the
@@ -279,6 +447,11 @@ import Foundation
             if !userInfo.isEmpty {
                 content.userInfo = userInfo
             }
+            // Hide content in notifications: only the neutral text is stored.
+            NotificationContentPrivacy.apply(
+                to: content,
+                kind: NotificationContentPrivacy.kind(category: category, eventType: userInfo["eventType"] as? String)
+            )
 
             let interval = date.timeIntervalSince(now)
             let trigger: UNNotificationTrigger
@@ -305,7 +478,7 @@ import Foundation
             return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         }
 
-        // MARK: - lastRegistrationSnapshot persistence (v0.6.0.8)
+        // MARK: - lastRegistrationSnapshot persistence
 
         /// Updates the in-memory snapshot in place and mirrors the result
         /// to UserDefaults. The mutation closure receives a writable

@@ -55,7 +55,7 @@ public struct HLRing: View {
     /// Doppelte, während der Ring 92 pt bleibt — bei 0.8 wurde „today" bei
     /// AX5 zu „tod…" (Public issue #6, Runde 2, Host-Render). 0.5 bringt die
     /// Caption dort auf etwa ihre Standardgröße zurück.
-    private static let labelMinimumScale: CGFloat = 0.5
+    nonisolated static let labelMinimumScale: CGFloat = 0.5
 
     /// Obergrenze für die Wert-Schrift als Anteil des INNEREN Ringdurchmessers.
     ///
@@ -122,7 +122,7 @@ public struct HLRing: View {
             let stroke = lineWidthOverride ?? HLRing.derivedStroke(forSide: side)
             ZStack {
                 // 1. Track — `HLText.primary @ HLChartGrid.lineOpacity` (10 %).
-                //    Theme-2.0 (T2-2): trimmed from textTertiary @ 18 % so the
+                //    Theme-2.0: trimmed from textTertiary @ 18 % so the
                 //    track sits as a barely-there hairline matching the chart-
                 //    gridline tier (`HLChartGrid.lineOpacity`). The ring still
                 //    reads complete on `HLSurface.secondary` cards because the
@@ -161,7 +161,7 @@ public struct HLRing: View {
                             .lineLimit(1)
                             .minimumScaleFactor(HLRing.valueMinimumScale)
                             .allowsTightening(true)
-                            // v0.12 W3-1 — the hero number must roll like the
+                            // The hero number must roll like the
                             // small dashboard tiles (`HLDashboardTile.valueRow`
                             // → `.contentTransition(.numericText())`), not pop
                             // from skeleton to value. The score is the biggest,

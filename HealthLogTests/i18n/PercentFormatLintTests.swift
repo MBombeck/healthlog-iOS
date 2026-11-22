@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Build-8 (b239) coherence guard — the in-suite half of the percent-format
+/// Build-8 coherence guard — the in-suite half of the percent-format
 /// lint (the other half is the `percent_use_hlnumberformat` SwiftLint
 /// custom_rule in `.swiftlint.yml`; one convention, two enforcement organs).
 ///

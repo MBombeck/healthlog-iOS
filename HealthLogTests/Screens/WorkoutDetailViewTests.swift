@@ -30,7 +30,7 @@ private func respond(_ req: URLRequest, _ json: String, status: Int = 200) -> (H
     return (http, Data(json.utf8))
 }
 
-/// v0.5.4-SP5 — Workout-Detail-Screen contract tests.
+/// Workout-Detail-Screen contract tests.
 ///
 /// Pins the pure helpers that drive the HR-chart accessibility label
 /// + the GeoJSON-LineString → CLLocationCoordinate2D conversion. The
@@ -52,6 +52,32 @@ struct WorkoutDetailHelperTests {
         #expect(label.contains("4 Messpunkte"))
         #expect(label.contains("110"))
         #expect(label.contains("165"))
+    }
+
+    @Test("D5 #4: a 5000-sample session plots at most the LTTB threshold, the summary keeps the full range")
+    func longSessionIsThinnedForPlotting() {
+        let base = Date(timeIntervalSinceReferenceDate: 0)
+        var samples: [WorkoutHRSample] = (0 ..< 5000).map { i in
+            .init(timestamp: base.addingTimeInterval(Double(i)), bpm: 120 + Double(i % 7))
+        }
+        // One spike and one dip in the middle: LTTB keeps the shape.
+        samples[2500] = .init(timestamp: base.addingTimeInterval(2500), bpm: 191)
+        samples[3700] = .init(timestamp: base.addingTimeInterval(3700), bpm: 61)
+        let curve = WorkoutHRCurve(workoutID: "w-long", samples: samples)
+
+        #expect(curve.samples.count == 5000)
+        #expect(curve.plotted.count == LTTB.seriesPlotThreshold)
+        #expect(curve.plotted.first == samples.first)
+        #expect(curve.plotted.last == samples.last)
+        #expect(curve.plotted.contains(samples[2500]), "the peak must survive the thinning")
+        #expect(curve.plotted.contains(samples[3700]), "the trough must survive the thinning")
+        #expect(curve.maximumBPM == 191)
+        #expect(curve.minimumBPM == 61)
+        // Count, minimum and maximum of the full series, not of the plotted one.
+        #expect(
+            WorkoutDetailView.hrAccessibilityLabel(curve: curve)
+                == String(localized: "workout.hr.a11y.summary \(5000) \(61) \(191)")
+        )
     }
 
     @Test("HR a11y label falls back when no samples")
@@ -207,7 +233,7 @@ struct RouteMapFittedRegionTests {
 @Suite("WorkoutsStore — loadDetail mirrors repo + HK series", .serialized)
 @MainActor
 struct WorkoutsStoreLoadDetailTests {
-    /// The transport seam (issue #82 / Plan 09-11). Both halves come from the
+    /// The transport seam. Both halves come from the
     /// caller's retained session, so every request this client makes is answered
     /// by that session's handler or by nothing at all.
     ///
@@ -352,7 +378,52 @@ struct WorkoutsStoreLoadDetailTests {
         #expect(store.detailError == nil)
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-11)
+    // MARK: - D5 #1: one workout's curve never paints on another
+
+    @Test("loadDetail — workout B never shows workout A's curve, also when B fails")
+    func anotherWorkoutsCurveNeverPaints() async throws {
+        let session = MockURLProtocolSession()
+        defer { session.invalidate() }
+        let repo = try WorkoutsRepository(api: makeAPI(session: session), outbox: OutboxQueue(inMemory: true))
+        let base = Date(timeIntervalSinceReferenceDate: 0)
+        let store = WorkoutsStore(repo: repo, hkDetail: FakeHKDetailService(samples: [
+            .init(timestamp: base, bpm: 120),
+            .init(timestamp: base.addingTimeInterval(10), bpm: 150)
+        ]))
+        session.install { req in
+            guard req.targets(prefixedBy: "/api/workouts/w-a") else {
+                // Workout B: the server cannot answer it (offline, deleted).
+                return respond(req, #"{"data":null,"error":"not found"}"#, status: 404)
+            }
+            return respond(req, #"""
+            {"data":{
+              "id":"w-a","sportType":"running",
+              "startedAt":"2026-05-15T07:00:00Z","endedAt":"2026-05-15T07:30:00Z",
+              "durationSec":1800,"distanceM":null,"activeEnergyKcal":null,
+              "avgHr":null,"maxHr":null,
+              "source":"APPLE_HEALTH","externalId":null,
+              "canonicalId":"w-a","route":null
+            },"error":null}
+            """#)
+        }
+
+        await store.loadDetail(id: "w-a")
+        #expect(store.hrCurve(for: "w-a")?.samples.count == 2)
+
+        await store.loadDetail(id: "w-b")
+        #expect(store.detailError != nil)
+        #expect(store.hrCurve(for: "w-b") == nil, "B's page must not inherit A's curve")
+        #expect(store.detailHRSeries == nil, "A's curve must not outlive the request for B")
+    }
+
+    @Test("hrCurve(for:) answers only for the workout the curve was resolved for")
+    func curveIsBoundToItsWorkout() {
+        let curve = WorkoutHRCurve(workoutID: "w-a", samples: [.init(timestamp: Date(), bpm: 90)])
+        #expect(curve.workoutID == "w-a")
+        #expect(curve.plotted == curve.samples)
+    }
+
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     func aLaterInstallCannotAnswerThisSuite() async throws {
@@ -396,7 +467,7 @@ struct WorkoutsStoreLoadDetailTests {
         // A positive count is the whole point: `store.detail?.id` is the decoded
         // response, and an unrouted request leaves it `nil` exactly as a 404
         // would. Only the count says the request reached this session.
-        #expect(mine.value == 1, "EXPECTED_RED: WorkoutsStoreLoadDetailTests was not routed to its own session")
+        #expect(mine.value == 1, "WorkoutsStoreLoadDetailTests was not routed to its own session")
         #expect(theirs.value == 0)
         #expect(store.detail?.id == "w-session")
     }

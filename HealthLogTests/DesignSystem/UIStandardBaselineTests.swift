@@ -12,27 +12,25 @@ import Testing
 ///
 /// Dieser Test ist deshalb die eigentliche Erzwingung. Er zählt die
 /// Verletzungen **pro Datei** und vergleicht sie mit
-/// `HealthLogTests/Resources/UIStandardBaseline.json`. Der Vergleich ist
-/// **exakt**, nicht „höchstens":
+/// `HealthLogTests/Resources/UIStandardBaseline.json`. Die Zahl je Datei ist
+/// eine **Obergrenze**:
 ///
 /// | Was passiert | Ergebnis |
 /// |---|---|
 /// | neue Verletzung in einer gelisteten Datei | ❌ Zahl zu hoch |
-/// | Verletzung in einer **nicht** gelisteten Datei | ❌ unbekannte Datei |
-/// | eine Verletzung wurde beseitigt | ❌ Baseline veraltet — Zahl senken |
-/// | alle Verletzungen einer Datei beseitigt | ❌ Baseline veraltet — Eintrag streichen |
+/// | Verletzung in einer **nicht** gelisteten Datei | ❌ unbekannte Datei (Grenze 0) |
+/// | eine Verletzung wurde beseitigt | ✅ grün |
 ///
-/// **Warum die Liste nicht wachsen kann:** sie zu vergrößern ist möglich, aber
-/// nur durch das Anheben einer Zahl bzw. das Hinzufügen eines Schlüssels *in
-/// der Baseline-Datei* — eine Änderung, die im Diff auf einer Zeile steht, die
-/// nichts anderes tut als „hier ist Schuld dazugekommen". Sie zu verkleinern
-/// ist dagegen erzwungen: wer eine Fundstelle aufräumt, **muss** die Baseline
-/// senken, sonst wird sein eigener Testlauf rot. Die Liste bewegt sich also
-/// nur unter Begründung nach oben und zwangsläufig nach unten.
+/// **Warum keine Gleichheit:** Mehrere Zweige räumen parallel auf. Müsste jeder
+/// seine Senkung in diese gemeinsame Datei schreiben, kämen sich die Zweige
+/// beim Zusammenführen in die Quere. Gesenkt wird die Datei deshalb zentral
+/// nach jedem Zusammenführen mit `scripts/refresh-ui-standard-baseline.py`;
+/// das Skript liest die Regeln aus dieser Datei und weigert sich, eine Zahl
+/// anzuheben.
 ///
-/// U1–U7 räumen ihre Flächen und senken dabei ihre Zeilen. U9 schaltet die
-/// SwiftLint-Regeln erst auf `error`, wenn die zugehörige Regel hier bei null
-/// steht — die Baseline ist damit gleichzeitig die Restschuld-Anzeige.
+/// Die verworfenen Knopfvarianten (`ghost`, `restrained`) zählt die
+/// SwiftLint-Regel `hl_no_rejected_button_variant` je Paket in
+/// `scripts/design-ratchets/`, nicht dieser Test.
 @Suite("UI-Standard — Ratschen-Baseline der E5-Bausteinregeln (kann nur schrumpfen)")
 struct UIStandardBaselineTests {
     // MARK: - Regel-Katalog
@@ -74,40 +72,6 @@ struct UIStandardBaselineTests {
             excludeSubstrings: [],
             pattern: #"\bToggle\("#,
             rationale: "R11 — Schalter-Zeilen sind HLSettingsToggleRow, sonst driften Schrift, Tinte und Gap."
-        ),
-        Rule(
-            id: "hl_no_hlcard_in_settings",
-            includePrefixes: ["HealthLog/Screens/Settings/", "HealthLog/Screens/PersonalSettings/"],
-            excludeSubstrings: [],
-            pattern: #"\bHLCard\("#,
-            rationale: "R12 — in den Einstellungen gilt HLSettingsCard; HLCard ist Dashboard-/Insights-Primitive."
-        ),
-        Rule(
-            id: "hl_no_sectionlabel_in_settings",
-            includePrefixes: ["HealthLog/Screens/Settings/", "HealthLog/Screens/PersonalSettings/"],
-            excludeSubstrings: [],
-            pattern: #"\bHLSectionLabel\("#,
-            rationale: "R12 — die Abschnittsmarke einer Einstellungsseite ist der Kartentitel."
-        ),
-        Rule(
-            id: "hl_button_legacy_variant",
-            includePrefixes: ["HealthLog/"],
-            excludeSubstrings: [],
-            pattern: #"variant:\s*\.(?:ghost|restrained)\b"#,
-            rationale: """
-            R9 — das Varianten-Enum schrumpft auf .primary/.secondary/.destructive. \
-            `.outline` ist in W0 gefallen (1:1 nach .secondary); `.ghost` und `.restrained` \
-            brauchen pro Fundstelle die R9-Entscheidung „Vollbreiten-Aktion (→ .secondary)" \
-            oder „Zeile in einer Karte (→ HLSettingsActionRow)" und gehören damit der \
-            Einheit, die die Fläche besitzt. \
-            \
-            Seit R9/E2-A1 (2026-08-23) gibt es eine dritte Übersetzung, und sie ist die \
-            häufigste: eine ruhige Aktion INNERHALB einer Kachel wird HLTileActionButton \
-            (44 pt, .hlSubhead, monochrome HLText.secondary-Tinte, keine Füllung). Diese \
-            Form hebt diesen Zähler NICHT an — genau dafür wurde sie geschrieben. Wer eine \
-            Kachel-Aktion braucht und dafür `.restrained` reaktiviert, erhöht die Ratsche \
-            und macht aus einer gelösten Regel wieder Schuld.
-            """
         ),
         Rule(
             id: "hl_card_both_slots",
@@ -186,14 +150,22 @@ struct UIStandardBaselineTests {
         return regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
     }
 
-    /// Sonderfall `hl_card_both_slots`: zählt `HLSettingsCard(`-Aufrufe, deren
-    /// Argumentliste **sowohl** `subtitle:` als auch `footer:` enthält, ohne
-    /// dass eine `bothSlotsJustification:` mitgegeben wurde.
+    /// Sonderfall `hl_card_both_slots`: zählt `HLCard(`- und
+    /// `HLSettingsCard(`-Aufrufe, deren Argumentliste **sowohl** `subtitle:`
+    /// als auch `footer:` enthält, ohne dass eine `bothSlotsJustification:`
+    /// mitgegeben wurde.
     nonisolated static func countCardsWithBothSlots(in text: String) -> Int {
+        cardNeedles.reduce(0) { $0 + countBothSlots(in: text, needle: Array($1)) }
+    }
+
+    /// Die Kartennamen, die den Kopf mit Untertitel und Fußzeile tragen. Kein
+    /// Name ist im anderen enthalten, also zählt keine Karte doppelt.
+    nonisolated static let cardNeedles = ["HLCard(", "HLSettingsCard("]
+
+    private nonisolated static func countBothSlots(in text: String, needle: [Character]) -> Int {
         let chars = Array(text)
         var hits = 0
         var index = 0
-        let needle = Array("HLSettingsCard(")
         while index + needle.count <= chars.count {
             guard Array(chars[index ..< index + needle.count]) == needle else {
                 index += 1
@@ -255,36 +227,34 @@ struct UIStandardBaselineTests {
 
     // MARK: - Tests
 
-    @Test("Jede E5-Regel entspricht exakt ihrer Baseline — mehr ist ein Verstoß, weniger ist eine fällige Senkung", arguments: rules)
+    @Test("Keine E5-Regel liegt in einer Datei über ihrer Baseline, neue Dateien stehen bei null", arguments: rules)
     func ruleMatchesBaseline(rule: Rule) throws {
         let baseline = try Self.loadBaseline()
         let expected = baseline.rules[rule.id] ?? [:]
         let actual = Self.measure()[rule.id] ?? [:]
-        guard expected != actual else { return }
 
+        // Obergrenze statt Gleichheit: mehrere Zweige senken parallel, ohne
+        // diese gemeinsame Datei zu ändern. Gesenkt wird sie nach dem
+        // Zusammenführen zentral mit scripts/refresh-ui-standard-baseline.py.
         var lines: [String] = []
-        for path in Set(expected.keys).union(actual.keys).sorted() {
-            let was = expected[path] ?? 0
+        for path in actual.keys.sorted() {
+            let allowed = expected[path] ?? 0
             let now = actual[path] ?? 0
-            guard was != now else { continue }
-            if now > was {
-                lines.append("  ⬆︎ \(path): \(was) → \(now)  NEUE Verletzung — bitte beheben, nicht die Baseline anheben.")
-            } else if now == 0 {
-                lines.append("  ✅ \(path): \(was) → 0  aufgeräumt — Eintrag aus UIStandardBaseline.json STREICHEN.")
-            } else {
-                lines.append("  ✅ \(path): \(was) → \(now)  aufgeräumt — Zahl in UIStandardBaseline.json auf \(now) SENKEN.")
+            if now > allowed {
+                lines.append("  ⬆︎ \(path): \(allowed) → \(now)  NEUE Verletzung — bitte beheben, nicht die Baseline anheben.")
             }
         }
+        guard !lines.isEmpty else { return }
         Issue.record(
             """
-            Regel \(rule.id) weicht von der Baseline ab.
+            Regel \(rule.id) liegt über der Baseline.
             \(rule.rationale)
 
             \(lines.joined(separator: "\n"))
 
             Die Baseline in HealthLogTests/Resources/UIStandardBaseline.json ist eine
-            Restschuld-Anzeige, keine Erlaubnisliste: sie darf nur nach unten korrigiert
-            werden. Steht eine Regel bei null, darf U9 sie in .swiftlint.yml auf `error` heben.
+            Obergrenze je Datei, keine Erlaubnisliste: sie wird nur nach unten korrigiert,
+            zentral nach dem Zusammenführen.
             """
         )
     }

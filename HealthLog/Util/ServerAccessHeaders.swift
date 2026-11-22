@@ -2,7 +2,7 @@ import Foundation
 
 /// One extra HTTP header the app sends to the configured HealthLog server.
 ///
-/// GH-iOS #27: a self-hosted instance behind a zero-trust proxy (Cloudflare
+/// A self-hosted instance behind a zero-trust proxy (Cloudflare
 /// Access, Pangolin, an nginx `auth_request` gate) only lets a request reach
 /// the origin when it carries the proxy's service credentials. Until 1.4.1 the
 /// app could only take them from `Info.plist`, so the distributed build had no
@@ -38,7 +38,7 @@ public enum ServerAccessHeaders {
 
     /// Header names the app itself owns or the transport manages. Letting a
     /// user header override them would break auth, idempotency or framing.
-    /// `origin` and `referer` (#151): the server's cross-site write guard
+    /// `origin` and `referer`: the server's cross-site write guard
     /// reads them, and a user header of that name could trip it.
     static let reservedNames: Set<String> = [
         "accept", "accept-encoding", "authorization", "connection",

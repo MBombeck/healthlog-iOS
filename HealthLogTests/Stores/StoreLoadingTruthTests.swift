@@ -1,4 +1,4 @@
-// 14-06 — the medications list, and the profile, must not lie about loading.
+// The medications list, and the profile, must not lie about loading.
 //
 // 13-03 closed this defect in `DashboardStore` and `LabsStore`. It did not
 // touch `MedicationsStore`, and `git diff v0.19.0-b266..HEAD` on that file is
@@ -16,7 +16,7 @@
 // so a stranded flag over an empty list is a permanent skeleton.
 //
 // Drives the REAL stores over the REAL `APIClient` on a session-scoped
-// `MockURLProtocolSession` (09-13) and a real in-memory `SWRCache`, because the
+// `MockURLProtocolSession` and a real in-memory `SWRCache`, because the
 // defect lives in the interaction between the SWR stream, the account fence and
 // the flag — not in any one of them.
 
@@ -173,7 +173,7 @@
 
             #expect(
                 store.isLoading == false,
-                "EXPECTED_RED: a cancelled foreground pass strands the medications skeleton for the process lifetime"
+                "a cancelled foreground pass strands the medications skeleton for the process lifetime"
             )
         }
 
@@ -211,7 +211,7 @@
 
             #expect(
                 observed.lines.contains("store-effect-refused store=medications reason=load_interrupted"),
-                "EXPECTED_RED: an interrupted medications load is indistinguishable from an empty account"
+                "an interrupted medications load is indistinguishable from an empty account"
             )
         }
 
@@ -382,7 +382,7 @@
 
             #expect(
                 store.isLoading == false,
-                "EXPECTED_RED: clearOnLogout leaves isLoading true into the next session"
+                "clearOnLogout leaves isLoading true into the next session"
             )
             load.cancel()
             _ = await load.value
@@ -403,9 +403,8 @@
         /// actually performs (`store.load()`, NOT forced) — against a transport
         /// that answers normally afterwards, and names which outcome occurs.
         ///
-        /// It carries no `EXPECTED_RED` marker on purpose: it is an observation,
-        /// and its job is to report the same answer before and after the fix if
-        /// that is the truth.
+        /// It is an observation on purpose, and its job is to report the same
+        /// answer before and after the fix if that is the truth.
         @Test("Nach einem abgebrochenen Durchlauf bringt ein Pull-to-Refresh die Liste")
         func pullToRefreshAfterAnInterruptedPassPublishesTheList() async throws {
             let session = MockURLProtocolSession()
@@ -458,7 +457,7 @@
         /// einfach gemacht und gewartet". The transport count is the witness:
         /// one request served two loads.
         ///
-        /// **21-03 (D-14-06-C) — what this case pins CHANGED, and it is kept
+        /// **What this case pins CHANGED, and it is kept
         /// rather than deleted because the old behaviour was measured truth and
         /// its replacement is a decision worth being able to read.**
         ///

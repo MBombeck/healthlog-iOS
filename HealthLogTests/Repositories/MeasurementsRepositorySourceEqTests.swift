@@ -9,9 +9,9 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.14.8 W3 — v1.15.13 adoption: the management-list source filter rides
+/// v1.15.13 adoption: the management-list source filter rides
 /// the server (`GET /api/measurements?sourceEq=…`) instead of slicing the
-/// recency-capped page client-side (RESEARCH-SERVER-PARITY A2). Pins:
+/// recency-capped page client-side. Pins:
 ///
 ///   1. The plain kind-scoped arm threads `sourceEq=<WIRE>` + `type=`.
 ///   2. The BP paired arm scopes BOTH type pages.

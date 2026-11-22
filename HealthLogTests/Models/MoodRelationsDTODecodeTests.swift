@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.1 — decode + behaviour locks for the LIVE mood-"relations" slices
+/// Decode + behaviour locks for the LIVE mood-"relations" slices
 /// (`GET /api/mood/insights`, server v1.11.5). Validates the tolerant
 /// `MoodRelationsResponse` against a realistic full `MoodAggregates` payload
 /// (the route serialises the whole aggregate; iOS reads only `tagInfluence` +

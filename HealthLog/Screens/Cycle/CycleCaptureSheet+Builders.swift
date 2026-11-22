@@ -3,7 +3,7 @@ import Foundation
 /// **Pure, static write-body builders for ``CycleCaptureSheet``.**
 ///
 /// Split out of `CycleCaptureSheet.swift` under the repo's file-length
-/// discipline (CU-25 / #72) — pure movement, no behaviour change. Everything
+/// discipline — pure movement, no behaviour change. Everything
 /// here is `static` and touches no view state, which is exactly why it is
 /// unit-testable without the SwiftUI runtime (`CycleCaptureSheetTests`).
 extension CycleCaptureSheet {
@@ -67,7 +67,7 @@ extension CycleCaptureSheet {
 
     // MARK: - Date helpers (profile zone, POSIX)
 
-    /// #115 1.5 — the day `date` names in the ACCOUNT zone. The sheet's date
+    /// The day `date` names in the ACCOUNT zone. The sheet's date
     /// picker runs in the same zone (`.environment(\.timeZone, …)` on the
     /// sheet), and "today" is the account's today, so the key the server
     /// upserts on is the day the person saw. It used to be cut with a

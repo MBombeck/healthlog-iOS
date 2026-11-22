@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0153 INV-D L3 — notification toggle title/hint localization gate.
+/// Notification toggle title/hint localization gate.
 ///
 /// The per-event notification toggle list is server-driven (`payload.eventTypes`,
 /// runtime). Before this fix the `NotificationEventLocalization.title(for:)`
@@ -50,7 +50,7 @@ struct NotificationEventLocalizationLeakTests {
         }
     }
 
-    /// **UI-Standard R1/R2 (U6) — die Ereignis-Zeile trägt keinen Hint mehr.**
+    /// **UI-Standard R1/R2 — die Ereignis-Zeile trägt keinen Hint mehr.**
     ///
     /// Diese Prüfung stand vorher auf dem Kopf: sie verlangte, dass jeder neue
     /// Server-Code eine Unterzeile *hat*. Die Unterzeilen sagten aber ihren
@@ -70,7 +70,7 @@ struct NotificationEventLocalizationLeakTests {
             )
         }
         #expect(NotificationEventLocalization.hint(for: "DAILY_BRIEFING") != nil)
-        // R7 — der Stimmungs-Hint nannte „Abends 22:00"; die Uhrzeit ist
+        // Der Stimmungs-Hint nannte „Abends 22:00"; die Uhrzeit ist
         // einstellbar, die Aussage lebt jetzt an der Stimmungs-Karte.
         #expect(NotificationEventLocalization.hint(for: "MOOD_REMINDER") == nil)
     }

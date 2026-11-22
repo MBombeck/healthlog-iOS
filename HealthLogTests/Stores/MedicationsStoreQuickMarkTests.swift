@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// MEDS-QUICK-MARK-TAKEN — store-level WriteOutcome tests for
+/// Store-level WriteOutcome tests for
 /// `MedicationsStore.markIntakeQuick`. Verifies the three outcomes:
 /// `.success` (200 → patched-row), `.queued` (retriable error → optimistic
 /// patch survives), `.failed(...)` (non-retriable → rollback).

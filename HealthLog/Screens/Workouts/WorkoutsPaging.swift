@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// #19 — the count line both workout lists show above their rows. Reads the
+/// The count line both workout lists show above their rows. Reads the
 /// server's `meta.total` (canonical rows for the active filter), never the
 /// size of the loaded page: "50 of 730 workouts" while pages are still
 /// outstanding, "730 workouts" once everything is there.
@@ -32,7 +32,7 @@ enum WorkoutsListSummary {
     }
 }
 
-/// #19 — what the end of a workout list shows.
+/// What the end of a workout list shows.
 enum WorkoutsPagingFooterState: Equatable {
     /// Nothing loaded yet (the empty state or the first-page load owns the screen).
     case hidden
@@ -63,7 +63,7 @@ enum WorkoutsPagingFooterState: Equatable {
     }
 }
 
-/// #19 — the end-of-list row shared by More → Workouts and the Insights
+/// The end-of-list row shared by More → Workouts and the Insights
 /// Workouts page. Purely presentational: the screens decide when the next
 /// page is requested (a lazy `List` row appearing, or the scroll position
 /// nearing the end of the Insights page).
@@ -72,7 +72,7 @@ struct WorkoutsPagingFooter: View {
 
     var body: some View {
         switch WorkoutsPagingFooterState.resolve(store) {
-        // 1.4 B2 — the end of the list needs no "Alle Workouts geladen"
+        // The end of the list needs no "Alle Workouts geladen"
         // line; the last row is the end.
         case .hidden, .end:
             EmptyView()
@@ -80,8 +80,7 @@ struct WorkoutsPagingFooter: View {
             HStack(spacing: HLSpace.sm) {
                 ProgressView()
                 Text("workouts.paging.loading")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowStatus)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, HLSpace.md)
@@ -90,10 +89,9 @@ struct WorkoutsPagingFooter: View {
         case .failed:
             VStack(spacing: HLSpace.sm) {
                 Text("workouts.paging.failed")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowStatus)
                     .multilineTextAlignment(.center)
-                HLButton("Try again", icon: "arrow.clockwise", variant: .secondary, size: .compact) {
+                HLButton(HLControlWord.retry.key, systemImage: "arrow.clockwise", variant: .secondary) {
                     Task { await store.retryNextPage() }
                 }
                 .accessibilityIdentifier("workouts.paging.retry")

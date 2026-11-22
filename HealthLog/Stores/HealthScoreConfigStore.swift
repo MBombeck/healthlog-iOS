@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v1.35.0 (GH #83) — drives Settings → Health Score.**
+/// **v1.35.0 — drives Settings → Health Score.**
 ///
 /// Holds the server's resolved composition, the person's in-progress selection,
 /// and — when the server refused a selection — the reason it gave, so the

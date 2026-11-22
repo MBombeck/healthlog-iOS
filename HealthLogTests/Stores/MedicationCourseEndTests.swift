@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **MED (1.5.0, #151 / #1280) — "End treatment" ends the course now.**
+/// **"End treatment" ends the course now.**
 ///
 /// Against a server that publishes `canEndCourse` (1.46.0 or later) the store
 /// calls `POST /api/medications/{id}/courses/end` and the local row stops

@@ -8,7 +8,7 @@ public enum HLError: Error, Sendable, Equatable {
     case rateLimited(retryAfter: TimeInterval?)
     case offline
     case canceled
-    /// #114 / #115 · 0.2 — the server refused an AI action because its
+    /// The server refused an AI action because its
     /// capability is unavailable: `assistant.disabled.<switch>` (403),
     /// `ai.record.notPermitted` (403), `ai.provider.none` (422, or 503 on
     /// `medications/extract`) or `ai.unavailable` (503), read from
@@ -26,7 +26,7 @@ public enum HLError: Error, Sendable, Equatable {
     /// is mid-flight short-circuit gracefully. The associated value is the
     /// server `meta.module` wire key.
     case moduleDisabled(String)
-    /// W-INTEGRITY-WRITEPATH G-2 — the optimistic write could **not** be made
+    /// The optimistic write could **not** be made
     /// durable: the network attempt failed retriably *and* the Outbox enqueue
     /// that should have preserved it for replay ALSO failed (most acutely when
     /// the Outbox has degraded to the in-memory inert floor, where every
@@ -37,7 +37,7 @@ public enum HLError: Error, Sendable, Equatable {
     /// `false` under `isRetriable`. The associated string is a sanitized
     /// description of the enqueue failure for triage, never user-facing.
     case notPersisted(String)
-    /// CU-20 (#69) — a guarded write (`baseUpdatedAt`) kept losing the race:
+    /// A guarded write (`baseUpdatedAt`) kept losing the race:
     /// the server returned `409` and the bounded conflict-retry loop in
     /// ``withOptimisticConflictRetry(conflictCode:maxAttempts:token:isolation:write:reread:)``
     /// gave up, either because the attempt budget was spent or because the
@@ -54,7 +54,7 @@ public enum HLError: Error, Sendable, Equatable {
     /// stale token). The associated value is the route's conflict `errorCode`,
     /// for triage only — never user-facing.
     case writeConflictUnresolved(String)
-    /// **Audit B-2 — the server is still processing an EARLIER request that
+    /// **The server is still processing an EARLIER request that
     /// carried this exact `Idempotency-Key`.** The wire shape is a `409` with the
     /// response header `X-Idempotent-Replay: false`, prose in `error` and no
     /// `errorCode` (confirmed with the server maintainer: none of the create
@@ -78,7 +78,7 @@ public enum HLError: Error, Sendable, Equatable {
     /// auftauchen würde. Nicht retriable, nicht outbox-persistiert (ein
     /// Replay hätte dasselbe Problem).
     case serverNotConfigured
-    /// v1.35.0 (GH #83) — the server understood the request and **refused it
+    /// v1.35.0 — the server understood the request and **refused it
     /// with a stated reason**: `meta.errorCode` says which rule was missed,
     /// `meta.reason` says which arm of it. A separate case from
     /// `.server(422, …)` for two reasons. The refusal is an explanation the
@@ -107,7 +107,7 @@ public enum HLError: Error, Sendable, Equatable {
         case connectionLost
         case dnsFailure
         case sslPinning
-        /// E1 — a write request was cut off on the wire (`URLError.cancelled`)
+        /// A write request was cut off on the wire (`URLError.cancelled`)
         /// while the task that sent it was NOT cancelled: an app suspend, the
         /// end of a background window, or a failed certificate pin. Nothing
         /// says the server refused it, so it is queued like any other transport
@@ -121,7 +121,7 @@ public enum HLError: Error, Sendable, Equatable {
 }
 
 public extension HLError {
-    /// b182 W-B182-INVITE (GH #16) — does this error represent a rejected invite
+    /// Does this error represent a rejected invite
     /// on the register call? On a closed-registration instance the server returns
     /// a `403` ("Invalid or expired invite" / "Registration is disabled") when
     /// the attached invite token is invalid/expired/exhausted. The onboarding
@@ -178,7 +178,7 @@ public extension HLError {
             status >= 500 || status == 408
         case .rateLimited:
             true
-        // Audit B-2 — an in-flight idempotency conflict says "not yet", never
+        // An in-flight idempotency conflict says "not yet", never
         // "no": the same key must go back on the wire, not into the bin.
         case .idempotencyReplayInFlight:
             true
@@ -220,7 +220,7 @@ public extension HLError {
     /// error. `.decoding` means we couldn't even read the response, so we don't
     /// know whether the write landed — enqueuing risks an unbounded replay of a
     /// request the server may have already applied. `.canceled` is user/system
-    /// intent, not a failure to persist. E1 — a write cut off on the wire while
+    /// intent, not a failure to persist. A write cut off on the wire while
     /// its task was still running arrives as `.network(.writeCancelled)` instead
     /// and IS persisted: nothing cancelled it on purpose.
     /// `true` for a `403 + errorCode: "module.disabled"`.
@@ -244,7 +244,7 @@ public extension HLError {
     /// surfaces that still show it; a surface should prefer
     /// ``userFacingDescription`` (or ``signInFacingDescription`` on sign-in).
     ///
-    /// L1 — localized. These sentences were fixed German, and a dozen screens
+    /// Localized. These sentences were fixed German, and a dozen screens
     /// (sessions, passkeys, integrations, edit sheets, the Health Score tile)
     /// put them on screen, so the English UI showed "Netzwerk-Fehler: …".
     var localizedDescription: String {
@@ -252,7 +252,7 @@ public extension HLError {
         case let .network(u):
             let detail = "\(u)"
             return String(localized: "error.detail.network \(detail)")
-        // v0.14.1 #3 — defense in depth: a 5xx carries an internal server
+        // Defense in depth: a 5xx carries an internal server
         // message (e.g. a leaked JS "x.map is not a function" TypeError) that
         // must never reach a user-facing surface. Mirror `userFacingDescription`
         // here so any remaining caller of `localizedDescription` for display
@@ -298,7 +298,7 @@ public extension HLError {
         case .rateLimited:
             String(localized: "Too many requests. Please try again shortly.")
         case .idempotencyReplayInFlight:
-            // Audit B-2 — the write is not lost and not refused; the server is
+            // The write is not lost and not refused; the server is
             // still finishing the first attempt of this very request.
             String(localized: "This is still being processed. We'll retry automatically.")
         case .canceled:
@@ -325,7 +325,7 @@ public extension HLError {
             // placeholder card.
             String(localized: "feature_disabled.title")
         case .moduleDisabled:
-            // #30 — the surface is hidden structurally once ModuleGate
+            // The surface is hidden structurally once ModuleGate
             // mirrors the disabled key; the banner copy stays neutral so a
             // mid-flight caller doesn't surface a scary error for what is
             // simply a switched-off module.
@@ -335,7 +335,7 @@ public extension HLError {
             // honest: the user's change was NOT saved and they should retry.
             String(localized: "Couldn't save your change. Please try again.")
         case .writeConflictUnresolved:
-            // CU-20 — nothing was written because the surface changed elsewhere
+            // Nothing was written because the surface changed elsewhere
             // (another device / the web session) while the edit was open. Be
             // honest and specific: a plain "try again" would read as a network
             // blip, when the actual instruction is "reopen, the data moved".
@@ -360,7 +360,18 @@ public extension HLError {
         }
     }
 
-    /// Audit B-1 — the user-facing sentence for ANY thrown error, including one
+    /// The banner's sentence when the banner carries its own retry button:
+    /// the same copy without the closing "try again", which the button says.
+    var retryBannerDescription: String {
+        switch self {
+        case .network(.timeout): String(localized: "error.banner.timeout")
+        case .decoding: String(localized: "error.banner.decoding")
+        case .unknown: String(localized: "error.banner.unknown")
+        default: userFacingDescription
+        }
+    }
+
+    /// The user-facing sentence for ANY thrown error, including one
     /// that is not an ``HLError``.
     ///
     /// Stores that catch untyped `Error` used to build their visible string from
@@ -378,5 +389,20 @@ public extension HLError {
     static func userFacingText(for error: Error) -> String {
         (error as? HLError)?.userFacingDescription
             ?? String(localized: "Something went wrong. Please try again.")
+    }
+}
+
+public extension HLError {
+    /// The session a write belongs to is no longer the signed-in one (a
+    /// sign-out, an account switch, a bearer that rotated under a pinned
+    /// lease). Retryable protocol uncertainty, never a verdict on the write.
+    /// The message names neither owner nor token.
+    static let authenticatedSessionChanged = HLError.network(.other("authenticated session changed"))
+
+    /// A failure that says nothing about the write, only about the session it
+    /// was sent under: the session changed, or the server did not take the
+    /// bearer. The replay keeps such a row uncounted (#6).
+    var isAuthenticationHold: Bool {
+        self == .unauthorized || self == .authenticatedSessionChanged
     }
 }

@@ -7,16 +7,14 @@ import Testing
 
     @testable import HealthLog
 
-    /// v0.14 — coverage for the Daylio-style structured mood-tag feature.
+    /// Coverage for the Daylio-style structured mood-tag feature.
     ///
-    /// Five axes, mirroring the build brief's test list:
+    /// Three axes, mirroring the build brief's test list:
     ///  1. **Catalog decode** — `GET /api/mood/tags` envelope → `MoodTagCatalog`,
     ///     plus SWR cache-TTL + bundled-fallback discipline.
     ///  2. **Picker selection state** — Set toggle + catalog-ordered projection.
     ///  3. **Save includes `tagKeys`** — the real `MoodRepository` POST body
     ///     carries the picked keys (stub URLSession, not a mock server).
-    ///  4. **Offline persists `tagKeys`** — standalone write → read-back, no net.
-    ///  5. **Adopt-on-pair carries `tagKeys`** — the bulk DTO encodes them.
     @MainActor
     @Suite("Mood tag taxonomy (v0.14)", .serialized, .mockURLSession)
     struct MoodTagCatalogTests {
@@ -230,72 +228,6 @@ import Testing
             #expect(entry.tags == ["Stress"])
         }
 
-        // MARK: - 4. Offline persist + read-back (standalone, no network)
-
-        private struct EmptyHK: StandaloneHealthKitReadServing {
-            func standaloneRecentSamples(kind _: MetricKind, days _: Int, limit _: Int) async -> [SeriesPoint] {
-                []
-            }
-
-            func standaloneDailySeries(kind _: MetricKind, days _: Int) async -> [SeriesPoint] {
-                []
-            }
-        }
-
-        @Test("Standalone mood write persists tagKeys and reads them back, no /api/*")
-        func standaloneRoundTripCarriesTagKeys() async throws {
-            let fired = Counter()
-            MockURLProtocol.install { [fired] _ in
-                fired.increment()
-                throw URLError(.notConnectedToInternet)
-            }
-            let local = try LocalRepository(store: LocalStore(modelContainer: LocalStore.makeInMemory()))
-            let gate = StandaloneGate(local: local, healthKit: EmptyHK(), isStandalone: { true })
-            let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), standalone: gate)
-
-            let saved = try await repo.log(score: 5, tags: [], tagKeys: ["grateful", "slept_well"], note: nil)
-            #expect(saved.tagKeys == ["grateful", "slept_well"])
-
-            let recent = try await repo.recent(days: 30)
-            let readBack = try #require(recent.first { $0.id == saved.id })
-            #expect(readBack.tagKeys == ["grateful", "slept_well"])
-            #expect(fired.value == 0, "standalone path must fire zero /api/* calls")
-        }
-
-        @Test("Standalone mood update edits tagKeys")
-        func standaloneUpdateEditsTagKeys() async throws {
-            let local = try LocalRepository(store: LocalStore(modelContainer: LocalStore.makeInMemory()))
-            let gate = StandaloneGate(local: local, healthKit: EmptyHK(), isStandalone: { true })
-            let repo = try MoodRepository(api: makeAPI(), outbox: OutboxQueue(inMemory: true), standalone: gate)
-            MockURLProtocol.install { _ in throw URLError(.notConnectedToInternet) }
-
-            let saved = try await repo.log(score: 4, tags: [], tagKeys: ["happy"], note: nil)
-            let updated = try await repo.update(
-                id: saved.id, patch: MoodEntryPatch(tagKeys: ["happy", "walked"])
-            )
-            #expect(Set(updated.tagKeys) == Set(["happy", "walked"]))
-        }
-
-        // MARK: - 5. Adopt-on-pair carries tagKeys
-
-        @Test("Bulk adopt DTO encodes tagKeys when present, omits when empty")
-        func bulkDTOEncodesTagKeys() throws {
-            let encoder = JSONEncoder()
-            let withKeys = BulkMoodEntryDTO(
-                mood: "GUT", tags: nil, tagKeys: ["happy", "walked"], note: nil,
-                moodLoggedAt: Date(timeIntervalSince1970: 1_700_000_000), source: "MANUAL", externalId: "a"
-            )
-            let json = try #require(JSONSerialization.jsonObject(with: encoder.encode(withKeys)) as? [String: Any])
-            #expect(json["tagKeys"] as? [String] == ["happy", "walked"])
-
-            let withoutKeys = BulkMoodEntryDTO(
-                mood: "OKAY", tags: nil, tagKeys: nil, note: nil,
-                moodLoggedAt: Date(timeIntervalSince1970: 1_700_000_000), source: "MANUAL", externalId: "b"
-            )
-            let json2 = try #require(JSONSerialization.jsonObject(with: encoder.encode(withoutKeys)) as? [String: Any])
-            #expect(json2["tagKeys"] == nil)
-        }
-
         // MARK: - v1.13.0 — custom / label / hidden decode + symbol coverage
 
         private nonisolated static let customCatalogJSON: Data = .init("""
@@ -373,7 +305,7 @@ import Testing
 
         @Test("Every custom-icon allow-list name maps to a real SF Symbol (not the Lucide name)")
         func allowListIconsAllMap() {
-            // #21 — the allow-list now mirrors the full 74-name server catalog
+            // The allow-list now mirrors the full 74-name server catalog
             // (`src/lib/mood/icon-catalog.ts`), no client-only extras.
             #expect(MoodTagCatalog.customIconAllowList.count == 74)
             for icon in MoodTagCatalog.customIconAllowList {

@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// W-B183 — DEFENSIVE glucose unit-at-source guard.
+/// DEFENSIVE glucose unit-at-source guard.
 ///
 /// Server is moving toward "unit-at-source" (each measurement value carries
 /// its own `unit`, targeted for server v1.17, NOT yet deployed). iOS hardcodes

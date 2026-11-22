@@ -1,49 +1,12 @@
 import SwiftUI
 
-// Splitting note (A360-4 / file_length-Disziplin): the empty-state,
-// deep-link-placeholder and first-paint-skeleton subviews of
-// `MedicationsScreen` live here so the screen file stays under the 600-line
-// budget. Pure code movement — no behaviour change. These types are
+// The deep-link placeholder and first-paint skeleton of `MedicationsScreen`
+// live here so the screen file stays under the 600-line budget. They are
 // module-internal (used only by `MedicationsScreen`).
-
-// MARK: - Empty state
-
-/// v0.7.0 — migrated to `ContentUnavailableView` (iOS 17+) with the
-/// `actions:` slot carrying the primary "Medikament hinzufügen" CTA.
-///
-/// The pre-v0.7.0 implementation wrapped the empty state in an `HLCard`
-/// and used the monochrome `BrandMark` as the hero glyph (Y8 H-1: the
-/// empty Medications tab is the most-seen empty surface, so it doubled
-/// as a brand-anchor surface). The system `ContentUnavailableView`
-/// supersedes that bespoke layout — it ships the standard centered
-/// vertical rhythm, Dynamic-Type behaviour and a dedicated actions
-/// region for the CTA. The `pills` SF Symbol replaces the BrandMark
-/// because `ContentUnavailableView`'s glyph slot expects a `Label`
-/// system icon, not a custom asset; the brand presence is now carried
-/// by the surrounding navigation/tab chrome rather than the empty
-/// state itself.
-struct EmptyMedicationsState: View {
-    let onAdd: () -> Void
-
-    var body: some View {
-        // 1.4 B2 — title and button say it; the sentence that promised
-        // what follows (and repeated the button) is gone. 1.4 B4: the one
-        // action is the app's secondary button, like every empty state.
-        HLEmptyState(icon: "pills", title: "No medications yet") {
-            HLButton(
-                String(localized: "Add medication"),
-                icon: "plus",
-                variant: .secondary,
-                action: onAdd
-            )
-        }
-        .accessibilityIdentifier("medications.empty")
-    }
-}
 
 // MARK: - Deep-link placeholder
 
-/// QoS-1 (A360-4) — the cold `healthlog://medications/<id>` placeholder shown
+/// QoS-1 — the cold `healthlog://medications/<id>` placeholder shown
 /// while the catalog hydrates before the requested medication can be resolved.
 ///
 /// The pre-fix version was a bare `ProgressView` whose `.task` called
@@ -56,7 +19,7 @@ struct EmptyMedicationsState: View {
 ///   versuchen" retry that re-drives `store.load(force:)`,
 /// - **not found** — once the load settles (`!isLoading`, `error == nil`) but
 ///   the requested id is absent (a stale reminder for an archived/deleted med),
-///   a calm `ContentUnavailableView` instead of a spinner that never resolves.
+///   a calm empty state instead of a spinner that never resolves.
 struct MedicationDeepLinkPlaceholder: View {
     let store: MedicationsStore
     let requestedID: String
@@ -90,7 +53,7 @@ struct MedicationDeepLinkPlaceholder: View {
     var body: some View {
         Group {
             if isNotFound {
-                // 1.4 B4 — the sentence keeps only what the title does not say.
+                // The sentence keeps only what the title does not say.
                 HLEmptyState(
                     icon: "pills.circle",
                     title: "Medication not found",
@@ -98,7 +61,7 @@ struct MedicationDeepLinkPlaceholder: View {
                 )
                 .accessibilityIdentifier("medications.deeplink.notFound")
             } else {
-                ProgressView()
+                HLInlineProgress()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -110,10 +73,10 @@ struct MedicationDeepLinkPlaceholder: View {
     }
 }
 
-// MARK: - First-paint skeleton (W-IMPL-SKELETON)
+// MARK: - First-paint skeleton
 
 /// First-paint silhouette painted while the Medications tab cold-starts.
-/// **v0.5.5.1 (W-IMPL-SKELETON):** rebuilt on top of `HLSkeleton` so the
+/// Rebuilt on top of `HLSkeleton` so the
 /// shimmer + reduce-motion contract lives at the token layer — the prior
 /// `RoundedRectangle.fill(HLColor.surface)` + `.opacity(0.55)` block had
 /// to manually paint each rectangle and skipped the reduce-motion gate
@@ -127,12 +90,12 @@ struct MedicationDeepLinkPlaceholder: View {
 /// unaffected by W-MED2.
 struct MedicationsSkeletonContent: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             // Compliance placeholder — section header + the 7×4 grid the
             // live `ComplianceHeatmapSection` paints. Aspect-ratio'd
             // square `.rect` skeletons reproduce the heatmap rhythm.
             //
-            // v0.6.1.2 Y4 (D-018): the legacy "Today" placeholder row above
+            // The legacy "Today" placeholder row above
             // dropped together with `TodayTimelineSection` — the Medikamente
             // tab no longer carries a per-day dose-list; take-action lives
             // on the detail screen now.

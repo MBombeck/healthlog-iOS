@@ -1,4 +1,4 @@
-// #143 — server v1.43.2: AI consent only on an explicit Accept.
+// Server v1.43.2: AI consent only on an explicit Accept.
 //
 // `POST /api/consent/ai` requires `"confirm": true` (else 400
 // `consent.ai.confirmRequired`, nothing written). The standing consent is read
@@ -523,7 +523,10 @@
             ))
         }
 
-        // MARK: - Structure: only the Accept tap sends a receipt
+        // MARK: - Tree-wide: only the Accept tap sends a receipt
+
+        // Consent may only be recorded from an explicit tap; a new call site anywhere
+        // in the app would mint a receipt the user never gave, which no unit test sees.
 
         @Test("only the two Accept closures call recordAcceptedAIConsent; nothing else mints")
         func onlyAcceptTapsMint() throws {
@@ -537,8 +540,6 @@
                 "recordAcceptedAIConsent(",
                 ".recordAcceptedConsent(",
                 "mintFullConsentReceipt(",
-                "syncServerAIConsentReceipt",
-                "ensureFullConsentReceipt",
                 "\"/api/consent/ai\"",
                 "/api/consent/ai/web"
             ]
@@ -561,8 +562,6 @@
             ])
             #expect(hits[".recordAcceptedConsent("] == ["AppContainer+AIConsentGate.swift"])
             #expect(Set(hits["mintFullConsentReceipt("] ?? []) == ["ConsentReceiptRepository.swift"])
-            #expect(hits["syncServerAIConsentReceipt"] == nil)
-            #expect(hits["ensureFullConsentReceipt"] == nil)
             #expect(hits["\"/api/consent/ai\""] == ["ConsentReceiptRepository.swift"])
             #expect(hits["/api/consent/ai/web"] == nil)
         }

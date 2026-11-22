@@ -59,7 +59,7 @@ struct EcgSampleScaleTests {
 
 // MARK: - The enum that must not be shared
 
-/// **GH #75 — die Drift, vor der das Server-Team ausdrücklich gewarnt hat.**
+/// **Die Drift, vor der das Server-Team ausdrücklich gewarnt hat.**
 ///
 /// Die Datenbank-Aufzählung `RhythmClassification` hat sechs Mitglieder, weil
 /// Gehstetigkeits- und neutrale Ereignis-Urteile dieselbe Spalte teilen. Auf

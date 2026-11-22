@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B187 QOL-2** — coverage for the off-main-actor index writer.
+/// Coverage for the off-main-actor index writer.
 ///
 /// Uses a stub ``SpotlightIndexWriting`` so the indexer's
 /// delete-then-index batching + sub-domain scoping is verifiable without
@@ -64,6 +64,75 @@ struct SpotlightIndexerTests {
                 SpotlightItemBuilder.Domain.measurements.rawValue
             ]]
         )
+    }
+
+    @Test("a reindex planned before sign-out indexes nothing after the teardown")
+    func staleReindexAfterSignOutIsDropped() async {
+        let stub = StubIndex()
+        let indexer = SpotlightIndexer(index: stub)
+        await indexer.deleteAll(generation: 1)
+        await indexer.replace(
+            [SpotlightIndexer.Entry(kind: .medication(id: "med_a"), title: "Lisinopril")],
+            in: .medications,
+            generation: 0
+        )
+        #expect(stub.indexedIDs.isEmpty)
+        // The next account's reindex runs under the new generation.
+        await indexer.replace(
+            [SpotlightIndexer.Entry(kind: .medication(id: "med_b"), title: "Trulicity")],
+            in: .medications,
+            generation: 1
+        )
+        #expect(stub.indexedIDs == ["healthlog://medications/med_b"])
+    }
+
+    @Test("a sign-out that lands while a reindex awaits the index wins")
+    func signOutDuringReindexWins() async {
+        let gate = GatedIndex()
+        let indexer = SpotlightIndexer(index: gate)
+        gate.onFirstDelete = { await indexer.deleteAll(generation: 1) }
+        await indexer.replace(
+            [SpotlightIndexer.Entry(kind: .medication(id: "med_a"), title: "Lisinopril")],
+            in: .medications,
+            generation: 0
+        )
+        #expect(gate.indexedCount == 0)
+        #expect(gate.deleteCount == 2)
+    }
+}
+
+/// An index whose first delete runs a hook while the indexer awaits it: the
+/// window in which a sign-out can land.
+private final class GatedIndex: SpotlightIndexWriting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _indexed = 0
+    private var _deletes = 0
+    private var _onFirstDelete: (@Sendable () async -> Void)?
+
+    var onFirstDelete: (@Sendable () async -> Void)? {
+        get { lock.withLock { _onFirstDelete } }
+        set { lock.withLock { _onFirstDelete = newValue } }
+    }
+
+    var indexedCount: Int {
+        lock.withLock { _indexed }
+    }
+
+    var deleteCount: Int {
+        lock.withLock { _deletes }
+    }
+
+    func hlIndexItems(_ items: [CSSearchableItem]) async throws {
+        lock.withLock { _indexed += items.count }
+    }
+
+    func hlDeleteItems(inDomains _: [String]) async throws {
+        let hook: (@Sendable () async -> Void)? = lock.withLock {
+            _deletes += 1
+            defer { _onFirstDelete = nil }
+            return _onFirstDelete
+        }
+        await hook?()
     }
 }
 

@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — pure locks for the trend chart's 7-day moving-average
+/// Pure locks for the trend chart's 7-day moving-average
 /// helper + the period-window filter. No SwiftUI render pass.
 @Suite("Mood trend chart helpers")
 struct MoodTrendChartTests {
@@ -47,6 +47,53 @@ struct MoodTrendChartTests {
         #expect(ma.count < present.count)
     }
 
+    /// The O(n²) reference the sliding window replaced (D5 #9).
+    private static func naiveMovingAverage(_ series: [(date: Date, score: Double)]) -> [(date: Date, score: Double)] {
+        guard series.count >= 7 else { return [] }
+        return series.compactMap { point in
+            guard let windowStart = calendar.date(byAdding: .day, value: -6, to: point.date) else { return nil }
+            let window = series.filter { $0.date >= windowStart && $0.date <= point.date }
+            guard window.count >= 4 else { return nil }
+            return (point.date, window.map(\.score).reduce(0, +) / Double(window.count))
+        }
+    }
+
+    @Test("D5 #9: the one-pass moving average equals the per-point window filter, gaps included")
+    func slidingWindowMatchesReference() {
+        var generator = SystemRandomNumberGenerator()
+        // Two years with random gaps of up to five days.
+        var series: [(date: Date, score: Double)] = []
+        var daysAgo = 730
+        while daysAgo >= 0 {
+            series.append((Self.day(daysAgo), Double(Int.random(in: 1 ... 5, using: &generator))))
+            daysAgo -= Int.random(in: 1 ... 5, using: &generator)
+        }
+        let fast = MoodTrendChart.movingAverage(series, calendar: Self.calendar)
+        let reference = Self.naiveMovingAverage(series)
+        #expect(fast.count == reference.count)
+        for (a, b) in zip(fast, reference) {
+            #expect(a.date == b.date)
+            #expect(abs(a.score - b.score) < 1e-9)
+        }
+    }
+
+    @Test("D5 #9: the trend series is derived once with daily averages, moving average and mean")
+    func trendSeriesDerivesOnce() {
+        let entries = (0 ..< 10).flatMap { offset -> [MoodTrendChart.Entry] in
+            // Two entries a day, 2 and 4: the daily average is 3.
+            [
+                MoodTrendChart.Entry(date: Self.day(offset).addingTimeInterval(3600), score: 2),
+                MoodTrendChart.Entry(date: Self.day(offset).addingTimeInterval(7200), score: 4)
+            ]
+        }
+        let series = MoodTrendSeries(entries: entries, calendar: Self.calendar)
+        #expect(series.daily.count == 10)
+        #expect(series.daily.allSatisfy { $0.score == 3 })
+        #expect(series.movingAverage.count == 7)
+        #expect(series.mean == 3)
+        #expect(MoodTrendSeries(entries: [], calendar: Self.calendar).mean == nil)
+    }
+
     @Test("period filter keeps only entries within the trailing window")
     func periodFilter() {
         let entries = [
@@ -54,9 +101,9 @@ struct MoodTrendChartTests {
             MoodEntry(id: "b", recordedAt: Self.day(40), score: 4),
             MoodEntry(id: "c", recordedAt: Self.day(200), score: 5)
         ]
-        let d30 = MoodPeriod.days30.filter(entries, now: Self.anchor, calendar: Self.calendar)
+        let d30 = MoodPeriod.month.filter(entries, now: Self.anchor, calendar: Self.calendar)
         #expect(d30.map(\.id) == ["a"])
-        let d90 = MoodPeriod.days90.filter(entries, now: Self.anchor, calendar: Self.calendar)
+        let d90 = MoodPeriod.sixMonths.filter(entries, now: Self.anchor, calendar: Self.calendar)
         #expect(Set(d90.map(\.id)) == ["a", "b"])
         let year = MoodPeriod.year.filter(entries, now: Self.anchor, calendar: Self.calendar)
         #expect(year.count == 3)

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.10.0 W-Mood-A — the pure mood-analysis computation engine.
+/// The pure mood-analysis computation engine.
 ///
 /// Ports MoodLog's `statistics-compute.ts` oracle (server repo
 /// `~/Projects/MoodLog/src/lib/statistics-compute.ts`) into a `Sendable`,
@@ -31,8 +31,8 @@ struct MoodInsights: Equatable, Sendable {
     /// 30-day average of daily averages (trailing from `now`), `nil` when none.
     let avg30: Double?
     /// The server's regression slopes (score units/day) over the trailing
-    /// 7/30/90 day windows (`/api/mood/analytics`). 1.5 VERDICTS (#151):
-    /// `nil` when the server sends none, offline and in standalone too; the
+    /// 7/30/90 day windows (`/api/mood/analytics`). 1.5 VERDICTS:
+    /// `nil` when the server sends none and offline too; the
     /// app no longer fits its own line.
     let slope7: Double?
     let slope30: Double?
@@ -47,7 +47,7 @@ struct MoodInsights: Equatable, Sendable {
     /// Distinct days with at least one entry.
     let dayCount: Int
     /// The server's direction of the 30-day trend, else of the 7-day one.
-    /// `nil` → no trend arrow (#151).
+    /// `nil` → no trend arrow.
     var trendDirection: TrendDirection?
 
     /// The all-nil insight set. This is the value ``compute(entries:now:calendar:enrichment:)``
@@ -113,10 +113,10 @@ extension MoodInsights {
     ///   - now: the reference "today" (injectable for tests).
     ///   - calendar: local calendar (injectable for tests).
     ///   - enrichment: the server's daily series (`/api/mood/analytics`) —
-    ///     #115 · 1.3: when it carries days, those profile-zone day means ARE
+    ///     When it carries days, those profile-zone day means ARE
     ///     the spine (heatmap, averages, slopes); its summary slopes and
-    ///     prior-period mean win as before. Without it (standalone, a paired
-    ///     device that never reached the series) the day means are bucketed on
+    ///     prior-period mean win as before. Without it (a device that never
+    ///     reached the series) the day means are bucketed on
     ///     `calendar` from the entries, as before.
     ///   - windowDays: the period window, so the server days are cut to the
     ///     same slice the entries were (`nil` = full history).
@@ -131,7 +131,7 @@ extension MoodInsights {
 
         let daily = enrichment.flatMap { $0.dailyAverages(calendar: calendar, windowDays: windowDays, now: now) }
             ?? makeDailyAverages(entries: entries, calendar: calendar)
-        // Audit B-4 — the latest NAMEABLE entry. A newer entry whose level this
+        // The latest NAMEABLE entry. A newer entry whose level this
         // build cannot name must not displace the person's real latest mood in
         // the one headline slot there is, and it has no score to put there.
         let latest = MoodEntry.scored(entries)
@@ -150,7 +150,7 @@ extension MoodInsights {
             latestScore: latest,
             mean: mean,
             avg30: avg30,
-            // 1.5 VERDICTS (#151) — the trend is the server's or none.
+            // The trend is the server's or none.
             slope7: enrichment?.slope7,
             slope30: enrichment?.slope30,
             slope90: enrichment?.slope90,
@@ -165,7 +165,7 @@ extension MoodInsights {
     /// Collapse entries to one mean-score-per-local-day, ascending. The spine.
     static func makeDailyAverages(entries: [MoodEntry], calendar: Calendar) -> [MoodDailyAverage] {
         var buckets: [Date: [Int]] = [:]
-        // Audit B-4 — `scored`: an entry whose level this build cannot name has
+        // `scored`: an entry whose level this build cannot name has
         // no valence, so it enters no day mean. It is still on the list.
         for (entry, score) in MoodEntry.scored(entries) {
             let day = calendar.startOfDay(for: entry.recordedAt)
@@ -216,7 +216,7 @@ extension MoodInsights {
     /// ≥ 3 occurrences AND |delta| ≥ 0.3, sorted by |delta| desc.
     static func makeTagDeltas(entries: [MoodEntry]) -> [MoodTagDelta] {
         guard !entries.isEmpty else { return [] }
-        // Audit B-4 — the baseline and every tag bucket are built from the
+        // The baseline and every tag bucket are built from the
         // nameable levels only; a sentinel would otherwise shift a tag delta.
         let scored = MoodEntry.scored(entries)
         guard !scored.isEmpty else { return [] }
@@ -237,7 +237,7 @@ extension MoodInsights {
             }
             .sorted { lhs, rhs in
                 if abs(lhs.delta) != abs(rhs.delta) { return abs(lhs.delta) > abs(rhs.delta) }
-                // 09-04 — the tag name is the deterministic final key. `buckets`
+                // The tag name is the deterministic final key. `buckets`
                 // is a `Dictionary` and `sorted` is not stable, so two tags with
                 // an equal |delta| AND an equal count changed places between
                 // evaluations of the same history.
@@ -247,7 +247,7 @@ extension MoodInsights {
     }
 }
 
-/// #115 · 1.3 — the server series as the engine's day spine.
+/// The server series as the engine's day spine.
 extension MoodAnalyticsEnrichment {
     /// The server day means as the engine's spine, cut to the period window.
     /// Each `YYYY-MM-DD` key becomes that calendar date's start of day in

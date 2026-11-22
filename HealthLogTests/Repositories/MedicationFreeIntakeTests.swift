@@ -78,7 +78,7 @@ struct MedicationFreeIntakeTests {
         #expect(capturedIdem != nil, "the per-med intake POST must carry an Idempotency-Key header")
 
         let object = try #require(try JSONSerialization.jsonObject(with: capturedBody ?? Data()) as? [String: Any])
-        // Issue #64 — the client NEVER sends a provenance `source`; the server
+        // The client NEVER sends a provenance `source`; the server
         // derives it from the request context.
         #expect(object["source"] == nil, "Issue #64: the intake body must carry no `source` field")
         #expect(object["skipped"] as? Bool == false)

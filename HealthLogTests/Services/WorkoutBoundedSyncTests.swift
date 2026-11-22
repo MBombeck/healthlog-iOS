@@ -76,7 +76,7 @@ import Testing
                 await probe.run(mode: $0)
             }
             await probe.waitForRunCount(1)
-            // 22-02 — same barrier as above: both upgrade callers must have
+            // Same barrier as above: both upgrade callers must have
             // made their join decision before the short pass is released, or
             // one of them races the completion and starts a third pass.
             async let processingOne = coordinator.run(signalling: arrival, partition: "user-A", mode: .processing) {
@@ -114,7 +114,7 @@ import Testing
             #expect(await probe.partitions == ["user-A", "user-B"])
         }
 
-        /// **22-02 (D-14-02-A / D-17-01-A / D-21-EXEC-A) — one mechanism, three
+        /// **One mechanism, three
         /// observations.**
         ///
         /// `WorkoutPassProbe.run` ended in `pendingResults.removeFirst()`. When
@@ -497,7 +497,7 @@ import Testing
     }
 
     private actor ImmediateWorkoutLifecycleStore: WorkoutHealthKitStore {
-        func executeWorkoutObserver(onUpdate _: @escaping @Sendable () -> Void) async {}
+        func executeWorkoutObserver(onUpdate _: @escaping @Sendable () async -> Void) async {}
         func stopWorkoutObserver() async {}
         func enableWorkoutBackgroundDelivery() async throws {}
         func disableWorkoutBackgroundDelivery() async throws {}

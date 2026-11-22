@@ -5,7 +5,7 @@ import Testing
 
     @testable import HealthLog
 
-    /// #21 — the Lucide→SF-Symbol map (`MoodTagSFSymbol`) must cover the full
+    /// The Lucide→SF-Symbol map (`MoodTagSFSymbol`) must cover the full
     /// server icon catalog (`src/lib/mood/icon-catalog.ts`, 74 names) and a
     /// blank icon must never be possible: an unknown / future name resolves to
     /// the neutral `tag` glyph instead of rendering nothing.

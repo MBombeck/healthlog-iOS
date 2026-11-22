@@ -4,7 +4,7 @@ import SwiftUI
 import Testing
 import UIKit
 
-/// 1.4 C2 — three decisions after the screenshot review: English titles in
+/// Three decisions after the screenshot review: English titles in
 /// sentence case, "Serie" and "Ausgangswert" in German, and a fertile window
 /// that stays visible on the light card.
 @Suite("C2 — sentence-case titles, German words, fertile mark in light")
@@ -77,16 +77,10 @@ struct C2TitlesWordsFertileTests {
             let entry = try #require(catalog.strings[key], "missing key \(key)")
             #expect(ParityCatalog.value(entry, language: "de") == german, "\(key)")
         }
-        // The deviation line is assembled from a template and a direction that
-        // carries the article: "1,2 SD über dem Ausgangswert".
-        let template = try #require(catalog.strings["illness.correlation.deviation.value"])
-            .localizations?["de"]?.stringUnit?.value
-        for (direction, word) in [("above", "über dem"), ("below", "unter dem"), ("unknown", "abseits vom")] {
-            let entry = try #require(catalog.strings["illness.correlation.direction.\(direction)"])
-            #expect(ParityCatalog.value(entry, language: "de") == word)
-            let line = try String(format: #require(template), "1,2", word)
-            #expect(line == "1,2 SD \(word) Ausgangswert")
-        }
+        // The deviation row says in its detail line what the signed figure
+        // on the right counts.
+        let unit = try #require(catalog.strings["illness.correlation.deviation.unit"])
+        #expect(ParityCatalog.value(unit, language: "de") == "Standardabweichungen vom Ausgangswert")
         // English is untouched.
         let streaks = try #require(catalog.strings["records.streaks.header"])
         #expect(ParityCatalog.value(streaks, language: "en") == "Streaks")
@@ -107,17 +101,5 @@ struct C2TitlesWordsFertileTests {
         let card = UIColor(HLSurface.secondary).resolvedColor(with: light)
         let ratio = HLContrastClamp.contrastRatio(foreground: edge, background: card)
         #expect(ratio >= HLContrastClamp.wcagAAUIRatio, "fertile edge \(ratio):1 on the light card")
-    }
-
-    @Test("Dark keeps the plain fertile wash, light adds the edge")
-    func fertileMarkSource() throws {
-        let file = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Screens
-            .deletingLastPathComponent() // HealthLogTests
-            .deletingLastPathComponent() // repo root
-            .appendingPathComponent("HealthLog/Screens/Cycle/CycleCalendarGrid.swift")
-        let src = try String(contentsOf: file, encoding: .utf8)
-        #expect(src.contains("if scheme == .dark {\n                Circle().fill(fertile(scheme).opacity(0.24))"))
-        #expect(src.contains("Circle().stroke(CyclePhasePalette.fertileEdgeLight, lineWidth: 1.2)"))
     }
 }

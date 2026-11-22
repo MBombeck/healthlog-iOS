@@ -109,7 +109,7 @@ struct SettingsStoreProfileTests {
     }
 }
 
-/// #97 / #115 · 0.4 — `PATCH /api/user/profile` answers a PARTIAL save with
+/// `PATCH /api/user/profile` answers a PARTIAL save with
 /// 200 and `rejectedFields`. Before, iOS decoded only the profile half, so the
 /// store returned `true`, the form re-baselined, showed "Saved" and the
 /// person's correction was gone without a word.

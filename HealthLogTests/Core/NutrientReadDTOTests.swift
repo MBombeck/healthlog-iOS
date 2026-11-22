@@ -42,7 +42,7 @@ struct NutrientReadDTOTests {
         ]}
         """#
         let dto = try Self.decoder.decode(NutrientOverviewDTO.self, from: Data(json.utf8))
-        // Audit B-4 — was "unknown code dropped": the row survived nowhere and
+        // Was "unknown code dropped": the row survived nowhere and
         // the person simply had one nutrient fewer than the server holds. It is
         // kept now, labelled by the raw code the server sent.
         #expect(dto.nutrients.count == 3, "an unnameable code costs its label, not its row")

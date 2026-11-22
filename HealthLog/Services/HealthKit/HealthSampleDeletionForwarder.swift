@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    /// **A5 (1.4, R3 S4) — Apple Health deletions of hand-kept readings, sent to
+    /// **Apple Health deletions of hand-kept readings, sent to
     /// the server.**
     ///
     /// A wrong weight or blood pressure the person deletes in Apple Health must
@@ -82,6 +82,11 @@
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncHoldReason? {
             if let refusal = lease.refusal { return refusal.holdReason }
+            // #5 — the deletion wins over an upload of the same sample that
+            // still waits in the outbox. Without this the DELETE found no row
+            // on the server, left no tombstone, and the replay then put the
+            // reading back.
+            await queue?.pruneQueuedAppleHealthUploads(.syncHealthKitSample, removing: Set(ids), ownerUserID: lease.ownerID)
             guard let server else { return await keep(ids, requiring: lease) }
             do {
                 try await lease.admitting { try await server.reconcileDeletedExternalIDs(ids) }

@@ -30,7 +30,7 @@ struct LogSanitizerTests {
         #expect(!s.contains(token))
     }
 
-    // MARK: - H-2: UUID redaction (canonical 8-4-4-4-12 form)
+    // MARK: - UUID redaction (canonical 8-4-4-4-12 form)
 
     @Test("Lowercase UUID is redacted")
     func uuidLowercase() {
@@ -66,7 +66,7 @@ struct LogSanitizerTests {
         #expect(s.components(separatedBy: "[redacted-uuid]").count - 1 == 2)
     }
 
-    // MARK: - H-4: URL stripping (preserve scheme + host, drop path/query/fragment)
+    // MARK: - URL stripping (preserve scheme + host, drop path/query/fragment)
 
     @Test("URL with path and query is stripped to host")
     func urlWithPathQuery() {
@@ -136,7 +136,7 @@ struct LogSanitizerTests {
         #expect(s == raw)
     }
 
-    // MARK: - W1-5: cuid-style entity-ID redaction (below the {32,} token floor)
+    // MARK: - Cuid-style entity-ID redaction (below the {32,} token floor)
 
     @Test("med_ cuid entity id is redacted")
     func cuidMedIDRedacted() {
@@ -255,7 +255,7 @@ struct HLLogMessageTests {
         #expect(msg.sanitized.contains("[redacted-uuid]"))
     }
 
-    // MARK: - M-7: OSLogPrivacy passthrough
+    // MARK: - OSLogPrivacy passthrough
 
     @Test("String literal alone → containsPrivateData is false")
     func privacyDefaultsPublicForLiterals() {
@@ -310,7 +310,7 @@ struct HLLogMessageTests {
         #expect(msg.containsPrivateData)
     }
 
-    // MARK: - v0.13 W2: BYO-key (LLM provider) redaction
+    // MARK: - BYO-key (LLM provider) redaction
 
     @Test("OpenAI sk- key is redacted")
     func openAIKey() {

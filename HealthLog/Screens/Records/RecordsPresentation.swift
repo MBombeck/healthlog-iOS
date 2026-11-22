@@ -74,6 +74,29 @@ extension FamilyRelationship {
     }
 }
 
+/// What the record list rows say: one detail line of side facts, and at most
+/// one status. Plain strings, so the rows stay two lines and testable.
+enum RecordsRowContent {
+    /// Type, category and severity of an allergy, in that order. A severity
+    /// this build does not know is left out rather than guessed.
+    static func allergyDetailParts(_ record: AllergyDTO) -> [String?] {
+        let severity = record.severity.flatMap { $0 == .unknown ? nil : $0.localizedLabel }
+        return [record.type.localizedLabel, record.category.localizedLabel, severity]
+    }
+
+    /// The status of a record that no longer applies; an active one says
+    /// nothing, because that is what the list is for.
+    static func allergyStatus(_ record: AllergyDTO) -> String? {
+        record.status == .active ? nil : record.status.localizedLabel
+    }
+
+    /// The relative and, when known, the age at onset.
+    static func familyDetailParts(_ record: FamilyHistoryEntryDTO) -> [String?] {
+        let age = record.ageAtOnset.map { String(format: String(localized: "familyHistory.row.ageAtOnset"), $0) }
+        return [record.relationship.localizedLabel, age]
+    }
+}
+
 /// Shared date helpers for the records editor onset pickers.
 enum RecordsDateFormat {
     /// The valid onset range the server accepts: 1900-01-01 … now. Clamping the
@@ -89,7 +112,7 @@ enum RecordsDateFormat {
         return lower ... Date.now
     }()
 
-    /// M1 — encode a user-picked onset DAY as a stable, day-anchored ISO-8601
+    /// Encode a user-picked onset DAY as a stable, day-anchored ISO-8601
     /// instant: **noon UTC** of the picked calendar day (read in the user's local
     /// calendar). The onset is a DATE, not a moment; encoding local-midnight via a
     /// UTC formatter (the old path) rolled the stored day BACK one calendar day for

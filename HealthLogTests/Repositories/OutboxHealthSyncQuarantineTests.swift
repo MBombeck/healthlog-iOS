@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// Phase 07 Wave 0 — outbox quarantine for rows this build cannot own.
+/// Outbox quarantine for rows this build cannot own.
 ///
 /// Two on-disk shapes are still adopted today. A row whose `ownerUserID` is
 /// `nil` or blank replays as if the current user had written it, and a row
@@ -161,7 +161,7 @@ struct OutboxHealthSyncQuarantineTests {
             }
         }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: unowned outbox row was transmitted deleted or adopted")
+        #expect(violations.isEmpty, "unowned outbox row was transmitted deleted or adopted")
     }
 }
 

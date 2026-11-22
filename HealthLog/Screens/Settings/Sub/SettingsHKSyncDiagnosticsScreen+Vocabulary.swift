@@ -1,6 +1,6 @@
 import Foundation
 
-/// **K1 — words, not identifiers, on the Sync-Diagnose screen.**
+/// **Words, not identifiers, on the Sync-Diagnose screen.**
 ///
 /// H2 photographed this screen showing Swift enum spellings to the user:
 /// „foreground", „healthKitQuery", „failed", „coldActivation". Every internal
@@ -81,7 +81,7 @@ enum HKSyncDiagnosticsVocabulary {
     /// metric for keeps its server word: the row is a list entry, and ten rows
     /// all titled „Unbekannt" would say less than the word itself.
     ///
-    /// U1 (#18) — the lookup ignores case and separators, so `heart_rate`,
+    /// The lookup ignores case and separators, so `heart_rate`,
     /// `heart-rate` and `HEART_RATE` are one key. `WORKOUTS` (the server's
     /// pseudo-type from `Workout` rows, `metric-freshness.ts`) and
     /// `MEDICATION_DOSE` (W5, v1.42.4) have their own words.
@@ -91,7 +91,7 @@ enum HKSyncDiagnosticsVocabulary {
         let key = normalizedTypeKey(raw)
         switch key {
         case "WORKOUTS", "WORKOUT": return String(localized: "settings.hkdiag.freshness.workouts")
-        // W5 — server v1.42.4: doses imported from Apple Health (W3's bulk call).
+        // Server v1.42.4: doses imported from Apple Health (W3's bulk call).
         case "MEDICATION_DOSE": return String(localized: "settings.hkdiag.freshness.medication_dose")
         case "BLOOD_PRESSURE_DIA": return MetricKind.bloodPressure.displayName
         default: break
@@ -116,7 +116,7 @@ enum HKSyncDiagnosticsVocabulary {
         return ([first.prefix(1).uppercased() + first.dropFirst()] + words.dropFirst()).joined(separator: " ")
     }
 
-    /// U1 (#18) — the workout counters as a sentence: „710 gelesen,
+    /// The workout counters as a sentence: „710 gelesen,
     /// 710 gesendet, 710 angenommen, 0 abgelehnt". Workouts HealthKit handed
     /// over that could not be mapped are named only when there are any; the
     /// old „F · M · S · A · X" line needed a code comment to be read.
@@ -131,8 +131,8 @@ enum HKSyncDiagnosticsVocabulary {
         return sentence + String(localized: "settings.hkdiag.workout_counts_unmapped \(unmapped)")
     }
 
-    /// #12 — the gate that decided the heart-rate bucket path's last outcome,
-    /// in words. 1.4 B4: the identifier a tester quotes back (and Console
+    /// The gate that decided the heart-rate bucket path's last outcome,
+    /// in words. The identifier a tester quotes back (and Console
     /// prints after `gate=`) no longer follows in parentheses on screen, where
     /// "(cutoverPending)" read like a fault; it is in "Bericht kopieren"
     /// (``SyncDiagnosticsReport``), next to the other identifiers.
@@ -140,9 +140,7 @@ enum HKSyncDiagnosticsVocabulary {
         switch gate {
         case .uploaded: String(localized: "settings.hkdiag.hrbuckets.gate.uploaded")
         case .upToDate: String(localized: "settings.hkdiag.hrbuckets.gate.upToDate")
-        case .standalone: String(localized: "settings.hkdiag.hrbuckets.gate.standalone")
         case .noAuthToken: String(localized: "settings.hkdiag.hrbuckets.gate.noAuthToken")
-        case .flagOff: String(localized: "settings.hkdiag.hrbuckets.gate.flagOff")
         case .cutoverPending: String(localized: "settings.hkdiag.hrbuckets.gate.cutoverPending")
         case .healthDataLocked: String(localized: "settings.hkdiag.hrbuckets.gate.healthDataLocked")
         case .queryFailed: String(localized: "settings.hkdiag.hrbuckets.gate.queryFailed")
@@ -153,9 +151,9 @@ enum HKSyncDiagnosticsVocabulary {
         }
     }
 
-    /// SYNC-HR — "Läuft seit 14:05": a heart-rate sweep past its deadline.
+    /// "Läuft seit 14:05": a heart-rate sweep past its deadline.
     static func heartRateBucketRunningSince(_ start: Date) -> String {
-        let time = start.formatted(.dateTime.day().month().hour().minute())
+        let time = HLDateFormat.dateTime(start)
         return String(localized: "settings.hkdiag.hrbuckets.running_since \(time)")
     }
 

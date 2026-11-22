@@ -3,7 +3,7 @@ import Foundation
     import AuthenticationServices
 #endif
 
-/// SEC (1.5, #151) — the way the native SSO leg comes back into the app.
+/// The way the native SSO leg comes back into the app.
 ///
 /// **Today every sign-in takes the custom scheme** (`healthlog://oidc-callback`),
 /// and that is the only way that works against any released server:

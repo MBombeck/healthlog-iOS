@@ -6,7 +6,7 @@ import SwiftUI
 /// presentation decision lives in the SwiftUI-free `CycleOptInPresentation`; this
 /// extension only renders each mode.
 extension AppleHealthIntegrationDetailScreen {
-    /// **v0.14.8 C4** — the explicit cycle-tracking opt-in. Flipping it on
+    /// The explicit cycle-tracking opt-in. Flipping it on
     /// force-enables the `CycleGate` (covers trans / non-binary / "other"
     /// users AND lets the operator self-test on a non-female account), starts
     /// the C2 HealthKit importer, and surfaces the gated `.cycle` row under
@@ -17,7 +17,7 @@ extension AppleHealthIntegrationDetailScreen {
                 isOn: Binding(
                     get: { container.settingsStore.cycleTrackingOptIn },
                     set: { newValue in
-                        // Build 9 (9.3) — server-synced opt-in: optimistic local +
+                        // Server-synced opt-in: optimistic local +
                         // PATCH cycle-prefs (server mode), then refresh the gate.
                         Task {
                             await container.settingsStore.setCycleTrackingOptIn(newValue)
@@ -26,29 +26,27 @@ extension AppleHealthIntegrationDetailScreen {
                     }
                 )
             ) {
-                Text("settings.cycle.optin.label")
-                    .font(.hlSubhead.weight(.semibold))
+                HLRowTitle("settings.cycle.optin.label")
             }
             .accessibilityIdentifier("HealthAccess.cycleTrackingToggle")
             Text("settings.cycle.optin.footer")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Server-parity v1.16 — one-tap hard purge
             // (`DELETE /api/cycle/all`, the web privacy promise).
-            // Server-only: hidden in standalone; visible only while
-            // the cycle gate is open (something can exist to purge).
-            if backend.hasServer, container.cycleGate.isCycleTrackingAvailable {
-                Divider()
-                HLSettingsActionRow(
-                    icon: "trash",
-                    title: "settings.cycle.purge.title",
-                    role: .destructive,
-                    presents: .confirm
-                ) {
-                    showCyclePurgeConfirmation = true
-                }
+            // Visible only while the cycle gate is open (something can exist to purge).
+            if container.cycleGate.isCycleTrackingAvailable {
+                HLDeleteButton(
+                    "settings.cycle.purge.title",
+                    form: .row,
+                    action: .confirmed(
+                        title: "settings.cycle.purge.confirm.title",
+                        message: "settings.cycle.purge.confirm.message"
+                    ) {
+                        await runCyclePurge()
+                    }
+                )
                 .disabled(cyclePurgeState == .running)
                 .accessibilityIdentifier("HealthAccess.cyclePurgeRow")
 
@@ -71,20 +69,9 @@ extension AppleHealthIntegrationDetailScreen {
                 }
             }
         }
-        .hlConfirmDestructive(
-            Text(String(localized: "settings.cycle.purge.confirm.title")),
-            isPresented: $showCyclePurgeConfirmation,
-            message: Text("settings.cycle.purge.confirm.message"),
-            confirm: Text("settings.cycle.purge.title"),
-            cancel: Text("Cancel"),
-            onCancel: { showCyclePurgeConfirmation = false },
-            action: {
-                Task { await runCyclePurge() }
-            }
-        )
     }
 
-    /// **A2 — the neutral cycle-tracking OFFER row** shown when the flag is on but
+    /// **The neutral cycle-tracking OFFER row** shown when the flag is on but
     /// the gate isn't available. It reads as a question, not a live module, and
     /// only on tap reveals the explainer + the actual opt-in action (which flips
     /// `cycleTrackingOptIn` and refreshes the gate — the SAME store call as the
@@ -92,34 +79,22 @@ extension AppleHealthIntegrationDetailScreen {
     /// form are operator-approved (b244 follow-up).
     func cycleOfferRow(container: AppContainer) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Button {
+            HLRowButton {
                 withAnimation { showCycleOfferExplainer.toggle() }
             } label: {
-                HStack(spacing: HLSpace.sm) {
-                    Text("settings.cycle.optin.offer.title")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
-                    Image(systemName: showCycleOfferExplainer ? "chevron.up" : "chevron.down")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
+                HLRow("settings.cycle.optin.offer.title", accessory: .expand(showCycleOfferExplainer))
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("HealthAccess.cycleTrackingOffer")
 
             if showCycleOfferExplainer {
-                // 1.4 B2-c — what turning it on does, the toggle's own line;
+                // What turning it on does, the toggle's own line;
                 // "optional, switch it off anytime" is gone.
                 Text("settings.cycle.optin.footer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
-                // R9 — nachgeordnete Vollbreiten-Aktion; das `.primary` dieses
+                // Nachgeordnete Vollbreiten-Aktion; das `.primary` dieses
                 // Screens ist „Mit Apple Health verbinden".
-                HLButton(String(localized: "settings.cycle.optin.offer.confirm"), variant: .secondary) {
+                HLButton("settings.cycle.optin.offer.confirm", variant: .secondary) {
                     Task {
                         await container.settingsStore.setCycleTrackingOptIn(true)
                         await container.cycleStore.refreshGateLifecycle()

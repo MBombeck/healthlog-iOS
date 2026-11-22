@@ -3,15 +3,15 @@
     @testable import HealthLog
     import Testing
 
-    /// W-HR-BUCKET-UPLOAD / GH #34 — coordinator gating contract.
+    /// Coordinator gating contract.
     ///
     /// The HK statistics query itself is exercised against a real `HKHealthStore`
     /// in integration; here we pin the cheap-first gate order that must
-    /// short-circuit BEFORE any HK query / upload fires: standalone, missing
-    /// share-auth token, and the feature flag. Each returns 0 with no API
+    /// short-circuit BEFORE any HK query / upload fires: missing share-auth
+    /// token, and the feature flag. Each returns 0 with no API
     /// traffic. Plus: a just-armed (future) cutover produces no buckets, and the
     /// incremental cursor key is per-User partitioned.
-    @Suite("HealthKitHRBucketSyncCoordinator — gating (standalone / auth / flag / cutover)")
+    @Suite("HealthKitHRBucketSyncCoordinator — gating (auth / flag / cutover)")
     struct HealthKitHRBucketSyncCoordinatorTests {
         private final class CapturingAPI: APIClientProtocol, @unchecked Sendable {
             private let lock = NSLock()
@@ -31,16 +31,6 @@
             }
         }
 
-        private struct FlagStub: FeatureFlagsServicing {
-            let enabled: Bool
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableHRBuckets: enabled
-                default: flag.defaultValue
-                }
-            }
-        }
-
         /// Returns a fresh isolated suite NAME (Sendable) — the coordinator
         /// reconstructs `UserDefaults(suiteName:)` inside its `@Sendable`
         /// provider, so no non-Sendable `UserDefaults` instance crosses the
@@ -54,8 +44,6 @@
 
         private func makeCoordinator(
             api: CapturingAPI,
-            flagOn: Bool,
-            standalone: Bool,
             token: String?,
             suite: String
         ) -> HealthKitHRBucketSyncCoordinator {
@@ -65,42 +53,18 @@
             return HealthKitHRBucketSyncCoordinator(
                 service: HealthKitHRBucketService(),
                 uploader: MeasurementBatchUploader(api: api, throttle: BatchSyncThrottle()),
-                featureFlags: FlagStub(enabled: flagOn),
                 keychain: keychain,
-                isStandalone: { standalone },
                 clock: { ISO8601DateFormatter.fractional.date(from: "2026-06-25T12:00:00.000Z") ?? Date() },
                 // swiftlint:disable:next force_unwrapping
                 defaultsProvider: { UserDefaults(suiteName: suite)! }
             )
         }
 
-        @Test("standalone → no upload, no API traffic")
-        func standaloneSuppressed() async {
-            let api = CapturingAPI()
-            let coord = makeCoordinator(
-                api: api, flagOn: true, standalone: true, token: "tok", suite: isolatedSuite()
-            )
-            let uploaded = await coord.sync(lookbackHours: 48)
-            #expect(uploaded == 0)
-            #expect(api.sendCount == 0)
-        }
-
         @Test("missing share-auth token → no upload, no API traffic")
         func noTokenSuppressed() async {
             let api = CapturingAPI()
             let coord = makeCoordinator(
-                api: api, flagOn: true, standalone: false, token: nil, suite: isolatedSuite()
-            )
-            let uploaded = await coord.sync(lookbackHours: 48)
-            #expect(uploaded == 0)
-            #expect(api.sendCount == 0)
-        }
-
-        @Test("feature flag OFF → no upload, no API traffic")
-        func flagOffSuppressed() async {
-            let api = CapturingAPI()
-            let coord = makeCoordinator(
-                api: api, flagOn: false, standalone: false, token: "tok", suite: isolatedSuite()
+                api: api, token: nil, suite: isolatedSuite()
             )
             let uploaded = await coord.sync(lookbackHours: 48)
             #expect(uploaded == 0)
@@ -116,7 +80,7 @@
             let api = CapturingAPI()
             let suite = isolatedSuite()
             let coord = makeCoordinator(
-                api: api, flagOn: true, standalone: false, token: "tok", suite: suite
+                api: api, token: "tok", suite: suite
             )
             let uploaded = await coord.sync(lookbackHours: 48)
             #expect(uploaded == 0)

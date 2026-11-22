@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping force_try
 
-/// W-INTEGRITY-WRITEPATH G-9 — the recovery open path must distinguish a
+/// The recovery open path must distinguish a
 /// transient/locked open failure (FAIL SOFT, destroy nothing) from genuine
 /// corruption (MOVE ASIDE by rename, never `rm`), so a `BGProcessingTask` wake
 /// before first unlock can't irreversibly delete un-synced writes.

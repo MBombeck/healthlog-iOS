@@ -79,31 +79,3 @@ public struct CSVImportResult: Decodable, Sendable, Equatable {
         inserted + updated
     }
 }
-
-// MARK: - JSON import (export round-trip)
-
-/// `POST /api/import` → `{ measurements, moodEntries, skipped }` — the row
-/// counts written when restoring a JSON export back into the account. There is
-/// no dry-run on the JSON route (the CSV route is the preview surface).
-public struct JSONImportResult: Decodable, Sendable, Equatable {
-    public let measurements: Int
-    public let moodEntries: Int
-    public let skipped: Int
-
-    public init(measurements: Int, moodEntries: Int, skipped: Int) {
-        self.measurements = measurements
-        self.moodEntries = moodEntries
-        self.skipped = skipped
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case measurements, moodEntries, skipped
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        measurements = try c.decodeIfPresent(Int.self, forKey: .measurements) ?? 0
-        moodEntries = try c.decodeIfPresent(Int.self, forKey: .moodEntries) ?? 0
-        skipped = try c.decodeIfPresent(Int.self, forKey: .skipped) ?? 0
-    }
-}

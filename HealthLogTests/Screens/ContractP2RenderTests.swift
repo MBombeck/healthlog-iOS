@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #126 P2 — server values the app decoded but did not show yet, now rendered
+/// Server values the app decoded but did not show yet, now rendered
 /// as delivered: the digest's `restMode`, `score.steadyWeeks` and `today[]`
 /// (v1.40 / v1.40.2), the deviation `basis: sameHours` (v1.40.3), and the
 /// Coach's reading window `coach-prefs.defaultWindow` (v1.40.2). Fixtures per
@@ -35,13 +35,13 @@ struct ContractP2RenderTests {
         return try JSONDecoder.hlDefault.decode(DailyDigest.self, from: Data(json.utf8))
     }
 
-    @Test("Rest Mode and the steady weeks get a line each; the facts come through as delivered")
+    @Test("Rest Mode and the steady weeks get a footnote each; the facts come through as delivered")
     func digestLines() throws {
         let digest = try Self.digest("")
-        let lines = TodayHeroFacts.statusLines(digest)
+        let lines = TodayHeroFacts.footnotes(digest)
         #expect(lines == [
             String(localized: "today.restMode.day \(3)"),
-            String(localized: "today.score.steadyAtLeast \(4)")
+            String(localized: "today.hero.steadyAtLeast \(4)")
         ])
         #expect(digest.today.map(\.label) == ["Schlaf", "Erholung"])
         #expect(digest.today.first?.value == "7 h 10 min")
@@ -51,7 +51,7 @@ struct ContractP2RenderTests {
     func digestWithoutExtras() throws {
         let json = #"{"date":"2026-10-16","lead":"x","score":{"value":71,"band":"green","delta":null}}"#
         let digest = try JSONDecoder.hlDefault.decode(DailyDigest.self, from: Data(json.utf8))
-        #expect(TodayHeroFacts.statusLines(digest).isEmpty)
+        #expect(TodayHeroFacts.footnotes(digest).isEmpty)
         #expect(digest.today.isEmpty)
     }
 

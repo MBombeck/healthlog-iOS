@@ -3,13 +3,35 @@ import Foundation
 /// #126 P2 (server v1.42.0) — the batched adherence read with `meta`: the
 /// account figure (`meta.aggregate`) and, with `?days=`, the report window.
 public extension MedicationsRepository {
+    /// Per-medication 7- and 30-day compliance, the server-canonical payload
+    /// from `src/app/api/medications/[id]/compliance/route.ts` (full intake
+    /// history, matching the web `/medications` view). The full 90-day envelope
+    /// is decoded so future surfaces can reach `dailyCompliance` without a
+    /// re-fetch.
+    func compliance(medicationID: String) async throws -> MedicationCompliancePayload {
+        let req: APIRequest<MedicationCompliancePayload> = .get(
+            "/api/medications/\(medicationID)/compliance"
+        )
+        return try await api.send(req)
+    }
+
+    /// **Build 6.3 — batched card compliance.** One round trip for every
+    /// medication the user owns (`GET /api/medications/compliance`), replacing
+    /// the per-card fan-out. Returns the per-card `compliance7` / `compliance30`
+    /// / `complianceDisplay` block only (no heatmap). A ≤ pre-batch server
+    /// (route absent) 404s and the store falls back to its bounded per-med
+    /// fan-out. Never client-recomputes: the server value is the only source.
+    ///
+    /// The same read now keeps `meta.aggregate` (the account figure)
+    /// for the compliance widget via ``complianceReport(days:)``.
+    func complianceSummary() async throws -> [MedicationComplianceSummaryEntry] {
+        try await complianceReport(days: nil).entries
+    }
+
     /// `GET /api/medications/compliance[?days=N]`. `days` outside
     /// ``MedicationComplianceReport/acceptedDays`` is not sent (the server
-    /// answers 422 rather than rounding). Standalone throws `.offline`, like
-    /// ``complianceSummary()``: the route would leak and the device computes no
-    /// account figure of its own.
+    /// answers 422 rather than rounding).
     func complianceReport(days: Int? = nil) async throws -> MedicationComplianceReport {
-        if isStandaloneActive { throw HLError.offline }
         var query: [(String, String)] = []
         if let days, MedicationComplianceReport.acceptedDays.contains(days) {
             query.append(("days", String(days)))
@@ -27,7 +49,7 @@ public extension MedicationsRepository {
     }
 }
 
-/// #126 P2 — the last account figure the batched read delivered, for the
+/// The last account figure the batched read delivered, for the
 /// compliance widget (`AppContainer.aggregateServerCompliancePercent`).
 ///
 /// Held beside the read rather than on `MedicationsStore` so the store keeps

@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **W-B187 QOL-1** — the per-medication READ intent: *"Did I take
+/// The per-medication READ intent: *"Did I take
 /// Lisinopril?"*
 ///
 /// The shipped `MedicationComplianceQueryIntent` answers the *global*
@@ -70,7 +70,7 @@ struct DidITakeMedicationIntent: AppIntent {
     }
 }
 
-/// **W-B187 QOL-1 — pure, localized copy + verdict logic for the per-med
+/// **Pure, localized copy + verdict logic for the per-med
 /// query.**
 ///
 /// Split out so the (id, today-intakes) → spoken-answer mapping is

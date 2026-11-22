@@ -1,11 +1,11 @@
 import XCTest
 
-/// #162 — the recovery page of an account with Garmin data (server v1.47).
+/// The Recovery category of an account with Garmin data (server v1.47).
 ///
 /// Boots the recovery overlay and, unless `TEST_RUNNER_HL_GARMIN_OVERLAY=0`,
 /// adds Garmin's four types to it (`-uitest-garmin`). The run without the
 /// overlay is the "before" picture: a build that does not know the types shows
-/// exactly that page, because the rows never reach the recovery list.
+/// no Garmin page in the category, because the types never reach the family.
 extension MarketingScreenshotsTest {
     func test_capture_garmin_recovery() {
         let withGarmin = ProcessInfo.processInfo.environment["HL_GARMIN_OVERLAY"] != "0"
@@ -21,22 +21,16 @@ extension MarketingScreenshotsTest {
         settle(3)
         openDeepLink("healthlog://insights/recovery")
         settle(6)
-        alignInsightsPage(app: app, identifier: "insights.page.recovery")
+        alignInsightsPage(app: app, identifier: "insights.page.recoveryScore")
         capture(name: "garmin-recovery")
-        app.swipeUp()
-        settle(2)
-        capture(name: "garmin-recovery-end")
         guard withGarmin else { return }
-        let row = app.descendants(matching: .any)["insights.recovery.row.bodyBattery"]
-        guard row.waitForExistence(timeout: 4), row.isHittable else {
-            logSkip("Body Battery row not on screen")
+        guard swipeToInsightsPage(app: app, identifier: "insights.page.bodyBattery") else {
+            logSkip("Body Battery page not reached")
             return
         }
-        row.tap()
-        settle(4)
-        capture(name: "garmin-bodybattery-detail")
+        capture(name: "garmin-bodybattery")
         app.swipeUp()
         settle(2)
-        capture(name: "garmin-bodybattery-detail-end")
+        capture(name: "garmin-bodybattery-end")
     }
 }

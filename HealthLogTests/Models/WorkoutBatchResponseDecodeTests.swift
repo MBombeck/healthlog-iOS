@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **GH #86** — pins the forward-compatible decode of the per-entry batch
+/// Pins the forward-compatible decode of the per-entry batch
 /// response.
 ///
 /// The reason this file exists: `enriched` does NOT exist on the server the day

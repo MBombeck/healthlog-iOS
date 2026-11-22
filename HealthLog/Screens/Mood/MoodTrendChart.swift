@@ -1,12 +1,13 @@
 import Charts
 import SwiftUI
 
-/// Mood trend line chart. Owned by W-Mood (v0.10.0) — upgraded from the bare
+/// Mood trend line chart. Owned by W-Mood — upgraded from the bare
 /// daily-score line to the three-layer DESIGN-B §2 anatomy:
-///   1. mean baseline `RuleMark` (where you usually sit),
+///   1. mean baseline, a labelled reference line (where you usually sit),
 ///   2. raw daily-average line (the wobble — demoted, 40% ink, 1 pt),
 ///   3. 7-day moving average (the signal — promoted, 100% ink, 2 pt).
-/// Y-axis labels are mood glyphs (`MoodCopy.scoreLabel`), not bare digits.
+/// Y-axis labels are mood words (`MoodCopy.scoreLabel`) on the leading axis
+/// every chart uses, not bare digits.
 /// Monochrome (`HLText.primary` ramp); color is reserved for signal elsewhere.
 ///
 /// **Back-compat:** the public `init(entries:)` + `Entry` API is unchanged so
@@ -26,34 +27,26 @@ struct MoodTrendChart: View {
         let score: Int
     }
 
-    let entries: [Entry]
+    /// The daily series, its moving average and its mean, derived once
+    /// (``MoodTrendSeries``): never in `body`, never per scrub frame.
+    let series: MoodTrendSeries
 
-    /// v0.11 — canonical scrub-to-read (AUDIT-FINAL §H1). Touch the line to read
+    /// Canonical scrub-to-read (AUDIT-FINAL §H1). Touch the line to read
     /// the daily-average mood at that day, identical to every other chart.
     @State private var selectedDate: Date?
 
-    /// Daily-average series (one point per local day, ascending). The spine.
-    private var daily: [DailyPoint] {
-        var buckets: [Date: [Int]] = [:]
-        let calendar = Calendar.current
-        for entry in entries {
-            let day = calendar.startOfDay(for: entry.date)
-            buckets[day, default: []].append(entry.score)
-        }
-        return buckets
-            .map { day, scores in
-                DailyPoint(date: day, score: Double(scores.reduce(0, +)) / Double(scores.count))
-            }
-            .sorted { $0.date < $1.date }
+    /// The series the analysis cache already derived off the main actor.
+    init(series: MoodTrendSeries) {
+        self.series = series
     }
 
-    /// 7-day trailing moving average — only emitted where ≥ 4 of the prior 7
-    /// days carry data (else a gap, never fabricated; DESIGN-B §2.1).
-    private var movingAverage: [DailyPoint] {
-        let tuples = daily.map { (date: $0.date, score: $0.score) }
-        return Self.movingAverage(tuples, calendar: Calendar.current).map {
-            DailyPoint(date: $0.date, score: $0.score)
-        }
+    /// Back-compat: derives the series once, here, not in every body pass.
+    init(entries: [Entry]) {
+        series = MoodTrendSeries(entries: entries, calendar: .current)
+    }
+
+    private var daily: [DailyPoint] {
+        series.daily
     }
 
     /// Pure 7-day MA over an ascending daily series, exposed for unit-testing.
@@ -62,20 +55,7 @@ struct MoodTrendChart: View {
         _ series: [(date: Date, score: Double)],
         calendar: Calendar
     ) -> [(date: Date, score: Double)] {
-        guard series.count >= 7 else { return [] }
-        return series.compactMap { point in
-            guard let windowStart = calendar.date(byAdding: .day, value: -6, to: point.date) else { return nil }
-            let window = series.filter { $0.date >= windowStart && $0.date <= point.date }
-            guard window.count >= 4 else { return nil }
-            let avg = window.map(\.score).reduce(0, +) / Double(window.count)
-            return (point.date, avg)
-        }
-    }
-
-    private var overallMean: Double? {
-        let series = daily
-        guard !series.isEmpty else { return nil }
-        return series.map(\.score).reduce(0, +) / Double(series.count)
+        MoodTrendSeries.movingAverage(series, calendar: calendar)
     }
 
     var body: some View {
@@ -92,23 +72,9 @@ struct MoodTrendChart: View {
 
     private var chart: some View {
         let series = daily
-        let ma = movingAverage
+        let ma = self.series.movingAverage
         return Chart {
-            // 1. Mean baseline.
-            // 1.4 B4 — its "Ø" label sits beside the plot on the leading axis
-            // (below), not on the line where the daily line ran through it.
-            if let mean = overallMean {
-                RuleMark(y: .value(String(localized: "Average"), mean))
-                    .foregroundStyle(HLText.tertiary.opacity(0.35))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: HLChartGrid.thresholdDash))
-            }
-            // Faint scale anchors at 1/3/5.
-            ForEach([1, 3, 5], id: \.self) { level in
-                RuleMark(y: .value(String(localized: "Scale"), level))
-                    .foregroundStyle(HLText.tertiary.opacity(0.2))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: HLChartGrid.thresholdDash))
-            }
-            // 2. Raw daily line — the wobble (demoted).
+            // 1. Raw daily line — the wobble (demoted).
             ForEach(series) { point in
                 LineMark(
                     x: .value(String(localized: "Date"), point.date),
@@ -119,7 +85,7 @@ struct MoodTrendChart: View {
                 .lineStyle(StrokeStyle(lineWidth: 1))
                 .interpolationMethod(.monotone)
             }
-            // 3. 7-day moving average — the signal (promoted).
+            // 2. 7-day moving average — the signal (promoted).
             ForEach(ma) { point in
                 LineMark(
                     x: .value(String(localized: "Date"), point.date),
@@ -130,6 +96,10 @@ struct MoodTrendChart: View {
                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 .interpolationMethod(.monotone)
             }
+            // 3. Mean baseline: the app's one reference line, labelled on the
+            // line itself. Drawn after the lines, so its label stands on its
+            // own surface above the curves instead of under them.
+            Self.meanLine(self.series.mean)
             // 4. Canonical scrub overlay — dashed rule + callout at the nearest
             // daily point.
             HLChartScrubber.marks(
@@ -139,44 +109,49 @@ struct MoodTrendChart: View {
                 value: \.score
             ) { point in
                 HLScrubCallout(
-                    title: point.date.formatted(.dateTime.weekday(.abbreviated).day().month()),
+                    title: "\(HLDateFormat.weekday(point.date, abbreviated: true)), \(HLDateFormat.dayMonth(point.date))",
                     value: MoodCopy.scoreLabel(Int(point.score.rounded())),
-                    unit: point.score.formatted(.number.precision(.fractionLength(1)))
+                    unit: HLValueFormat.number(point.score, fractionDigits: 1 ... 1)
                 )
             }
         }
         .hlChartScrub($selectedDate) { date in
             guard let nearest = HLChartScrubber.nearest(to: date, in: series, date: \.date) else { return nil }
             return String(
-                localized: "\(nearest.date.formatted(.dateTime.day().month())): \(MoodCopy.scoreLabel(Int(nearest.score.rounded())))"
+                localized: "\(HLDateFormat.dayMonth(nearest.date)): \(MoodCopy.scoreLabel(Int(nearest.score.rounded())))"
             )
         }
         .chartYScale(domain: 0.5 ... 5.5)
-        .chartYAxis {
-            AxisMarks(values: [1, 3, 5]) { value in
-                AxisValueLabel {
-                    if let level = value.as(Int.self) {
-                        Text(MoodCopy.scoreLabel(level))
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                }
-            }
-            // The mean's label, outside the plot at the height of its rule.
-            AxisMarks(position: .leading, values: overallMean.map { [$0] } ?? []) { value in
-                AxisValueLabel {
-                    if let mean = value.as(Double.self) {
-                        Text("Ø \(mean.formatted(.number.precision(.fractionLength(1))))")
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                }
-            }
-        }
-        // 1.4 B4 — the app's one date-axis rule.
-        .chartXAxis { ChartDateAxis.marks(for: series.map(\.date)) }
-        // 1.4 B2 — no footnote about when the smoothed line starts: below
+        // A tick and a word at every other level only: five words do not
+        // fit beside a 220 pt plot, and a tick without a word says nothing.
+        .hlChartAxes(dates: series.map(\.date), unit: "", ticks: Self.axisTicks, label: Self.axisLabel)
+        // No footnote about when the smoothed line starts: below
         // seven days the chart simply draws the daily line.
+    }
+
+    /// The levels that carry a word on the value axis.
+    nonisolated static let axisTicks: [Double] = [1, 3, 5]
+
+    /// The mood word for an odd level (1, 3, 5), nothing for the levels
+    /// between them.
+    nonisolated static func axisLabel(_ value: Double) -> String {
+        let level = Int(value.rounded())
+        guard (1 ... 5).contains(level), !level.isMultiple(of: 2) else { return "" }
+        return MoodCopy.scoreLabel(level)
+    }
+
+    /// The label on the mean line: "Ø 3,4".
+    nonisolated static func meanLabel(_ mean: Double) -> String {
+        String(localized: "Ø \(HLValueFormat.number(mean, fractionDigits: 1 ... 1))")
+    }
+
+    /// The mean as a labelled reference line; none without a mean.
+    static func meanLine(_ mean: Double?) -> HLChartReferenceLines {
+        guard let mean else { return .none }
+        return HLChartReferenceLines(
+            lines: [SeriesReferenceLine(value: mean, kind: .unknown, source: .clinical, label: meanLabel(mean))],
+            unit: ""
+        )
     }
 
     // MARK: - Sparse state (< 2 daily points)
@@ -184,29 +159,17 @@ struct MoodTrendChart: View {
     private var sparseState: some View {
         // Audit-01 C1/H4 — the canonical `HLEmptyState` lockup (the bespoke
         // stack used a raw `.system(.title)` glyph + its own type recipe).
-        // 1.4 B2 — the title says it; no sentence asks for more entries.
+        // The title says it; no sentence asks for more entries.
         HLEmptyState(icon: "chart.line.uptrend.xyaxis", title: "Not enough entries for a trend")
             .frame(height: HLChartStyle.heightRegular)
     }
 
-    private struct DailyPoint: Identifiable, Hashable {
-        let date: Date
-        let score: Double
-        var id: Date {
-            date
-        }
-    }
+    private typealias DailyPoint = MoodTrendSeries.Point
 }
 
 extension MoodTrendChart: AXChartDescriptorRepresentable {
     nonisolated func makeChartDescriptor() -> AXChartDescriptor {
-        let series = entries
-            .reduce(into: [Date: [Int]]()) { acc, e in
-                let day = Calendar.current.startOfDay(for: e.date)
-                acc[day, default: []].append(e.score)
-            }
-            .map { (day: $0.key, score: Double($0.value.reduce(0, +)) / Double($0.value.count)) }
-            .sorted { $0.day < $1.day }
+        let series = series.daily
 
         let pts = series.enumerated().map { idx, p in
             AXDataPoint(x: Double(idx), y: p.score, label: MoodCopy.scoreLabel(Int(p.score.rounded())))

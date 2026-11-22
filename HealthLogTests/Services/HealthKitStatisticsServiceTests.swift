@@ -98,7 +98,7 @@ import Testing
 
         // MARK: - CumulativeTypeConfig
 
-        @Test("Default configs cover the 5 locked cumulative HK types and the two ring minutes (HK-NEW)")
+        @Test("Default configs cover the 5 locked cumulative HK types, the two ring minutes (HK-NEW), resting energy and the 1.7 distances")
         func defaultsCoverLocked5() {
             let identifiers = HealthKitCumulativeTypeConfig.defaults.map(\.identifier)
             let expected: Set = [
@@ -107,12 +107,18 @@ import Testing
                 "HKQuantityTypeIdentifierFlightsClimbed",
                 "HKQuantityTypeIdentifierDistanceWalkingRunning",
                 "HKQuantityTypeIdentifierTimeInDaylight",
-                // HK-NEW (1.5) — server v1.44, collected only where the server maps them.
+                // Server v1.44, collected only where the server maps them.
                 "HKQuantityTypeIdentifierAppleExerciseTime",
-                "HKQuantityTypeIdentifierAppleStandTime"
+                "HKQuantityTypeIdentifierAppleStandTime",
+                // Server v1.47.1, collected only where the server maps it.
+                "HKQuantityTypeIdentifierBasalEnergyBurned",
+                // 1.7 (server 1.49.0): cycling and rowing distance, summed per
+                // day so the Watch and the iPhone do not count a ride twice.
+                "HKQuantityTypeIdentifierDistanceCycling",
+                "HKQuantityTypeIdentifierDistanceRowing"
             ]
             #expect(Set(identifiers) == expected)
-            #expect(identifiers.count == 7)
+            #expect(identifiers.count == 10)
         }
 
         @Test("Default wire-units match server unitMap (steps/kcal/flights/m/minutes)")
@@ -127,6 +133,7 @@ import Testing
             #expect(map["HKQuantityTypeIdentifierTimeInDaylight"] == "minutes")
             #expect(map["HKQuantityTypeIdentifierAppleExerciseTime"] == "minutes")
             #expect(map["HKQuantityTypeIdentifierAppleStandTime"] == "minutes")
+            #expect(map["HKQuantityTypeIdentifierBasalEnergyBurned"] == "kcal")
         }
 
         @Test("cumulativeIdentifiers Set matches defaults — drift guard")

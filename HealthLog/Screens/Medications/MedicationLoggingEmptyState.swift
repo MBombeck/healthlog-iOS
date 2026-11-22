@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **CU-24 (GH iOS #73)** — the honest empty state shared by both
+/// The honest empty state shared by both
 /// medication-logging surfaces (`MedicationQuickIntakeSheet` and
 /// `MedicationFreeIntakeSheet`).
 ///
@@ -50,10 +50,10 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
         case addMedication
     }
 
-    /// Render contract for one empty state. Snapshot-locked (CU-24) so a copy or
+    /// Render contract for one empty state. Snapshot-locked so a copy or
     /// action regression on either dead end surfaces as a diff.
     ///
-    /// 1.4 B4 — icon and title only. The sentence under each title said the
+    /// Icon and title only. The sentence under each title said the
     /// title again ("Du hast noch kein aktives Medikament.", "Für heute ist
     /// gerade keine Einnahme fällig.").
     struct Descriptor: Equatable {
@@ -95,10 +95,12 @@ enum MedicationLoggingEmptyState: String, Equatable, CaseIterable {
 /// the same `AddMedicationSheet` the Medikamente tab uses — no second create
 /// path, and no dead end that only offers a close button.
 ///
-/// 1.4 B4 — one action, the app's secondary button. The quick sheet's
+/// One action, the app's secondary button. The quick sheet's
 /// "Schließen" under it is gone: the sheet closes by pulling it down like the
-/// chooser it replaces, and two stacked buttons were one too many.
-struct MedicationLoggingEmptyStateView: View {
+/// chooser it replaces, and two stacked buttons were one too many. The
+/// lockup is HLEmptyState; this type only binds it to the create sheet both
+/// logging sheets share.
+struct MedicationLoggingEmptyStateView: View { // swiftlint:disable:this hl_no_local_state_view
     let state: MedicationLoggingEmptyState
     /// Rendered only when the state offers it (`nothingDue`). `nil` hides it.
     var onLogManually: (() -> Void)?
@@ -115,14 +117,13 @@ struct MedicationLoggingEmptyStateView: View {
                 ) {
                     actions(for: descriptor)
                 }
-                // 1.4 B2-b: the buttons ran edge to edge of the sheet; the
+                // The buttons ran edge to edge of the sheet; the
                 // state keeps the screen's side margin like every card.
-                .padding(.horizontal, HLSpace.lg)
+                .padding(.horizontal, HLLayout.cardInset)
             } else {
-                ProgressView()
+                HLInlineProgress()
             }
         }
-        .containerCentered()
         .background(HLColor.background)
         // A failed cold-start load leaves `hasLoadedMedications` false, i.e. the
         // spinner above. Without this the honest "claim nothing" state would be
@@ -139,8 +140,7 @@ struct MedicationLoggingEmptyStateView: View {
                     // pulls the freshly materialised today-intakes with it, so
                     // the sheet behind repaints into its real next state.
                     Task { await store.load(force: true) }
-                },
-                onDismiss: { isPresentingAdd = false }
+                }
             )
         }
     }
@@ -149,20 +149,18 @@ struct MedicationLoggingEmptyStateView: View {
     private func actions(for descriptor: MedicationLoggingEmptyState.Descriptor) -> some View {
         if descriptor.primaryAction == .addMedication {
             HLButton(
-                String(localized: "Add medication"),
-                icon: "plus",
-                variant: .secondary,
-                size: .regular
+                "Add medication",
+                systemImage: "plus",
+                variant: .secondary
             ) {
                 isPresentingAdd = true
             }
             .accessibilityIdentifier("meds.empty.addMedication")
         } else if descriptor.offersManualLog, let onLogManually {
             HLButton(
-                String(localized: "med.freelog.open"),
-                icon: "square.and.pencil",
-                variant: .secondary,
-                size: .regular
+                "med.dose.form.title",
+                systemImage: "square.and.pencil",
+                variant: .secondary
             ) {
                 onLogManually()
             }

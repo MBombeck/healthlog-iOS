@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Account deletion and the account probe
 
-/// KONTO (1.5.0): moved out of `AuthService.swift`, which stood at the
+/// Moved out of `AuthService.swift`, which stood at the
 /// `file_length` error limit, so the deletion receipt (`scheduledPurgeAt`,
 /// server 1.46.0) has room. Behaviour is unchanged apart from the receipt.
 public extension AuthService {
@@ -112,18 +112,18 @@ public extension AuthService {
             keys.append(AIConsentStore.keyPrefix + provider.rawValue)
             keys.append(AIConsentStore.declinedKeyPrefix + provider.rawValue)
         }
-        // v0.13 — mirror the BYO-key consent-grant wipe (`byo-consent.<provider>`)
+        // Mirror the BYO-key consent-grant wipe (`byo-consent.<provider>`)
         // so account deletion is self-sufficient. The client-side BYO path
         // transmits health data off-device, so its consent record must not
         // survive the deleted account.
-        keys.append(KeychainKey.lastSessionUserID) // Build 273 (A2) — goes with the outbox
+        keys.append(KeychainKey.lastSessionUserID) // Goes with the outbox
         for provider in BYOProviderID.allCases {
             keys.append(AIConsentStore.byoKeyPrefix + provider.rawValue)
             keys.append(BYOKeyStore.keyPrefix + provider.rawValue)
             keys.append(BYOKeyStore.modelPrefix + provider.rawValue)
             keys.append(BYOKeyStore.baseURLPrefix + provider.rawValue)
         }
-        // v0.13 W2 — and wipe the BYO API **key bytes** themselves
+        // And wipe the BYO API **key bytes** themselves
         // (`byo.llm.key.<provider>` + model/baseURL overrides) so the secret
         // never survives the deleted account.
         var targetedRemovalFailed = false
@@ -148,7 +148,7 @@ public extension AuthService {
         }
     }
 
-    /// #37/#38 Privacy H3 (audit-v0162) — the tri-state outcome of probing
+    /// #37/#38 Privacy H3 — the tri-state outcome of probing
     /// whether the currently-persisted session's account still exists on the
     /// server. Used after an MFA-enrolled user was routed to *web* account
     /// deletion (the native Bearer session cannot satisfy the cookie-only fresh-
@@ -167,7 +167,7 @@ public extension AuthService {
         case inconclusive
     }
 
-    /// #37/#38 Privacy H3 (audit-v0162) — probe `GET /api/auth/me` to decide
+    /// #37/#38 Privacy H3 — probe `GET /api/auth/me` to decide
     /// whether the account behind the persisted token still exists.
     ///
     /// Routed through the fail-fast auth session (`failFast: true`,

@@ -106,7 +106,7 @@ struct CorrelationsDiscoveryRepositoryTests {
 
     @Test("fetch — 403 + assistant.disabled.correlations → nil (P10 graceful hide)")
     func fetch403AssistantDisabledIsNil() async throws {
-        // v0141 W-DATAPARITY (P10): `requireAssistantSurface("correlations")`
+        // `requireAssistantSurface("correlations")`
         // answers a disabled surface with `403` +
         // `errorCode: "assistant.disabled.correlations"`. `correlations` is not a
         // known iOS `FeatureFlag` surface, so `APIClient` surfaces it as

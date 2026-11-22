@@ -13,7 +13,7 @@ struct WorkoutHRBackfillCursor: Codable, Sendable, Equatable {
     }
 }
 
-/// **GH #86 — where the HR-series backfill stands, per user.**
+/// **Where the HR-series backfill stands, per user.**
 ///
 /// The sweep walks the HealthKit workout history BACKWARDS (newest first, the
 /// order the user cares about) and re-posts each known workout with its HR

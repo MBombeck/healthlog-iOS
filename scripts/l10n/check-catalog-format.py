@@ -30,9 +30,9 @@ and the Siri phrase catalog `AppShortcuts.xcstrings`):
     in every phrase of every language.
   * `needs_review` is counted per language; medical keys (medical-keys.json)
     in that state are listed. With --release such a key in a `required`
-    language fails (freeze pregates). Every medical prefix and key must match
-    a key of one of the catalogs (the `report.` keys live in the doctor
-    report's table).
+    language fails (the App Store gate, before a submission). Every medical
+    prefix and key must match a key of one of the catalogs (the `report.`
+    keys live in the doctor report's table).
 
 `CatalogFormatSignatureTests` stays as the runtime check; this is the fast one
 that runs in the CI step "Lint".

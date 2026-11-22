@@ -3,7 +3,7 @@ import Foundation
 /// In-memory + UserDefaults-backed cache for resolved on-device
 /// observations. One entry per `metric.locale.yyyy-MM-dd`. Single global
 /// instance — the cache itself has no per-card state. Same pattern as
-/// `OnDeviceBriefingCache` (I-1).
+/// `OnDeviceBriefingCache`.
 ///
 /// QS-1 reconcile: `@unchecked Sendable` swapped for an `NSLock`-guarded
 /// barrier around mutations so write + clearOnLogout don't race on the
@@ -75,7 +75,7 @@ final class TrendObservationCache: @unchecked Sendable {
         let dir = fileURL.deletingLastPathComponent()
         do {
             try SensitiveDataBackupExclusion.prepareDirectory(at: dir)
-            // QoS-M1 (v0.12 P3): health-derived trend text at rest → protect until
+            // QoS-M1: health-derived trend text at rest → protect until
             // first unlock, the same tier as the Outbox / briefing stores
             // (ADR-011/012). Previously this cache sat in unprotected UserDefaults.
             try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])

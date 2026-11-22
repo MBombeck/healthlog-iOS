@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for the iOS app, a widget or the Apple Watch app.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most features need the server and the app. If your idea is about data the server does not keep yet, the [server project](https://github.com/MBombeck/HealthLog/discussions) is the better place to start.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do that you cannot do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How could it work?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do instead today?

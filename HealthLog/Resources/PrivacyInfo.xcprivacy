@@ -176,6 +176,11 @@
         (siehe `KeychainKey.deviceID` + Refresh-Token-Binding). Server bindet
         Refresh-Token an die Device-Row, dient der Revocation. Spaeter (A6)
         kommt der APNs-Token unter dieselbe Kategorie.
+        #190 (iOS 1.7): with the person's opt-in the push relay run by the
+        project maintainer holds the APNs token, a hash of the binding key and
+        the consent version and day, linked to the server instance. Same
+        category (Identifiers, Device ID), linked, not used for tracking, App
+        Functionality; the relay never sees content.
         -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
@@ -226,6 +231,11 @@
         it exists for the duration of the request that carries it and no
         longer, and is covered by the existing HealthFitness collected-data
         declaration above.
+        1C8F.1 ("Access info from the same App Group"): the app writes the
+        shared App-Group suite (`group.dev.healthlog.app`) its widgets and the
+        Notification Service Extension read, e.g. the lock-screen "hide
+        medication names" switch (`LockScreenPrivacy`) and the account prefs
+        (`SharedAccountPrefs`).
         -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
@@ -233,14 +243,18 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+                <string>1C8F.1</string>
             </array>
         </dict>
         <!--
         FileTimestamp — SwiftData-Outbox-Store (`outbox.sqlite`) und
         kuenftige Read-Caches greifen ueber Foundation-File-APIs auf
-        `createdAt`/`updatedAt`-Attribute zu; ausserdem rendert die
-        Sync-/Outbox-Diagnose-Surface die Zeitstempel an die User-UI.
-        Reason C617.1: "Display file timestamps to the user". Ohne diese
+        `createdAt`/`updatedAt`-Attribute zu (die Temp-Sweeper lesen das
+        Aenderungsdatum eigener Dateien im App-Container); ausserdem rendert
+        die Sync-/Outbox-Diagnose-Surface die Zeitstempel an die User-UI.
+        Reason C617.1: "Access timestamps of files inside the app container,
+        app group container, or CloudKit container". Reason DDA9.1: "Display
+        file timestamps to the person using the device". Ohne diese
         Deklaration loest ITMS-91053 post-upload aus.
         -->
         <dict>
@@ -250,6 +264,24 @@
             <array>
                 <string>C617.1</string>
                 <string>DDA9.1</string>
+            </array>
+        </dict>
+        <!--
+        SystemBootTime — `ProcessInfo.systemUptime` measures elapsed time
+        inside one process: the budget of the hourly HealthKit statistics pass
+        (`HealthKitStatisticsSyncCoordinator+Hourly`), the workout catch-up and
+        the live-history split. Nothing leaves the device and nothing is
+        compared across launches.
+        Reason 35F9.1: "Access the system boot time in order to measure the
+        amount of time that has elapsed between events that occurred within
+        the app or to perform calculations to enable timers".
+        -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
             </array>
         </dict>
     </array>

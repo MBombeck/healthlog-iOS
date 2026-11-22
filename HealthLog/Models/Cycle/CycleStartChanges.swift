@@ -133,7 +133,7 @@ public struct CycleDeleteOutcome: Decodable, Sendable, Equatable {
 }
 
 /// The one calm sentence the cycle calendar shows after the server merged or
-/// gave back a start (#137). Built from the server's dates only.
+/// gave back a start. Built from the server's dates only.
 public struct CycleStartNotice: Sendable, Equatable, Identifiable {
     public enum Kind: Sendable, Equatable {
         /// `absorbed` start folded into `into`.

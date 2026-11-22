@@ -170,7 +170,7 @@ struct VorsorgeCardModelTests {
         "PHQ9_SCORE", "GAD7_SCORE", "WHO5_SCORE", "SCI_SCORE"
     ])
     func actionCheckInScreening(type: String) {
-        // #42 — a screening sum score is server-derived, not hand-entered, so the
+        // A screening sum score is server-derived, not hand-entered, so the
         // reminder action opens the mental-health check-in surface rather than a
         // numeric capture form or a silent mark-done.
         #expect(VorsorgeCard.primaryAction(for: Self.row(type: type)) == .checkIn)
@@ -252,7 +252,7 @@ struct VorsorgeCardModelTests {
         )
     }
 
-    /// C10 — a COACH reminder stores an i18n KEY in `label`; rendering it
+    /// A COACH reminder stores an i18n KEY in `label`; rendering it
     /// verbatim showed the user `coach.reminderSuggestion.cadence.bp722`.
     @Test("COACH label is resolved through the localization catalog")
     func coachLabelResolves() {

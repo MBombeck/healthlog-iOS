@@ -91,7 +91,7 @@ public enum HealthKitServerSupportConfig {
     /// reason lands in the same terminal default instead of breaking decoding.
     public static let reasonUnstableExternalId = "unstable_external_id"
 
-    /// **X4 (1.3, #138)** — the three skip reasons of an hourly
+    /// The three skip reasons of an hourly
     /// `stats:<HK>:<YYYY-MM-DD>T<HH>` row (server v1.43,
     /// `src/lib/measurements/intraday-hour-buckets.ts`). Deterministic: the
     /// same row re-sent is skipped the same way, so they are terminal.

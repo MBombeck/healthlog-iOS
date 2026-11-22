@@ -1,12 +1,12 @@
 import Foundation
 
 extension HealthKitBatchRejection {
-    /// INT-A — how many consecutive sweeps an unexplained whole-batch 4xx may
+    /// How many consecutive sweeps an unexplained whole-batch 4xx may
     /// hold one type's anchor before its rows are recorded and released (the
     /// same bound the nutrient sweep applies to a transient skip).
     static let maxHeldSweeps = 5
 
-    /// #115 / 0.3 — the page a rejected whole batch leaves for the cursor.
+    /// The page a rejected whole batch leaves for the cursor.
     ///
     /// Queued like a transport failure, a whole-batch 4xx committed the anchor
     /// and the replay deleted the rows on the same 4xx. Instead:

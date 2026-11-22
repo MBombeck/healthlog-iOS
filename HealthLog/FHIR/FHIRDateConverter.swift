@@ -1,7 +1,7 @@
 import Foundation
 import ModelsR4
 
-/// A2-L4 — non-throwing FHIR date/time construction from runtime `Date`s.
+/// Non-throwing FHIR date/time construction from runtime `Date`s.
 ///
 /// The FHIR export helpers historically used `try! DateTime(date:timeZone:)` /
 /// `try! Instant(date:timeZone:)`. Those initializers throw via

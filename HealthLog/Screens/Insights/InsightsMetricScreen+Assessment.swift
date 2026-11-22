@@ -12,16 +12,16 @@ extension InsightsMetricScreen {
     /// Fetches the per-metric assistant assessment through the
     /// `MetricInsightsRepository.fetchAssessment` read path.
     ///
-    /// **Task #49 — re-gated behind the single remote-AI opt-in.** Task #46
+    /// **Re-gated behind the single remote-AI opt-in.** Task #46
     /// (commit `c1c2f1bd`) made this read un-gated so the assessment showed
     /// regardless of consent; the operator now wants ONE Settings opt-in to
     /// govern every remote-AI surface. We keep #46's SWR/decode mechanism but
     /// put the consent check back in FRONT of it: when the master opt-in is OFF
     /// we never fetch and leave `assessment` nil so `AssessmentCard`
     /// self-suppresses (hidden — `consentClosed: false`, never the consent CTA
-    /// on this page). When ON, hide/show is then carried by `hasServer`
-    /// (standalone) and the server envelope's `hasProvider` (no provider).
-    /// **Task #50 — preparing→poll→ready.** The server serves the assessment
+    /// on this page). When ON, hide/show is then carried by the server
+    /// envelope's `hasProvider` (no provider).
+    /// **Preparing→poll→ready.** The server serves the assessment
     /// stale-while-revalidate: on a cold cache it returns
     /// `{ hasProvider:true, text:null, preparing:true }` and warms the prose OUT
     /// OF BAND. The web POLLS the endpoint (`use-insight-status.ts`, 4 s cadence,
@@ -39,7 +39,7 @@ extension InsightsMetricScreen {
     ///
     /// Best-effort — a failure leaves `assessment` nil (the card self-suppresses).
     ///
-    /// **b177 W-ASSESS2 — gate widened to the explicit External-AI CHOICE, not
+    /// **Gate widened to the explicit External-AI CHOICE, not
     /// only a completed grant.** `remoteAIEnabled` is true only once an informed-
     /// consent grant exists for a configured provider. Two real states broke the
     /// page with the old `remoteAIEnabled`-only gate while Settings still showed
@@ -51,8 +51,7 @@ extension InsightsMetricScreen {
     /// `fetchAssessment`), and the server envelope (`hasProvider`) carries the
     /// authoritative hide/show. `.none` / on-device / BYO still never fetch.
     func loadAssessment() async {
-        guard backend.hasServer,
-              externalAIChosen,
+        guard externalAIChosen,
               let repo = appContainer?.metricInsightsRepo else
         {
             assessment = nil
@@ -131,7 +130,7 @@ extension InsightsMetricScreen {
         }
     }
 
-    /// b177 W-ASSESS2 — true when the user's chosen assistant source is External
+    /// True when the user's chosen assistant source is External
     /// AI: either fully granted (`remoteAIEnabled`) or held as the explicit
     /// `.online` intent (provider not configured yet / grant record lost). Drives
     /// the read-only assessment fetch; see `loadAssessment` doc.

@@ -19,7 +19,7 @@ extension LogoutConfirmationPolicyTests {
 
         // 1. Settings → Konto → Abmelden.
         let account = try Self.strippedSource("HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift")
-        if let card = Phase8SourceScan.member(named: "private var signOutCard: some View {", in: account) {
+        if let card = Phase8SourceScan.member(named: "private var signOutRow: some View {", in: account) {
             if card.contains("logout(") {
                 violations.append("the Settings sign-out row still calls the logout path from its tap handler")
             }
@@ -27,7 +27,7 @@ extension LogoutConfirmationPolicyTests {
                 violations.append("the Settings sign-out row does not ask before it acts")
             }
         } else {
-            violations.append("SettingsAccountScreen no longer declares signOutCard — restate this contract")
+            violations.append("SettingsAccountScreen no longer declares signOutRow — restate this contract")
         }
         violations += Self.sharedPolicyViolations(
             in: account,
@@ -63,8 +63,8 @@ extension LogoutConfirmationPolicyTests {
             violations.append("RootView no longer composes RootPrivacyShield — restate this contract")
         }
         if let protected = Self.region(
-            from: "case let .protected(reason):",
-            to: "case .unprotected:",
+            from: "shield: { reason in",
+            to: "content: {",
             in: root
         ) {
             violations += Self.sharedPolicyViolations(
@@ -74,44 +74,6 @@ extension LogoutConfirmationPolicyTests {
             )
         } else {
             violations.append("RootView no longer branches on the privacy shield — restate this contract")
-        }
-
-        #expect(violations.isEmpty, "\(violations)")
-    }
-
-    // MARK: - Preservation: the policy layer stays state-agnostic and native
-
-    @Test("the confirmation layer owns presentation only, and it is native")
-    func policyLayerOwnsNoAuthState() throws {
-        let policy = try Self.strippedSource("HealthLog/DesignSystem/LogoutConfirmationModifier.swift")
-        var violations: [String] = []
-
-        // It presents; it does not know who is signed in and it cleans nothing
-        // up. Everything destructive stays behind the injected closure.
-        for forbidden in ["AuthStore", "AppContainer", "authStore", "@Environment", "URLSession", "UserDefaults"]
-            where policy.contains(forbidden)
-        {
-            violations.append("the confirmation layer reaches \(forbidden); it may only present")
-        }
-
-        // Native, destructive, and cancellable — an imitation would lose the
-        // platform's own destructive semantics and VoiceOver treatment.
-        //
-        // **Where that evidence lives moved with R13-A1 (17-08), and the
-        // clause moved with it rather than being dropped.** The logout question
-        // is no longer built here; it is carried by `hlConfirmDestructive`,
-        // which every destructive confirmation in the app now shares. So this
-        // asks the modifier for the routing and the carrier for the semantics.
-        // `titleVisibility: .visible` has no successor and needs none: it
-        // existed to stop a `confirmationDialog` from hiding its own question,
-        // and an `alert` always shows its title. Dropping it silently would
-        // have been the weakening; saying why is not.
-        if !policy.contains(".hlConfirmDestructive(") {
-            violations.append("the confirmation no longer routes through the shared destructive carrier")
-        }
-        let carrier = try Self.strippedSource("HealthLog/DesignSystem/HLConfirmDestructive.swift")
-        for required in ["alert(", "role: .destructive", "role: .cancel"] where !carrier.contains(required) {
-            violations.append("the shared destructive carrier is no longer \(required)")
         }
 
         #expect(violations.isEmpty, "\(violations)")

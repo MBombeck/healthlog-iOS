@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.1 — the weight tile is coloured by the server's target-aware
+/// The weight tile is coloured by the server's target-aware
 /// verdict (`GET /api/dashboard/snapshot` → `tiles.weightTrend`, v1.39), not by
 /// a client rule that calls every fall good and every rise bad.
 ///

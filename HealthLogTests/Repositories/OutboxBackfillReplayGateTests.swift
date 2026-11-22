@@ -8,7 +8,7 @@ import Testing
 /// SYNC-TRIG (1.5, #138, Regel 10 und 11) — a parked page replays under a
 /// word today's server takes.
 ///
-/// The outbox keeps the `syncTrigger` a page was posted under (A2, 1.4). A
+/// The outbox keeps the `syncTrigger` a page was posted under. A
 /// 1.4.1 install parks a history page as `backfill` while its server reports
 /// `features.syncTriggerBackfill`; when the server it replays against no
 /// longer takes the word (a self-hosted rollback to 1.42, a new address), the

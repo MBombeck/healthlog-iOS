@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// **W-THRESHOLD-NUDGE (v0.15.2) — the local-notification delivery for the
+    /// **The local-notification delivery for the
     /// calm, MDR-safe out-of-range nudge.**
     ///
     /// The pure decision lives in ``ThresholdNudgeEvaluator``; this extension
@@ -49,7 +49,7 @@ import Foundation
 
             let request = Self.buildThresholdNudgeRequest(content, breachKey: breachKey)
             do {
-                // W-FOCUS-FILTER — routine `.passive` reminder: a HealthLog Focus
+                // Routine `.passive` reminder: a HealthLog Focus
                 // filter holds it back. Returns false when suppressed.
                 return try await addLocalNotification(request, center: center)
             } catch {
@@ -85,6 +85,8 @@ import Foundation
                 userInfo["deepLink"] = deepLink.absoluteString
             }
             notification.userInfo = userInfo
+            // Hide content in notifications: the reading stays out of the store.
+            NotificationContentPrivacy.apply(to: notification, kind: .healthData)
 
             // 1s trigger so it surfaces right after the log without blocking the
             // write path. A unique-per-breach identifier replaces a pending

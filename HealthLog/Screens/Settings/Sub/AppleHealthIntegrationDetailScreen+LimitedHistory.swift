@@ -10,7 +10,7 @@ extension AppleHealthIntegrationDetailScreen {
     var limitedHistoryRow: some View {
         if let start = hkReadiness.limitedHistoryStart {
             noticeRow(
-                "settings.applehealth.limitedHistory \(start.formatted(.dateTime.day().month(.wide).year()))",
+                "settings.applehealth.limitedHistory \(HLDateFormat.date(start, style: .long))",
                 icon: "clock.arrow.circlepath"
             )
             .accessibilityIdentifier("settings.integrations.appleHealth.limitedHistory")

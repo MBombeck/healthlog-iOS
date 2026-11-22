@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **MED-PLUS (1.5.0, #126 3.4) — the course list under "Erweitert".**
+/// **The course list under "Erweitert".**
 ///
 /// Drives the real `APIClient` through `MockURLProtocol` with answers shaped
 /// after `openapi.yaml` v1.47.0 (`MedicationCoursesResponse`, the PATCH and

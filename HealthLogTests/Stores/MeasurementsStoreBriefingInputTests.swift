@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// DASHBOARD-BUG-FIX-2 — pins the contract that:
+/// Pins the contract that:
 ///
 /// 1. `MeasurementsStore.load()` now defaults to limit=400, NOT limit=50.
 ///    The 50-row default starved every downstream consumer that filters

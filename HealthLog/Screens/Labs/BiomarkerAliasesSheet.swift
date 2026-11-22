@@ -8,14 +8,11 @@ import SwiftUI
 /// and merge aliases. A spelling another marker already owns is refused with
 /// its own sentence (`409 labs.biomarker.alias.taken`).
 struct BiomarkerAliasesSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: LabsStore
     let marker: BiomarkerDTO
 
     @State private var aliases: [String]
     @State private var draft = ""
-    @State private var isSaving = false
     @State private var inlineError: String?
 
     init(store: LabsStore, marker: BiomarkerDTO) {
@@ -25,9 +22,13 @@ struct BiomarkerAliasesSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            verbatim: marker.name,
+            action: .save(isEnabled: LabsStore.cleanAliases(aliases) != marker.aliases) { await save() },
+            isDirty: LabsStore.cleanAliases(aliases) != marker.aliases
+        ) {
             Form {
-                // 1.4 B2-c — what this list does is its header, read before the
+                // What this list does is its header, read before the
                 // rows instead of after them.
                 Section {
                     ForEach(aliases, id: \.self) { alias in
@@ -39,27 +40,19 @@ struct BiomarkerAliasesSheet: View {
                             .submitLabel(.done)
                             .onSubmit(addDraft)
                             .accessibilityIdentifier("labs.aliases.field")
-                        Button("labs.aliases.add", action: addDraft)
+                        HLIconButton(systemImage: "plus", label: "labs.aliases.add", size: .inline, action: addDraft)
                             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 } header: {
                     Text("labs.aliases.footer")
                 }
+                .hlFormRowSurface()
                 if let inlineError {
                     Section { HLFormErrorText(inlineError) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(Text(verbatim: marker.name))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("labs.action.cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("labs.action.save") { Task { await save() } }
-                        .disabled(isSaving || LabsStore.cleanAliases(aliases) == marker.aliases)
-                }
-            }
+            .hlPageMargins()
         }
     }
 
@@ -73,14 +66,13 @@ struct BiomarkerAliasesSheet: View {
         draft = ""
     }
 
-    private func save() async {
-        isSaving = true
+    /// Returns `true` when the sheet may close.
+    private func save() async -> Bool {
         inlineError = nil
-        defer { isSaving = false }
         if await store.setAliases(aliases, for: marker.id) {
-            dismiss()
-        } else {
-            inlineError = store.lastError ?? String(localized: "labs.save.failed")
+            return true
         }
+        inlineError = store.lastError ?? String(localized: "labs.save.failed")
+        return false
     }
 }

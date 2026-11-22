@@ -169,7 +169,7 @@ struct OnDeviceBriefingTests {
     @Test("MDRSafetyFilter — matrix covers UNSAFE rows 7, 8, 9, 11, 14")
     func mdrFilterMatrixCoversRequiredRows() {
         let rows = MDRSafetyFilter.matrixRows()
-        // R4 §5.1 — UNSAFE rows that MUST have at least one regex.
+        // UNSAFE rows that MUST have at least one regex.
         for required in [7, 8, 9, 11, 14] {
             #expect(rows.contains(required), "Matrix missing row \(required)")
         }
@@ -180,7 +180,7 @@ struct OnDeviceBriefingTests {
         #expect(MDRSafetyFilter.patternCount >= 15)
     }
 
-    // MARK: - Capability short-circuit (#115 · 0.2)
+    // MARK: - Capability short-circuit
 
     @Test("OnDeviceBriefingService — briefing onDeviceAllowed=false short-circuits to fallback")
     func featureFlagOffShortCircuits() async {

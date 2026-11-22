@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    // Phase 07 Wave 2 — one page of samples, mapped once and classified honestly.
+    // One page of samples, mapped once and classified honestly.
     //
     // `HealthLogStandard.handleNewSamples` used to be four responsibilities in one
     // method: the anti-echo filter and wire mapping, the two upload gates, the POST,
@@ -37,17 +37,20 @@
         /// `true` when rows existed before the gates and none survived them, i.e.
         /// the daily-statistics or HR-bucket path owns this read instead.
         let handedToAggregatePath: Bool
-        /// #12 — heart-rate rows the HR-bucket gate took off this page. The
+        /// Heart-rate rows the HR-bucket gate took off this page. The
         /// caller requests a bucket sweep whenever this is non-zero, so the
         /// hand-off and the sweep that completes it travel together.
         var heartRateHandedOff = 0
-        /// V1 (1.2) — cumulative rows (steps, energy, flights, distance,
+        /// Cumulative rows (steps, energy, flights, distance,
         /// daylight) the daily-statistics gate took off this page. The caller
         /// requests a recent statistics sweep whenever this is non-zero.
         var cumulativeHandedOff = 0
+        /// #8 — the oldest start date among those cumulative rows. Its day
+        /// is summed again even when it lies outside the sweep window.
+        var cumulativeHandedOffEarliest: Date?
     }
 
-    /// What the server did with one page's rows, for Sync Diagnostics (#113).
+    /// What the server did with one page's rows, for Sync Diagnostics.
     ///
     /// Only `inserted`, `updated` and `duplicate` count as uploaded. A row the
     /// server refused is `skipped` (and remembered in the skip register); a row
@@ -102,7 +105,12 @@
                 entries: entries,
                 handedToAggregatePath: entries.isEmpty && !rawEntries.isEmpty,
                 heartRateHandedOff: heartRateBefore - heartRateAfter,
-                cumulativeHandedOff: rawEntries.count - afterStatsGate.count
+                cumulativeHandedOff: rawEntries.count - afterStatsGate.count,
+                cumulativeHandedOffEarliest: dailyStatsEnabled
+                    ? rawEntries
+                    .filter { HealthKitCumulativeTypeConfig.cumulativeIdentifiers.contains($0.hkIdentifier) }
+                    .map(\.startDate).min()
+                    : nil
             )
         }
     }
@@ -116,13 +124,13 @@
             requiringCurrentOwner ownerUserID: String
         ) async throws
 
-        /// Build 273 (A15) — whether a live (non-dead-lettered) row already waits
+        /// Whether a live (non-dead-lettered) row already waits
         /// under this idempotency key. A deterministically failing stats chunk is
         /// re-planned on every foreground; without this check it was enqueued
         /// again each time under the same key.
         func hasPendingHealthKitRetry(idempotencyKey: String) async -> Bool
 
-        /// A2 (1.4) — the same durable write, keeping the `syncTrigger` the
+        /// The same durable write, keeping the `syncTrigger` the
         /// page was posted under, so the replay sends it again.
         func enqueueHealthKitRetry(
             _ entries: [HealthKitBatchEntryDTO],
@@ -131,10 +139,40 @@
             requiringCurrentOwner ownerUserID: String
         ) async throws
 
-        /// A5 (1.4, R3 S4) — deleted sample UUIDs that could not be sent,
+        /// Deleted sample UUIDs that could not be sent,
         /// kept for the replay under the owner they were read for.
         func enqueueHealthKitDeletion(
             _ externalIDs: [String],
+            idempotencyKey: String,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws
+
+        /// A symptom page the server did not answer for good.
+        func enqueueAppleHealthSymptoms(
+            _ entries: [AppleHealthSymptomEntryDTO],
+            idempotencyKey: String,
+            requiringCurrentOwner ownerUserID: String
+        ) async throws
+
+        /// Takes deleted records out of queued uploads before their delete.
+        @discardableResult
+        func pruneQueuedAppleHealthUploads(
+            _ kind: OutboxQueue.Operation.Kind,
+            removing externalIDs: Set<String>,
+            ownerUserID: String
+        ) async -> Int
+
+        /// #3, #5 — takes the entries `drop` names out of this account's
+        /// queued HealthKit pages and returns them.
+        func pruneQueuedHealthKitEntries(
+            ownerUserID: String,
+            where drop: @escaping @Sendable (HealthKitBatchEntryDTO) -> Bool
+        ) async -> [HealthKitBatchEntryDTO]
+
+        /// Deletions for one ingest-v2 delete route that could not be sent.
+        func enqueueAppleHealthDeletion(
+            _ externalIDs: [String],
+            domain: AppleHealthDeleteDomain,
             idempotencyKey: String,
             requiringCurrentOwner ownerUserID: String
         ) async throws
@@ -155,6 +193,40 @@
             throw HLError.notPersisted("this queue keeps no HealthKit deletions")
         }
 
+        /// A queue that keeps no symptom pages (test doubles) refuses, so the
+        /// page holds instead of losing them.
+        func enqueueAppleHealthSymptoms(
+            _: [AppleHealthSymptomEntryDTO],
+            idempotencyKey _: String,
+            requiringCurrentOwner _: String
+        ) async throws {
+            throw HLError.notPersisted("this queue keeps no symptom pages")
+        }
+
+        func pruneQueuedAppleHealthUploads(
+            _: OutboxQueue.Operation.Kind,
+            removing _: Set<String>,
+            ownerUserID _: String
+        ) async -> Int {
+            0
+        }
+
+        func pruneQueuedHealthKitEntries(
+            ownerUserID _: String,
+            where _: @escaping @Sendable (HealthKitBatchEntryDTO) -> Bool
+        ) async -> [HealthKitBatchEntryDTO] {
+            []
+        }
+
+        func enqueueAppleHealthDeletion(
+            _: [String],
+            domain _: AppleHealthDeleteDomain,
+            idempotencyKey _: String,
+            requiringCurrentOwner _: String
+        ) async throws {
+            throw HLError.notPersisted("this queue keeps no ingest deletions")
+        }
+
         /// A queue that keeps no trigger (test doubles) writes the row without.
         func enqueueHealthKitRetry(
             _ entries: [HealthKitBatchEntryDTO],
@@ -167,7 +239,7 @@
     }
 
     extension OutboxQueue: HealthSyncBatchRetryEnqueuing {
-        /// A15 — a live row under this key already waits in the outbox.
+        /// A live row under this key already waits in the outbox.
         func hasPendingHealthKitRetry(idempotencyKey: String) async -> Bool {
             await hasLiveOperation(idempotencyKey: idempotencyKey)
         }
@@ -212,7 +284,7 @@
         /// needs a retry and has nowhere to write it reports `durableRetryFailed`,
         /// so the cursor holds rather than claiming ground it does not have.
         let retry: (any HealthSyncBatchRetryEnqueuing)?
-        /// #113 — where a row the server refused for a deterministic reason
+        /// Where a row the server refused for a deterministic reason
         /// (`value_out_of_range`, …) is remembered before the cursor may pass it.
         /// `nil` means there is nowhere to remember it, and a page carrying such a
         /// refusal then holds instead of dropping the row.
@@ -248,10 +320,10 @@
         }
 
         /// ``transmit(_:admitted:)`` plus the honest per-row tally the Sync
-        /// Diagnostics surface counts (#113): only `inserted`, `updated` and
+        /// Diagnostics surface counts: only `inserted`, `updated` and
         /// `duplicate` are "uploaded".
         ///
-        /// - Parameter asBackfill: A2 (1.4, R-A7) — a page of the history walk.
+        /// - Parameter asBackfill: A2 — a page of the history walk.
         func transmitReporting(
             _ mapping: HealthSampleMappingResult,
             admitted lease: HealthSyncAuthenticatedLease?,
@@ -280,7 +352,7 @@
 
             var verdicts = PageVerdicts()
             do {
-                // SYNC-TRIG (1.5) — the mark rides on the upload call, not on
+                // The mark rides on the upload call, not on
                 // a task-local around it.
                 let outcomes = try await admitting(lease) {
                     try await uploader.upload(posted, requiring: authenticationLease, asBackfill: asBackfill)
@@ -289,13 +361,13 @@
             } catch let refusal as HealthSyncLeaseRefusal {
                 return (Self.refusedOutcome(refusal, postedCount: posted.count), HealthSampleServerTally())
             } catch let error where Self.isCancellation(error) {
-                // W1 (1.3.0) — a cancelled task, or a request a background
+                // A cancelled task, or a request a background
                 // expiry cut off on the wire, is "stopped", not "failed": the
                 // page holds its cursor and the next run reads it again. It is
                 // not parked, so it never shows up as waiting.
                 return (Self.refusedOutcome(.cancelled, postedCount: posted.count), HealthSampleServerTally())
             } catch let error where Self.isUnreachable(error) {
-                // A2 (1.4, R3 S6) — offline, or the uploader's backoff refused
+                // Offline, or the uploader's backoff refused
                 // the POST before the wire. Nothing is parked: the cursor
                 // holds and the next run reads the page again. Until 1.3.0 both took the transport arm below, and the
                 // history walk filled the outbox page by page.
@@ -316,10 +388,10 @@
         /// One reason survives that gate and still is not progress: the server
         /// cannot map the identifier yet. Every other terminal skip is a refusal
         /// the person must be able to see, so it is collected for the skip
-        /// register (#113).
+        /// register.
         private struct PageVerdicts {
             var accepted = 0
-            /// A2 — stored rows the server answered `duplicate` / `folded_window`.
+            /// Stored rows the server answered `duplicate` / `folded_window`.
             var foldedWindow = 0
             var nonterminalIndexes: Set<Int> = []
             var refused: [HealthKitSkippedEntry] = []
@@ -371,7 +443,7 @@
                 )
             }
 
-            // #113 — a refused row may be passed only once it is remembered. If it
+            // A refused row may be passed only once it is remembered. If it
             // cannot be (no register, no owner, a write that did not verify), the
             // page holds: the next wake re-reads it, the server folds everything it
             // already stored on `externalId`, and the refusal is tried again.
@@ -444,7 +516,7 @@
             asBackfill: Bool
         ) async -> Bool {
             guard let retry, let lease else { return false }
-            // A2 (1.4) — the word this page went out under, kept for its replay.
+            // The word this page went out under, kept for its replay.
             let trigger = uploader.wireSyncTrigger(asBackfill: asBackfill)
             guard let envelope = HealthSyncRetryEnvelope(
                 ownerID: lease.ownerID,
@@ -493,17 +565,21 @@
             }
         }
 
-        /// A2 (1.4, R3 S6) — no answer could come: no network
+        /// No answer could come: no network
         /// (`URLError.notConnectedToInternet`, `HLError.offline`), a connection
         /// lost on the wire (`.networkConnectionLost`, `.network(.connectionLost)`
         /// since B5) or the uploader's own backoff (`BatchBackoffError.throttled`,
         /// thrown before the wire). A lost connection may have delivered the
         /// batch. Holding is safe either way, because the page is read again and
-        /// the server answers a stored row `duplicate`.
+        /// the server answers a stored row `duplicate`. A 429 holds too: the
+        /// server stored nothing, and parking the page would only add an outbox
+        /// replay that ignores the client throttle to the load that caused it.
         static func isUnreachable(_ error: Error) -> Bool {
             if error is BatchBackoffError { return true }
-            let hlError = error as? HLError
-            return hlError == .offline || hlError == .network(.connectionLost)
+            switch error as? HLError {
+            case .offline?, .network(.connectionLost)?, .rateLimited?: return true
+            default: return false
+            }
         }
 
         private static func unreachableOutcome(postedCount: Int) -> HealthSyncPageOutcome {

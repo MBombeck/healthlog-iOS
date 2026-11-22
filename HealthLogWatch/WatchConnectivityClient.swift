@@ -3,7 +3,7 @@ import Observation
 import WatchConnectivity
 import WidgetKit
 
-/// **v0.12 P2 — watch-side WatchConnectivity client.**
+/// **Watch-side WatchConnectivity client.**
 ///
 /// Receives the phone's `WatchSnapshot` (latest-wins application context) and
 /// sends `WatchAction`s back via the durable `transferUserInfo` queue (survives
@@ -161,7 +161,7 @@ final class WatchConnectivityClient: NSObject {
         try? await Task.sleep(for: .milliseconds(100))
     }
 
-    /// `true` once the phone can accept writes (signed-in OR standalone — see
+    /// `true` once the phone can accept writes (signed in — see
     /// `WatchSnapshot.signedIn`/`canLog`). The watch can't sign in itself.
     var signedIn: Bool {
         snapshot.signedIn
@@ -182,7 +182,7 @@ final class WatchConnectivityClient: NSObject {
 
     func markIntake(_ dose: WatchSnapshot.Dose, status: WatchIntakeStatus) {
         pendingIntakeIDs.insert(dose.id)
-        let action = WatchAction(kind: .markIntake(intakeId: dose.id, status: status, at: Date()))
+        let action = WatchAction(kind: .markIntake(intakeId: dose.id, status: status, at: Date()), ownerHash: snapshot.ownerHash)
         intakeActions[dose.id] = .pending
         pendingIntakeForAck[action.id] = dose.id
         send(action)
@@ -194,7 +194,7 @@ final class WatchConnectivityClient: NSObject {
     /// picker. No day-level lock.
     func logMood(score: Int) {
         let tappedAt = Date()
-        let action = WatchAction(kind: .logMood(score: score, at: tappedAt))
+        let action = WatchAction(kind: .logMood(score: score, at: tappedAt), ownerHash: snapshot.ownerHash)
         moodActions[action.id] = TrackedAction(id: action.id, state: .pending, moodScore: score)
         lastMoodActionID = action.id
         // Record the tap as a pending DELTA on top of the snapshot count; the
@@ -234,7 +234,10 @@ final class WatchConnectivityClient: NSObject {
     /// action with its own id, tracked pending→ack so the capture view shows an
     /// honest state. `secondary` is the BP diastolic (nil for scalar kinds).
     func logMeasurement(kind: WatchMeasurementKind, value: Double, secondary: Double? = nil) {
-        let action = WatchAction(kind: .logMeasurement(kind: kind, value: value, secondary: secondary, at: Date()))
+        let action = WatchAction(
+            kind: .logMeasurement(kind: kind, value: value, secondary: secondary, at: Date()),
+            ownerHash: snapshot.ownerHash
+        )
         measurementActions[action.id] = .pending
         lastMeasurementActionID = action.id
         lastMeasurement = PendingMeasurement(kind: kind, value: value, secondary: secondary)
@@ -319,7 +322,7 @@ final class WatchConnectivityClient: NSObject {
         // Persist for the complication + refresh its timeline so the watch
         // face reflects the new next-dose / compliance immediately.
         //
-        // Privacy H4 (audit-v0162) — a cleared (logout) snapshot carries no PHI;
+        // Privacy H4 — a cleared (logout) snapshot carries no PHI;
         // treat it as "wipe the local file" so the previous user's medication
         // names / doses / mood / measurement do not persist at rest on the wrist.
         // Either way the complication timelines reload to reflect the empty state.

@@ -38,7 +38,7 @@ public extension MedicationsStore {
         patch: MedicationsRepository.IntakePatch
     ) async -> WriteOutcome {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
-        // 15-01 (B1) — say locally what the patch says, BEFORE the round-trip,
+        // Say locally what the patch says, BEFORE the round-trip,
         // and give it back on every exit that does not land. Deliberately ahead
         // of the first suspension point: this is a statement about a row the
         // user is looking at, not an authenticated effect. `nil` when the patch
@@ -55,7 +55,7 @@ public extension MedicationsStore {
             // so the Today section + dashboard tile reflect the retro-mark
             // without a separate refetch.
             if let idx = todayIntakes.firstIndex(where: { $0.id == eventId }) {
-                bumpMutationGeneration() // H-3 — protect this optimistic patch
+                bumpMutationGeneration() // Protect this optimistic patch
                 todayIntakes[idx] = updated
                 if let swr {
                     await swr.writeThrough(todayIntakesKey, value: todayIntakes)
@@ -77,7 +77,7 @@ public extension MedicationsStore {
                 restoreIntakeSnapshot(optimisticSnapshot)
                 return .failed(.canceled)
             }
-            error = err
+            error = IntakeWriteRefusal.explained(err)
             // `.queued` keeps the local statement standing — the outbox holds
             // the exact patch and replays it (same rule as `markIntakeQuick`).
             if err.shouldPersistToOutbox { return .queued }
@@ -127,7 +127,7 @@ public extension MedicationsStore {
         scheduledAt: Date,
         now: Date = .now
     ) async -> WriteOutcome {
-        // W3-MEDCONTRACT — the server's update schema is `{takenAt, skipped,
+        // The server's update schema is `{takenAt, skipped,
         // forceSlotInstant}`; the unknown `status` key is stripped by Zod.
         // The pre-v0.14.8 body relied on `status` alone for a skip, which
         // silently no-opped, and a skipped→taken flip left `skipped: true`
@@ -168,7 +168,7 @@ public extension MedicationsStore {
         return await updateIntake(medicationId: medicationId, eventId: eventId, patch: patch)
     }
 
-    // MARK: - W3-MEDCONTRACT (v0.14.8) — slot pin / unpin
+    // MARK: - Slot pin / unpin
 
     /// Pin an off-schedule (ad-hoc) take onto a named real slot — the
     /// server counts it taken-late and badges the row "zugeordnet"
@@ -210,17 +210,27 @@ public extension MedicationsStore {
     /// `DELETE /api/medications/[medicationId]/intake/[eventId]` (204).
     /// Idempotent: a 404-on-replay is treated as success by the repo's
     /// retriable-classifier.
+    ///
+    /// `expected` (#191) is the row as the person saw it; when it changed
+    /// since, nothing is deleted and the notice says so.
     @discardableResult
-    func deleteIntake(medicationId: String, eventId: String) async -> WriteOutcome {
+    func deleteIntake(
+        medicationId: String,
+        eventId: String,
+        expected: IntakeUndoPrecondition? = nil
+    ) async -> WriteOutcome {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
         do {
-            try await repo.deleteIntake(medicationId: medicationId, eventId: eventId)
+            try await repo.deleteIntake(medicationId: medicationId, eventId: eventId, expected: expected)
             try sessionLease.requireCurrent()
             // Drop from today's list if present + writeThrough so the
             // optimistic UI doesn't re-flash on the next observe.
             if let idx = todayIntakes.firstIndex(where: { $0.id == eventId }) {
-                bumpMutationGeneration() // H-3 — protect this optimistic removal
+                bumpMutationGeneration() // Protect this optimistic removal
                 todayIntakes.remove(at: idx)
+                // The slot is open again: badge, Live Activity, reminders and
+                // alarms follow (#188 (7), the undo of an external take).
+                onIntakesDidChange?()
                 if let swr {
                     await swr.writeThrough(todayIntakesKey, value: todayIntakes)
                     try sessionLease.requireCurrent()
@@ -231,6 +241,14 @@ public extension MedicationsStore {
                 try sessionLease.requireCurrent()
             }
             return .success
+        } catch let err as HLError where IntakeUndoPrecondition.isChangedSinceSeen(err) {
+            guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+            return await reportChangedSinceSeen()
+        } catch let err as HLError where IntakeUndoPrecondition.isInvalidPrecondition(err) {
+            guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
+            let notice = IntakeUndoPrecondition.invalidPreconditionNotice
+            error = notice
+            return .failed(notice)
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
             error = err
@@ -249,7 +267,7 @@ public extension MedicationsStore {
     /// writeThrough above, NOT via invalidate (F5 reconcile: invalidating it
     /// causes a `.empty → fresh` flash on the next observe).
     ///
-    /// **15-03 (B4) — `.medicationsList` belongs here.** The medication row
+    /// **`.medicationsList` belongs here.** The medication row
     /// carries `lastTakenAt`, so the card's "letzte Einnahme" is exactly as
     /// fresh as this key. Without the invalidation the session that just
     /// recorded an intake kept reading its own pre-write list until the TTL
@@ -268,10 +286,6 @@ public extension MedicationsStore {
     /// the reversal descriptor, but does NOT touch the undo coordinator.
     /// Split out so the undo-reversal unit tests can assert the token shape
     /// + the inverse round-trip without a live coordinator.
-    ///
-    /// Standalone real-path: ``markIntakeQuick`` swaps the optimistic row for
-    /// the mirror-canonical row carrying a fresh `externalId`; we diff
-    /// `todayIntakes` for the id that newly appeared so undo can delete it.
     func markIntakeQuickReturningUndo(
         intakeId: String,
         status: IntakeStatus,
@@ -279,15 +293,13 @@ public extension MedicationsStore {
         injectionSite: InjectionSite? = nil
     ) async -> (outcome: WriteOutcome, undo: IntakeMarkUndo?) {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return (.failed(.canceled), nil) }
-        let standalone = isStandalone()
-        let preIds = Set(todayIntakes.map(\.id))
         // Snapshot the pre-mark row for the real-intake reversal.
         let preSnapshot = todayIntakes.first { $0.id == intakeId }
         let synthParsed = intakeId.hasPrefix(MedicationIntake.synthesizedPlaceholderPrefix)
             ? Self.parseSynthesizedPlaceholderID(intakeId)
             : nil
 
-        if !standalone, let synthParsed {
+        if let synthParsed {
             let result = await markSynthesizedPlaceholderReturningReceipt(
                 intakeId: intakeId,
                 status: status,
@@ -310,7 +322,9 @@ public extension MedicationsStore {
                         serverEventID: result.serverEventID,
                         queuedOperationID: result.queuedOperationID
                     ),
-                    medicationId: synthParsed.medicationId
+                    medicationId: synthParsed.medicationId,
+                    idempotencyKey: result.idempotencyKey,
+                    syncVersion: result.syncVersion
                 )
             )
         }
@@ -321,32 +335,8 @@ public extension MedicationsStore {
         guard authenticatedEffectIsCurrent(sessionLease) else { return (.failed(.canceled), nil) }
         guard outcome.didLand else { return (outcome, nil) }
 
-        let undo: IntakeMarkUndo?
-        if standalone {
-            // The added mirror row is the id that newly appeared in
-            // `todayIntakes` after the mark. Real path swaps a fresh id in;
-            // synth path appends one. Either way, diff finds it.
-            let addedId = todayIntakes.map(\.id).first { !preIds.contains($0) }
-            if let addedId {
-                let pending = preSnapshot.map {
-                    MedicationIntake(
-                        id: $0.id,
-                        medicationId: $0.medicationId,
-                        scheduledAt: $0.scheduledAt,
-                        takenAt: nil,
-                        status: .pending,
-                        snoozedUntil: nil
-                    )
-                }
-                undo = IntakeMarkUndo(
-                    kind: .standaloneAdded(externalId: addedId, pendingSnapshot: pending),
-                    medicationId: synthParsed?.medicationId ?? preSnapshot?.medicationId ?? ""
-                )
-            } else {
-                undo = nil
-            }
-        } else if let synthParsed {
-            undo = IntakeMarkUndo(
+        let undo: IntakeMarkUndo? = if let synthParsed {
+            IntakeMarkUndo(
                 kind: .synthesized(
                     medicationId: synthParsed.medicationId,
                     scheduledAt: synthParsed.scheduledAt,
@@ -357,24 +347,23 @@ public extension MedicationsStore {
                 medicationId: synthParsed.medicationId
             )
         } else if let preSnapshot {
-            undo = IntakeMarkUndo(
+            IntakeMarkUndo(
                 kind: .realIntake(snapshot: preSnapshot),
                 medicationId: preSnapshot.medicationId
             )
         } else {
-            undo = nil
+            nil
         }
         return (outcome, undo)
     }
 
     /// Reverse a mark fired via ``markIntakeQuickUndoable``. Routes each
     /// path back to its pre-mark state: re-mark the real row to its prior
-    /// status, delete the synth disposition, or delete the standalone mirror
-    /// row + restore the local pending row. Best-effort —
+    /// status, or delete the synth disposition. Best-effort —
     /// surfaces failures on `error` exactly like a forward mark.
     func undoIntakeMark(_ token: IntakeMarkUndo) async {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return }
-        bumpMutationGeneration() // H-3 — protect the optimistic revert (all branches)
+        bumpMutationGeneration() // Protect the optimistic revert (all branches)
         switch token.kind {
         case let .realIntake(snapshot):
             // Restore the captured row locally, then push the prior status to
@@ -401,7 +390,8 @@ public extension MedicationsStore {
                 if let serverEventID {
                     try await repo.deleteIntake(
                         medicationId: medicationId,
-                        eventId: serverEventID
+                        eventId: serverEventID,
+                        expected: undoPrecondition(syncVersion: token.syncVersion, idempotencyKey: token.idempotencyKey)
                     )
                 } else if let queuedOperationID {
                     try await repo.cancelQueuedReminderIntake(operationID: queuedOperationID)
@@ -414,43 +404,15 @@ public extension MedicationsStore {
             } catch let err as HLError {
                 guard authenticatedEffectIsCurrent(sessionLease) else { return }
                 error = err
+                await explainIfChangedSinceSeen(err) // #191
             } catch {
                 guard authenticatedEffectIsCurrent(sessionLease) else { return }
                 self.error = .unknown(String(describing: error))
             }
-            // W-COMPLIANCE-INV — refresh only; the previous server snapshot
+            // Refresh only; the previous server snapshot
             // stays painted until the canonical value lands (no local-interim
             // repaint).
             await refreshCardComplianceSnapshot(for: medicationId, sessionLease: sessionLease)
-
-        case let .standaloneAdded(externalId, pendingSnapshot):
-            do {
-                try await repo.deleteStandaloneIntake(externalId: externalId)
-                try sessionLease.requireCurrent()
-                // Drop the added (taken/skipped) row locally; restore the
-                // pre-mark pending row so the dose reads as due again.
-                todayIntakes.removeAll { $0.id == externalId }
-                if let pendingSnapshot,
-                   !todayIntakes.contains(where: { $0.id == pendingSnapshot.id })
-                {
-                    todayIntakes.append(pendingSnapshot)
-                }
-                onIntakesDidChange?()
-                if let swr {
-                    await swr.writeThrough(todayIntakesKey, value: todayIntakes)
-                    try sessionLease.requireCurrent()
-                    await swr.invalidate(intakeSiblingKeys)
-                    try sessionLease.requireCurrent()
-                }
-            } catch let err as HLError {
-                guard authenticatedEffectIsCurrent(sessionLease) else { return }
-                error = err
-            } catch {
-                guard authenticatedEffectIsCurrent(sessionLease) else { return }
-                self.error = .unknown(String(describing: error))
-            }
-            // W-COMPLIANCE-INV — refresh only (see above).
-            await refreshCardComplianceSnapshot(for: token.medicationId, sessionLease: sessionLease)
         }
     }
 
@@ -469,7 +431,7 @@ public extension MedicationsStore {
     ///   (outbox replays on next reachability)
     /// - On non-retriable error → rollback, return `.failed(err)`
     /// - On success → writeThrough + sibling-invalidate, return `.success`
-    /// v0.11 — recent injection sites for a medication (newest-first), feeding
+    /// Recent injection sites for a medication (newest-first), feeding
     /// the take-flow rotation hint. Reads the paginated intake history and maps
     /// the server `injectionSite` strings to local cases. Best-effort — a fetch
     /// failure returns `[]` so the hint silently degrades (no suggestion).
@@ -492,7 +454,7 @@ public extension MedicationsStore {
         injectionSite: InjectionSite? = nil
     ) async -> WriteOutcome {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
-        // W-MED2: synthesised placeholders have no server `intakeId` to
+        // Synthesised placeholders have no server `intakeId` to
         // PATCH — route through `recordFromReminder` so the bulk-intake
         // endpoint creates the row idempotently from the
         // `(medicationId, scheduledFor)` pair. The optimistic patch
@@ -508,7 +470,7 @@ public extension MedicationsStore {
                 injectionSite: injectionSite
             )
         }
-        // v0.8.2 W1b (B5): coalesce a rapid second tap on the same real
+        // Coalesce a rapid second tap on the same real
         // intake while the first PATCH is still in flight.
         guard beginMark(intakeId) else { return .success }
         defer { endMark(intakeId) }
@@ -536,7 +498,7 @@ public extension MedicationsStore {
         } else {
             now
         }
-        bumpMutationGeneration() // H-3 — protect this optimistic patch (mark)
+        bumpMutationGeneration() // Protect this optimistic patch (mark)
         todayIntakes[originalIndex] = MedicationIntake(
             id: original.id,
             medicationId: original.medicationId,
@@ -545,35 +507,21 @@ public extension MedicationsStore {
             status: status,
             snoozedUntil: nil
         )
-        // v0.6.1.3 Y4.1 — let the App-Badge follow the optimistic patch
+        // Let the App-Badge follow the optimistic patch
         // so the icon ticks down immediately on Genommen tap, even
         // before the server roundtrip lands.
         onIntakesDidChange?()
-        // W-COMPLIANCE-INV — keep the last server snapshot painting through
+        // Keep the last server snapshot painting through
         // the optimistic window; the post-mark refresh overwrites it with the
         // canonical value (server is the only painted source).
 
         do {
-            let saved: MedicationIntake = if isStandalone() {
-                // v0.11 W2 — persist the dose to the local mirror so it reads
-                // back in the list immediately. No network, no outbox. The
-                // optimistic patch above already moved the row; this swaps in
-                // the canonical local row (stable externalId).
-                try await repo.recordStandaloneIntake(
-                    medicationId: original.medicationId,
-                    scheduledAt: original.scheduledAt,
-                    status: status,
-                    takenAt: resolvedTakenAt,
-                    injectionSite: injectionSite
-                )
-            } else {
-                try await repo.record(
-                    intake: intakeId,
-                    status: status,
-                    takenAt: resolvedTakenAt,
-                    injectionSite: injectionSite
-                )
-            }
+            let saved = try await repo.record(
+                intake: intakeId,
+                status: status,
+                takenAt: resolvedTakenAt,
+                injectionSite: injectionSite
+            )
             try sessionLease.requireCurrent()
             if let idx = todayIntakes.firstIndex(where: { $0.id == intakeId }) {
                 todayIntakes[idx] = saved
@@ -585,7 +533,7 @@ public extension MedicationsStore {
                 try sessionLease.requireCurrent()
             }
             onIntakesDidChange?()
-            // v0.6.1.4 Y4.2 — re-fetch the server-canonical card
+            // Re-fetch the server-canonical card
             // snapshot for the affected medication so the bar moves
             // to the new percentage as soon as the round-trip lands.
             // Detached so the success return isn't blocked on the
@@ -622,12 +570,13 @@ public extension MedicationsStore {
             return .failed(err)
         } catch {
             guard authenticatedEffectIsCurrent(sessionLease) else { return .failed(.canceled) }
-            let wrapped = HLError.unknown(String(describing: error))
+            // #191: the slot already held a take; nothing was written. The
+            // notice says when; the next load shows the first take.
+            let already = error as? MedicationAlreadyTaken
+            let wrapped = already?.notice ?? HLError.unknown(String(describing: error))
             self.error = wrapped
-            if let idx = todayIntakes.firstIndex(where: { $0.id == intakeId }) {
-                todayIntakes[idx] = original
-            }
-            onIntakesDidChange?()
+            // 1.7 (R1 #8): an already-taken slot stays taken, not reopened.
+            settleRefusedMark(intakeId: intakeId, original: original, already: already)
             return .failed(wrapped)
         }
     }

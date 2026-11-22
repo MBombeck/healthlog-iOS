@@ -1,0 +1,221 @@
+{
+  "_doc": "Questionnaire wording copied from the HealthLog server. Do not edit: run scripts/l10n/sync-questionnaire-wording.py --server-ref <tag>. See docs/localization.md.",
+  "language": "es",
+  "serverRef": "v1.46.6",
+  "serverCommit": "2c8140a50270a39852b57103785fc867bc2d47f6",
+  "generator": "scripts/l10n/sync-questionnaire-wording.py",
+  "punctuation": [
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.1",
+      "printed": "46–60 min",
+      "shown": "46 a 60 min",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.2",
+      "printed": "31–45 min",
+      "shown": "31 a 45 min",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.3",
+      "printed": "16–30 min",
+      "shown": "16 a 30 min",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.duration.4",
+      "printed": "0–15 min",
+      "shown": "0 a 15 min",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.0",
+      "printed": "5–7",
+      "shown": "5 a 7",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.nights.4",
+      "printed": "0–1",
+      "shown": "0 a 1",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.1",
+      "printed": "7–12 meses",
+      "shown": "7 a 12 meses",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.2",
+      "printed": "3–6 meses",
+      "shown": "3 a 6 meses",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    },
+    {
+      "instrument": "SCI",
+      "field": "anchors.problemDuration.3",
+      "printed": "1–2 meses",
+      "shown": "1 a 2 meses",
+      "reason": "A range between two numbers reads with the range word \"a\" instead of an en dash."
+    }
+  ],
+  "instruments": {
+    "PHQ9": {
+      "serverFile": "src/lib/mental-health/wording/phq9/es.ts",
+      "serverBlob": "b01a962377bd9cf90cbe3e4a702b5cd9a333cb0a",
+      "validated": true,
+      "source": "Pfizer Inc., PHQ-9, official translation \"Spanish for Spain\", read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/PHQ9_Spanish%20for%20Spain.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "Durante las últimas 2 semanas ¿con qué frecuencia le ha molestado alguno de los siguientes problemas?"
+      },
+      "items": [
+        "Poco interés o alegría por hacer cosas",
+        "Sensación de estar decaído/a, deprimido/a o desesperanzado/a",
+        "Problemas para quedarse dormido/a, para seguir durmiendo o dormir demasiado",
+        "Sensación de cansancio o de tener poca energía",
+        "Poco apetito o comer demasiado",
+        "Sentirse mal consigo mismo/a; sentir que es un/a fracasado/a o que ha decepcionado a su familia o a sí mismo/a",
+        "Problemas para concentrarse en algo, como leer el periódico o ver la televisión",
+        "Moverse o hablar tan despacio que los demás pueden haberlo notado. O lo contrario: estar tan inquieto/a o agitado/a que se ha estado moviendo de un lado a otro más de lo habitual",
+        "Pensamientos de que estaría mejor muerto/a o de querer hacerse daño de algún modo"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Nunca",
+          "1": "Varios días",
+          "2": "Más de la mitad de los días",
+          "3": "Casi cada día"
+        }
+      },
+      "functional": {
+        "title": "Si ha marcado alguno de los problemas de este cuestionario, ¿hasta qué punto estos problemas le han creado dificultades para hacer su trabajo, ocuparse de la casa o relacionarse con los demás?",
+        "anchors": {
+          "0": "Ninguna dificultad",
+          "1": "Algunas dificultades",
+          "2": "Muchas dificultades",
+          "3": "Muchísimas dificultades"
+        }
+      }
+    },
+    "GAD7": {
+      "serverFile": "src/lib/mental-health/wording/gad7/es.ts",
+      "serverBlob": "0d3462ddddae718d251d5e6e9446250e1a3df69f",
+      "validated": true,
+      "source": "Pfizer Inc., GAD-7, official translation \"Spanish for Spain\", read from https://www.phqscreeners.com/images/sites/g/files/g10060481/f/201412/GAD7_Spanish%20for%20Spain.pdf. Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or distribute.",
+      "stems": {
+        "period": "En los últimos 14 días, ¿con qué frecuencia le han supuesto una molestia los siguientes problemas?"
+      },
+      "items": [
+        "Sentirse nervioso/a, angustiado/a o muy tenso/a",
+        "Ser incapaz de dejar de preocuparse o de controlar la preocupación",
+        "Preocuparse demasiado por diferentes cuestiones",
+        "Tener problemas para relajarse",
+        "Estar tan inquieto/a que le resulta difícil permanecer sentado/a",
+        "Enfadarse o irritarse con facilidad",
+        "Sentir miedo de que algo terrible pueda ocurrir"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Nunca",
+          "1": "Varios días",
+          "2": "Más de la mitad de los días",
+          "3": "Casi cada día"
+        }
+      }
+    },
+    "WHO5": {
+      "serverFile": "src/lib/mental-health/wording/who5/es.ts",
+      "serverBlob": "3cce92e1be8ae634eb955ac45bec52c6226ecc1b",
+      "validated": true,
+      "source": "Psychiatric Research Unit (WHO Collaborating Centre in Mental Health, Mental Health Centre North Zealand) translation, republished by WHO beside WHO/UCN/MSD/MHE/2024.1 (licence CC BY-NC-SA 3.0 IGO). Spanish, 1998 version (\"OMS (cinco) Indice de Bienestar\"), read from https://cdn.who.int/media/docs/default-source/mental-health/oms-(cinco)-indice-de-bienestar-(oms-5).pdf.",
+      "stems": {
+        "period": "Durante las últimas dos semanas:"
+      },
+      "items": [
+        "Me he sentido alegre y de buen humor",
+        "Me he sentido tranquilo y relajado",
+        "Me he sentido activo y enérgico",
+        "Me he despertado fresco y descansado",
+        "Mi vida cotidiana ha estado llena de cosas que me interesan"
+      ],
+      "anchors": {
+        "all": {
+          "0": "Nunca",
+          "1": "De vez en cuando",
+          "2": "Menos de la mitad del tiempo",
+          "3": "Más de la mitad del tiempo",
+          "4": "La mayor parte del tiempo",
+          "5": "Todo el tiempo"
+        }
+      }
+    },
+    "SCI": {
+      "serverFile": "src/lib/mental-health/wording/sci/es.ts",
+      "serverBlob": "cf49ef5097f4c8b8c98d57388052058dc11c3277",
+      "validated": false,
+      "source": null,
+      "stems": {
+        "finally": "Por último …",
+        "impact": "Pensando en el último mes, ¿en qué medida dormir mal …",
+        "night": "Pensando en una noche típica del último mes …"
+      },
+      "items": [
+        "… ¿cuánto tiempo tarda en quedarse dormido/a?",
+        "… si después se despierta durante la noche … ¿cuánto tiempo permanece despierto/a en total? (sume todos los despertares)",
+        "… ¿cuántas noches a la semana tiene un problema con el sueño?",
+        "… ¿cómo valoraría la calidad de su sueño?",
+        "… ha afectado a su estado de ánimo, su energía o sus relaciones?",
+        "… ha afectado a su concentración, su productividad o su capacidad para mantenerse despierto/a?",
+        "… le ha molestado en general?",
+        "… ¿desde hace cuánto tiempo tiene un problema con el sueño?"
+      ],
+      "anchors": {
+        "duration": {
+          "0": "≥ 61 min",
+          "1": "46 a 60 min",
+          "2": "31 a 45 min",
+          "3": "16 a 30 min",
+          "4": "0 a 15 min"
+        },
+        "impact": {
+          "0": "Muchísimo",
+          "1": "Mucho",
+          "2": "Algo",
+          "3": "Un poco",
+          "4": "Nada"
+        },
+        "nights": {
+          "0": "5 a 7",
+          "1": "4",
+          "2": "3",
+          "3": "2",
+          "4": "0 a 1"
+        },
+        "problemDuration": {
+          "0": "> 1 año",
+          "1": "7 a 12 meses",
+          "2": "3 a 6 meses",
+          "3": "1 a 2 meses",
+          "4": "No tengo ningún problema / < 1 mes"
+        },
+        "quality": {
+          "0": "Muy mala",
+          "1": "Mala",
+          "2": "Regular",
+          "3": "Buena",
+          "4": "Muy buena"
+        }
+      }
+    }
+  }
+}

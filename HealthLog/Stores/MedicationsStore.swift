@@ -38,10 +38,10 @@ public final class MedicationsStore {
     /// Defaults to the server default (cards, no manual order) until the fetch
     /// lands; `activeMedications` applies the `order` so the list matches the
     /// web/other devices. Fetched best-effort on `load()` — any failure
-    /// (offline / standalone / older server) leaves the default and the list
+    /// (offline / older server) leaves the default and the list
     /// keeps the plain server order.
     public internal(set) var listLayout: MedicationListLayout = .default
-    /// **v0.6.1.4 Y4.2 — per-medication card snapshots.** Server-fetched 7-/30-day
+    /// **Per-medication card snapshots.** Server-fetched 7-/30-day
     /// compliance rates keyed by medication id, hydrated on `load()` + refreshed
     /// after each `markIntakeQuick`. `MedicationCard` reads via
     /// `cardComplianceSnapshot(for:)` ("unknown" when the fetch failed, #115 B7). Empty on logout.
@@ -63,10 +63,12 @@ public final class MedicationsStore {
     /// (``criticalAlarmFailureNames``) so a missed critical dose alarm is never
     /// invisible. Wired via `AppContainer.reconcileCriticalAlarms`'
     /// `onSchedulingFailures` callback; an empty set on a successful reconcile
-    /// clears the warning. Always empty on iOS < 26 / non-AlarmKit builds.
+    /// clears the warning. Always empty on non-AlarmKit builds.
     public private(set) var criticalAlarmFailureIDs: Set<String> = []
+    /// **D3 #4 — resolved slots on other days** (`MedicationsStore+ResolvedBeyondToday.swift`).
+    @ObservationIgnored var beyondToday = ResolvedBeyondToday()
 
-    /// **audit-v0162 H-3 — optimistic-mutation generation guard.** Bumped on
+    /// **Optimistic-mutation generation guard.** Bumped on
     /// every optimistic `todayIntakes` / `medications` write (mark / synth-mark /
     /// retro-mutate / delete-intake / undo / CRUD). The `consumeIntakes` /
     /// `consumeMeds` observe loops capture it at load-start and drop any
@@ -79,7 +81,7 @@ public final class MedicationsStore {
     @ObservationIgnored var mutationGeneration: UInt64 = 0
 
     /// Account-generation fence for every authenticated medication effect.
-    /// Standalone/test stores own an anonymous registry; AppContainer replaces
+    /// Test stores own an anonymous registry; AppContainer replaces
     /// it with the shared authenticated registry during composition.
     @ObservationIgnored var authenticatedSessionRegistry = AuthenticatedSessionLeaseRegistry()
     @ObservationIgnored var authenticatedSessionOwnerProvider: @Sendable () -> String? = { "_anonymous" }
@@ -113,7 +115,7 @@ public final class MedicationsStore {
     /// previous-user value can't flash for the next user on a shared device.
     var complianceRefreshTask: Task<Void, Never>?
 
-    // MARK: - v0.14.2 H4 — compliance fan-out throttle + dedup
+    // MARK: - Compliance fan-out throttle + dedup
 
     /// Medication-ids whose card-compliance fetch is currently in flight. Keeps
     /// the bounded fan-out from re-fetching the same med concurrently (two
@@ -132,7 +134,7 @@ public final class MedicationsStore {
     var lastComplianceFanoutIDs: Set<String> = []
     var lastComplianceFanoutAt: Date?
 
-    /// **W-COMPLIANCE-INV — per-med fetch-failure marker.** A med-id lands
+    /// **Per-med fetch-failure marker.** A med-id lands
     /// here when its `GET …/compliance` round-trip failed (offline / 5xx) and
     /// leaves on the next success. `cardComplianceSnapshot` answers "unknown"
     /// (never a device-computed rate, #115 B7) for ids in this set — before the
@@ -155,19 +157,67 @@ public final class MedicationsStore {
     /// a genuine resume past the window still forces a fresh reconcile.
     private var lastForegroundLoadAt: Date?
 
-    /// Minimum gap between foreground-triggered forced loads. Short enough that
-    /// a real resume after a glance still revalidates promptly, long enough to
-    /// swallow a multi-event scenePhase flap.
-    static let foregroundRevalidateThrottle: TimeInterval = 3
+    /// The foreground revalidation in flight (#188 (1)). Owned by the store,
+    /// not by whoever asked for it, so the foreground pass's 250 ms deadline
+    /// cannot cancel it. `nil` when none runs.
+    @ObservationIgnored var foregroundRevalidationTask: Task<Void, Never>?
 
-    /// W-PERF-SWR — throttled foreground revalidation entry point for the
+    /// How many `.fresh` today-intakes payloads the store has applied. The
+    /// foreground throttle stamps its window only when a revalidation moved
+    /// this, i.e. after the server answered.
+    @ObservationIgnored var freshTodayIntakesDeliveries: UInt64 = 0
+    @ObservationIgnored var foregroundRevalidationGeneration: UInt64 = 0
+    /// When the server last answered today's intakes (#189 (6)).
+    @ObservationIgnored var lastFreshTodayIntakesAt: Date?
+
+    /// Takes recorded outside the app, offered for undo on the next open
+    /// (#188 (7)). Tests point it at a temporary file.
+    @ObservationIgnored var externalTakeLog = ExternalTakeLog()
+    /// #191: capability reads, the data's `lastUpdatedAt` and the freshness check in flight.
+    @ObservationIgnored var contract = MedicationContractState()
+    /// 1.7: whether the dose state on screen is confirmed (``DoseStateConfirmation``).
+    public internal(set) var doseConfirmation = DoseStateConfirmation()
+    /// Doses resolved elsewhere, from the extension's App Group ledger. Tests point it at a file.
+    @ObservationIgnored var resolvedDoseLedger = ResolvedDoseLedger()
+
+    /// Throttled foreground revalidation entry point for the
     /// `scenePhase == .active` hook. Runs a forced `load` at most once per
     /// `foregroundRevalidateThrottle`; intermediate flaps are dropped (the prior
     /// forced load already reconciled the canonical state). Pass `now` for tests.
+    ///
+    /// **#188 (1):** the load runs in a task the store owns
+    /// (``startForegroundRevalidation(now:)``). This call waits for it only
+    /// until the caller is cancelled: the foreground pass's deadline used to
+    /// cancel the load itself, the fetch then landed in the cache only, and
+    /// `todayIntakes` stayed stale with no `onIntakesDidChange` (Live Activity,
+    /// widget, reminder completion). The window is stamped after a `.fresh`
+    /// delivery, so an interrupted or failed load no longer swallows the next
+    /// `scenePhase` reload for three seconds.
     public func loadOnForeground(now: Date = .now) async {
-        guard shouldRunForegroundLoad(now: now) else { return }
-        lastForegroundLoadAt = now
-        await load(force: true)
+        guard let task = startForegroundRevalidation(now: now) else { return }
+        await OwnedReloadWait.untilDoneOrCancelled(task)
+    }
+
+    /// Starts the forced foreground load in its own task, or returns the one
+    /// already running; `nil` inside the throttle window.
+    @discardableResult
+    func startForegroundRevalidation(now: Date = .now) -> Task<Void, Never>? {
+        if let running = foregroundRevalidationTask { return running }
+        guard shouldRunForegroundLoad(now: now) else { return nil }
+        let deliveriesBefore = freshTodayIntakesDeliveries
+        foregroundRevalidationGeneration &+= 1
+        let generation = foregroundRevalidationGeneration
+        let task = _Concurrency.Task { @MainActor [weak self] in
+            guard let self else { return }
+            await load(force: true)
+            // A logout cancels this task and a new one may already run.
+            guard foregroundRevalidationGeneration == generation else { return }
+            if freshTodayIntakesDeliveries != deliveriesBefore { lastForegroundLoadAt = now }
+            foregroundRevalidationTask = nil
+            offerUndoForExternalTake()
+        }
+        foregroundRevalidationTask = task
+        return task
     }
 
     /// Pure throttle decision — `true` when no foreground load has run, or the
@@ -196,14 +246,8 @@ public final class MedicationsStore {
     /// Optional undo affordance — wires the archive flow into the shared
     /// `Rückgängig`-pill. `nil` in headless / unit-test contexts.
     let undoCoordinator: UndoCoordinator?
-    /// v0.11 W2 — live standalone-mode predicate. Default `{ false }` keeps the
-    /// store on the existing server intake path (paired invariant). When the
-    /// composition-root wires the standalone gate this returns the live mode, so
-    /// a logged dose lands in the local mirror + reads back in the list. Full
-    /// on-device compliance is the W2b follow-up; this only routes the WRITE.
-    let isStandalone: @Sendable () -> Bool
 
-    /// **v0.14 DATA — server-profile day-anchoring timezone.**
+    /// **Server-profile day-anchoring timezone.**
     ///
     /// `derivedTodayIntakes` builds today's `[startOfToday, endOfToday)` window
     /// and the recurrence-engine `Context` against this zone. The composition
@@ -224,7 +268,7 @@ public final class MedicationsStore {
         profileTimeZoneProvider()
     }
 
-    /// **audit-v0162 M-7 — derived-intake synthesis gate.** `derivedTodayIntakes`
+    /// **Derived-intake synthesis gate.** `derivedTodayIntakes`
     /// synthesises client-side placeholders for schedule slots the server hasn't
     /// materialised. On a MODERN (slot-materialising) server that synthesis
     /// double-counts a slot whose server `scheduledFor` diverges >5 min from the
@@ -235,9 +279,7 @@ public final class MedicationsStore {
     /// **Wired since audit-v0162 M-7.** `AppContainer.configureRuntimeWiring`
     /// points this at `MedicationSlotMaterializationGate.synthesisEnabled` —
     /// the persisted verdict from `GET /api/version` against
-    /// ``MedicationSlotMaterialization/minimumServerVersion`` (v1.8.1) — OR'd
-    /// with standalone mode, where there is no server ledger at all and the
-    /// synthesis is the only source of "due today". The bare default stays
+    /// ``MedicationSlotMaterialization/minimumServerVersion`` (v1.8.1). The bare default stays
     /// `true` for stores built outside the composition root (tests, previews):
     /// synthesising is the historically-correct behaviour for a store with no
     /// server-capability knowledge attached. A provider so a later version
@@ -267,7 +309,7 @@ public final class MedicationsStore {
         .dashboardSummary(day: MedicationDayKey.string(timeZone: profileTimeZone))
     }
 
-    /// **v0.6.1.3 Y4.1 — App-Badge recompute hook.**
+    /// **App-Badge recompute hook.**
     ///
     /// AppContainer wires this to `NotificationService.refreshBadge(from:)`
     /// so every mark / snooze / load mutation that changes the pending
@@ -277,7 +319,7 @@ public final class MedicationsStore {
     /// a hop.
     public var onIntakesDidChange: (@MainActor () -> Void)?
 
-    /// **v0.9.0 W2 — per-med critical-alarm opt-in predicate provider.**
+    /// **Per-med critical-alarm opt-in predicate provider.**
     ///
     /// AppContainer wires this to produce a fresh
     /// `DeliveryPreferencesStore.enabledPredicate(for: .criticalAlarm)`
@@ -288,6 +330,10 @@ public final class MedicationsStore {
     /// `assumeIsolated`. `nil` (→ "all off") in tests + macOS builds so the
     /// store still routes everything through the existing UN path unchanged.
     public var criticalAlarmEnabledProvider: (@MainActor () -> @Sendable (String) -> Bool)?
+    /// Whether this device plans local reminders at all (``ReminderDevicePolicy``).
+    /// `false` hands both local planners an empty list, which purges what they
+    /// armed. `nil` (tests, phones) plans.
+    public var localPlanningGate: (@MainActor () -> Bool)?
 
     /// **v0.10 W-Meds-A2 (v1.7.0 SB-LA-1 / SB-AK-1) — medications-loaded hook.**
     ///
@@ -298,7 +344,7 @@ public final class MedicationsStore {
     /// (`ingestServerDefaults(from:)`). The gating predicates then resolve those
     /// defaults with no scheduler-side change. `nil` in tests + macOS builds.
     public var onMedicationsDidChange: (@MainActor ([Medication]) -> Void)?
-    /// W-B187 QOL-2 — fires the fresh snapshot on list-settle so `AppContainer`
+    /// Fires the fresh snapshot on list-settle so `AppContainer`
     /// re-indexes meds into CoreSpotlight (a slot distinct from `onMedicationsDidChange`).
     public var onMedicationsListSettled: (@MainActor ([Medication]) -> Void)?
     /// Days window passed to `repo.compliance` + matching `CacheKey`.
@@ -314,20 +360,14 @@ public final class MedicationsStore {
     /// the store-side alias.
     nonisolated static let complianceDaysWindow = CacheKey.complianceWindowDays
 
-    public init(
-        repo: MedicationsRepository,
-        swr: SWRCoordinator? = nil,
-        undoCoordinator: UndoCoordinator? = nil,
-        isStandalone: @escaping @Sendable () -> Bool = { false }
-    ) {
+    public init(repo: MedicationsRepository, swr: SWRCoordinator? = nil, undoCoordinator: UndoCoordinator? = nil) {
         self.repo = repo
         self.swr = swr
         self.undoCoordinator = undoCoordinator
-        self.isStandalone = isStandalone
         authenticatedSessionRegistry.activate(ownerID: "_anonymous")
     }
 
-    // MARK: - v0.8.2 W1b (audit B5) — in-flight mark guard
+    // MARK: - In-flight mark guard
 
     /// `true` while a mark for `intakeId` is awaiting its network
     /// round-trip. Views observe this (`@Observable`) to disable a row's
@@ -354,11 +394,11 @@ public final class MedicationsStore {
 
     /// - Parameter force: when `true`, bypasses the `medicationsList` /
     ///   `medicationsTodayIntakes` TTLs so an explicit pull-to-refresh always
-    ///   revalidates (W8-B1). Default `false` lets a foreground bounce inside
+    ///   revalidates. Default `false` lets a foreground bounce inside
     ///   the window paint from cache without redundant round-trips. The
     ///   compliance stream keeps its own 5min TTL regardless — it is not a
     ///   per-bounce hot key.
-    /// - Parameter intent: **21-03 (D-14-06-C)** — who asked. `.system` (every
+    /// - Parameter intent: **21-03** — who asked. `.system` (every
     ///   caller here today) keeps the single-flight collapse exactly as it was;
     ///   `.userInitiated` — which `MedicationsScreen`'s pull now passes — takes
     ///   the bounded-attach path in `SWRCoordinator.revalidateSingleFlight`
@@ -370,11 +410,11 @@ public final class MedicationsStore {
     /// `load-1` to a helper symbol and introduces a new `owned-task` hit — drift
     /// in the FROZEN Phase-06 effect census, which a 21-xx plan may not
     /// disposition. See `.planning/phases/21-first-paint/deferred-items.md`
-    /// (D-21-03-A) for the working shape and the two regressions it must keep
+    /// for the working shape and the two regressions it must keep
     /// guarding.
     public func load(force: Bool = false, intent: RefreshIntent = .system) async {
         guard let sessionLease = captureAuthenticatedSessionLease() else {
-            // 14-06 — this was a silent `return`, exactly as 13-03 found in
+            // This was a silent `return`, exactly as 13-03 found in
             // `DashboardStore`. A refused lease and a finished load looked
             // identical in the field.
             StoreEffectDiagnostics.recordRefusal(.leaseUnavailable, store: .medications)
@@ -432,10 +472,11 @@ public final class MedicationsStore {
             return
         }
         let repo = repo
-        // audit-v0162 H-3 — capture the mutation generation at observe-start so a
+        // Capture the mutation generation at observe-start so a
         // revalidation that began before a concurrent mark/CRUD is dropped rather
         // than repainting a marked dose pending / a deleted med back into the list.
         let loadGeneration = mutationGeneration
+        beginDoseHoldIfUnknown()
         async let medsStream: () = consumeMeds(
             stream: swr.observe(
                 .medicationsList,
@@ -469,15 +510,15 @@ public final class MedicationsStore {
         async let layoutFetch: () = fetchListLayout(sessionLease: sessionLease)
         _ = await (medsStream, intakesStream, complianceStream, layoutFetch)
         guard authenticatedEffectIsCurrent(sessionLease) else {
-            // 14-06 — the same silence as the lease-nil above, one emission later.
+            // The same silence as the lease-nil above, one emission later.
             StoreEffectDiagnostics.recordRefusal(.leaseRetired, store: .medications)
             return
         }
-        // v0.6.1.4 Y4.2 — fan out per-medication server-canonical
+        // Fan out per-medication server-canonical
         // snapshots once the medication list has settled. Quietly
         // drops failures (cold cache / offline); the card then says
-        // "adherence unknown" (#115 B7).
-        // v0.14.2 H4 — throttled so this load + the SWR `.fresh` re-emit it
+        // "adherence unknown".
+        // Throttled so this load + the SWR `.fresh` re-emit it
         // races coalesce into ONE fan-out per screen-open (was N×2-3 GETs).
         await refreshAllCardComplianceSnapshotsThrottled(sessionLease: sessionLease)
     }
@@ -489,7 +530,7 @@ public final class MedicationsStore {
         guard authenticatedEffectIsCurrent(sessionLease) else { return }
         isLoading = true
         error = nil
-        // 14-06 — the condition used to be `authenticatedEffectIsCurrent`, which
+        // The condition used to be `authenticatedEffectIsCurrent`, which
         // folds in cancellation, so on the one exit that needed the defer it did
         // not fire. This is the `LabsStore` twin 13-03 closed, in a store 13-03
         // never touched. `ownsRegistryGeneration` fires on cancellation (which
@@ -509,19 +550,25 @@ public final class MedicationsStore {
             onMedicationsListSettled?(medications)
             let fetchedToday = try await today
             try sessionLease.requireCurrent()
-            todayIntakes = fetchedToday
+            let freshAt = Date.now
+            todayIntakes = Self.foldingResolvedDoses(
+                resolvedDoseLedger.read(), into: fetchedToday, asOf: Self.ledgerCutoff(freshAt: freshAt)
+            )
+            freshTodayIntakesDeliveries &+= 1
+            lastFreshTodayIntakesAt = freshAt
+            noteFreshTodayIntakes(now: freshAt)
             let fetchedCompliance = try await comp
             try sessionLease.requireCurrent()
             compliance = fetchedCompliance
             await fetchListLayout(sessionLease: sessionLease)
             try sessionLease.requireCurrent()
             reconcileSpeziSchedulerIfAvailable()
-            // v0.6.1.4 Y4.2 — fan out per-medication compliance
+            // Fan out per-medication compliance
             // snapshots after the medication list has settled. The
             // refresh tolerates failures so unit-test fixtures that
             // omit the `/api/medications/[id]/compliance` stub keep
             // the existing direct-fetch contract — the dict stays
-            // empty and the card says "adherence unknown" (#115 B7).
+            // empty and the card says "adherence unknown".
             await refreshAllCardComplianceSnapshots(sessionLease: sessionLease)
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(sessionLease) else { return }
@@ -539,7 +586,7 @@ public final class MedicationsStore {
     ) async {
         for await state in stream {
             guard authenticatedEffectIsCurrent(sessionLease) else {
-                // 14-06 — the refusal is countable now. `load`'s defer settles
+                // The refusal is countable now. `load`'s defer settles
                 // the flag this bare `return` used to strand.
                 StoreEffectDiagnostics.recordRefusal(.leaseRetired, store: .medications)
                 return
@@ -549,7 +596,7 @@ public final class MedicationsStore {
                 isLoading = true
                 error = nil
             case let .cached(value, _):
-                // H-3 — drop a stale cache page superseded by a concurrent CRUD.
+                // Drop a stale cache page superseded by a concurrent CRUD.
                 guard mutationGeneration == loadGeneration else {
                     isLoading = false
                     continue
@@ -561,7 +608,7 @@ public final class MedicationsStore {
                 reconcileSpeziSchedulerIfAvailable()
                 onMedicationsListSettled?(medications)
             case let .fresh(value):
-                // H-3 — drop a stale fresh page superseded by a concurrent CRUD
+                // Drop a stale fresh page superseded by a concurrent CRUD
                 // (optimistic create/archive/unarchive bumps the generation).
                 guard mutationGeneration == loadGeneration else {
                     isLoading = false
@@ -575,11 +622,11 @@ public final class MedicationsStore {
                 error = nil
                 reconcileSpeziSchedulerIfAvailable()
                 onMedicationsListSettled?(medications)
-                // v0.6.1.4 Y4.2 — refresh per-medication snapshots in
+                // Refresh per-medication snapshots in
                 // the background. New medications enter the array
                 // here (post-`create`, post-`unarchive`), so the
                 // snapshot dict needs to catch up.
-                // v0.14.2 H4 — route through the THROTTLED variant: the SWR
+                // Route through the THROTTLED variant: the SWR
                 // stream re-emits `.fresh` with identical rows on every
                 // revalidate, and re-running the full N-request fan-out each
                 // time is radio-wake waste. The throttle no-ops when the active
@@ -590,7 +637,7 @@ public final class MedicationsStore {
                     await self?.refreshAllCardComplianceSnapshotsThrottled(sessionLease: sessionLease)
                 }
             case let .failed(err, lastKnown):
-                // H-3 — `lastKnown` is the pre-fetch page; don't repaint it over
+                // `lastKnown` is the pre-fetch page; don't repaint it over
                 // a concurrent optimistic CRUD.
                 if let lastKnown, mutationGeneration == loadGeneration {
                     medications = preservingLocalArchivedAt(in: lastKnown)
@@ -614,69 +661,45 @@ public final class MedicationsStore {
     /// the `#if canImport(SpeziScheduler)` gate keeps tests + macOS
     /// builds untouched.
     func reconcileSpeziSchedulerIfAvailable() {
-        // v0.10 W-Meds-A2 — fold the per-medication v1.7.0 delivery booleans
+        // Fold the per-medication v1.7.0 delivery booleans
         // into the DeliveryPreferences server-default cache BEFORE the reconcile
         // reads the gating predicates, so a Live Activity / critical alarm only
         // arms when the resolved value is true.
         onMedicationsDidChange?(medications)
-        // v0.9.0 W2 — critical-med AlarmKit reconcile runs FIRST and returns
+        // Critical-med AlarmKit reconcile runs FIRST and returns
         // the subset that stays on the UN/Spezi path (coexistence = REPLACE).
-        // On iOS < 26 / no AlarmKit this is the identity, so the Spezi path is
-        // unchanged. Falls back to "all off" when the predicate isn't wired
-        // (tests / macOS) so everything still routes through the UN path.
+        let schedulerMeds = reconcileCriticalAlarms()
+        #if canImport(SpeziScheduler)
+            AppContainer.reconcileMedicationsScheduler(medications: schedulerMeds)
+        #endif
+    }
+
+    /// The critical-med AlarmKit pass on its own; returns the medications
+    /// that stay on the UN/Spezi path. Without AlarmKit this is the identity.
+    /// Falls back to "all off" when the predicate isn't wired (tests / macOS),
+    /// so everything still routes through the UN path. A device that does not
+    /// plan reminders reconciles against nothing, so whatever it armed earlier
+    /// is cancelled. **#188 (5):** today's taken or skipped slots go along, so
+    /// a dose resolved anywhere keeps its alarm silent today; the intake-change
+    /// wiring calls this on every `onIntakesDidChange`.
+    @discardableResult
+    func reconcileCriticalAlarms() -> [Medication] {
         let alarmEnabled: @Sendable (String) -> Bool = if let provider = criticalAlarmEnabledProvider {
             provider()
         } else {
             { _ in false }
         }
-        let schedulerMeds = AppContainer.reconcileCriticalAlarms(
-            medications: medications,
+        return AppContainer.reconcileCriticalAlarms(
+            medications: plannedMedications,
             alarmEnabled: alarmEnabled,
+            resolvedSlots: allResolvedSlots,
+            accountTimeZone: profileTimeZone,
             // audit-release 05 C-1 — surface a critical-alarm scheduling failure
             // as a persistent, user-visible warning instead of swallowing it.
             onSchedulingFailures: { [weak self] failedIDs in
                 self?.criticalAlarmFailureIDs = failedIDs
             }
         )
-        #if canImport(SpeziScheduler)
-            AppContainer.reconcileMedicationsScheduler(medications: schedulerMeds)
-        #endif
-    }
-
-    /// Server doesn't return `archivedAt` (clientside-only field per the
-    /// Medication model). Merge incoming rows with the in-memory map so
-    /// that a fresh `load()` doesn't drop the local timestamp the user
-    /// just saw when they archived. Pre-existing timestamps win only
-    /// when the incoming row is still `active = false` — if the server
-    /// has reactivated the medication, we drop the stale timestamp.
-    private func preservingLocalArchivedAt(in incoming: [Medication]) -> [Medication] {
-        let localTimestamps: [String: Date] = Dictionary(uniqueKeysWithValues: medications
-            .compactMap { medication -> (String, Date)? in
-                guard let archivedAt = medication.archivedAt else { return nil }
-                return (medication.id, archivedAt)
-            })
-        guard !localTimestamps.isEmpty else { return incoming }
-        return incoming.map { row in
-            guard !row.active, row.archivedAt == nil, let preserved = localTimestamps[row.id] else {
-                return row
-            }
-            return Medication(
-                id: row.id,
-                name: row.name,
-                dose: row.dose,
-                treatmentClass: row.treatmentClass,
-                category: row.category,
-                dosesPerUnit: row.dosesPerUnit,
-                schedule: row.schedule,
-                lastTakenAt: row.lastTakenAt,
-                todayEventCount: row.todayEventCount,
-                notificationsEnabled: row.notificationsEnabled,
-                active: row.active,
-                archivedAt: preserved,
-                trackIntake: row.trackIntake,
-                recordedSchedule: row.recordedSchedule
-            ).carryingCategoryLabel(row.categoryLabel)
-        }
     }
 
     private func consumeIntakes(
@@ -689,19 +712,34 @@ public final class MedicationsStore {
             switch state {
             case .empty:
                 break
-            case let .cached(value, _):
-                // H-3 generation-guarded — drop if a concurrent mark superseded.
-                applyTodayIntakes(value, loadGeneration: loadGeneration)
+            case let .cached(value, age):
+                // Generation-guarded — drop if a concurrent mark superseded.
+                // 1.7: a row older than the state in memory never replaces
+                // it, and a row older than the window is held neutral
+                // (``DoseStateConfirmation``) with its effects kept back.
+                let cachedAt = Date.now.addingTimeInterval(-age)
+                guard acceptsCachedTodayIntakes(cachedAt: cachedAt) else { continue }
+                let current = noteCachedTodayIntakes(cachedAt: cachedAt)
+                applyTodayIntakes(value, loadGeneration: loadGeneration, asOf: cachedAt, notify: current)
             case let .fresh(value):
-                // H-3 — a stale fresh here would repaint a marked dose pending
+                // A stale fresh here would repaint a marked dose pending
                 // and climb the app badge back up; drop it when superseded.
-                applyTodayIntakes(value, loadGeneration: loadGeneration)
+                // Counted either way: the server answered (#188 (1)).
+                let freshAt = Date.now
+                freshTodayIntakesDeliveries &+= 1
+                lastFreshTodayIntakesAt = freshAt
+                // Fold before the prune: an entry written during the request's
+                // flight still counts once.
+                applyTodayIntakes(value, loadGeneration: loadGeneration, asOf: Self.ledgerCutoff(freshAt: freshAt), notify: false)
+                noteFreshTodayIntakes(now: freshAt)
+                onIntakesDidChange?()
             case let .failed(_, lastKnown):
                 if let lastKnown {
                     applyTodayIntakes(lastKnown, loadGeneration: loadGeneration)
                 }
             }
         }
+        noteTodayIntakesStreamEnded()
     }
 
     private func consumeCompliance(
@@ -723,7 +761,7 @@ public final class MedicationsStore {
         }
     }
 
-    /// **v0.6.1.4 Y4.2** — fetch the server-canonical compliance
+    /// Fetch the server-canonical compliance
     /// snapshot for a single medication and patch it into
     /// `complianceCardSnapshots`. On failure the dict stays untouched
     /// (so a previous-good value keeps rendering and the local
@@ -753,7 +791,7 @@ public final class MedicationsStore {
         sessionLease: AuthenticatedSessionLease
     ) async {
         guard authenticatedEffectIsCurrent(sessionLease) else { return }
-        // v0.14.2 H4 — dedup: skip if this med's compliance fetch is already in
+        // Dedup: skip if this med's compliance fetch is already in
         // flight (fan-out + a racing single-med refresh) so we never open two
         // concurrent `GET …/compliance` for the same med. Check-then-insert is
         // atomic on the MainActor.
@@ -762,7 +800,7 @@ public final class MedicationsStore {
         defer { inFlightComplianceFetchIDs.remove(medicationID) }
         do {
             let payload = try await repo.compliance(medicationID: medicationID)
-            // PHI-flash race (QA-b198 M-2): a logout/user-switch mid-fetch must
+            // PHI-flash race: a logout/user-switch mid-fetch must
             // not commit the previous user's adherence onto the next user's card.
             try sessionLease.requireCurrent()
             let snapshot = ComplianceCardSnapshot(
@@ -777,7 +815,7 @@ public final class MedicationsStore {
             )
             complianceCardSnapshots[medicationID] = snapshot
             failedComplianceFetchIDs.remove(medicationID)
-            // M-7 triage (v0.14.8 audit Q2.2): the med id is a bare cuid
+            // The med id is a bare cuid
             // (sanitizer-transparent) and the rates/counts are health-behavior
             // values tied to it, so the whole mixed line goes `.private`.
             HLLog.api.debug(
@@ -791,11 +829,11 @@ public final class MedicationsStore {
             )
         } catch {
             guard authenticatedEffectIsCurrent(sessionLease) else { return }
-            // W-COMPLIANCE-INV — mark the failed round-trip so the card
-            // accessor may say "adherence unknown" (#115 B7) instead
+            // Mark the failed round-trip so the card
+            // accessor may say "adherence unknown" instead
             // of a skeleton forever. A previous-good cached value still wins.
             failedComplianceFetchIDs.insert(medicationID)
-            // M-7 triage — same rationale: cuid med id + free-form error text
+            // Same rationale: cuid med id + free-form error text
             // (sanitizer-transparent shapes) → `.private`.
             HLLog.api.debug(
                 """
@@ -812,7 +850,7 @@ public final class MedicationsStore {
     /// into `complianceCardSnapshots`, replacing the per-card N-request fan-out.
     /// Returns the set of medication ids the batch covered so the caller fans out
     /// only over the remainder (PRN meds, excluded server-side). Returns an empty
-    /// set on any failure (offline / standalone / pre-batch server 404) so the
+    /// set on any failure (offline / pre-batch server 404) so the
     /// caller's per-med fan-out runs as the full fallback — no behaviour lost,
     /// just fewer requests on the happy path.
     ///
@@ -874,21 +912,27 @@ public final class MedicationsStore {
 
     public func clearOnLogout() {
         rotateOwnedAuthenticatedSessionBoundary()
+        resetFreshness()
+        resetDoseConfirmation()
         medications = []
         hasLoadedMedications = false
         todayIntakes = []
         compliance = []
         complianceCardSnapshots = [:]
         failedComplianceFetchIDs = []
-        criticalAlarmFailureIDs = [] // C-1 — no stale alarm warning into the cleared store
+        criticalAlarmFailureIDs = [] // No stale alarm warning into the cleared store
+        beyondToday = ResolvedBeyondToday()
         error = nil
         isLoading = false
         isShowingStaleCache = false
         inFlightMarkIDs = []
-        complianceRefreshTask?.cancel() // M3 — no stale value into cleared store
+        complianceRefreshTask?.cancel() // No stale value into cleared store
         complianceRefreshTask = nil
         medicationsFanoutTask?.cancel()
         medicationsFanoutTask = nil
+        foregroundRevalidationTask?.cancel()
+        foregroundRevalidationTask = nil
+        foregroundRevalidationGeneration &+= 1
         // Reconcile against the now-empty medications array — the
         // SpeziScheduler module purges every `med-*` task because none
         // are in the desired-id set. Prevents the next user from

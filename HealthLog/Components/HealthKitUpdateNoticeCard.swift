@@ -4,20 +4,20 @@ import SwiftUI
 /// an *existing* installation what an update changed about Apple Health.
 ///
 /// Why this is a second surface beside `HealthKitConnectBanner` rather than a
-/// banner change: the banner's rule is pinned (12-12) and deliberately
+/// banner change: the banner's rule is pinned and deliberately
 /// refuses on `isConnected` first — correct for read-only users whose data
-/// demonstrably flows (K10), and exactly the latch that left the field
+/// demonstrably flows, and exactly the latch that left the field
 /// device with no connect affordance at all. This card carries its own rule
 /// (`HealthKitUpdateNotice.visibleVariant`): armed once per install by the
 /// launch prologue's update evidence, dismissed once by the ✕, rendered from
-/// the readiness state — and, since 25-02 (E-2026-08-29 #5), gone the moment
+/// the readiness state — and, since 25-02, gone the moment
 /// the SYSTEM says its sheet was answered (`getRequestStatusForAuthorization`,
 /// the one API that speaks for read types too). A completed sheet removes the
 /// card in the same session and across launches, with no local memory.
 ///
 /// The two buttons stay individually addressable — deliberately NO
 /// `.accessibilityElement(children: .combine)`: 12-12 measured that the
-/// banner's merge makes both child identifiers unresolvable (D-12-12-B),
+/// banner's merge makes both child identifiers unresolvable,
 /// which silently disarmed a sibling test's dismissal.
 struct HealthKitUpdateNoticeCard: View {
     @Environment(HKReadinessStore.self) private var readiness
@@ -27,7 +27,7 @@ struct HealthKitUpdateNoticeCard: View {
     /// `HealthKitUpdateNotice`.
     @AppStorage(HealthKitUpdateNotice.dismissedDefaultsKey) private var dismissed = false
 
-    /// **25-02 (E-2026-08-29 #5) — the system's answer, asked and re-asked,
+    /// **The system's answer, asked and re-asked,
     /// never remembered.** `nil` until the first query returns (the card
     /// renders nothing rather than flashing an answer it does not have yet).
     /// Queried on every appearance keyed to the readiness state — a fresh
@@ -52,7 +52,7 @@ struct HealthKitUpdateNoticeCard: View {
                     .transition(transition)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dismissed)
             } else if sheetStatus != nil {
-                // HK-NEW (1.5) — the new read types, in this card's slot and
+                // The new read types, in this card's slot and
                 // only when it has nothing to say itself.
                 HealthKitNewReadTypesCard()
             }
@@ -156,7 +156,7 @@ struct HealthKitUpdateNoticeCard: View {
         Button {
             Task {
                 await readiness.requestAuthorization()
-                // 25-02 — the flow completed; ask the system again NOW so an
+                // The flow completed; ask the system again NOW so an
                 // answered sheet takes the card off this session's screen
                 // (the store's own readiness refresh already ran inside
                 // `requestAuthorization()`).

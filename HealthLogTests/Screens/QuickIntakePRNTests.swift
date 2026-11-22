@@ -1,4 +1,4 @@
-// 15-04 (B6) — "über Erfassen lässt sich nichts erfassen".
+// "über Erfassen lässt sich nichts erfassen".
 //
 // The Erfassen → Einnahme-erfassen sheet asks exactly one question: which of
 // today's slots is due? (`MedicationQuickIntakeOptions.resolve` — pending
@@ -73,7 +73,7 @@
 
             #expect(
                 options.asNeeded.map(\.id) == [Self.prn.id],
-                "EXPECTED_RED: the quick sheet structurally excludes PRN"
+                "the quick sheet structurally excludes PRN"
             )
             #expect(!options.isEmpty, "a PRN-only account must not read as 'nothing to record'")
         }

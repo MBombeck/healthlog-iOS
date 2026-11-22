@@ -27,7 +27,7 @@ import Foundation
 /// low-rate, server-rate-limited probes — no outbox `Kind` is wired (these are
 /// Settings actions, not high-volume health writes).
 ///
-/// **The test POSTs never retry (#112).** Since server v1.38.21 a relay that
+/// **The test POSTs never retry.** Since server v1.38.21 a relay that
 /// refuses the test message answers `502` with the cause in `meta`. The
 /// transport retries a 5xx up to three times, so one tap sent up to four test
 /// messages to the relay and spent four of the route's five tests per five
@@ -59,7 +59,7 @@ public actor NotificationServicesRepository {
         let url: String
         let headerName: String?
         let headerValue: String?
-        /// #112 — `generic` | `gotify`. `nil` is left off the wire, and the
+        /// `generic` | `gotify`. `nil` is left off the wire, and the
         /// server then keeps the stored format; ``WebhookFormat/unknown`` is
         /// never sent.
         let format: String?
@@ -150,7 +150,7 @@ public actor NotificationServicesRepository {
 
     /// Saves the generic-webhook channel config. `headerValue` (write-only
     /// shared secret) is forwarded only on change. `format` is sent only when
-    /// it is a known choice (#112); `nil` or ``WebhookFormat/unknown`` keeps the
+    /// it is a known choice; `nil` or ``WebhookFormat/unknown`` keeps the
     /// stored format server-side.
     public func saveWebhook(
         enabled: Bool,

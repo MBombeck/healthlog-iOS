@@ -1,4 +1,4 @@
-// parity 2.9 — "auth honesty": the login surface must promise only what the
+// "auth honesty": the login surface must promise only what the
 // configured server can actually deliver.
 //
 // Coverage:

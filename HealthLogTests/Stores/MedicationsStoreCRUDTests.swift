@@ -5,7 +5,7 @@ import Testing
 // swiftlint:disable force_unwrapping
 
 /// T-3 store-level CRUD orchestration. The store delegates to
-/// `MedicationsRepository` (T-0) but owns the optimistic in-memory list,
+/// `MedicationsRepository` but owns the optimistic in-memory list,
 /// the archive-rollback semantics, and the active/archived split that
 /// `MedicationsScreen` consumes.
 @MainActor

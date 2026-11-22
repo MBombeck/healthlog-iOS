@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.15.7 W-RHYTHM-FRONTDOOR — Home front door to the device-health-
+/// **Home front door to the device-health-
 /// notifications (ECG/AFib rhythm-events) card.**
 ///
 /// The ECG / AFib / irregular-rhythm timeline already has a dedicated, regulator-
@@ -30,27 +30,28 @@ struct RhythmEventsTile: View {
     let summary: RhythmEventsTileModel.Summary
 
     var body: some View {
-        HLCard(style: .elevated) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                header
-                // 1.4 B2 — eyebrow plus one sentence; the separate title
-                // ("Hinweise deiner Uhr") said the same thing a third time.
-                Text(summary.subtitle)
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+        // The whole card is the button, like every tappable card of Today:
+        // press feedback, the lift under the pointer, keyboard focus.
+        Button { router.requestInsightsOverview() } label: {
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    header
+                    // Eyebrow plus one sentence; the separate title
+                    // ("Hinweise deiner Uhr") said the same thing a third time.
+                    Text(summary.subtitle)
+                        .font(HLRowTitle.font)
+                        .foregroundStyle(HLText.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture { router.requestInsightsOverview() }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("dashboard.rhythmEvents.tile")
         }
-        .accessibilityElement(children: .contain)
+        .hlPressable(hover: .lift)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("dashboard.rhythmEvents.tile")
     }
 
-    /// 1.4 B4 — Today's one card heading: the metric tiles' glyph and title.
+    /// Today's one card heading: the metric tiles' glyph and title.
     private var header: some View {
         HLTileHeaderRow(icon: "waveform.path.ecg", title: Text("dashboard.rhythmEvents.tile.eyebrow")) { EmptyView() }
     }

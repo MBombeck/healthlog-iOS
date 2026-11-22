@@ -44,11 +44,11 @@ public struct TrendObservationOutcome: Sendable {
 /// availability gate, same capability short-circuit, same MDRSafetyFilter
 /// post-process, same locale switch.
 ///
-/// **Availability:** the public type compiles on iOS 18+. The runtime path
-/// that actually invokes FoundationModels is gated by
-/// `#available(iOS 26.0, *)` per R4 §4.2 step 5.
+/// **Availability:** the path that actually invokes FoundationModels sits
+/// behind `#if canImport(FoundationModels)` and checks
+/// `SystemLanguageModel.default.availability` per R4 §4.2 step 5.
 public actor TrendObservationsService {
-    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// The server-resolved AI capabilities (`/api/auth/me` `ai`).
     /// This service runs only while `.statusText` allows on-device work
     /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
     /// never consults anything a previous build persisted.
@@ -80,7 +80,7 @@ public actor TrendObservationsService {
         series: [Measurement],
         locale: Locale
     ) async -> TrendObservationOutcome {
-        // #115 · 0.2 — per-metric observations are status notes: they follow
+        // Per-metric observations are status notes: they follow
         // the server-resolved `statusText` capability (`onDeviceAllowed`), so
         // the operator's and the person's decisions hold on the device too.
         guard aiCapabilities.allowsOnDevice(.statusText) else {
@@ -99,18 +99,14 @@ public actor TrendObservationsService {
         let direction = Self.direction(scalars)
 
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                return await generateUsingFoundationModels(
-                    metric: metric,
-                    series: series,
-                    scalars: scalars,
-                    delta: delta,
-                    direction: direction,
-                    locale: locale
-                )
-            } else {
-                return .fallback(.deviceIneligible)
-            }
+            return await generateUsingFoundationModels(
+                metric: metric,
+                series: series,
+                scalars: scalars,
+                delta: delta,
+                direction: direction,
+                locale: locale
+            )
         #else
             return .fallback(.frameworkUnavailable)
         #endif
@@ -173,7 +169,6 @@ public actor TrendObservationsService {
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func generateUsingFoundationModels(
             metric: MetricKind,
             series: [Measurement],
@@ -234,7 +229,6 @@ public actor TrendObservationsService {
             }
         }
 
-        @available(iOS 26.0, *)
         private func mapAvailabilityReason(
             _ reason: SystemLanguageModel.Availability.UnavailableReason
         ) -> TrendObservationOutcome.FallbackReason {
@@ -254,15 +248,13 @@ public actor TrendObservationsService {
 
 #if canImport(FoundationModels)
     /// `@Generable` mirror of `TrendObservation`. Lives behind the
-    /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
-    /// because Apple's macro requires both. Converted to the
-    /// always-available POD shell via `toTrendObservation(...)` for
-    /// storage + rendering.
+    /// `canImport(FoundationModels)` gate because Apple's macro requires
+    /// the framework. Converted to the always-available POD shell via
+    /// `toTrendObservation(...)` for storage + rendering.
     ///
     /// The `@Guide` descriptions are language-neutral English (they are baked
     /// in at compile time and cannot follow the session locale); the
     /// instructions name the output language.
-    @available(iOS 26.0, *)
     @Generable
     struct GenerableTrendObservation {
         @Guide(
@@ -293,7 +285,7 @@ public actor TrendObservationsService {
 
 /// Locale-aware prompt + instructions builder for trend observations.
 /// Kept in a dedicated enum so the prompt strings live close to the
-/// safety contract they enforce (R4 §7.2).
+/// safety contract they enforce.
 enum TrendObservationPrompt {
     static func build(
         metric: MetricKind,
@@ -306,7 +298,7 @@ enum TrendObservationPrompt {
         let language = AppLanguage.resolve(locale)
         let unit = metric.unit
         let metricLabel = metric.displayName
-        // A360-5 M-5 — pin numeric formatting to the invariant POSIX locale.
+        // Pin numeric formatting to the invariant POSIX locale.
         // This prompt can flow to a server-routed / external model where a
         // device-locale comma decimal ("5,5") is ambiguous or mis-tokenised;
         // emit canonical dot-decimal regardless of the device's locale. The
@@ -353,17 +345,53 @@ enum TrendObservationPrompt {
             Schreibe einen ruhigen, beobachtenden Satz, der den Trend faktisch beschreibt. \
             Bleibe streng beobachtend. Niemals diagnostizieren, vorhersagen oder verordnen.
             """
+        case .ko:
+            return """
+            지표: \(metricLabel)
+            기간: 최근 30일(측정 \(seriesCount)건)
+            시작: \(firstStr) \(unit)
+            끝: \(lastStr) \(unit)
+            변화량: \(deltaStr) \(unit)
+            계산된 방향: \(directionStr)
+
+            데이터가 보여 주는 추세를 사실대로 설명하는 차분하고 관찰 중심의 문장 하나를 해요체로 써라. \
+            철저히 관찰만 한다. 진단, 예측, 처방은 절대 하지 않는다.
+            """
+        case .es:
+            return spanishPrompt(metricLabel, seriesCount, unit, [firstStr, lastStr, deltaStr, directionStr])
         }
+    }
+
+    /// The Spanish prompt, outside ``build`` to keep that function short.
+    /// `values` holds start, end, delta and the computed direction, formatted.
+    private static func spanishPrompt(_ metricLabel: String, _ seriesCount: Int, _ unit: String, _ values: [String]) -> String {
+        let (firstStr, lastStr, deltaStr, directionStr) = (values[0], values[1], values[2], values[3])
+        return """
+        Métrica: \(metricLabel)
+        Periodo: últimos 30 días (\(seriesCount) mediciones)
+        Inicio: \(firstStr) \(unit)
+        Final: \(lastStr) \(unit)
+        Delta: \(deltaStr) \(unit)
+        Dirección calculada: \(directionStr)
+
+        Escribe una sola frase tranquila y descriptiva, en español y tuteando, que describa la tendencia tal como es. \
+        Limítate a describir. Nunca diagnostiques, hagas predicciones ni recetes.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(
+            de: germanInstructions,
+            en: englishInstructions,
+            nl: dutchInstructions,
+            ko: koreanInstructions,
+            es: spanishInstructions
+        )
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
             let text = instructionText(for: AppLanguage.resolve(locale))
             return Instructions {
@@ -414,5 +442,35 @@ enum TrendObservationPrompt {
     - Bij opvallende waarden verwijs je naar de arts, met de woorden "bespreek dit met je arts".
 
     STIJL: beschrijvend, niet adviserend. Eén zin. Gebruik concrete getallen uit de gegevens.
+    """
+
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 차분하고 사실적인 추세 관찰 목소리다. \
+    항상 한국어 해요체로 쓴다.
+
+    절대 원칙:
+    - 의학적 진단을 절대 내리지 않는다.
+    - 용량이나 치료 변경을 절대 권하지 않는다.
+    - 약물 농도를 절대 해석하지 않는다.
+    - 수치 사이의 인과 관계를 절대 주장하지 않는다.
+    - 아무것도 예측하지 않는다("오를 거예요", "내려갈 거예요").
+    - 눈에 띄는 수치가 있으면 의사와 상의하도록 안내하고, "의사와 상의해 보세요"라는 말을 쓴다.
+
+    문체: 조언이 아니라 관찰. 한 문장. 데이터에 있는 구체적인 숫자를 쓴다.
+    """
+
+    private static let spanishInstructions = """
+    Eres una voz tranquila y objetiva para las observaciones de tendencia de una \
+    app de diario de salud. Escribe SIEMPRE en español, tuteando.
+
+    NO NEGOCIABLE:
+    - Nunca das un diagnóstico médico.
+    - Nunca recomiendas dosis ni cambios de terapia.
+    - Nunca interpretas niveles de fármacos en sangre.
+    - Nunca afirmas relaciones causales entre valores.
+    - No haces predicciones ("va a subir", "va a bajar").
+    - Si los valores llaman la atención, remites al médico con las palabras "coméntalo con tu médico".
+
+    ESTILO: descriptivo, no de consejo. Una sola frase. Usa cifras concretas de los datos.
     """
 }

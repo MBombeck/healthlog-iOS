@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit v0.14.8 N5.3** — pins the anchored-sweep interleave guard the HK
+/// Pins the anchored-sweep interleave guard the HK
 /// importers (`WorkoutHealthKitImporter`, `CycleHealthKitImporter`) route every
 /// sweep through: one body at a time per key, a mid-flight trigger coalesces
 /// into exactly one trailing re-run (never dropped, never interleaved), and

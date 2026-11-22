@@ -9,6 +9,11 @@ on:
   # pushing an empty commit. No inputs — same matrix as push/PR.
   workflow_dispatch:
 
+# Read-only token for every job; nothing in this workflow writes to the
+# repository. Actions are pinned by commit SHA (scripts/test-workflow-hygiene.sh).
+permissions:
+  contents: read
+
 # 2026-09-08 — CI runs on the operator's Mac mini (self-hosted runner, label
 # `healthlog-mini`), not on GitHub's macOS runners: eight cloud runs of this
 # suite exhausted the account's Actions budget in one day, and the Mac mini
@@ -44,20 +49,47 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      # Hosted runner only: select Xcode 27.2 from the image or stop with a
-      # clear message. Nothing is downloaded silently in its place.
-      - name: Select Xcode (hosted runner)
+      # Hosted runner only (#168): the image lags behind the pinned Xcode,
+      # so the job installs Xcode 27.2 itself. The Apple-signed .xip comes
+      # from the repository's Actions cache, which the trusted
+      # `xcode-cache` job below fills; a fork run reads it and holds no
+      # secret. When the image ships 27.2 the install is skipped.
+      - name: Restore pinned Xcode archive (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/hl-xcode
+          key: xcode-27.2-xip-v1
+
+      - name: Install Xcode (hosted runner)
         if: env.HEALTHLOG_RUNNER == 'hosted'
         run: |
-          app="/Applications/Xcode_27.2.app"
+          set -euo pipefail
+          version="27.2"
+          app="/Applications/Xcode_${version}.app"
           if [[ ! -d "$app" ]]; then
-            echo "::error::Xcode 27.2 is not on this runner image; available:" >&2
-            ls -d /Applications/Xcode*.app >&2 || true
-            exit 1
+            xip="$HOME/hl-xcode/Xcode_${version}.xip"
+            if [[ ! -f "$xip" ]]; then
+              echo "::error::Xcode ${version} is neither on this image nor in the cache (key xcode-27.2-xip-v1); run the workflow by hand on main to fill it. Available:" >&2
+              ls -d /Applications/Xcode*.app >&2 || true
+              exit 1
+            fi
+            # Only an archive Apple signed is unpacked.
+            pkgutil --check-signature "$xip" | grep -q "Apple Software" || { echo "::error::$xip is not signed by Apple" >&2; exit 1; }
+            # The expanded app needs room the image does not leave: the
+            # image's own Xcodes are not used by this job.
+            sudo find /Applications -maxdepth 1 -name 'Xcode*.app' -exec rm -rf {} +
+            work="$RUNNER_TEMP/xcode-unxip"
+            mkdir -p "$work"
+            (cd "$work" && xip --expand "$xip")
+            sudo mv "$work/Xcode.app" "$app"
+            rm -f "$xip"
           fi
           sudo xcode-select -s "$app/Contents/Developer"
+          sudo xcodebuild -license accept
+          sudo xcodebuild -runFirstLaunch
 
       # Hosted runner only: the release gates' exact tool versions, from the
       # upstream release archives, each checked against a pinned SHA-256.
@@ -126,8 +158,9 @@ jobs:
           bash scripts/verify-server-contract-fixtures.sh
           bash scripts/verify-server-contract-fixtures.sh --self-test
           # 1.5 POLISH-C — every iOS `/api/...` string against the pinned
-          # server route inventory (v1.47.0) and the exceptions ledger. The
-          # self-test ends with the live run over the real repository.
+          # server route inventory (release/v1.49.0) and the exceptions
+          # ledger. The self-test ends with the live run over the real
+          # repository; its report goes to the scratch folder, not the tree.
           bash scripts/test-verify-route-matrix.sh
 
       - name: Verify CI release gate contract
@@ -181,8 +214,89 @@ jobs:
           # Specifiers, CLDR plurals, empty values and required languages in
           # all five catalogs, languages.json against CFBundleLocalizations;
           # medical keys awaiting review are reported (--release fails on them
-          # in the freeze pregates, not here).
+          # before an App Store submission, by hand, not here and not in the
+          # release producer: TestFlight builds carry them on purpose).
           python3 scripts/l10n/check-catalog-format.py
+          # A string reference without a catalog key, and the function body
+          # ledger: the release producer refuses on both, so a branch learns
+          # of them here and not at the start of a release. Self-test first.
+          scripts/check-missing-strings.sh --self-test
+          scripts/check-missing-strings.sh
+          bash scripts/verify-function-body-baseline.sh --self-test
+          bash scripts/verify-function-body-baseline.sh
+          # Design ratchets per package C1 to C4 and the sheet scaffold and
+          # delete ladder checks, the same three the release producer runs.
+          # Self-test first; --check compares and never writes. The base is
+          # the merge base with the target branch, so a package file raised
+          # by hand fails too; without one the ratchet says "no base given".
+          bash scripts/test-design-ratchets.sh
+          ratchet_target="${{ github.base_ref || github.event.repository.default_branch }}"
+          git fetch --quiet --no-tags --deepen=500 origin "$ratchet_target" || true
+          HL_RATCHET_BASE="$(git merge-base HEAD FETCH_HEAD 2>/dev/null || true)"
+          bash scripts/design-ratchet.sh --check ${HL_RATCHET_BASE:+--base "$HL_RATCHET_BASE"}
+          bash scripts/check-sheet-scaffold.sh --strict
+          bash scripts/check-delete-ladder.sh --strict
+
+      # The third static gate of the release producer. The public mirror does
+      # not carry the script, so the step runs where the script exists.
+      - name: Verify citation wiring
+        if: hashFiles('scripts/verify-sources-wired.sh') != ''
+        run: bash scripts/verify-sources-wired.sh
+
+      # Tracked Markdown and Swift against the fingerprints of retired
+      # credentials (the public mirror carries the scanner too). The release
+      # producer also runs its self-test, which needs history this shallow
+      # checkout does not have.
+      - name: Scan tracked secrets
+        if: hashFiles('scripts/scan-tracked-secrets.sh') != ''
+        run: bash scripts/scan-tracked-secrets.sh
+
+      # The frozen phase 06 inventories, as the release producer and the
+      # baseline refresh verify them. Self-tests first. The inventories live
+      # in `.planning/`, which the public mirror does not carry.
+      - name: Frozen phase 06 inventories
+        if: hashFiles('.planning/phases/06-account-and-privacy-boundaries/06-AUTHENTICATED-EFFECT-INVENTORY.md') != ''
+        run: |
+          bash scripts/test-validate-phase06-effect-inventory.sh
+          bash scripts/test-validate-phase06-presentation-inventory.sh
+          scripts/validate-phase06-effect-inventory.sh --verify-frozen .planning/phases/06-account-and-privacy-boundaries/06-AUTHENTICATED-EFFECT-INVENTORY.md
+          scripts/validate-phase06-presentation-inventory.sh --verify-frozen .planning/phases/06-account-and-privacy-boundaries/06-PHI-PRESENTATION-INVENTORY.md
+
+      # Static gates of the release producer the public mirror does not
+      # carry: the relay key pin, the UI standard baseline (compare only),
+      # the questionnaire wording sync and the release UI manifest. Self-tests
+      # before the live checks.
+      - name: Release manifests and pins
+        if: hashFiles('scripts/release-ui-tests.json') != ''
+        run: |
+          python3 scripts/pin-relay-keys.py --check
+          python3 scripts/refresh-ui-standard-baseline.py --check
+          python3 scripts/l10n/sync-questionnaire-wording.py --self-test
+          bash scripts/test-release-ui-manifest.sh
+          python3 scripts/verify-release-ui-manifest.py
+
+      # The road to a build (entry script, producer, internal delivery, the
+      # gate wrapper, the baseline refresh, the candidate core, the build
+      # number, the selectors, the export contact, the delivery boundary)
+      # against stand-ins for Xcode and Apple. On the Mac mini only: fork runs
+      # stay short, and the public mirror does not carry the release tooling.
+      - name: Release tooling self-tests
+        if: env.HEALTHLOG_RUNNER != 'hosted' && hashFiles('scripts/ship-to-testflight.sh') != ''
+        run: |
+          bash scripts/test-resolve-gate-destination.sh
+          bash scripts/validate-phase07-handoff.sh --self-test
+          bash scripts/test-allocate-build-number.sh
+          bash scripts/test-asc-build-inventory.sh
+          bash scripts/test-export-asc-contact.sh
+          bash scripts/test-assert-release-behavioral-red.sh
+          bash scripts/test-run-serialized-xcode-gate.sh
+          bash scripts/test-gate-watchos.sh
+          bash scripts/refresh-baselines.sh --self-test
+          bash scripts/test-release-selectors.sh
+          python3 scripts/verify-release-selectors.py
+          bash scripts/test-candidate-manifest.sh
+          bash scripts/test-upload-existing-testflight.sh
+          bash scripts/test-release.sh
 
       - name: Generate Xcode project
         run: xcodegen
@@ -191,22 +305,28 @@ jobs:
       # the `ThreadLocal` macro which fails xcodebuild's default
       # macro-fingerprint trust check on a fresh runner. Same flag as
       # the private release pipeline to keep CI vs release-build parity.
-      # Both Xcode steps run through the serialized gate: one Xcode job per
+      # Every Xcode step runs through the serialized gate: one Xcode job per
       # machine, the same lock as the release producer, derived data at
       # /tmp/dd-hl-ci-<run id> (shared by build and test, freed below). The
       # gate resolves the destination itself — a booted iPhone simulator, else
       # the first available one.
-      - name: Build (iOS Simulator)
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=-
+      #
+      # Debug is compiled once, app and both test bundles, like the release
+      # producer does it; the two test steps below run from these products and
+      # compile nothing. Coverage is a build setting, so it is asked for here.
+      - name: Build for testing (iOS Simulator)
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- build-for-testing -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -enableCodeCoverage YES
 
       # The same two test gates the release producer runs (ship-to-testflight
-      # "unit" and "ui"): the whole unit target, and the three release UI
-      # classes — not the entire UI target, whose remaining classes are
-      # exploratory and not a gate. German locale like the local gates (the
+      # "unit-tests" and "ui-tests"): the whole unit target, and the three
+      # release UI classes — not the entire UI target, whose remaining classes
+      # are exploratory and not a gate. German locale like the local gates (the
       # suite asserts the German copy); ad-hoc signing so the keychain
-      # entitlements exist for the keychain-backed tests.
+      # entitlements exist for the keychain-backed tests. Each gate keeps its
+      # own result bundle (--result-label), so the second does not replace the
+      # first.
       - name: Test — unit (iOS Simulator)
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -enableCodeCoverage YES -only-testing:HealthLogTests
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" --result-label unit -- test-without-building -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -enableCodeCoverage YES -only-testing:HealthLogTests
 
       # The UI gate may retry once: iOS raises its own "Passwort sichern?"
       # sheet after a fixture login on a freshly installed app, and the three
@@ -214,18 +334,20 @@ jobs:
       # (CANDIDATE-FREEZE.md §2R). The release producer keeps its single-shot
       # gate; CI reports a genuine failure only when both iterations fail.
       # Not on the hosted runner: fork runs stay short (build, unit suite,
-      # SPM core); the UI gate runs on the Mac mini for every own branch and
-      # in the release producer.
+      # Release links, SPM core); the UI gate runs on the Mac mini for every
+      # own branch and in the release producer.
       - name: Test — release UI gate (iOS Simulator)
         if: env.HEALTHLOG_RUNNER != 'hosted'
-        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" -- test -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -retry-tests-on-failure -test-iterations 2 -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
+        run: scripts/run-serialized-xcode-gate.sh "ci-${{ github.run_id }}" --result-label ui -- test-without-building -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=- -testLanguage de -testRegion DE -retry-tests-on-failure -test-iterations 2 -only-testing:HealthLogUITests/AuthJourneyUITest -only-testing:HealthLogUITests/LoginBounceUITests -only-testing:HealthLogUITests/WebLoginJourneyUITest
 
       # 1.5 MATRIX — public #2 (build 273): a NON-weak reference to a HealthKit
       # symbol that only exists from iOS 26 aborted the launch on iOS 18 in
       # dyld, before any line of the app ran. Only the Release binary shows the
       # real links (in Debug the code sits in HealthLog.debug.dylib), so this
       # step builds Release through the same gate and checks the main binary.
-      # Self-test first, live check second, on every runner.
+      # It is the only Release compile of a CI run, and the one place a branch
+      # learns of an error only Release shows; the producer meets Release first
+      # in its archive. Self-test first, live check second, on every runner.
       - name: Release links (no strong iOS 26 symbols)
         run: |
           bash scripts/verify-no-strong-ios26-symbols.sh --self-test
@@ -245,7 +367,7 @@ jobs:
       # `if: failure()` so a green run leaves no artifact noise.
       - name: Upload Snapshot Failure Artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: snapshot-failures
           path: |
@@ -272,3 +394,56 @@ jobs:
         run: |
           bash scripts/verify-spm-core-build.sh --self-test
           bash scripts/verify-spm-core-build.sh
+
+  # #168: fills the Actions cache with the Apple-signed Xcode archive the
+  # hosted fork runs install. Runs only when the workflow is started by hand,
+  # which a fork cannot do, on a GitHub-hosted runner and without checking
+  # out any code, so neither the secrets nor the Mac mini meet fork code.
+  # The archive comes from `XCODE_XIP_URL` (a private download link of the
+  # operator's own copy) or, without it, from Apple through xcodes with
+  # `XCODES_USERNAME` / `XCODES_PASSWORD`. A cache entry unused for seven
+  # days is evicted by GitHub; start the workflow again to refill it.
+  xcode-cache:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Look up the cached archive
+        id: lookup
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/hl-xcode
+          key: xcode-27.2-xip-v1
+          lookup-only: true
+
+      - name: Download the Xcode archive
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          XCODE_XIP_URL: ${{ secrets.XCODE_XIP_URL }}
+          XCODES_USERNAME: ${{ secrets.XCODES_USERNAME }}
+          XCODES_PASSWORD: ${{ secrets.XCODES_PASSWORD }}
+        run: |
+          set -euo pipefail
+          version="27.2"
+          dir="$HOME/hl-xcode"
+          mkdir -p "$dir"
+          xip="$dir/Xcode_${version}.xip"
+          if [[ -n "${XCODE_XIP_URL:-}" ]]; then
+            curl -fsSL --retry 3 -o "$xip" "$XCODE_XIP_URL"
+          elif [[ -n "${XCODES_USERNAME:-}" && -n "${XCODES_PASSWORD:-}" ]]; then
+            xcodes download "$version" --directory "$dir"
+            downloaded="$(find "$dir" -maxdepth 1 -name 'Xcode*.xip' | head -1)"
+            [[ -n "$downloaded" ]] || { echo "::error::xcodes did not leave an archive" >&2; exit 1; }
+            [[ "$downloaded" == "$xip" ]] || mv "$downloaded" "$xip"
+          else
+            echo "::error::set XCODE_XIP_URL, or XCODES_USERNAME and XCODES_PASSWORD" >&2
+            exit 1
+          fi
+          pkgutil --check-signature "$xip" | grep -q "Apple Software" || { echo "::error::the archive is not signed by Apple" >&2; exit 1; }
+
+      - name: Save the archive to the cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/hl-xcode
+          key: xcode-27.2-xip-v1

@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    // Phase 07 Wave 2 — the cutover seam.
+    // The cutover seam.
     //
     // The Spezi `CollectSamples` registrations that used to own server-bound sample
     // collection were removed in the same commit that added this file. That removal
@@ -34,7 +34,7 @@
     /// through the same call. Before installation — and while signed out — a
     /// trigger is a no-op, which is the correct fail-closed posture: there is no
     /// account to collect for.
-    /// **Phase 07 Wave 4.** The seam now has two slots, and the reason is the
+    /// The seam now has two slots, and the reason is the
     /// difference between "collect the thirty-five sample types" and "run this
     /// trigger's plan".
     ///
@@ -65,6 +65,18 @@
         private static var installedSampleCollection:
             (@Sendable (HealthSyncTrigger) async -> HealthSyncCapabilityResult)?
 
+        /// Whether the sample collection was installed (a device that reads no
+        /// HealthKit never installs it).
+        static var hasSampleCollection: Bool {
+            installedSampleCollection != nil
+        }
+
+        #if DEBUG
+            static func removeSampleCollectionForTesting() {
+                installedSampleCollection = nil
+            }
+        #endif
+
         static var isInstalled: Bool {
             installed != nil || installedSampleCollection != nil
         }
@@ -75,7 +87,7 @@
             installed != nil
         }
 
-        /// Installs the one bounded pass a trigger runs (Plan 07-07).
+        /// Installs the one bounded pass a trigger runs.
         static func install(
             _ run: @escaping @Sendable (
                 HealthSyncTrigger,
@@ -86,7 +98,7 @@
             installed = run
         }
 
-        /// Installs the app-owned sample collection (Plan 07-03). Reached as the
+        /// Installs the app-owned sample collection. Reached as the
         /// orchestrator's `speziSampleCollection` capability.
         static func installSampleCollection(
             _ run: @escaping @Sendable (HealthSyncTrigger) async -> HealthSyncCapabilityResult
@@ -140,7 +152,7 @@
             HealthLogSampleTypeRegistry.knownIdentifiers.sorted()
         }
 
-        /// 1.2 / V4 — the part of `identifiers` the configured server stores
+        /// The part of `identifiers` the configured server stores
         /// yet (``HealthKitServerTypeGate``). A server before v1.42 would
         /// answer RMSSD with `skipped(unmappable_identifier)`; instead the type
         /// is neither queried nor observed, its cursor stays where it is, and
@@ -159,13 +171,13 @@
         let cursors: DurableHealthCursorStore
         let admission: @Sendable () throws -> HealthSyncAuthenticatedLease
         let cutoff: @Sendable () -> Date
-        /// #113 — offers the skip register's rows again (`force` = all rows, not
+        /// Offers the skip register's rows again (`force` = all rows, not
         /// only those this build has not offered). `nil` where no uploader is
         /// composed; the register then simply waits.
         private let reoffer: (@Sendable (HealthSyncAuthenticatedLease, Bool) async -> HealthKitSkippedRowReoffer.Summary)?
-        /// V1 — where ``HealthCollectionRotation`` keeps its offset.
+        /// Where ``HealthCollectionRotation`` keeps its offset.
         let defaultsProvider: @Sendable () -> UserDefaults
-        /// 1.3 (#128) — the server's per-type freshness, asked once for the
+        /// The server's per-type freshness, asked once for the
         /// upgraded partitions that still wait for their replay floor. `nil`
         /// result = could not ask; `nil` closure = no server composed.
         let serverFreshness: (@Sendable () async -> [MetricFreshness]?)?
@@ -217,10 +229,10 @@
 
             await prepare(lease: lease, window: window)
 
-            // V1 (1.2) — a pass that runs out of time hands the start of the
+            // A pass that runs out of time hands the start of the
             // next one to the first type it did not finish (HealthLog#1173).
-            // V4: only the types this server can store take part.
-            // 1.3 (#127) — the history leg keeps its own rotation, so a run cut
+            // Only the types this server can store take part.
+            // The history leg keeps its own rotation, so a run cut
             // short by its time budget hands the next one to the type it did
             // not reach.
             let defaults = defaultsProvider()
@@ -245,7 +257,7 @@
                 defaults: defaults
             )
             Self.advanceHistoryRotation(historyOrder, results: results, defaults: defaults)
-            // #113 — rows the server refused under an older build get one new
+            // Rows the server refused under an older build get one new
             // offer per build. After that first pass this is one register read.
             _ = await reoffer?(lease, false)
             // `ran`, not `succeeded`: the collector commits per type through the
@@ -266,10 +278,13 @@
                 migratedOwners.insert(lease.ownerID)
             }
 
-            // #113 — once per installation and account, after the migration has
+            // Once per installation and account, after the migration has
             // established the partitions and before the first query reads them.
             // After the first run this is two marker reads per pass.
             await HealthKitPercentScaleCursorReset.apply(store: cursors, requiring: lease)
+            // After "Daten zurücksetzen": every partition walks again. One
+            // marker read per pass when none is armed.
+            await HealthDataResetResync.apply(store: cursors, typeIdentifiers: Self.collectedTypeIdentifiers, requiring: lease)
 
             if !observing {
                 observing = true
@@ -281,7 +296,7 @@
             }
         }
 
-        /// #128 — between the live streams and the history leg (the live leg
+        /// Between the live streams and the history leg (the live leg
         /// establishes the split, so an upgrade's floor can be asked for in
         /// the same pass). `nil` where no server is composed.
         func replayFloorResolution(

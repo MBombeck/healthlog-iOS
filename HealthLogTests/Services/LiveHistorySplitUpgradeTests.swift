@@ -5,11 +5,11 @@
     import Synchronization
     import Testing
 
-    /// 1.3 (#127, #128) — the update path from an existing 1.2.0 installation.
+    /// The update path from an existing 1.2.0 installation.
     ///
     /// A fresh install proves little here. The cases that matter are the
     /// phones already in the field: a partition whose one shared cursor is
-    /// halfway through years of history (#1204), one that is fully current,
+    /// halfway through years of history, one that is fully current,
     /// and one whose server cannot be asked right now. Each starts from the
     /// exact storage a 1.2.0 build leaves behind and runs the production
     /// coordinator over it.

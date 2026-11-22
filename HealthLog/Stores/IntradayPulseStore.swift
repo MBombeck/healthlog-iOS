@@ -17,7 +17,7 @@ import Observation
 ///
 /// **Server-derived (paired only).** Pure server compute, no on-device
 /// fallback — the call site additionally gates on a cloud surface being
-/// available so the block never appears in standalone / no-server.
+/// available so the block never appears without a server.
 @MainActor
 @Observable
 public final class IntradayPulseStore {

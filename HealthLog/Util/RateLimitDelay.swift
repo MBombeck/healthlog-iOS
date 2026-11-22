@@ -1,6 +1,6 @@
 import Foundation
 
-/// #110 — how long a `429` asked the client to wait, in seconds from `now`.
+/// How long a `429` asked the client to wait, in seconds from `now`.
 ///
 /// From server v1.39.0 every limiter refusal carries `Retry-After` (whole
 /// seconds, never below 1) next to `X-RateLimit-Reset` (an ISO-8601 instant);

@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **A4 (iOS 1.4) — the sleep score says why a sub-score is missing (#145).**
+    /// **A4 (iOS 1.4) — the sleep score says why a sub-score is missing.**
     ///
     /// Shape from `SleepScoreValue` in `docs/api/openapi.yaml` at `v1.43.10`:
     /// `subScores[]` rows `{ key, value, weight, gap? }` with `gap` only on a

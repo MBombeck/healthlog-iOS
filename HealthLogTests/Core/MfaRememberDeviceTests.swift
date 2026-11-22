@@ -1,4 +1,4 @@
-// Parity 2.4 — "remember this device" on MFA verify.
+// "remember this device" on MFA verify.
 //
 // `AuthService.verifyMFA` has accepted a `rememberDevice` argument since #37,
 // but nothing ever passed it: `AuthStore.verifyMFA(method:code:)` called the

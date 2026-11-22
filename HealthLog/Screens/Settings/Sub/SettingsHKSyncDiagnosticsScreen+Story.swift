@@ -12,7 +12,7 @@ import SwiftUI
 // nothing new moves the first, never the second, so distance and energy no
 // longer look stale on a day when nothing changed.
 
-// 1.4 B2-c — the per-card "Quelle: …" line is gone: the server card is the
+// The per-card "Quelle: …" line is gone: the server card is the
 // only card from the server, and the (i) says which of this iPhone's cards
 // count since the last launch and which are kept across launches.
 
@@ -80,7 +80,7 @@ struct ServerFreshnessFacts: Equatable {
         return String(localized: "settings.hkdiag.freshness_background \(Self.relative(background))")
     }
 
-    /// #146 / server #1247 — "Last entered here 2 minutes ago" on a type
+    /// "Last entered here 2 minutes ago" on a type
     /// the server writes back to Apple Health, as the server sends it. It
     /// explains why the row reads fresh although Apple Health sent nothing new;
     /// the time on the right (`lastSeenAt`) and `stale` stay the server's own.
@@ -148,7 +148,7 @@ extension KindRow {
         }
     }
 
-    /// 1.4 B4 — a row with nothing to report since the launch: nothing read,
+    /// A row with nothing to report since the launch: nothing read,
     /// skipped or parked, no check, no new value. Its status says "Ruhend";
     /// "0 gelesen, 0 übertragen" and "Seit dem App-Start noch nichts" under
     /// every such row said it twice more, on twenty-odd rows.

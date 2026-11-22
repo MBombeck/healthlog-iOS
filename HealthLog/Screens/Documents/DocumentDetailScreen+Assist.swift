@@ -24,48 +24,46 @@ struct DocumentAssistApplied: Equatable {
 extension DocumentDetailScreen {
     // MARK: - Assist card
 
-    /// **Wave 4.3.** The manual AI actions. No longer a heavy standalone
-    /// "KI-Unterstützung" `HLCard` above the fields: it is the web's calm
-    /// bordered `bg-muted/30` block, sits between the persisted summary and the
-    /// editable fields, carries no section header (the web dropped its chrome in
-    /// v1.28.22 — the summary above already names the AI tier), and collapses
-    /// entirely once auto-read has settled (see
-    /// `DocumentDetailScreen.showsAssistActions`).
+    /// The manual AI actions. No longer a heavy standalone
+    /// "KI-Unterstützung" card with a section header above the fields: it sits
+    /// between the persisted summary and the editable fields, carries no head
+    /// (the summary above already names the AI tier), and collapses entirely
+    /// once auto-read has settled (see `DocumentDetailScreen.showsAssistActions`).
+    /// A suggestion or a summary opens as its own card under it, with a head
+    /// and the cross that puts it away.
     var assistCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLWrapLayout(spacing: HLSpace.xs) {
-                HLButton(
-                    "documents.assist.suggest",
-                    icon: "sparkles",
-                    variant: .secondary,
-                    size: .compact,
-                    isLoading: isSuggesting
-                ) {
-                    Task { await runSuggest() }
-                }
-                .accessibilityIdentifier("documents.assist.suggest")
-                HLButton(
-                    "documents.summary.summarise",
-                    icon: "text.alignleft",
-                    variant: .secondary,
-                    size: .compact,
-                    isLoading: isSummarising && summaryMode == .summary
-                ) {
-                    Task { await runSummary(.summary) }
-                }
-                HLButton(
-                    "documents.summary.showText",
-                    icon: "doc.plaintext",
-                    variant: .ghost,
-                    size: .compact,
-                    isLoading: isSummarising && summaryMode == .text
-                ) {
-                    Task { await runSummary(.text) }
-                }
-            }
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    HLButtonPair {
+                        HLButton(
+                            "documents.assist.suggest",
+                            systemImage: "sparkles",
+                            variant: .secondary,
+                            isLoading: isSuggesting
+                        ) {
+                            Task { await runSuggest() }
+                        }
+                        .accessibilityIdentifier("documents.assist.suggest")
+                    } secondary: {
+                        HLButton(
+                            "documents.summary.summarise",
+                            systemImage: "text.alignleft",
+                            variant: .secondary,
+                            isLoading: isSummarising && summaryMode == .summary
+                        ) {
+                            Task { await runSummary(.summary) }
+                        }
+                    }
+                    HLLinkButton("documents.summary.showText") {
+                        Task { await runSummary(.text) }
+                    }
+                    .disabled(isSummarising)
 
-            if let suggestError {
-                HLFormErrorText(suggestError)
+                    if let suggestError {
+                        HLFormErrorText(suggestError)
+                    }
+                }
             }
             if let suggestion {
                 suggestionReview(suggestion)
@@ -74,76 +72,59 @@ extension DocumentDetailScreen {
                 summaryPanel(mode: summaryMode)
             }
         }
-        .padding(HLSpace.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: HLRadius.md).fill(HLSurface.secondary))
         .accessibilityIdentifier("documents.assist.section")
     }
 
     // MARK: - Suggestion review (drafts → prefill)
 
     private func suggestionReview(_ suggestion: DocumentSuggestion) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(alignment: .top, spacing: HLSpace.xs) {
-                Image(systemName: "sparkles")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                // 1.4 B2-c — the title says the suggestions are AI's; the
-                // hint line under it is gone.
-                HLSectionLabel("documents.assist.reviewTitle")
-                Spacer()
-                Button {
-                    self.suggestion = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .accessibilityLabel(Text("documents.assist.dismiss"))
+        // The title says the suggestions are AI's; the hint line under it is gone.
+        HLCard("documents.assist.reviewTitle") {
+            HLDismissButton(label: "documents.assist.dismiss") {
+                self.suggestion = nil
             }
-
+        } content: {
             if suggestion.hasAny {
-                if let title = suggestion.title, !title.isEmpty {
-                    reviewRow(
-                        label: "documents.assist.suggestedTitle",
-                        value: Text(verbatim: title),
-                        applied: suggestApplied.title,
-                        applyKey: "documents.assist.useTitle"
-                    ) {
-                        applySuggestedTitle(title)
+                HLFactGroup {
+                    if let title = suggestion.title, !title.isEmpty {
+                        reviewRow(
+                            label: "documents.assist.suggestedTitle",
+                            value: Text(verbatim: title),
+                            applied: suggestApplied.title,
+                            applyKey: "documents.assist.useTitle"
+                        ) {
+                            applySuggestedTitle(title)
+                        }
                     }
-                }
-                if let kind = suggestion.kind {
-                    reviewRow(
-                        label: "documents.assist.suggestedKind",
-                        value: Text(DocumentKindMeta.labelKey(kind)),
-                        applied: suggestApplied.kind,
-                        applyKey: "documents.assist.apply"
-                    ) {
-                        Task { await applySuggestedKind(kind) }
+                    if let kind = suggestion.kind {
+                        reviewRow(
+                            label: "documents.assist.suggestedKind",
+                            value: Text(DocumentKindMeta.labelKey(kind)),
+                            applied: suggestApplied.kind,
+                            applyKey: "documents.assist.apply"
+                        ) {
+                            Task { await applySuggestedKind(kind) }
+                        }
                     }
-                }
-                if let date = suggestion.documentDate, !date.isEmpty {
-                    reviewRow(
-                        label: "documents.assist.suggestedDate",
-                        value: Text(verbatim: DocumentFormat.mediumDate(date)),
-                        applied: suggestApplied.date,
-                        applyKey: "documents.assist.apply"
-                    ) {
-                        Task { await applySuggestedDate(date) }
+                    if let date = suggestion.documentDate, !date.isEmpty {
+                        reviewRow(
+                            label: "documents.assist.suggestedDate",
+                            value: Text(verbatim: DocumentFormat.mediumDate(date)),
+                            applied: suggestApplied.date,
+                            applyKey: "documents.assist.apply"
+                        ) {
+                            Task { await applySuggestedDate(date) }
+                        }
                     }
                 }
             } else {
-                Text("documents.assist.empty")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.tertiary)
+                HLEmptyNote("documents.assist.empty")
             }
         }
-        .padding(HLSpace.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: HLRadius.sm).fill(HLSurface.secondary))
     }
 
+    /// One suggested field: the fact (label and value), and under it either
+    /// the action that applies it or the note that it has been applied.
     private func reviewRow(
         label: LocalizedStringKey,
         value: Text,
@@ -151,24 +132,12 @@ extension DocumentDetailScreen {
         applyKey: String,
         apply: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: HLSpace.sm) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                value
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(2)
-            }
-            Spacer()
+        VStack(alignment: .trailing, spacing: HLSpace.xxs) {
+            HLFactRow(label: Text(label), value: value)
             if applied {
-                Label("documents.assist.applied", systemImage: "checkmark")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .labelStyle(.titleAndIcon)
+                HLBadge(String(localized: "documents.assist.applied"), icon: "checkmark", form: .text)
             } else {
-                HLButton(applyKey, variant: .ghost, size: .compact, action: apply)
+                HLLinkButton(LocalizedStringKey(applyKey), action: apply)
             }
         }
     }
@@ -176,45 +145,26 @@ extension DocumentDetailScreen {
     // MARK: - Summary panel (session-only; not a diagnosis)
 
     private func summaryPanel(mode: DocumentSummaryMode) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                    HLSectionLabel(LocalizedStringKey(mode == .text ? "documents.summary.textTitle" : "documents.summary.summaryTitle"))
-                }
-                Spacer()
-                Button {
-                    summaryMode = nil
-                    summary = nil
-                    summaryError = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .accessibilityLabel(Text("documents.summary.close"))
+        HLCard(LocalizedStringKey(mode == .text ? "documents.summary.textTitle" : "documents.summary.summaryTitle")) {
+            HLDismissButton(label: "documents.summary.close") {
+                summaryMode = nil
+                summary = nil
+                summaryError = nil
             }
-
+        } content: {
             if isSummarising {
                 HStack(spacing: HLSpace.xs) {
                     ProgressView().controlSize(.small)
                     Text("documents.summary.working")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.factLabel)
                 }
             } else if let summaryError {
                 HLFormErrorText(summaryError)
             } else if let prose = summary?.prose {
                 HLInsightProse(text: prose)
             }
-            // 1.4 B2-c — "made for this view only, not saved" is gone.
+            // "made for this view only, not saved" is gone.
         }
-        .padding(HLSpace.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: HLRadius.sm).fill(HLSurface.secondary))
     }
 
     // MARK: - Actions
@@ -286,7 +236,7 @@ extension DocumentDetailScreen {
     /// withdrew assist mid-session); a rate-limit as its own line; anything else
     /// as the generic retry message.
     static func assistErrorMessage(_ error: Error) -> String {
-        // #115 · 0.2 — one sentence per v1.39 refusal code.
+        // One sentence per v1.39 refusal code.
         switch DocumentsRepository.aiRefusalKind(error) {
         case .operatorDisabled:
             return String(localized: "documents.assist.errorOperatorDisabled")
@@ -300,7 +250,7 @@ extension DocumentDetailScreen {
         if let hl = error as? HLError, case .rateLimited = hl {
             return String(localized: "documents.assist.errorRateLimited")
         }
-        // #151 — a busy reader or a read cut off before any value each
+        // A busy reader or a read cut off before any value each
         // get their own sentence instead of the generic one.
         if let notice = DocumentReadNotice.from(error: error) {
             return notice.message

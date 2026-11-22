@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// W-COACH-CADENCE (#30) — pins the `CoachCadenceSuggestionsRepository` wire
+/// Pins the `CoachCadenceSuggestionsRepository` wire
 /// contract against the proactive coach **action** route: the POST hits the right
 /// path with only `{ cadenceId, action }` (the client never widens a cadence).
 ///

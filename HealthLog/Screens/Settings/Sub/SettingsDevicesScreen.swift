@@ -47,7 +47,7 @@ struct SettingsDevicesScreen: View {
     #endif
 
     var body: some View {
-        HLSettingsPage(title: "Devices") {
+        HLPage {
             pairedCard
         }
         .navigationTitle("Devices")
@@ -99,12 +99,11 @@ struct SettingsDevicesScreen: View {
     /// Ort) gewinnt sie; der falsche Untertitel fällt ersatzlos — R7 verlangt
     /// die Klärung vor der Kürzung, und die Klärung ergibt: nur Omron-BP.
     private var pairedCard: some View {
-        // 1.4 B2-c — where the readings go is the card's footer (it stood
+        // Where the readings go is the card's footer (it stood
         // loose under the card), and the empty state is one line in the card
         // instead of a lockup inside it.
-        HLSettingsCard(
-            icon: "dot.radiowaves.left.and.right",
-            title: "Paired devices",
+        HLCard(
+            "Paired devices",
             footer: "devices.dualwrite.footnote"
         ) {
             if manager.pairedDevices.isEmpty {
@@ -118,46 +117,22 @@ struct SettingsDevicesScreen: View {
     }
 
     private var emptyState: some View {
-        Text("No devices paired yet")
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
+        HLEmptyNote("No devices paired yet")
             .accessibilityIdentifier("settings.devices.emptyState")
     }
 
     /// Compact list rendering the snapshot the manager holds. Uses the
-    /// SpeziDevices `PairedDeviceInfo` projection — the only field the
-    /// row needs today is the display name plus its identifier; the rest
-    /// (model variant icon, battery) is a v0.6.0.6+ design pass.
-    ///
-    /// **v0.6.1.5 Y5 layout fix:** rows render inside recessed
-    /// `HLSurface.tertiary` wells. Pre-Y5 the rows painted directly on
-    /// the card's `HLSurface.secondary` chrome — white-on-white in
-    /// light mode per the operator real-device walkthrough ("habe ich
-    /// einen riesen großen weißen Bar"). The recessed-well treatment
-    /// matches the `HLSurface.tertiary` recipe handbook §1.2 reserves
-    /// for inset rows + chip backgrounds + disabled affordances, giving
-    /// the paired-list visual separation without breaking the outer
-    /// card's continuity with the rest of the screen.
+    /// SpeziDevices `PairedDeviceInfo` projection: one row per paired
+    /// device, its name beside the radio symbol in the row's symbol column,
+    /// in the card's own rows like every other list.
     @ViewBuilder
     private var pairedList: some View {
         #if canImport(SpeziDevices) && canImport(SpeziDevicesUI)
-            VStack(spacing: HLSpace.sm) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(manager.pairedDevices, id: \.id) { info in
-                    HStack(spacing: HLSpace.sm) {
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.hlSubhead.weight(.semibold))
-                            .foregroundStyle(HLText.secondary)
-                        Text(info.name)
-                            .font(.hlSubhead.weight(.semibold))
-                            .foregroundStyle(HLText.primary)
-                        Spacer(minLength: HLSpace.sm)
+                    HLRow(title: Text(verbatim: info.name)) {
+                        HLRowGlyph(symbol: "dot.radiowaves.left.and.right")
                     }
-                    .padding(.vertical, HLSpace.sm)
-                    .padding(.horizontal, HLSpace.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
-                            .fill(HLSurface.tertiary)
-                    )
                 }
             }
             .accessibilityIdentifier("settings.devices.pairedList")
@@ -167,17 +142,17 @@ struct SettingsDevicesScreen: View {
     }
 
     private var addDeviceRow: some View {
-        // v0.11.0 W37-P1: `HLSpace.sm` between the Add-button, the supported-
+        // `HLSpace.sm` between the Add-button, the supported-
         // families line, and the pairing hint. The previous `.xs` packed the
         // "Supported: Omron …" line tight under the button and read out of
         // rhythm with the rest of the page (paired-list rows + dual-write
         // footnote both breathe at `.sm`). A little extra top-padding lifts the
         // helper block off the button so the card spacing harmonises.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // R8 — eine Aktion in einer Karte ist eine Zeile; `.create` sagt
+            // Eine Aktion in einer Karte ist eine Zeile; `.create` sagt
             // „öffnet ein Blatt, das etwas anlegt" und wählt das Glyph.
+            // No own symbol: the row takes the plus chip of every create row.
             HLSettingsActionRow(
-                icon: "plus.circle.fill",
                 title: "Add device",
                 presents: .create
             ) {
@@ -204,18 +179,18 @@ struct SettingsDevicesScreen: View {
     /// reads the list at render time so no other call-site change is
     /// needed.
     private var supportedFamiliesSubtitle: some View {
-        HStack(spacing: HLSpace.xs) {
-            Text("devices.add.supported.title")
-            Text(Self.supportedFamilies
-                .map { String(localized: $0.localizationKey) }
-                .joined(separator: ", ")
-            )
-        }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("settings.devices.supportedFamilies")
+        // One run of text: as two texts side by side, a large size gave each
+        // half a column and „Unter- / stützt:" stood beside „Blutdruck- /
+        // messge- / räte".
+        let families = Self.supportedFamilies
+            .map { String(localized: $0.localizationKey) }
+            .joined(separator: ", ")
+        return Text(verbatim: "\(String(localized: "devices.add.supported.title")) \(families)")
+            .fixedSize(horizontal: false, vertical: true)
+            .hlText(.rowSubtitle)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("settings.devices.supportedFamilies")
     }
 
     /// Display-name list for device families the screen advertises as

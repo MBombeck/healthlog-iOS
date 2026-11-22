@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 4 — the operator-visible half of an orchestrated pass.
+// The operator-visible half of an orchestrated pass.
 //
 // Split out of `HKSyncDiagnostics.swift` for file/type length, and safe to
 // split: no Wave-0 assertion reads that file as source text, which is the trap
@@ -38,14 +38,23 @@ public extension HKSyncDiagnostics {
         /// Apple-Health doses the ledger is still waiting to account for
         /// (plan 07-05). Unbounded in principle, which is why it is visible.
         public var pendingAppleDoseCount = 0
-        /// Ownerless legacy daily-stat rows held in quarantine (plan 07-04).
+        /// Ownerless legacy daily-stat rows held in quarantine.
         public var quarantinedLegacyRowCount = 0
         public var withheldCountsSampledAt: Date?
+        /// HealthKit identifiers whose cursor partition stayed closed in the
+        /// last pass that looked at them, with why. Optional so a snapshot
+        /// persisted by an earlier build still decodes (its counters must survive).
+        var lockedPartitions: [String: HealthSyncPartitionLockReason]?
+        /// Background passes (processing, app refresh, silent push, observer)
+        /// that found no signed-in session for at least one capability: the
+        /// evidence for a cold background start that never activated the
+        /// session. Optional for the same decoding reason.
+        public var backgroundPassesWithoutSession: Int?
 
         public init() {}
     }
 
-    // MARK: - Orchestrated pass diagnostics (Phase 07 / plan 07-07)
+    // MARK: - Orchestrated pass diagnostics
 
     /// Record one finished orchestrated pass.
     ///
@@ -62,6 +71,9 @@ public extension HKSyncDiagnostics {
         let refused = snapshot.capabilitiesRefusedForMissingAdmission
         healthSync.lastPassRefusedForMissingAdmission = refused
         healthSync.admissionRefusalsTotal += refused.count
+        if !refused.isEmpty, Self.backgroundTriggers.contains(snapshot.trigger) {
+            healthSync.backgroundPassesWithoutSession = (healthSync.backgroundPassesWithoutSession ?? 0) + 1
+        }
         for capability in snapshot.capabilities {
             healthSync.dispositionTotals[capability.disposition, default: 0] += 1
             if let reason = capability.holdReason {
@@ -70,12 +82,32 @@ public extension HKSyncDiagnostics {
         }
         noteActivity(at: date)
         persistHealthSync()
-        // U1 (#16) — a pass that settled items reached the server. Most
+        // A pass that settled items reached the server. Most
         // capabilities report `ran` without counts and are stamped by their own
         // recorders instead; this catches the ones that do count.
         if snapshot.capabilities.contains(where: { $0.itemsSettled > 0 }) {
             noteServerAcceptance(at: date)
         }
+    }
+
+    /// The pass triggers iOS starts without anyone opening the app.
+    static let backgroundTriggers: Set<String> = [
+        HealthSyncTrigger.processing.rawValue,
+        HealthSyncTrigger.appRefresh.rawValue,
+        HealthSyncTrigger.silentPush.rawValue,
+        HealthSyncTrigger.observer.rawValue
+    ]
+
+    /// The live leg's word on which of the `checked` types stayed locked.
+    /// Types it did not check keep their last state; nothing is written when
+    /// nothing changed, which is every pass on a healthy device.
+    internal func recordLockedPartitions(_ locked: [String: HealthSyncPartitionLockReason], checked: [String]) {
+        let before = healthSync.lockedPartitions ?? [:]
+        var after = before.filter { !checked.contains($0.key) }
+        after.merge(locked) { _, new in new }
+        guard after != before else { return }
+        healthSync.lockedPartitions = after.isEmpty ? nil : after
+        persistHealthSync()
     }
 
     /// Record the two "this account is still owed N things" counts.

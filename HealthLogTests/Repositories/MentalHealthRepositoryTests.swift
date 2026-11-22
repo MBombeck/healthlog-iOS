@@ -175,7 +175,7 @@ struct MentalHealthRepositoryTests {
         #expect(probe.method == "POST")
         #expect(probe.path == "/api/mental-health/assessments")
         #expect(probe.idempotencyKey?.isEmpty == false)
-        // #39 — the idempotency-key header is BOUND to the body externalId so a
+        // The idempotency-key header is BOUND to the body externalId so a
         // >24h outbox replay still dedups to one administration.
         #expect(probe.idempotencyKey == "ext-abc-123")
         let json = try probe.bodyJSON()
@@ -183,7 +183,7 @@ struct MentalHealthRepositoryTests {
         #expect((json["items"] as? [Int])?.count == 9)
         #expect(json["functionalDifficulty"] as? Int == 2)
         #expect(json["locale"] as? String == "en")
-        // #39 — client provenance + durable idempotency id on the wire.
+        // Client provenance + durable idempotency id on the wire.
         #expect(json["source"] as? String == "IOS")
         #expect(json["externalId"] as? String == "ext-abc-123")
         // userId is NEVER a body field.

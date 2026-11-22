@@ -126,13 +126,13 @@ public struct HealthScore: Codable, Sendable, Hashable {
         compositionNotice = try? c.decodeIfPresent(HealthScoreCompositionNotice.self, forKey: .compositionNotice)
     }
 
-    /// **W-B187 / #27 — the band that drives the UI colour + label.**
+    /// **The band that drives the UI colour + label.**
     ///
     /// The server-authoritative ``band`` token, so the Dashboard tile and the
     /// Insights score surfaces agree ("one engine"). `nil` when the server sent
     /// no band (older server, unknown token): the surfaces then stay neutral.
     ///
-    /// **#115 B7:** until B7 a missing band fell back to iOS-side thresholds
+    /// Until B7 a missing band fell back to iOS-side thresholds
     /// (green ≥ 67, yellow ≥ 34) — a verdict the server never made.
     public var displayBand: HealthScoreBand? {
         band
@@ -216,7 +216,7 @@ public struct HealthScoreBasis: Codable, Sendable, Hashable {
     }
 }
 
-/// `compositionNotice` (#103): pillars that left / joined since the last
+/// `compositionNotice`: pillars that left / joined since the last
 /// stored day. Dismissal goes through the server's notice path; the app only
 /// renders a notice the server still reports as not dismissed.
 public struct HealthScoreCompositionNotice: Codable, Sendable, Hashable {

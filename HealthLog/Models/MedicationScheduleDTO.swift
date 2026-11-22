@@ -7,7 +7,7 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
     public let label: String?
     public let dose: String?
 
-    // MARK: - v1.37.10 / v1.37.19 per-slot inventory dose (#219)
+    // MARK: - v1.37.10 / v1.37.19 per-slot inventory dose
 
     /// **v1.37.10 `unitsPerDose` — the user's RAW per-slot override.**
     /// `number | null`, and the `null` is a value in its own right: it means
@@ -35,7 +35,7 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
     /// row 2). Parsing happens client-side via `Domain.toDomain()`.
     public let daysOfWeek: String?
 
-    // MARK: - v1.5 first-class schedule fields (R1 §3.1)
+    // MARK: - First-class schedule fields (server v1.5)
 
     /// First-class points-in-time the dose is taken (`HH:mm`, user local).
     /// Up to 8 entries. Empty / absent falls back to `[windowStart]`.
@@ -50,13 +50,13 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
     /// legacy `windowEnd - windowStart` span.
     public let reminderGraceMinutes: Int?
 
-    // MARK: - v1.7.0 PRN + cyclic schedule fields (W-Meds-A2, SB-SCHED-5)
+    // MARK: - v1.7.0 PRN + cyclic schedule fields
 
     /// **Cyclic ON-week count (`cyclicOnWeeks`).** N weeks on, 1…52 on the
     /// input schema, `integer | null` and **required** on the output schema
     /// (null unless `scheduleType` is CYCLIC).
     ///
-    /// **09-14 — this used to be spelled `cycleWeeksOn` and no such key exists.**
+    /// **This used to be spelled `cycleWeeksOn` and no such key exists.**
     /// `cycleWeeksOn`, `cycleWeeksOff` and `cycleAnchor` occur **zero** times in
     /// the accepted v1.37.24 contract, so the decode guard could never hold and
     /// every CYCLIC schedule fell through to rolling/rrule/legacy, while every
@@ -80,7 +80,7 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
     /// "ignored otherwise". Optional here only so a legacy cache blob decodes.
     public let scheduleType: ScheduleType?
 
-    // MARK: - v1.15.18 per-dose intake windows (W3-MEDCONTRACT, v0.14.8)
+    // MARK: - v1.15.18 per-dose intake windows
 
     /// Explicit per-dose on-time windows (`doseWindowEntrySchema`): each
     /// entry keys a `timesOfDay` dose time and carries the `[start, end]`
@@ -126,7 +126,7 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
         self.doseWindows = doseWindows
     }
 
-    /// **09-14 — every key here is declared by `MedicationScheduleInput`, and
+    /// **Every key here is declared by `MedicationScheduleInput`, and
     /// every key the output publishes that iOS reads is here.** The three that
     /// used to be listed and are not — `cycleWeeksOn`, `cycleWeeksOff`,
     /// `cycleAnchor` — occur zero times in the accepted contract. A
@@ -170,7 +170,7 @@ public struct MedicationScheduleDTO: Codable, Sendable, Hashable {
         try container.encodeIfPresent(reminderGraceMinutes, forKey: .reminderGraceMinutes)
         try container.encodeIfPresent(cyclicOnWeeks, forKey: .cyclicOnWeeks)
         try container.encodeIfPresent(cyclicOffWeeks, forKey: .cyclicOffWeeks)
-        // Audit B-4 — the sentinel is dropped here rather than refused: this
+        // The sentinel is dropped here rather than refused: this
         // encoder also writes the SWR cache blob, and a cached medication whose
         // schedule carried an unnameable tag must not fail the cache write. The
         // key simply goes missing, which is what it meant on the way in.

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Task #53 — the single source-of-truth for *whether* and *which* assistant
+/// The single source-of-truth for *whether* and *which* assistant
 /// the user has chosen. Generalises Task #49's `remoteAIEnabled` boolean into
 /// a three-way pick presented identically in onboarding and Settings:
 ///
@@ -10,28 +10,23 @@ import Observation
 ///   nothing leaves the device.
 /// - ``onDevice`` — local generation via Apple Foundation Models
 ///   (`LocalLLMService` / `OnDeviceBriefingService` / `TrendObservationsService`).
-///   Works offline + standalone; nothing is transmitted, so no off-device
+///   Works offline; nothing is transmitted, so no off-device
 ///   consent is required. Persisted as a UI-pref (UserDefaults), since it is a
 ///   pure local-generation switch the server never needs to know about.
 /// - ``byoKey`` — v0.13 **bring-your-own-key**, client-side: the user supplies
 ///   their own LLM API key and requests go **directly device→provider** (never
 ///   through our server). The key lives in the device Keychain (`BYOKeyStore`,
 ///   W2); the per-provider BYO consent grant (Apple 5.1.2(i) — health data still
-///   leaves the device to a third party) IS the `.byoKey` state. Available in
-///   BOTH operating modes (standalone AND server-connected).
+///   leaves the device to a third party) IS the `.byoKey` state.
 /// - ``online`` — the server provider path (Task #50 pre-generated texts +
 ///   online Coach), surfaced as **"External AI"** in v0.13's matrix. Requires a
 ///   configured provider AND the per-provider informed-consent grant (Apple
 ///   5.1.2(i)); the grant record IS the `.online` state, so a prior Task #49
-///   grant reads back as `.online` with no migration. Only reachable in
-///   server-connected mode (a standalone user has no server provider to grant).
+///   grant reads back as `.online` with no migration.
 ///
-/// **v0.13 matrix:** the operating mode (standalone vs server) is a *second*
-/// axis read from `BackendAvailability.mode` — NOT duplicated into this enum.
-/// Standalone offers {none, onDevice?, byoKey}; server adds {online}. On-device
-/// is further capability-gated (`LocalLLMService.availability`). Keeping mode
-/// out of the enum is what lets `AIConsentStore` stay the single source of truth
-/// without forking a parallel system.
+/// On-device is further capability-gated (`LocalLLMService.availability`),
+/// which stays out of this enum so `AIConsentStore` remains the single source
+/// of truth without forking a parallel system.
 public enum AIMode: String, Codable, Sendable, CaseIterable, Identifiable {
     case none
     case onDevice
@@ -57,7 +52,7 @@ public enum AIMode: String, Codable, Sendable, CaseIterable, Identifiable {
 /// Surface is `@MainActor` for SwiftUI; the underlying Keychain write is
 /// synchronous so no `async` needed.
 ///
-/// **v0.5.0+ PB1-Reconcile (H3):** decline is now persistent per provider
+/// **v0.5.0+ PB1-Reconcile:** decline is now persistent per provider
 /// (Keychain entry `ai-consent-declined.<provider>` holds the ISO-8601
 /// timestamp of the last decline). `AuthenticatedShell.evaluateConsentGate`
 /// reads it via ``wasDeclined(for:)`` and suppresses auto-presentation of
@@ -139,7 +134,7 @@ public final class AIConsentStore {
     /// the grant on every logout path so a fresh sign-in starts neutral.
     nonisolated static let declinedKeyPrefix = "ai-consent-declined."
 
-    /// v0.13 — Keychain account prefix for the per-`BYOProviderID` **BYO-key
+    /// Keychain account prefix for the per-`BYOProviderID` **BYO-key
     /// consent** grant (`byo-consent.<provider>`). Mirrors ``keyPrefix`` exactly:
     /// the grant record IS the `.byoKey` state. Separate namespace from
     /// `ai-consent.` because the BYO path covers providers the server-side
@@ -148,7 +143,7 @@ public final class AIConsentStore {
     /// keychain cascade can wipe these in lockstep with the rest of the bundle.
     nonisolated static let byoKeyPrefix = "byo-consent."
 
-    /// W-B186 COACH-1 (#24) — Keychain account for the **server-managed** AI
+    /// Keychain account for the **server-managed** AI
     /// consent grant. The operator's server/admin-managed provider exposes NO
     /// per-user provider (`GET /api/user/ai-provider` returns `provider: null`,
     /// `managedBy: "server"`), so there is no concrete ``AIProvider`` to key
@@ -161,12 +156,12 @@ public final class AIConsentStore {
     /// keychain cascade wipes it in lockstep with the per-provider grants.
     nonisolated static let serverManagedScope = "ai-consent.__server_managed__"
 
-    /// W-B186 COACH-1 — decline marker for the server-managed scope, mirroring
+    /// Decline marker for the server-managed scope, mirroring
     /// ``declinedKeyPrefix`` per concrete provider so a single decline silences
     /// the shell auto-gate without nag-looping. Wiped on logout + on grant.
     nonisolated static let serverManagedDeclinedKey = "ai-consent-declined.__server_managed__"
 
-    /// Task #53 — UserDefaults key backing the ``onDevice`` arm of ``AIMode``.
+    /// UserDefaults key backing the ``onDevice`` arm of ``AIMode``.
     /// On-device generation sends nothing off-device, so a UI-pref flag (per
     /// PROJECT_GUIDE.md: UserDefaults for UI-prefs only) is the right home — no
     /// Keychain round-trip, no server sync needed. The `.online` arm stays in
@@ -174,7 +169,7 @@ public final class AIConsentStore {
     /// one clears the other) so ``aiMode`` resolves a single coherent choice.
     static let onDeviceDefaultsKey = "hl.ai.onDeviceEnabled"
 
-    /// M1 (Audit-2) — UI-pref key backing the **pending `.online` intent**: the
+    /// UI-pref key backing the **pending `.online` intent**: the
     /// user picked Online but no provider is configured yet, so no grant could
     /// land and ``aiMode`` legitimately stays `.none`. Persisting the *intent*
     /// (UserDefaults — pure UI-pref, never on the wire) lets the Settings picker
@@ -186,7 +181,7 @@ public final class AIConsentStore {
     /// `.none` / `.onDevice` (``setMode(_:activeProvider:requestOnlineConsent:)``).
     static let onlineIntentDefaultsKey = "hl.ai.onlineIntentPending"
 
-    /// v0.13 — UI-pref key backing the **pending `.byoKey` intent**: the user
+    /// UI-pref key backing the **pending `.byoKey` intent**: the user
     /// picked "Own key" in the picker but has not yet saved a key + accepted the
     /// BYO consent, so no grant could land and ``aiMode`` legitimately stays at
     /// its prior value. Persisting the intent (UserDefaults — pure UI-pref) keeps
@@ -207,7 +202,7 @@ public final class AIConsentStore {
     /// `/api/insights/*` request; if false, present `AIConsentSheet`
     /// and only proceed on the sheet's `onAccept` callback.
     public func hasConsent(for provider: AIProvider) -> Bool {
-        trackRevisionRead() // N5.1 — Keychain read is untracked; anchor on `revision`.
+        trackRevisionRead() // Keychain read is untracked; anchor on `revision`.
         guard provider != .unconfigured else { return true } // no provider → no traffic anyway
         let key = Self.keyPrefix + provider.rawValue
         let stored = keychain.getString(forKey: key) ?? ""
@@ -217,7 +212,7 @@ public final class AIConsentStore {
         return granted
     }
 
-    /// Task #49 — true when the user has granted remote-AI consent for **any**
+    /// True when the user has granted remote-AI consent for **any**
     /// real (non-`.unconfigured`) provider. Backs the single Settings master
     /// toggle "Remote-KI-Tools aktivieren" and every remote-AI render gate
     /// (assessment read, ✦ Coach surfaces, briefing/overview insights), so a
@@ -227,7 +222,7 @@ public final class AIConsentStore {
     /// handful of synchronous Keychain reads, never on a hot path.
     public func isAnyProviderGranted() -> Bool {
         trackRevisionRead() // N5.1
-        // W-B186 COACH-1 (#24) — the server-managed scope grant counts as a
+        // The server-managed scope grant counts as a
         // remote-AI grant: it has no concrete provider but the Coach + per-metric
         // surfaces are served by the operator's server key, and the `ai_full`
         // ConsentReceipt is minted off this exact grant.
@@ -238,7 +233,7 @@ public final class AIConsentStore {
         }
     }
 
-    /// Bug 3 (v0.14.8) — the single granted server provider, or `nil` when none
+    /// Bug 3 — the single granted server provider, or `nil` when none
     /// is granted. `grant`/`setMode` keep at most one server grant active, so the
     /// `first` match is the active provider. Backs the Settings disable toggle so
     /// it can key its revoke on the *granted* provider even when the live server
@@ -252,7 +247,7 @@ public final class AIConsentStore {
         }
     }
 
-    // MARK: - W-B186 COACH-1 (#24) — server-managed AI consent
+    // MARK: - Server-managed AI consent
 
     /// True when the user has granted consent for the **server-managed** AI
     /// scope (the admin/operator-managed provider with no per-user key). The
@@ -260,7 +255,7 @@ public final class AIConsentStore {
     /// as a per-provider grant is for a user-configured provider. Reads the
     /// sentinel Keychain entry directly; cheap, never on a hot path.
     public func hasServerManagedConsent() -> Bool {
-        trackRevisionRead() // N5.1 — Keychain read is untracked; anchor on `revision`.
+        trackRevisionRead() // Keychain read is untracked; anchor on `revision`.
         return keychain.getString(forKey: Self.serverManagedScope) == "granted"
     }
 
@@ -275,7 +270,7 @@ public final class AIConsentStore {
         do {
             // The grant record IS the off-device-transmission gate (Apple
             // 5.1.2(i)) — a persist failure must NOT report success; leave the
-            // scope un-granted so the next gate re-prompts (v0162).
+            // scope un-granted so the next gate re-prompts.
             try keychain.setString("granted", forKey: Self.serverManagedScope)
         } catch {
             HLLog.security.error(
@@ -321,7 +316,7 @@ public final class AIConsentStore {
         HLLog.security.info("AI consent revoked for server-managed scope")
     }
 
-    // MARK: - v0.13 — BYO-key (client-side device→provider) consent
+    // MARK: - BYO-key (client-side device→provider) consent
 
     /// True when the user has granted BYO-key consent for the given provider.
     /// The grant record IS the `.byoKey` arm's state — mirrors
@@ -348,7 +343,7 @@ public final class AIConsentStore {
     }
 
     /// Records the BYO-key informed-consent grant for `provider`. Called by the
-    /// inline key-entry flow (W3) AFTER a key has been saved to `BYOKeyStore` and
+    /// inline key-entry flow AFTER a key has been saved to `BYOKeyStore` and
     /// the user accepted the BYO consent copy. Enforces single-arm exclusivity:
     /// granting BYO revokes every server grant and clears the on-device flag, so
     /// `aiMode` resolves a single coherent choice. Other BYO providers are
@@ -384,7 +379,7 @@ public final class AIConsentStore {
         for granted in AIProvider.allCases where granted != .unconfigured {
             revoke(for: granted)
         }
-        // W-B186 COACH-1 — switching to client-side BYO must also drop any
+        // Switching to client-side BYO must also drop any
         // server-managed grant so the arms stay mutually exclusive.
         revokeServerManaged()
         lastResult = true
@@ -410,7 +405,7 @@ public final class AIConsentStore {
         }
     }
 
-    /// v0.13 — true when the user picked "Own key" but has not yet saved a key +
+    /// True when the user picked "Own key" but has not yet saved a key +
     /// accepted consent. Read ONLY by the picker (keep "Own key" selected) and
     /// the inline entry card (stay expanded). Does NOT feed ``aiMode``.
     public var isBYOKeyIntentPending: Bool {
@@ -424,7 +419,7 @@ public final class AIConsentStore {
         bumpRevision()
     }
 
-    // MARK: - Task #53 — three-way AI mode
+    // MARK: - Three-way AI mode
 
     /// True when the on-device assistant arm is enabled (UI-pref flag). Reads
     /// the UserDefaults flag directly so the resolution stays a single source
@@ -435,7 +430,7 @@ public final class AIConsentStore {
         return defaults.bool(forKey: Self.onDeviceDefaultsKey)
     }
 
-    /// M1 (Audit-2) — true when the user picked `.online` while no provider was
+    /// True when the user picked `.online` while no provider was
     /// configured, so the choice is held as a pending intent. Read ONLY by the
     /// Settings AI picker (to keep showing Online) and the add-provider hint (to
     /// stay visible). Intentionally NOT consulted by ``aiMode`` — the app-wide
@@ -464,7 +459,7 @@ public final class AIConsentStore {
     /// still holds because granting BYO revokes all server grants (and vice
     /// versa), so the two never coexist in practice.
     public var aiMode: AIMode {
-        trackRevisionRead() // N5.1 — resolves from Keychain + UserDefaults only.
+        trackRevisionRead() // Resolves from Keychain + UserDefaults only.
         if isAnyBYOKeyGranted() {
             return .byoKey
         }
@@ -511,7 +506,7 @@ public final class AIConsentStore {
     /// supersedes — the user can change their mind in either direction).
     public func grant(for provider: AIProvider) {
         guard provider != .unconfigured else {
-            // Bug 2 (v0.14.8) — observability for the silent no-op. A grant for
+            // Bug 2 — observability for the silent no-op. A grant for
             // `.unconfigured` has no provider scope to write against, so it
             // returns without persisting. That is exactly the shape that drove
             // the "I accepted but it still says consent missing" trust break:
@@ -526,7 +521,7 @@ public final class AIConsentStore {
         do {
             // Same 5.1.2(i) contract as ``grantServerManaged()`` — a persist
             // failure must NOT be logged as success; leave the provider
-            // un-granted so the gate re-prompts (v0162).
+            // un-granted so the gate re-prompts.
             try keychain.setString("granted", forKey: key)
         } catch {
             HLLog.security.error(
@@ -541,7 +536,7 @@ public final class AIConsentStore {
         // tab switch would still suppress auto-presentation needlessly
         // and the user could not re-engage via the standard CTA flow.
         try? keychain.remove(forKey: Self.declinedKeyPrefix + provider.rawValue)
-        // M1 — a real grant fulfils any pending `.online` intent; aiMode now
+        // A real grant fulfils any pending `.online` intent; aiMode now
         // resolves `.online` via the grant itself, so drop the stale intent.
         setOnlineIntentPending(false)
         lastCheckedProvider = provider
@@ -565,7 +560,7 @@ public final class AIConsentStore {
         try? keychain.setString(timestamp, forKey: key)
         lastCheckedProvider = provider
         lastResult = false
-        // N5.1 — `wasDeclined`/`declinedAt` output changed; invalidate readers.
+        // `wasDeclined`/`declinedAt` output changed; invalidate readers.
         bumpRevision()
         // Provider enum raw value — operator-grade.
         // swiftlint:disable:next hllog_public_privacy_interpolation
@@ -609,7 +604,7 @@ public final class AIConsentStore {
         explicitPromptToken &+= 1
     }
 
-    /// Task #53 — apply a three-way ``AIMode`` choice from the onboarding step
+    /// Apply a three-way ``AIMode`` choice from the onboarding step
     /// or the Settings card. The arms are mutually exclusive:
     ///
     /// - `.none` — clears the on-device flag AND revokes every provider grant,
@@ -617,8 +612,8 @@ public final class AIConsentStore {
     /// - `.onDevice` — sets the local flag and revokes every provider grant
     ///   (a switch away from online must stop off-device traffic). No consent
     ///   sheet — nothing leaves the device.
-    /// - `.byoKey` (v0.13) — clears the on-device flag and holds a pending
-    ///   intent; the inline key-entry card (W3) saves the key + calls
+    /// - `.byoKey` — clears the on-device flag and holds a pending
+    ///   intent; the inline key-entry card saves the key + calls
     ///   ``grantBYO(for:)``, which is what actually flips `aiMode` to `.byoKey`
     ///   and revokes the other arms. Existing server grants are left intact until
     ///   that grant lands, so tapping the card never destroys a working setup.
@@ -649,7 +644,7 @@ public final class AIConsentStore {
             for provider in AIProvider.allCases where provider != .unconfigured {
                 revoke(for: provider)
             }
-            // W-B186 COACH-1 — `.none` closes EVERY remote-AI gate, server-managed included.
+            // `.none` closes EVERY remote-AI gate, server-managed included.
             revokeServerManaged()
         case .onDevice:
             setOnDeviceEnabled(true)
@@ -659,11 +654,11 @@ public final class AIConsentStore {
             for provider in AIProvider.allCases where provider != .unconfigured {
                 revoke(for: provider)
             }
-            // W-B186 COACH-1 — switching to on-device stops all server-mediated AI.
+            // Switching to on-device stops all server-mediated AI.
             revokeServerManaged()
         case .byoKey:
-            // v0.13 — pick "Own key". Like `.online`, the actual grant lands
-            // later: the inline key-entry card (W3) saves the key to BYOKeyStore
+            // Pick "Own key". Like `.online`, the actual grant lands
+            // later: the inline key-entry card saves the key to BYOKeyStore
             // and calls ``grantBYO(for:)``, which is what flips `aiMode` to
             // `.byoKey` and revokes the other arms. Here we only switch away from
             // the on-device arm and hold the pending intent so the picker keeps
@@ -687,7 +682,7 @@ public final class AIConsentStore {
                     setOnlineIntentPending(false)
                     requestExplicitPrompt()
                 } else if !isAnyProviderGranted() {
-                    // Bug 1 (RCA v0.14.8) — onboarding context: the shell isn't
+                    // Bug 1 — onboarding context: the shell isn't
                     // mounted so we deliberately DON'T fire the sheet
                     // (`requestOnlineConsent == false`). Previously this branch
                     // cleared the online intent even though no grant landed, so the
@@ -702,7 +697,7 @@ public final class AIConsentStore {
                     setOnlineIntentPending(true)
                 }
             } else {
-                // M1 — no provider yet: hold the choice as a pending intent so
+                // No provider yet: hold the choice as a pending intent so
                 // the Settings picker keeps showing Online + the add-provider
                 // hint stays visible, instead of snapping back to None. aiMode
                 // still resolves .none until a grant lands (never an empty box).

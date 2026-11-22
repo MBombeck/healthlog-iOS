@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.15 W-FRONTDOORS — pins the pure logic behind the Home Vorsorge tile.**
+/// **Pins the pure logic behind the Home Vorsorge tile.**
 ///
 /// Three decisions are unit-tested here so the tile (a SwiftUI view) stays a
 /// thin renderer over verified logic:
@@ -10,7 +10,7 @@ import Testing
 /// 1. `VorsorgeNextDue.nextDue` / `.nextDueNow` — soonest *enabled* reminder
 ///    selection (the tile lead). `.nextDueNow` additionally gates on the server
 ///    `nextDueAt` being DUE now (today/overdue) so the Home tile shows ONLY when
-///    something must be done now (V1). Drives self-suppression: `nil` ⇒ no tile.
+///    something must be done now. Drives self-suppression: `nil` ⇒ no tile.
 /// 2. `VorsorgeNextDue.prefillKind` — server `measurementType` → capturable
 ///    `MetricKind` (the "jetzt messen" prefill), `nil` for free-text / uncapturable.
 /// 3. `MeasurementRemindersStore.clearOnLogout` — PHI hygiene on the promoted
@@ -155,11 +155,11 @@ struct VorsorgeNextDueTests {
         #expect(VorsorgeNextDue.nextDueNow(from: rows, now: now) == nil)
     }
 
-    // MARK: - V2 — a capturable due reminder routes the Home card to measure
+    // MARK: - A capturable due reminder routes the Home card to measure
 
     @Test("a capturable due reminder yields a prefill kind (card-tap → measure), free-text yields nil (→ open surface)")
     func dueReminderRoutesToMeasureWhenCapturable() {
-        // V2: the Home card-body tap routes to `router.requestMeasure(prefill:)`
+        // The Home card-body tap routes to `router.requestMeasure(prefill:)`
         // exactly when the due reminder maps to a capturable MetricKind; a
         // free-text reminder has no prefill, so the card falls back to opening
         // the Vorsorge surface (mark-done). The routing branch is `prefillKind !=

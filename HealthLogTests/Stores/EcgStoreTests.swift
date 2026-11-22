@@ -130,7 +130,7 @@ struct EcgStoreTests {
             "Keine Anzeichen von Vorhofflimmern"
         ].contains(label))
         // …and it is never shown without naming the device as its author.
-        // 1.4 B2: the attribution is the footer under the result (the same
+        // The attribution is the footer under the result (the same
         // sentence on the list and the detail), not a second line restating it.
         let attribution = String(localized: "insights.ecg.disclaimer")
         #expect(

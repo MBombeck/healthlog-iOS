@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **1.5 ROUTES (#149) — the workout-route read permission.**
+    /// **The workout-route read permission.**
     ///
     /// Asked in exactly one place: the moment the person turns "Send routes"
     /// on under Settings, Apple Health, Advanced. Never in the first sheet

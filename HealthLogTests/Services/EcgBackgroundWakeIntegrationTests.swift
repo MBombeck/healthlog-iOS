@@ -59,7 +59,7 @@
 
             let run = Task { await background.runBGSync(on: task) }
             await entered.wait()
-            // R-A1 (1.4): `runBGSync` installs the expiration handler before
+            // `runBGSync` installs the expiration handler before
             // anything else, so it is in place by the time the pass is entered.
             // Up to 1.3 the pass could start first and this test had to wait.
             #expect(task.hasExpirationHandler)

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **MED (#149) — the carry-over caveat of the segmented fit.**
+/// **The carry-over caveat of the segmented fit.**
 ///
 /// Server v1.46 adds `targets[].segmented` to `GET /api/medications/{id}/efficacy`:
 /// a segmented regression around the start with a `fit` block. When the lag-1

@@ -3,7 +3,7 @@ import Foundation
     import UIKit
 #endif
 
-/// Build 274 (public #4) — a lease on background execution time around a write
+/// A lease on background execution time around a write
 /// to the outbox store in the shared app-group container.
 ///
 /// Build 271 was terminated by RunningBoard with `0xdead10cc` ("holding a file
@@ -24,14 +24,14 @@ public protocol BackgroundExecutionLeasing: Sendable {
     ) async throws -> T?
 }
 
-/// Build 274 (public #4) — always grants: tests, and builds without a UIKit
+/// Always grants: tests, and builds without a UIKit
 /// application object. Keeps every existing call path writing exactly as before.
 public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing {
-    /// Build 274 (public #4) — public so the queue's public initializers can
+    /// Public so the queue's public initializers can
     /// name it as their default lease.
     public init() {}
 
-    /// Build 274 (public #4) — runs the body unconditionally and never returns
+    /// Runs the body unconditionally and never returns
     /// `nil`, so no caller can mistake this lease for a refusal.
     public func withLease<T: Sendable>(
         named _: String,
@@ -42,7 +42,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
 }
 
 #if canImport(UIKit)
-    /// Build 274 (public #4) — the production lease:
+    /// The production lease:
     /// `UIApplication.beginBackgroundTask(withName:)` around the body.
     /// Expiration cancels the body's task; the assertion is always ended, on
     /// success, on throw and on expiry.
@@ -56,7 +56,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
     /// extension building while the app still gets the real lease.
     @available(iOSApplicationExtension, unavailable)
     struct UIKitBackgroundExecutionLease: BackgroundExecutionLeasing {
-        /// Build 274 (public #4) — bridges the expiration handler (fires once,
+        /// Bridges the expiration handler (fires once,
         /// on the main thread, at an unknown moment) to the body's task, which
         /// is created only after the lease exists, and owns the one-shot latch
         /// that decides WHO ends the assertion.
@@ -75,7 +75,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
             private var expired = false
             private var ended = false
 
-            /// Build 274 (public #4) — attaches the body's cancellation; fires
+            /// Attaches the body's cancellation; fires
             /// it immediately when expiry already happened before the task ran.
             /// The closure is not retained after an expiry, so the cancel fires
             /// exactly once no matter which side arrives first.
@@ -88,7 +88,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
                 if fireNow { cancel() }
             }
 
-            /// Build 274 (public #4) — records the expiry and cancels the body
+            /// Records the expiry and cancels the body
             /// if it is already running. A second expiry is a no-op: the handler
             /// is documented to fire once, and firing a stale cancel would tear
             /// down whatever task inherited the reference.
@@ -103,7 +103,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
                 cancel?()
             }
 
-            /// Build 274 (public #4) — the one-shot end latch. `true` for the
+            /// The one-shot end latch. `true` for the
             /// first caller only; that caller — the expiration handler or the
             /// tail path, whichever gets there first — owns the single
             /// `endBackgroundTask`. A second end would release an assertion this
@@ -117,7 +117,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
             }
         }
 
-        /// Build 274 (public #4) — the assertion identifier is only known AFTER
+        /// The assertion identifier is only known AFTER
         /// `beginBackgroundTask` returns, yet the expiration handler passed into
         /// that same call has to end it. The box closes the cycle. It is
         /// main-actor isolated (hence `Sendable`) because both writers — the
@@ -129,7 +129,7 @@ public struct UnconditionalBackgroundExecutionLease: BackgroundExecutionLeasing 
             var value: UIBackgroundTaskIdentifier = .invalid
         }
 
-        /// Build 274 (public #4) — takes the assertion first, runs the body only
+        /// Takes the assertion first, runs the body only
         /// when the system granted time, and ends the assertion EXACTLY once, on
         /// whichever path reaches the latch first.
         ///

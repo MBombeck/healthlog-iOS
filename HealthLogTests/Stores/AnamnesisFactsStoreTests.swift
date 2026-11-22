@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-32 — `AnamnesisFactsStore` über den echten Transportweg.**
+/// **`AnamnesisFactsStore` über den echten Transportweg.**
 ///
 /// Der Store entscheidet POST gegen PATCH aus dem Zustand und lädt nach jedem
 /// Schreibvorgang neu, weil eine Korrektur eine neue Revisions-ID erzeugt. Beides

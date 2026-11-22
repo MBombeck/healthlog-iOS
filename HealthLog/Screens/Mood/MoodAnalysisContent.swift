@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// v0.12 W4-3 — the SINGLE implementation of the Mood "analysis" body.
+/// The SINGLE implementation of the Mood "analysis" body.
 ///
-/// **Why this exists:** the seven analysis sub-views (hero → heatmap → trend →
-/// stability → tags → patterns → recent) shipped TWICE, once in
+/// **Why this exists:** the seven analysis sub-views (hero, stability, trend,
+/// heatmap, tags, patterns, recent) shipped TWICE, once in
 /// `MoodAnalysisScreen` (More → Stimmung) and once in `InsightsMoodPage`
 /// (Insights → Stimmung), in the same order with separately-maintained period
 /// controls, empty states + sheet wiring. That is double-maintenance: a fix to
-/// the heatmap-over-full-history decoupling (B18) or a new sub-view had to land
+/// the heatmap-over-full-history decoupling or a new sub-view had to land
 /// in two places or silently drift.
 ///
 /// **Approach (per the W4-3 brief — "both hosts delegate to one shared body"):**
@@ -18,7 +18,7 @@ import SwiftUI
 ///   - a `section` decorator so the host can wrap each section in its own
 ///     entrance treatment or render it plain (`InsightsMoodPage`).
 ///
-/// 1.4 B2 — the second host, `MoodAnalysisScreen`, had no call site since the
+/// The second host, `MoodAnalysisScreen`, had no call site since the
 /// v0.11 IA removed its More row and was deleted; the seams stay so the body
 /// remains testable on its own (`MoodAnalysisContentTests`).
 ///
@@ -27,13 +27,13 @@ import SwiftUI
 /// can never diverge on the maths.
 struct MoodAnalysisContent<Section: View>: View {
     @Environment(MoodStore.self) private var store
-    /// #115 · 1.3 — the server's stability rides the relations payload
+    /// The server's stability rides the relations payload
     /// (`GET /api/mood/insights`, SWR-cached, already loaded by the Insights
     /// host; the More → Stimmung host loads it here).
     /// Optional so a host without the store (previews, render tests) still
     /// draws; the section then shows no stability, never a computed one.
     @Environment(MoodRelationsStore.self) private var relationsStore: MoodRelationsStore?
-    /// POLISH-B B8 — the dashboard snapshot carries the server's mood verdict
+    /// The dashboard snapshot carries the server's mood verdict
     /// (`tiles.directions["MOOD"]`). Optional for the same reason as above.
     @Environment(DailyBriefingStore.self) private var briefingStore: DailyBriefingStore?
 
@@ -43,16 +43,16 @@ struct MoodAnalysisContent<Section: View>: View {
     @Binding var editing: MoodEntry?
     /// "Show all" → full-history push binding (host owns the destination).
     @Binding var showFullHistory: Bool
-    /// v0.14.4 E1 — when `true`, the pixel grid is driven by the host's `period`
+    /// When `true`, the pixel grid is driven by the host's `period`
     /// (the page's bottom range control) instead of its own 12-weeks/year toggle,
     /// and reads the WINDOWED daily averages. The Insights Mood page sets this;
     /// the More → Stimmung host keeps the self-owned toggle over full history.
     var heatmapDrivenByPeriod: Bool = false
-    /// v0.14.4 E2 — when `false`, the inline "recent entries" section is dropped
+    /// When `false`, the inline "recent entries" section is dropped
     /// (the Insights Mood page replaces it with the standard "Show all" drill-down
     /// at the page bottom). The More → Stimmung host keeps it.
     var showsRecentSection: Bool = true
-    /// **Phase 09 Wave 0** — the measured analysis seam. The default is the
+    /// The measured analysis seam. The default is the
     /// live engine, so both hosts construct this view exactly as before and
     /// compute exactly what they computed before; a test injects a counting
     /// engine, and Plan 09-04 swaps the live one for a revision-keyed cache
@@ -60,10 +60,11 @@ struct MoodAnalysisContent<Section: View>: View {
     var analysis: MoodAnalysisEngine = .live
     /// Per-section decorator: the host wraps each section in its own entrance
     /// motion (zone stagger) or renders it verbatim. `index` is the section's
-    /// position (0…6) so a staggered host can offset its delay.
+    /// position in ``MoodAnalysisSection/order`` so a staggered host can offset
+    /// its delay.
     @ViewBuilder let section: (_ index: Int, _ content: AnyView) -> Section
 
-    /// **Phase 09 / plan 09-04.** The analysis this body draws, published on the
+    /// The analysis this body draws, published on the
     /// main actor after it was computed off it. Owned per view instance; the
     /// *cache* behind it is owned by the store, so the two hosts and a
     /// re-entered screen share one answer rather than one copy each.
@@ -142,34 +143,33 @@ struct MoodAnalysisContent<Section: View>: View {
     }
 
     private var windowLabel: String {
-        switch period {
-        case .days30: String(localized: "in 30 days")
-        case .days90: String(localized: "in 90 days")
-        case .year: String(localized: "in 1 year")
-        }
+        MoodAnalysisSection.windowLabel(for: period)
     }
 
+    /// The sections in the order of every detail page: the figure, the
+    /// statistic, the chart, then the deeper blocks and the entries. Each
+    /// index comes from ``MoodAnalysisSection/order(hasPatterns:showsRecent:)``,
+    /// so the drawn order and the tested order are one list.
     var body: some View {
         let key = renderKey
-        section(0, AnyView(heroSection(key)))
-        section(1, AnyView(heatmapSection))
-        section(2, AnyView(trendSection))
-        section(3, AnyView(stabilitySection))
-        section(4, AnyView(MoodTagInsightSection(deltas: insights.tagDeltas)))
-        // #136 — the pattern cards are back, from the server (v1.43) and only
-        // rendered here; an older server sends none and the section is absent,
-        // so the indices stay contiguous (recent is 5 without it, 6 with it).
-        // INT-Q — the patterns of the chosen period (`?days`), never the year's.
+        // The patterns of the chosen period (`?days`), never the year's; an
+        // older server sends none and the section is absent.
         let patterns = relationsStore?.patterns(forDays: period.rawValue)
+        let order = MoodAnalysisSection.order(hasPatterns: patterns != nil, showsRecent: showsRecentSection)
+        section(order.position(of: .hero), AnyView(heroSection(key)))
+        section(order.position(of: .stability), AnyView(stabilitySection))
+        section(order.position(of: .trend), AnyView(trendSection))
+        section(order.position(of: .heatmap), AnyView(heatmapSection))
+        section(order.position(of: .tags), AnyView(MoodTagInsightSection(deltas: insights.tagDeltas)))
         if let patterns {
-            section(5, AnyView(MoodPatternSection(patterns: patterns)))
+            section(order.position(of: .patterns), AnyView(MoodPatternSection(patterns: patterns)))
         }
         if showsRecentSection {
-            section(MoodPatternSection.recentSectionIndex(hasPatterns: patterns != nil), AnyView(recentSection))
+            section(order.position(of: .recent), AnyView(recentSection))
         }
     }
 
-    /// v0.14.7 B5 — "Stimmung heute" renders as a section heading ABOVE the
+    /// "Stimmung heute" renders as a section heading ABOVE the
     /// tile (the heading-above-card pattern the Trend / metric pages use), not
     /// as an in-card title. The header lives here so both hosts (Insights →
     /// Stimmung + More → Stimmung) stay in lockstep.
@@ -179,18 +179,19 @@ struct MoodAnalysisContent<Section: View>: View {
     /// wrapping the seven sections to carry one `.task` would have started
     /// seven of them.
     private func heroSection(_ key: RenderKey) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            InsightsSectionHeader("Mood today", flush: true)
+        VStack(alignment: .leading, spacing: 0) {
+            HLSectionHeader("Mood today", rank: .area)
             MoodHeroSummary(insights: insights, verdict: briefingStore?.snapshotBriefing?.directions["MOOD"]?.direction)
         }
+        .moodSectionGap()
         .task(id: key) { await loadAnalysis(key) }
-        // #115 · 1.3 — the server's day means and stability. Re-read when the
+        // The server's day means and stability. Re-read when the
         // entries move (a write drops the series' SWR row); not on launch.
         .task(id: store.entriesRevision) {
             await store.loadDailySeries()
             if let relationsStore, relationsStore.response == nil { await relationsStore.load() }
         }
-        // #126 P2 — stability follows the chosen period (`?days=`).
+        // Stability follows the chosen period (`?days=`).
         .task(id: period) { await relationsStore?.loadStability(days: period.rawValue) }
     }
 
@@ -202,22 +203,23 @@ struct MoodAnalysisContent<Section: View>: View {
         )
     }
 
-    /// v0.14.6 N5 — the "Verlauf" title is now a section heading ABOVE the card
+    /// The "Verlauf" title is now a section heading ABOVE the card
     /// (matching the metric pages' heading-outside-card pattern), not a
     /// hard-to-read in-card title. Same "Trend" key (renders "Verlauf" in DE).
     ///
-    /// 1.4 B4 — with fewer than two days there is no line to draw, and the card
+    /// With fewer than two days there is no line to draw, and the card
     /// is absent rather than a heading over "not enough entries".
     @ViewBuilder
     private var trendSection: some View {
         if MoodTrendPresence.isShown(trendEntries) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("Trend", flush: true)
+            VStack(alignment: .leading, spacing: 0) {
+                HLSectionHeader("Trend", rank: .area)
                 HLCard {
-                    MoodTrendChart(entries: trendEntries)
+                    MoodTrendChart(series: presenter.windowed?.trendSeries ?? .empty)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .moodSectionGap()
         }
     }
 
@@ -252,11 +254,69 @@ struct MoodAnalysisContent<Section: View>: View {
     }
 }
 
-/// **1.4 B4 — when the mood trend card is there at all.** The trend needs two
+/// The sections of the mood analysis in page order (figure, statistic,
+/// chart, deeper blocks, entries). Data, so a test can read the order the
+/// body draws without rendering it.
+enum MoodAnalysisSection: Hashable, CaseIterable {
+    case hero
+    case stability
+    case trend
+    case heatmap
+    case tags
+    case patterns
+    case recent
+
+    /// The sections a body draws; a missing one moves the next one up, so the
+    /// indices stay contiguous.
+    static func order(hasPatterns: Bool, showsRecent: Bool) -> [MoodAnalysisSection] {
+        allCases.filter { kind in
+            switch kind {
+            case .patterns: hasPatterns
+            case .recent: showsRecent
+            default: true
+            }
+        }
+    }
+
+    /// The analysis body's index for the recent-entries section.
+    static func recentIndex(hasPatterns: Bool) -> Int {
+        order(hasPatterns: hasPatterns, showsRecent: true).position(of: .recent)
+    }
+
+    /// The window under the entry count, named after the page's period.
+    static func windowLabel(for period: MoodPeriod) -> String {
+        switch period {
+        case .day: String(localized: "Today")
+        case .week: String(localized: "mood.window.week")
+        case .month: String(localized: "in 30 days")
+        case .sixMonths: String(localized: "mood.window.sixMonths")
+        case .year: String(localized: "in 1 year")
+        case .all: String(localized: "All data")
+        }
+    }
+}
+
+extension [MoodAnalysisSection] {
+    /// The index a section is drawn at; past the end when it is not drawn.
+    func position(of kind: MoodAnalysisSection) -> Int {
+        firstIndex(of: kind) ?? count
+    }
+}
+
+/// **When the mood trend card is there at all.** The trend needs two
 /// different days, the threshold below which `MoodTrendChart` itself would only
 /// draw its sparse state. Outside the generic host so a test can ask it.
 enum MoodTrendPresence {
     static func isShown(_ entries: [MoodTrendChart.Entry], calendar: Calendar = .current) -> Bool {
         Set(entries.map { calendar.startOfDay(for: $0.date) }).count >= 2
+    }
+}
+
+extension View {
+    /// A mood section hands its header and card to the host page as one view.
+    /// The header then stands in this stack rather than in the page's, so the
+    /// stack says that the page's gap is above it and its own gap below.
+    func moodSectionGap(after spacing: CGFloat = 0) -> some View {
+        environment(\.hlContainerGap, HLContainerGap(before: HLLayout.cardGap, after: spacing))
     }
 }

@@ -29,15 +29,15 @@ extension EditProfileScreen {
             // metric/imperial control above the three detail pickers; writes go
             // through `setUnitPreference` (optimistic mirror + PATCH). With no
             // explicit weight override, the weight picker follows this binary.
-            Picker(
-                String(localized: "settings.unitSystem.title"),
-                selection: unitSystemBinding
+            HLAdaptiveSegmentedPicker(
+                "settings.unitSystem.title",
+                selection: unitSystemBinding,
+                labels: HLUnitPreference.allCases.map { LocalizedStringKey($0.label) }
             ) {
                 ForEach(HLUnitPreference.allCases, id: \.self) { pref in
                     Text(pref.label).tag(pref)
                 }
             }
-            .pickerStyle(.segmented)
             .accessibilityIdentifier("settings.units.systemPicker")
             unitRow(label: "Weight", identifier: "settings.units.weightPicker") {
                 Picker(String(localized: "Weight"), selection: bindable(\.weightUnit)) {
@@ -56,7 +56,7 @@ extension EditProfileScreen {
                 .labelsHidden()
             }
             unitRow(label: "Blood glucose", identifier: "settings.units.glucosePicker") {
-                // #108 — the glucose unit belongs to the account: the pick
+                // The glucose unit belongs to the account: the pick
                 // PATCHes `/api/auth/me/glucose-unit` (optimistic, reverted on
                 // failure) so the server converts the series into the same unit.
                 Picker(String(localized: "Blood glucose"), selection: glucoseUnitBinding) {
@@ -67,34 +67,44 @@ extension EditProfileScreen {
                 .labelsHidden()
             }
         } header: {
-            Text("Units")
+            HLSectionHeader("Units")
         }
+        .hlFormRowSurface()
         // UI-Standard R2 — der Abschnitts-Footer („Lege fest, wie Gewicht,
         // Blutdruck und Glukose angezeigt werden.") zählte die drei Zeilen
         // auf, die direkt darüber „Gewicht", „Blutdruck" und „Blutzucker"
         // heißen. Tautologie, gefallen.
     }
 
-    /// The "Time format" section: a single auto / 24h / 12h picker bound to the
-    /// server-backed `SettingsStore.setTimeFormat(_:)` so the pick PATCHes
-    /// `/api/user/profile` and every rendered clock snaps immediately.
-    var timeFormatSection: some View {
+    /// Time and date format in one card: an auto / 24h / 12h picker and an
+    /// auto / DMY / MDY / YMD picker, each bound to the server-backed
+    /// `SettingsStore` setter so the pick PATCHes `/api/user/profile` (server
+    /// `User.dateFormat`, v1.21.0) and every rendered clock and date snaps
+    /// immediately. The header names the pair, so no row repeats it.
+    var formatsSection: some View {
         Section {
-            Picker(
-                String(localized: "settings.time_format.title"),
-                selection: timeFormatBinding
-            ) {
-                ForEach(HLTimeFormat.allCases, id: \.self) { format in
-                    Text(format.label).tag(format)
-                }
+            // Form pickers: at AX sizes the value wraps under the title
+            // instead of being cut in the middle.
+            HLFormPicker(
+                "settings.time_format.title",
+                selection: timeFormatBinding,
+                options: HLTimeFormat.allCases
+            ) { format in
+                Text(format.label)
             }
             .accessibilityIdentifier("editProfile.timeFormatPicker")
+            HLFormPicker(
+                "settings.date_format.title",
+                selection: dateFormatBinding,
+                options: HLDateFormat.allCases
+            ) { format in
+                Text(format.label)
+            }
+            .accessibilityIdentifier("editProfile.dateFormatPicker")
         } header: {
-            Text("settings.time_format.title")
+            HLSectionHeader("profile.formats.header")
         }
-        // UI-Standard R2 — Footer gefallen: „Wie Uhrzeiten in der gesamten App
-        // dargestellt werden." formulierte den Abschnitts-Header „Zeitformat"
-        // um, den einzigen Inhalt bildet ein Auto/24h/12h-Picker.
+        .hlFormRowSurface()
     }
 
     /// Binding for the server-backed time-format pick: reads the resolved
@@ -105,28 +115,6 @@ extension EditProfileScreen {
             get: { settings.timeFormat },
             set: { newValue in Task { await settings.setTimeFormat(newValue) } }
         )
-    }
-
-    /// The "Date format" section: a single auto / DMY / MDY / YMD picker bound
-    /// to the server-backed `SettingsStore.setDateFormat(_:)` so the pick
-    /// PATCHes `/api/user/profile` (server `User.dateFormat`, v1.21.0) and every
-    /// rendered date snaps immediately. Mirrors ``timeFormatSection``.
-    var dateFormatSection: some View {
-        Section {
-            Picker(
-                String(localized: "settings.date_format.title"),
-                selection: dateFormatBinding
-            ) {
-                ForEach(HLDateFormat.allCases, id: \.self) { format in
-                    Text(format.label).tag(format)
-                }
-            }
-            .accessibilityIdentifier("editProfile.dateFormatPicker")
-        } header: {
-            Text("settings.date_format.title")
-        }
-        // UI-Standard R2 — Footer gefallen, aus demselben Grund wie beim
-        // Zeitformat darüber.
     }
 
     /// Binding for the server-backed date-format pick: reads the resolved
@@ -164,7 +152,7 @@ extension EditProfileScreen {
         LabeledContent {
             content()
         } label: {
-            Text(label)
+            HLRowTitle(label)
         }
         .accessibilityIdentifier(identifier)
     }

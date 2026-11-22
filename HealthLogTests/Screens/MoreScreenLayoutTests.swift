@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// v0.5.1-F5 / v0.5.2-A3 — MoreScreen.Layout contract tests.
+/// MoreScreen.Layout contract tests.
 ///
 /// The Mehr tab is described declaratively by `MoreScreen.Layout`. These
 /// tests pin the **shape** of that descriptor — section titles, row order,
@@ -34,7 +34,7 @@ struct MoreScreenLayoutTests {
 
     @Test("Trends row was removed in v0.11 IA — ChartsScreen duplicate per-metric list cut")
     func trendsRowAbsent() {
-        // v0.11 IA — the metric path is consolidated to Insights (tile →
+        // The metric path is consolidated to Insights (tile →
         // ChartDetailScreen) + the Dashboard tile shortcut. The rival
         // More→Trends list (ChartsScreen) is gone; guard re-introduction.
         let ids = MoreScreen.Layout.recordsRows.map(\.id)
@@ -43,7 +43,7 @@ struct MoreScreenLayoutTests {
 
     @Test("Stimmung row removed from Mehr in v0.11 IA — mood analysis lives in Insights")
     func moodRowAbsentFromMehr() {
-        // v0.11 IA — the More→Stimmung row (→ MoodAnalysisScreen) was a
+        // The More→Stimmung row (→ MoodAnalysisScreen) was a
         // duplicate of the Insights mood surface. It was dropped; mood logging
         // stays on Erfassen, analysis/history lives in Insights. Guard against
         // re-introduction.
@@ -84,7 +84,7 @@ struct MoreScreenLayoutTests {
         #expect(MoreScreen.Layout.personalRecordsRow.icon == "rosette")
     }
 
-    // MARK: - v0.14.1 (#134) — Mehr IA reorg
+    // MARK: - Mehr IA reorg
 
     @Test(
         "Records & achievements section groups Rekorde + Erfolge + Workouts + Messwerte in order (Labs/Illness promoted to clinical spine in v0.15)"
@@ -92,14 +92,15 @@ struct MoreScreenLayoutTests {
     func recordsSectionComposition() {
         #expect(MoreScreen.Layout.recordsSectionTitle == "Records & achievements")
         let titles = MoreScreen.Layout.recordsRows.map(\.title)
-        // v0.15 W-FRONTDOORS — Lab results + Condition journal were PROMOTED out
+        // Lab results + Condition journal were PROMOTED out
         // of this records drawer into the clinical-spine "Health & care" section.
-        #expect(titles == ["Personal records", "Achievements", "Workouts", "Measurements"])
+        // The timeline heads the section (1.7): the whole record at once.
+        #expect(titles == ["timeline.title", "Personal records", "Achievements", "Workouts", "Measurements"])
         let ids = MoreScreen.Layout.recordsRows.map(\.id)
-        #expect(ids == ["personal_records", "achievements", "workouts", "measurements"])
+        #expect(ids == ["timeline", "personal_records", "achievements", "workouts", "measurements"])
     }
 
-    // MARK: - v0.15 W-FRONTDOORS — clinical-spine section
+    // MARK: - Clinical-spine section
 
     @Test(
         "Health & care clinical-spine section leads with Über mich, then Vorsorge + Labs + Illness + Documents + Mental wellbeing + Cycle"
@@ -107,7 +108,7 @@ struct MoreScreenLayoutTests {
     func clinicalSectionComposition() {
         #expect(MoreScreen.Layout.clinicalSectionTitle == "Health & care")
         let ids = MoreScreen.Layout.clinicalRows.map(\.id)
-        // v0152 W-COACH-CLEANUP (C2) — the stray More Coach row was removed; the
+        // The stray More Coach row was removed; the
         // manual coach entry returns inline on the Insights pages (later update).
         // v1.25 W-MENTAL-HEALTH — the PHQ-9 / GAD-7 screener front door.
         // Documents — the opt-in `inboundDocuments` vault front door.
@@ -119,7 +120,11 @@ struct MoreScreenLayoutTests {
         // the hub, so they remain absent here.
         // 1.0.3 (App Review 1.4.1) — `medical_sources` was inserted directly
         // after `vorsorge` (see `medicalSourcesRowPresent` below).
-        #expect(ids == ["about_me", "vorsorge", "medical_sources", "labs", "illness", "documents", "mental_wellbeing", "cycle"])
+        // 1.7 — the seizure diary stands next to the illness journal; it is
+        // rendered only while the server's module map says it is on.
+        #expect(ids == [
+            "about_me", "vorsorge", "medical_sources", "labs", "illness", "seizures", "documents", "mental_wellbeing", "cycle"
+        ])
     }
 
     // MARK: - 1.0.3 (App Review 1.4.1) — Medical sources hub
@@ -142,7 +147,7 @@ struct MoreScreenLayoutTests {
         #expect(MoreScreen.Layout.cycleSettingsRow.id == "cycle_settings")
         #expect(MoreScreen.Layout.cycleSettingsRow.icon == "gearshape")
         #expect(MoreScreen.Layout.cycleSettingsRow.title == "more.cycleSettings.title")
-        // **Amended 2026-08-23 (Plan 17-05, R5-A1).** This clause used to pin
+        // **Amended 2026-08-23.** This clause used to pin
         // `subtitle == nil`, on R5's rule that a subtitle which only rephrases
         // its title falls. R5 Amendment A1 supersedes that for hub rows BY NAME:
         // on the settings hub and the „Mehr" tab a rephrasing subtitle is not
@@ -225,7 +230,7 @@ struct MoreScreenLayoutTests {
 
     @Test("Devices stays in the Settings hub — no devices row in any live Mehr section (v0.14.10 §3 / v0.14.8 W2 §3.c)")
     func devicesRowAbsentFromMehr() {
-        // v0.14.10 §3 — operator wants Geräte under Einstellungen. The dead
+        // Operator wants Geräte under Einstellungen. The dead
         // `devicesRow`/`serverDataRows` source-compat descriptors were deleted
         // in v0.14.8 W2 (§3.c) together with the orphaned "Data & devices"
         // section, so the only guard left is the live row catalogue.
@@ -245,6 +250,7 @@ struct MoreScreenLayoutTests {
     func recordsAccessibilityIdentifiers() {
         let identifiers = MoreScreen.Layout.recordsRows.map(\.accessibilityIdentifier)
         #expect(identifiers == [
+            "more.row.timeline",
             "more.row.personal_records",
             "more.row.achievements",
             "more.row.workouts",
@@ -254,8 +260,8 @@ struct MoreScreenLayoutTests {
 
     @Test("Measurements picker row folded into Records & achievements — the orphaned Data & devices section is gone (v0.14.8 W2 §3.c)")
     func measurementsRowFoldedIntoRecords() {
-        // v0.14.8 W2 (Audit §3.c) — after Geräte (v0.14.10 §3) and Export
-        // (v0.14.7 C1) moved back to the Settings hub, "Data & devices" held a
+        // v0.14.8 W2 (Audit §3.c) — after Geräte and Export
+        // moved back to the Settings hub, "Data & devices" held a
         // single Messwerte row under a heading that promised devices. The row
         // now renders last in the Records & achievements section; the section
         // descriptor + the dead exportRow/devicesRow descriptors were deleted.
@@ -263,21 +269,21 @@ struct MoreScreenLayoutTests {
         #expect(MoreScreen.Layout.measurementsRow.title == "Measurements")
         #expect(MoreScreen.Layout.measurementsRow.accessibilityIdentifier == "more.row.measurements")
         // Measurements is still last in the records section after Labs/Illness
-        // were promoted to the clinical spine (v0.15 W-FRONTDOORS).
+        // were promoted to the clinical spine.
         #expect(MoreScreen.Layout.recordsRows.last?.id == "measurements")
     }
 
     @Test("Lab results row lives in the clinical spine, gated behind the labs module (v0.15 promotion)")
     func labsRowPresentAndGated() {
         #expect(MoreScreen.Layout.labsRow.icon == "testtube.2")
-        // v0153 INV-D — the row's title is now the canonical screen
+        // The row's title is now the canonical screen
         // localization key (de "Laborwerte"), not the unregistered English
         // literal that leaked into the German build. The subtitle is its own
         // keyed string.
         #expect(MoreScreen.Layout.labsRow.title == "labs.list.title")
         #expect(MoreScreen.Layout.labsRow.subtitle == "more.labs.subtitle")
         #expect(MoreScreen.Layout.labsRow.accessibilityIdentifier == "more.row.labs")
-        // v0.15 — promoted out of recordsRows into clinicalRows.
+        // Promoted out of recordsRows into clinicalRows.
         #expect(MoreScreen.Layout.clinicalRows.contains { $0.id == "labs" })
         #expect(!MoreScreen.Layout.recordsRows.contains { $0.id == "labs" })
     }
@@ -285,7 +291,7 @@ struct MoreScreenLayoutTests {
     @Test("Condition journal descriptor is stable and RESTORED to the clinical spine next to Labs (v1.26.1 W-ABOUT-ME-RECONCILE)")
     func illnessRowRestoredToClinicalSpine() {
         #expect(MoreScreen.Layout.illnessRow.icon == "heart.text.square")
-        // v0153 INV-D — the row's title is now the canonical screen
+        // The row's title is now the canonical screen
         // localization key (de "Beschwerden-Tagebuch"), not the unregistered
         // English literal that leaked into the German build. The subtitle is
         // its own keyed string.
@@ -365,7 +371,7 @@ struct MoreScreenLayoutTests {
         #expect(MoreScreen.Layout.shareToolbarAccessibilityLabel == "Share with your doctor")
     }
 
-    // MARK: - v0.6.1.5 Y5 — Account (sign-out + delete) rows
+    // MARK: - Account (sign-out + delete) rows
 
     //
     // v0.17 settings-hygiene — the `sicherheitSectionTitle` + `sicherheitRows`
@@ -415,13 +421,13 @@ struct MoreScreenLayoutTests {
         // real estate, so the contract copy demotes onto the row
         // itself.
         #expect(MoreScreen.Layout.signOutRow.subtitle == "Your data on the server is preserved")
-        // **Amended 2026-08-23 (Plan 17-05, R5-A1).** The middle dot is out —
+        // **Amended 2026-08-23.** The middle dot is out —
         // the operator reads it as machine-written and the amendment names the
         // comma as the only separator. The sentence is otherwise untouched,
         // including the word „irreversible", which is the contract copy this
         // clause exists to protect.
         //
-        // **Amended 1.5.0 (KONTO, #151).** From server 1.46.0 a deletion
+        // **Amended 1.5.0.** From server 1.46.0 a deletion
         // locks the account and an admin can undo it inside the grace window,
         // so „irreversible" is no longer true for every server. The row says
         // what holds for both generations; the deletion screen says whether

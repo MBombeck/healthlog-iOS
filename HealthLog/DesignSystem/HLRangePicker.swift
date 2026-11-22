@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.11 — the ONE canonical period / time-range control for every chart.
+/// The ONE canonical period / time-range control for every chart.
 ///
 /// **Why this exists (AUDIT-FINAL §H2):** before v0.11 there were FOUR bespoke
 /// period controls — `ChartDetailScreen.RangePicker`, `FullscreenRangePicker`,
@@ -20,35 +20,22 @@ protocol HLRangeOption: CaseIterable, Identifiable, Hashable {
     var rangeAccessibilityLabel: String { get }
 }
 
-/// Canonical segmented range control. Two presentation styles:
-/// - `.bar` (default) — the sticky chrome treatment used at the top of
-///   `ChartDetailScreen` / bottom of `FullscreenChartCover` (horizontal +
-///   vertical padding + a translucent material backing so chart content can
-///   scroll underneath).
-/// - `.inline` — bare segmented control for use inside a card's `VStack`,
-///   no material backing.
+/// Canonical segmented range control: the bare segments. A detail page
+/// hosts them in the floating glass capsule (``HLFloatingPeriodControl``);
+/// the material bar this type used to draw itself is gone, a page has one
+/// period control and it floats.
 struct HLRangePicker<Option: HLRangeOption>: View where Option.AllCases: RandomAccessCollection {
     enum Style {
-        /// Sticky chrome: padded + material backing. For `safeAreaInset` hosts.
-        case bar
-        /// Bare control for inline placement inside a card.
+        /// Bare control, the only form left. Kept as a name so a call that
+        /// spells it out still reads as before.
         case inline
     }
 
     @Binding var selection: Option
-    var style: Style = .bar
+    var style: Style = .inline
 
     var body: some View {
-        switch style {
-        case .bar:
-            picker
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.sm)
-                .frame(maxWidth: .infinity)
-                .background(HLMaterialBackground())
-        case .inline:
-            picker
-        }
+        picker
     }
 
     private var picker: some View {
@@ -59,7 +46,7 @@ struct HLRangePicker<Option: HLRangeOption>: View where Option.AllCases: RandomA
                     .tag(option)
             }
         }
-        // v0.6.1.6 — Y6 — AP-005: lock the selected segment to the chart-chrome
+        // Y6 — AP-005: lock the selected segment to the chart-chrome
         // monochrome key (handbook §2.8), independent of the scene-root accent.
         .pickerStyle(.segmented)
         .tint(HLText.primary)
@@ -67,5 +54,68 @@ struct HLRangePicker<Option: HLRangeOption>: View where Option.AllCases: RandomA
         // Honour reduce-motion at the call-site's chart `.hlAnimation`; the
         // segment-slide here is the system default (already reduce-motion-aware).
         .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+/// **The one period set of the app: T, W, M, 6M, J, Alle.**
+///
+/// Every detail page with a time series offers exactly these, in this order,
+/// in the floating period control (Ruhepuls, Blutdruck, a lab marker, an own
+/// metric, mood). `rawValue` is the window in days; `all` asks the server for
+/// its whole span (3650 days, its cap).
+enum HLTimeRange: Int, CaseIterable, Identifiable, Sendable, HLRangeOption {
+    case day = 1
+    case week = 7
+    case month = 30
+    case sixMonths = 180
+    case year = 365
+    case all = 3650
+
+    /// What a page opens on.
+    static let standard: HLTimeRange = .month
+
+    var id: Int {
+        rawValue
+    }
+
+    /// The window in days.
+    var days: Int {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .day: String(localized: "range.label.day", defaultValue: "T")
+        case .week: String(localized: "range.label.week", defaultValue: "W")
+        case .month: "M"
+        case .sixMonths: "6M"
+        case .year: String(localized: "range.label.year", defaultValue: "Y")
+        case .all: String(localized: "range.label.all", defaultValue: "All")
+        }
+    }
+
+    var rangeAccessibilityLabel: String {
+        switch self {
+        case .day: String(localized: "Day")
+        case .week: String(localized: "Week")
+        case .month: String(localized: "Month")
+        case .sixMonths: String(localized: "6 months")
+        case .year: String(localized: "Year")
+        case .all: String(localized: "All data")
+        }
+    }
+
+    /// The first instant of the window that ends at `now`. `nil` for `all`,
+    /// which has no lower edge.
+    func start(endingAt now: Date, calendar: Calendar = .current) -> Date? {
+        guard self != .all else { return nil }
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: -(days - 1), to: today)
+    }
+
+    /// The set entry for a window in days, so a page that stores days can
+    /// map onto the set. `nil` for a window the set does not offer.
+    init?(days: Int) {
+        self.init(rawValue: days)
     }
 }

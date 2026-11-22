@@ -46,24 +46,10 @@ struct CoachReasoningAdvanced: View {
 
     var body: some View {
         VStack(spacing: HLSpace.sm) {
-            Button {
+            HLLinkButton("Advanced", isExpanded: expanded) {
                 withHLAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-            } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Text("Advanced")
-                        .font(.hlSubhead.weight(.semibold))
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .accessibilityHidden(true)
-                }
-                .foregroundStyle(HLText.secondary)
-                .frame(minHeight: 44)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("settings.ai.advanced")
-            .accessibilityValue(expanded ? Text("Expanded") : Text("Collapsed"))
             if expanded, let state = model.state {
                 CoachReasoningCard(state: state, pending: model.pending, failed: model.failed) { level in
                     Task { await model.choose(level) }
@@ -81,9 +67,8 @@ struct CoachReasoningCard: View {
     let choose: (CoachReasoningLevel) -> Void
 
     var body: some View {
-        HLSettingsCard(
-            icon: "brain",
-            title: "settings.ai.reasoning.title",
+        HLCard(
+            "settings.ai.reasoning.title",
             subtitle: "settings.ai.reasoning.explainer"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -92,8 +77,7 @@ struct CoachReasoningCard: View {
                 }
                 ForEach(CoachReasoningPresentation.notes(for: state), id: \.self) { note in
                     Text(verbatim: note)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if failed {
@@ -107,39 +91,18 @@ struct CoachReasoningCard: View {
         .accessibilityIdentifier("settings.ai.reasoning.card")
     }
 
+    /// The mark moves at the tap and stays while the server answers; the row
+    /// is locked until then.
     private func optionRow(_ level: CoachReasoningLevel) -> some View {
         let allowed = state.canChoose(level)
-        let selected = state.preference == level
-        return Button {
+        return HLChoiceRow(
+            title: Text(verbatim: CoachReasoningPresentation.label(level, offIsReal: state.offIsReal)),
+            detail: !state.isLocked && !allowed ? Text("settings.ai.usage.limited") : nil,
+            isSelected: (pending ?? state.preference) == level
+        ) {
             choose(level)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: CoachReasoningPresentation.label(level, offIsReal: state.offIsReal))
-                        .font(.hlBody)
-                        .foregroundStyle(allowed ? HLText.primary : HLText.tertiary)
-                    if !state.isLocked, !allowed {
-                        Text("settings.ai.usage.limited")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
-                Spacer(minLength: HLSpace.sm)
-                if pending == level {
-                    ProgressView()
-                } else if selected {
-                    Image(systemName: "checkmark")
-                        .font(.hlIcon(HLIconSize.rowAction))
-                        .foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(!allowed || pending != nil)
-        .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("settings.ai.reasoning.option.\(level.rawValue)")
     }
 }

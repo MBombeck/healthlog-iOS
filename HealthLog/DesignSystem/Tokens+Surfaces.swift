@@ -3,11 +3,11 @@ import SwiftUI
 // Sheet presentation tokens now live in `HLSheet.swift` (HLSheetSize + the
 // `hlSheetPresentation(_:)` modifier alongside the legacy `HLSheet` aliases).
 
-// MARK: - Asset-Catalog tinted aliases (v0.4.0 §A6 retune)
+// MARK: - Asset-Catalog tinted aliases
 
 public extension Color {
     /// Canonical screen background — `Background.colorset`, retuned to
-    /// `#F5F5F8 / #16171C` (A6 §4). Use via `.hlScreenBackground()` modifier.
+    /// `#F5F5F8 / #16171C`. Use via `.hlScreenBackground()` modifier.
     static let hlBackground = HLColor.background
     /// Elevated background platter for List rows etc.
     static let hlBackgroundElevated = HLColor.backgroundEleva
@@ -67,71 +67,30 @@ public enum HLSurface {
     public static let tertiary = Color("SurfaceTertiary", bundle: .main)
 }
 
-/// Chrome accent namespace — **monochrome** as of v0.8.1.
+/// Chrome accent namespace — **monochrome**.
 ///
-/// Per the operator's monochrome direction ("chrome = monochrome, accent is
-/// signal-only"), both `primary` and `userBrandTint` now resolve to the
-/// monochrome `HLText.primary`. They no longer carry hue. v0.14 purple-sweep:
-/// the `HLColor.purple` / `.pink` token literals were deleted — no surface
-/// (LaunchScreen splash, OnboardingFlow hero, Coach brand-gradient, the
-/// AccentColor asset) references them anymore; every former brand-anchor
-/// already resolves through `HLText.primary` (mono graphite). Status/threshold
-/// semantics keep their real signal colours (`StatusOK/Warn/Bad`).
-/// Tinted-but-not-accent surfaces → `HLSurface.tertiary`.
+/// Chrome is monochrome and accent is signal-only, so both `primary` and
+/// `userBrandTint` resolve to `HLText.primary` and carry no hue.
+/// Status/threshold semantics keep their real signal colours
+/// (`StatusOK/Warn/Bad`). Tinted-but-not-accent surfaces → `HLSurface.tertiary`.
 public enum HLAccent {
-    /// Chrome accent — monochrome, resolves to `HLText.primary`.
-    ///
-    /// **v0.8.1 monochrome-restore:** was `HLColor.purple` (`#BD93F9`).
-    /// The v0.8.0 W6 sweep routed passive chrome (Settings rows, list-row
-    /// chips, badges) here, which surfaced purple everywhere — the
-    /// accent-picker UI was retired in v0.6.1.0 so the persisted tint was
-    /// purple for essentially all users. Per the monochrome direction
-    /// ("chrome = monochrome, accent is signal-only"), this now resolves to
-    /// the monochrome `HLText.primary` (`#2E2B27` light / `#EBEBF5` dark).
-    /// v0.14 purple-sweep: the `HLColor.purple` token literal was deleted —
-    /// no brand-anchor surface references it anymore. Status/threshold
-    /// semantics keep their real signal colours (`StatusOK/Warn/Bad`).
+    /// Chrome accent — monochrome, resolves to `HLText.primary`
+    /// (`#2E2B27` light / `#EBEBF5` dark). Passive chrome (Settings rows,
+    /// list-row chips, badges) routes here. Status/threshold semantics keep
+    /// their real signal colours (`StatusOK/Warn/Bad`).
     public static var primary: Color {
         HLText.primary
     }
 
     /// Pressed / active-state variant — slightly dimmed for tactile feedback
     /// on tap. Used by `HLPressableButtonStyle` during the press transition.
-    ///
-    /// **v0.8.1/v0.8.2 monochrome-restore (W3a/A3):** was `HLColor.purpleDeep`,
-    /// which flashed a stray purple on an otherwise monochrome button press.
-    /// Re-pointed to a dimmed `HLText.primary` so the press state stays
-    /// monochrome (chrome = mono, accent is signal-only). Kept subtle/brief.
+    /// A dimmed `HLText.primary`, so the press state stays monochrome.
     public static let pressed = HLText.primary.opacity(0.7)
 
-    /// UX-H1 reconcile: the user-picked accent (`SettingsStore.preferredTint`)
-    /// resolved at every read. Every non-brand-anchor accent surface routes
-    /// here so the picker propagates instantly to: icon-tints, selection
-    /// rings, `+ hinzufügen` affordances, retry CTAs, ShareLink action
-    /// icons, tag-chip selection fills, and any other surface that should
-    /// follow the user's pick.
-    ///
-    /// **v0.5.2-A8 reactivity caveat:** this is a `static var` that reads
-    /// `UserDefaults` directly. SwiftUI's Observation tracking does not see
-    /// the read as a dependency, so a view body that holds this value as a
-    /// default-parameter or constant will NOT re-render when the
-    /// `SettingsStore.preferredTint` mutates unless some OTHER tracked
-    /// state on the same view changes. New code should prefer the
-    /// SwiftUI-environment-driven path: `.foregroundStyle(.tint)` (reads
-    /// the `.tint(...)` env value bound at the scene root) or
-    /// `@Environment(SettingsStore.self)` directly so the picker propagates
-    /// reactively to the surface. This accessor stays available as the
-    /// non-View escape hatch (chart-tints, `HLChartTints.series` read at
-    /// body re-eval time anyway).
-    ///
-    /// **v0.8.1 monochrome-restore:** previously read the persisted
-    /// `hl.settings.tint` (default `.purple`). Since the accent-picker UI was
-    /// retired in v0.6.1.0, that defaulted purple for everyone, so the v0.8.0
-    /// W6 sweep routing chrome through this accessor turned the Settings hub,
-    /// list-row icon chips, badges, the HealthScore neutral dial, and the
-    /// achievement art purple. Re-pointed to the monochrome `HLText.primary`
-    /// so all chrome renders neutral; the persisted key stays for backward
-    /// compat but is no longer read for chrome.
+    /// The accent for surfaces that follow the user's tint: icon tints,
+    /// selection rings, `+ hinzufügen` affordances, retry CTAs, tag-chip
+    /// fills. It resolves to the monochrome `HLText.primary`, so all chrome
+    /// renders neutral; the persisted `hl.settings.tint` key is not read here.
     public static var userBrandTint: Color {
         HLText.primary
     }
@@ -139,17 +98,15 @@ public enum HLAccent {
 
 /// Tonal-Mono text scale — one ink, three strengths.
 ///
-/// **v0.14.11 light-theme redesign ("Warmes Papier"):** the light ramp is a
-/// single warm ink `#2E2B27` at three opacities over the paper surfaces —
-/// mirroring the dark ramp (`#EBEBF5` @ 1.0/0.7/0.4). The old light ramp was
-/// broken at both ends: primary (`#1C1C1E@0.9` on pure white) screamed at
-/// 12.6:1 while secondary (`#3C3C43@0.6`) *failed* WCAG AA at 3.4:1.
+/// **Light ("Warmes Papier"):** a single warm ink `#2E2B27` at three
+/// opacities over the paper surfaces, mirroring the dark ramp
+/// (`#EBEBF5` @ 1.0/0.7/0.4).
 ///
 /// **Light (effective on card `#FAF8F5`):**
 /// primary `#2E2B27 @ 0.90` → ≈9.8:1 (comfortable, still AAA);
-/// secondary `@ 0.72` → ≈5.6:1 (now genuinely AA);
+/// secondary `@ 0.72` → ≈5.6:1 (WCAG AA);
 /// tertiary `@ 0.50` → ≈2.9:1 (decorative/disabled meta only).
-/// **Dark (unchanged):** `#EBEBF5` @ 1.0 / 0.70 / 0.40.
+/// **Dark:** `#EBEBF5` @ 1.0 / 0.70 / 0.40.
 ///
 /// The asset-catalog entries `TextPrimaryMono`, `TextSecondaryMono`,
 /// `TextTertiaryMono` remain the single source; every call-site routes

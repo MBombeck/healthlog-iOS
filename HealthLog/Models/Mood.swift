@@ -7,7 +7,7 @@ public enum ServerMoodLevel: String, Codable, Sendable, CaseIterable {
     case okay = "OKAY" // score 3
     case good = "GUT" // score 4
     case great = "SUPER_GUT" // score 5
-    /// Audit B-4 — decode-only sentinel for a level this build cannot name.
+    /// Decode-only sentinel for a level this build cannot name.
     ///
     /// The server column is a free string documented as the five levels above,
     /// and it has grown before. `MoodEntry.mood` is a plain `try c.decode` and
@@ -27,7 +27,7 @@ public enum ServerMoodLevel: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// Audit B-4 — the 1…5 valence of a NAMED level, `nil` for ``unknown``.
+    /// The 1…5 valence of a NAMED level, `nil` for ``unknown``.
     ///
     /// Optional on purpose. ``unknown`` is a BUCKET, not a level: two entries on
     /// it may carry two different server levels, so every number derived across
@@ -50,7 +50,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
     public let id: String
     public let mood: ServerMoodLevel
     public let tags: [String]
-    /// v0.14 — structured mood-tag keys (server v1.8.5 `MoodEntryTagLink`).
+    /// Structured mood-tag keys (server v1.8.5 `MoodEntryTagLink`).
     /// Stable catalog keys (`happy`, `worked_out`) the Daylio-style picker
     /// emits; sent on `POST`/`PUT` and round-tripped on read. Coexists with
     /// the free-text `tags` axis (the server folds both into aggregates).
@@ -61,7 +61,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
     /// dedizierte Spalte. iOS sendet `note` direkt im Body (single-write,
     /// kein Dual-Write `tags["note:..."]` mehr).
     public let note: String?
-    /// v0.14.7 — RATED factors with their per-entry score, read back from the
+    /// RATED factors with their per-entry score, read back from the
     /// server (`GET`/`PUT`/`POST` response serializes `ratedFactors:
     /// [{ key, rating }]`, server v1.12.0 — `route.ts` `entriesWithParsedTags`).
     /// The capture flow PUTs these via ``MoodEntryPatch/ratedFactors``; this is
@@ -76,6 +76,10 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
     /// response carries them; a list read never does.
     public var droppedTagKeys: [String] = []
     public var droppedFactorKeys: [String] = []
+    /// The HealthKit sample UUID of an entry imported from Apple Health
+    /// (`source: "APPLE_HEALTH"`), which the mood delete route matches on.
+    /// `nil` for every entry made in HealthLog.
+    public var externalId: String?
 
     /// Every key the server dropped on this write (tags first, then factors).
     public var droppedKeys: [String] {
@@ -126,7 +130,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
 
     /// Convenience-Properties für UI-Code, der das alte score-Schema kennt.
     ///
-    /// Audit B-4 — optional since the mood level stopped being closed: `nil`
+    /// Optional since the mood level stopped being closed: `nil`
     /// means "this build cannot name the server's level", which is not the same
     /// statement as any number between 1 and 5.
     public var score: Int? {
@@ -141,7 +145,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, mood, tags, tagKeys, moodLoggedAt, source, note, ratedFactors
-        case droppedTagKeys, droppedFactorKeys
+        case droppedTagKeys, droppedFactorKeys, externalId
     }
 
     public init(from decoder: Decoder) throws {
@@ -162,10 +166,11 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
         // `ratedFactors` is a v1.12.0 read-side addition — tolerate older cached
         // responses / pre-v2 servers that omit it by defaulting to an empty set.
         ratedFactors = try c.decodeIfPresent([RatedFactorOutput].self, forKey: .ratedFactors) ?? []
-        // #115 R3 — tolerant: absent, `null` or a malformed value all mean
+        // Tolerant: absent, `null` or a malformed value all mean
         // "nothing reported dropped"; a stray shape never fails the save.
         droppedTagKeys = (try? c.decodeIfPresent([String].self, forKey: .droppedTagKeys)) ?? []
         droppedFactorKeys = (try? c.decodeIfPresent([String].self, forKey: .droppedFactorKeys)) ?? []
+        externalId = try? c.decodeIfPresent(String.self, forKey: .externalId)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -192,6 +197,7 @@ public struct MoodEntry: Codable, Sendable, Identifiable, Hashable {
         if !droppedFactorKeys.isEmpty {
             try c.encode(droppedFactorKeys, forKey: .droppedFactorKeys)
         }
+        try c.encodeIfPresent(externalId, forKey: .externalId)
     }
 }
 
@@ -233,12 +239,12 @@ public struct RatedFactorInput: Codable, Sendable, Equatable {
 public struct MoodEntryPatch: Codable, Sendable {
     public let mood: ServerMoodLevel?
     public let tags: [String]?
-    /// v0.14 — structured tag-keys on edit. The server update schema accepts
+    /// Structured tag-keys on edit. The server update schema accepts
     /// `tagKeys` nullable+optional; we only send the key when the caller
     /// passes a non-nil value so an unrelated edit (e.g. note-only) doesn't
     /// clobber the existing tag-links.
     public let tagKeys: [String]?
-    /// v0.14.1 — Mood v2 rated factors (work / social / sleep / stress /
+    /// Mood v2 rated factors (work / social / sleep / stress /
     /// conflict). Parallel to `tagKeys`; omitted entirely when nil/empty so an
     /// unrelated edit doesn't touch the rated links.
     public let ratedFactors: [RatedFactorInput]?

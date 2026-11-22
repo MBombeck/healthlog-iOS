@@ -58,7 +58,7 @@ public protocol NutrientDailyRowsProviding: Sendable {
 /// **Upsert contract:** upsert key is `(day, nutrient)`; a re-post REPLACES the
 /// stored total and reports `updated` (never `duplicate`).
 ///
-/// **Per-entry skips (#115 / 0.3), classified against the server route**
+/// **Per-entry skips, classified against the server route**
 /// (`src/app/api/nutrients/batch/route.ts` at v1.39.0):
 ///
 /// * `unit_mismatch` | `value_out_of_range` | `day_invalid` are validation
@@ -102,11 +102,11 @@ public actor NutrientDailySyncCoordinator {
     /// window is ambiguous between "no data" and "read authorization denied",
     /// so it leaves the one-shot armed.
     static let backfillDoneKeyPrefix = "hl.healthkit.nutrientBackfillCompleted."
-    /// Build 273 (A12) — see `sweepWindowStart`.
+    /// See `sweepWindowStart`.
     static let lastSweepEndKeyPrefix = "hl.healthkit.nutrientLastSweepEndUTC."
-    /// #115 / 0.3 — consecutive sweeps held by a transient per-entry skip.
+    /// Consecutive sweeps held by a transient per-entry skip.
     static let heldSweepsKeyPrefix = "hl.healthkit.nutrientHeldSweeps."
-    /// #115 / 0.3 — how many consecutive sweeps a transient skip may hold the
+    /// How many consecutive sweeps a transient skip may hold the
     /// window before its rows are recorded as refused and the sweep moves on.
     static let maxHeldSweeps = 5
     /// Server skip reasons that are a verdict on the entry itself (see the type
@@ -190,7 +190,9 @@ public actor NutrientDailySyncCoordinator {
             calendar: calendar
         )
 
-        let (entries, queryFailed) = await collectEntries(from: from, to: now)
+        let (read, queryFailed) = await collectEntries(from: from, to: now)
+        let ledger = NutrientMacroDayLedger(defaults: defaults, partition: partition)
+        let entries = queryFailed ? read : ledger.correcting(read, from: from, to: now, calendar: calendar)
         guard !entries.isEmpty else {
             // No dietary day-rows in the window. HealthKit does NOT tell us
             // whether that means "nothing recorded" or "read authorization
@@ -209,7 +211,7 @@ public actor NutrientDailySyncCoordinator {
         }
 
         let run = await upload(entries)
-        // INT-A — terminal refusals go into the ONE skip register (per account,
+        // Terminal refusals go into the ONE skip register (per account,
         // listed in Sync Diagnostics, wiped at sign-out). A write that does not
         // verify holds the sweep: the next one posts the day again.
         let recorded = await NutrientRefusalRegister.record(run.refused, userID: userID)
@@ -225,6 +227,7 @@ public actor NutrientDailySyncCoordinator {
             return run.summary.holding(run.held.count)
         }
         markBackfillDone(key: backfillKey)
+        ledger.remember(entries, now: now, calendar: calendar)
         defaults.set(now, forKey: lastSweepKey)
         return run.summary
     }
@@ -238,7 +241,8 @@ public actor NutrientDailySyncCoordinator {
     ) async -> (entries: [NutrientIntakeEntryDTO], queryFailed: Bool) {
         var entries: [NutrientIntakeEntryDTO] = []
         var queryFailed = false
-        for item in NutrientCatalog.all {
+        let macrosOpen = AppleHealthIngestCapability.isAvailable(.nutrientMacros)
+        for item in NutrientCatalog.syncItems(includingMacros: macrosOpen) {
             do {
                 let rows = try await statisticsService.dailyRows(
                     forNutrientIdentifier: item.hkIdentifier,
@@ -293,7 +297,7 @@ public actor NutrientDailySyncCoordinator {
                 run.stoppedForModuleDisabled = true
                 break
             } catch HLError.rateLimited {
-                // #110 — the batch bucket answered 429. Every further chunk of
+                // The batch bucket answered 429. Every further chunk of
                 // this sweep would meet the same refusal, so stop sending. The
                 // failed batch holds `lastSweepEnd`; nothing is registered. The
                 // next sweep re-posts the window (day-keyed upsert).
@@ -310,7 +314,7 @@ public actor NutrientDailySyncCoordinator {
         return run
     }
 
-    /// #115 / 0.3 — may the sweep move past this run's transient skips?
+    /// May the sweep move past this run's transient skips?
     ///
     /// A transient per-entry skip is a row the server did not store. Moving
     /// `lastSweepEnd` past it lost that day for good once the incremental
@@ -427,7 +431,7 @@ public struct NutrientSyncSummary: Sendable, Equatable {
     public let updated: Int
     public let skipped: Int
     public let failedBatches: Int
-    /// #115 / 0.3 — transient skips that held the sweep window this run.
+    /// Transient skips that held the sweep window this run.
     public let heldSkips: Int
 
     public init(inserted: Int, updated: Int, skipped: Int, failedBatches: Int, heldSkips: Int = 0) {
@@ -475,7 +479,7 @@ public struct NutrientSyncSummary: Sendable, Equatable {
     }
 }
 
-// MARK: - Refusal register (#115 / 0.3)
+// MARK: - Refusal register
 
 /// One nutrient day-total the server did not store, with the reason it gave.
 /// Carries what a person needs to recognise the row — day, nutrient, amount,

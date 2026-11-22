@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 public final class DashboardStore {
-    // W-FILELEN — `internal(set)` (not `private(set)`) so the
+    // `internal(set)` (not `private(set)`) so the
     // `DashboardStore+MetricStates.swift` same-module extension can write these.
     // Public read API is unchanged; only the setter widens from private to
     // internal. Pure visibility relax; no behaviour change.
@@ -61,7 +61,7 @@ public final class DashboardStore {
     /// (refreshable + scenePhase combo), only the FIRST settle schedules a
     /// tick task; subsequent settles within the grace window are absorbed.
     public internal(set) var policyTick: Int = 0
-    /// W-FILELEN — internal so the +MetricStates extension can guard/schedule the tick.
+    /// Internal so the +MetricStates extension can guard/schedule the tick.
     var scheduledPolicyTickAt: Date?
     /// Retained so terminal cleanup can cancel and later drain the delayed
     /// policy publication instead of relying on cooperative cancellation alone.
@@ -135,7 +135,7 @@ public final class DashboardStore {
     }
 
     /// - Parameter force: when `true`, bypasses the SWR staleness TTL so an
-    ///   explicit pull-to-refresh always hits the network (W8-B1). Default
+    ///   explicit pull-to-refresh always hits the network. Default
     ///   `false` respects the `dashboardSummary` TTL — a quick foreground
     ///   bounce inside the window serves from cache.
     public func load(force: Bool = false) async {
@@ -171,7 +171,7 @@ public final class DashboardStore {
         // could carry another account's data across a session boundary, and
         // lowering a loading flag carries none.
         //
-        // 20-02 (D-14-06-A) — and it is guarded on `ownsRegistryGeneration`,
+        // And it is guarded on `ownsRegistryGeneration`,
         // not left unconditional. 13-03 was right that cancellation must still
         // settle; it did not have the predicate that could say so without also
         // letting a SUPERSEDED generation settle. `isLoading` is an observable,
@@ -204,7 +204,7 @@ public final class DashboardStore {
             return value
         }) {
             guard authenticatedEffectIsCurrent(sessionLease) else {
-                // 13-03 — the refusal is now countable. It is the same silence
+                // The refusal is now countable. It is the same silence
                 // as the lease-nil above, one emission later.
                 StoreEffectDiagnostics.recordRefusal(.leaseRetired, store: .dashboard)
                 return
@@ -303,7 +303,7 @@ public final class DashboardStore {
         policyTickTask = nil
         summary = nil
         error = nil
-        // 13-03 — this line was missing. Nine fields were reset and the one
+        // This line was missing. Nine fields were reset and the one
         // that decides whether the skeleton is on screen was not, so a logout
         // during an in-flight load handed the next account a dashboard that
         // was already, permanently, loading.

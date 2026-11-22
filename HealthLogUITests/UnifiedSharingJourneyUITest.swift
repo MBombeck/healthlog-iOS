@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 18 / 18-03 — the one sharing journey, walked hermetically.**
+/// **The one sharing journey, walked hermetically.**
 ///
 /// Mehr → the header share glyph → the unified surface → select-all → a period
 /// → a labelled link. Every byte comes from the bundled hermetic fixtures
@@ -24,9 +24,7 @@ final class UnifiedSharingJourneyUITest: XCTestCase {
 
         // Mehr tab → the header share glyph. Since 18-03 that glyph opens the
         // one sharing surface directly; there is no hub in between.
-        let moreTab = app.tabBars.buttons.element(boundBy: max(0, app.tabBars.buttons.count - 1))
-        XCTAssertTrue(moreTab.waitForExistence(timeout: 15), "More tab missing")
-        moreTab.tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .more, in: app, timeout: 15), "More tab missing")
 
         let shareGlyph = app.buttons["more.toolbar.share"]
         XCTAssertTrue(shareGlyph.waitForExistence(timeout: 15), "Header share glyph missing")
@@ -40,7 +38,7 @@ final class UnifiedSharingJourneyUITest: XCTestCase {
             "The selection summary never appeared — did the capabilities fixture serve share.leaves?"
         )
 
-        // E1.2 — the empty default says what it means, before anything is shared.
+        // The empty default says what it means, before anything is shared.
         let emptyMeaning = app.descendants(matching: .any)
             .matching(identifier: "sharing.unified.emptyMeaning").firstMatch
         XCTAssertTrue(
@@ -75,9 +73,13 @@ final class UnifiedSharingJourneyUITest: XCTestCase {
         }
     }
 
-    /// Question 3 — the form, and the fields it still needs. Link is the
-    /// preselected form on this entry, so the label field is already there.
+    /// Question 3 — the form, and the fields it still needs. The surface
+    /// opens with no form chosen, so the walk picks Link first.
     private func labelAndCreate(in app: XCUIApplication) {
+        let linkForm = scrollTo(identifier: "sharing.unified.form.link", in: app, kind: .button)
+        XCTAssertTrue(linkForm.waitForExistence(timeout: 10), "Link form row missing")
+        linkForm.tap()
+
         var scrolls = 0
         let label = app.textFields["sharing.unified.link.label"]
         while !label.exists, scrolls < 8 {

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// audit-v0162 H1 — reentrancy guard on the outbox replay entry point.
+/// Reentrancy guard on the outbox replay entry point.
 ///
 /// `OutboxReplayService.runOnce()` is triggered from THREE concurrent sources
 /// (reachability edge, app-foreground, auth bootstrap). Its `guard !isRunning`
@@ -18,7 +18,7 @@ import Testing
 /// so the lock is "every key POSTed exactly once".
 ///
 /// `.serialized` — this suite owns the process-global `MockURLProtocol.handler`
-/// for the duration of each test (audit-v0162 H2).
+/// for the duration of each test.
 @Suite("Outbox replay reentrancy guard", .serialized, .mockURLSession)
 struct OutboxReplayReentrancyTests {
     private func makeAPI() -> APIClient {

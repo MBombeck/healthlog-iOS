@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// **v0.6.1.3 Y4.1 — NotificationService badge plumbing tests.**
+    /// **NotificationService badge plumbing tests.**
     ///
     /// `setBadgeCount` and `refreshBadge(from:)` go through the system
     /// `UNUserNotificationCenter.setBadgeCount` API, which the test

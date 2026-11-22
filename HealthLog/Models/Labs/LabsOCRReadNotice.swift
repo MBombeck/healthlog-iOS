@@ -1,6 +1,6 @@
 import Foundation
 
-/// #151 — one calm line over the review list for every limit a server read
+/// One calm line over the review list for every limit a server read
 /// ran into. Each names what happened in plain words; none blocks saving.
 enum LabsOCRLimitLine: Sendable, Equatable, Hashable {
     /// The reader stopped at its output limit; `pages` names the pages it cut
@@ -92,7 +92,7 @@ enum LabsOCRFailure: Sendable, Equatable {
     case unavailable
     /// No connection.
     case offline
-    /// POLISH-A A4 — the upload ran out of background time (app switched away).
+    /// The upload ran out of background time (app switched away).
     case backgroundEnded
     /// Anything else (`labs.ocr.extractFailed`, `aiRuns.failed`, unreadable).
     case failed

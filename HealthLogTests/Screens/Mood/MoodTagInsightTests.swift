@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — lock the tag-chip delta formatting (proper +/− sign,
+/// Lock the tag-chip delta formatting (proper +/− sign,
 /// one fractional digit) — the load-bearing monochrome valence cue (DESIGN-B
 /// §4.3: direction by glyph + sign + ink-weight, never hue).
 @Suite("Mood tag-insight delta formatting")

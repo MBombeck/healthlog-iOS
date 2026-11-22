@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 24 / plan 24-01 — when the repair runs, and how often.
+// When the repair runs, and how often.
 //
 // `AuthService.recoverUserIDFromProfile()` knows HOW to recover an identity.
 // This decides WHETHER to, and it is deliberately the narrowest possible

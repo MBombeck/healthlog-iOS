@@ -13,7 +13,7 @@ import Testing
 /// Delay im retry-Loop — KEIN extra Exponential-Backoff (W2a-A2 Audit §6).
 @Suite("Rate-limit header handling", .serialized, .mockURLSession)
 struct RateLimitHeaderTests {
-    /// T1 (1.4) — a whole second, so the ISO header carries it exactly.
+    /// A whole second, so the ISO header carries it exactly.
     private static let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func makeAPI(clock: RecordingRetryClock) -> APIClient {
@@ -33,8 +33,8 @@ struct RateLimitHeaderTests {
 
     @Test("429 with X-RateLimit-Reset surfaces a non-nil retryAfter")
     func parsesRateLimitReset() async {
-        // T1 (1.4) — the client reads the reset against the injected clock, so
-        // the delay is exact. FLAKES (1.3.0) had to widen a wall-clock reset
+        // The client reads the reset against the injected clock, so
+        // the delay is exact. FLAKES had to widen a wall-clock reset
         // to 20 s and accept anything in (0, 21].
         let clock = RecordingRetryClock(now: Self.now)
         let api = makeAPI(clock: clock)
@@ -67,7 +67,7 @@ struct RateLimitHeaderTests {
 
     @Test("Retry honours the X-RateLimit-Reset value within the maxRetries budget")
     func retryHonoursReset() async throws {
-        // T1 (1.4) — the clock is injected: the reset is read against a fixed
+        // The clock is injected: the reset is read against a fixed
         // instant and the retry delay is recorded instead of slept. The old
         // form measured "second attempt < 1.5 s after the first" on the wall
         // clock, which a loaded runner can break, and its 50 ms reset was
@@ -106,7 +106,7 @@ struct RateLimitHeaderTests {
     }
 }
 
-/// T1 (1.4) — an ``APIRetryClock`` that stands still at `now` and records
+/// An ``APIRetryClock`` that stands still at `now` and records
 /// every requested wait instead of spending it.
 private final class RecordingRetryClock: @unchecked Sendable {
     private let lock = NSLock()

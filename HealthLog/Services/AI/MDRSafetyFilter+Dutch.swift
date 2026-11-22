@@ -224,7 +224,7 @@ extension MDRSafetyFilter {
                 ),
                 matrixRow: 9,
                 label: "reflective_suggestive_nl",
-                // R19b — see `reflective_suggestive_de`.
+                // See `reflective_suggestive_de`.
                 exemptions: [handOffExemptionUnguarded]
             ),
             Pattern(

@@ -47,7 +47,7 @@ public extension Double {
     ///
     /// Lets a presentation `switch` arm stay a single expression (no per-case
     /// `guard`), which keeps the formatter functions under the cyclomatic-
-    /// complexity gate while closing the `Int(serverDouble)` trap (W-CRASHGUARD).
+    /// complexity gate while closing the `Int(serverDouble)` trap.
     func safeServerIntString(_ format: IntegerFormatStyle<Int> = .number) -> String {
         guard let whole = Int(safeServer: self) else { return Double.emDashPlaceholder }
         return whole.formatted(format)
@@ -61,10 +61,10 @@ public extension Double {
 
     /// Crash-safe "Xh Ym" sleep-duration string — `self` is a count of HOURS
     /// (the server emits the sleep `latestValue` in hours). Em-dash for a
-    /// non-finite / out-of-`Int.range` minute product (W-CRASHGUARD).
+    /// non-finite / out-of-`Int.range` minute product.
     var safeServerSleepDurationHM: String {
         guard let rawMinutes = Int(safeServer: self * 60) else { return Double.emDashPlaceholder }
-        // W-RECONCILE L-1 — clamp to 0 so a stray negative server value can never
+        // Clamp to 0 so a stray negative server value can never
         // render a nonsensical "-1h -30m" (server is non-negative; defensive only).
         let totalMinutes = max(0, rawMinutes)
         let hours = totalMinutes / 60
@@ -74,7 +74,7 @@ public extension Double {
 
     /// Crash-safe `sys/dia` whole-number blood-pressure string. Returns the
     /// em-dash placeholder (the WHOLE pair, not a half-formed `—/81`) if either
-    /// operand is non-finite / out-of-`Int.range` (W-CRASHGUARD).
+    /// operand is non-finite / out-of-`Int.range`.
     static func safeServerBPString(systolic: Double, diastolic: Double) -> String {
         guard let sys = Int(safeServer: systolic), let dia = Int(safeServer: diastolic) else {
             return emDashPlaceholder

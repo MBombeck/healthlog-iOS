@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.3 (#127) — how far back the history walk has reached, per type.**
+/// **How far back the history walk has reached, per type.**
 ///
 /// New readings travel on their own live stream and are not shown here. This
 /// card answers the other question: is the older history on the server yet,
@@ -12,7 +12,7 @@ extension SettingsHKSyncDiagnosticsScreen {
         HistoryPerTypeCard(store: HealthHistoryCatchUpStore.shared, hourlyStatus: hourlyStatus)
     }
 
-    /// INT-Q (X4, #138) — the hourly backfill of the summed types for the
+    /// The hourly backfill of the summed types for the
     /// signed-in account, or `nil` while the server does not take hourly rows
     /// (then the card shows no hourly row at all).
     func hourlyStatus() -> HourlyStatsStatus? {
@@ -62,16 +62,13 @@ struct HistoryPerTypeCard: View {
     @State private var hourly: HourlyStatsStatus?
 
     var body: some View {
-        // 1.4 B2-c — no subtitle: the Apple Health page already says the
+        // No subtitle: the Apple Health page already says the
         // older history follows on its own.
-        HLSettingsCard(
-            icon: "clock.arrow.circlepath",
-            title: "settings.hkdiag.history_title"
-        ) {
+        HLCard("settings.hkdiag.history_title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 if let overview = store.overview, !overview.types.isEmpty {
                     let rows = HistoryKindRow.rows(overview)
-                    // 1.4 B4 — twenty-five rows that all read "Bis 19.10.2026"
+                    // Twenty-five rows that all read "Bis 19.10.2026"
                     // are one row for all types.
                     if let shared = Self.sharedState(rows) {
                         historyRow(title: Text("settings.hkdiag.history_allTypes"), state: shared)
@@ -89,24 +86,14 @@ struct HistoryPerTypeCard: View {
                 // B5 (1.4, R4 2.1) — "complete" above means as far as Apple
                 // Health lets HealthLog read; A3's one line says from when.
                 if let start = store.overview?.limitedFrom {
-                    Text("settings.applehealth.limitedHistory \(start.formatted(.dateTime.day().month(.wide).year()))")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                    Text("settings.applehealth.limitedHistory \(HLDateFormat.date(start, style: .long))")
+                        .hlText(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("settings.hkdiag.limitedHistory")
                 }
                 if let hourly {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("settings.hkdiag.history_hourly_title")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                        Spacer(minLength: HLSpace.md)
-                        Text(Self.hourlyLabel(hourly))
-                            .font(.hlCaption.monospacedDigit())
-                            .foregroundStyle(HLText.secondary)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .accessibilityElement(children: .combine)
+                    HLSettingsStatRow(label: Text("settings.hkdiag.history_hourly_title"), value: Self.hourlyLabel(hourly))
+                        .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -117,29 +104,18 @@ struct HistoryPerTypeCard: View {
     }
 
     private func historyRow(title: Text, state: HistoryKindRow.State) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            title
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: HLSpace.md)
-            Text(Self.label(state))
-                .font(.hlCaption.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
+        HLSettingsStatRow(label: title, value: Self.label(state))
+            .accessibilityElement(children: .combine)
     }
 
-    /// 1.4 B4 — the one state every row shares, or `nil` when they differ
+    /// The one state every row shares, or `nil` when they differ
     /// (or there is only one row, which needs no summary).
     static func sharedState(_ rows: [HistoryKindRow]) -> HistoryKindRow.State? {
         guard rows.count > 1, let first = rows.first?.state else { return nil }
         return rows.allSatisfy { label($0.state) == label(first) } ? first : nil
     }
 
-    /// INT-Q — the hourly row: complete, or how many of the owed days are on
+    /// The hourly row: complete, or how many of the owed days are on
     /// the server.
     static func hourlyLabel(_ status: HourlyStatsStatus) -> String {
         if status.isBackfillComplete {
@@ -159,7 +135,7 @@ struct HistoryPerTypeCard: View {
         case .notStarted:
             String(localized: "settings.hkdiag.history_pending")
         case let .reachedBack(date):
-            String(localized: "settings.hkdiag.history_reached \(date.formatted(date: .numeric, time: .omitted))")
+            String(localized: "settings.hkdiag.history_reached \(HLDateFormat.date(date, style: .numeric))")
         }
     }
 }

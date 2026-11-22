@@ -20,7 +20,7 @@ public enum NutrientDisplay {
         String(localized: String.LocalizationValue(nameKey(for: code)))
     }
 
-    /// **Audit B-4 — the display name for a row whose code may be unnameable.**
+    /// **The display name for a row whose code may be unnameable.**
     ///
     /// There is no catalogue key for ``NutrientCode/unknown`` and there must not
     /// be one: the sentinel is a bucket, and a shared "Unknown nutrient" label
@@ -38,6 +38,8 @@ public enum NutrientDisplay {
         case "ug": "µg"
         case "ml": "ml"
         case "mg": "mg"
+        case "g": "g"
+        case "kcal": "kcal"
         default: wireUnit
         }
     }
@@ -64,13 +66,13 @@ public enum NutrientDisplay {
         return amount / reference
     }
 
-    /// POLISH-A A1 — why the detail page shows no reference. The server sends
+    /// Why the detail page shows no reference. The server sends
     /// `reference: null` for two reasons it does not name: the code has no
     /// reference of its own (`dha`, `epa`: EFSA sets one adequate intake for
     /// both together, server v1.43 `supplementOnly`), or the reference is
     /// sex-split and the profile has no sex on file. Only the syncable codes
     /// can be the second case; a supplement-only or unknown code is the first.
     public static func missingReferenceMeansNoSex(for code: NutrientCode) -> Bool {
-        code.isSyncable
+        code.isSyncable && !NutrientCatalog.macros.contains { $0.code == code }
     }
 }

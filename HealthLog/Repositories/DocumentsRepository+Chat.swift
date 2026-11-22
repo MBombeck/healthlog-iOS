@@ -144,7 +144,7 @@ public extension DocumentsRepository {
         }
         if isNotIndexed(error) { return DocumentChatError.notIndexed }
         if isConsentRequired(error) { return DocumentChatError.consentRequired }
-        // #115 · 0.2 — the v1.39 document-AI refusals, one state each.
+        // The v1.39 document-AI refusals, one state each.
         switch aiRefusalKind(error) {
         case .operatorDisabled: return DocumentChatError.operatorDisabled
         case .recordNotPermitted: return DocumentChatError.recordNotPermitted

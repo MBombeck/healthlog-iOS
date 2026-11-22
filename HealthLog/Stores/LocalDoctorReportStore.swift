@@ -47,15 +47,15 @@ public final class LocalDoctorReportStore {
     private var previousFHIRURL: URL?
     private let calendar: Calendar
     private let now: () -> Date
-    /// #115 · 1.2 — reads the server's per-medication adherence
+    /// Reads the server's per-medication adherence
     /// (`GET /api/medications/compliance`) when a report is generated. One
     /// request, user-initiated, never on the launch path. Tests inject a stub;
-    /// `nil` result = unavailable (offline / standalone / old server).
-    /// #126 P2 — asked with `?days=` = the report period, so the rows and the
+    /// `nil` result = unavailable (offline / old server).
+    /// Asked with `?days=` = the report period, so the rows and the
     /// account figure cover the report's own window.
     @ObservationIgnored
     var complianceFetch: @MainActor (_ days: Int) async -> MedicationComplianceReport?
-    /// #119 — the server's daily pulse for the report window (v1.40.1 rule).
+    /// The server's daily pulse for the report window (v1.40.1 rule).
     /// `nil` = unavailable; the pulse row then applies the rule to the readings.
     @ObservationIgnored
     var pulseDaysFetch: @MainActor (_ from: Date, _ to: Date) async -> [DailyPulseValue]?
@@ -176,9 +176,9 @@ public final class LocalDoctorReportStore {
             serverComplianceReport: serverComplianceReport,
             serverPulseDays: serverPulseDays,
             moodEntries: moodStore.entries,
-            // #115 B5 — the PDF prints glucose in the account's unit.
+            // The PDF prints glucose in the account's unit.
             glucoseUnit: settingsStore.glucoseUnit,
-            // #115 P2 — and weight / temperature / waist in the account's unit.
+            // And weight / temperature / waist in the account's unit.
             accountUnits: settingsStore.unitPreferences
         )
     }
@@ -188,32 +188,5 @@ public final class LocalDoctorReportStore {
         let short = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         return "\(short) (\(build))"
-    }
-}
-
-// MARK: - Period presets
-
-/// Days-window presets exposed on the export-screen picker. Matches the
-/// shape the server-rendered report already uses so the UI
-/// stays consistent.
-public enum LocalDoctorReportPeriod: Int, CaseIterable, Identifiable, Sendable {
-    case thirty = 30
-    case sixty = 60
-    case ninety = 90
-    case oneEighty = 180
-    case threeSixtyFive = 365
-
-    public var id: Int {
-        rawValue
-    }
-
-    public var label: String {
-        switch self {
-        case .thirty: "30T"
-        case .sixty: "60T"
-        case .ninety: "90T"
-        case .oneEighty: "6M"
-        case .threeSixtyFive: "1J"
-        }
     }
 }

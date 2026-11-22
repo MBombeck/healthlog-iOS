@@ -7,9 +7,8 @@ import Foundation
 ///
 /// **Why server-only:** the per-domain CSVs are *the server's* canonical export
 /// shape (column order, locale, audit columns). There is no on-device source of
-/// truth that reproduces them byte-for-byte, so in standalone the calling card
-/// degrades to `HLCloudDerivedPlaceholder` rather than inventing a divergent
-/// local CSV. The full backup (`SettingsExportScreen`'s full-backup card) and
+/// truth that reproduces them byte-for-byte, so there is no divergent local
+/// CSV. The full backup (`SettingsExportScreen`'s full-backup card) and
 /// FHIR bundle remain the offline data-portability paths.
 ///
 /// Endpoints (server-confirmed, Bearer-auth, rate-limited 10/h):
@@ -79,7 +78,7 @@ public actor ExportService {
 
     /// The full JSON/CSV backup: `GET /api/export?format=<json|csv>&type=all`.
     ///
-    /// **R2 / #115 A4 — this used to be `POST /api/export` and answered 405.**
+    /// **This used to be `POST /api/export` and answered 405.**
     /// The route exports `GET` only (`src/app/api/export/route.ts`, every tag
     /// since long before v1.39), so the full-backup card never produced a file.
     /// From v1.39.3, `type=all` is the whole record and takes the fresh-proof
@@ -121,7 +120,7 @@ public actor ExportService {
     /// passphrase means the archive is unrecoverable. Shares the
     /// `export:<userId>` rate-limit bucket (10/h) with every other export.
     ///
-    /// R2 / #115 A3 — on an account with a second factor the server wants a
+    /// On an account with a second factor the server wants a
     /// second-factor (or passkey) elevation in `X-Step-Up`
     /// (`requireRecentProof({ bearer: "elevation-if-enrolled" })`, v1.39.3) and
     /// answers `401 auth.stepup.required` without one; an account without a
@@ -159,7 +158,7 @@ public actor ExportService {
         return "healthlog-backup-\(stamp).hlx"
     }
 
-    // MARK: - Health-record export package (B2)
+    // MARK: - Health-record export package
 
     /// A downloaded health-record export: the raw bytes plus the server-suggested
     /// filename (parsed from `Content-Disposition`, with a deterministic fallback).
@@ -176,7 +175,7 @@ public actor ExportService {
     /// The request body is built strictly to `exportSelectionSchema` (unknown keys
     /// 422), carrying the **required** v2 `selection` since server v1.32.39 —
     /// the removed grouped `sections` tree this call used to send is what made
-    /// every package export 422 (CU-11). Rate limit is the shared
+    /// every package export 422. Rate limit is the shared
     /// `export:<userId>` bucket, 10/h across PDF + FHIR + package + CSV —
     /// `APIClient` maps 429 to ``HLError/rateLimited``.
     public func downloadHealthRecordPackage(_ request: HealthRecordExportRequest) async throws -> PackageExport {

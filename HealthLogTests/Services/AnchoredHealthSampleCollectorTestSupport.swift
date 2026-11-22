@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    // Phase 07 Wave 2 — doubles for the app-owned collector's suite.
+    // Doubles for the app-owned collector's suite.
     //
     // They live beside the suite rather than inside it so the suite itself stays a
     // readable list of properties. Each one exists to make a fault observable that
@@ -139,7 +139,7 @@
             Task { await handler(typeIdentifier) }
         }
 
-        /// V1 — the whole delivery, awaited, the way the HealthKit observer
+        /// The whole delivery, awaited, the way the HealthKit observer
         /// awaits it before calling its completion handler.
         func deliver(_ typeIdentifier: String) async {
             await handler.withLock { $0 }?(typeIdentifier)

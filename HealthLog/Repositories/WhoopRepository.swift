@@ -9,7 +9,7 @@ import Foundation
 /// (`PUT /api/whoop/credentials`); `GET /api/whoop/connect` returns **400**
 /// until they are saved, and `status.configured` stays `false`. The Settings
 /// gate therefore drives off `status.configured` (creds present) AND
-/// `status.connected` (OAuth done), not just `hasServer`.
+/// `status.connected` (OAuth done).
 ///
 /// - `GET    /api/whoop/status`           — connection + last-sync snapshot.
 /// - `GET    /api/whoop/credentials`      — `{ hasCredentials }`.
@@ -137,14 +137,14 @@ public struct WhoopStatus: Codable, Sendable {
     public let configured: Bool?
     public let lastSyncedAt: Date?
     public let connectedAt: Date?
-    /// **Legacy, fallback only (#139).** Deprecated in server v1.43, removed in
+    /// **Legacy, fallback only.** Deprecated in server v1.43, removed in
     /// v1.44. Read only when ``health`` is absent (a server before v1.42.4);
     /// every other reader goes through ``health``.
     public let tokenExpired: Bool?
     public let tokenExpiresAt: Date?
     public let backfillCompleted: Bool?
     public let scope: String?
-    /// #139 — the server's unified connection state (v1.42.4+).
+    /// The server's unified connection state (v1.42.4+).
     public let health: ConnectionHealth?
 
     public init(
@@ -188,18 +188,13 @@ public struct WhoopStatus: Codable, Sendable {
         health = ConnectionHealth.tolerant(from: c, forKey: .health)
     }
 
-    /// #139 — the connection is broken until the person reconnects. From
+    /// The connection is broken until the person reconnects. From
     /// ``health`` when the server sends it; the legacy `tokenExpired` only
     /// answers for a server that does not.
     public var needsReconnect: Bool {
         if let health { return health.needsReconnect }
         return tokenExpired == true
     }
-}
-
-/// Mirror of `GET /api/whoop/credentials`.
-public struct WhoopCredentialsStatus: Codable, Sendable {
-    public let hasCredentials: Bool
 }
 
 /// Mirror of the `POST /api/integrations/whoop/test` success branch.

@@ -77,7 +77,7 @@ struct PermissionDeclarationTests {
         }
     }
 
-    /// 1.5 L10N-NL — a language in `CFBundleLocalizations` without its own
+    /// A language in `CFBundleLocalizations` without its own
     /// purpose string shows the English one in the system prompt. Every
     /// listed language (also a `pending` one) carries every key English has.
     @Test("every listed language declares the same purpose strings as English")

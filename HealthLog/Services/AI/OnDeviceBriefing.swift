@@ -5,15 +5,14 @@ import Foundation
 /// — diagnostic / predictive / prescriptive output is filtered out by
 /// `MDRSafetyFilter` before this struct is ever surfaced.
 ///
-/// The struct is isomorphic to the server's `DailyBriefing` (R4 §2.6) so
+/// The struct is isomorphic to the server's `DailyBriefing` so
 /// renderers can switch sources without view-layer churn.
 ///
 /// **Why not `@Generable` here?** Apple's `@Generable` macro requires
-/// `FoundationModels`, which is iOS 26+. To keep `OnDeviceBriefing`
-/// callable from iOS-18 code paths (fallback wiring), this struct is the
-/// plain transport type; the `@Generable` mirror used at the model call
-/// site lives in `OnDeviceBriefingService` under a `#if canImport`
-/// + `@available(iOS 26.0, *)` gate.
+/// `FoundationModels`. To keep `OnDeviceBriefing` callable from code paths
+/// that never import it (fallback wiring), this struct is the plain
+/// transport type; the `@Generable` mirror used at the model call site
+/// lives in `OnDeviceBriefingService` under a `#if canImport` gate.
 public struct OnDeviceBriefing: Sendable, Equatable {
     public var summary: String
     public var keyFindings: [String]

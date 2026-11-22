@@ -62,6 +62,7 @@ public extension MedicalSourceCatalog {
         case .mood: []
         case .illnessRecovery: []
         case .vorsorge: []
+        case .seizures: [.trinka2015StatusEpilepticus, .niceNg217Epilepsies, .beniczky2025IlaeSeizures, .cdcSeizureFirstAid]
         }
     }
 
@@ -126,7 +127,7 @@ public extension MedicalSourceCatalog {
         case .breathingDisturbances: [.appleSleepApnea]
         case .boneMass: [.icrp89ReferenceMan]
         case .timeInDaylight: [.who2020PhysicalActivity]
-        // HK-NEW (1.5) — the activity rings are physical-activity minutes.
+        // The activity rings are physical-activity minutes.
         case .exerciseMinutes, .standMinutes, .standHours: [.who2020PhysicalActivity]
         case .mood: [.topp2015Who5]
         // Deliberately empty, not an oversight: `.painNRS` is a self-report on a
@@ -236,6 +237,7 @@ public extension MedicalSourceCatalog {
         case .mood: "sources.method.mood"
         case .illnessRecovery: "sources.method.illnessRecovery"
         case .vorsorge: "sources.method.vorsorge"
+        case .seizures: "sources.method.seizures"
         }
     }
 
@@ -269,6 +271,7 @@ public extension MedicalSourceCatalog {
         ("sources.methodTitle.mood", "sources.method.mood"),
         ("sources.methodTitle.illnessRecovery", "sources.method.illnessRecovery"),
         ("sources.methodTitle.aiAssistant", "sources.method.aiAssistant"),
-        ("sources.methodTitle.vorsorge", "sources.method.vorsorge")
+        ("sources.methodTitle.vorsorge", "sources.method.vorsorge"),
+        ("sources.methodTitle.seizures", "sources.method.seizures")
     ]
 }

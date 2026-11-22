@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-// Build 7 — Dashboard-Struktur (items 7.3 + 7.5) + operator-feedback b235.
+// Dashboard-Struktur (items 7.3 + 7.5) + operator-feedback b235.
 //
 // 7.3 — mood graduated to a first-class dashboard metric tile and the `bmi`
 //       summary token now decodes; this suite locks the render configuration
@@ -12,7 +12,7 @@ import Testing
 //       height) must map, surface, and SURVIVE a layout-save round-trip. Server
 //       #54 (v1.31.0) made the PUT validate against the FULL widget-id catalogue
 //       so it retains them; this is the iOS-side client contract for that.
-// b235 — a dashboard partial failure must be reported by EITHER the top banner
+// A dashboard partial failure must be reported by EITHER the top banner
 //        OR the inline metrics error card, never both.
 
 // `@MainActor`: `DashboardStore` is `@MainActor @Observable`, so its
@@ -140,16 +140,10 @@ struct ClinicalWidgetIdLayoutSaveTests {
 
 @Suite("b235 — dashboard error is never reported twice")
 struct DashboardTopBannerSuppressionTests {
-    @Test("a partial failure (no summary, error, not loading) suppresses the top banner")
-    func partialFailureSuppressesBanner() {
-        // The inline metrics error card (#67) is showing → the banner must stay
-        // silent so the outage isn't reported twice.
-        #expect(
-            DashboardMetricsSectionState.suppressesTopBanner(
-                hasSummary: false, hasError: true, isLoading: false
-            ) == true
-        )
-        // And this is exactly the inline-card state.
+    @Test("a partial failure (no summary, error, not loading) stops the skeleton; the banner is the one report")
+    func partialFailureStopsSkeleton() {
+        // The metrics section draws nothing for `.error`; the top banner shows
+        // `store.error` with its retry, so the outage is reported once.
         #expect(
             DashboardMetricsSectionState.resolve(
                 hasSummary: false, hasError: true, isLoading: false
@@ -157,34 +151,30 @@ struct DashboardTopBannerSuppressionTests {
         )
     }
 
-    @Test("an error while a cached summary still renders keeps the banner (only surface)")
-    func errorWithCachedSummaryKeepsBanner() {
-        // Tiles still paint from the cached summary; the inline error card is NOT
-        // shown, so the banner remains the sole error surface (unchanged).
+    @Test("an error while a cached summary still renders keeps the tiles")
+    func errorWithCachedSummaryKeepsTiles() {
         #expect(
-            DashboardMetricsSectionState.suppressesTopBanner(
+            DashboardMetricsSectionState.resolve(
                 hasSummary: true, hasError: true, isLoading: false
-            ) == false
+            ) == .content
         )
     }
 
-    @Test("an in-flight retry (no summary, error, loading) does NOT suppress — skeleton, not inline card")
-    func inFlightRetryKeepsBanner() {
-        // During a retry the section shows the skeleton, not the inline error
-        // card, so the banner is allowed (matches the inline card exactly).
+    @Test("an in-flight retry (no summary, error, loading) shows the skeleton")
+    func inFlightRetryShowsSkeleton() {
         #expect(
-            DashboardMetricsSectionState.suppressesTopBanner(
+            DashboardMetricsSectionState.resolve(
                 hasSummary: false, hasError: true, isLoading: true
-            ) == false
+            ) == .skeleton
         )
     }
 
-    @Test("a plain cold load with no error does not suppress")
-    func coldLoadKeepsBanner() {
+    @Test("a plain cold load with no error shows the skeleton")
+    func coldLoadShowsSkeleton() {
         #expect(
-            DashboardMetricsSectionState.suppressesTopBanner(
+            DashboardMetricsSectionState.resolve(
                 hasSummary: false, hasError: false, isLoading: true
-            ) == false
+            ) == .skeleton
         )
     }
 }

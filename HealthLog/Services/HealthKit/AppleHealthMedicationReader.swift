@@ -5,13 +5,12 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **GH #47 — the iOS 26+ HealthKit-backed ``AppleHealthMedicationReading``.**
+    /// **The iOS 26+ HealthKit-backed ``AppleHealthMedicationReading``.**
     ///
     /// The ONLY HealthKit-aware seam of the Apple-medications feature. Reads
     /// `HKUserAnnotatedMedication` + `HKMedicationDoseEvent` (both iOS 26 types)
     /// and projects them into the plain `Sendable` records the importer + tests
-    /// consume. Every HK access is gated `#available(iOS 26.0, *)`; below iOS 26
-    /// (or when the Medications data type is unavailable) ``isAvailable`` is
+    /// consume. When HealthKit is unavailable on the device ``isAvailable`` is
     /// `false` and the importer short-circuits — no auth prompt ever fires.
     ///
     /// Mapping (read-only, lossy by design):
@@ -33,13 +32,10 @@ import Foundation
         }
 
         public var isAvailable: Bool {
-            guard HKHealthStore.isHealthDataAvailable() else { return false }
-            if #available(iOS 26.0, *) { return true }
-            return false
+            HKHealthStore.isHealthDataAvailable()
         }
 
         public func requestAuthorization() async throws {
-            guard #available(iOS 26.0, *) else { return }
             // GH #47 crash fix: per-object read authorization applies ONLY to the
             // medication OBJECT type (`HKUserAnnotatedMedicationType`). Dose events
             // are `HKSample`s — `HKMedicationDoseEventType: HKSampleType` — and do
@@ -56,14 +52,12 @@ import Foundation
         }
 
         public func readMedications() async throws -> [AppleHealthMedicationRecord] {
-            guard #available(iOS 26.0, *) else { return [] }
             let descriptor = HKUserAnnotatedMedicationQueryDescriptor(predicate: nil, limit: nil)
             let annotated = try await descriptor.result(for: makeStore())
             return annotated.compactMap(Self.record(from:))
         }
 
         public func readDoseEvents(since: Date?) async throws -> [AppleHealthDoseRecord] {
-            guard #available(iOS 26.0, *) else { return [] }
             let store = makeStore()
             let end = Date.distantFuture
             let start = since ?? .distantPast
@@ -92,14 +86,13 @@ import Foundation
         /// 1.4 / iOS 27 — the dose-event type's readable window. Medication
         /// objects are not samples and are never limited; their dose events are.
         public func doseReadWindow() async -> HealthReadWindow {
-            guard #available(iOS 26.0, *) else { return .unlimited }
-            return await HealthKitAuthorizedHistory(store: makeStore()).window(for: HKObjectType.medicationDoseEventType())
+            await HealthKitAuthorizedHistory(store: makeStore()).window(for: HKObjectType.medicationDoseEventType())
         }
 
         public func observeDoseEvents(
             _ onChange: @escaping @Sendable () async -> Void
         ) async -> (any AppleHealthDoseEventObservation)? {
-            guard isAvailable, #available(iOS 26.0, *) else { return nil }
+            guard isAvailable else { return nil }
             let observation = AppleHealthDoseEventObserver(store: makeStore())
             await observation.start(onChange)
             return observation
@@ -107,7 +100,6 @@ import Foundation
 
         // MARK: - Mapping
 
-        @available(iOS 26.0, *)
         private static func record(from annotated: HKUserAnnotatedMedication) -> AppleHealthMedicationRecord? {
             let concept = annotated.medication
             let conceptID = conceptString(concept.identifier)
@@ -124,7 +116,6 @@ import Foundation
             )
         }
 
-        @available(iOS 26.0, *)
         private static func record(from event: HKMedicationDoseEvent) -> AppleHealthDoseRecord? {
             let status: AppleHealthDoseLogStatus = switch event.logStatus {
             case .taken: .taken
@@ -137,7 +128,7 @@ import Foundation
                 scheduledDate: event.scheduledDate,
                 sampleStart: event.startDate
             )
-            // CU-10: an unarchivable concept yields no stable identity, so the
+            // An unarchivable concept yields no stable identity, so the
             // dose has nothing to attach to — drop it instead of sending it under
             // a key that can never resolve.
             let conceptID = conceptString(event.medicationConceptIdentifier)
@@ -160,7 +151,7 @@ import Foundation
         /// mirrored-med map stays consistent and the server's
         /// `(userId, externalSource, externalId)` upsert key actually matches.
         ///
-        /// **CU-10 / GH #47.** This used to be `String(describing: identifier)`.
+        /// This used to be `String(describing: identifier)`.
         /// `HKHealthConceptIdentifier` is opaque and documents no `description`
         /// contract, so that returned `NSObject`'s default —
         /// `<HKHealthConceptIdentifier: 0x12568db80>`, a memory address that is a
@@ -173,7 +164,6 @@ import Foundation
         /// Returns `""` when the identifier cannot be archived — the callers drop
         /// the record rather than mirror it under an unstable key. A medication
         /// that is silently missing is recoverable; a phantom row is not.
-        @available(iOS 26.0, *)
         private static func conceptString(_ identifier: HKHealthConceptIdentifier) -> String {
             do {
                 let archived = try NSKeyedArchiver.archivedData(
@@ -191,18 +181,17 @@ import Foundation
 
         /// Map the HK dosage form onto the server `deliveryForm` enum.
         ///
-        /// Build 274 (public #2) — compares the RAW string. The typed constants
+        /// Compares the RAW string. The typed constants
         /// (`.capsule` …) are un-annotated `extern NSString *const` globals in
         /// the iOS 26.5 SDK; pattern-matching them emitted STRONG dyld references
         /// and build 273 aborted at launch on every iOS 18 device. Nothing in the
         /// app binary may name those symbols — `AppleHealthMedicationFormLinkageTests`
         /// pins the strings, `scripts/verify-no-strong-ios26-symbols.sh` the binary.
-        @available(iOS 26.0, *)
         private static func deliveryForm(from form: HKMedicationGeneralForm) -> String? {
             deliveryForm(fromRawForm: form.rawValue)
         }
 
-        /// Build 274 (public #2) — the raw-string mapping. Internal so the
+        /// The raw-string mapping. Internal so the
         /// linkage test can drive it on any OS; the strings are the SDK's own
         /// (pinned by the same suite).
         static func deliveryForm(fromRawForm raw: String) -> String? {
@@ -219,7 +208,6 @@ import Foundation
         }
 
         /// Pull the RxNorm RxCUI out of the concept's related clinical codings.
-        @available(iOS 26.0, *)
         private static func rxNormCode(from codings: Set<HKClinicalCoding>) -> String? {
             codings.first { $0.system.lowercased().contains("rxnorm") }?.code
         }
@@ -236,9 +224,8 @@ import Foundation
     ///
     /// The completion handler goes back to HealthKit when `onChange` has run or
     /// at ``HealthKitDeliveryReceipt/deadline``, exactly once and on the error
-    /// path too, the same receipt the sample observers use (V1). Not tested in
+    /// path too, the same receipt the sample observers use. Not tested in
     /// the simulator: it delivers no background updates.
-    @available(iOS 26.0, *)
     actor AppleHealthDoseEventObserver: AppleHealthDoseEventObservation {
         private let store: HKHealthStore
         private var query: HKObserverQuery?

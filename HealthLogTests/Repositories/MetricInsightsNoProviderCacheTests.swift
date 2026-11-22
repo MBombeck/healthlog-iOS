@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.10 W-INSIGHTSDATA — pins that the server's NO-KEY FALLBACK body
+/// Pins that the server's NO-KEY FALLBACK body
 /// (`hasProvider:false` + a non-empty localized hint) can never masquerade as
 /// the day's ready assessment in the Berlin-day SWR cache.
 ///

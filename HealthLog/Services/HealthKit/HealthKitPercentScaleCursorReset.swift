@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    /// **#113 / public #7 — the one-time re-read of SpO2 and body fat.**
+    /// **The one-time re-read of SpO2 and body fat.**
     ///
     /// Up to 1.0.3 the app sent both percent types pre-multiplied by 100. Servers
     /// before v1.38.25 scaled them a second time, rejected every row as

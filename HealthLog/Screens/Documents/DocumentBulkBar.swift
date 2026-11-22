@@ -1,122 +1,87 @@
 import SwiftUI
 
-/// The floating bulk-action bar shown when ≥ 1 document is selected. Verbs, in
-/// order: change kind, link condition, delete, clear — the destructive verb sits
-/// last (before Clear) so a stray tap never lands on Delete (web parity).
+/// The bulk actions shown while ≥ 1 document is selected, as the items of the
+/// system bottom bar (`ToolbarItemGroup(placement: .bottomBar)`), which brings
+/// the glass. Verbs, in order: change kind, link condition, delete, clear — the
+/// destructive verb sits last (before Clear) so a stray tap never lands on
+/// Delete (web parity).
 struct DocumentBulkBar: View {
     let store: DocumentsStore
     let conditionChips: [DocumentConditionLink]
 
     @State private var isBusy = false
 
+    /// No stack around the items: the toolbar lays each one out as its own
+    /// bar item.
     var body: some View {
-        HStack(spacing: HLSpace.sm) {
-            Text(selectionLabel)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.updatesFrequently)
-            Spacer(minLength: HLSpace.sm)
+        Text(selectionLabel)
+            .hlText(.rowTitle)
+            .accessibilityAddTraits(.updatesFrequently)
+        Spacer(minLength: HLSpace.sm)
 
-            Menu {
-                ForEach(DocumentKindMeta.order) { kind in
-                    Button {
-                        run { await store.runBulk(.setKind, kind: kind) }
-                    } label: {
-                        Label(DocumentKindMeta.labelKey(kind), systemImage: DocumentKindMeta.icon(kind))
-                    }
-                }
-            } label: {
-                bulkIcon("tag", label: "documents.bulk.setKind")
-            }
-            .disabled(isBusy)
-            .accessibilityIdentifier("documents.bulk.setKind")
-
-            if !conditionChips.isEmpty {
-                Menu {
-                    ForEach(conditionChips) { chip in
-                        Button {
-                            run { await store.runBulk(.linkEpisode, episodeId: chip.episodeId) }
-                        } label: {
-                            Text(chip.name)
-                        }
-                    }
+        HLIconButton(systemImage: "tag", label: "documents.bulk.setKind", menu: {
+            ForEach(DocumentKindMeta.order) { kind in
+                Button {
+                    run { await store.runBulk(.setKind, kind: kind) }
                 } label: {
-                    bulkIcon("folder.badge.plus", label: "documents.bulk.linkCondition")
+                    Label(DocumentKindMeta.labelKey(kind), systemImage: DocumentKindMeta.icon(kind))
                 }
-                .disabled(isBusy)
-                .accessibilityIdentifier("documents.bulk.linkCondition")
             }
+        })
+        .disabled(isBusy)
+        .accessibilityIdentifier("documents.bulk.setKind")
 
-            Button {
-                run {
-                    await store.bulkDelete { count in
-                        let template = String(localized: "documents.bulk.deleted")
-                        return String(format: template, count)
+        if !conditionChips.isEmpty {
+            HLIconButton(systemImage: "folder.badge.plus", label: "documents.bulk.linkCondition", menu: {
+                ForEach(conditionChips) { chip in
+                    Button(chip.name) {
+                        run { await store.runBulk(.linkEpisode, episodeId: chip.episodeId) }
                     }
                 }
-            } label: {
-                bulkIcon("trash", label: "documents.bulk.delete", tint: HLColor.statusBad)
-            }
+            })
             .disabled(isBusy)
-            .accessibilityIdentifier("documents.bulk.delete")
-
-            Button {
-                store.clearSelection()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    // The clear verb is a bulk action too. It declares no frame
-                    // of its own, so it inherits the shared region rather than a
-                    // second literal — nothing scans this one, and the helper is
-                    // the honest way to say "44, and nothing else".
-                    .hlMinimumHitTarget()
-                    .accessibilityLabel(Text("documents.selection.clear"))
-            }
-            .accessibilityIdentifier("documents.selection.clear")
+            .accessibilityIdentifier("documents.bulk.linkCondition")
         }
-        .padding(.horizontal, HLSpace.md)
-        .padding(.vertical, HLSpace.sm)
-        // Reduce Transparency outranks the material: the bar is the only thing
-        // between a selection count and whatever it floats over, so the opaque
-        // answer is the elevated surface fill rather than a washed-out blur.
-        // The shape moves from the material's `in:` argument onto the clip so
-        // the rounded rect and the stroke overlay below still agree.
-        .background(
-            HLMaterialBackground(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                .stroke(HLColor.separator, lineWidth: 1)
-        )
-        .shadow(radius: 8, y: 2)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text("documents.bulk.barLabel"))
-    }
 
-    /// The glyph keeps its headline typography and grows only its *region*:
-    /// a `min` frame enlarges what was too small and leaves anything already
-    /// large alone, so 36×32 becomes 44×44 without the icon changing size.
-    ///
-    /// The literal is deliberate. `Phase8AccessibilityPolicyTests` reads this
-    /// member by name and parses digits out of its `.frame(`, so
-    /// `.hlMinimumHitTarget()` — which is the same 44 by construction — is
-    /// invisible to it, and `HLHitTarget.minimum` is an identifier rather than a
-    /// number. Third time in the phase: 08-10's back chevron, 08-11's edit
-    /// button, this.
-    private func bulkIcon(_ systemName: String, label: LocalizedStringKey, tint: Color? = nil) -> some View {
-        Image(systemName: systemName)
-            .font(.hlHeadline)
-            .foregroundStyle(tint ?? HLAccent.userBrandTint)
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel(Text(label))
+        // Several documents at once take their links and summaries
+        // along: asked first, like a single document. The question is
+        // asked by the `hlDeleteConfirmation()` on the documents list.
+        HLDeleteButton(
+            "documents.bulk.delete",
+            form: .bar,
+            action: .confirmed(title: deleteQuestion) { await deleteSelection() }
+        )
+        .labelStyle(BulkBarIconLabelStyle())
+        .disabled(isBusy)
+        .accessibilityLabel(Text("documents.bulk.delete"))
+        .accessibilityIdentifier("documents.bulk.delete")
+
+        HLIconButton(systemImage: "xmark", label: "documents.selection.clear") {
+            store.clearSelection()
+        }
+        .accessibilityIdentifier("documents.selection.clear")
     }
 
     private var selectionLabel: String {
         let template = String(localized: "documents.selection.count")
         return String(format: template, store.selection.count)
+    }
+
+    /// "Delete document?" for one, "Delete 3 documents?" for more.
+    private var deleteQuestion: LocalizedStringKey {
+        let count = store.selection.count
+        return count == 1
+            ? "documents.detail.deleteConfirm.title"
+            : "documents.bulk.deleteConfirm.title \(count)"
+    }
+
+    private func deleteSelection() async {
+        isBusy = true
+        defer { isBusy = false }
+        _ = await store.bulkDelete { count in
+            let template = String(localized: "documents.bulk.deleted")
+            return String(format: template, count)
+        }
     }
 
     private func run(_ action: @escaping () async -> Void) {
@@ -126,5 +91,15 @@ struct DocumentBulkBar: View {
             await action()
             isBusy = false
         }
+    }
+}
+
+/// The bar shows the sign of the delete button alone, on the same touch area
+/// as its other verbs; the button keeps its colour and its spoken title.
+private struct BulkBarIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.icon
+            .font(.hlHeadline)
+            .hlMinimumHitTarget()
     }
 }

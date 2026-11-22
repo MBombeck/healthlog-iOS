@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **H2 (1.1.0) — an empty tile shows no number.**
+/// **An empty tile shows no number.**
 ///
 /// The QA sweep photographed a steps tile reading "8.421 Schritte" in grey
 /// with "Noch keine Daten" under it (resting heart rate and HRV the same):

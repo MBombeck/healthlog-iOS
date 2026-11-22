@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **B5 (1.4, #126 3.11) — 1½ and the other halves above one unit.**
+/// **1½ and the other halves above one unit.**
 ///
 /// The server takes any value above 0 and at most 100 with four decimals
 /// since v1.39.1 (`isSupportedUnitsPerDose`, `src/lib/medications/

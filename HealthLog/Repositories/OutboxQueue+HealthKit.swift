@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 1 — the focused HealthKit surface of the outbox queue.
+// The focused HealthKit surface of the outbox queue.
 //
 // Two things live here, and they are two halves of one rule: a HealthKit write
 // on the queue must be attributable, and a row that is not attributable must
@@ -92,7 +92,7 @@ public extension OutboxQueue {
     /// live session, so a long-running import that resumes after an account
     /// switch cannot persist account A's samples as account B's.
     ///
-    /// A2 (1.4) — `syncTrigger` is the word the page was posted under. The
+    /// `syncTrigger` is the word the page was posted under. The
     /// row keeps it and its replay sends it again; `nil` writes the row as
     /// 1.3.0 did, without the key.
     func enqueueHealthKitBatch(
@@ -116,7 +116,7 @@ public extension OutboxQueue {
 
     /// The exact body `MeasurementBatchUploader.upload` would have POSTed.
     ///
-    /// A2 (1.4) — with the `syncTrigger` it was posted under, where the caller
+    /// With the `syncTrigger` it was posted under, where the caller
     /// knows it. Up to 1.3.0 the word was left out because a replay happens
     /// in another wake; but the server reads it as a statement about the rows
     /// (a `backfill` page moves no live arrival stamp), and 6 to 10 full pages

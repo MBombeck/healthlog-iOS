@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.3 (#127, public #25) — the history card.**
+/// **The history card.**
 ///
 /// New readings always go first; the older history follows on its own in the
 /// time left over. This card says how far that has got and offers the one
@@ -8,21 +8,24 @@ import SwiftUI
 /// the phone awake and on the charger.
 extension AppleHealthIntegrationDetailScreen {
     var historyCard: some View {
-        HistoryCatchUpCard(store: HealthHistoryCatchUpStore.shared)
+        HistoryCatchUpCard(
+            store: HealthHistoryCatchUpStore.shared,
+            hasSynced: hkReadiness.displayedLastSyncedAt(serverLastSyncedAt: store.hkConfig?.lastSyncedAt) != nil
+        )
     }
 }
 
 private struct HistoryCatchUpCard: View {
     let store: HealthHistoryCatchUpStore
+    /// Before the first sync "0 of 36 complete" reads like a failure; the
+    /// card says the count follows the next sync instead.
+    let hasSynced: Bool
 
     var body: some View {
-        // 1.4 B2-c — no subtitle: "new readings go first, the older history
+        // No subtitle: "new readings go first, the older history
         // follows on its own" and the four sentences over the button are one
         // short note now, shown only while there is something left to send.
-        HLSettingsCard(
-            icon: "clock.arrow.circlepath",
-            title: "settings.applehealth.history.title"
-        ) {
+        HLCard("settings.applehealth.history.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 Text(statusText)
                     .font(.hlBody)
@@ -32,22 +35,19 @@ private struct HistoryCatchUpCard: View {
 
                 if store.isRunning, let overview = store.overview, overview.totalCount > 0 {
                     ProgressView(value: Double(overview.finishedCount), total: Double(overview.totalCount))
-                        .tint(HLText.primary)
                 }
 
                 if !(store.overview?.isFinished ?? false) || store.isRunning {
                     Text("settings.applehealth.history.note")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
 
                     HLButton(
                         store.isRunning
-                            ? String(localized: "settings.applehealth.history.stop")
-                            : String(localized: "settings.applehealth.history.sync_all"),
-                        icon: store.isRunning ? "stop.circle" : "arrow.down.circle",
-                        variant: .secondary,
-                        size: .regular
+                            ? "settings.applehealth.history.stop"
+                            : "settings.applehealth.history.sync_all",
+                        systemImage: store.isRunning ? "stop.circle" : "arrow.down.circle",
+                        variant: .secondary
                     ) {
                         if store.isRunning {
                             store.stop()
@@ -71,7 +71,7 @@ private struct HistoryCatchUpCard: View {
         default:
             break
         }
-        guard let overview = store.overview, overview.totalCount > 0 else {
+        guard hasSynced || store.isRunning, let overview = store.overview, overview.totalCount > 0 else {
             return String(localized: "settings.applehealth.history.unknown")
         }
         if overview.isFinished {

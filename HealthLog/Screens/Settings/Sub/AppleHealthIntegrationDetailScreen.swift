@@ -26,23 +26,19 @@ import SwiftUI
 struct AppleHealthIntegrationDetailScreen: View {
     @Environment(SettingsStore.self) var store
     @Environment(HKReadinessStore.self) var hkReadiness
-    /// v0.14.8 W2 — container access for the relocated cycle-opt-in + mood-sync
-    /// toggles (feature flag, cycle store lifecycle, mood sync store).
+    /// Container access for the relocated cycle-opt-in + mood-sync
+    /// toggles (cycle gate and store lifecycle, mood sync store).
     /// `internal` (not `private`) so the `+Cycle` extension file can read it.
     @Environment(\.appContainer) var container
-    /// Server-parity v1.16 — the cycle purge is a server route; hidden in
-    /// standalone (there is nothing server-side to purge). `internal` for `+Cycle`.
-    @Environment(BackendAvailability.self) var backend
     @State private var refreshTick: Int = 0
-    /// #154 — whether the HealthKit sheet is answered (`nil`: unknown yet).
+    /// Whether the HealthKit sheet is answered (`nil`: unknown yet).
     @State private var sheetAnswered: Bool?
-    /// v0.10.0 W-Mood-B — spinner while the State-of-Mind opt-in auth runs.
+    /// Spinner while the State-of-Mind opt-in auth runs.
     @State private var moodSyncInFlight = false
     /// Server-parity v1.16 — cycle purge confirmation + progress/result state.
     /// `internal` so the `+Cycle` extension file can drive them.
-    @State var showCyclePurgeConfirmation = false
     @State var cyclePurgeState: CyclePurgeState = .idle
-    /// A2 — whether the neutral cycle-tracking OFFER row is expanded to reveal the
+    /// Whether the neutral cycle-tracking OFFER row is expanded to reveal the
     /// explainer + the actual opt-in action.
     @State var showCycleOfferExplainer = false
 
@@ -53,15 +49,25 @@ struct AppleHealthIntegrationDetailScreen: View {
         case failed
     }
 
+    @Environment(\.deviceProfile) private var deviceProfile
+
     var body: some View {
-        HLSettingsPage(title: "Apple Health") {
+        if HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).offersAuthorization {
+            phoneBody
+        } else {
+            AppleHealthPadNotice()
+        }
+    }
+
+    private var phoneBody: some View {
+        HLPage {
             connectionCard
-            // 1.3 (#127, public #25) — how far the older history has got, and
+            // How far the older history has got, and
             // "Sync everything now". Server-only: it is the server it fills.
-            if backend.hasServer {
+            if Self.showsHistory(status: shownStatus) {
                 historyCard
             }
-            // 1.4 B2-c — a loaded list without a single type rendered a
+            // A loaded list without a single type rendered a
             // titled card with nothing in it.
             if store.hkConfig?.entries.isEmpty != true {
                 dataTypesCard
@@ -72,11 +78,8 @@ struct AppleHealthIntegrationDetailScreen: View {
             // W-B187 (Settings consolidation §A.3) — the one-shot export.zip
             // bulk import folded IN here as a card, so the Integrations list
             // shows ONE "Apple Health" row instead of two confusing peers
-            // ("Apple Health" + "Apple Health Import"). Server-only: gated on
-            // `backend.hasServer` (the XML-parse pipeline lives on the server).
-            if backend.hasServer {
-                importCard
-            }
+            // ("Apple Health" + "Apple Health Import").
+            importCard
             transparencyCard
         }
         .navigationTitle("Apple Health")
@@ -99,22 +102,46 @@ struct AppleHealthIntegrationDetailScreen: View {
     // MARK: - Connection (status + connect + sync-now + transparency rows)
 
     private var connectionCard: some View {
-        HLSettingsCard(
-            icon: "heart.text.square.fill",
-            title: "Apple Health",
+        HLCard(
+            "Apple Health",
             trailing: { appleHealthPill },
             content: { appleHealthBody }
         )
     }
 
-    /// P2 (R2-status) — die Pille meldet die EMPFANGS-Wahrheit, nie den rohen
+    /// Die Pille meldet die EMPFANGS-Wahrheit, nie den rohen
     /// Schreib-Status. Die Ableitung liegt seit H1 in
     /// `HKReadinessStore.surfaceStatus`, gemalt von ``HealthKitStatusPill``, so
     /// dass die Integrationen-Liste und diese Seite nicht mehr auseinander
     /// laufen können. Die Einschränkung beim Zurückschreiben ist eine eigene
     /// Geschichte und steht als `writeBackNoticeRow` im Kartenkörper.
     private var appleHealthPill: some View {
-        HealthKitStatusPill()
+        HealthKitStatusPill(status: shownStatus, form: .capsule)
+    }
+
+    /// The card states one connection. Connected means the permission is
+    /// granted; while iOS would still show the permission sheet the card
+    /// says "Not connected" over its connect button, not "Connected".
+    static func shownStatus(
+        _ surface: HKReadinessStore.SurfaceStatus,
+        action: HKReadinessStore.ConnectionAction
+    ) -> HKReadinessStore.SurfaceStatus {
+        if surface == .receiving, action == .connect { return .notConnected }
+        return surface
+    }
+
+    /// Writing back and syncing only mean something once the connection stands.
+    static func isConnected(status: HKReadinessStore.SurfaceStatus) -> Bool {
+        status == .receiving
+    }
+
+    /// The history card counts types only for a connection that can send any.
+    static func showsHistory(status: HKReadinessStore.SurfaceStatus) -> Bool {
+        isConnected(status: status)
+    }
+
+    private var shownStatus: HKReadinessStore.SurfaceStatus {
+        Self.shownStatus(hkReadiness.surfaceStatus, action: connectionAction)
     }
 
     private var appleHealthBody: some View {
@@ -122,15 +149,14 @@ struct AppleHealthIntegrationDetailScreen: View {
             // Audit-Gruppe 1 — „Lese- und Schreibzugriff auf Vitalwerte“ stand
             // hier ein drittes Mal (Karten-Untertitel auf der Integrationen-
             // Liste, toter Seiten-Untertitel, hier). Heimat ist die Liste, wo
-            // die Navigationsentscheidung fällt (R3); der zustandsabhängige
+            // die Navigationsentscheidung fällt; der zustandsabhängige
             // Sync-Stand bleibt — er trägt Information, die kein Titel hat.
             Text(syncStateCaption)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
 
             writeBackNoticeRow
-            // #154 (MIRROR, 1.5) — one action per state instead of
+            // One action per state instead of
             // "Connect" and "Open in Apple Health" whenever a write type was
             // missing (the pill said "Connected", the button "Connect"). The
             // review link sits beside the write-back notice it answers.
@@ -151,21 +177,22 @@ struct AppleHealthIntegrationDetailScreen: View {
                     }
                 }
             }
-            HLButton(
-                String(localized: "Sync now"),
-                icon: "arrow.triangle.2.circlepath",
-                variant: .secondary,
-                size: .regular,
-                isLoading: hkReadiness.isSyncing
-            ) {
-                Task { await hkReadiness.triggerManualSync() }
+            if Self.isConnected(status: shownStatus) {
+                HLButton(
+                    "Sync now",
+                    systemImage: "arrow.triangle.2.circlepath",
+                    variant: .secondary,
+                    isLoading: hkReadiness.isSyncing
+                ) {
+                    Task { await hkReadiness.triggerManualSync() }
+                }
+                .disabled(hkReadiness.isSyncing)
+                .accessibilityIdentifier("settings.integrations.appleHealthManualSync")
             }
-            .disabled(hkReadiness.isSyncing)
-            .accessibilityIdentifier("settings.integrations.appleHealthManualSync")
         }
     }
 
-    /// #154 — the card's one action for the current state.
+    /// The card's one action for the current state.
     private var connectionAction: HKReadinessStore.ConnectionAction {
         hkReadiness.connectionAction(sheetAnswered: sheetAnswered)
     }
@@ -174,7 +201,7 @@ struct AppleHealthIntegrationDetailScreen: View {
         sheetAnswered = await hkReadiness.authorizationSheetAnswered()
     }
 
-    /// **P2 (R2-status)** — the WRITE-back status, kept strictly separate from
+    /// The WRITE-back status, kept strictly separate from
     /// the receive pill. When receiving demonstrably works (`isConnected`) but
     /// not every WRITE type is authorized, we say so honestly ("write-back
     /// limited / off") instead of letting the connection surface claim it
@@ -182,7 +209,7 @@ struct AppleHealthIntegrationDetailScreen: View {
     /// isn't connected at all (the Connect CTA + pill already own that case).
     @ViewBuilder
     private var writeBackNoticeRow: some View {
-        if hkReadiness.isConnected {
+        if Self.isConnected(status: shownStatus) {
             switch hkReadiness.state {
             case .denied:
                 noticeRow("settings.applehealth.writeback.blocked")
@@ -197,18 +224,16 @@ struct AppleHealthIntegrationDetailScreen: View {
     func noticeRow(_ text: LocalizedStringKey, icon: String = "arrow.up.forward.circle") -> some View {
         HStack(alignment: .top, spacing: HLSpace.xs) {
             Image(systemName: icon)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// #10 — the device's own stamp first, the server's `lastSyncedAt` as the
+    /// The device's own stamp first, the server's `lastSyncedAt` as the
     /// fallback (see `HKReadinessStore.displayedLastSyncedAt`).
     private var syncStateCaption: String {
         if let date = hkReadiness.displayedLastSyncedAt(serverLastSyncedAt: store.hkConfig?.lastSyncedAt) {
@@ -219,23 +244,20 @@ struct AppleHealthIntegrationDetailScreen: View {
         return String(localized: "Not synced yet")
     }
 
-    // MARK: - Data types (moved from SettingsSourcesScreen v0.11)
+    // MARK: - Data types
 
     /// Per-Apple-Health-Type Sync-Toggles. Vorher im Top-Level-"Quellen"-Hub;
     /// gehört IA-logisch unter die Apple-Health-Integration. Server-Logik
     /// unverändert — `SettingsStore.toggle(syncEntryID:)` + der First-Enable-
     /// HK-Auth-Seiteneffekt sind reiner Re-Host.
     private var dataTypesCard: some View {
-        HLSettingsCard(
-            icon: "list.bullet.rectangle.fill",
-            title: "Apple Health data types"
-        ) {
+        HLCard("Apple Health data types") {
             if let config = store.hkConfig {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     ForEach(config.entries) { entry in
                         dataTypeRow(entry: entry)
                     }
-                    // HK-NEW (1.5) — the way back to the new read types.
+                    // The way back to the new read types.
                     AppleHealthNewReadTypesLink()
                 }
             } else {
@@ -252,12 +274,9 @@ struct AppleHealthIntegrationDetailScreen: View {
     private func dataTypeRow(entry: HealthKitSyncEntry) -> some View {
         HStack(spacing: HLSpace.md) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(LocalizedStringKey(entry.kindDisplayName))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                HLRowTitle(Text(LocalizedStringKey(entry.kindDisplayName)))
                 Text(LocalizedStringKey(directionLabel(entry.direction)))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             Spacer(minLength: HLSpace.sm)
             Toggle("", isOn: Binding(
@@ -292,66 +311,49 @@ struct AppleHealthIntegrationDetailScreen: View {
     /// to live on the *transparency* page (`SettingsHealthAccessScreen`) are
     /// sync behaviour, exactly like the per-type toggles above, so they belong
     /// on THE Apple-Health surface. Gate logic is unchanged — only the host
-    /// moved (the cycle row stays invisible unless `FeatureFlag.cycleTracking`
-    /// is on; flipping it force-enables the `CycleGate` and starts the C2
-    /// HealthKit importer; the toggle is a UI-pref,
+    /// moved (flipping the cycle toggle force-enables the `CycleGate` and
+    /// starts the C2 HealthKit importer; the toggle is a UI-pref,
     /// `SettingsStore.cycleTrackingOptIn`). Accessibility identifiers are kept
     /// stable (`HealthAccess.*`) so UI tests + deep references keep resolving.
     @ViewBuilder
     private var specialSyncsCard: some View {
         if let container {
-            HLSettingsCard(
-                icon: "arrow.triangle.2.circlepath",
-                title: "settings.applehealth.specialSyncs.title"
-            ) {
+            HLCard("settings.applehealth.specialSyncs.title") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    // A2 — three-state cycle opt-in presentation. The flag gates
-                    // existence; the gate's availability decides toggle vs a
-                    // neutral offer so a non-cycle user never sees a live-looking
+                    // The gate's availability decides toggle vs a neutral
+                    // offer so a non-cycle user never sees a live-looking
                     // "cycle tracking" toggle, while the tertiary-override opt-in
                     // path stays reachable for everyone.
                     switch CycleOptInPresentation.mode(
-                        flagOn: container.featureFlagsStore.isEnabled(.cycleTracking),
                         available: container.cycleGate.isCycleTrackingAvailable
                     ) {
-                    case .hidden:
-                        EmptyView()
                     case .toggle:
                         cycleTrackingToggle(container: container)
-                        Divider()
                     case .offer:
                         cycleOfferRow(container: container)
-                        Divider()
                     }
                     moodSyncToggle(store: container.moodHealthSyncStore)
-                    // GH #47 — Apple Health medications mirror (iOS 26+ only).
-                    // Hidden entirely below iOS 26 / when the data type is
-                    // unavailable so the row never claims a sync that can't run.
+                    // Apple Health medications mirror. Hidden entirely when
+                    // HealthKit is unavailable so the row never claims a sync
+                    // that can't run.
                     if container.medicationHealthSyncStore.isAvailable {
-                        Divider()
                         medicationSyncToggle(store: container.medicationHealthSyncStore)
                     }
-                    // GH #74 — the Apple-Health ECG upload switch. Server-only:
-                    // the target is `POST /api/insights/ecg`, so in standalone
-                    // the row would offer a transfer with nowhere to go. Hidden
-                    // rather than disabled — an unreachable switch explains
-                    // nothing.
-                    if backend.hasServer {
-                        Divider()
-                        ecgSyncToggle(store: container.ecgHealthSyncStore)
-                    }
+                    // The Apple-Health ECG upload switch (target
+                    // `POST /api/insights/ecg`).
+                    ecgSyncToggle(store: container.ecgHealthSyncStore)
                 }
             }
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — the single "Mit Apple Health synchronisieren"
+    /// The single "Mit Apple Health synchronisieren"
     /// mood toggle. Writes future mood logs into Apple Health's "Mood" track and
     /// imports moods logged elsewhere (anti-duped against our own writes).
     /// 16-03/E2: it now arrives ON for anyone who completed the first HealthKit
     /// sheet; flipping it on by hand is the recovery path and still requests the
     /// State-of-Mind permission at that moment.
-    /// **GH #74** — the Apple-Health ECG upload switch.
+    /// The Apple-Health ECG upload switch.
     ///
     /// 16-03/E2: the electrocardiogram READ permission is asked for in the first
     /// sheet now, and a completed grant switches this on wherever there is a
@@ -366,9 +368,7 @@ struct AppleHealthIntegrationDetailScreen: View {
     /// lives on the ECG surface where a verdict is actually shown.
     ///
     /// **UI-Standard R11 / E4** — the canonical ``HLSettingsToggleRow``, not a
-    /// raw `Toggle`. The three neighbouring toggles on this card are still
-    /// hand-rolled; they belong to the units that own them, and adding a fourth
-    /// hand-rolled row would have grown the ratchet the baseline test guards.
+    /// raw `Toggle`, like the mood and medication switches beside it.
     private func ecgSyncToggle(store: EcgHealthSyncStore) -> some View {
         HLSettingsToggleRow(
             title: "settings.applehealth.ecgSync.label",
@@ -386,66 +386,46 @@ struct AppleHealthIntegrationDetailScreen: View {
     }
 
     private func moodSyncToggle(store: MoodHealthSyncStore) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Toggle(
-                isOn: Binding(
-                    get: { store.enabled },
-                    set: { newValue in
-                        Task {
-                            moodSyncInFlight = true
-                            await store.setEnabled(newValue)
-                            moodSyncInFlight = false
-                        }
-                    }
-                )
-            ) {
-                HStack(spacing: HLSpace.sm) {
-                    Text("settings.applehealth.moodSync.label")
-                        .font(.hlSubhead.weight(.semibold))
-                    if moodSyncInFlight || store.isRequestingAuthorization {
-                        ProgressView().controlSize(.mini)
+        HLSettingsToggleRow(
+            title: "settings.applehealth.moodSync.label",
+            description: "Write your mood into Apple Health's State of Mind, and import moods you log elsewhere.",
+            isOn: Binding(
+                get: { store.enabled },
+                set: { newValue in
+                    Task {
+                        moodSyncInFlight = true
+                        await store.setEnabled(newValue)
+                        moodSyncInFlight = false
                     }
                 }
-            }
-            .disabled(moodSyncInFlight)
-            .accessibilityIdentifier("HealthAccess.moodSyncToggle")
-            Text("Write your mood into Apple Health's State of Mind, and import moods you log elsewhere.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+            ),
+            isBusy: moodSyncInFlight || store.isRequestingAuthorization,
+            isEnabled: !moodSyncInFlight,
+            accessibilityID: "HealthAccess.moodSyncToggle"
+        )
     }
 
-    /// **GH #47** — the "Sync medications with Apple Health" toggle (iOS 26+,
+    /// The "Sync medications with Apple Health" toggle (iOS 26+,
     /// OFF by default). Flipping it on requests opt-in Medications read auth and
     /// mirrors the user's Apple Health medications + their logged doses
     /// (read-only; the app never writes back, and a mirrored med disables its
     /// own manual dose logging to avoid double-counting).
     private func medicationSyncToggle(store: MedicationHealthSyncStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Toggle(
+            HLSettingsToggleRow(
+                title: "settings.applehealth.medSync.label",
+                description: "settings.applehealth.medSync.footer",
                 isOn: Binding(
                     get: { store.enabled },
                     set: { newValue in
                         Task { await store.setEnabled(newValue) }
                     }
-                )
-            ) {
-                HStack(spacing: HLSpace.sm) {
-                    Text("settings.applehealth.medSync.label")
-                        .font(.hlSubhead.weight(.semibold))
-                    if store.isRequestingAuthorization {
-                        ProgressView().controlSize(.mini)
-                    }
-                }
-            }
-            .disabled(store.isRequestingAuthorization)
-            .accessibilityIdentifier("HealthAccess.medicationSyncToggle")
-            Text("settings.applehealth.medSync.footer")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            // CU-10 — the mirror can be structurally obstructed (cap reached /
+                ),
+                isBusy: store.isRequestingAuthorization,
+                isEnabled: !store.isRequestingAuthorization,
+                accessibilityID: "HealthAccess.medicationSyncToggle"
+            )
+            // The mirror can be structurally obstructed (cap reached /
             // unstable identifier). Name the reason here instead of letting a
             // generic error banner say "something went wrong" about a condition
             // that has a precise cause.
@@ -473,7 +453,7 @@ struct AppleHealthIntegrationDetailScreen: View {
     // export.zip bulk-import entry point) lives in
     // `AppleHealthIntegrationDetailScreen+Import.swift` to keep this type under
     // the body-length budget. It is rendered above between `specialSyncsCard` and
-    // `transparencyCard`, server-gated on `backend.hasServer`.
+    // `transparencyCard`.
 
     // MARK: - Transparency & diagnostics
 
@@ -482,10 +462,7 @@ struct AppleHealthIntegrationDetailScreen: View {
     /// reads Verbindung → Sync-Verhalten → Transparenz/Diagnose. Accessibility
     /// identifiers unchanged.
     private var transparencyCard: some View {
-        HLSettingsCard(
-            icon: "checklist",
-            title: "settings.applehealth.transparency.title"
-        ) {
+        HLCard("settings.applehealth.transparency.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 // Apple Guideline 5.1.3(i) transparency — discoverable in-app
                 // surface that lists every HealthKit type HealthLog reads +
@@ -495,9 +472,7 @@ struct AppleHealthIntegrationDetailScreen: View {
                 }
                 .accessibilityIdentifier("settings.integrations.healthAccessRow")
 
-                Divider()
-
-                // BF-5: per-kind sync diagnostics drilldown.
+                // Per-kind sync diagnostics drilldown.
                 HLSettingsActionRow(title: "settings.hkdiag.nav_row", presents: .push) {
                     SettingsHKSyncDiagnosticsScreen()
                 }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #141 (RELATED, 1.5.0) — `related` on lab results, documents, illness
+/// `related` on lab results, documents, illness
 /// episodes and medications. Server v1.43+, absent on older servers.
 @Suite("Related records (#141)")
 struct RelatedLinksTests {
@@ -170,7 +170,7 @@ struct RelatedLinksTests {
         #expect(row.biomarkerId == "bm_1")
     }
 
-    // MARK: - Document page (POLISH-A A2)
+    // MARK: - Document page
 
     @Test("The document page shows a linked episode once: in its card, not again under Related")
     func documentEpisodeShownOnce() throws {

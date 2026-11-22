@@ -42,7 +42,7 @@ struct TokensRegressionTests {
 
     @Test("Chart style heights are non-zero + ordered")
     func chartHeightsOrderly() {
-        // 1.4 B4 — two heights: the line without axes (tiles, cards) and every
+        // Two heights: the line without axes (tiles, cards) and every
         // chart with axes. The regular height fits the mood scale's labels.
         #expect(HLChartStyle.heightCompact > 0)
         #expect(HLChartStyle.heightRegular > HLChartStyle.heightCompact)
@@ -101,7 +101,7 @@ struct TokensRegressionTests {
     @Test("Status traffic-light is dual-appearance: light-tuned + Dracula dark")
     @MainActor
     func statusTokensRouteToDracula() {
-        // W-LIGHT (v0.8.0) — status colours promoted from single `Color(hex:)`
+        // Status colours promoted from single `Color(hex:)`
         // literals to dual-appearance colorsets. The DARK slot keeps the exact
         // Dracula `--success`/`--warning`/`--destructive` hex
         // (`globals.css:185-187`). The Any/LIGHT slot was retuned in the
@@ -257,11 +257,13 @@ struct TokensRegressionTests {
     @MainActor
     func theme2TextTokensResolveCorrectly() {
         // v0.14.11 "Warmes Papier" light redesign — the light ramp is ONE warm
-        // ink #2E2B27 at three opacities (0.90 / 0.72 / 0.50), mirroring the
+        // ink #2E2B27 at three opacities (0.90 / 0.72 / 0.60), mirroring the
         // dark #EBEBF5 @ 1.0/0.7/0.4 ramp. The old ramp was broken at both
         // ends: primary #1C1C1E@0.9 on pure white hit a harsh 12.6:1 while
         // secondary #3C3C43@0.6 FAILED WCAG AA at 3.4:1. New effective ratios
-        // on the #FAF8F5 card: ~9.8:1 / ~5.6:1 / ~2.9:1. Dark slot
+        // on the #FAF8F5 card: ~9.8:1 / ~5.6:1 / ~3.9:1; tertiary went from
+        // 0.50 to 0.60 so chevrons and quiet values keep 3:1 on every light
+        // surface. Dark slot
         // (#EBEBF5 at full / 0.70 / 0.40) is UNCHANGED.
         let lightTraits = UITraitCollection(userInterfaceStyle: .light)
         let darkTraits = UITraitCollection(userInterfaceStyle: .dark)
@@ -273,7 +275,7 @@ struct TokensRegressionTests {
         #expect(TokensRegressionTests.resolvedHex(of: HLText.secondary, traits: lightTraits) == 0x2E2B27)
         #expect(TokensRegressionTests.resolvedAlpha2(of: HLText.secondary, traits: lightTraits) == 0.72)
         #expect(TokensRegressionTests.resolvedHex(of: HLText.tertiary, traits: lightTraits) == 0x2E2B27)
-        #expect(TokensRegressionTests.resolvedAlpha2(of: HLText.tertiary, traits: lightTraits) == 0.5)
+        #expect(TokensRegressionTests.resolvedAlpha2(of: HLText.tertiary, traits: lightTraits) == 0.6)
 
         // Dark slot unchanged: off-white #EBEBF5, secondary 0.70 / tertiary 0.40.
         #expect(TokensRegressionTests.resolvedAlpha(of: HLText.secondary, traits: darkTraits) == 0.7)
@@ -309,7 +311,7 @@ struct TokensRegressionTests {
 
         // Threshold overlays — dashed-red high + dashed-green low, now routed
         // through the dual-appearance `statusBad` / `statusOK` colorsets
-        // (W-LIGHT v0.8.0) so the dashed rules de-neon on white in light mode
+        // so the dashed rules de-neon on white in light mode
         // while keeping the Dracula red/green in dark. The dashed stroke style
         // separates them visually from any solid status pill.
         let lightT = UITraitCollection(userInterfaceStyle: .light)

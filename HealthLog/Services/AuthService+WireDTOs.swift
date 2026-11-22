@@ -60,7 +60,7 @@ struct PasskeyLoginOptionsResponse: Decodable {
     }
 }
 
-/// #37 — the `WebauthnOptionsResponse` for the mfa-webauthn options leg.
+/// The `WebauthnOptionsResponse` for the mfa-webauthn options leg.
 /// The server types `options` loosely (`additionalProperties: {}`), but the
 /// live fields are the standard SimpleWebAuthn assertion-options shape — we
 /// decode the same `{ challenge, rpId, allowCredentials }` subset the passkey

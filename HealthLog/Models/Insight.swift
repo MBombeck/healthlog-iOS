@@ -90,7 +90,7 @@ public enum AIProvider: String, Codable, Sendable, CaseIterable, Identifiable {
     case anthropic
     case openai
     case local
-    /// CU-16 (A6) — server v1.34: any OpenAI-compatible `/chat/completions`
+    /// Server v1.34: any OpenAI-compatible `/chat/completions`
     /// endpoint the SERVER holds credentials for (base URL + key live in the
     /// server's own columns). Added so a `GET /api/user/ai-provider` carrying
     /// `OPENAI_COMPATIBLE` resolves to itself instead of collapsing onto
@@ -100,7 +100,7 @@ public enum AIProvider: String, Codable, Sendable, CaseIterable, Identifiable {
     /// **Not iOS-configurable** (absent from ``configurableCases``), same
     /// The endpoint is an operator concern and iOS has no field for it, so
     /// exposing a half-working picker row would be
-    /// a Baustelle (AC18). Decode-and-display only.
+    /// a Baustelle. Decode-and-display only.
     ///
     /// Distinct from ``BYOProviderID/openAICompatible``, which is the
     /// device→provider path with the key in the local Keychain.

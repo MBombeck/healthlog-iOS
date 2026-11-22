@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.14.8 W3 — v1.15.13 adoption: `POST /api/measurements/bulk-delete`
+/// v1.15.13 adoption: `POST /api/measurements/bulk-delete`
 /// (RESEARCH-SERVER-PARITY A2). Real `APIClient` over `MockURLProtocol`
 /// (PROJECT_GUIDE.md: never a mock server on the outbox-replay path). Pins:
 ///
@@ -179,7 +179,7 @@ struct MeasurementsRepositoryBulkDeleteTests {
     }
 }
 
-/// v0.14.8 W3 — store-level optimistic semantics for the bulk delete.
+/// Store-level optimistic semantics for the bulk delete.
 @MainActor
 @Suite("MeasurementsStore — bulk delete", .serialized, .mockURLSession)
 struct MeasurementsStoreBulkDeleteTests {

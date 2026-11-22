@@ -3,7 +3,7 @@ import SwiftUI
 import Testing
 import UIKit
 
-/// Theme-2.0 (T2-2) lock-tests on the DesignSystem primitives. Pins the
+/// Theme-2.0 lock-tests on the DesignSystem primitives. Pins the
 /// single-accent + tonal-mono contract at the call-site level so a future
 /// "let's bring back some color" regression in any one primitive trips a
 /// build break instead of slowly drifting across the app.
@@ -22,7 +22,7 @@ struct PrimitivesTheme2RegressionTests {
         arguments: [HLSparkline.Mode.line, .bar]
     )
     func sparklineModeHasNoArea(mode: HLSparkline.Mode) {
-        // Theme-2.0 (T2-2): the LinearGradient area-fill is incompatible with
+        // Theme-2.0: the LinearGradient area-fill is incompatible with
         // tonal-mono restraint. If a future change re-adds `.area`, the enum
         // exhaustiveness on the switch fails to compile. Parameterised test so
         // the compiler does the exhaustiveness check via the case-list itself

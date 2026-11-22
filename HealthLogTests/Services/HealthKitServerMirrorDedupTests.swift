@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **S1 / public #11** — a blood-pressure reading typed on the web never
+    /// A blood-pressure reading typed on the web never
     /// reached Apple Health: the server stores it as `MANUAL`, and the
     /// server→Health mirror excluded `.manual` as "already round-tripped at
     /// create-time". `.manual` is now mirrored, so these tests pin the dedup
@@ -223,7 +223,7 @@
             // The import path drops it (our id + our source), so it is never
             // uploaded again as a new APPLE_HEALTH reading.
             #expect(HealthKitSampleOwnership.isOwnEcho(externalUUID: externalUUID, isFromThisApp: true))
-            // A6 — its sync identifier, the one key a deletion keeps, names the
+            // Its sync identifier, the one key a deletion keeps, names the
             // row, so a deletion in Apple Health lands in the tombstones.
             #expect(HealthKitCopySyncIdentity.serverID(fromSyncIdentifier: first.metadata?[HKMetadataKeySyncIdentifier]) == "srv-sys-1")
         }

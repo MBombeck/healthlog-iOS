@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - #114 / #115 · 0.2 — AI capability reads for SwiftUI surfaces
+// MARK: - AI capability reads for SwiftUI surfaces
 
 extension AppContainer {
     /// Hands the capability gate to the stores whose server reads carry

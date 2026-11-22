@@ -30,7 +30,7 @@ struct InjectionBodyMap: View {
     /// Fractional positions on the `InjectionBody` asset (front view). Tuned
     /// against the rendered silhouette — see the calibration note above.
     ///
-    /// **v0.14.1 ITEM-C** — the two lowest leg markers (`thighLeft` /
+    /// The two lowest leg markers (`thighLeft` /
     /// `thighRight`) were dropped from the map per operator feedback (the
     /// calibrated thigh points sat awkwardly low on the silhouette). The
     /// `InjectionSite` enum keeps the thigh cases (server wire-compat); they
@@ -59,7 +59,7 @@ struct InjectionBodyMap: View {
         let bodyWidth = bodyHeight * Self.bodyAspect
         VStack(spacing: HLSpace.sm) {
             bodyGraphic(bodyWidth: bodyWidth)
-            // v0.14.1 ITEM-C — legend under the body image so the dashed
+            // Legend under the body image so the dashed
             // (recommended) + orange (last-used) dot semantics read at a glance.
             legend
         }
@@ -92,7 +92,7 @@ struct InjectionBodyMap: View {
         .accessibilityLabel(Text(String(localized: "Body overview")))
     }
 
-    /// **v0.14.1 ITEM-C** — dashed = recommended (rotation suggestion),
+    /// Dashed = recommended (rotation suggestion),
     /// orange = last-used site. Quiet, monochrome chrome bar under the map.
     private var legend: some View {
         HStack(spacing: HLSpace.md) {
@@ -117,8 +117,7 @@ struct InjectionBodyMap: View {
                 )
             )
         }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.secondary)
+        .hlText(.rowSubtitle)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
     }
@@ -161,7 +160,7 @@ struct InjectionBodyMap: View {
             .frame(width: hitTarget, height: hitTarget)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hlRow)
         .accessibilityLabel(Text(site.localizedLabel))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityHint(Text(hint(for: site)))

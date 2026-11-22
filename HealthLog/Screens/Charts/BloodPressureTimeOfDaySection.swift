@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.5 BP-TOD (#161, server #1331)** — "Nach Tageszeit" on the blood
+/// "Nach Tageszeit" on the blood
 /// pressure page: the morning, midday and evening means of the chart's range
 /// side by side, each with its reading count and pulse, and the
 /// morning-minus-evening difference once the server gives one.
@@ -20,7 +20,6 @@ struct BloodPressureTimeOfDaySection: View {
     /// same window.
     let days: Int
 
-    @Environment(BackendAvailability.self) private var backend
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(\.appContainer) private var appContainer
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -32,14 +31,13 @@ struct BloodPressureTimeOfDaySection: View {
     @State private var attempt = 0
 
     /// The section's placement gate, pure so the wiring is testable without a
-    /// view host: the blood pressure page only, a paired server, and a server
-    /// known to have the route. An unknown version answers no (Regel 10).
+    /// view host: the blood pressure page only, and a server known to have the
+    /// route. An unknown version answers no (Regel 10).
     nonisolated static func isAvailable(
         for kind: MetricKind,
-        hasServer: Bool,
         serverVersion: String?
     ) -> Bool {
-        guard kind == .bloodPressure, hasServer, let serverVersion else { return false }
+        guard kind == .bloodPressure, let serverVersion else { return false }
         return ServerVersionInfo(version: serverVersion).isAtLeast(BloodPressureTimeOfDayRepository.minimumServerVersion)
     }
 
@@ -47,18 +45,16 @@ struct BloodPressureTimeOfDaySection: View {
     /// capability gate reads it.
     nonisolated static func isAvailable(
         for kind: MetricKind,
-        hasServer: Bool,
         defaults: UserDefaults = .standard
     ) -> Bool {
         isAvailable(
             for: kind,
-            hasServer: hasServer,
             serverVersion: defaults.string(forKey: KnownServerVersion.defaultsKey)
         )
     }
 
     var body: some View {
-        if Self.isAvailable(for: kind, hasServer: backend.canShowCloudInsights, serverVersion: serverVersion) {
+        if Self.isAvailable(for: kind, serverVersion: serverVersion) {
             section
                 .task(id: LoadKey(days: days, attempt: attempt)) {
                     guard let model = resolvedModel() else { return }
@@ -71,10 +67,12 @@ struct BloodPressureTimeOfDaySection: View {
     private var section: some View {
         let phase = model?.phase ?? .loading
         if phase != .absent {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("insights.bpTimeOfDay.title", flush: true)
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("insights.bpTimeOfDay.title", rank: .area)
                 content(phase)
             }
+            // The header keeps its 24 and 8 pt in this stack of the page's gap.
+            .hlContainerGap(HLLayout.cardGap)
             .accessibilityIdentifier("insights.bpTimeOfDay")
         }
     }
@@ -92,8 +90,7 @@ struct BloodPressureTimeOfDaySection: View {
             HLCard {
                 if summary.isEmpty {
                     Text("insights.bpTimeOfDay.empty")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("insights.bpTimeOfDay.empty")
@@ -108,10 +105,9 @@ struct BloodPressureTimeOfDaySection: View {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
                     Text("insights.bpTimeOfDay.error")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary) { attempt += 1 }
+                    HLButton(HLControlWord.retry.key, variant: .secondary) { attempt += 1 }
                         .accessibilityIdentifier("insights.bpTimeOfDay.retry")
                 }
             }
@@ -136,8 +132,7 @@ struct BloodPressureTimeOfDaySection: View {
             }
             if let difference = summary.morningEveningDifference {
                 Text(Self.differenceLine(difference, units: units))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("insights.bpTimeOfDay.difference")
             }
@@ -147,11 +142,9 @@ struct BloodPressureTimeOfDaySection: View {
     private func column(_ part: BloodPressureTimeOfDay.PartSummary, units: UnitPreferences) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(Self.name(part.part))
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
+                .hlText(.tileLabel)
             Text(Self.hours(part))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .monospacedDigit()
             if let pair = Self.pair(part, units: units) {
                 // The pair never breaks ("134/8" over "6"); the unit moves
@@ -168,18 +161,15 @@ struct BloodPressureTimeOfDaySection: View {
                 }
             } else {
                 Text("insights.bpTimeOfDay.notEnough")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Text(Self.readings(part.readingCount))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .monospacedDigit()
             if let pulse = part.pulse {
                 Text("insights.bpTimeOfDay.pulse \(pulse)")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .monospacedDigit()
             }
         }
@@ -190,9 +180,11 @@ struct BloodPressureTimeOfDaySection: View {
         .accessibilityIdentifier("insights.bpTimeOfDay.part.\(part.part.rawValue)")
     }
 
+    /// A grid cell: the compact value size of `HLValueText`, set on the
+    /// formatted pair ("128/82", or kPa with a decimal).
     private func pairText(_ pair: String) -> some View {
         Text(verbatim: pair)
-            .font(.hlMetric(.title3))
+            .font(HLValueSize.compact.numberFont)
             .foregroundStyle(HLText.primary)
             .monospacedDigit()
             .lineLimit(1)
@@ -201,7 +193,7 @@ struct BloodPressureTimeOfDaySection: View {
 
     private func unitText(_ units: UnitPreferences) -> some View {
         Text(verbatim: units.bloodPressure.unitSuffix)
-            .font(.hlCaption2)
+            .font(HLValueSize.compact.unitFont)
             .foregroundStyle(HLText.secondary)
     }
 
@@ -230,10 +222,14 @@ extension BloodPressureTimeOfDaySection {
         }
     }
 
-    /// "04:00 bis 11:59" from the server's `[startHour, endHour)`.
-    nonisolated static func hours(_ part: BloodPressureTimeOfDay.PartSummary) -> String {
-        let start = String(format: "%02d:00", part.startHour)
-        let end = String(format: "%02d:59", (part.endHour + 23) % 24)
+    /// "04:00 bis 11:59" from the server's `[startHour, endHour)`, in the
+    /// 12- or 24-hour form the user chose.
+    nonisolated static func hours(
+        _ part: BloodPressureTimeOfDay.PartSummary,
+        locale: Locale = HLTimeFormat.current().formattingLocale
+    ) -> String {
+        let start = HLTimeFormat.clock(minutesAfterMidnight: part.startHour * 60, locale: locale)
+        let end = HLTimeFormat.clock(minutesAfterMidnight: ((part.endHour + 23) % 24) * 60 + 59, locale: locale)
         return String(localized: "insights.bpTimeOfDay.hours \(start) \(end)")
     }
 

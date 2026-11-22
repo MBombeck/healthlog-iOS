@@ -23,7 +23,7 @@ public enum CoachCadenceSuggestionsDefaultsKeys {
     public static let serverMirrorEnabled: String = "hl.settings.coach.reminderSuggestions.enabled"
 }
 
-/// **W-COACH-CADENCE (#30)** — `@MainActor @Observable` driver behind the
+/// `@MainActor @Observable` driver behind the
 /// proactive coach cadence-suggestion cards (Insights overview, near the coach
 /// surface).
 ///
@@ -65,7 +65,7 @@ public final class CoachCadenceSuggestionsStore {
     /// native reminders list. Weak: the store must not extend its life.
     private weak var remindersStore: MeasurementRemindersStore?
     private let defaults: UserDefaults
-    /// W-FOCUS-FILTER — resolves the live Focus-filter config. Injected so tests
+    /// Resolves the live Focus-filter config. Injected so tests
     /// stay isolated from the shared App Group suite; production reads the store.
     private let focusFilterConfig: @MainActor () -> FocusFilterConfig
 
@@ -104,7 +104,7 @@ public final class CoachCadenceSuggestionsStore {
     public func present(_ suggestion: CoachCadenceSuggestion) {
         guard enabledOptIn() else { return }
         guard !dismissedIDs.contains(suggestion.cadenceId) else { return }
-        // W-FOCUS-FILTER — while a HealthLog Focus filter is active with "pause
+        // While a HealthLog Focus filter is active with "pause
         // coach nudges" on, hold back the proactive cadence cards. The card never
         // carries PHI; the inline in-chat card is unaffected (the user is
         // actively in a coach turn there).
@@ -118,7 +118,7 @@ public final class CoachCadenceSuggestionsStore {
     /// inline suggestions are surfaced as cards. A nil stored value (never
     /// toggled) reads as ON.
     private func enabledOptIn() -> Bool {
-        // Build 9 (9.2) — the server mirror wins once it has been written (Coach
+        // The server mirror wins once it has been written (Coach
         // reached). It is authoritative across devices; the legacy device-local
         // key is only the pre-server fallback.
         let mirror = CoachCadenceSuggestionsDefaultsKeys.serverMirrorEnabled

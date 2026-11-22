@@ -4,20 +4,21 @@ import SwiftUI
 /// bound, panel, and a context note are optional. A duplicate name surfaces the
 /// server `409` as an inline ``HLFormErrorText`` (`biomarker.duplicate.error`).
 struct BiomarkerEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: LabsStore
     /// `nil` → create; non-nil → edit that marker.
     let existing: BiomarkerDTO?
 
     @State private var name: String
     @State private var unit: String
-    /// #160 — "No unit": the marker is a ratio or an index and is stored
+    /// "No unit": the marker is a ratio or an index and is stored
     /// with the unity `"1"`. ``unit`` keeps what was typed for the way back.
     @State private var noUnit: Bool
     /// Whether the "No unit" switch is offered (server 1.46.6, or a marker
     /// that already has no unit).
     private let offersNoUnit: Bool
+    /// `false` for a marker with an empty unit on a server that would refuse
+    /// any unit change (``LabUnit/markerUnitEditable(stored:defaults:)``).
+    private let unitEditable: Bool
     @State private var lowerBoundText: String
     @State private var upperBoundText: String
     @State private var panel: String
@@ -32,11 +33,9 @@ struct BiomarkerEditorSheet: View {
     /// Purely a picker binding; the seed's values are copied into the editable
     /// fields on selection and the slug is never sent to the server.
     @State private var selectedSeedSlug: String?
-    @State private var isSaving = false
     @State private var inlineError: String?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial-focus + submit-chain across the text fields.
+    /// Drives the discard-confirmation dialog.
+    /// Initial-focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -47,13 +46,16 @@ struct BiomarkerEditorSheet: View {
         self.store = store
         self.existing = existing
         _name = State(initialValue: existing?.name ?? "")
-        let storedWithoutUnit = LabUnit.isUnity(existing?.unit)
+        // An empty unit (minted from a text result) opens like "No unit".
+        let storedWithoutUnit = existing.map { LabUnit.isNoUnit($0.unit) } ?? false
         _unit = State(initialValue: storedWithoutUnit ? "" : existing?.unit ?? "")
         _noUnit = State(initialValue: storedWithoutUnit)
-        offersNoUnit = LabUnit.offersNoUnit(current: existing?.unit)
+        offersNoUnit = storedWithoutUnit || LabUnit.offersNoUnit(current: existing?.unit)
+        unitEditable = LabUnit.markerUnitEditable(stored: existing?.unit)
         _lowerBoundText = State(initialValue: existing?.lowerBound.map { $0.formatted() } ?? "")
         _upperBoundText = State(initialValue: existing?.upperBound.map { $0.formatted() } ?? "")
-        _panel = State(initialValue: existing?.panel ?? "")
+        // The stored panel can be a key ("coagulation"); the field shows its label.
+        _panel = State(initialValue: LabPanelName.display(existing?.panel) ?? "")
         _context = State(initialValue: existing?.context ?? "")
         _hidden = State(initialValue: existing?.hidden ?? false)
     }
@@ -72,97 +74,115 @@ struct BiomarkerEditorSheet: View {
         LabUnit.wire(typed: unit, noUnit: noUnit)
     }
 
-    /// FORM-1 — any field diverges from the initial (empty on create, prefilled
+    /// Any field diverges from the initial (empty on create, prefilled
     /// on edit) value.
     private var isDirty: Bool {
         name != (existing?.name ?? "")
-            || (wireUnit ?? "") != (existing?.unit ?? "")
+            || unitChanged
             || lowerBoundText != (existing?.lowerBound.map { $0.formatted() } ?? "")
             || upperBoundText != (existing?.upperBound.map { $0.formatted() } ?? "")
-            || panel != (existing?.panel ?? "")
+            || panel != (LabPanelName.display(existing?.panel) ?? "")
             || context != (existing?.context ?? "")
             || hidden != (existing?.hidden ?? false)
     }
 
+    /// Whether the unit differs from the stored one in a way a save would send.
+    private var unitChanged: Bool {
+        guard let existing else { return wireUnit != nil }
+        return LabUnit.markerPatchUnit(stored: existing.unit, edited: wireUnit) != nil
+    }
+
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "biomarker.edit.title" : "biomarker.add.sheetTitle",
+            action: isEditing
+                ? .save(isEnabled: canSave) { await save() }
+                : .add(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                // Build 3 / item 3.2 — seed catalog. CREATE only: on edit the
-                // marker already has an identity and overwriting it from a seed
-                // would silently re-point the operator's history.
-                if !isEditing {
-                    seedSection
-                }
-                Section("biomarker.editor.identity") {
-                    TextField("biomarker.editor.name", text: $name)
-                        .focused($focusedField, equals: .name)
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .unit }
-                    TextField("biomarker.editor.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
-                        .focused($focusedField, equals: .unit)
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .panel }
-                        .disabled(noUnit)
-                    if offersNoUnit {
-                        LabNoUnitToggle(isOn: $noUnit)
+                Group {
+                    // Build 3 / item 3.2 — seed catalog. CREATE only: on edit the
+                    // marker already has an identity and overwriting it from a seed
+                    // would silently re-point the operator's history.
+                    if !isEditing {
+                        seedSection
                     }
-                    TextField("biomarker.editor.panel", text: $panel)
-                        .focused($focusedField, equals: .panel)
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .lowerBound }
-                }
-                Section("biomarker.editor.bounds") {
-                    TextField("labs.add.referenceLow", text: $lowerBoundText)
-                        .keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .lowerBound)
-                    TextField("labs.add.referenceHigh", text: $upperBoundText)
-                        .keyboardType(.decimalPad)
-                        .focused($focusedField, equals: .upperBound)
-                }
-                Section("biomarker.editor.context") {
-                    TextField("biomarker.editor.contextField", text: $context, axis: .vertical)
-                        .lineLimit(2 ... 5)
-                        .focused($focusedField, equals: .context)
-                }
-                // Build 3 / item 3.2 — hide instead of delete. Only on edit.
-                if isEditing {
-                    Section {
-                        Toggle("biomarker.editor.hidden", isOn: $hidden)
+                    Section("biomarker.editor.identity") {
+                        LabFormField("biomarker.editor.name") {
+                            TextField("biomarker.editor.name", text: $name)
+                                .focused($focusedField, equals: .name)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .unit }
+                        }
+                        // "No unit" hides the field instead of leaving an
+                        // empty one that cannot be typed into.
+                        if !noUnit {
+                            LabFormField("biomarker.editor.unit") {
+                                TextField("labs.unit.placeholder", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
+                                    .focused($focusedField, equals: .unit)
+                                    .submitLabel(.next)
+                                    .onSubmit { focusedField = .panel }
+                                    .disabled(!unitEditable)
+                            }
+                        }
+                        if offersNoUnit {
+                            LabNoUnitToggle(isOn: $noUnit)
+                                .disabled(!unitEditable)
+                        }
+                        if !unitEditable {
+                            Text("biomarker.editor.unit.waitsForServer")
+                                .hlText(.note)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        LabFormField("biomarker.editor.panel") {
+                            TextField("biomarker.editor.panel", text: $panel)
+                                .focused($focusedField, equals: .panel)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .lowerBound }
+                        }
+                        LabPanelSuggestionChips(panels: store.customPanels, text: $panel)
+                    }
+                    Section("biomarker.editor.bounds") {
+                        LabFormField("labs.add.referenceLow") {
+                            TextField("labs.add.referenceLow", text: $lowerBoundText)
+                                .keyboardType(.decimalPad)
+                                .focused($focusedField, equals: .lowerBound)
+                        }
+                        LabFormField("labs.add.referenceHigh") {
+                            TextField("labs.add.referenceHigh", text: $upperBoundText)
+                                .keyboardType(.decimalPad)
+                                .focused($focusedField, equals: .upperBound)
+                        }
+                    }
+                    Section("biomarker.editor.context") {
+                        TextField("biomarker.editor.contextField", text: $context, axis: .vertical)
+                            .lineLimit(2 ... 5)
+                            .focused($focusedField, equals: .context)
+                    }
+                    // Build 3 / item 3.2 — hide instead of delete. Only on edit.
+                    if isEditing {
+                        Section {
+                            Toggle(isOn: $hidden) {
+                                HLRowTitle("biomarker.editor.hidden")
+                            }
                             .accessibilityIdentifier("biomarker.editor.hidden")
-                    } footer: {
-                        Text("biomarker.editor.hidden.footer")
+                        } footer: {
+                            Text("biomarker.editor.hidden.footer")
+                        }
+                    }
+                    if let inlineError {
+                        Section { HLFormErrorText(inlineError) }
                     }
                 }
-                if let inlineError {
-                    Section { HLFormErrorText(inlineError) }
-                }
+                .hlFormRowSurface()
             }
-            .navigationTitle(Text(isEditing ? "biomarker.edit.title" : "biomarker.add.sheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            // 1.4 B2 — the reference-range citation pushes inside this sheet.
-            .hlSheetStack()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("labs.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("labs.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave || isSaving)
-                }
-            }
-            // FORM-2 — seed focus onto the name field once the sheet settles.
+            .hlPageMargins()
+            // Seed focus onto the name field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = .name
             }
-        }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
         }
     }
 
@@ -186,7 +206,7 @@ struct BiomarkerEditorSheet: View {
                     }
                 }
             } label: {
-                Text("biomarker.editor.seed.label")
+                HLRowTitle("biomarker.editor.seed.label")
             }
             .accessibilityIdentifier("biomarker.editor.seed")
             .onChange(of: selectedSeedSlug) { _, newValue in
@@ -218,14 +238,13 @@ struct BiomarkerEditorSheet: View {
         inlineError = nil
     }
 
-    private func save() async {
-        isSaving = true
+    /// Returns `true` when the sheet may close.
+    private func save() async -> Bool {
         inlineError = nil
-        defer { isSaving = false }
 
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let trimmedUnit = wireUnit ?? ""
-        let trimmedPanel = panel.trimmingCharacters(in: .whitespaces)
+        let trimmedPanel = LabPanelName.toSave(typed: panel, stored: existing?.panel)
         let trimmedContext = context.trimmingCharacters(in: .whitespaces)
         let lower = LocaleDecimalParser.parse(lowerBoundText)
         let upper = LocaleDecimalParser.parse(upperBoundText)
@@ -241,7 +260,9 @@ struct BiomarkerEditorSheet: View {
                 id: existing.id,
                 BiomarkerPatch(
                     name: trimmedName,
-                    unit: trimmedUnit,
+                    // Only a real change: a rename of a marker without a unit
+                    // must not send one (server 1.47.6 answers 422).
+                    unit: LabUnit.markerPatchUnit(stored: existing.unit, edited: wireUnit),
                     lowerBound: .fromEditor(lowerBoundText, parse: { LocaleDecimalParser.parse($0) }),
                     upperBound: .fromEditor(upperBoundText, parse: { LocaleDecimalParser.parse($0) }),
                     context: .fromEditor(trimmedContext),
@@ -263,11 +284,12 @@ struct BiomarkerEditorSheet: View {
         }
 
         if ok {
-            dismiss()
+            return true
         } else if store.lastErrorWasDuplicateName {
             inlineError = String(localized: "biomarker.duplicate.error")
         } else {
             inlineError = store.lastError ?? String(localized: "labs.save.failed")
         }
+        return false
     }
 }

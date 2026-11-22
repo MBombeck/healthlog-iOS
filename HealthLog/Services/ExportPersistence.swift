@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-03 — the protected export write boundary.**
+/// **The protected export write boundary.**
 ///
 /// Every PHI export the app produces — the full backup, a per-domain CSV, the
 /// health-record ZIP, the encrypted `HLX1` archive, the FHIR bundle — ends in
@@ -23,7 +23,7 @@ import Foundation
 actor ExportPersistence {
     private let writer: ExportPersistenceWriter
 
-    /// - Parameter writer: the byte-write seam (09-01). The live default is the
+    /// - Parameter writer: the byte-write seam. The live default is the
     ///   same `Data.write` the store called inline; tests pass a counting writer
     ///   that records the byte count, the options and the originating thread.
     init(writer: ExportPersistenceWriter = .live) {

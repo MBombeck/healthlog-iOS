@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// **W-B189 (#23) — `MEASUREMENT_REMINDER` (preventive-care / Vorsorge)
+    /// **`MEASUREMENT_REMINDER` (preventive-care / Vorsorge)
     /// action handlers**, split out of `NotificationService.swift` to keep the
     /// parent file under the SwiftLint LOC ceiling.
     ///
@@ -30,7 +30,7 @@ import Foundation
         /// `measurement.done` — "Erledigt"/complete on a preventive-care
         /// reminder.
         ///
-        /// **v1.18.6 (#32) — server-authoritative completion.** The server now
+        /// **v1.18.6 — server-authoritative completion.** The server now
         /// publishes `POST /api/measurement-reminders/{id}/complete` (idempotent,
         /// owner-scoped, fires no notification) — the explicit user-action twin
         /// of `satisfy`. When the push carries a resolvable `reminderId` AND the
@@ -99,10 +99,10 @@ import Foundation
         }
     }
 
-    /// **W-B189 (#23) — UserDefaults mirror of the server's
+    /// **UserDefaults mirror of the server's
     /// `notificationPrefs.measurementReminder.clientManaged` flag.**
     ///
-    /// **CU-26: this is a SUPPRESSION flag, not an opt-in.** Server-side
+    /// **This is a SUPPRESSION flag, not an opt-in.** Server-side
     /// `clientManaged == true` means "do not deliver" — until v1.33.1 on every
     /// channel, since v1.33.1 on APNs only. The card used to be labelled
     /// "Erinnerungen", so switching it ON to *receive* preventive-care reminders
@@ -114,7 +114,7 @@ import Foundation
     /// Mirrors the `LowStockRunwayPrefStore` / `MoodReminderPrefStore` precedent:
     /// the server is the authority for *firing* the preventive-care reminder, but
     /// the Settings toggle wants the last-known value immediately (before the
-    /// prefs payload loads, or offline / standalone). The Settings card + the
+    /// prefs payload loads, or offline). The Settings card + the
     /// prefs cold-read write it whenever the server value is known; the card
     /// reads it back. Default **off** when never written (no key) — opt-in,
     /// matching the medication precedent.

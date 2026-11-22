@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W3-MEDCONTRACT (v0.14.8) — ledger-first detail-store derivations.**
+/// **Ledger-first detail-store derivations.**
 ///
 /// When the server dose-history ledger is loaded, `complianceSummary()` and
 /// `verlaufGlyphs()` must read it verbatim instead of re-deriving from the

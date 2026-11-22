@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// CU-16 (A6) — tolerance against server enums that grew after v1.32.8.
+/// Tolerance against server enums that grew after v1.32.8.
 ///
 /// The shared rule every suite here locks: **a value we do not know must never
 /// be fatal.** Either it decodes into a typed case we added, or it lands in a
@@ -16,9 +16,9 @@ import Testing
 /// a fallback and not a lookup table with one more entry.
 ///
 /// Deliberately NOT covered here (owned by other units so two agents never
-/// touch one file): `gender` (CU-17), `SyncHealth.verdict` (CU-21),
-/// health-score pillars + `deltaReason` (CU-31), derived-metric IDs +
-/// `PriorityItem.kind` (CU-30), `glucoseContext` / `GlucoseContext` (CU-18).
+/// touch one file): `gender`, `SyncHealth.verdict`,
+/// health-score pillars + `deltaReason`, derived-metric IDs +
+/// `PriorityItem.kind`, `glucoseContext` / `GlucoseContext`.
 private func makeCU16API() -> APIClient {
     let env = AppEnvironment(
         baseURL: URL(string: "https://test.healthlog.local")!,

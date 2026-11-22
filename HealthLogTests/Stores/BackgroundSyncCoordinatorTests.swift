@@ -17,7 +17,7 @@
         private var _syncPassCallCount = 0
         private var _writeCallCount = 0
         private var shouldThrow: Bool
-        /// CYC-3 — the no-prompt biological-sex signal this mock returns, so a
+        /// The no-prompt biological-sex signal this mock returns, so a
         /// composition test can prove `AppContainer` actually wires the gate's
         /// `biologicalSexProvider` through to `healthKit.cycleBiologicalSex()`
         /// (the provider was dead — defaulted to `.unknown` — before the wiring).
@@ -56,7 +56,7 @@
             }
         }
 
-        /// S1 — what the create-time write received (its id is the one stamped
+        /// What the create-time write received (its id is the one stamped
         /// into `HKMetadataKeyExternalUUID`).
         private var _writtenMeasurements: [HealthLog.Measurement] = []
 
@@ -64,7 +64,7 @@
             lock.withLock { _writtenMeasurements }
         }
 
-        /// W-HKBACKFILL — every batch handed to the server-origin mirror; B5 (1.4):
+        /// Every batch handed to the server-origin mirror; B5 (1.4):
         /// `mirrorDecides == false` plays a pass that could not decide.
         private var _mirrorCallCount = 0
         private var _mirroredMeasurements: [HealthLog.Measurement] = []
@@ -87,30 +87,30 @@
         }
 
         func writeMood(_: MoodEntry) async throws {
-            // S4 / QA6 #2: HKStateOfMind mirror. Mock no-op.
+            // HKStateOfMind mirror. Mock no-op.
         }
 
         func deleteMood(id _: String) async throws {
-            // v0.10.0 W10 M1 — HKStateOfMind mirror delete. Mock no-op.
+            // HKStateOfMind mirror delete. Mock no-op.
         }
 
         func requestMoodAuthorization() async throws {
-            // v0.10.0 W-Mood-B — State-of-Mind opt-in auth. Mock no-op.
+            // State-of-Mind opt-in auth. Mock no-op.
         }
 
         func startMoodImport(repo _: MoodRepository, userID _: String?) async {
-            // v0.10.0 W-Mood-B — State-of-Mind import. Mock no-op.
+            // State-of-Mind import. Mock no-op.
         }
 
         func stopMoodImport() async {
-            // v0.10.0 W-Mood-B — State-of-Mind import. Mock no-op.
+            // State-of-Mind import. Mock no-op.
         }
 
         func resetMoodImport() async {
-            // v0.10.0 W10 M2 — State-of-Mind import anchor reset. Mock no-op.
+            // State-of-Mind import anchor reset. Mock no-op.
         }
 
-        /// v0.14.8 W3 (AUDIT-SECURITY-B175 H-1) — recorded so the logout-
+        /// Recorded so the logout-
         /// completeness suite can pin that `performFullLocalLogout` resets the
         /// cycle import observer + per-user anchors on every path.
         var resetCycleImportCallCount: Int {
@@ -145,11 +145,6 @@
 
         func setInitialBackfillCutoff(_ cutoff: Date?) async {
             lock.withLock { _initialBackfillCutoff = cutoff }
-        }
-
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {
-            // Test-Doppel — Composition-Root wires the live reader;
-            // wiring-tests don't exercise the per-sample gate.
         }
 
         var initialBackfillCutoff: Date? {
@@ -331,7 +326,7 @@
 
         @Test("W-LA-BG: runBGSync drives the Live-Activity reconcile hook AFTER the med reconcile")
         func bgSyncDrivesLiveActivityReconcileHook() async {
-            // v0.16.1 W-LA-BG — a dose that becomes due while the app is
+            // A dose that becomes due while the app is
             // backgrounded must have its medication Live Activity STARTED from
             // the guaranteed-sync BGProcessingTask, not only the local
             // notification. This pins that (1) the LA-reconcile hook fires from
@@ -385,7 +380,7 @@
             #expect(spy.lastSuccess == true)
         }
 
-        // MARK: - Reliability M1 (audit-v0162) — BGTask drains the outbox
+        // MARK: - Reliability M1 — BGTask drains the outbox
 
         /// **Restated by plan 07-09 — same contract, reached through the one
         /// route.** The guaranteed-sync BGProcessingTask must still drain the
@@ -455,7 +450,7 @@
             #expect(await unreachableDrainCount.value == 0)
         }
 
-        // MARK: - W-HK-RELIABILITY H-3 — BGTask completion exactly-once + expiration
+        // MARK: - BGTask completion exactly-once + expiration
 
         /// **Restated by plan 07-09.** It used to assert that the wake called the
         /// writer's shimmed sweep once *and* the workout hook once — two of the
@@ -501,7 +496,7 @@
             // the task exactly once, and the eventual normal-path completion
             // must be a no-op (exactly-once guarantee).
             //
-            // Plan 07-09: the pass blocks in the route rather than in the
+            // The pass blocks in the route rather than in the
             // writer's shimmed sweep, because the wake no longer calls that
             // sweep. The predicate the route receives is the same
             // `BGTask.expirationHandler` flag the handler sets.
@@ -778,7 +773,6 @@
         func attachUploader(_: MeasurementBatchUploader) async {}
         func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
         func setInitialBackfillCutoff(_: Date?) async {}
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     }
 
     /// Minimaler async-Latch fuer den Detach-Test: erlaubt einem detached Task zu
@@ -839,7 +833,7 @@
         }
     }
 
-    /// Plan 07-09 — a one-shot lock-guarded box, so an assertion made inside a
+    /// A one-shot lock-guarded box, so an assertion made inside a
     /// `@Sendable` route closure can be read back on the test task.
     final class AsyncBox: @unchecked Sendable {
         private let lock = NSLock()
@@ -854,7 +848,7 @@
         }
     }
 
-    /// Plan 07-09 — records the `HealthSyncTrigger` each wake names, so
+    /// Records the `HealthSyncTrigger` each wake names, so
     /// "exactly once, under one name" is an assertion rather than a claim.
     actor TriggerRouteRecorder {
         private(set) var values: [HealthSyncTrigger] = []

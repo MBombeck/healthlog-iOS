@@ -16,6 +16,38 @@
       "values": 1,
       "keys": 1,
       "fingerprint": "6a399c49fa1a7ace8575590d667e60240b391b6da437d36604fb38552cdec01c"
+    },
+    {
+      "language": "ko",
+      "by": "Machine check against de and en, not a medical professional",
+      "date": "2026-11-14",
+      "values": 154,
+      "keys": 154,
+      "fingerprint": "c551de68241de62d1759c1dbd6ce62d717d93865f1f23702f60ed061bb05e278"
+    },
+    {
+      "language": "en",
+      "by": "Machine check against de, not a medical professional",
+      "date": "2026-11-15",
+      "values": 2,
+      "keys": 2,
+      "fingerprint": "2e1fb2da7a41f9283870ea41d787bd15c5a64b0071e1072b4ed37103be916320"
+    },
+    {
+      "language": "nl",
+      "by": "Machine check against de, not a medical professional",
+      "date": "2026-11-15",
+      "values": 2,
+      "keys": 2,
+      "fingerprint": "810e9c0f2f3e4abf59a313d85bbae4a020ecbca64c93cbbf8a66624d6a9ad2e8"
+    },
+    {
+      "language": "ko",
+      "by": "Machine check against de, not a medical professional",
+      "date": "2026-11-15",
+      "values": 2,
+      "keys": 2,
+      "fingerprint": "aa83432fc4e48c0f65918c56cd6306cb0c2e2eb88c78c38da97c3a56871158d1"
     }
   ]
 }

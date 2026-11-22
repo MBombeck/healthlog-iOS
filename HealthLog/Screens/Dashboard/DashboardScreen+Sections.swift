@@ -2,18 +2,18 @@ import SwiftUI
 
 // MARK: - Highlight insight card
 
-// v0.5.1-A B3 — `ComplianceRingCard` extracted to its own file so the
+// `ComplianceRingCard` extracted to its own file so the
 // per-snapshot subtitle helper doesn't push `DashboardScreen.swift` past
 // the 600-line file-length lint baseline. See `ComplianceRingCard.swift`.
 
 struct HighlightInsightCard: View {
     let insight: Insight?
-    /// 1.4 B2 — the server's long `body` stays behind "Mehr anzeigen"; the
+    /// The server's long `body` stays behind "Mehr anzeigen"; the
     /// card opens with title and summary only.
     @State private var showsBody = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// #115 B6 — the cards on this tile are rule-based since server v1.39
+    /// The cards on this tile are rule-based since server v1.39
     /// (`insights/cards` answers `provider: "rules"`), so neither the title nor
     /// the symbol may suggest an assistant wrote them.
     static let symbolName = "lightbulb"
@@ -23,22 +23,24 @@ struct HighlightInsightCard: View {
 
     var body: some View {
         if let insight {
-            HLCard(style: .elevated) {
+            HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    // 1.4 B4 — Today's one card heading: the metric tiles'
-                    // glyph and title. #115 · 0.2 — no provider badge: from
+                    // Today's one card heading: the metric tiles'
+                    // glyph and title. No provider badge: from
                     // server v1.39 `insights/cards` are rule-based.
                     HLTileHeaderRow(icon: Self.symbolName, title: Text(Self.title)) { EmptyView() }
+                    // Title and text in the size of a card's content: the
+                    // tile header above stays the card's one heading.
                     Text(insight.title)
-                        .font(.hlTitle3)
+                        .font(HLRowTitle.font)
                         .foregroundStyle(HLText.primary)
-                    // 1.4 B2 — never cut off: the summary used to stop after
+                        .fixedSize(horizontal: false, vertical: true)
+                    // Never cut off: the summary used to stop after
                     // three lines with the full body right under it.
                     Text(insight.summary)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
-                    // v0.7.0 W-API-RENDER — the server sends a full `body`
+                    // The server sends a full `body`
                     // prose paragraph + structured `recommendations` (each
                     // with an optional `actionURL`). The body renders verbatim
                     // (MDR: never paraphrase), on request.
@@ -47,18 +49,16 @@ struct HighlightInsightCard: View {
                     {
                         if showsBody {
                             Text(body)
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button {
+                        HLLinkButton(
+                            showsBody ? "dashboard.highlight.showFewer" : "dashboard.highlight.showMore",
+                            alignment: .leading,
+                            isExpanded: showsBody
+                        ) {
                             withAnimation(reduceMotion ? nil : HLMotion.spring) { showsBody.toggle() }
-                        } label: {
-                            Text(showsBody ? "Show fewer" : "Show more")
-                                .font(.hlSubhead.weight(.medium))
-                                .foregroundStyle(HLText.secondary)
                         }
-                        .buttonStyle(.plain)
                         .accessibilityIdentifier("dashboard.highlight.toggle")
                     }
                     InsightRecommendationActions(recommendations: insight.recommendations)
@@ -68,7 +68,7 @@ struct HighlightInsightCard: View {
     }
 }
 
-/// v0.7.0 W-API-RENDER — renders the action buttons for an insight's
+/// Renders the action buttons for an insight's
 /// `recommendations`. Only entries that carry an `actionURL` become tappable
 /// buttons (a recommendation without a deep-link is shown as a plain bullet
 /// so the prose isn't lost). Opens via the system `openURL` so the URL the
@@ -82,24 +82,15 @@ private struct InsightRecommendationActions: View {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 ForEach(recommendations) { rec in
                     if let url = rec.actionURL {
-                        Button {
+                        // The link leaves the card for the server's target:
+                        // the one external sign, in the shared button.
+                        HLButton(
+                            Text(verbatim: rec.label),
+                            systemImage: HLRowIndicator.externalSymbol,
+                            variant: .secondary
+                        ) {
                             openURL(url)
-                        } label: {
-                            HStack(spacing: HLSpace.xs) {
-                                Image(systemName: "arrow.up.forward.app")
-                                    .font(.hlIcon(HLIconSize.sm))
-                                Text(rec.label)
-                                    .font(.hlSubhead.weight(.semibold))
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                            }
-                            .foregroundStyle(HLText.primary)
-                            .padding(.vertical, HLSpace.xs)
-                            .padding(.horizontal, HLSpace.sm)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
                         }
-                        .hlPressable() // QOL-AUDIT H1: press feedback (M1 filled pill)
                         .accessibilityHint(Text(String(localized: "Opens the recommended action")))
                     } else {
                         HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
@@ -112,8 +103,7 @@ private struct InsightRecommendationActions: View {
                                 .foregroundStyle(HLText.tertiary)
                                 .accessibilityHidden(true) // decorative bullet
                             Text(rec.label)
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .accessibilityElement(children: .combine)
@@ -130,21 +120,21 @@ private struct InsightRecommendationActions: View {
 struct MetricsGrid: View {
     let metrics: [DashboardMetric]
     let states: [MetricKind: MetricDataState]
-    /// W-IMPL-MOTION-POLISH (v0.5.5.1) — matched-geometry namespace forwarded
+    /// Matched-geometry namespace forwarded
     /// from `DashboardScreen.matchedGeometryNamespace`. `nil` under
     /// reduce-motion so the tile + destination skip the shared-element
     /// transition entirely.
     let matchedNamespace: Namespace.ID?
-    /// v0.8.7 W-NATIVE-REORDER — the raw zoom namespace (never `nil`) for the
+    /// The raw zoom namespace (never `nil`) for the
     /// native `.matchedTransitionSource(id:in:)`. A transition source must
     /// always be registered; reduce-motion is handled at the destination push,
     /// which only adopts `.navigationTransition(.zoom)` when motion is allowed.
     let zoomNamespace: Namespace.ID
-    /// v0.8.7 W-NATIVE-REORDER — true when motion is allowed; gates the subtle
+    /// True when motion is allowed; gates the subtle
     /// scroll-entrance transition. The zoom push itself stays the default
     /// system transition under reduce-motion (harmless, no extra motion).
     let allowsMotion: Bool
-    /// v0.6.2.x bug-c10-ios-direct — HK-direct today step total. Forwarded
+    /// HK-direct today step total. Forwarded
     /// into each `DashboardTileRouter`; only the Steps tile honors it.
     var liveTodayStepsOverride: Double?
     /// Build 7 / item 7.1 — digest (7-/30-day averages) + personal targets
@@ -159,15 +149,21 @@ struct MetricsGrid: View {
     /// v0.14 A — needed for the long-press "remove from Home" affordance on
     /// dashboard tiles (mirrors the Insights pin gesture).
     @Environment(\.appContainer) private var appContainer
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        // v0.8.7 W-NATIVE-REORDER — the custom UICollectionView jiggle-reorder
+        // The custom UICollectionView jiggle-reorder
         // engine is gone (it broke four times; the home-screen jiggle is not a
-        // public Apple API). Dashboard tiles are all full-width, so a plain
-        // `LazyVStack` renders them natively. Reorder / add / remove now lives
+        // public Apple API). Reorder / add / remove now lives
         // entirely in the native `DashboardCustomizationScreen` (List + .onMove
         // + visibility toggles), reachable from the always-on toolbar button.
-        LazyVStack(spacing: HLSpace.md) {
+        // Tiles sit closer than cards: the grid is denser than the card run.
+        // One full-width column on the phone and in a narrow column, as many
+        // tiles side by side as the measured width holds elsewhere. Eager,
+        // like the page around it: a handful of tiles, and a lazy stack in a
+        // page has frozen the main thread before.
+        let grid = TodayLayout.textSizedGrid(dynamicTypeSize)
+        grid {
             ForEach(metrics) { metric in
                 tileButton(for: metric)
             }
@@ -191,16 +187,17 @@ struct MetricsGrid: View {
             // measurable in Instruments. No behavioural effect.
             .hlSignpostFirstPaint(.tileCachePaint)
         }
-        // W1-7: app-wide press-feedback (scaleEffect 0.97 + selection-haptic)
-        .hlPressable()
+        // App-wide press-feedback (scaleEffect 0.97 + selection-haptic); the
+        // tile rises under the pointer like every card.
+        .hlPressable(hover: .lift)
         .accessibilityAddTraits(.isButton)
-        // v0.8.7 W-NATIVE-REORDER — native iOS-18 zoom transition source. The
+        // Native iOS-18 zoom transition source. The
         // `navigationDestination` content applies `.navigationTransition(.zoom(
         // sourceID:in:))` with the same id + namespace, so the tile zooms into
         // the chart-detail screen. Mirrors `ChartDetailScreen`'s fullscreen
         // zoom usage.
         .matchedTransitionSource(id: metric.kind, in: zoomNamespace)
-        // v0.8.7 W-TILE-DYNAMICS — subtle scroll-entrance fade + scale. Kept
+        // Subtle scroll-entrance fade + scale. Kept
         // restrained (operator wants no gamification). Neutralised under
         // reduce-motion: the modifier collapses to the identity phase.
         .scrollTransition { content, phase in

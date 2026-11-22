@@ -46,14 +46,7 @@ public final class MoodTagCatalogStore {
         catalog.label(forTagKey: key)
     }
 
-    /// True iff `key` is a known structured-tag key — lets the read-back
-    /// surface split structured chips (icon + catalog label) from legacy
-    /// free-text tags.
-    public func isStructuredTag(_ key: String) -> Bool {
-        catalog.containsTag(key)
-    }
-
-    /// v0.14.8 W3 (AUDIT-SECURITY-B175 M-1) — drop the per-user catalog back
+    /// Drop the per-user catalog back
     /// to the bundled fallback on logout. The catalog can contain the previous
     /// user's CUSTOM tags (health-revealing labels) which the container-
     /// lifetime store would otherwise paint into the next user's picker.

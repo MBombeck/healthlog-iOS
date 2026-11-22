@@ -4,8 +4,7 @@ import SwiftUI
 ///
 /// A clean, monochrome form to log one cycle day per the v1.15 LOCKED contract.
 /// Reachable only via the gated `.cycle` row in `CapturePickerSheet` (women-only
-/// resolution + explicit opt-in, hard-gated behind `FeatureFlag.cycleTracking`),
-/// so an ineligible / opted-out user can never reach it.
+/// resolution + explicit opt-in), so an ineligible / opted-out user can never reach it.
 ///
 /// Saves go through the EXISTING write path — `CycleStore.commitCapture` →
 /// `CycleRepository.logDayLog` (+ optional `period`) (optimistic POST → Outbox
@@ -17,7 +16,7 @@ import SwiftUI
 /// **Privacy:** cycle data is highly sensitive — this view never logs field
 /// values; the store + repo log counts/states only.
 ///
-/// The calendar / prediction surface (C5) + the phase-aware explainer land in
+/// The calendar / prediction surface + the phase-aware explainer land in
 /// the next wave; this sheet only needs to LOG correctly with a minimal
 /// post-save confirmation.
 struct CycleCaptureSheet: View {
@@ -25,10 +24,10 @@ struct CycleCaptureSheet: View {
     let healthKit: AnyHealthKitWriter?
     /// Optional initial day (C5 calendar day-tap seeds the editor to that date).
     var initialDate: Date?
-    let onDismiss: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     @State private var date: Date = .now
-    /// #115 P2 — the basal temperature reads in the account's unit; the stepper
+    /// The basal temperature reads in the account's unit; the stepper
     /// still steps and stores canonical °C.
     @Environment(\.unitPreferences) private var units
     /// Pending period start/end choice — committed together with the day-log on
@@ -41,6 +40,8 @@ struct CycleCaptureSheet: View {
     @State private var symptomSeverity: [String: Int] = [:]
     @State private var hasBBT = false
     @State private var bbt: Double = 36.5
+    /// What the temperature field holds; saving waits for a valid reading.
+    @State private var bbtEntry: HLNumberEntry.State = .empty
     /// v1.16.15 — mark a disturbed (fever / late) reading excluded from the
     /// temperature evaluation. Only offered while a BBT reading is present.
     @State private var temperatureExcluded = false
@@ -61,7 +62,7 @@ struct CycleCaptureSheet: View {
 
     @State private var isSaving = false
     @State private var error: String?
-    /// **CU-25 (#72) — the reconciliation moment.** Flow logged on a day with no
+    /// **The reconciliation moment.** Flow logged on a day with no
     /// active period would be filed silently against the PREVIOUS cycle (the
     /// server attributes a day log to the latest span starting on or before that
     /// day, and only `POST /api/cycle/period` ever creates a span). That is what
@@ -70,39 +71,38 @@ struct CycleCaptureSheet: View {
     /// first bleeding day of a run, never on every entry
     /// (see ``CycleFlowReconciliation``).
     @State private var showPeriodStartPrompt = false
-    /// QoL-1 (A360-4) — Save haptic drivers (see `AddMedicationSheet`). `saveTick`
+    /// Save haptic drivers (see `AddMedicationSheet`). `saveTick`
     /// bumps on a committed capture, `saveErrorTick` on a failure.
     @State private var saveTick = 0
     @State private var saveErrorTick = 0
+    /// The day as loaded, for the discard guard. Re-taken on every day load,
+    /// since picking another day replaces the form with that day's entry.
+    @State private var baseline: [AnyHashable]?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "cycle.capture.title",
+            action: .save(isEnabled: !isSaving && (!hasBBT || bbtEntry.value != nil)) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                periodSection
-                flowSection
-                symptomsSection
-                fertilitySection
-                cervixSection
-                intimacySection
-                testsAndContraceptionSection
-                noteSection
-                if let error {
-                    Section { HLFormErrorText(error) }
+                Group {
+                    periodSection
+                    flowSection
+                    symptomsSection
+                    fertilitySection
+                    cervixSection
+                    intimacySection
+                    testsAndContraceptionSection
+                    noteSection
+                    if let error {
+                        Section { HLFormErrorText(error) }
+                    }
                 }
+                .hlFormRowSurface()
             }
-            .navigationTitle("cycle.capture.title")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(isSaving)
-                }
-            }
-            .overlay(alignment: .center) { savingOverlay }
-            // QoL-1 — Save success/error haptic, mirroring the intake path.
+            .hlPageMargins()
+            // Save success/error haptic, mirroring the intake path.
             .sensoryFeedback(.success, trigger: saveTick)
             .sensoryFeedback(.error, trigger: saveErrorTick)
             .confirmationDialog(
@@ -112,19 +112,18 @@ struct CycleCaptureSheet: View {
             ) {
                 Button("cycle.capture.reconcile.confirm") {
                     periodAction = .start
-                    Task { await commit() }
+                    Task { await commitFromPrompt() }
                 }
                 Button("cycle.capture.reconcile.decline") {
                     store.declineFlowReconciliation(for: Self.dayKey(date))
-                    Task { await commit() }
+                    Task { await commitFromPrompt() }
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(HLControlWord.cancel.key, role: .cancel) {}
             } message: {
                 Text("cycle.capture.reconcile.message")
             }
         }
-        .interactiveDismissDisabled(isSaving)
-        // #115 1.5 — the date picker shows days in the ACCOUNT zone, the zone
+        // The date picker shows days in the ACCOUNT zone, the zone
         // `dayKey` cuts the server key in, so the day picked is the day sent.
         .environment(\.timeZone, ProfileDay.timeZone)
         .onAppear { if let initialDate { date = initialDate } }
@@ -138,11 +137,8 @@ struct CycleCaptureSheet: View {
                 store: store,
                 onSaved: { key in
                     selectedSymptoms.insert(key)
-                    customEditor = nil
-                },
-                onDismiss: { customEditor = nil }
+                }
             )
-            .hlSheetPresentation(.form)
         }
     }
 
@@ -153,15 +149,17 @@ struct CycleCaptureSheet: View {
     }
 
     private var flowSection: some View {
-        Section("cycle.capture.flow.header") {
-            // K1 — „Schmier…" was cut even on the large device; a menu shows
-            // the whole word when the five segments cannot.
+        Section {
+            // „Schmier…" was cut even on the large device; a menu shows
+            // the whole word when the five segments cannot, and then carries
+            // its row title, so "Keine" never stands alone.
             HLAdaptiveSegmentedPicker("cycle.capture.flow.header", selection: $flow, labels: Self.flowLabels) {
                 ForEach(CycleFlowLevel.allCases, id: \.self) { level in
                     Text(Self.flowLabel(level)).tag(level)
                 }
             }
-            .labelsHidden()
+        } header: {
+            HLSectionHeader("cycle.capture.flow.header", rank: .group)
         }
     }
 
@@ -173,30 +171,52 @@ struct CycleCaptureSheet: View {
                     symptomRow(key: item.key, label: Text(LocalizedStringKey(item.labelKey)))
                 }
             } header: {
-                Text(LocalizedStringKey(section.titleKey))
+                HLSectionHeader(LocalizedStringKey(section.titleKey), rank: .group)
             }
         }
         Section {
             ForEach(store.customSymptoms) { symptom in
                 customSymptomRow(symptom)
             }
-            Button {
+            HLSettingsActionRow(title: "cycle.custom.create.button", presents: .create) {
                 customEditor = .create
-            } label: {
-                Label("cycle.custom.create.button", systemImage: "plus")
             }
             .disabled(store.customSymptoms.count >= 50)
             if store.customSymptoms.count >= 50 {
                 Text("cycle.custom.limit")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             if let customError = store.customSymptomsError {
                 HLFormErrorText(customError)
             }
         } header: {
-            Text("cycle.capture.symptoms.category.custom")
+            HLSectionHeader("cycle.capture.symptoms.category.custom", rank: .group)
         }
+    }
+
+    /// The basal temperature reads and is typed in the account's unit and
+    /// stays canonical °C underneath.
+    private var bbtInAccountUnit: Binding<Double?> {
+        let transform = units.transform(for: .bodyTemperature)
+        return Binding(
+            get: { (transform.display(bbt) * 100).rounded() / 100 },
+            set: { typed in
+                if let typed { bbt = transform.canonical(fromDisplayed: typed) }
+            }
+        )
+    }
+
+    private var bbtUnit: HLUnit {
+        units.transform(for: .bodyTemperature).rescales ? .fahrenheit : .celsius
+    }
+
+    /// 35 to 39 °C, in the account's unit.
+    private var bbtRange: ClosedRange<Double> {
+        let transform = units.transform(for: .bodyTemperature)
+        func rounded(_ value: Double) -> Double {
+            (value * 100).rounded() / 100
+        }
+        return rounded(transform.display(35)) ... rounded(transform.display(39))
     }
 
     @ViewBuilder
@@ -212,19 +232,22 @@ struct CycleCaptureSheet: View {
                     }
                 }
             )) {
-                label.font(.hlSubhead)
+                HLRowTitle(label)
             }
             if isOn {
-                Picker("cycle.capture.symptoms.severity", selection: Binding(
-                    get: { symptomSeverity[key] ?? 0 },
-                    set: { symptomSeverity[key] = $0 == 0 ? nil : $0 }
-                )) {
+                HLAdaptiveSegmentedPicker(
+                    "cycle.capture.symptoms.severity",
+                    selection: Binding(
+                        get: { symptomSeverity[key] ?? 0 },
+                        set: { symptomSeverity[key] = $0 == 0 ? nil : $0 }
+                    ),
+                    labels: ["cycle.capture.symptoms.severity.none", "1", "2", "3", "4"]
+                ) {
                     Text("cycle.capture.symptoms.severity.none").tag(0)
                     ForEach(1 ... 4, id: \.self) { sev in
                         Text("\(sev)").tag(sev)
                     }
                 }
-                .pickerStyle(.segmented)
             }
         }
     }
@@ -237,57 +260,57 @@ struct CycleCaptureSheet: View {
                 key: symptom.key,
                 label: Text(verbatim: symptom.displayLabel ?? String(localized: "cycle.custom.unnamed"))
             )
-            Menu {
-                Button("Edit") { customEditor = .edit(symptom) }
-                Button("Delete", role: .destructive) {
+            HLIconButton(systemImage: "ellipsis", label: "cycle.custom.actions", menu: {
+                Button(HLControlWord.edit.key) { customEditor = .edit(symptom) }
+                // The store has no way back for a custom symptom: asked first.
+                HLDeleteMenuItem(.confirmed(title: "cycle.custom.delete.title") {
                     selectedSymptoms.remove(symptom.key)
                     symptomSeverity[symptom.key] = nil
-                    Task { _ = await store.softDeleteCustomSymptom(key: symptom.key) }
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .accessibilityLabel(Text("cycle.custom.actions"))
+                    _ = await store.softDeleteCustomSymptom(key: symptom.key)
+                })
+            })
         }
+        .hlDeleteConfirmation()
     }
 
     private var fertilitySection: some View {
-        Section("cycle.capture.fertility.header") {
+        Section {
             Toggle(isOn: $hasBBT) {
-                Text("cycle.capture.bbt.label").font(.hlSubhead)
+                HLRowTitle("cycle.capture.bbt.label")
             }
             if hasBBT {
-                Stepper(value: $bbt, in: 35.0 ... 39.0, step: 0.05) {
-                    Text(Self.bbtFormatted(bbt, units: units))
-                        .font(.hlSubhead.monospacedDigit())
-                }
+                HLNumberField(
+                    "cycle.bbt.axis.temperature",
+                    value: bbtInAccountUnit,
+                    state: $bbtEntry,
+                    unit: bbtUnit,
+                    range: bbtRange,
+                    fractionDigits: 2 ... 2
+                )
                 Toggle(isOn: $temperatureExcluded) {
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text("cycle.capture.bbt.excluded.label").font(.hlSubhead)
+                        HLRowTitle("cycle.capture.bbt.excluded.label")
                         Text("cycle.capture.bbt.excluded.hint")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                     }
                 }
             }
-            Picker("cycle.capture.ovulation.label", selection: Binding(
-                get: { ovulationTest },
-                set: { ovulationTest = $0 }
-            )) {
-                Text("cycle.capture.option.notSet").tag(CycleOvulationTest?.none)
-                ForEach(CycleOvulationTest.allCases, id: \.self) { test in
-                    Text(Self.ovulationLabel(test)).tag(CycleOvulationTest?.some(test))
-                }
+            HLFormPicker(
+                "cycle.capture.ovulation.label",
+                selection: $ovulationTest,
+                options: [CycleOvulationTest?.none] + CycleOvulationTest.allCases.map { CycleOvulationTest?.some($0) }
+            ) { value in
+                value.map { Text(Self.ovulationLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
-            Picker("cycle.capture.mucus.label", selection: Binding(
-                get: { cervicalMucus },
-                set: { cervicalMucus = $0 }
-            )) {
-                Text("cycle.capture.option.notSet").tag(CycleCervicalMucus?.none)
-                ForEach(CycleCervicalMucus.allCases, id: \.self) { mucus in
-                    Text(Self.mucusLabel(mucus)).tag(CycleCervicalMucus?.some(mucus))
-                }
+            HLFormPicker(
+                "cycle.capture.mucus.label",
+                selection: $cervicalMucus,
+                options: [CycleCervicalMucus?.none] + CycleCervicalMucus.allCases.map { CycleCervicalMucus?.some($0) }
+            ) { value in
+                value.map { Text(Self.mucusLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
+        } header: {
+            HLSectionHeader("cycle.capture.fertility.header", rank: .group)
         }
     }
 
@@ -296,92 +319,87 @@ struct CycleCaptureSheet: View {
     /// selection is simply omitted from the write body.
     private var cervixSection: some View {
         Section {
-            Picker("cycle.capture.cervix.position.label", selection: Binding(
-                get: { cervixPosition },
-                set: { cervixPosition = $0 }
-            )) {
-                Text("cycle.capture.option.notSet").tag(CycleCervixPosition?.none)
-                ForEach(CycleCervixPosition.allCases, id: \.self) { value in
-                    Text(Self.cervixPositionLabel(value)).tag(CycleCervixPosition?.some(value))
-                }
+            HLFormPicker(
+                "cycle.capture.cervix.position.label",
+                selection: $cervixPosition,
+                options: [CycleCervixPosition?.none] + CycleCervixPosition.allCases.map { CycleCervixPosition?.some($0) }
+            ) { value in
+                value.map { Text(Self.cervixPositionLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
-            Picker("cycle.capture.cervix.firmness.label", selection: Binding(
-                get: { cervixFirmness },
-                set: { cervixFirmness = $0 }
-            )) {
-                Text("cycle.capture.option.notSet").tag(CycleCervixFirmness?.none)
-                ForEach(CycleCervixFirmness.allCases, id: \.self) { value in
-                    Text(Self.cervixFirmnessLabel(value)).tag(CycleCervixFirmness?.some(value))
-                }
+            HLFormPicker(
+                "cycle.capture.cervix.firmness.label",
+                selection: $cervixFirmness,
+                options: [CycleCervixFirmness?.none] + CycleCervixFirmness.allCases.map { CycleCervixFirmness?.some($0) }
+            ) { value in
+                value.map { Text(Self.cervixFirmnessLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
-            Picker("cycle.capture.cervix.opening.label", selection: Binding(
-                get: { cervixOpening },
-                set: { cervixOpening = $0 }
-            )) {
-                Text("cycle.capture.option.notSet").tag(CycleCervixOpening?.none)
-                ForEach(CycleCervixOpening.allCases, id: \.self) { value in
-                    Text(Self.cervixOpeningLabel(value)).tag(CycleCervixOpening?.some(value))
-                }
+            HLFormPicker(
+                "cycle.capture.cervix.opening.label",
+                selection: $cervixOpening,
+                options: [CycleCervixOpening?.none] + CycleCervixOpening.allCases.map { CycleCervixOpening?.some($0) }
+            ) { value in
+                value.map { Text(Self.cervixOpeningLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
         } header: {
-            Text("cycle.capture.cervix.header")
+            HLSectionHeader("cycle.capture.cervix.header", rank: .group)
         }
     }
 
     private var intimacySection: some View {
-        Section("cycle.capture.intimacy.header") {
+        Section {
             Toggle(isOn: $sexualActivity) {
-                Text("cycle.capture.intimacy.active").font(.hlSubhead)
+                HLRowTitle("cycle.capture.intimacy.active")
             }
             if sexualActivity {
                 Toggle(isOn: $protectedSex) {
-                    Text("cycle.capture.intimacy.protected").font(.hlSubhead)
+                    HLRowTitle("cycle.capture.intimacy.protected")
                 }
             }
+        } header: {
+            HLSectionHeader("cycle.capture.intimacy.header", rank: .group)
         }
     }
 
     private var testsAndContraceptionSection: some View {
-        Section("cycle.capture.tests.header") {
-            Toggle("cycle.capture.intermenstrualBleeding.label", isOn: $intermenstrualBleeding)
-            Picker("cycle.capture.pregnancyTest.label", selection: $pregnancyTest) {
-                Text("cycle.capture.option.notSet").tag(CycleTestResult?.none)
-                ForEach(CycleTestResult.allCases, id: \.self) { result in
-                    Text(Self.testResultLabel(result)).tag(CycleTestResult?.some(result))
-                }
+        Section {
+            Toggle(isOn: $intermenstrualBleeding) {
+                HLRowTitle("cycle.capture.intermenstrualBleeding.label")
             }
-            Picker("cycle.capture.progesteroneTest.label", selection: $progesteroneTest) {
-                Text("cycle.capture.option.notSet").tag(CycleTestResult?.none)
-                ForEach(CycleTestResult.allCases, id: \.self) { result in
-                    Text(Self.testResultLabel(result)).tag(CycleTestResult?.some(result))
-                }
+            HLFormPicker(
+                "cycle.capture.pregnancyTest.label",
+                selection: $pregnancyTest,
+                options: [CycleTestResult?.none] + CycleTestResult.allCases.map { CycleTestResult?.some($0) }
+            ) { value in
+                value.map { Text(Self.testResultLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
-            Picker("cycle.capture.contraceptive.label", selection: $contraceptive) {
-                Text("cycle.capture.option.notSet").tag(CycleContraceptiveKind?.none)
-                ForEach(CycleContraceptiveKind.allCases, id: \.self) { value in
-                    Text(Self.contraceptiveLabel(value)).tag(CycleContraceptiveKind?.some(value))
-                }
+            HLFormPicker(
+                "cycle.capture.progesteroneTest.label",
+                selection: $progesteroneTest,
+                options: [CycleTestResult?.none] + CycleTestResult.allCases.map { CycleTestResult?.some($0) }
+            ) { value in
+                value.map { Text(Self.testResultLabel($0)) } ?? Text("cycle.capture.option.notSet")
             }
+            HLFormPicker(
+                "cycle.capture.contraceptive.label",
+                selection: $contraceptive,
+                options: [CycleContraceptiveKind?.none] + CycleContraceptiveKind.allCases.map { CycleContraceptiveKind?.some($0) }
+            ) { value in
+                value.map { Text(Self.contraceptiveLabel($0)) } ?? Text("cycle.capture.option.notSet")
+            }
+        } header: {
+            HLSectionHeader("cycle.capture.tests.header", rank: .group)
         }
     }
 
     private var noteSection: some View {
-        Section("cycle.capture.note.header") {
+        Section {
             TextField("cycle.capture.note.placeholder", text: $note, axis: .vertical)
                 .lineLimit(2 ... 4)
                 .onChange(of: note) { _, newValue in
                     if newValue.count > 500 { note = String(newValue.prefix(500)) }
                 }
-        }
-    }
-
-    @ViewBuilder
-    private var savingOverlay: some View {
-        if isSaving {
-            ProgressView()
-                .controlSize(.large)
-                .padding(HLSpace.lg)
-                .hlGlassBackground(in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous), fallback: HLSurface.secondary)
+        } header: {
+            HLSectionHeader("cycle.capture.note.header", rank: .group)
         }
     }
 
@@ -392,6 +410,7 @@ struct CycleCaptureSheet: View {
         let row = await store.dayLog(date: requestedKey)
         guard requestedKey == Self.dayKey(date) else { return }
         resetForm()
+        defer { baseline = formFingerprint }
         guard let row else { return }
         existingID = row.id
         flow = row.flowLevel ?? .none
@@ -420,36 +439,13 @@ struct CycleCaptureSheet: View {
         note = row.note ?? ""
     }
 
-    private func resetForm() {
-        existingID = nil
-        periodAction = nil
-        flow = .none
-        intermenstrualBleeding = false
-        selectedSymptoms = []
-        symptomSeverity = [:]
-        hasBBT = false
-        bbt = 36.5
-        temperatureExcluded = false
-        ovulationTest = nil
-        cervicalMucus = nil
-        cervixPosition = nil
-        cervixFirmness = nil
-        cervixOpening = nil
-        sexualActivity = false
-        protectedSex = false
-        pregnancyTest = nil
-        progesteroneTest = nil
-        contraceptive = nil
-        note = ""
-    }
-
     // MARK: - Save
 
     /// Save — asks the reconciliation question first when this is flow on a day
-    /// no period covers, then commits. The prompt's own buttons call
-    /// ``commit()`` directly, so the question can never be asked twice for one
-    /// Save.
-    private func save() async {
+    /// no period covers, then commits. The prompt's own buttons commit
+    /// directly, so the question can never be asked twice for one Save.
+    /// `true` when the sheet may close.
+    private func save() async -> Bool {
         if CycleFlowReconciliation.shouldAskPeriodStarted(
             flow: flow,
             periodAction: periodAction,
@@ -458,13 +454,19 @@ struct CycleCaptureSheet: View {
             declined: store.flowReconciliationDeclined
         ) {
             showPeriodStartPrompt = true
-            return
+            return false
         }
-        await commit()
+        return await commit()
+    }
+
+    /// The prompt's answer commits and closes the sheet itself, since the
+    /// save that asked has already returned.
+    private func commitFromPrompt() async {
+        if await commit() { dismiss() }
     }
 
     /// Commit create/edit and the optional period boundary through one Save.
-    private func commit() async {
+    private func commit() async -> Bool {
         isSaving = true
         defer { isSaving = false }
         error = nil
@@ -478,11 +480,11 @@ struct CycleCaptureSheet: View {
         if ok {
             saveTick &+= 1
             store.clearSaveConfirmation()
-            onDismiss()
         } else {
             error = store.lastError ?? String(localized: "cycle.capture.error.generic")
             saveErrorTick &+= 1
         }
+        return ok
     }
 }
 
@@ -554,5 +556,46 @@ extension CycleCaptureSheet {
 
     private func patchField<Value>(_ value: Value?) -> RecordPatchField<Value> {
         value.map(RecordPatchField.set) ?? .clear
+    }
+}
+
+// MARK: - Form state
+
+private extension CycleCaptureSheet {
+    /// Every field of the day the person can change, in one comparable value.
+    var formFingerprint: [AnyHashable] {
+        [
+            periodAction, flow, selectedSymptoms, symptomSeverity, hasBBT, bbt, temperatureExcluded,
+            ovulationTest, cervicalMucus, cervixPosition, cervixFirmness, cervixOpening, sexualActivity,
+            protectedSex, intermenstrualBleeding, pregnancyTest, progesteroneTest, contraceptive, note
+        ]
+    }
+
+    var isDirty: Bool {
+        guard let baseline else { return false }
+        return baseline != formFingerprint
+    }
+
+    func resetForm() {
+        existingID = nil
+        periodAction = nil
+        flow = .none
+        intermenstrualBleeding = false
+        selectedSymptoms = []
+        symptomSeverity = [:]
+        hasBBT = false
+        bbt = 36.5
+        temperatureExcluded = false
+        ovulationTest = nil
+        cervicalMucus = nil
+        cervixPosition = nil
+        cervixFirmness = nil
+        cervixOpening = nil
+        sexualActivity = false
+        protectedSex = false
+        pregnancyTest = nil
+        progesteroneTest = nil
+        contraceptive = nil
+        note = ""
     }
 }

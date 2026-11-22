@@ -18,13 +18,9 @@ import Testing
 /// matches the behaviour: there is no chevron that does nothing, and no row that
 /// looks inert while being tappable.
 ///
-/// The two halves are tested separately on purpose. The mapping is pure data and
-/// can be right while the surface still shows dead rows — which is exactly the
-/// state this suite started in.
+/// The mapping is pure data and is tested here as such.
 @Suite("C1 — jede Zusammenhangs-Zeile lässt sich verfolgen")
 struct CorrelationDrillInTests {
-    private static let block = "HealthLog/Screens/Insights/Sub/InsightsCorrelationsDiscoveryBlock.swift"
-
     // MARK: - The mapping (pure data)
 
     @Test("Ein kuratierter Kanal mit eigener Insights-Seite löst auf die richtige Metrik auf")
@@ -101,42 +97,6 @@ struct CorrelationDrillInTests {
 
         let unmapped = Self.pair(behaviour: "CAFFEINE", outcome: "cmet_7f3a91")
         #expect(InsightsCorrelationsDiscoveryBlock.drillIns(for: unmapped).isEmpty)
-    }
-
-    // MARK: - The surface (the RED this plan closes)
-
-    /// **EXPECTED_RED (C1): the card ends where the question begins.** Read as
-    /// comment-stripped source, so the clause states what is missing without
-    /// naming a symbol that does not exist yet.
-    @Test("C1-Marker: keine Karte bietet einen Weg in das Paar hinein")
-    func unmappedEntryHasAnHonestFallback() throws {
-        let source = try Phase8SourceScan.stripped(Self.block)
-
-        var violations: [String] = []
-        if !source.contains("insights.correlations.discovery.followUp") {
-            violations.append("no card offers a follow-up affordance")
-        }
-        // The clause is the SHAPE, not its type name. It was written against
-        // `InsightsCorrelationDetailSheet` and the shape shipped as
-        // `InsightsCorrelationFollowUpSection`, because a `.sheet` is a
-        // presentation the frozen Phase-06 inventory counts and that inventory is
-        // fail-closed against new hits — a later plan may record that a
-        // presentation went away, never mint one. Same one shape, opened in place
-        // instead of modally; the EXPECTED_RED marker below is unchanged.
-        if !source.contains("InsightsCorrelationFollowUpSection") {
-            violations.append("there is no one detail shape a card can open")
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: unmapped entries are dead rows with a live look
-
-            C1. Jede Karte muss dieselbe eine Folge-Form anbieten — auch die, deren Kanäle \
-            keine eigene Metrik-Seite haben; sonst bleibt genau der Rest übrig, dem der \
-            Betreiber nicht nachgehen kann. Offen: \(violations)
-            """
-        )
     }
 
     // MARK: - Fixtures

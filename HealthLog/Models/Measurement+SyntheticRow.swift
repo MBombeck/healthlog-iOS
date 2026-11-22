@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - #115 R3 — synthetic server ids are not measurement rows
+// MARK: - Synthetic server ids are not measurement rows
 
 /// The measurement read routes hand out points and rows whose `id` is a
 /// **synthetic key**, not a stored row id (OpenAPI `SeriesPoint.id` /
@@ -21,7 +21,7 @@ import Foundation
 /// such points in several places (list fallback, chart-detail state, the
 /// cumulative `recent(kind:)` path), so every edit and delete path asks this
 /// first. Real ids are cuids (no colon), local optimistic ids start with
-/// `local-`, standalone ids with `hk-` — none of them can match.
+/// `local-` — none of them can match.
 public extension Measurement {
     /// The id prefixes the server uses for synthetic, non-row keys.
     static let syntheticServerRowIDPrefixes: [String] = ["day:", "hour:", "sleep:", "sleep-seg:"]

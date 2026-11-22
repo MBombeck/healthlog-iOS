@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit v0162 — AI-consent grant persistence failures are handled.**
+/// **AI-consent grant persistence failures are handled.**
 ///
 /// `grant(for:)` / `grantServerManaged()` used to log success unconditionally
 /// after a silent `try?` Keychain write. The grant record IS the gate for

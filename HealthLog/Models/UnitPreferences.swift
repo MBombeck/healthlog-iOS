@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Display-unit prefs (v0.11 N1)
+// MARK: - Display-unit prefs
 
 //
 // Lives in `Models` (HealthLogCore) so the platform-free metric formatters
@@ -10,7 +10,7 @@ import Foundation
 
 /// Local-only display unit for body-mass values (weight, body-water, bone-mass).
 ///
-/// **v0.11 N1 — wired end-to-end.** The server keeps storing canonical SI
+/// **Wired end-to-end.** The server keeps storing canonical SI
 /// units (kg). When the user picks `.lb` the value is converted **at display
 /// time** by `UnitPreferences.convertWeight(_:)` and the unit label flips to
 /// `"lb"`; nothing is re-persisted. UserDefaults usage stays inside the
@@ -112,7 +112,7 @@ public enum BloodPressureUnit: String, CaseIterable, Identifiable, Sendable {
 
 /// Display unit for blood-glucose values. Canonical store = mg/dL.
 ///
-/// #108 — the unit belongs to the ACCOUNT (`User.glucoseUnit`, server v1.39):
+/// The unit belongs to the ACCOUNT (`User.glucoseUnit`, server v1.39):
 /// `SettingsStore` adopts it from `/api/auth/me` and writes a change through
 /// `PATCH /api/auth/me/glucose-unit`, because the series endpoint already
 /// converts into it.
@@ -138,14 +138,14 @@ public enum GlucoseUnit: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// #108 — the account's glucose unit as the server spells it
+    /// The account's glucose unit as the server spells it
     /// (`User.glucoseUnit`, `PATCH /api/auth/me/glucose-unit`). Same tokens as
     /// the display suffix.
     public var serverValue: String {
         unitSuffix
     }
 
-    /// #108 — resolve a server glucose-unit token exactly like the server's
+    /// Resolve a server glucose-unit token exactly like the server's
     /// `resolveGlucoseUnit` (`src/lib/glucose.ts`, v1.39.0): `"mmol/L"` is
     /// mmol/L, and every other value — including `null` on an account that never
     /// set it — is mg/dL. The series endpoint converts with the same rule, so an
@@ -154,7 +154,7 @@ public enum GlucoseUnit: String, CaseIterable, Identifiable, Sendable {
         raw == GlucoseUnit.mmolL.serverValue ? .mmolL : .mgdL
     }
 
-    /// **#115 B5** — a value entered in this unit, in canonical mg/dL. The same
+    /// A value entered in this unit, in canonical mg/dL. The same
     /// arithmetic as the app's entry sheet (`UnitPreferences.canonicalGlucose`,
     /// dividing by ``UnitPreferences/mgdLToMmolL``) so Siri, the watch and the
     /// sheet store the identical number for the identical entry. Lives here, not
@@ -167,7 +167,7 @@ public enum GlucoseUnit: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// #108 — a unit token the server stamped on a payload (the series `unit`).
+    /// A unit token the server stamped on a payload (the series `unit`).
     /// `nil` for anything that is not one of the two glucose units, so a caller
     /// never mistakes an unrelated label for a glucose unit.
     public init?(serverToken raw: String?) {
@@ -183,7 +183,7 @@ public enum GlucoseUnit: String, CaseIterable, Identifiable, Sendable {
 /// dashboard/metric display path so the conversion is a pure, testable
 /// transform separate from the `@MainActor` store.
 ///
-/// **v0.11 N1.** The server stores canonical SI units (kg / mmHg / mg/dL);
+/// The server stores canonical SI units (kg / mmHg / mg/dL);
 /// this type converts to the user's chosen unit **at display time only** and
 /// supplies the matching unit suffix. `.standard` is the canonical-unit
 /// identity (no conversion) used by call-sites that have no store handle.
@@ -191,7 +191,7 @@ public struct UnitPreferences: Sendable, Hashable {
     public var weight: WeightUnit
     public var bloodPressure: BloodPressureUnit
     public var glucose: GlucoseUnit
-    /// **#115 P2** — the account's unit system (`User.unitPreference` from
+    /// The account's unit system (`User.unitPreference` from
     /// `/api/auth/me`). Temperature, circumference, distance and walking speed
     /// follow it directly (the server's display-transform registry has no
     /// per-device pick for them); weight keeps its own ``weight`` field because

@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// Phase 07 Wave 2 — the collector's bounds and its observer discipline.
+    /// The collector's bounds and its observer discipline.
     ///
     /// Split from `AnchoredHealthSampleCollectorTests` so neither suite grows past
     /// the project's type-body budget. This half asserts what the collector refuses
@@ -42,7 +42,7 @@
             #expect(results.first?.pagesCollected == budget.maxPagesPerType)
         }
 
-        /// 1.3 (#127) — until 1.2.0 a short wake refused a partition without a
+        /// Until 1.2.0 a short wake refused a partition without a
         /// cursor outright, because its first read was the whole history. The
         /// first read is now the live window (two days), which a short wake may
         /// start; the history walk stays refused.

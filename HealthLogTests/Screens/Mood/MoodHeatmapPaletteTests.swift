@@ -2,8 +2,8 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — pure locks for the mood-heatmap bucketer + the 90-day
-/// pre-roll gate (DESIGN-B §1.2 / §1.5). No SwiftUI render pass.
+/// Pure locks for the mood-heatmap bucketer + the 90-day
+/// pre-roll gate. No SwiftUI render pass.
 @Suite("Mood heatmap palette + gate")
 struct MoodHeatmapPaletteTests {
     @Test("daily-avg buckets snap to the nearest of 5 levels")

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.5.5.2 — per-kind sane-input ranges for the manual MeasureSheet.**
+/// **Per-kind sane-input ranges for the manual MeasureSheet.**
 ///
 /// Before this helper, the operator could type `-500` weight or `99999`
 /// glucose into the sheet, hit Speichern, and the server would 422 with
@@ -52,7 +52,7 @@ public enum MeasurementRanges {
         case .hrv: 1 ... 500
         case .vo2Max: 10 ... 90
         case .respiratoryRate: respiratoryRate
-        // v0158 — v1.25 manual clinical signals. Bounds mirror the server sane
+        // v1.25 manual clinical signals. Bounds mirror the server sane
         // bands (`src/lib/validations/measurement.ts` L580-587). Pain NRS is a
         // 0–10 integer; the MeasureSheet enforces the integer via a picker, this
         // range is the belt-and-braces submit guard.
@@ -62,23 +62,23 @@ public enum MeasurementRanges {
         case .bloodPressure, .sleep, .steps, .walkingSpeed, .walkingAsymmetry,
              .walkingStepLength, .walkingDoubleSupport, .walkingSteadiness,
              .audioExposureEnvironment, .audioExposureHeadphone, .bmi,
-             // v0.8.3 W-D — HK-only activity aggregates, no manual typo guard.
+             // HK-only activity aggregates, no manual typo guard.
              .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight,
-             // v0.11 W21 — server/Withings-sourced web-parity kinds; no manual
+             // Server/Withings-sourced web-parity kinds; no manual
              // entry surface, so no typo guard needed.
              .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
              .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
              .fatMass,
-             // v0.13.1 IC — v1.10.0 additive signals; read/display-only, no
+             // v1.10.0 additive signals; read/display-only, no
              // manual entry, so no typo guard.
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native read-only types; no manual entry.
+             // v1.12.8 WHOOP-native read-only types; no manual entry.
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
-             // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23);
+             // v1.17.1 source-fixed render-only signals;
              // read/display-only, no manual entry, so no typo guard.
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — waist-to-height is render-only (no manual entry), so no
+             // Waist-to-height is render-only (no manual entry), so no
              // client-side typo guard is needed.
              .waistToHeight,
              // Build 3 / item 3.3 — the 21 decoder catch-up types are
@@ -91,10 +91,11 @@ public enum MeasurementRanges {
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity,
              // Build 7 / item 7.3 — mood has no manual MeasureSheet entry (it is
              // logged via its own State-of-Mind flow), so no typo guard applies.
              .mood,
-             // Audit B-4 — the audio-exposure EVENT is categorical (band `1…1`)
+             // The audio-exposure EVENT is categorical (band `1…1`)
              // and read-only, and `.unknown` is a type this build cannot name,
              // so it has no bound anyone could state. Neither is enterable.
              .audioExposureEvent, .unknown:
@@ -123,7 +124,7 @@ public enum MeasurementRanges {
     static func validate(value: String, for kind: MetricKind) -> ValidationOutcome {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return .empty }
-        // A360-5 H-4 — locale-aware parse (de "72,4" + grouped "1.234,5").
+        // Locale-aware parse (de "72,4" + grouped "1.234,5").
         guard let number = LocaleDecimalParser.parse(trimmed) else { return .notANumber }
         guard let range = range(for: kind) else { return .ok }
         if number < range.lowerBound { return .belowMinimum }
@@ -140,7 +141,7 @@ public enum MeasurementRanges {
     ) -> ValidationOutcome {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return .empty }
-        // A360-5 H-4 — locale-aware parse (de comma decimal + grouping).
+        // Locale-aware parse (de comma decimal + grouping).
         guard let number = LocaleDecimalParser.parse(trimmed) else { return .notANumber }
         let range = component == .systolic ? bloodPressureSystolic : bloodPressureDiastolic
         if number < range.lowerBound { return .belowMinimum }

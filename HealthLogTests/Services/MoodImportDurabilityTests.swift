@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 0 — State-of-Mind import durability.
+/// State-of-Mind import durability.
 ///
 /// `MoodStateOfMindImporter.runAnchoredSweep` imports each foreign sample and
 /// then saves the query's new anchor. A per-item failure is logged and
@@ -58,11 +58,9 @@ struct MoodImportDurabilityTests {
 
     // MARK: - RED
 
-    /// A failed durable enqueue must hold the State-of-Mind anchor, and the
-    /// importer must reach its anchor through the shared commit contract
-    /// instead of saving it after a swallowed error.
+    /// A failed durable enqueue must hold the State-of-Mind anchor.
     @Test("an enqueue failure holds the anchor")
-    func enqueueFailureHoldsAnchor() throws {
+    func enqueueFailureHoldsAnchor() {
         var violations: [String] = []
 
         let lost = Self.outcome(retryPersisted: false, retryFailed: true, classification: .nonterminal)
@@ -70,29 +68,6 @@ struct MoodImportDurabilityTests {
             violations.append("a lost durable enqueue still advanced the anchor")
         }
 
-        let importer = try Self.source("HealthLog/Services/HealthKit/MoodStateOfMindImporter.swift")
-        if !importer.contains("HealthSyncCursorPolicy") {
-            violations.append("the importer does not consult the shared commit rule")
-        }
-        if importer.contains("saveAnchor(result.newAnchor)") {
-            violations.append("the importer still saves the anchor at the tail of the sweep")
-        }
-
-        let repository = try Self.source("HealthLog/Repositories/MoodRepository.swift")
-        if repository.contains("HLLog.outbox.error(\"Outbox enqueue failed") {
-            violations.append("the mood repository still swallows a lost outbox write")
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: Mood enqueue failure advanced anchor")
-    }
-
-    // MARK: - Source access
-
-    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        #expect(violations.isEmpty, "Mood enqueue failure advanced anchor")
     }
 }

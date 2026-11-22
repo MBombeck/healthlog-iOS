@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 L10N-FINAL** — the server emits a target's `classification.category`
+/// The server emits a target's `classification.category`
 /// as a canonical English token. The status chip shows it in the reader's
 /// language through `targets.status.*`, like the web, and never a raw key.
 @Suite("target classification chip in the reader's language")
@@ -12,10 +12,14 @@ struct InsightsTargetStatusLabelTests {
     func interfaceLanguageLabels() {
         let language = AppLanguage.current
         #expect(InsightsTargetStatusLabel.label(for: "Overweight")
-            == language.pick(de: "Übergewicht", en: "Overweight", nl: "Overgewicht"))
+            == language.pick(de: "Übergewicht", en: "Overweight", nl: "Overgewicht", ko: "과체중", es: "Sobrepeso"))
         #expect(InsightsTargetStatusLabel.label(for: "Hypertension Grade 1")
-            == language.pick(de: "Hypertonie Grad 1", en: "Hypertension Grade 1", nl: "Hypertensie graad 1"))
-        #expect(InsightsTargetStatusLabel.label(for: "Optimal") == language.pick(de: "Optimal", en: "Optimal", nl: "Optimaal"))
+            == language.pick(
+                de: "Hypertonie Grad 1", en: "Hypertension Grade 1", nl: "Hypertensie graad 1", ko: "고혈압 1기",
+                es: "Hipertensión grado 1"
+            ))
+        #expect(InsightsTargetStatusLabel.label(for: "Optimal")
+            == language.pick(de: "Optimal", en: "Optimal", nl: "Optimaal", ko: "최적", es: "Óptima"))
     }
 
     @Test("an unknown token stays as the server sent it")
@@ -25,7 +29,6 @@ struct InsightsTargetStatusLabelTests {
     }
 
     @Test("every token has text in every listed language, never its key", arguments: CatalogLanguages.listed)
-    @available(iOS 18.4, *)
     func everyTokenTranslated(language: String) {
         for (token, resource) in InsightsTargetStatusLabel.keys {
             let resolved = Bundle.main.localizedString(
@@ -39,7 +42,6 @@ struct InsightsTargetStatusLabelTests {
     }
 
     @Test("Dutch reads Dutch")
-    @available(iOS 18.4, *)
     func dutchLabels() {
         let resolved = Bundle.main.localizedString(
             forKey: "targets.status.optimal",

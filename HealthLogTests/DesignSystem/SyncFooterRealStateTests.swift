@@ -109,25 +109,12 @@ struct SyncFooterRealStateTests {
         #expect(state == .preparing)
     }
 
-    @Test("Today is the only footer that keeps the settled line: one switch, one opt-in")
-    func todayIsTheOnlyOptIn() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // DesignSystem
-            .deletingLastPathComponent() // HealthLogTests
-            .deletingLastPathComponent() // repo root
-        let screens = root.appendingPathComponent("HealthLog/Screens")
-        let walker = try #require(FileManager.default.enumerator(at: screens, includingPropertiesForKeys: nil))
-        var optIns: [String] = []
-        for case let url as URL in walker where url.pathExtension == "swift" {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            if text.contains("scope: .today") { optIns.append(url.lastPathComponent) }
-        }
-        #expect(optIns == ["DashboardSlots.swift"])
-
-        let footer = try String(
-            contentsOf: root.appendingPathComponent("HealthLog/DesignSystem/HLSyncStatusFooter.swift"),
-            encoding: .utf8
-        )
-        #expect(footer.contains("var scope: Scope = .realStateOnly"))
+    @Test("a footer mounted without a scope reports only real states")
+    @MainActor
+    func footerDefaultsToRealStateOnly() {
+        // Every screen but Today mounts the footer without a scope, so the
+        // default decides what all of them show.
+        #expect(HLSyncStatusFooter().scope == .realStateOnly)
+        #expect(HLSyncStatusFooter(screenLoading: true).scope == .realStateOnly)
     }
 }

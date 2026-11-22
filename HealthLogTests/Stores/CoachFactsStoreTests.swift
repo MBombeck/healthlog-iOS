@@ -29,7 +29,7 @@ private func respond(_ req: URLRequest, _ json: String, status: Int = 200) -> (H
     return (http, Data(json.utf8))
 }
 
-/// **v0.14.2 FW5-C — CoachFactsStore (coach memory) state-machine.**
+/// **CoachFactsStore (coach memory) state-machine.**
 ///
 /// Drives the store through the real `APIClient` + stubbed `URLSession` so the
 /// store→repo→wire contract is exercised end-to-end. Pins:
@@ -41,7 +41,7 @@ private func respond(_ req: URLRequest, _ json: String, status: Int = 200) -> (H
 @Suite("CoachFactsStore", .serialized)
 @MainActor
 struct CoachFactsStoreTests {
-    /// The transport seam (issue #82 / Plan 09-11). Both halves come from the
+    /// The transport seam. Both halves come from the
     /// caller's retained session, so every request this client makes is answered
     /// by that session's handler or by nothing at all.
     ///
@@ -154,7 +154,7 @@ struct CoachFactsStoreTests {
         #expect(calls.value == 2)
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-11)
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     func aLaterInstallCannotAnswerThisSuite() async {
@@ -188,7 +188,7 @@ struct CoachFactsStoreTests {
         // A positive count is the whole point. `store.error == nil` and an empty
         // fact list are produced just as well by a request that never arrived,
         // so only the count proves this suite was routed to its own session.
-        #expect(mine.value == 1, "EXPECTED_RED: CoachFactsStoreTests was not routed to its own session")
+        #expect(mine.value == 1, "CoachFactsStoreTests was not routed to its own session")
         #expect(theirs.value == 0)
     }
 }

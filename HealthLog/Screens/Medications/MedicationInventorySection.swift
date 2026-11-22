@@ -21,13 +21,13 @@ import SwiftUI
 /// reproduce — and ``Medication/runwayDays`` is the projection, from the same
 /// burn rate the low-stock push evaluates, so the card and the notification
 /// cannot disagree. Neither is recomputed here, and `nil` is never rounded up
-/// into a guess: `nil` = tracking off / unknown → "—", `0` = tracked and
-/// exhausted → a real zero.
+/// into a guess: `nil` = tracking off / unknown → no count is named, `0` =
+/// tracked and exhausted → a real zero.
 struct MedicationInventorySection: View {
     let medication: Medication
     let items: [MedicationInventoryItemDTO]
-    /// #25 / #115 · 1.3 — the server's `summary` from the same inventory GET
-    /// (dose capacity, expired units). `nil` → the capacity reads "—".
+    /// The server's `summary` from the same inventory GET
+    /// (dose capacity, expired units). `nil` → the headline names no capacity.
     var summary: MedicationSupplySummary?
     /// The server's ``Medication/runwayDays`` **after** the display gate in
     /// ``runwayWithinThreshold(_:threshold:)`` — `nil` here means "do not
@@ -35,9 +35,9 @@ struct MedicationInventorySection: View {
     /// low-supply threshold), `0` means the supply is exhausted. Callers must
     /// pass the filtered value; the section applies no threshold of its own.
     var runwayDays: Int?
-    /// Tap a container row to correct / mark / delete it (C2).
+    /// Tap a container row to correct / mark / delete it.
     var onEdit: (MedicationInventoryItemDTO) -> Void
-    /// Register a new container (C2).
+    /// Register a new container.
     var onRegister: () -> Void
 
     private var unitsPerDose: Double {
@@ -45,74 +45,99 @@ struct MedicationInventorySection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack {
-                HLSectionLabel("med.inventory.section.header")
-                Spacer(minLength: HLSpace.sm)
-                Button(action: onRegister) {
-                    Label("med.inventory.register.cta", systemImage: "plus")
-                        .font(.hlCaption.weight(.semibold))
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(HLText.secondary)
+        HLSectionHeader("med.inventory.section.header", rank: .area) {
+            // The plus says it adds; grey alone read as switched off.
+            HLLinkButton("med.inventory.register.cta", systemImage: "plus", action: onRegister)
                 .accessibilityIdentifier("medications.detail.inventory.register")
-            }
+        }
+        if Self.isEmpty(stockDosesRemaining: medication.stockDosesRemaining, summary: summary, itemCount: items.count) {
+            // Nothing tracked and no container: one quiet line in a card with
+            // the card's own inset and corners, not a thin pill (Z10).
             HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.md) {
-                    summaryRow
-                    if let runwayDays {
-                        runwayRow(runwayDays)
-                    }
-                    Divider()
-                    VStack(alignment: .leading, spacing: HLSpace.sm) {
-                        ForEach(items) { item in
-                            Button {
-                                onEdit(item)
-                            } label: {
-                                itemRow(item)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                HLEmptyNote("med.inventory.summary.none")
+            }
+            .accessibilityIdentifier("medications.detail.inventory")
+        } else {
+            rowsCard
+        }
+    }
+
+    /// Nothing to show but the empty line: no count and no container.
+    nonisolated static func isEmpty(stockDosesRemaining: Int?, summary: MedicationSupplySummary?, itemCount: Int) -> Bool {
+        itemCount == 0 && summaryLine(stockDosesRemaining: stockDosesRemaining, summary: summary) == .unknown
+    }
+
+    private var rowsCard: some View {
+        // The supply and each container as rows of one card: the total
+        // first, then one row per container. A container row opens its
+        // editor; it shows a value, so it carries no chevron (Z2+).
+        HLCard(layout: .rows) {
+            switch Self.summaryLine(stockDosesRemaining: medication.stockDosesRemaining, summary: summary) {
+            case .unknown:
+                // The containers below carry the supply; a headline without a
+                // count would only repeat that nothing is known.
+                EmptyView()
+            case let .remaining(doses):
+                summaryRow(Text(String(format: String(localized: "med.inventory.summary.remainingOnly"), doses)))
+            case let .remainingOfTotal(doses, total):
+                summaryRow(Text(String(format: String(localized: "med.inventory.summary"), doses, total)))
+            }
+            ForEach(items) { item in
+                HLRowButton {
+                    onEdit(item)
+                } label: {
+                    itemRow(item)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("medications.detail.inventory")
     }
 
+    /// What the supply headline can honestly say.
+    enum SummaryLine: Equatable {
+        /// No count is known: no sentence with a dash in it.
+        case unknown
+        /// The doses left, without a known capacity.
+        case remaining(String)
+        /// The doses left out of the server's capacity.
+        case remainingOfTotal(String, String)
+    }
+
     /// Doses remaining — the **server's** `stockDosesRemaining`, never a local
-    /// sum ÷ dose. The trailing "of Y" is the server's `summary.dosesTotal`
-    /// (#25 / #115 · 1.3 — it used to be a local sum of `unitsTotal`); without a
-    /// summary it reads "—". Units in expired containers get their own muted
-    /// line, never folded into the headline.
-    private var summaryRow: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Image(systemName: "shippingbox")
-                    .font(.hlIcon(HLIconSize.md))
-                    .foregroundStyle(HLText.secondary)
-                Text(
-                    String(
-                        format: String(localized: "med.inventory.summary"),
-                        Self.remainingDoseString(medication.stockDosesRemaining),
-                        Self.capacityDoseString(summary)
-                    )
+    /// sum ÷ dose; "of Y" only with the server's `summary.dosesTotal` (#25 /
+    /// #115 · 1.3). A missing figure leaves its part of the sentence out
+    /// instead of standing in it as "—".
+    nonisolated static func summaryLine(stockDosesRemaining: Int?, summary: MedicationSupplySummary?) -> SummaryLine {
+        let remaining = remainingDoseString(stockDosesRemaining)
+        guard remaining != InventorySanity.placeholder else { return .unknown }
+        let capacity = capacityDoseString(summary)
+        guard let total = summary?.dosesTotal, total > 0, capacity != InventorySanity.placeholder else {
+            return .remaining(remaining)
+        }
+        return .remainingOfTotal(remaining, capacity)
+    }
+
+    /// Units in expired containers sit on the detail line, never folded into
+    /// the headline; a short runway is the row's status.
+    private func summaryRow(_ title: Text) -> some View {
+        HLRowLayout(
+            title: title,
+            subtitle: Self.expiredUnitsString(summary).map {
+                Text(String(format: String(localized: "med.inventory.expiredUnits"), $0))
+            }
+        ) {
+            if let runwayDays {
+                HLBadge(
+                    String(format: String(localized: "med.inventory.runway"), runwayDays),
+                    icon: "exclamationmark.triangle",
+                    tone: .warning,
+                    form: .text
                 )
-                .font(.hlHeadline)
-                // (both figures collapse to "—" rather than to a fabricated 0)
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
+                .accessibilityIdentifier("medications.detail.inventory.runway")
             }
-            if let expired = Self.expiredUnitsString(summary) {
-                Text(String(format: String(localized: "med.inventory.expiredUnits"), expired))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .monospacedDigit()
-                    .accessibilityIdentifier("medications.detail.inventory.expired")
-            }
+        } leading: {
+            HLRowGlyph(symbol: "shippingbox")
         }
     }
 
@@ -130,73 +155,30 @@ struct MedicationInventorySection: View {
         return doseString(units, unitsPerDose: 1)
     }
 
-    /// C3 — the server's projected runway, already threshold-filtered.
-    private func runwayRow(_ days: Int) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLColor.statusWarn)
-            Text(
-                String(
-                    format: String(localized: "med.inventory.runway"),
-                    days
-                )
-            )
-            .font(.hlSubhead.weight(.medium))
-            .foregroundStyle(HLColor.statusWarn)
-            .monospacedDigit()
-        }
-        .accessibilityIdentifier("medications.detail.inventory.runway")
-    }
-
     private func itemRow(_ item: MedicationInventoryItemDTO) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            if let type = item.containerType {
-                Image(systemName: type.glyph)
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-            }
-            Text(
+        // Only a plausible expiry date is shown; a sentinel / epoch timestamp
+        // is suppressed (never a fake "Jan 1970").
+        let expiry = InventorySanity.validDate(item.expiresAt ?? item.printedExpiry)
+        return HLRowLayout(
+            title: Text(
                 String(
                     format: String(localized: "med.inventory.item.doses"),
                     Self.doseString(item.unitsRemaining, unitsPerDose: unitsPerDose),
                     Self.doseString(item.unitsTotal, unitsPerDose: unitsPerDose)
                 )
-            )
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.primary)
-            .monospacedDigit()
-            Spacer(minLength: HLSpace.sm)
-            // **W-INVENTORY** — only render a plausible expiry date; a
-            // sentinel / epoch timestamp is suppressed (never a fake "Jan 1970").
-            if let expiry = InventorySanity.validDate(item.expiresAt ?? item.printedExpiry) {
-                Text(expiry, format: .dateTime.day().month().year())
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-            }
+            ),
+            subtitle: expiry.map { Text(HLDateFormat.date($0, style: .abbreviated)) }
+        ) {
             stateBadge(item.state)
-            HLDisclosureChevron()
+        } leading: {
+            HLRowGlyph(symbol: item.containerType?.glyph)
         }
-        .contentShape(Rectangle())
     }
 
-    /// Calm monochrome state badge — `EXPIRED` is the only signal colour
-    /// (statusBad), matching the web's destructive badge.
+    /// The container's state as the card's mark; `EXPIRED` is the only
+    /// signal colour, matching the web's destructive badge.
     private func stateBadge(_ state: String) -> some View {
-        Text(Self.stateLabel(state))
-            .font(.hlCaption.weight(.semibold))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(state == "EXPIRED" ? HLColor.statusBad : HLText.secondary)
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.vertical, HLSpace.xxs)
-            .overlay {
-                Capsule().strokeBorder(HLText.tertiary.opacity(0.25), lineWidth: 1)
-            }
-            // Badge keeps its natural width so "In Gebrauch" never wraps to
-            // two lines; the leading dose text yields space instead.
-            .layoutPriority(1)
+        HLBadge(Self.stateLabel(state), tone: state == "EXPIRED" ? .critical : .neutral, form: .text)
     }
 
     // MARK: - ROUTE-06 server supply truth (v1.37.19)
@@ -253,7 +235,7 @@ struct MedicationInventorySection: View {
     }
 
     nonisolated static func doseString(_ units: Double, unitsPerDose: Double) -> String {
-        // **W-INVENTORY — last-line display guard, central gate.** A corrupt
+        // **Last-line display guard, central gate.** A corrupt
         // unit count (non-finite / negative / absurd) is NOT rendered as a
         // fabricated `0`; it renders the honest `—` placeholder instead
         // (operator brief: "nicht still auf 0 raten"). A degenerate
@@ -270,7 +252,7 @@ struct MedicationInventorySection: View {
         if doses.truncatingRemainder(dividingBy: 1) == 0 {
             return String(Int(doses))
         }
-        return doses.formatted(.number.precision(.fractionLength(0 ... 1)))
+        return HLValueFormat.number(doses, fractionDigits: 0 ... 1)
     }
 
     /// Localized label for the server state enum; an unknown future literal

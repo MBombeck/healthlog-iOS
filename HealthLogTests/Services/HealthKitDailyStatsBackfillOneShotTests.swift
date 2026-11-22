@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Build 273 (A8) — the all-time daily-stats backfill one-shot may only be
+/// The all-time daily-stats backfill one-shot may only be
 /// burnt when the sweep actually completed. `triggerDailyStatsSync` used to
 /// return `Void` and the orchestrator burnt the flag unconditionally after it
 /// returned, so a wake killed mid-sweep (or a held sweep) left every later
@@ -29,7 +29,6 @@ struct HealthKitDailyStatsBackfillOneShotTests {
                     ),
                     throttle: BatchSyncThrottle(maxPerWindow: 60, window: 60.0, jitter: 0 ... 0)
                 ),
-                featureFlags: AlwaysOnFeatureFlags(),
                 admission: { throw HLError.unknown("held: no admitted account") }
             )
             let syncing: HealthKitDailyStatsSyncing = coord

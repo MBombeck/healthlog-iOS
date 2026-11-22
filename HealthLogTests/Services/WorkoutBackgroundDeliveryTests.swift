@@ -41,16 +41,38 @@ import Testing
             #expect(await harness.events.snapshot() == [.execute, .enable, .sweep, .sweep])
         }
 
-        @Test("Observer callback returns promptly before its asynchronous sweep")
-        func observerCallbackIsPrompt() async throws {
-            let harness = try makeHarness()
+        @Test("HealthKit's receipt waits until the observer sweep has finished")
+        func observerReceiptWaitsForTheSweep() async throws {
+            let sweep = ControlledSweep(events: LifecycleEvents())
+            let harness = try makeHarness(sweep: sweep)
             await harness.importer.start()
 
             await harness.lifecycle.fireObserverUpdate()
+            await sweep.waitUntilBlocked()
 
+            // The sweep is still running: acknowledging now would let iOS
+            // suspend the process before the workout reached the server.
+            #expect(await harness.lifecycle.receiptCount() == 0)
+            await sweep.release()
+            await phase09AwaitCondition { await harness.lifecycle.receiptCount() == 1 }
+            #expect(await harness.lifecycle.receiptCount() == 1)
+            #expect(await sweep.sideEffectCount() == 1)
             #expect(await harness.lifecycle.callbackReturnCount() == 1)
-            await waitForEventCount(.sweep, count: 2, in: harness.events)
-            #expect(await harness.events.count(.sweep) == 2)
+        }
+
+        @Test("An observer delivery before activation finished is acknowledged at once")
+        func earlyDeliveryIsAcknowledgedAtOnce() async throws {
+            let enableGate = SuspensionGate()
+            let harness = try makeHarness(enableGate: enableGate)
+            let start = Task { await harness.importer.start() }
+            await waitForEventCount(.enable, count: 1, in: harness.events)
+
+            await harness.lifecycle.fireObserverUpdate()
+            await phase09AwaitCondition { await harness.lifecycle.receiptCount() == 1 }
+            #expect(await harness.lifecycle.receiptCount() == 1)
+
+            await enableGate.open()
+            await start.value
         }
 
         @Test("Activation failure stops the observer and does not sweep")
@@ -305,7 +327,7 @@ import Testing
             count: Int,
             in events: LifecycleEvents
         ) async {
-            // T1 (1.4) — bounded by time, not by 10,000 yields: the importer
+            // Bounded by time, not by 10,000 yields: the importer
             // runs on other executors, and the callers' own expectations
             // report a count that never arrives.
             await phase09AwaitCondition { await events.count(event) >= count }
@@ -352,8 +374,9 @@ import Testing
         private var remainingDisableFailures: Int
         private let executeGate: SuspensionGate?
         private let enableGate: SuspensionGate?
-        private var observerUpdate: (@Sendable () -> Void)?
+        private var observerUpdate: (@Sendable () async -> Void)?
         private var callbackReturns = 0
+        private var receipts = 0
         private var disabledTypeIdentifiers: [String] = []
 
         init(
@@ -370,7 +393,7 @@ import Testing
             self.enableGate = enableGate
         }
 
-        func executeWorkoutObserver(onUpdate: @escaping @Sendable () -> Void) async {
+        func executeWorkoutObserver(onUpdate: @escaping @Sendable () async -> Void) async {
             observerUpdate = onUpdate
             await events.append(.execute)
             await executeGate?.wait()
@@ -399,9 +422,24 @@ import Testing
             disabledTypeIdentifiers.append(HKObjectType.workoutType().identifier)
         }
 
+        /// Like `HKObserverQuery`: the handler returns at once, the delivery
+        /// runs on, and the receipt is counted when the delivery returns.
         func fireObserverUpdate() {
-            observerUpdate?()
+            if let update = observerUpdate {
+                Task {
+                    await update()
+                    noteReceipt()
+                }
+            }
             callbackReturns += 1
+        }
+
+        private func noteReceipt() {
+            receipts += 1
+        }
+
+        func receiptCount() -> Int {
+            receipts
         }
 
         func callbackReturnCount() -> Int {

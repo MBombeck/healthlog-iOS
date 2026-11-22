@@ -30,7 +30,7 @@ public struct SleepCompositeTile: View {
 
     private let metric: DashboardMetric
     private let stages: StagesBreakdown?
-    /// W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — matched-geometry namespace
+    /// Matched-geometry namespace
     /// forwarded by `DashboardTileRouter`. The composite tile picks the
     /// duration text as the dominant element (mirrors `HLDashboardTile`'s
     /// value-row source) so the sleep tile participates in the same
@@ -42,8 +42,6 @@ public struct SleepCompositeTile: View {
     private let matchedNamespace: Namespace.ID?
     /// 1.5 VERDICTS — the server's verdicts the trend arrow is coloured from.
     private let trendVerdicts: TileTrendVerdicts
-
-    @ScaledMetric(relativeTo: .title2) private var primaryValueSize: CGFloat = 28
 
     public init(
         metric: DashboardMetric,
@@ -68,38 +66,32 @@ public struct SleepCompositeTile: View {
                     stagesStrip(stages: stages)
                     stagesLegend(stages: stages)
                 } else {
-                    // C-1 + C-6 + Theme-2.0 (T2-2): fallback sparkline goes
+                    // C-1 + C-6 + Theme-2.0: fallback sparkline goes
                     // monochrome at rest (HLText.tertiary) and pure `.line`
-                    // (HLSparkline default per R2 §Primitive #3). W6b — routes
+                    // (HLSparkline default per R2 §Primitive #3). Routes
                     // through the shared `HLTileSparkline` (single sparkline-row
-                    // code path). Task #36 — pass `.sleep` so the fallback chart
+                    // code path). Pass `.sleep` so the fallback chart
                     // shares the Insights engine + `inkGraphite` ink.
                     HLTileSparkline(values: metric.sparkline, kind: .sleep)
                 }
             }
+            // Fills the height its grid row offers, so the tiles of a row
+            // stand equally tall; alone in a column it keeps its own height.
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(combinedLabel)
     }
 
     private var header: some View {
-        let descriptor = MetricKind.sleep.descriptor
-        // W6b — the glyph + title route through the shared `HLMetricTileChrome`
-        // primitives (the single tile-fragment code path). The Sleep header
-        // keeps its OWN composition: the trailing accessory is the descriptor's
-        // `secondaryHint` (none for sleep since #146), not a trend glyph — so it does
-        // not use `HLTileHeaderRow` (which is trend-shaped), but it does share
-        // the glyph + title rendering so the chrome reads identically.
-        return HStack(spacing: HLSpace.xs) {
-            HLTileHeaderGlyph(systemName: descriptor.sfSymbol)
-            HLTileTitleLabel(Text(descriptor.title))
-            Spacer()
-            if let secondary = descriptor.secondaryHint {
+        // The shared tile head; its trailing slot carries the descriptor's
+        // hint (none for sleep today) and the verdict-coloured trend arrow.
+        HLTileHeaderRow(icon: MetricKind.sleep.descriptor.sfSymbol, title: Text(MetricKind.sleep.descriptor.title)) {
+            if let secondary = MetricKind.sleep.descriptor.secondaryHint {
                 Text(secondary)
                     .font(.hlCaption2.weight(.medium))
                     .foregroundStyle(HLText.tertiary)
             }
-            // 1.5 VERDICTS — the server's verdict colours the arrow, nothing else.
             TrendChip(trend: metric.dashboardTrend, mode: trendVerdicts.mode(for: metric))
         }
     }
@@ -107,10 +99,10 @@ public struct SleepCompositeTile: View {
     private var value: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
             Text(metric.formattedPrimary())
-                .font(.hlMetric(primaryValueSize))
+                .font(HLValueSize.tile.numberFont)
                 .foregroundStyle(HLText.primary)
                 .monospacedDigit()
-                // W-IMPL-BACKLOG-CLEANUP (v0.5.5.2) — shared-element source
+                // Shared-element source
                 // matching the chart-detail hero. The destination already
                 // exists in `ChartDetailScreen.HeroStrip` keyed by
                 // `MetricKind.sleep`, so the matched id resolves without
@@ -124,7 +116,7 @@ public struct SleepCompositeTile: View {
         }
     }
 
-    /// Theme-2.0 (T2-2): the four sleep stages now paint a single-accent ramp
+    /// Theme-2.0: the four sleep stages now paint a single-accent ramp
     /// built from `HLChartTints` — deep = full series accent, REM = seriesMid
     /// (70% accent), core = seriesLow (40% accent), awake = `HLColor.statusWarn`
     /// (the awake stage is the only clinically-meaningful stage signal — a
@@ -168,8 +160,7 @@ public struct SleepCompositeTile: View {
                         .fill(entry.1)
                         .frame(width: 6, height: 6)
                     Text(entry.0)
-                        .font(.hlCaption2.weight(.medium))
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.chartMark)
                 }
             }
         }

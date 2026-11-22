@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.6.2.2 W-TILE-AUDIT — pin the structural synth-hide contract.**
+/// **Pin the structural synth-hide contract.**
 ///
 /// Carry-over from v0.6.2.1 W-COLD-LAUNCH-FLICKER, broadened to cover
 /// pull-to-refresh (the path the v0.6.2.1 fix missed). Operator on build
@@ -159,7 +159,7 @@ struct DashboardEmptyTilePolicyColdLaunchTests {
         ))
     }
 
-    /// **v0.6.2.2 W-TILE-AUDIT — replaces the v0.6.2.1 contract.** A synth
+    /// **Replaces the v0.6.2.1 contract.** A synth
     /// tile in `.unknown` is HIDDEN regardless of `fanOutSettledAt`. The
     /// v0.6.2.1 contract kept it visible post-settle ("skeleton paint
     /// during pull-to-refresh"); that's exactly the pull-to-refresh
@@ -243,7 +243,7 @@ struct DashboardEmptyTilePolicyColdLaunchTests {
 
     /// **v0.6.2.2 scenePhase / tab-switch trigger-path pin.** Foreground
     /// transition re-runs `store.refresh()` + `refreshTileStates()`. The
-    /// anchor is set-once (W-TILEHOTFIX) so the timing is irrelevant —
+    /// anchor is set-once so the timing is irrelevant —
     /// AND the new contract drops the timing dependency for synth tiles
     /// regardless. Pinned across both invariants.
     @Test("scenePhase foreground: synth + .empty(.noData) → HIDDEN")
@@ -259,7 +259,7 @@ struct DashboardEmptyTilePolicyColdLaunchTests {
         ))
     }
 
-    /// **v0.6.2.2 — synth + post-settle hydration race.** If a synth tile's
+    /// **Synth + post-settle hydration race.** If a synth tile's
     /// fan-out promotes it to `.ready` AFTER the anchor was stamped, the
     /// tile must show immediately. Mirrors the case where series fallback
     /// resolves slower than the wide-page derive.

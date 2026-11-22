@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit A-7 — a "turn it on" button that the server would refuse.**
+/// **A "turn it on" button that the server would refuse.**
 ///
 /// Labs, Illness and Documents are user-switchable modules, so a switched-off
 /// surface offers an enable CTA rather than the operator-gated

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// v0.7.1 W-TARGETS-EDITOR — `@Observable` wrapper over
+/// `@Observable` wrapper over
 /// `UserThresholdsRepository`.
 ///
 /// Drives the personal-target *editor* — the editable `{ min, max }` band per

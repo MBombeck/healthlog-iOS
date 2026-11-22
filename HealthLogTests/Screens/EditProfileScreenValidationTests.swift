@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// **v0.5.5.2 — EditProfileScreen displayName-first-edit gate.**
+/// **EditProfileScreen displayName-first-edit gate.**
 ///
 /// Before this fix, opening `EditProfileScreen` on a profile whose server-
 /// side `displayName` was empty immediately rendered the red footer
@@ -45,7 +45,7 @@ struct EditProfileScreenValidationTests {
             == String(localized: "50 characters max."))
     }
 
-    // MARK: - Footer gate (v0.5.5.2)
+    // MARK: - Footer gate
 
     @Test("Footer suppresses the error on initial screen-open (empty + not edited yet)")
     func footerHiddenOnInitialOpenWithEmptyServerValue() {

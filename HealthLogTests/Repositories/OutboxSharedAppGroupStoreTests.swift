@@ -6,7 +6,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping force_try
 
-/// **audit-v0162 H2 — the offline "Genommen"/mood write-loss regression.**
+/// **The offline "Genommen"/mood write-loss regression.**
 ///
 /// The Lock-Screen widget + Live-Activity App Intents run inside the
 /// *widget-extension* process. Pre-fix, an offline "Genommen" tap enqueued its
@@ -125,15 +125,18 @@ struct OutboxSharedAppGroupStoreTests {
             .appendingPathComponent("pending-confirm-\(UUID().uuidString).json")
         let pendingStore = WidgetPendingConfirmStore(url: pendingURL)
         MarkNextDoseFromWidgetIntent.pendingStoreOverride = pendingStore
+        MarkNextDoseFromWidgetIntent.externalTakeLogOverride = ExternalTakeLog(
+            url: FileManager.default.temporaryDirectory.appendingPathComponent("ext-\(UUID().uuidString).json")
+        )
         defer {
             IntentDependencies.testOverride = nil
             MarkNextDoseFromWidgetIntent.pendingStoreOverride = nil
+            MarkNextDoseFromWidgetIntent.externalTakeLogOverride = nil
             try? FileManager.default.removeItem(at: pendingURL)
         }
 
         let slot = Date(timeIntervalSince1970: 1_799_999_000)
-        // Pre-arm so this is the SECOND (recording) tap of the two-step confirm.
-        try pendingStore.arm(medicationId: "med-1", scheduledFor: slot)
+        // One tap records (#188 (7)).
         let intent = MarkNextDoseFromWidgetIntent(
             medicationId: "med-1",
             medicationName: "Vitamin D",

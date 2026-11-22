@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-2 — pure timeline-refresh decisions for the widgets.**
+/// **Pure timeline-refresh decisions for the widgets.**
 ///
 /// Extracted from the `TimelineProvider`s (which live in the extension and
 /// can't be unit-tested from the app test target) into a shared
@@ -39,7 +39,7 @@ public enum WidgetTimelinePolicy {
         return startOfTomorrow ?? now.addingTimeInterval(6 * 60 * 60)
     }
 
-    // MARK: - Staleness (audit-v0162 M3)
+    // MARK: - Staleness
 
     // The snapshot carries `generatedAt` precisely so a widget can tell when
     // the app last refreshed it. When iOS grants no BGTask (Low Power /
@@ -76,6 +76,22 @@ public enum WidgetTimelinePolicy {
         now.timeIntervalSince(generatedAt) > threshold
     }
 
+    /// **#189 (7)** — how long before its due time a snapshot may have been
+    /// written and still be trusted once that time has come. A dose can be
+    /// taken elsewhere (pill box, Telegram) around its slot; a snapshot from
+    /// the evening before cannot know. Past this lead the due dose shows no
+    /// button until the app has written a newer snapshot.
+    public static let dueSnapshotMaxLead: TimeInterval = 2 * 60 * 60
+
+    /// `true` when the next dose must not be acted on at `now`: the snapshot
+    /// is older than ``nextDoseStaleThreshold``, or the dose is due and the
+    /// snapshot predates it by more than ``dueSnapshotMaxLead``.
+    public static func isNextDoseUntrusted(generatedAt: Date, scheduledAt: Date?, now: Date) -> Bool {
+        if isNextDoseStale(generatedAt: generatedAt, now: now) { return true }
+        guard let scheduledAt, now >= scheduledAt else { return false }
+        return scheduledAt.timeIntervalSince(generatedAt) > dueSnapshotMaxLead
+    }
+
     /// Belt-and-suspenders age cap for the compliance surface (the local-day
     /// check below is the primary rule). 24 h — one full day.
     public static let complianceStaleMaxAge: TimeInterval = 24 * 60 * 60
@@ -96,5 +112,43 @@ public enum WidgetTimelinePolicy {
     ) -> Bool {
         if !calendar.isDate(generatedAt, inSameDayAs: now) { return true }
         return now.timeIntervalSince(generatedAt) > maxAge
+    }
+
+    // MARK: - Two-tap confirm frames
+
+    /// The armed "Confirm?" state as timeline frames: armed from `now`, plain
+    /// again at the moment the confirm window closes. WidgetKit shows a frame
+    /// no earlier than its date, so the button can never read "Taken" while the
+    /// intent would still treat the next tap as the confirming one. A reload
+    /// request at the window edge carried no such guarantee.
+    public static func pendingConfirmFrames(
+        now: Date,
+        armedAt: Date?,
+        window: TimeInterval
+    ) -> [(date: Date, armed: Bool)] {
+        guard let armedAt else { return [(now, false)] }
+        let closes = armedAt.addingTimeInterval(window)
+        guard closes > now else { return [(now, false)] }
+        return [(now, true), (closes, false)]
+    }
+
+    // MARK: - Snapshot stamp
+
+    /// How old `generatedAt` may grow while the medication content stays the
+    /// same before the writer stamps it anew.
+    public static let snapshotStampRefreshInterval: TimeInterval = 60 * 60
+
+    /// `true` when an unchanged snapshot still needs a fresh `generatedAt`.
+    /// The stamp is what the widgets read as "the app looked at this", so an
+    /// app that ran and found nothing new must still move it forward, or a
+    /// quiet day turns into "open the app".
+    public static func needsFreshStamp(
+        previous: Date,
+        now: Date,
+        calendar: Calendar = .current,
+        interval: TimeInterval = snapshotStampRefreshInterval
+    ) -> Bool {
+        if !calendar.isDate(previous, inSameDayAs: now) { return true }
+        return now.timeIntervalSince(previous) >= interval
     }
 }

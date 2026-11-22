@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Parity 1.7 — the illness write bodies must send an explicit `null`, not an
+/// **The illness write bodies must send an explicit `null`, not an
 /// absent key, for their clearable fields.**
 ///
 /// The server merges `note` / `functionalImpact` / `feverC` as *"key omitted ⇒

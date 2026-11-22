@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A2-M4 — locks the appear-revalidation freshness gate that lets list stores
+/// Locks the appear-revalidation freshness gate that lets list stores
 /// re-validate the *partial-then-stale* case (data went stale after a partial
 /// success) instead of only reloading when empty. `isStale` is a pure function
 /// of the recorded load time and an injected `now`.

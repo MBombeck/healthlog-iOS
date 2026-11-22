@@ -140,7 +140,7 @@ struct ChartDetailStoreEmptyStateTests {
         }
     }
 
-    // MARK: - v0.14 DATA — fix 3: floors (no-series) never perpetual-spins
+    // MARK: - Fix 3: floors (no-series) never perpetual-spins
 
     @Test("flightsClimbed (no-series) + empty kind-scoped page → settles to .empty, never stuck .loading")
     func floorsNoSeriesSettlesToEmpty() async throws {
@@ -167,7 +167,7 @@ struct ChartDetailStoreEmptyStateTests {
         }
     }
 
-    // MARK: - v0.14 DATA — fix 2: BMI computed series from weight + height
+    // MARK: - Fix 2: BMI computed series from weight + height
 
     @Test("BMI derives a chartable series from the weight series + profile height")
     func bmiComputedSeriesFromWeight() async throws {

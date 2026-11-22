@@ -4,11 +4,11 @@ import Observation
 import SwiftUI
 import UIKit
 
-/// **v0.8.0 W11 — self-hosted avatar display + upload orchestration.**
+/// **Self-hosted avatar display + upload orchestration.**
 ///
 /// Owns the avatar image lifecycle for the display surfaces (DashboardHeader,
 /// ProfileScreen) and the edit surface (EditProfileScreen). The Gravatar leak
-/// is gone (v0.6.2); the photo now lives on the OWN server and is fetched
+/// is gone; the photo now lives on the OWN server and is fetched
 /// owner-scoped through the pinned `APIClient` session — never a bare
 /// `AsyncImage(url:)`, which would carry neither the Bearer token nor the
 /// SPKI cert-pin.
@@ -47,7 +47,7 @@ public final class AvatarStore {
     /// refetch.
     private var loadedKey: String?
 
-    /// **v0.8.2 W1c (C4) — stale-image guard.** The `?v=` key of the most
+    /// **Stale-image guard.** The `?v=` key of the most
     /// recently *uploaded* avatar. `upload` sets `image` directly from the
     /// freshly-encoded bytes, then calls `refreshProfile()`. If that refresh
     /// races and returns the *pre-flip* (old) `avatarUrl`, the display surface
@@ -80,7 +80,7 @@ public final class AvatarStore {
     /// Resolves the image for `avatarURLPath` (the profile's `avatarUrl`).
     /// `nil` clears the image (user removed the photo / never had one).
     ///
-    /// `force` (v0.8.2 W1c / C4): when `true`, bypasses the `loadedKey`
+    /// `force`: when `true`, bypasses the `loadedKey`
     /// short-circuit and refetches even if the key is unchanged — a defensive
     /// escape hatch for the case where the server reuses the same `avatarUrl`
     /// after a re-upload (no `?v=` flip) and the operator would otherwise be
@@ -135,7 +135,7 @@ public final class AvatarStore {
     @discardableResult
     public func upload(_ uiImage: UIImage) async -> Bool {
         error = nil
-        // v0.12 W8-5 — the encode is an up-to-12MP downscale + multi-pass JPEG
+        // The encode is an up-to-12MP downscale + multi-pass JPEG
         // re-compression; running it on `@MainActor` stutters the picker
         // dismissal. `AvatarImageProcessor` is a pure enum over value types and
         // `UIImage` is `Sendable`, so the work moves off-main without a data
@@ -158,7 +158,7 @@ public final class AvatarStore {
                 image = img
                 loadedKey = result.avatarUrl
                 // Stamp the fresh key so a racing post-refresh `load` with a
-                // stale url can't revert the photo we just uploaded (C4).
+                // stale url can't revert the photo we just uploaded.
                 lastUploadedKey = result.avatarUrl
             }
             await refreshProfile()
@@ -219,7 +219,7 @@ public final class AvatarStore {
         return Image(uiImage: ui)
     }
 
-    /// **20-03 (R6) — the avatar is decoded ONCE to a bounded thumbnail.**
+    /// **The avatar is decoded ONCE to a bounded thumbnail.**
     ///
     /// The upload path allows up to 2048 px under a 2 MiB cap, the server stores
     /// what it is given, and `AvatarRepository` asks for the bytes back with no
@@ -238,7 +238,24 @@ public final class AvatarStore {
     /// why this seam exists at all: it is what `AvatarThumbnailTests` addresses.
     static func decodedImage(from data: Data) -> UIImage? {
         guard let thumbnail = thumbnailCGImage(from: data) else { return nil }
-        return UIImage(cgImage: thumbnail, scale: UIScreen.main.scale, orientation: .up)
+        return UIImage(cgImage: thumbnail, scale: screenScale, orientation: .up)
+    }
+
+    /// The display scale of the window the app shows in: the foreground
+    /// scene's trait collection, so an iPad on an external display or in
+    /// Stage Manager gets the scale of the screen it is on. The store has no
+    /// view of its own to ask `displayScale`.
+    static var screenScale: CGFloat {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        return displayScale(scene?.traitCollection.displayScale)
+    }
+
+    /// A scale the trait collection has not resolved yet (0) or no scene at
+    /// all falls back to the current traits, at least 1.
+    static func displayScale(_ sceneScale: CGFloat?) -> CGFloat {
+        if let sceneScale, sceneScale > 0 { return sceneScale }
+        return max(1, UITraitCollection.current.displayScale)
     }
 
     /// 64 pt at 3× is 192 px; 256 px is the next power-of-two above it and is
@@ -266,6 +283,6 @@ public final class AvatarStore {
             thumbnailCGImage(from: data)
         }.value
         guard let thumbnail else { return nil }
-        return Image(uiImage: UIImage(cgImage: thumbnail, scale: UIScreen.main.scale, orientation: .up))
+        return Image(uiImage: UIImage(cgImage: thumbnail, scale: screenScale, orientation: .up))
     }
 }

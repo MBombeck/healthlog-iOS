@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 
 // swiftlint:disable force_unwrapping file_length type_body_length
 
-/// SUPP-EDIT (1.5.0, #131 P3) — editing a supplement's composition, also
+/// Editing a supplement's composition, also
 /// from a label photo (server v1.43, notes of 15.10.: HEIC is refused, a
 /// label is read only on the own record).
 ///

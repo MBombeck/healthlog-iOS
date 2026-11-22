@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - v0.5.2 server-stats wire (V052-A7)
+// MARK: - Server-stats wire
 
 public extension AppContainer {
     /// Bundle of repositories backing the v0.5.2 server-stats wire-up.
@@ -24,36 +24,36 @@ public extension AppContainer {
         public let personalRecords: PersonalRecordsRepository
         public let insightsTargets: InsightsTargetsRepository
         public let sourcePriority: SourcePriorityRepository
-        /// v0.7.1 W-TARGETS-EDITOR — editable per-user target-range overrides
+        /// Editable per-user target-range overrides
         /// (`/api/user/thresholds`), the write half of the targets surface.
         public let userThresholds: UserThresholdsRepository
-        /// v0.12 W5b — device-flagged categorical events
+        /// Device-flagged categorical events
         /// (`GET /api/insights/rhythm-events`), the RhythmEvents overview card.
         public let rhythmEvents: RhythmEventsRepository
-        /// v0.12 W5b — server-computed derived metrics
+        /// Server-computed derived metrics
         /// (`GET /api/insights/derived`), the derived re-frames overview block.
         public let derivedMetrics: DerivedMetricsRepository
-        /// v0141 W-PARITY (P7) — one local day's intraday pulse shape
+        /// One local day's intraday pulse shape
         /// (`GET /api/insights/pulse/intraday`), the pulse page's day curve.
         public let intradayPulse: IntradayPulseRepository
-        /// v0141 W-PARITY (P8) — the device's ECG recordings
+        /// The device's ECG recordings
         /// (`GET /api/insights/ecg` + `…/[id]`), the Insights ECG surface.
         public let ecg: EcgRepository
-        /// v0.12 — FDR-controlled correlation discovery
+        /// FDR-controlled correlation discovery
         /// (`GET /api/insights/correlations`), the discovered-correlations
         /// overview block. Operator-gated → `404`/`422` hides it gracefully.
         public let correlationsDiscovery: CorrelationsDiscoveryRepository
-        /// I-3 (v0.14) — the period-retrospective narrative
+        /// The period-retrospective narrative
         /// (`GET /api/insights/narrative`), the "Zeitraum im Rückblick" card.
         public let narrative: NarrativeRepository
-        /// v0.14.1 — the mood "relations" slices (`GET /api/mood/insights`,
+        /// The mood "relations" slices (`GET /api/mood/insights`,
         /// server v1.11.5): tag-influence + the "better days" board.
         public let moodRelations: MoodRelationsRepository
-        /// W-B189 (#23) — the server-computed recovery family
+        /// The server-computed recovery family
         /// (`GET /api/insights/recovery`, server v1.17.1): strain / training-load /
         /// autonomic-charge + the daily heart-and-energy items.
         public let recovery: RecoveryInsightsRepository
-        /// v1.25 (GH iOS #38) — the three read-only "clinical signals" awareness
+        /// v1.25 — the three read-only "clinical signals" awareness
         /// reads (`GET /api/insights/health-status` / `…/breathing-screening` /
         /// `…/labs-changes`). Server-authoritative, render-don't-recompute.
         public let clinicalSignals: ClinicalSignalsRepository
@@ -145,27 +145,27 @@ public extension AppContainer {
         public let personalRecords: PersonalRecordsStore
         public let insightsTargets: InsightsTargetsStore
         public let sourcePriority: SourcePriorityStore
-        /// v0.7.1 W-TARGETS-EDITOR — editable target-range overrides store.
+        /// Editable target-range overrides store.
         public let userThresholds: UserThresholdsStore
-        /// v0.12 W5b — RhythmEvents overview card store.
+        /// RhythmEvents overview card store.
         public let rhythmEvents: RhythmEventsStore
-        /// v0.12 W5b — derived re-frames overview block store.
+        /// Derived re-frames overview block store.
         public let derivedMetrics: DerivedInsightsStore
-        /// v0141 W-PARITY (P7) — the pulse page's intraday day-curve store.
+        /// The pulse page's intraday day-curve store.
         public let intradayPulse: IntradayPulseStore
-        /// v0141 W-PARITY (P8) — the Insights ECG surface store. Its
+        /// The Insights ECG surface store. Its
         /// `hasRecordings` flag is the pill's data gate.
         public let ecg: EcgStore
-        /// v0.12 — discovered-correlations overview block store.
+        /// Discovered-correlations overview block store.
         public let correlationsDiscovery: CorrelationsDiscoveryStore
-        /// I-3 (v0.14) — "Zeitraum im Rückblick" retrospective card store.
+        /// "Zeitraum im Rückblick" retrospective card store.
         public let narrative: NarrativeStore
-        /// v0.14.1 — mood "relations" cards store (tag-influence + better-days).
+        /// Mood "relations" cards store (tag-influence + better-days).
         public let moodRelations: MoodRelationsStore
-        /// W-B189 (#23) — the Insights → Recovery sub-page store (strain /
+        /// The Insights → Recovery sub-page store (strain /
         /// training-load / autonomic-charge + heart-and-energy family).
         public let recovery: RecoveryInsightsStore
-        /// v1.25 (GH iOS #38) — the three read-only "clinical signals" awareness
+        /// v1.25 — the three read-only "clinical signals" awareness
         /// cards' store (health-status / breathing-screening / labs-changes).
         public let clinicalSignals: ClinicalSignalsStore
         /// Web-parity `TodayHero` — the daily-digest store backing the dashboard
@@ -240,58 +240,58 @@ public extension AppContainer {
         swr: SWRCoordinator? = nil
     ) -> ServerStatsRepos {
         ServerStatsRepos(
-            syncState: SyncStateRepository(api: apiClient),
-            // Audit v0.14.8 C4.1 — outbox-backed so a retriably-failed workout
+            syncState: SyncStateRepository(api: apiClient, receiptQuery: { RelayReceiptQuery.items() }),
+            // Outbox-backed so a retriably-failed workout
             // batch upload survives a restart + replays on reachability.
             workouts: WorkoutsRepository(api: apiClient, outbox: outbox),
             personalRecords: PersonalRecordsRepository(api: apiClient),
-            // W3 (v0.11 #22) — targets read routes through the persistent
+            // Targets read routes through the persistent
             // `.insightsTargets` SWR cache so the "Ziel" block paints
             // cache-first on launch + is warmed by the prefetch service.
             insightsTargets: InsightsTargetsRepository(api: apiClient, swr: swr),
             sourcePriority: SourcePriorityRepository(api: apiClient),
-            // v0.7.1 W-TARGETS-EDITOR — outbox-backed so an offline target
+            // Outbox-backed so an offline target
             // edit survives an app restart + replays on reachability.
             userThresholds: UserThresholdsRepository(api: apiClient, outbox: outbox),
-            // v0.12 W5b — both route through the shared daily SWR cache so the
+            // Both route through the shared daily SWR cache so the
             // RhythmEvents card + derived block paint cache-first on launch +
             // revalidate on the Berlin-day-anchored key.
             rhythmEvents: RhythmEventsRepository(api: apiClient, swr: swr),
             derivedMetrics: DerivedMetricsRepository(api: apiClient, swr: swr),
-            // v0141 W-PARITY (P7) — the intraday day curve fetches DIRECT (no
+            // The intraday day curve fetches DIRECT (no
             // SWR): the server answers `no-store` because today's shape keeps
             // growing, so a persisted snapshot would paint a stale morning.
             // Past days are memoized inside the actor instead.
             intradayPulse: IntradayPulseRepository(api: apiClient),
-            // v0141 W-PARITY (P8) — the ECG LIST routes through the shared daily
+            // The ECG LIST routes through the shared daily
             // SWR cache (Berlin-day-anchored `.insightsEcg`); the per-recording
             // waveform is fetched direct and never cached (server `no-store`,
             // decrypted health data).
             ecg: EcgRepository(api: apiClient, swr: swr),
-            // v0.12 — discovery routes through the shared daily SWR cache
+            // Discovery routes through the shared daily SWR cache
             // (Berlin-day-anchored `.correlations`) so the block paints
             // cache-first on launch + revalidates once per day.
             correlationsDiscovery: CorrelationsDiscoveryRepository(api: apiClient, swr: swr),
-            // I-3 — the period narrative routes through the shared daily SWR
+            // The period narrative routes through the shared daily SWR
             // cache (Berlin-day-anchored `.insightsNarrative`) so the
             // retrospective card paints cache-first + revalidates once per day.
             narrative: NarrativeRepository(api: apiClient, swr: swr),
-            // v0.14.1 — the mood relations slices route through the shared SWR
+            // The mood relations slices route through the shared SWR
             // cache (`.moodInsights`, ~60s) so the tag-influence + better-days
             // cards paint cache-first on the Mood page + revalidate.
             moodRelations: MoodRelationsRepository(api: apiClient, swr: swr),
-            // W-B189 (#23) — recovery routes through the shared SWR cache
+            // Recovery routes through the shared SWR cache
             // (Berlin-day-anchored `.insightsRecovery`) so the recovery sub-page
             // paints cache-first on launch and revalidates (1.4 B3: five minutes).
             recovery: RecoveryInsightsRepository(api: apiClient, swr: swr),
-            // v1.25 (GH iOS #38) — the three clinical-signal reads route through
+            // v1.25 — the three clinical-signal reads route through
             // the shared daily SWR cache (Berlin-day-anchored) so each card paints
             // cache-first on launch + revalidates once per day.
             clinicalSignals: ClinicalSignalsRepository(api: apiClient, swr: swr),
             // Web-parity `TodayHero` — the digest is `no-store` + must reflect a
             // fresh dismiss / keep / let-go, so it fetches direct (no SWR).
             dailyDigest: DailyDigestRepository(api: apiClient),
-            // CU-33 — the pattern ledger is deliberately NOT cached: the
+            // The pattern ledger is deliberately NOT cached: the
             // correlations recomputation can clear a dismissal server-side, so a
             // cached row would paint a statement the server already lifted.
             patterns: PatternsRepository(api: apiClient)
@@ -300,7 +300,7 @@ public extension AppContainer {
 
     /// Factory — constructs the observable stores from the repos.
     ///
-    /// **v0.5.4-BF7:** the `PersonalRecordsStore` now takes an optional
+    /// The `PersonalRecordsStore` now takes an optional
     /// `derivedSource`. When supplied, the store surfaces client-derived
     /// records (Steps streak / Steps best-day) for the cumulative kinds
     /// the server-side detection worker hasn't started populating yet
@@ -312,10 +312,10 @@ public extension AppContainer {
         repos: ServerStatsRepos,
         measurementsRepo: MeasurementsRepository
     ) -> ServerStatsStores {
-        // v0.5.4-BF7 — client-side derivation surface for PersonalRecords. Reads
+        // Client-side derivation surface for PersonalRecords. Reads
         // cached `/api/measurements/series` + computes Schritte best-day +
         // 10k-streak records until the server detection worker lights up the route.
-        // v0.5.5.6 POLISH-PR — 30-day trajectory provider for the redesigned
+        // 30-day trajectory provider for the redesigned
         // `PersonalRecordsScreen` (hero + grid mini sparklines with peak markers).
         // Re-uses the same `MeasurementsRepository` series cache so one fetch
         // serves both call-sites.
@@ -327,7 +327,7 @@ public extension AppContainer {
         )
         return ServerStatsStores(
             syncState: SyncStateStore(repo: repos.syncState, healthDiagnostics: .shared),
-            // v0.5.4-SP5 — HR-time-series for workout-detail is read
+            // HR-time-series for workout-detail is read
             // from HealthKit directly (server only exposes avg/max/min).
             // `HealthKitWorkoutDetailService` is iOS-only; the
             // `canImport(HealthKit)` shim inside the service keeps the
@@ -336,7 +336,7 @@ public extension AppContainer {
                 repo: repos.workouts,
                 hkDetail: HealthKitWorkoutDetailService()
             ),
-            // v0.5.4-BF7 — `PersonalRecordsStore` takes an optional
+            // `PersonalRecordsStore` takes an optional
             // `derivedSource`. v0.5.5.6 POLISH-PR adds the
             // `sparklineProvider` for the redesigned record cards.
             personalRecords: PersonalRecordsStore(
@@ -357,7 +357,7 @@ public extension AppContainer {
             ),
             narrative: NarrativeStore(repo: repos.narrative),
             moodRelations: MoodRelationsStore(repo: repos.moodRelations),
-            // 1.4 B3 — the trend lines read exactly what the metric screen
+            // The trend lines read exactly what the metric screen
             // behind each card reads, so both show the same readings.
             recovery: RecoveryInsightsStore(repo: repos.recovery) { [measurementsRepo] kind in
                 try await measurementsRepo.recent(kind: kind, limit: 400)

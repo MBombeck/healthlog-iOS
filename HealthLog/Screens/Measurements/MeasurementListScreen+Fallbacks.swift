@@ -12,7 +12,7 @@ import SwiftUI
 // in the screen file, where `private` still reaches it.
 
 extension MeasurementListScreen {
-    /// v0.14.3 E5 / v0.14.4 D2 — synthesizes list rows when the default
+    /// Synthesizes list rows when the default
     /// `recent(kind:)` page came back empty, so the drill-down list never shows
     /// "keine Daten" while the chart (and the all-time history) has data.
     ///
@@ -45,7 +45,7 @@ extension MeasurementListScreen {
         }
     }
 
-    /// v0.14.4 D2 — the non-series fallback: a WIDE kind-scoped `recent(kind:)`
+    /// The non-series fallback: a WIDE kind-scoped `recent(kind:)`
     /// read so a long-dormant or low-frequency kind surfaces its older rows
     /// instead of the empty state. `limit: 2000` opts the repo into the full
     /// ~10y history window (see `MeasurementsRepository.recent(kind:limit:)`).

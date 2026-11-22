@@ -3,13 +3,12 @@ import SwiftUI
 /// **Phase C5 — the cycle home (women-only, gated).**
 ///
 /// The mirror of the web `/cycle` surface: a hero ``HLCycleRing`` driven by the
-/// prediction, a warm phase-aware explainer ("Was passiert gerade mit meinem
-/// Körper"), a month calendar of logged + predicted days, and calm prediction +
-/// cycle-stats summaries. Reachable only when ``CycleGate/isCycleTrackingAvailable``
-/// is true (hard-gated behind `FeatureFlag.cycleTracking`), so an ineligible /
-/// opted-out user can never land here.
+/// prediction, calm prediction + cycle-stats summaries, the charts, a month
+/// calendar of logged + predicted days, and a warm phase-aware explainer
+/// ("Was passiert gerade mit meinem Körper") last (``CycleScreenSection``). Reachable only when ``CycleGate/isCycleTrackingAvailable``
+/// is true, so an ineligible / opted-out user can never land here.
 ///
-/// **Data path / offline (Z1 / #72).** Reads from ``CycleStore`` (SWR
+/// **Data path / offline.** Reads from ``CycleStore`` (SWR
 /// cache-first). The hero ring draws the SERVER's ``CycleVerdictDTO`` — state,
 /// phase, arcs, day count, overdue count — and derives none of it. Offline the
 /// on-device ``CyclePredictionEngine`` still fills the FORECAST (labelled), and
@@ -43,29 +42,15 @@ struct CycleScreen: View {
             if let store {
                 content(store: store)
             } else {
-                CycleUnavailableCard()
-            }
-        }
-        .navigationTitle("cycle.home.title")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let store, !store.isDisabled {
-                // 1.4 B2 — the one (i): the current phase in full, the method
-                // behind phases and predictions, the guide.
-                ToolbarItem(placement: .topBarTrailing) {
-                    HLInfoButton(content: info(store: store), accessibilityIdentifier: "cycle.info")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAdvancedSettings = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .accessibilityLabel(Text("cycle.settings.title"))
-                    .accessibilityIdentifier("cycle.home.advancedSettings")
+                HLPage {
+                    SectionRootHeader("cycle.home.title")
+                    CycleTrackingOffCard()
                 }
             }
         }
+        // Inline when pushed; as a sidebar tab the page heads itself.
+        .hlSectionRootTitle(Text("cycle.home.title"))
+        .hlPageActions(pageActions)
         .task { await store?.load() }
         // AUD-6 Critical #2 — reload the calendar/prediction on foreground so the
         // current-phase / day-of-cycle rolls over at midnight (and an offline
@@ -91,79 +76,87 @@ struct CycleScreen: View {
             CycleCaptureSheet(
                 store: container.cycleStore,
                 healthKit: container.healthKit,
-                initialDate: captureDate,
-                onDismiss: { showCapture = false }
+                initialDate: captureDate
             )
-            .hlSheetPresentation(.form)
         }
     }
 
     @ViewBuilder
     private func advancedSettingsSheet() -> some View {
         if let store {
-            CycleAdvancedSettingsSheet(store: store, onDismiss: { showAdvancedSettings = false })
-                .hlSheetPresentation(.form)
+            CycleAdvancedSettingsSheet(store: store)
         }
     }
 
     private func content(store: CycleStore) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: HLSpace.xxl) {
+        HLPage {
+            SectionRootHeader("cycle.home.title")
+            Group {
                 if store.isDisabled {
-                    CycleUnavailableCard()
+                    CycleTrackingOffCard()
                 } else if isColdError(store: store) {
-                    // QOL-ERR-1 — a cold offline start (no cached calendar / cycles
+                    // A cold offline start (no cached calendar / cycles
                     // and no on-device prediction to fall back to) used to render
                     // the same "still learning" surface as a genuine no-data state.
                     // Surface an honest error + Retry instead. Pull-to-refresh also
                     // re-runs the load.
-                    HLRetryUnavailableView { await store.load() }
+                    HLErrorState(retry: { await store.load() })
+                        .containerCentered()
                 } else {
-                    heroSection(store: store)
-                    if let phase = currentPhase(store: store) {
-                        CyclePhaseExplainer(phase: phase, dayOfCycle: store.verdict?.verdict.dayOfCycle)
+                    // Key figure, forecast, statistics, charts, calendar and
+                    // patterns, background last: the order of every detail page.
+                    ForEach(CycleScreenSection.visible(hasPhase: currentPhase(store: store) != nil), id: \.self) {
+                        section($0, store: store)
                     }
-                    calendarSection(store: store)
-                    CyclePredictionSummary(
-                        prediction: store.prediction,
-                        today: Self.today,
-                        cyclesObserved: cyclesObserved(store: store)
-                    )
-                    CycleStatsCard(stats: store.stats, cyclesObserved: confirmedCycleCount(store: store))
-                    CycleBBTChart(
-                        days: store.calendar?.days ?? [],
-                        cycles: store.cycles,
-                        prediction: store.prediction,
-                        rawMode: store.profile?.rawChartMode ?? false,
-                        today: Self.today
-                    )
-                    CycleHistoryChart(
-                        cycles: store.cycles,
-                        averageLength: store.stats?.avgLengthDays
-                    )
-                    CycleInsightsSection(store: store)
-                    // 1.4 B2 — the Apple Health link moved into the settings
+                    // The Apple Health link moved into the settings
                     // sheet; nothing stands loose under the last card.
                     // b177 sync-status footer — self-suppresses until the first
                     // sync handshake lands.
                     HLSyncStatusFooter(screenLoading: store.isLoading)
                 }
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.md)
-            // Normal bottom inset — the previous `.xxxl` cleared the removed
-            // bottom log button overlay; without the button the page scrolls
-            // fully and only needs a comfortable tail.
-            .padding(.bottom, HLSpace.xl)
         }
-        .hlScrollEdgeSoft()
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
-        // QOL-ERR-1 — pull-to-refresh reloads the calendar/prediction.
-        .refreshable { await store.load() }
+        // Pull-to-refresh reloads the calendar/prediction.
+        .hlRefresh(in: .list) { await store.load() }
     }
 
-    /// QOL-ERR-1 — true when the last load FAILED and there is genuinely nothing
+    @ViewBuilder
+    private func section(_ section: CycleScreenSection, store: CycleStore) -> some View {
+        switch section {
+        case .ring:
+            heroSection(store: store)
+        case .prediction:
+            CyclePredictionSummary(
+                prediction: store.prediction,
+                today: Self.today,
+                cyclesObserved: cyclesObserved(store: store)
+            )
+        case .upcoming:
+            CycleUpcomingCard(content: upcomingContent(store: store))
+        case .statistics:
+            CycleStatsCard(stats: store.stats, cyclesObserved: confirmedCycleCount(store: store))
+        case .temperature:
+            CycleBBTChart(
+                days: store.calendar?.days ?? [],
+                cycles: store.cycles,
+                prediction: store.prediction,
+                rawMode: store.profile?.rawChartMode ?? false,
+                today: Self.today
+            )
+        case .history:
+            CycleHistoryChart(cycles: store.cycles, averageLength: store.stats?.avgLengthDays)
+        case .calendar:
+            calendarSection(store: store)
+        case .patterns:
+            CycleInsightsSection(store: store)
+        case .explainer:
+            if let phase = currentPhase(store: store) {
+                CyclePhaseExplainer(phase: phase, dayOfCycle: store.verdict?.verdict.dayOfCycle)
+            }
+        }
+    }
+
+    /// True when the last load FAILED and there is genuinely nothing
     /// to render (no cached calendar, no cycle history, and no server / on-device
     /// prediction). Distinguishes a cold error from the legitimate "still
     /// learning" state so the screen can surface a Retry instead of a blank page.
@@ -205,13 +198,13 @@ struct CycleScreen: View {
             // server older than v1.35.2. The app does NOT reconstruct one — it
             // says it has none. This is deliberately not the "still learning"
             // card, which would claim something about the data.
-            CycleVerdictUnavailableCard()
+            CycleNoVerdictCard()
         } else {
             CycleLearningCard()
         }
     }
 
-    /// **Z1 (#72) — the offline "as of" stamp.**
+    /// **The offline "as of" stamp.**
     ///
     /// A verdict is a statement about one specific day, resolved in the user's
     /// PROFILE timezone. Offline the app shows the last one the server sent and
@@ -223,15 +216,14 @@ struct CycleScreen: View {
     private func verdictAsOfCaption(store: CycleStore) -> some View {
         if store.verdictIsRestored, let snapshot = store.verdict {
             Text(Self.asOfText(snapshot.asOf))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("cycle.home.verdictAsOf")
         }
     }
 
-    /// **CU-25 (#72) — visible provenance.** The server is the canonical source;
+    /// **Visible provenance.** The server is the canonical source;
     /// the on-device engine is only the offline / degraded fallback. When the
     /// numbers on the ring came from this device rather than from the record,
     /// the screen says so instead of letting the two silently diverge.
@@ -240,8 +232,7 @@ struct CycleScreen: View {
     private func provenanceCaption(store: CycleStore) -> some View {
         if store.predictionProvenance == .onDevice {
             Text("cycle.home.prediction.onDevice")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("cycle.home.predictionProvenance")
@@ -249,6 +240,18 @@ struct CycleScreen: View {
     }
 
     // MARK: - Info
+
+    /// The one (i): the current phase in full, the method behind phases and
+    /// predictions, the guide; then the cycle settings.
+    private var pageActions: HLTabHeaderActions {
+        guard let store, !store.isDisabled else { return .none }
+        return [
+            .info(info(store: store), identifier: "cycle.info"),
+            .settings(label: "cycle.settings.title", identifier: "cycle.home.advancedSettings") {
+                showAdvancedSettings = true
+            }
+        ]
+    }
 
     private func info(store: CycleStore) -> HLInfoContent {
         let insights = store.insights
@@ -258,11 +261,13 @@ struct CycleScreen: View {
 
     // MARK: - Calendar
 
+    @ViewBuilder
     private func calendarSection(store: CycleStore) -> some View {
         let suppress = suppressFertility(store: store)
-        return HLSettingsCard(icon: "calendar", title: "cycle.calendar.title") {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                // #137 — the server merged or gave back a start (v1.43).
+        HLSectionHeader("cycle.calendar.title", rank: .area)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLLayout.rowSpacing) {
+                // The server merged or gave back a start (v1.43).
                 if let notice = store.startNotice {
                     CycleStartNoticeRow(notice: notice) { store.dismissStartNotice() }
                 }
@@ -282,7 +287,19 @@ struct CycleScreen: View {
         }
     }
 
-    // MARK: - Maturity gate (C1)
+    /// The server's projection for the card under the forecast. The
+    /// prediction card names the next period whenever it renders, so the
+    /// list then starts after it.
+    private func upcomingContent(store: CycleStore) -> CycleUpcomingContent {
+        let showsNext = store.prediction.map { !$0.nextPeriodStart.isEmpty } ?? false
+        return CycleUpcomingContent.resolve(
+            projection: store.calendar?.projection,
+            state: store.calendar?.projectionState,
+            showsNextPeriod: showsNext
+        )
+    }
+
+    // MARK: - Maturity gate
 
     /// The single confirmed-cycle maturity value for the screen. Prefers the
     /// calendar envelope's `profile.cyclesObserved`, then the prediction's
@@ -312,23 +329,16 @@ struct CycleScreen: View {
 
     private var monthHeader: some View {
         HStack {
-            Button {
+            HLIconButton(systemImage: "chevron.left", label: "cycle.calendar.previousMonth") {
                 shiftMonth(-1)
-            } label: {
-                Image(systemName: "chevron.left").font(.hlSubhead)
             }
-            .accessibilityLabel(Text("cycle.calendar.previousMonth"))
             Spacer()
             Text(Self.monthTitle(visibleMonth))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+                .hlText(.cardTitle)
             Spacer()
-            Button {
+            HLIconButton(systemImage: "chevron.right", label: "cycle.calendar.nextMonth") {
                 shiftMonth(1)
-            } label: {
-                Image(systemName: "chevron.right").font(.hlSubhead)
             }
-            .accessibilityLabel(Text("cycle.calendar.nextMonth"))
         }
         .foregroundStyle(HLText.secondary)
     }
@@ -372,10 +382,10 @@ struct CycleScreen: View {
     }
 
     static func monthTitle(_ date: Date) -> String {
-        monthFormatter.string(from: date)
+        HLDateFormat.monthYear(date)
     }
 
-    /// #115 1.5 — midnight of the key's day in the ACCOUNT zone: the instant
+    /// Midnight of the key's day in the ACCOUNT zone: the instant
     /// the capture sheet's profile-zone picker shows as that day, so a grid tap
     /// opens the editor on the tapped day wherever the phone is.
     static func date(from key: String) -> Date? {
@@ -385,24 +395,17 @@ struct CycleScreen: View {
     /// "Stand: Gestern, 14:20". Relative where the system offers it, so a
     /// yesterday-old verdict reads as yesterday rather than as a bare date.
     static func asOfText(_ date: Date) -> String {
-        String(format: String(localized: "cycle.home.verdict.asOf"), asOfFormatter.string(from: date))
+        String(format: String(localized: "cycle.home.verdict.asOf"), asOfStamp(date))
     }
 
-    private static let asOfFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        f.doesRelativeDateFormatting = true
-        return f
-    }()
-
-    private static let monthFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
-        f.setLocalizedDateFormatFromTemplate("yMMMM")
-        return f
-    }()
+    /// Today and yesterday in words, older days as a date, each with the time.
+    static func asOfStamp(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        let daysAgo = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: date),
+            to: calendar.startOfDay(for: now)
+        ).day ?? 0
+        guard (0 ... 1).contains(daysAgo) else { return HLDateFormat.dateTime(date) }
+        return "\(HLDateFormat.relative(date, now: now, calendar: calendar)), \(HLTimeFormat.time(date))"
+    }
 }

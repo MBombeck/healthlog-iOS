@@ -9,7 +9,6 @@ struct BiomarkerCatalogScreen: View {
 
     @State private var showAddSheet = false
     @State private var editingMarker: BiomarkerDTO?
-    @State private var deletingMarker: BiomarkerDTO?
 
     private var sortedMarkers: [BiomarkerDTO] {
         store.biomarkers.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -39,37 +38,33 @@ struct BiomarkerCatalogScreen: View {
                             markerRow(marker)
                         }
                     }
+                    .hlFormRowSurface()
                     if !hiddenMarkers.isEmpty {
                         Section {
                             ForEach(hiddenMarkers) { marker in
                                 markerRow(marker)
                             }
                         } header: {
-                            // 1.4 B2-c — header only: what "hidden" means is
+                            // Header only: what "hidden" means is
                             // the editor's toggle line, one tap away.
-                            Text("biomarker.catalog.hidden.section")
+                            HLSectionHeader("biomarker.catalog.hidden.section", rank: .group)
                         }
+                        .hlFormRowSurface()
                     }
                     Section {} footer: {
                         HLSyncStatusFooter(screenLoading: store.isLoading)
                     }
                 }
                 .listStyle(.insetGrouped)
+                .hlPageMargins()
                 .refreshable { await store.reloadBiomarkers() }
             }
         }
         .navigationTitle(Text("biomarker.catalog.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Label("biomarker.add.title", systemImage: "plus")
-                }
-                .accessibilityIdentifier("biomarker.toolbar.add")
-            }
-        }
+        .hlPageActions([
+            .add(label: "biomarker.add.title", identifier: "biomarker.toolbar.add") { showAddSheet = true }
+        ])
         .task { await store.reloadBiomarkers() }
         .sheet(isPresented: $showAddSheet) {
             BiomarkerEditorSheet(store: store, existing: nil)
@@ -77,105 +72,59 @@ struct BiomarkerCatalogScreen: View {
         .sheet(item: $editingMarker) { marker in
             BiomarkerEditorSheet(store: store, existing: marker)
         }
-        .hlConfirmDestructive(
-            Text("biomarker.delete.confirm.title"),
-            isPresented: deleteBinding,
-            message: Text("biomarker.delete.keepsHistory"),
-            confirm: Text("labs.delete.action"),
-            cancel: Text("labs.action.cancel"),
-            onCancel: { deletingMarker = nil },
-            action: {
-                if let marker = deletingMarker {
-                    Task { await store.deleteBiomarker(id: marker.id) }
-                }
-                deletingMarker = nil
-            }
-        )
     }
 
     /// One catalog row — extracted so the visible and hidden sections stay
     /// literally identical in behaviour (tap to edit, swipe to delete). A
     /// hidden marker is still fully editable; that is how you un-hide it.
     private func markerRow(_ marker: BiomarkerDTO) -> some View {
-        Button {
+        HLRowButton {
             editingMarker = marker
         } label: {
             BiomarkerRow(marker: marker)
         }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                deletingMarker = marker
-            } label: {
-                Label("labs.delete.action", systemImage: "trash")
-            }
-        }
-    }
-
-    private var deleteBinding: Binding<Bool> {
-        Binding(
-            get: { deletingMarker != nil },
-            set: { if !$0 { deletingMarker = nil } }
-        )
+        // A marker is a container: asked first, its readings stay.
+        .hlSwipeDelete(.confirmed(
+            title: "biomarker.delete.confirm.title",
+            message: "biomarker.delete.keepsHistory"
+        ) {
+            await store.deleteBiomarker(id: marker.id)
+        })
     }
 
     private var emptyState: some View {
-        // 1.4 B4 — the one empty-state form: on the page, no ghost card, the
-        // one action `.secondary`.
-        ScrollView {
+        // The one empty-state form: on the page, no ghost card; its one
+        // action adds the first marker, the plus in the bar stays.
+        HLPage {
             HLEmptyState(
                 icon: "list.bullet.rectangle",
                 title: "biomarker.empty.title",
                 message: "biomarker.empty.subtitle"
             ) {
-                HLButton("biomarker.add.title", icon: "plus", variant: .secondary) {
-                    showAddSheet = true
-                }
+                HLButton("biomarker.add.title", systemImage: "plus", variant: .secondary) { showAddSheet = true }
+                    .accessibilityIdentifier("biomarker.empty.add")
             }
-            .padding(HLSpace.lg)
         }
         .refreshable { await store.reloadBiomarkers() }
     }
 }
 
+/// One catalog entry: the name, and one detail line with panel, unit and
+/// reference range. It opens the editor as a whole, without a chevron.
 struct BiomarkerRow: View {
     let marker: BiomarkerDTO
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(marker.name)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if let panel = marker.panel, !panel.isEmpty {
-                    Text(panel)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-            }
-            Spacer(minLength: HLSpace.sm)
-            VStack(alignment: .trailing, spacing: HLSpace.xxs) {
-                // #160 — a marker without a unit says so instead of "1".
-                if let unitLabel = LabUnit.standalone(marker.unit) {
-                    Text(verbatim: unitLabel)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-                if let range = rangeLabel {
-                    Text(range)
-                        .font(.hlCaption)
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.tertiary)
-                }
-            }
-            HLDisclosureChevron()
-        }
-        .padding(.vertical, HLSpace.xs)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        HLRow(title: Text(verbatim: marker.name), detail: HLRowDetail.text(Self.detailParts(marker)))
     }
 
-    private var rangeLabel: String? {
+    /// Panel, unit and range in reading order; a marker without a unit says
+    /// so instead of "1".
+    static func detailParts(_ marker: BiomarkerDTO) -> [String?] {
+        [LabPanelName.display(marker.panel), LabUnit.standalone(marker.unit), rangeLabel(marker)]
+    }
+
+    static func rangeLabel(_ marker: BiomarkerDTO) -> String? {
         switch (marker.lowerBound, marker.upperBound) {
         case let (low?, high?): HLNumberFormat.range(low.formatted(), high.formatted())
         case let (low?, nil): "≥ \(low.formatted())"

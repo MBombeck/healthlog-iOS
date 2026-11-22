@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **H2 (1.1.0) — no Swift type name under "Version unavailable".**
+/// **No Swift type name under "Version unavailable".**
 ///
 /// The QA sweep photographed Settings → Server reading "Der Vorgang konnte
 /// nicht abgeschlossen werden. (HealthLog.HLError-Fehler 2.)": the screen showed

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-WIDGET-DEEPLINK (v0152)** — pins the per-measurement widget deep link:
+/// Pins the per-measurement widget deep link:
 /// the canonical `MetricKind` ⇄ kebab-slug round-trip (now owned by the
 /// plattform-free `InsightsLayoutTileId`), the `LatestMeasurement` widget's
 /// per-metric URL builder, the `DeepLinkRoute` parse back to
@@ -40,7 +40,7 @@ struct InsightsLatestMeasurementDeepLinkTests {
 
     @Test("Mapped slugs are server-known — all of them")
     func mappedSlugsAreServerKnown() {
-        // Parity Build 4 / 4.1 — the `steps` exemption is gone: it is a
+        // The `steps` exemption is gone: it is a
         // `SUB_PAGE_METRIC` key on the web (v1.12) and now in `serverKnownIds`,
         // so EVERY mapped slug must be server-known with no carve-out left.
         for slug in InsightsLayoutTileId.kindToSlug.values {

@@ -129,7 +129,7 @@
                 && store.error == nil
             #expect(
                 accountBRemainsIsolated,
-                "EXPECTED_RED: late A medication fanout affected B"
+                "late A medication fanout affected B"
             )
         }
 

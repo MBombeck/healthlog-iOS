@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-32 — `AnamnesisRepository` gegen echten `APIClient` + `MockURLProtocol`.**
+/// **`AnamnesisRepository` gegen echten `APIClient` + `MockURLProtocol`.**
 ///
 /// Kein Mock-Server: der Transportweg ist echt, nur `URLProtocol` ist gestubbt,
 /// damit Schema-Drift zwischen Fixture und Decoder auffällt statt durchzurutschen.

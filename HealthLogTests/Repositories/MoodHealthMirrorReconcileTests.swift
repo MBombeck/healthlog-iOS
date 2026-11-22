@@ -6,12 +6,12 @@ import Testing
 
 /// **v0.10.0 W10 reconcile — mood ↔ Apple Health correctness fixes.**
 ///
-/// M1: an offline-logged mood (queued in the outbox, synced later) must be
+/// An offline-logged mood (queued in the outbox, synced later) must be
 /// mirrored into HKStateOfMind on the OUTBOX-REPLAY success path — not only on
 /// the online-success branch — so it actually reaches Apple Health. A replayed
 /// delete must remove the mirror.
 ///
-/// M2: on logout / user-change the device-local sync toggle must be forced OFF
+/// On logout / user-change the device-local sync toggle must be forced OFF
 /// and the per-user import anchor reset, so a different user signing in on the
 /// same device does not re-import the previous user's full HKStateOfMind
 /// history into their account.
@@ -52,7 +52,7 @@ struct MoodHealthMirrorReconcileTests {
         )
     }
 
-    // MARK: - M1 — offline-replay mirrors to HealthKit
+    // MARK: - Offline-replay mirrors to HealthKit
 
     @Test("M1: a replayed offline logMood mirrors the SERVER entry into HealthKit")
     func replayedLogMoodMirrorsToHK() async throws {
@@ -120,7 +120,7 @@ struct MoodHealthMirrorReconcileTests {
         #expect(recorder.writes.isEmpty)
     }
 
-    // MARK: - M2 — logout resets toggle + import anchor
+    // MARK: - Logout resets toggle + import anchor
 
     @MainActor
     @Test("M2: deactivateOnLogout forces the sync toggle OFF and resets the importer")
@@ -219,7 +219,7 @@ private final class MirrorRecorder: @unchecked Sendable {
     }
 }
 
-/// Stub `AnyHealthKitWriter` that records the `resetMoodImport()` call (M2).
+/// Stub `AnyHealthKitWriter` that records the `resetMoodImport()` call.
 private actor ResetRecordingWriter: AnyHealthKitWriter {
     private(set) var resetCount = 0
     private(set) var refreshCount = 0
@@ -243,7 +243,6 @@ private actor ResetRecordingWriter: AnyHealthKitWriter {
     func attachUploader(_: MeasurementBatchUploader) async {}
     func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
     func setInitialBackfillCutoff(_: Date?) async {}
-    func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
 }
 
 // swiftlint:enable force_unwrapping force_try

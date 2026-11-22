@@ -24,30 +24,41 @@ import Testing
 struct HLSettingsActionRowContractTests {
     typealias Row = HLSettingsActionRow<EmptyView, EmptyView>
 
-    @Test("Jeder Präsentationsfall trägt exakt das von R10 verlangte Symbol")
-    func glyphMapping() {
-        #expect(Row.trailingSymbol(for: .sheet) == "pencil")
-        #expect(Row.trailingSymbol(for: .create) == "plus.circle")
-        #expect(Row.trailingSymbol(for: .share) == "square.and.arrow.up")
-        #expect(Row.trailingSymbol(for: .external) == "arrow.up.right.square")
+    @Test("Rechts nur die Zeichen, die iOS kennt: Chevron, Teilen, externes Ziel oder nichts")
+    func indicatorMapping() {
+        #expect(Row.indicator(for: .sheet) == .disclosure, "ein Sheet öffnet sich hinter dem Chevron, kein Stift")
+        #expect(Row.indicator(for: .create) == .hidden, "Anlegen trägt das Plus vorn, rechts nichts")
+        #expect(Row.indicator(for: .share) == .symbol("square.and.arrow.up"))
+        #expect(Row.indicator(for: .external) == .symbol("arrow.up.right"))
         // `.confirm` löst an Ort und Stelle aus (bzw. öffnet einen
-        // confirmationDialog) — die Zeile führt nirgendwohin, also kein Glyph.
-        #expect(Row.trailingSymbol(for: .confirm) == nil)
+        // confirmationDialog) — die Zeile führt nirgendwohin, also kein Zeichen.
+        #expect(Row.indicator(for: .confirm) == .hidden)
+        #expect(Row.trailingSymbol(for: .sheet) == nil)
+        #expect(Row.trailingSymbol(for: .external) == "arrow.up.right")
     }
 
-    @Test("Kein Präsentationsfall malt einen Chevron — der ist dem Push vorbehalten")
-    func noActionCaseWearsAChevron() {
+    @Test("Kein Zubehör außer Chevron, Teilen und externem Ziel; nie Stift oder Plus rechts")
+    func noPencilOrPlusOnTheRight() {
         for presents in Row.Presents.allCases {
             let symbol = Row.trailingSymbol(for: presents) ?? ""
-            #expect(
-                !symbol.hasPrefix("chevron"),
-                """
-                \(presents.rawValue) trägt „\(symbol)". Ein Chevron ist in iOS die Ansage \
-                „es geht weiter nach rechts" und darf ausschließlich am Push stehen. \
-                Push ist über HLSettingsActionRow(presents: .push, destination:) erreichbar, \
-                der den NavigationLink selbst baut.
-                """
-            )
+            #expect(!symbol.contains("pencil"), "\(presents.rawValue) trägt einen Stift")
+            #expect(!symbol.contains("plus"), "\(presents.rawValue) trägt ein Plus rechts")
+        }
+    }
+
+    @Test("Eine Zeile, die etwas anlegt, trägt das Plus vorn, außer sie bringt ihr eigenes Symbol")
+    func createLeadsWithPlus() {
+        #expect(Row.leadingSymbol(icon: nil, presents: .create) == "plus")
+        #expect(Row.leadingSymbol(icon: "camera", presents: .create) == "camera")
+        #expect(Row.leadingSymbol(icon: nil, presents: .sheet) == nil)
+        #expect(Row.leadingSymbol(icon: nil, presents: nil) == nil)
+    }
+
+    @Test("Only the row that leaves the app is a link for VoiceOver")
+    func onlyExternalIsALink() {
+        #expect(Row.isLink(.external))
+        for presents in Row.Presents.allCases where presents != .external {
+            #expect(!Row.isLink(presents), "\(presents) reads as a link")
         }
     }
 

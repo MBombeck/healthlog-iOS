@@ -5,7 +5,7 @@ enum WorkoutHRBackfillRearmTrigger: Sendable {
     case authorizationRefresh
 }
 
-/// **GH #86** — per-user persistence for ``WorkoutHRBackfillState``.
+/// Per-user persistence for ``WorkoutHRBackfillState``.
 ///
 /// One JSON blob under `hl.workout.hrBackfill.<userId-token>`. UserDefaults
 /// for the same reason the HK anchors live there (PROJECT_GUIDE.md battery

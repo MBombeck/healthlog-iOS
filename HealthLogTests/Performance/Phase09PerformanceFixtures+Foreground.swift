@@ -5,7 +5,7 @@
     import Foundation
     @testable import HealthLog
 
-    /// **Phase 09 / plan 09-06 — a barrier that is opened, never waited out.**
+    /// **A barrier that is opened, never waited out.**
     ///
     /// The foreground contracts are all about *order*: which member had finished
     /// when another one started, and whether a cancellation actually reached a

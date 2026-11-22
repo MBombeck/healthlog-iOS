@@ -23,13 +23,13 @@ import Foundation
         /// (``HealthKitAuthorizedHistoryProviding``). `[:]` = nothing limited,
         /// `nil` = HealthKit could not say. Defaults to "nothing limited".
         var earliestAuthorizedDates: @Sendable (Set<HKObjectType>) async -> [HKObjectType: Date]? = { _ in [:] }
-        /// **B5 (1.4)** — the person's per-type direction from the server
+        /// The person's per-type direction from the server
         /// (``HealthKitWriteBackPolicy``). `nil` = not known right now (no
         /// cached answer and the server out of reach). Defaults to "no setting".
         var writeBackPolicy: @Sendable () async -> HealthKitWriteBackPolicy? = { .unrestricted }
     }
 
-    /// **S1 / public #11** — the decision half of the server→Apple-Health mirror.
+    /// The decision half of the server→Apple-Health mirror.
     ///
     /// `HealthKitService.mirrorServerMeasurements` and the create-time write
     /// both route through here, so the rule that decides "already in Apple
@@ -62,14 +62,14 @@ import Foundation
             /// Samples to save, in candidate order.
             var samples: [HKQuantitySample] = []
             /// What is handed to `HKHealthStore.save`: the samples, with each
-            /// blood-pressure pair wrapped in its correlation (T4 / #15).
+            /// blood-pressure pair wrapped in its correlation.
             var objects: [HKObject] = []
             /// Server ids of every row the plan writes. The caller keeps them
             /// claimed while the save is in flight.
             var linkageIDs: [String] = []
-            /// **B5 (1.4)** — `false` when the person's direction was not known
+            /// `false` when the person's direction was not known
             /// and the pass wrote nothing for that reason. The one-shot history
-            /// mirror then stays due. An unknown readable window (A3) does not
+            /// mirror then stays due. An unknown readable window does not
             /// count: it can stay unknown, and the one-shot would then fetch the
             /// whole history again on every refresh.
             var decided = true
@@ -94,7 +94,7 @@ import Foundation
             ]
         }
 
-        /// MIRROR (1.5, public #28) — `rowLimit` caps how many readings one
+        /// `rowLimit` caps how many readings one
         /// plan writes (the background pass allows 50), and `shouldStop` is
         /// asked before every candidate (the background window). Both default
         /// to "no bound", which is the foreground page and the history pass.
@@ -110,7 +110,7 @@ import Foundation
             var seen = excluded
             let eligible = measurements.filter(HealthKitService.shouldMirrorFromServer)
             guard !eligible.isEmpty else { return plan }
-            // B5 (1.4) — the person's direction per kind. Not known now: write
+            // The person's direction per kind. Not known now: write
             // nothing and say so, the next pass decides.
             guard let policy = await probe.writeBackPolicy() else {
                 plan.decided = false
@@ -153,7 +153,7 @@ import Foundation
             ServerMirrorWriteOutcome(decided: plan.decided, unexamined: plan.unexamined, stopped: plan.stopped)
         }
 
-        /// **MIRROR (1.5, public #28)** — saves a plan, or nothing. `isExpired`
+        /// Saves a plan, or nothing. `isExpired`
         /// is asked once more right before the save: a window that closed while
         /// the plan was probing writes nothing, so a wake never leaves half a
         /// batch behind, and the planned rows wait for the next window. The save

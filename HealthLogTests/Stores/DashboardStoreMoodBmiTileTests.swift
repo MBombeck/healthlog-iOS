@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// b241 — mood + BMI dashboard tile data fixes. Pins the three contracts the
+/// Mood + BMI dashboard tile data fixes. Pins the three contracts the
 /// b241 investigation nailed down (server confirmed 483 mood rows + 35 BMI rows,
 /// yet both tiles rendered a headline with an empty series):
 ///

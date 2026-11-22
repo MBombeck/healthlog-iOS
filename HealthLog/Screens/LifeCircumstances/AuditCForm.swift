@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **AUDITC (1.5.0, #132)** — the three AUDIT-C items, unfolded in the
+/// **AUDITC** — the three AUDIT-C items, unfolded in the
 /// alcohol section.
 ///
 /// Stems and answers are rendered exactly as `auditC.instrument` delivered
@@ -63,32 +63,13 @@ struct AuditCForm: View {
     }
 
     private func optionRow(_ option: AuditCInstrument.Option, item index: Int) -> some View {
-        let isSelected = model.answer(index) == option.value
-        return Button {
+        HLChoiceRow(
+            title: Text(Self.spoken(option.label, language: instrument.locale)),
+            isSelected: model.answer(index) == option.value
+        ) {
             model.select(option.value, item: index)
-        } label: {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? HLAccent.userBrandTint : HLText.tertiary)
-                    .accessibilityHidden(true)
-                Text(Self.spoken(option.label, language: instrument.locale))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, HLSpace.xs)
-            .padding(.horizontal, HLSpace.sm)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
-                    .fill(isSelected ? HLAccent.userBrandTint.opacity(0.12) : Color.clear)
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(model.isSubmitting)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("life.auditC.item.\(index).option.\(option.value)")
     }
 
@@ -98,24 +79,19 @@ struct AuditCForm: View {
                 HLFormErrorText(error)
                     .accessibilityIdentifier("life.auditC.error")
             }
-            HLButton("life.auditC.submit", variant: .primary, isLoading: model.isSubmitting) {
-                Task { await model.submit(instrument, store: store) }
+            HLButtonPair {
+                HLButton("life.auditC.submit", variant: .primary, isLoading: model.isSubmitting) {
+                    Task { await model.submit(instrument, store: store) }
+                }
+                .disabled(!model.isComplete || model.isSubmitting)
+                .accessibilityIdentifier("life.auditC.submit")
+            } secondary: {
+                HLButton(HLControlWord.cancel.key, variant: .secondary) {
+                    withHLAnimation(.easeInOut(duration: 0.2)) { model.cancel() }
+                }
+                .disabled(model.isSubmitting)
+                .accessibilityIdentifier("life.auditC.cancel")
             }
-            .disabled(!model.isComplete || model.isSubmitting)
-            .accessibilityIdentifier("life.auditC.submit")
-            Button {
-                withHLAnimation(.easeInOut(duration: 0.2)) { model.cancel() }
-            } label: {
-                Text("Cancel")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(minHeight: 44)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(model.isSubmitting)
-            .accessibilityIdentifier("life.auditC.cancel")
         }
     }
 

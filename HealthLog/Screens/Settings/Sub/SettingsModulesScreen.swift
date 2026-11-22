@@ -17,7 +17,7 @@ import SwiftUI
 /// when the server map is absent). A toggle snaps optimistically, then the PATCH
 /// confirms; a non-retriable failure reverts the row and surfaces the alert.
 ///
-/// **Audit A-7 — this screen is where a module that is off says why.** The More
+/// **This screen is where a module that is off says why.** The More
 /// tab keeps HIDING the rows of switched-off modules (a tab full of dead rows
 /// explaining themselves would be worse than a short one), so the explanation
 /// has to live somewhere a person can reach: here. Every offered module stays
@@ -34,17 +34,12 @@ struct SettingsModulesScreen: View {
     @State private var showError = false
 
     var body: some View {
-        HLSettingsPage(title: "Modules") {
+        HLPage {
             toggleableCard
         }
         .navigationTitle("Modules")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(
-            String(localized: "Could not update modules. Please try again."),
-            isPresented: $showError
-        ) {
-            Button(String(localized: "OK"), role: .cancel) {}
-        }
+        .hlAcknowledgeAlert("Could not update modules. Please try again.", isPresented: $showError)
     }
 
     /// UI-Standard R2 — der Karten-Subtitle („Jeder Schalter blendet die
@@ -52,11 +47,10 @@ struct SettingsModulesScreen: View {
     /// erzählte die Schalter darunter nach und stand außerdem wortgleich in
     /// der Hub-Zeile „Optionale Funktionen ein- oder ausschalten". Gefallen.
     private var toggleableCard: some View {
-        // 1.4 B2-c — which domains are always on is this card's subtitle; the
+        // Which domains are always on is this card's subtitle; the
         // "Always on" card held nothing but that sentence.
-        HLSettingsCard(
-            icon: "square.grid.2x2.fill",
-            title: "Optional features",
+        HLCard(
+            "Optional features",
             subtitle: "Weight, blood pressure and pulse are always available."
         ) {
             ForEach(SettingsModulesScreen.offeredKeys) { key in
@@ -71,10 +65,10 @@ struct SettingsModulesScreen: View {
     static let offeredKeys: [ModuleKey] = ModuleKey.allCases.filter(\.isUserToggleable)
 
     private func moduleToggleRow(_ key: ModuleKey) -> some View {
-        // #30 — observe the gate map so the toggle reflects a 403-driven flip too.
+        // Observe the gate map so the toggle reflects a 403-driven flip too.
         let gate = container?.moduleGate
         _ = gate?.modules
-        _ = gate?.moduleAccess // Audit A-7 — re-render when the reasons change too.
+        _ = gate?.moduleAccess // Re-render when the reasons change too.
         let isOn = gate?.isEnabled(key) ?? true
         let busy = inFlight.contains(key)
         // Audit A-7 (fix round 1) — one seam, and it resolves the state itself.
@@ -84,7 +78,7 @@ struct SettingsModulesScreen: View {
         let row = SettingsModulesScreen.rowPresentation(gate: gate, key: key)
         return HLSettingsToggleRow(
             title: key.displayTitle,
-            // Audit A-7 — a module the viewer cannot switch replaces its
+            // A module the viewer cannot switch replaces its
             // marketing subtitle with the reason it is off. `disabled` (the
             // viewer's own switch) keeps the subtitle: the row is simply off.
             description: row.reasonKey.map { LocalizedStringKey($0) } ?? key.displaySubtitle,
@@ -110,7 +104,7 @@ struct SettingsModulesScreen: View {
         rowPresentation(for: gate?.reconciledAccessState(key))
     }
 
-    /// **Audit A-7 — how one switchboard row reads, given the server's verdict.**
+    /// **How one switchboard row reads, given the server's verdict.**
     ///
     /// Pure and `nonisolated` so the rule can be asserted without a view: the
     /// screen's whole A-7 behaviour is this function plus the two fields it
@@ -129,7 +123,7 @@ struct SettingsModulesScreen: View {
         return RowPresentation(reasonKey: state.offReasonKey, isSwitchOffered: false)
     }
 
-    /// Audit A-7 — the two things a module's access state changes about its row.
+    /// The two things a module's access state changes about its row.
     struct RowPresentation: Equatable, Sendable {
         /// Catalogue key of the reason sentence, or `nil` to keep the module's
         /// own subtitle.
@@ -149,7 +143,7 @@ struct SettingsModulesScreen: View {
                 showError = true
                 return
             }
-            // GH #48 — the nutrients module drives a HealthKit read of the
+            // The nutrients module drives a HealthKit read of the
             // Dietary* catalog types, which are deliberately kept OUT of the
             // always-on onboarding sheet. Request their read-authorization
             // lazily the moment the module is switched ON (never before), then
@@ -175,17 +169,17 @@ extension ModuleKey {
         case .glucose: "Blood glucose"
         case .workouts: "Workouts"
         case .recovery: "Recovery"
-        case .labs: "Lab values"
+        case .labs: "labs.list.title"
         case .achievements: "Achievements"
         case .coach: "AI coach"
         case .insights: "Insights overview"
         case .doctorReport: "Doctor report"
-        case .illness: "Illness journal"
+        case .illness: "illness.journal.title"
         case .inboundDocuments: "Documents"
         case .nutrients: "Nutrients"
         case .medications: "Medications"
-        case .environment: "Environment"
-        case .mentalHealth: "Mental health"
+        case .environment: "environment.list.title"
+        case .mentalHealth: "more.mentalWellbeing.title"
         case .mcp: "MCP connector"
         }
     }

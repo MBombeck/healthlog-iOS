@@ -18,6 +18,9 @@ import Observation
 public final class LabsStore {
     public private(set) var labs: [LabResultDTO] = []
     public private(set) var biomarkers: [BiomarkerDTO] = []
+    /// The person's own panel names from the catalog read (server v1.47.1),
+    /// offered as suggestions in the marker form. Empty on an older server.
+    public private(set) var customPanels: [String] = []
     public private(set) var isLoading = false
     /// True after a `403 module.disabled` for `labs` — the module is OFF.
     public private(set) var isDisabled = false
@@ -33,33 +36,38 @@ public final class LabsStore {
     public private(set) var biomarkerCatalogError: String?
     /// Server-reported total (for an honest pull-to-refresh count).
     public private(set) var total = 0
-    /// #130 — the per-marker overview (`GET /api/labs/overview`, server
+    /// The per-marker overview (`GET /api/labs/overview`, server
     /// v1.42.4+), the source of the "by type" list. `nil` on a server without
     /// the route, before the first load, or offline before it ever loaded; the
     /// list then falls back to grouping ``labs`` (see ``markerIndex``).
     public private(set) var markerOverview: LabOverviewResponse?
+    /// The person's labs list presentation (`groupBy`, `groupsOpen`, server
+    /// v1.47.1). `nil` before the first load and on an older server.
+    public private(set) var listLayout: LabsListLayout?
 
     /// Ids removed optimistically and pending a possible restore (undo window).
     /// Cleared when the undo window expires or the restore lands.
     public private(set) var pendingRestoreIDs: [String] = []
 
     let repository: LabsRepository
-    /// #130 — merged marker id to the marker it went into (``resolvedBiomarker(_:)``).
+    /// Merged marker id to the marker it went into (``resolvedBiomarker(_:)``).
     public internal(set) var mergedMarkerRedirects: [String: String] = [:]
     private let undo: UndoCoordinator?
+    /// D5 #11: the derived marker list, kept for the inputs it was built from.
+    @ObservationIgnored var markerMemo = LabsMarkerMemo()
     @ObservationIgnored private var authenticatedSessionRegistry = AuthenticatedSessionLeaseRegistry()
     @ObservationIgnored private var authenticatedSessionOwnerProvider: @Sendable () -> String? = { "_anonymous" }
     @ObservationIgnored private var ownsAuthenticatedSessionRegistry = true
     /// In-flight guard so overlapping `load()` calls coalesce.
     private var isReloading = false
 
-    /// v0154 LR-REDO — labs-list page size. Matches the web's `limit=500` so a
+    /// Labs-list page size. Matches the web's `limit=500` so a
     /// full biomarker history backs the client-side per-biomarker series filter
     /// + chart. The server caps the page server-side; this is the requested size.
     static let historyLimit = 500
 
-    /// **W-THRESHOLD-NUDGE** — optional, MDR-safe out-of-range nudge coordinator.
-    /// `nil` in standalone / tests that don't exercise the nudge; when wired it
+    /// Optional, MDR-safe out-of-range nudge coordinator.
+    /// `nil` in tests that don't exercise the nudge; when wired it
     /// is consulted right after a lab result lands. It NEVER blocks or fails the
     /// write — it only (maybe) surfaces one calm, retrospective, non-diagnostic
     /// banner off the SERVER's own range verdict. Settable post-init so the
@@ -108,7 +116,7 @@ public final class LabsStore {
         guard !isReloading else { return }
         isReloading = true
         isLoading = true
-        // 13-03 — unconditional. The condition used to be the very lease that
+        // Unconditional. The condition used to be the very lease that
         // had just been retired, so on the one exit that needed it the defer
         // did not fire — and it stranded TWO flags, not one: `isReloading`
         // guards this method's own re-entry, so every later `load()` became a
@@ -116,7 +124,7 @@ public final class LabsStore {
         // data fence below still refuses to write labs, biomarkers or an error
         // for a retired lease.
         //
-        // 20-02 (D-14-06-A) — guarded on `ownsRegistryGeneration`, which is
+        // Guarded on `ownsRegistryGeneration`, which is
         // registry currency WITHOUT the cancellation fold. Cancellation still
         // settles both flags, so 13-03's reasoning above survives intact
         // (including the `isReloading` half, whose stranding turned every later
@@ -133,30 +141,26 @@ public final class LabsStore {
                 isReloading = false
             }
         }
-        // v0154 LR-REDO — pull a full biomarker history (web uses limit=500)
+        // Pull a full biomarker history (web uses limit=500)
         // so the per-biomarker detail page can back its chart + "Alle
         // Messungen" list from the loaded list (the series is a client-side
         // filter of `labs`, no per-biomarker endpoint). The default 100 cap
         // truncated long histories under the by-type index.
         async let labsResult = repository.labs(limit: Self.historyLimit)
         async let catalog = repository.biomarkers()
-        // #130 — the marker list comes from the overview: one entry per marker
+        // The marker list comes from the overview: one entry per marker
         // over the whole history, so a long history is no longer cut at
         // `historyLimit`. A third, independent half: a failed overview keeps the
         // previous one (or the `labs` fallback) and states nothing of its own.
         async let overviewResult = repository.labsOverview()
-        // 14-03 (E1 / the #67 pattern, Labs edition) — two requests, two
-        // independently settled halves.
-        //
-        // These two were awaited as ONE tuple, so a throw from either jumped
-        // out of the whole `do` block: a failed biomarker CATALOG discarded a
-        // perfectly good labs result and the screen fell through to its error
-        // phase with no rows. That is exactly the symptom #67 taught the
-        // dashboard to survive, still live here. Each half now settles into its
-        // own slot, and each states its own failure.
-        //
-        // This is publication-level decoupling only. No retry policy is added,
-        // no third request, and the two requests stay two requests.
+        // The fourth half: the person's list presentation. Its failure is
+        // silent and keeps the previous one; the list never waits on it.
+        async let layoutResult = repository.labsListLayout()
+        // Two requests, two independently settled halves. Awaited as one
+        // tuple, a failed biomarker CATALOG would discard a good labs result
+        // and drop the screen into its error phase with no rows. Each half
+        // settles into its own slot and states its own failure; there is no
+        // retry policy and no third request.
         var page: ListLabResultsResponse?
         var markers: ListBiomarkersResponse?
         var labsFailure: Error?
@@ -167,6 +171,8 @@ public final class LabsStore {
         // server has no overview route (fall back to grouping `labs`).
         var overview: LabOverviewResponse??
         do { overview = try await overviewResult } catch {}
+        var layout: LabsListLayout??
+        do { layout = try await layoutResult } catch {}
         // The account fence is unchanged and still comes first: a retired lease
         // publishes NOTHING — not a row, not an error, not a caption. 13-03's
         // unconditional `defer` above still lowers both flags on this exit.
@@ -188,7 +194,9 @@ public final class LabsStore {
         labs = page?.results ?? labs
         total = page.map { $0.meta?.total ?? $0.results.count } ?? total
         biomarkers = markers?.biomarkers ?? biomarkers
+        customPanels = markers?.customPanels ?? customPanels
         if let overview { markerOverview = overview }
+        if let layout { listLayout = layout }
         publishHalfStatements(
             anyHalfSucceeded: page != nil || markers != nil,
             labsFailure: labsFailure,
@@ -196,7 +204,7 @@ public final class LabsStore {
         )
     }
 
-    /// 14-03 — is the `labs` module simply off?
+    /// Is the `labs` module simply off?
     ///
     /// A `module.disabled` verdict from either request is about the whole
     /// surface, so it is not a partial failure and does not get split: it takes
@@ -211,7 +219,7 @@ public final class LabsStore {
         return true
     }
 
-    /// 14-03 — what each half says about ITSELF once both have settled.
+    /// What each half says about ITSELF once both have settled.
     ///
     /// `lastError` is the labs half's, and only its. `biomarkerCatalogError` is
     /// the catalogue's, deliberately in its own slot because `lastError` is what
@@ -247,7 +255,8 @@ public final class LabsStore {
             let response = try await repository.biomarkers()
             try sessionLease.requireCurrent()
             biomarkers = response.biomarkers
-            // 14-03 — a successful catalog read ends the catalog's own
+            customPanels = response.customPanels
+            // A successful catalog read ends the catalog's own
             // statement; the retry the screen offers has to be able to end it.
             // A call rather than an assignment, deliberately: this method's
             // publication census is frozen at one site, and clearing a caption
@@ -285,7 +294,7 @@ public final class LabsStore {
             let created = try await repository.createLab(body, idempotencyKey: idempotencyKey)
             try sessionLease.requireCurrent()
             if reloadAfterCreate { await load() }
-            // W-THRESHOLD-NUDGE — evaluate the just-logged, server-resolved row
+            // Evaluate the just-logged, server-resolved row
             // against its server / user-defined range. The coordinator owns every
             // MDR gate (opt-in, server-escalation deference, debounce, and the
             // hard "no app-invented threshold" rule — it acts ONLY on the
@@ -369,7 +378,7 @@ public final class LabsStore {
             try await repository.deleteLab(id: id)
             try sessionLease.requireCurrent()
         } catch let err as HLError where err.shouldPersistToOutbox {
-            // v0150 C-M3 — the repository durably enqueued the delete to the
+            // The repository durably enqueued the delete to the
             // Outbox (it WILL replay + succeed at reachability). Mirror the
             // optimistic-write + outbox doctrine MeasurementsStore /
             // MedicationsStore apply on a queued delete: KEEP the optimistic
@@ -480,10 +489,9 @@ public final class LabsStore {
         }
     }
 
-    /// Delete a catalog biomarker. The server unlinks (SetNull) every reading —
-    /// lab history survives with its legacy fields — so this reloads BOTH the
-    /// catalog and the lab list so unlinked rows repaint with their preserved
-    /// analyte/unit.
+    /// Delete a catalog biomarker. The server hard-deletes the marker together
+    /// with every reading of it in one transaction (`DELETE /api/biomarkers/{id}`),
+    /// so this reloads BOTH the catalog and the lab list, which drops those rows.
     @discardableResult
     public func deleteBiomarker(id: String) async -> Bool {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return false }
@@ -506,7 +514,7 @@ public final class LabsStore {
     /// reads this to show an inline `HLFormErrorText`.
     public private(set) var lastErrorWasDuplicateName = false
 
-    /// #130 — dry run or real merge into `target`; redirects recorded only behind the lease.
+    /// Dry run or real merge into `target`; redirects recorded only behind the lease.
     func runBiomarkerMerge(into target: String, sources: [String], dryRun: Bool) async -> BiomarkerMergeResult? {
         let picked = Array(sources.filter { $0 != target }.prefix(BiomarkerMergeRequest.maxSources))
         guard !picked.isEmpty, let sessionLease = captureAuthenticatedSessionLease() else { return nil }
@@ -522,7 +530,7 @@ public final class LabsStore {
         }
     }
 
-    /// #130 — one marker's whole history, returned (never published) behind the lease.
+    /// One marker's whole history, returned (never published) behind the lease.
     public func fetchHistory(biomarkerId: String?, analyte: String) async -> [LabResultDTO]? {
         guard let lease = captureAuthenticatedSessionLease() else { return nil }
         let rows = try? await repository.markerHistory(biomarkerId: biomarkerId, analyte: analyte)
@@ -537,7 +545,9 @@ public final class LabsStore {
         rotateOwnedAuthenticatedSessionBoundary()
         labs = []
         biomarkers = []
+        customPanels = []
         markerOverview = nil
+        listLayout = nil
         pendingRestoreIDs = []
         total = 0
         isLoading = false
@@ -545,37 +555,22 @@ public final class LabsStore {
         isDisabled = false
         lastError = nil
         lastErrorWasDuplicateName = false
-        // 14-03 — the catalog's own failure slot is PHI-adjacent state like the
+        // The catalog's own failure slot is PHI-adjacent state like the
         // rest of this list and leaves with it.
         biomarkerCatalogError = nil
         mergedMarkerRedirects = [:]
     }
 
-    /// Test-only — populate the in-memory lab + biomarker snapshots without a
-    /// network round-trip, so the logout-wipe suite can prove `clearOnLogout`
-    /// purges the PHI. Production reaches this state only through ``load()``.
-    func seedForTesting(
-        labs: [LabResultDTO],
-        biomarkers: [BiomarkerDTO] = [],
-        total: Int? = nil,
-        overview: LabOverviewResponse? = nil
-    ) {
-        self.labs = labs
-        self.biomarkers = biomarkers
-        self.total = total ?? labs.count
-        markerOverview = overview
-    }
-
     // MARK: - Private
 
-    /// 14-03 — end the biomarker catalogue's own statement. A named call so
+    /// End the biomarker catalogue's own statement. A named call so
     /// the two places that must end it (a successful catalogue re-read, and the
     /// module gate closing over the whole surface) say the same thing once.
     private func clearBiomarkerCatalogStatement() {
         biomarkerCatalogError = nil
     }
 
-    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// The visible error is localized copy, not a Swift description.
     /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
     /// user-facing surface; the sanitized description belongs in the log line,
     /// where triage reads it. `HLError.userFacingText(for:)` resolves the
@@ -585,10 +580,11 @@ public final class LabsStore {
             isDisabled = true
             labs = []
             biomarkers = []
+            customPanels = []
             markerOverview = nil
             lastError = nil
             lastErrorWasDuplicateName = false
-            // 14-03 — a switched-off module is not a catalogue failure; the
+            // A switched-off module is not a catalogue failure; the
             // caption goes with the data it was standing beside.
             clearBiomarkerCatalogStatement()
             return
@@ -596,5 +592,29 @@ public final class LabsStore {
         lastErrorWasDuplicateName = LabsRepository.isDuplicateName(error)
         HLLog.ui.error("Labs write failed: \(LogSanitizer.redact(String(describing: error)))")
         lastError = LabsRefusal.sentence(for: error) ?? HLError.userFacingText(for: error)
+    }
+}
+
+/// Test seeding, outside the class body (pure move, D5 #11 kept the type
+/// under its length budget). Same file, so it may still set the
+/// `private(set)` state.
+extension LabsStore {
+    /// Test-only — populate the in-memory lab + biomarker snapshots without a
+    /// network round-trip, so the logout-wipe suite can prove `clearOnLogout`
+    /// purges the PHI. Production reaches this state only through ``load()``.
+    func seedForTesting(
+        labs: [LabResultDTO],
+        biomarkers: [BiomarkerDTO] = [],
+        total: Int? = nil,
+        overview: LabOverviewResponse? = nil,
+        customPanels: [String] = [],
+        listLayout: LabsListLayout? = nil
+    ) {
+        self.labs = labs
+        self.biomarkers = biomarkers
+        self.customPanels = customPanels
+        self.listLayout = listLayout
+        self.total = total ?? labs.count
+        markerOverview = overview
     }
 }

@@ -1,6 +1,6 @@
 import XCTest
 
-/// H2 — the navigation and capture primitives of ``QASweepScreenshotsTest``,
+/// The navigation and capture primitives of ``QASweepScreenshotsTest``,
 /// split out so the walk itself stays readable (and inside `type_body_length`).
 extension QASweepScreenshotsTest {
     // MARK: - Navigation primitives
@@ -10,8 +10,119 @@ extension QASweepScreenshotsTest {
     }
 
     func tab(_ symbol: String) {
-        let button = app.tabBars.buttons.containing(.image, identifier: symbol).firstMatch
-        if tap(button, "tab \(symbol)") { settle(3) }
+        if ShellNavigator.select(symbol: symbol, in: app, timeout: 8) {
+            settle(3)
+        } else {
+            note("not found: tab \(symbol)")
+        }
+    }
+
+    /// Opens More and waits for its gear: through the bar, or through the
+    /// sidebar where the bar does not take the tap.
+    @discardableResult
+    func openMore() -> Bool {
+        let arrived = AdaptiveShell.open(
+            .more,
+            in: app,
+            button: ShellNavigator.barButton(symbol: "ellipsis", in: app),
+            until: app.buttons["more.toolbar.gear"]
+        )
+        if arrived {
+            settle(2)
+        } else {
+            // A navigation miss fails the case; it no longer passes as a note.
+            note("not reached: More")
+            XCTFail("More was not reached")
+        }
+        return arrived
+    }
+
+    /// Settings through the gear in More's header, the one way in on every
+    /// device.
+    func openSettings() -> Bool {
+        guard openMore() else { return false }
+        guard tap(app.buttons["more.toolbar.gear"], "settings gear") else {
+            XCTFail("the settings gear in More was not reached")
+            return false
+        }
+        settle(2)
+        return true
+    }
+
+    /// The sidebar title of a More row whose area is a section of its own in
+    /// a regular window, in the run's language; `nil` for a row that stays in
+    /// More everywhere.
+    func sectionTitle(forMoreRow row: String) -> String? {
+        let titles: [String: [UITestLanguage: String]] = [
+            "labs": [.en: "Lab results", .de: "Laborwerte", .nl: "Labuitslagen", .es: "Resultados de laboratorio"],
+            "documents": [.en: "Documents", .de: "Dokumente", .nl: "Documenten", .es: "Documentos"],
+            "measurements": [.en: "Measurements", .de: "Messwerte", .nl: "Metingen", .es: "Mediciones"],
+            "illness": [.en: "Condition journal", .de: "Beschwerden-Tagebuch", .nl: "Klachtendagboek", .es: "Diario de enfermedades"],
+            "seizures": [.en: "Seizure diary", .de: "Anfallskalender", .nl: "Aanvalsdagboek", .es: "Diario de crisis"],
+            "cycle": [.en: "Cycle", .de: "Zyklus", .nl: "Cyclus", .es: "Ciclo"],
+            "mental_wellbeing": [.en: "Mental wellbeing", .de: "Seelisches Wohlbefinden", .nl: "Mentaal welzijn", .es: "Bienestar mental"],
+            "workouts": [.en: "Workouts", .de: "Workouts", .nl: "Trainingen", .es: "Entrenamientos"],
+            "vorsorge": [.en: "Preventive care", .de: "Vorsorge", .nl: "Preventieve zorg", .es: "Atención preventiva"]
+        ]
+        guard let names = titles[row] else { return nil }
+        return names[language] ?? names[.en]
+    }
+
+    /// Opens the area behind a More row wherever the window keeps it: a
+    /// section in a regular window is a sidebar tab and no row of More.
+    @discardableResult
+    func openArea(_ row: String) -> Bool {
+        if let title = sectionTitle(forMoreRow: row), AdaptiveShell.isRegular(app) {
+            guard ShellNavigator.select(section: title, in: app, timeout: 8) else {
+                note("section not reachable: \(row)")
+                XCTFail("the section \(row) was not reached")
+                return false
+            }
+            settle(3)
+            return true
+        }
+        guard openMore() else { return false }
+        scrollUpToTop()
+        guard let target = probe("more.row.\(row)") else {
+            note("More row not present: \(row)")
+            XCTFail("the More row \(row) was not reached")
+            return false
+        }
+        target.tap()
+        settle(3)
+        return true
+    }
+
+    /// How a lab marker's page came up.
+    enum LabMarkerOpening {
+        /// Pushed over the list: the way back is the back button.
+        case pushed
+        /// Beside the table in a wide window: the row was selected, nothing
+        /// was pushed, so there is no way back to take.
+        case beside
+    }
+
+    /// Opens a lab marker's page from the lab list. Beside the table the first
+    /// marker is already chosen, so the first row that is not selected is
+    /// tapped; the picture then shows another marker than the list's. `nil`
+    /// when the list has no marker row.
+    func openLabMarker() -> LabMarkerOpening? {
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'labs.byType.item'"))
+        guard rows.firstMatch.waitForExistence(timeout: 4) else { return nil }
+        let all = rows.allElementsBoundByIndex.filter { $0.exists && $0.isHittable }
+        guard let first = all.first else { return nil }
+        let isBeside = all.contains(where: \.isSelected)
+        let target = isBeside ? (all.first { !$0.isSelected } ?? first) : first
+        target.tap()
+        settle(3)
+        return isBeside ? .beside : .pushed
+    }
+
+    /// The Log tab is an action: it raises the capture picker.
+    func tapLogTab() -> Bool {
+        let tapped = ShellNavigator.select(tab: .log, in: app, timeout: 8)
+        if !tapped { note("not found: Log tab") }
+        return tapped
     }
 
     @discardableResult
@@ -43,6 +154,33 @@ extension QASweepScreenshotsTest {
         for _ in 0 ..< 8 {
             if target.exists, target.isHittable { return target }
             scrollDown()
+        }
+        return target.exists && target.isHittable ? target : nil
+    }
+
+    /// `scrollDown`, started in the page's left margin (outside any card).
+    func marginScroll() {
+        let window = app.windows.firstMatch
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.015, dy: 0.72))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.015, dy: 0.32))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 600, thenHoldForDuration: 0.3)
+        settle(1.2)
+    }
+
+    /// Like `probe`, but far enough for the longest settings screens and for
+    /// the settings hub at the largest text size.
+    func deepProbe(_ identifier: String) -> XCUIElement? {
+        let target = element(identifier)
+        for step in 0 ..< 16 {
+            if target.exists, target.isHittable { return target }
+            // A drag that starts on a large button (the assistant source
+            // picker) does not scroll; every other try drags along the
+            // page's left margin, outside the cards.
+            if step.isMultiple(of: 2) {
+                scrollDown()
+            } else {
+                marginScroll()
+            }
         }
         return target.exists && target.isHittable ? target : nil
     }
@@ -139,6 +277,53 @@ extension QASweepScreenshotsTest {
                 }
             }
         }
+    }
+
+    // MARK: - Building blocks
+
+    /// The building block page from its top to its end, then the sheet
+    /// scaffold without and with an action.
+    func test_31_buildingBlocks() {
+        bootBuildingBlocks()
+        shotToEnd("31-blocks")
+        scrollUpToTop()
+        for kind in ["plain", "action"] {
+            guard tap(element("blocks.sheet.\(kind)"), "sheet \(kind)") else { continue }
+            settle(2)
+            shot("31-blocks-sheet-\(kind)")
+            if tap(element("hl.sheet.close"), "sheet close") {
+                settle(1.5)
+            } else {
+                dismissSheet()
+            }
+        }
+        // The action forms stand on a page of their own, so the largest text
+        // size reaches them within the scroll steps.
+        bootBuildingBlocks(extra: ["-uitest-building-blocks-actions"])
+        shotToEnd("31-actions")
+    }
+
+    /// The fixture-backed start of `boot()` with the building block page in
+    /// place of the root. That launch never shows a Dashboard, so the boot
+    /// waits for the page itself.
+    func bootBuildingBlocks(extra: [String] = []) {
+        app = XCUIApplication()
+        var arguments = language.launchArguments + [
+            "-uitest-hermetic",
+            "-uitest-ack-disclaimer",
+            "-uitest-disable-biometric-lock",
+            "-uitest-building-blocks"
+        ] + extra
+        if isXXL {
+            arguments += ["-UIPreferredContentSizeCategoryName", xxlCategory]
+        }
+        if isLightAppearance {
+            arguments += HermeticAppearance.lightArguments
+        }
+        app.launchArguments = arguments
+        app.launch()
+        waitFor("blocks.ready", 60)
+        settle(2)
     }
 
     // MARK: - Capture

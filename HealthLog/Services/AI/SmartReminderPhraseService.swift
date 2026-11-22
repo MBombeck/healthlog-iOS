@@ -136,14 +136,14 @@ public struct ReminderPhraseOutcome: Sendable {
 /// - The 15-pattern `MDRSafetyFilter` is the belt-and-braces guarantee on
 ///   top of the system-prompt instructions.
 ///
-/// **Availability:** the public type compiles on iOS 18+ so callers don't
-/// need `#available` guards. The runtime path that actually invokes
-/// FoundationModels is gated by `#available(iOS 26.0, *)`. On older OS /
+/// **Availability:** callers don't need availability guards. The path that
+/// actually invokes FoundationModels sits behind `#if canImport(FoundationModels)`
+/// and checks `SystemLanguageModel.default.availability`. On
 /// non-Apple-Intelligence devices the outcome maps to
 /// `.fallback(.deviceIneligible)` (or one of the more specific reasons)
 /// and the caller falls back to the static `NotificationService` template.
 public actor SmartReminderPhraseService {
-    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// The server-resolved AI capabilities (`/api/auth/me` `ai`).
     /// This service runs only while `.briefing` allows on-device work
     /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
     /// never consults anything a previous build persisted.
@@ -179,21 +179,16 @@ public actor SmartReminderPhraseService {
         }
 
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                return await generateUsingFoundationModels(
-                    context: context.withTrimmedName(trimmedName),
-                    locale: locale
-                )
-            } else {
-                return .fallback(.deviceIneligible)
-            }
+            return await generateUsingFoundationModels(
+                context: context.withTrimmedName(trimmedName),
+                locale: locale
+            )
         #else
             return .fallback(.frameworkUnavailable)
         #endif
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func generateUsingFoundationModels(
             context: ReminderPhraseContext,
             locale: Locale
@@ -238,7 +233,6 @@ public actor SmartReminderPhraseService {
             }
         }
 
-        @available(iOS 26.0, *)
         private func mapAvailabilityReason(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> ReminderPhraseOutcome
             .FallbackReason
         {
@@ -269,14 +263,12 @@ private extension ReminderPhraseContext {
 
 #if canImport(FoundationModels)
     /// `@Generable` mirror of `ReminderPhrase`. Lives behind the
-    /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
-    /// because Apple's macro requires both. Converted to the always-available
-    /// POD shell via `toReminderPhrase()`.
+    /// `canImport(FoundationModels)` gate because Apple's macro requires
+    /// the framework. Converted to the always-available POD shell via `toReminderPhrase()`.
     ///
     /// The `@Guide` descriptions are language-neutral English (they are baked
     /// in at compile time and cannot follow the session locale); the
     /// instructions name the output language.
-    @available(iOS 26.0, *)
     @Generable
     struct GenerableReminderPhrase {
         @Guide(
@@ -354,17 +346,62 @@ enum SmartReminderPhrasePrompt {
             Wenn Streak>0, ein sanfter, positiver Hinweis ist erlaubt. Wenn die vorherige Dosis \
             verpasst wurde, ein sanfter Nachhol-Hinweis ist erlaubt. Sonst kann der Body leer sein.
             """
+        case .ko:
+            return koreanPrompt(context: context, slotLabel: slotLabel, cappedStreak: cappedStreak)
+        case .es:
+            return spanishPrompt(context: context, slotLabel: slotLabel, cappedStreak: cappedStreak)
         }
+    }
+
+    /// The Spanish user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func spanishPrompt(context: ReminderPhraseContext, slotLabel: String, cappedStreak: Int) -> String {
+        """
+        Contexto del recordatorio:
+        - medicamento: \(context.medicationName)
+        - momento del día: \(slotLabel)
+        - días seguidos (máximo 7): \(cappedStreak)
+        - dosis anterior olvidada: \(context.missedPrevious ? "sí" : "no")
+
+        Escribe un título breve de recordatorio y una frase de apoyo opcional, en español y tuteando. \
+        Limítate a recordar la hora. Sin consejos de dosis, sin cambios de terapia, \
+        sin diagnóstico, sin predicciones, sin interpretar niveles de fármacos. \
+        Si los días seguidos son más de 0, puedes añadir un comentario positivo y amable. Si se olvidó \
+        la dosis anterior, puedes añadir un recordatorio amable para retomarla. Si no, el texto puede quedar vacío.
+        """
+    }
+
+    /// The Korean user turn, outside `build` to keep that body under the
+    /// function-length limit.
+    private static func koreanPrompt(context: ReminderPhraseContext, slotLabel: String, cappedStreak: Int) -> String {
+        """
+        알림 맥락:
+        - 약: \(context.medicationName)
+        - 시간대: \(slotLabel)
+        - 연속 일수(최대 7): \(cappedStreak)
+        - 이전 복용 놓침: \(context.missedPrevious ? "예" : "아니요")
+
+        짧은 알림 제목 하나와 선택적인 보조 문장 하나를 해요체로 써라. \
+        철저히 시간 알림으로만 쓴다. 용량 조언, 치료 변경, \
+        진단, 예측, 약물 농도 해석은 절대 넣지 않는다. \
+        연속 일수가 0보다 크면 부드럽고 긍정적인 한마디를 써도 된다. 이전 복용을 놓쳤다면 \
+        다시 챙기자는 부드러운 한마디를 써도 된다. 그 밖에는 본문을 비워도 된다.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(
+            de: germanInstructions,
+            en: englishInstructions,
+            nl: dutchInstructions,
+            ko: koreanInstructions,
+            es: spanishInstructions
+        )
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
             let text = instructionText(for: AppLanguage.resolve(locale))
             return Instructions {
@@ -430,13 +467,52 @@ enum SmartReminderPhrasePrompt {
     Gebruik het moment van de dag als anker. Een lege body is beter dan opvulling.
     """
 
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 짧은 복약 시간 알림 문구를 쓴다. \
+    항상 한국어 해요체로 쓴다.
+
+    너의 유일한 일: 약 복용 시간 알림에 쓸 짧은 제목과 선택적인 보조 문장을 만드는 것.
+
+    절대 원칙:
+    - 이것은 시간 알림이지 의학적 조언이 아니다.
+    - 어떤 용량을 복용해야 하는지, 치료를 바꿔야 하는지는 절대 말하지 않는다.
+    - 진단하지 않고, 질환을 암시하지 않는다.
+    - 경과를 예측하지 않는다("오를 거예요", "내려갈 거예요").
+    - 약물 농도, 반감기, 약동학을 해석하지 않는다.
+    - 맥락에 없는 숫자를 지어내지 않는다.
+    - 제목은 40자 이내, 본문은 80자 이내.
+
+    문체: 차분하고 친근한 해요체. 약 이름을 그대로 부른다. \
+    시간대를 문구의 기준으로 삼는다. 군더더기보다 빈 본문이 낫다.
+    """
+
+    private static let spanishInstructions = """
+    Escribes avisos breves de recordatorio para una app de diario de salud. \
+    Escribe SIEMPRE en español, tuteando.
+
+    Tu única tarea: un título breve y una frase de apoyo opcional para un \
+    recordatorio de la hora de un medicamento.
+
+    NO NEGOCIABLE:
+    - Es un recordatorio de HORARIO, no un consejo médico.
+    - Nunca digas qué dosis hay que tomar ni que se cambie la terapia.
+    - Nunca des un diagnóstico ni insinúes una enfermedad.
+    - Nunca hagas predicciones sobre la evolución ("va a subir", "va a bajar").
+    - Nunca interpretes niveles de fármacos, vida media ni farmacocinética.
+    - Nunca inventes cifras que no estén en el contexto.
+    - Título de 40 caracteres como máximo, texto de 80 caracteres como máximo.
+
+    ESTILO: tranquilo, cercano, tuteando. Nombra el medicamento. \
+    Usa el momento del día como referencia. Mejor un texto vacío que relleno.
+    """
+
     private static func slotLabel(_ slot: ReminderPhraseContext.Slot, language: AppLanguage) -> String {
         switch slot {
-        case .morning: language.pick(de: "Morgen", en: "morning", nl: "ochtend")
-        case .noon: language.pick(de: "Mittag", en: "noon", nl: "middag")
-        case .afternoon: language.pick(de: "Nachmittag", en: "afternoon", nl: "namiddag")
-        case .evening: language.pick(de: "Abend", en: "evening", nl: "avond")
-        case .night: language.pick(de: "Nacht", en: "night", nl: "nacht")
+        case .morning: language.pick(de: "Morgen", en: "morning", nl: "ochtend", ko: "아침", es: "mañana")
+        case .noon: language.pick(de: "Mittag", en: "noon", nl: "middag", ko: "점심", es: "mediodía")
+        case .afternoon: language.pick(de: "Nachmittag", en: "afternoon", nl: "namiddag", ko: "오후", es: "tarde")
+        case .evening: language.pick(de: "Abend", en: "evening", nl: "avond", ko: "저녁", es: "tarde-noche")
+        case .night: language.pick(de: "Nacht", en: "night", nl: "nacht", ko: "밤", es: "noche")
         }
     }
 }

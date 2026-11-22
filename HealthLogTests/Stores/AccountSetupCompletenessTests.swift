@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **25-03 (GH #1) — completeness derived from what exists on the account.**
+/// **Completeness derived from what exists on the account.**
 ///
 /// The first community report (public issue #1): a profile created in the web
 /// UI, then an iOS sign-in — and the app walked the full setup flow anyway.
@@ -119,7 +119,7 @@ struct AccountSetupCompletenessTests {
         if route == .authenticatedShell, scope != .deviceLocalOnly {
             violations.append("a fresh device skipped its own local head")
         }
-        #expect(violations.isEmpty, "EXPECTED_RED: 25-03 GH1 web-created account replayed the account-level setup")
+        #expect(violations.isEmpty, "web-created account replayed the account-level setup")
     }
 
     @Test("profile substance alone derives completion — what exists on the account outranks a marker nobody set")
@@ -132,7 +132,7 @@ struct AccountSetupCompletenessTests {
         if !store.isCompleted {
             violations.append("isCompleted is false despite account substance")
         }
-        #expect(violations.isEmpty, "EXPECTED_RED: 25-03 GH1 profile substance did not derive completion")
+        #expect(violations.isEmpty, "profile substance did not derive completion")
     }
 
     @Test("the web wizard's own completion record counts, even with the baseline profile skipped")
@@ -145,7 +145,7 @@ struct AccountSetupCompletenessTests {
         if !store.isCompleted {
             violations.append("isCompleted is false despite the account's completion record")
         }
-        #expect(violations.isEmpty, "EXPECTED_RED: 25-03 GH1 the web wizard's completion record was ignored")
+        #expect(violations.isEmpty, "the web wizard's completion record was ignored")
     }
 
     // MARK: - Controls (green from construction, in both worlds)
@@ -213,7 +213,7 @@ struct AccountSetupCompletenessTests {
         ClassificationRow(marker: true, record: false, substance: true, answer: .completed),
         ClassificationRow(marker: true, record: true, substance: false, answer: .completed),
         ClassificationRow(marker: true, record: true, substance: true, answer: .completed),
-        // Account evidence completes over a false marker (GH #1) …
+        // Account evidence completes over a false marker …
         ClassificationRow(marker: false, record: false, substance: true, answer: .completed),
         ClassificationRow(marker: false, record: true, substance: false, answer: .completed),
         ClassificationRow(marker: false, record: true, substance: true, answer: .completed),

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Human-readable labels for the report-selection leaf ids (CU-11).
+/// Human-readable labels for the report-selection leaf ids.
 ///
 /// **This is a label lookup, never a vocabulary.** The set of selectable leaves
 /// comes exclusively from `GET /api/meta/capabilities` →

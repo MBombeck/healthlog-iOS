@@ -4,12 +4,12 @@ import Foundation
 /// `ondevice_briefing.<yyyy-MM-dd>.<lang>`. Entries auto-expire on key
 /// change (next-day rollover) — `write` keeps only the most-recent key.
 ///
-/// **1.4 B4 — no writer left.** The on-device briefing hero that read and
+/// **No writer left.** The on-device briefing hero that read and
 /// wrote this cache had no caller and was deleted. The cache stays because an
 /// install from an earlier build can still hold a `briefing-cache.json` with
 /// health-derived text, and `clearOnLogout()` is what removes it.
 ///
-/// **v0.9.0 — storage moved off `UserDefaults` to a file-protected JSON
+/// **Storage moved off `UserDefaults` to a file-protected JSON
 /// file** (`Application Support/HealthLog/Briefing/briefing-cache.json`) with
 /// `.completeUntilFirstUserAuthentication` protection, matching the Outbox /
 /// GLP1 / HKStats stores. The project rule (PROJECT_GUIDE.md) is: no health-derived

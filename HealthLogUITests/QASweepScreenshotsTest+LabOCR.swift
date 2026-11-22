@@ -43,11 +43,11 @@ extension QASweepScreenshotsTest {
         }
         row.tap()
         settle(3)
-        guard let add = probe("labs.toolbar.add") else {
-            note("lab ocr: add menu not found")
+        guard let more = probe("labs.toolbar.more") else {
+            note("lab ocr: more menu not found")
             return false
         }
-        add.tap()
+        more.tap()
         settle(1)
         guard let scan = probe("labs.menu.scan") else {
             note("lab ocr: scan item not found")

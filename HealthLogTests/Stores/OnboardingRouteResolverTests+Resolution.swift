@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 08 Wave 1 — the resolver against the frozen matrix.**
+/// **The resolver against the frozen matrix.**
 ///
 /// Wave 0 wrote down what every server-answer × cache-shape cell has to come out
 /// as; this measures the implementation against that table cell by cell instead

@@ -40,7 +40,7 @@ public final class NotificationServicesStore {
     public private(set) var ntfyTestSucceeded = false
     public private(set) var telegramTestSucceeded = false
     public private(set) var webhookTestSucceeded = false
-    /// #112 — why the last ntfy / webhook test failed, when the server named it
+    /// Why the last ntfy / webhook test failed, when the server named it
     /// (relay status, SMTP code, the relay's own words). Cleared on the next
     /// action, like the success flag.
     public private(set) var ntfyTestFailure: NotificationChannelTestFailure?
@@ -205,7 +205,7 @@ public final class NotificationServicesStore {
     /// Saves the webhook config, then re-loads so `hasHeaderValue` + persisted
     /// values reflect the server. `headerValue` (write-only secret) is
     /// forwarded only when the user entered one; it is never retained here.
-    /// `format` (#112) is forwarded only when it is a known choice.
+    /// `format` is forwarded only when it is a known choice.
     public func saveWebhook(
         enabled: Bool,
         url: String,

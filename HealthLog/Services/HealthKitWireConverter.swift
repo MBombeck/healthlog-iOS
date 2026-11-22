@@ -9,7 +9,7 @@ import Foundation
     /// Wire-Konventionen die in `06-ios-responsibilities.md` und der A1-Audit-Tabelle
     /// festgehalten sind:
     ///
-    /// - **Keine ×100-Konversion** (#113): Prozent-Typen (SpO2, Body-Fat, Gait) gehen als
+    /// - **Keine ×100-Konversion**: Prozent-Typen (SpO2, Body-Fat, Gait) gehen als
     ///   rohe HK-Fraktion 0..1 auf die Leitung, der Server skaliert (`percentFromFraction`).
     /// - **Sleep-Stage-Decoder** — `HKCategorySample` mit `sleepAnalysis` wird zu einer
     ///   Row mit `sleepStage = categorySample.value` (Codepoint 0..5) und
@@ -27,6 +27,11 @@ import Foundation
         /// - Andere Category-Types werden übersprungen (Server kennt sie nicht;
         ///   der Cursor-Advance kümmert sich darum, dass wir nicht endlos retryen).
         public static func entries(from sample: HKSample) -> [HealthKitBatchEntryDTO] {
+            // The reading's own zone, while the server takes it (#181).
+            HealthKitReadingTimeZone.stamp(unstampedEntries(from: sample), from: sample)
+        }
+
+        static func unstampedEntries(from sample: HKSample) -> [HealthKitBatchEntryDTO] {
             if let quantity = sample as? HKQuantitySample {
                 if let entry = quantityEntry(quantity) {
                     return [entry]
@@ -37,10 +42,10 @@ import Foundation
                 if category.categoryType.identifier == HKCategoryTypeIdentifier.sleepAnalysis.rawValue {
                     return [sleepEntry(category)]
                 }
-                // HK-NEW (1.5) — stand hours and mindful sessions (server v1.44).
+                // Stand hours and mindful sessions (server v1.44).
                 return server144CategoryEntries(category)
             }
-            // HK-NEW (1.5) — State of Mind as valence, under the loop guard.
+            // State of Mind as valence, under the loop guard.
             if let stateOfMind = sample as? HKStateOfMind {
                 return StateOfMindValencePolicy.entry(for: stateOfMind).map { [$0] } ?? []
             }
@@ -51,7 +56,7 @@ import Foundation
 
         private static func quantityEntry(_ sample: HKQuantitySample) -> HealthKitBatchEntryDTO? {
             let identifier = sample.quantityType.identifier
-            guard let unit = preferredUnit(for: identifier) else {
+            guard let unit = preferredUnit(for: identifier), sample.quantity.is(compatibleWith: unit.hkUnit) else {
                 // Server kennt diesen Identifier eh nicht — wir lassen ihn raus,
                 // damit der Anchor-Cursor nicht ins Leere zeigt. (Defensiv: das
                 // sollte erst greifen, wenn Apple einen neuen QuantityType
@@ -140,7 +145,7 @@ import Foundation
             case HKQuantityTypeIdentifier.bodyMass.rawValue:
                 return WireUnit(hkUnit: .gramUnit(with: .kilo), wireSymbol: "kg", scale: 1)
 
-            // % — Body-Fat. #113: HK liefert die Fraktion 0..1 und die geht roh
+            // % — Body-Fat. HK liefert die Fraktion 0..1 und die geht roh
             // auf die Leitung (`scale: 1`), wie bei Gait und Steadiness. Der
             // Server skaliert selbst (`percentFromFraction`, v1.39.0): `0.25`
             // wird als `25` gespeichert. Das frühere `scale: 100` ließ ältere
@@ -175,7 +180,7 @@ import Foundation
             case HKQuantityTypeIdentifier.respiratoryRate.rawValue:
                 return WireUnit(hkUnit: HKUnit.count().unitDivided(by: .minute()), wireSymbol: "br/min", scale: 1)
 
-            // % — Oxygen Saturation. #113: die rohe HK-Fraktion (`0.97`) geht auf
+            // % — Oxygen Saturation. Die rohe HK-Fraktion (`0.97`) geht auf
             // die Leitung, der Server speichert `97` (OpenAPI v1.39.0: „an oxygen
             // saturation sent as `0.98` in `fraction` is stored as `98`").
             case HKQuantityTypeIdentifier.oxygenSaturation.rawValue:
@@ -194,8 +199,8 @@ import Foundation
                  HKQuantityTypeIdentifier.flightsClimbed.rawValue:
                 return WireUnit(hkUnit: .count(), wireSymbol: "count", scale: 1)
 
-            // kcal — Active Energy Burned
-            case HKQuantityTypeIdentifier.activeEnergyBurned.rawValue:
+            // kcal — Active and resting energy
+            case HKQuantityTypeIdentifier.activeEnergyBurned.rawValue, HKQuantityTypeIdentifier.basalEnergyBurned.rawValue:
                 return WireUnit(hkUnit: .kilocalorie(), wireSymbol: "kcal", scale: 1)
 
             // m — Distance Walking/Running
@@ -218,7 +223,7 @@ import Foundation
             case "HKQuantityTypeIdentifierTimeInDaylight":
                 return WireUnit(hkUnit: .minute(), wireSymbol: "min", scale: 1)
 
-            // v0.5.2 F2 — walkingSpeed (m/s), walkingStepLength (m),
+            // walkingSpeed (m/s), walkingStepLength (m),
             // bodyMassIndex (count). walkingSpeed + walkingStepLength are
             // server-persisted since v1.6.0 (W-WALK ungated the
             // `HealthKitServerSupportConfig` set); the wire rows carry the raw
@@ -239,7 +244,7 @@ import Foundation
             case HKQuantityTypeIdentifier.walkingDoubleSupportPercentage.rawValue:
                 return WireUnit(hkUnit: .percent(), wireSymbol: "%", scale: 1)
 
-            // W28d — walking steadiness. HK delivers the raw fraction (0…1);
+            // Walking steadiness. HK delivers the raw fraction (0…1);
             // the server scales ×100 like the other gait percentages, so the
             // wire carries the fraction intact (`scale: 1`).
             case HKQuantityTypeIdentifier.appleWalkingSteadiness.rawValue:
@@ -293,8 +298,8 @@ import Foundation
                 return WireUnit(hkUnit: .count(), wireSymbol: "count", scale: 1)
 
             default:
-                // HK-NEW (1.5) — the server-v1.44 quantity types, or nil.
-                return server144Unit(for: identifier)
+                // The server-v1.44 quantity types, the 1.7 ones, or nil.
+                return server144Unit(for: identifier) ?? AppleHealthIngestQuantityTypes.wireUnit(for: identifier)
             }
         }
 

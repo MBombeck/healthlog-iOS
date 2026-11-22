@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    // 1.3 (#127, #128) — the history and legacy legs of the collector.
+    // The history and legacy legs of the collector.
     //
     // Both run only in the budget the live streams left, only for a type
     // whose live stream has reached the present, and only one run at a time.
@@ -10,7 +10,7 @@
     // a live page: a page the server did not terminally accept (and that has
     // no durable retry row) leaves the date cursor exactly where it was.
 
-    /// 1.3 (#127) — the history seam: samples of one type whose start date
+    /// The history seam: samples of one type whose start date
     /// lies in `window`, newest start first, at most `limit` (`nil` = all).
     protocol HealthSampleHistoryQuerying: Sendable {
         func historyPage(
@@ -55,7 +55,7 @@
             let holdReason: HealthSyncHoldReason?
             /// Nothing is owed any more by either leg.
             let isFinished: Bool
-            /// A2 (1.4, R3 S6) — pages whose rows the server (or the
+            /// Pages whose rows the server (or the
             /// statistics path) took: committed, not empty, nothing parked.
             /// Only these are progress for "Sync everything now".
             var acceptedPages = 0
@@ -86,7 +86,7 @@
             // B5 (1.4, R4 2.1) — one question for every type's readable window.
             let readable = await readWindows(for: order)
             for typeIdentifier in order {
-                // A2 (1.4, R3 S6) — once a page found the server out of reach,
+                // Once a page found the server out of reach,
                 // the other types are not read: their pages could not go out
                 // either, and until 1.3.0 each of them parked one in the outbox.
                 if unreachable {
@@ -118,7 +118,7 @@
             return await history.readWindows(typeIdentifiers: typeIdentifiers)
         }
 
-        /// A2 — the history of a type a pass did not read because the server
+        /// The history of a type a pass did not read because the server
         /// was out of reach.
         static var unreachableHistory: HistoryResult {
             historyResult(0, 0, .deferred, .serverUnreachable, false)
@@ -135,9 +135,9 @@
             var pages = 0
             var samplesRead = 0
             var retryPersisted = false
-            /// A2 (1.4, R3 S6) — committed pages with rows, none of them parked.
+            /// Committed pages with rows, none of them parked.
             var acceptedPages = 0
-            /// A2 (1.4, R3 3.2) — pages in a row the server answered with
+            /// Pages in a row the server answered with
             /// nothing but folded windows.
             var foldedRun = 0
 
@@ -270,21 +270,25 @@
             return nil
         }
 
-        /// A2 (1.4, R3 3.2) — the last pages came back as nothing but folded
-        /// windows: the server holds this type's history from here back (its
-        /// fold runs over everything older than its threshold). The walk
-        /// records its floor as reached instead of sending years of rows the
-        /// server would only answer `duplicate`. A failed write changes
-        /// nothing; the walk simply goes on.
+        /// The last pages came back as nothing but folded
+        /// windows: the server holds this type's history from here back to
+        /// its oldest reading. The walk jumps to that reading instead of
+        /// sending years of rows the server would only answer `duplicate`.
+        ///
+        /// #10 — up to 1.6 it jumped to the bottom of the window. Below the
+        /// server's oldest reading there is nothing to fold into, and those
+        /// years never came. Without the server naming its oldest reading
+        /// the walk goes on. A failed write changes nothing either.
         private func stopAtFoldedWindows(
             _ key: HealthSyncCursorKey,
             _ state: inout HealthSampleSplitState,
             cutoff: Date,
             lease: HealthSyncAuthenticatedLease
         ) async {
-            let floor = state.historyFloor(cutoff: cutoff)
+            guard let target = Self.foldedJumpTarget(state, cutoff: cutoff) else { return }
             let stopped = await cursors.updateSplit(for: key, requiring: lease) { split in
-                split.historyEnd = floor
+                // The server holds the reading at `target` itself.
+                split.historyEnd = target
                 split.historyEndInclusive = false
             }
             guard stopped, let reread = await cursors.splitState(for: key) else { return }
@@ -294,7 +298,16 @@
             HLLog.healthKit.info("health history [\(key.source.rawValue, privacy: .public)] — server holds the rest folded")
         }
 
-        /// A2 (1.4, R-A8) — a type whose history another path owns (the summed
+        /// Where a folded run may jump to: the server's oldest reading, never
+        /// below the floor and never above where the walk already is. `nil`
+        /// when the server has not named it, or the jump would not move.
+        static func foldedJumpTarget(_ state: HealthSampleSplitState, cutoff: Date) -> Date? {
+            guard let oldest = state.serverOldestReading else { return nil }
+            let target = max(oldest, state.historyFloor(cutoff: cutoff))
+            return target < state.historyEnd ? target : nil
+        }
+
+        /// A type whose history another path owns (the summed
         /// types, sent as day and hour totals by the statistics path). Its raw
         /// history is recorded as read without reading it: the per-sample gate
         /// would drop every row anyway. The legacy leg retires with it.
@@ -422,7 +435,7 @@
             return nil
         }
 
-        /// A2 (1.4, R3 S6) — whether a pass moved anything for a type: its
+        /// Whether a pass moved anything for a type: its
         /// live leg took rows without holding or parking any, or its history
         /// took at least one page. What "Sync everything now" counts.
         static func madeProgress(_ result: TypeResult) -> Bool {
@@ -447,7 +460,7 @@
     }
 
     extension HealthSyncPageOutcome {
-        /// A2 (1.4, R3 3.2) — every posted row came back a `folded_window`
+        /// Every posted row came back a `folded_window`
         /// duplicate: the server had all of it already, folded.
         var isEntirelyFolded: Bool {
             postedCount > 0 && foldedWindowDuplicates >= postedCount

@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **1.4 B4 — one card, one zone.**
+/// **One card, one zone.**
 ///
 /// The card projects its "Nächste Einnahme" in the account zone the server
 /// keeps (`computeNextDose(timeZone:)`, the `/me` zone), and the server grades

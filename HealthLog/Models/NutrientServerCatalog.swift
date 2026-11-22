@@ -1,6 +1,6 @@
 import Foundation
 
-// SUPP-EDIT (1.5.0, #131 P3): the nutrient catalogue as the server serves
+// The nutrient catalogue as the server serves
 // it to the composition form (`GET /api/nutrients/catalog`, v1.43). Every
 // code with its canonical unit, its name in the account language and the
 // units an amount may be entered in. The form is built from this and converts

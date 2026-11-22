@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// v0.14.8 W2-SYNCUX — the **shared quiet sync banner** (AUDIT-QOL-UX §4).
+/// The **shared quiet sync banner**.
 ///
-/// Extracted from the v0.11 W5 `AdoptUploadIndicator` banner layout so the
-/// first-login sync indicator in `AuthenticatedShell` and the adopt-on-pair
-/// upload indicator in `OnboardingFlow` speak the exact same visual language:
+/// The banner layout of the first-login sync indicator in
+/// `AuthenticatedShell`:
 /// a calm, monochrome, full-width `.thinMaterial` strip pinned above the
 /// bottom safe area — mini spinner (or status glyph) + `.hlCaption` text +
 /// optional trailing action. No new visual language was invented here; this
@@ -16,7 +15,7 @@ import SwiftUI
 /// reduce-motion-gated).
 struct HLSyncBanner: View {
     /// The caption line (already-localized — hosts resolve their state-
-    /// specific keys, e.g. `sync.status.syncing` / `onboarding.adopt.done`).
+    /// specific keys, e.g. `sync.status.syncing`).
     let text: String
     /// `true` renders the leading mini `ProgressView` (in-flight states).
     var showsSpinner: Bool = false

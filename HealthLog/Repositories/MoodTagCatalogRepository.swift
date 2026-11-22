@@ -21,7 +21,7 @@ public actor MoodTagCatalogRepository {
 
     private var cached: MoodTagCatalog?
     private var cachedAt: Date?
-    /// **CU-20 (#69)** — last `updatedAt` seen from `/api/mood/tags/layout`.
+    /// Last `updatedAt` seen from `/api/mood/tags/layout`.
     /// The GET emits this key **conditionally** (omitted, not null, when the
     /// user row did not resolve — `route.ts:57-61`), so `nil` legitimately
     /// means "no token" and the next PUT goes out unconditional.
@@ -189,7 +189,7 @@ public actor MoodTagCatalogRepository {
     public func layout() async throws -> MoodTagLayoutDTO {
         let req: APIRequest<MoodTagLayoutDTO> = .get("/api/mood/tags/layout")
         let dto = try await api.send(req)
-        // CU-20 — refresh the token the next PUT will echo as `baseUpdatedAt`.
+        // Refresh the token the next PUT will echo as `baseUpdatedAt`.
         layoutToken = dto.updatedAt
         return dto
     }
@@ -197,7 +197,7 @@ public actor MoodTagCatalogRepository {
     @discardableResult
     public func updateGroupOrder(_ groupOrder: [String]) async throws -> MoodTagLayoutDTO {
         let current = try await layout()
-        // CU-20 — on a conflict the group order is re-applied to the FRESHLY
+        // On a conflict the group order is re-applied to the FRESHLY
         // re-read layout, so the retry keeps the other session's placement
         // edits instead of overwriting them with our stale copy.
         return try await putLayout(
@@ -219,7 +219,7 @@ public actor MoodTagCatalogRepository {
         )
     }
 
-    /// **CU-20 (#69):** guarded by `baseUpdatedAt`. A stale token yields
+    /// Guarded by `baseUpdatedAt`. A stale token yields
     /// `409 mood_tag_layout_conflict` with nothing written; the bounded retry
     /// re-GETs, re-applies the caller's change via `reapply`, and re-sends.
     /// `reapply` defaults to sending the same body verbatim (the full-replace
@@ -357,7 +357,7 @@ public struct DeleteMoodTagGroupResponse: Codable, Sendable, Equatable {
 public struct MoodTagLayoutDTO: Codable, Sendable, Equatable {
     public let groupOrder: [String]
     public let placements: [String: [String]]
-    /// **CU-20 (#69) — optimistic-concurrency token.** Echoed as
+    /// **Optimistic-concurrency token.** Echoed as
     /// `baseUpdatedAt` on the next PUT; a stale one yields
     /// `409 mood_tag_layout_conflict` and nothing is written. Guards the shared
     /// `User.updatedAt` (`api/mood/tags/layout/route.ts:112`).
@@ -392,7 +392,7 @@ public struct MoodTagLayoutDTO: Codable, Sendable, Equatable {
             [String: [String]].self,
             forKey: .placements
         ) ?? [:]
-        // CU-20 — conditionally present; absent for a never-resolved user row.
+        // Conditionally present; absent for a never-resolved user row.
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
     }
 

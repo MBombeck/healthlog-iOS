@@ -1,7 +1,7 @@
 import SwiftUI
 import Synchronization
 
-/// **Phase 09 / plan 09-05 — the first frame, as something launch work can await.**
+/// **The first frame, as something launch work can await.**
 ///
 /// The launch tick used to open the persistent SwiftData outbox synchronously,
 /// inside `AppContainer.init`, because `BGTaskScheduler.register` must run

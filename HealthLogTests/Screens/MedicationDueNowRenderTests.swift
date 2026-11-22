@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// W-B180 — render verification for the medication card's due-state.
+    /// Render verification for the medication card's due-state.
     ///
     /// The b179 future-due gate compared against the server SLOT instant, so a
     /// card whose dose window was already OPEN (now ≥ window start) but whose
@@ -19,7 +19,7 @@
     /// hue on the card (`HLColor.statusOK` next-dose value), so a pixel
     /// hue-scan is a stable signal.
     ///
-    /// **09-15 — the clock is injected, not observed.** These fixtures used to
+    /// **The clock is injected, not observed.** These fixtures used to
     /// be anchored on `.now` and then flattened into `TimeOfDay`, throwing the
     /// date away; near midnight the derived window and the derived slot landed
     /// on different calendar days and the suite went red for reasons that had
@@ -83,7 +83,7 @@
             )
         }
 
-        /// 09-15 — a daily 23:00 dose whose row publishes a declared
+        /// A daily 23:00 dose whose row publishes a declared
         /// `23:00–02:00` on-time window, with the un-served 23:00 slot as
         /// `nextDueAt` (the shape the server publishes for a due, untaken dose,
         /// pinned by `W-B179 (b)`), so the future-due gate never fires and the
@@ -111,6 +111,8 @@
             )
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(_ medication: Medication, at now: Date, name: String) throws -> UIImage {
             let view = ScrollView {
                 MedicationCard(
@@ -229,7 +231,7 @@
             let image = try render(overnightMed(), at: now, name: "med-due-past-midnight")
             #expect(
                 hasGreenInk(image),
-                "EXPECTED_RED: the post-midnight half of an open dose window renders neutral"
+                "the post-midnight half of an open dose window renders neutral"
             )
         }
 
@@ -241,7 +243,7 @@
             let image = try render(overnightMed(), at: now, name: "med-due-pre-midnight-window")
             #expect(
                 !hasGreenInk(image),
-                "EXPECTED_RED: a declared window that has not opened renders due-now"
+                "a declared window that has not opened renders due-now"
             )
         }
     }

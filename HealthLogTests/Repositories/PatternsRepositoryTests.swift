@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-33** — locks the wire contract of the correlation-pattern decision
+/// Locks the wire contract of the correlation-pattern decision
 /// ledger (server v1.34.0):
 /// `GET /api/insights/patterns` + `PATCH /api/insights/patterns/{id}`.
 ///

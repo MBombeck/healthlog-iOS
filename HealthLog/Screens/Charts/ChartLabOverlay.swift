@@ -1,12 +1,12 @@
 import Charts
 import SwiftUI
 
-/// **1.5 LAB-LINES (#158, server #1299)** — one lab marker over the
+/// One lab marker over the
 /// metric chart's window, on its own axis directly under the chart.
 ///
 /// Every point is one reading as the server sent it (`labSeries.points`):
 /// never averaged, two readings on one day are two points (set a few hours
-/// apart so both stay visible). The reference band sits pale behind them; a
+/// apart so both stay visible). The reference range is two dashed edges; a
 /// reading above or below its range is a triangle pointing up or down, the
 /// rest are dots. The verdict is the server's `rangeStatus`, never derived,
 /// and stays calm like everywhere else in Labs (no alarm colour).
@@ -33,10 +33,7 @@ struct ChartLabOverlay: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 header
                 if plotted.isEmpty {
-                    Text(Self.emptyLine(name: series.name))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HLEmptyNote(Text(Self.emptyLine(name: series.name)))
                         .accessibilityIdentifier("insights.labOverlay.empty")
                 } else {
                     chart
@@ -48,8 +45,7 @@ struct ChartLabOverlay: View {
                 }
                 if series.excluded > 0 {
                     Text(Self.excludedLine(series.excluded))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("insights.labOverlay.excluded")
                 }
@@ -65,12 +61,10 @@ struct ChartLabOverlay: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
             Text(verbatim: series.name)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+                .hlText(.rowTitle)
             if let unit = LabUnit.suffix(series.unit) {
                 Text(verbatim: unit)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             Spacer(minLength: 0)
         }
@@ -87,23 +81,6 @@ struct ChartLabOverlay: View {
     private var chart: some View {
         let domain = Self.valueDomain(points: series.points, band: series.band)
         return Chart {
-            if let band = series.band, !band.isEmpty {
-                RectangleMark(
-                    xStart: .value("chart.labOverlay.day", window.lowerBound),
-                    xEnd: .value("chart.labOverlay.day", window.upperBound),
-                    yStart: .value("chart.labOverlay.value", band.low ?? domain.lowerBound),
-                    yEnd: .value("chart.labOverlay.value", band.high ?? domain.upperBound)
-                )
-                .foregroundStyle(HLChartTints.seriesLow.opacity(0.18))
-                .accessibilityHidden(true)
-                // Dashed edges like the band on the lab detail page.
-                ForEach([band.low, band.high].compactMap(\.self), id: \.self) { edge in
-                    RuleMark(y: .value("chart.labOverlay.value", edge))
-                        .foregroundStyle(HLChartTints.seriesLow)
-                        .lineStyle(StrokeStyle(lineWidth: HLChartGrid.lineWidth, dash: HLChartGrid.thresholdDash))
-                        .accessibilityHidden(true)
-                }
-            }
             if let shown = shownPoint {
                 RuleMark(x: .value("chart.labOverlay.day", shown.date))
                     .foregroundStyle(HLChartTints.seriesLow)
@@ -119,31 +96,31 @@ struct ChartLabOverlay: View {
                     // A plot symbol is chart geometry, sized like the other
                     // point marks; it must not grow with the text size.
                     Image(systemName: Self.symbolName(entry.point.rangeStatus))
-                        // swiftlint:disable:next dynamic_type_bypass
-                        .font(.system(size: entry.id == shownPoint?.id ? 13 : 10, weight: .semibold))
+                        .font(.hlIcon(entry.id == shownPoint?.id ? HLIconSize.sm : HLIconSize.xs))
                         .foregroundStyle(HLChartTints.series)
                 }
                 .accessibilityLabel(Text(verbatim: Self.dayText(entry.point.date)))
                 .accessibilityValue(Text(verbatim: Self.spokenValue(entry.point, unit: series.unit)))
             }
+            // The reference range as its two edges, never a filled area,
+            // drawn after the points so its label stands on top.
+            if let band = series.band, !band.isEmpty {
+                HLChartReferenceLines.band(lower: band.low, upper: band.high, unit: series.unit)
+            }
         }
         .chartXScale(domain: window)
         .chartYScale(domain: domain)
-        .chartXSelection(value: $selectedDate)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
-                AxisGridLine()
-                    .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel()
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
-        .chartXAxis { ChartDateAxis.marks(for: [window.lowerBound, window.upperBound]) }
+        // Scrubbing pins the nearest reading (with the selection haptic);
+        // the detail under the chart shows it.
+        .hlChartScrub($selectedDate)
+        // The axes of every chart; the unit stands in the card head, so the
+        // axis carries none.
+        .hlChartAxes(dates: [window.lowerBound, window.upperBound], unit: "", values: .automatic(desiredCount: 3))
         .accessibilityIdentifier("insights.labOverlay.chart")
     }
 
-    static let chartHeight: CGFloat = 140
+    /// Every chart with axes has the regular height.
+    static let chartHeight: CGFloat = HLChartStyle.heightRegular
 
     /// One point as drawn: the reading and where on the day axis it sits.
     struct Plotted: Identifiable, Equatable {
@@ -205,14 +182,14 @@ extension ChartLabOverlay {
 
     nonisolated static func dayText(_ dayKey: String) -> String {
         guard let date = TimelineRepository.date(fromDayKey: dayKey) else { return dayKey }
-        return date.formatted(.dateTime.day().month(.wide).year().locale(AppLanguage.current.formattingLocale))
+        return HLDateFormat.date(date, style: .long)
     }
 
     /// The reading as printed: the figure the report printed sets how many
     /// decimals the value keeps, else up to two.
     nonisolated static func valueText(_ point: TimelineLabPoint, unit: String) -> String {
         let digits = point.sourceValue.map(decimals(of:)) ?? 2
-        let number = point.value.formatted(.number.precision(.fractionLength(0 ... max(digits, 0))))
+        let number = HLValueFormat.number(point.value, fractionDigits: 0 ... max(digits, 0))
         return LabUnit.appending(unit, to: number)
     }
 
@@ -250,23 +227,20 @@ struct ChartLabPointDetail: View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
                 Text(verbatim: ChartLabOverlay.valueText(point, unit: series.unit))
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.objectName)
                     .monospacedDigit()
                 LabRangeBadge(status: point.rangeStatus)
                 Spacer(minLength: 0)
             }
             Text(verbatim: ChartLabOverlay.dayText(point.date))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             if let range = LabResultDetailScreen.rangeText(
                 low: point.referenceLow,
                 high: point.referenceHigh,
                 unit: series.unit
             ) {
                 Text(verbatim: range)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             if let report = point.report {
                 NavigationLink {
@@ -277,20 +251,22 @@ struct ChartLabPointDetail: View {
                         date: point.date
                     ))
                 } label: {
+                    // The link form of the app (``HLLinkButton``): 15
+                    // semibold in the quiet ink, no underline, 44 pt tall.
+                    // The report's name exists only at run time.
                     HStack(spacing: HLSpace.xs) {
                         Image(systemName: "doc.text")
-                            .font(.hlCaption)
+                            .font(.hlFootnote.weight(.semibold))
                             .accessibilityHidden(true)
                         Text(verbatim: Self.reportTitle(report))
-                            .font(.hlSubhead)
+                            .font(.hlSubhead.weight(.semibold))
                             .lineLimit(2)
-                            .underline()
                     }
-                    .foregroundStyle(HLText.primary)
-                    .frame(minHeight: 44)
+                    .foregroundStyle(HLText.secondary)
+                    .frame(minHeight: HLLinkButton.hitHeight)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hlRow)
                 .accessibilityLabel(Text("insights.labOverlay.report.a11y \(Self.reportTitle(report))"))
                 .accessibilityIdentifier("insights.labOverlay.report")
             }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.2 — the doctor report's adherence is the server's cadence-aware
+/// The doctor report's adherence is the server's cadence-aware
 /// `compliance30` (`GET /api/medications/compliance`, `MedicationComplianceSummaryEntry`
 /// in `docs/api/openapi.yaml` at `v1.39.0`) with its window stated. Before, the
 /// report divided TODAY's intakes by today's slots and printed that as the
@@ -113,7 +113,7 @@ struct DoctorReportServerAdherenceTests {
         let row = try #require(spec.adherence?.perMedication.first)
         #expect(row.applicable == false)
         #expect(row.rate == nil)
-        // F1 — English now writes "0%" (no gap), so the guard checks for any
+        // English now writes "0%" (no gap), so the guard checks for any
         // percent sign, not one spelling of it.
         #expect(!LocaleText.adherenceRow(row, windowDays: 30, locale: .en).contains("%"))
         #expect(!LocaleText.adherenceRow(row, windowDays: 30, locale: .de).contains("%"))

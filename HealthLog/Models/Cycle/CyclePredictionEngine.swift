@@ -121,7 +121,7 @@ public enum CyclePredictionEngine {
             outlierK: Double = 3.0, // OUTLIER_K
             outlierKPerimenopause: Double = 4.0, // OUTLIER_K_PERIMENOPAUSE
             hardCycleMin: Int = 21, // HARD_CYCLE_MIN
-            hardCycleMax: Int = 45, // HARD_CYCLE_MAX
+            hardCycleMax: Int = 60, // HARD_CYCLE_MAX, a backstop; long but steady cycles reach the MAD fence
             missedLogFactor: Double = 1.75, // MISSED_LOG_FACTOR
             tempShiftCManual: Double = 0.2, // TEMP_SHIFT_C_MANUAL
             tempShiftCPassive: Double = 0.15, // TEMP_SHIFT_C_PASSIVE

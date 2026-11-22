@@ -21,8 +21,7 @@ extension HLDashboardTile {
     /// avg sub-rows render the bare number.
     var averagesRow: some View {
         Text(averagesText)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .monospacedDigit()

@@ -13,7 +13,7 @@ import SwiftUI
 /// - Disclaimer copy below the chart is byte-equal to the server's locked
 ///   wording (`Localizable.xcstrings`).
 ///
-/// **D-12-05-A — the gate is gone; the curve is not.** The server retired
+/// **The gate is gone; the curve is not.** The server retired
 /// Research Mode on 2026-08-08 (`0160052289e4`): *"The chart stopped consulting
 /// the flag several releases ago and has painted for every account since… The
 /// curve is simply part of the medication page now."* The opt-in, the
@@ -21,14 +21,14 @@ import SwiftUI
 /// columns went with it, so this section renders on its own inputs alone:
 ///
 /// - doses available → `Chart` + the MDR caption in the chart card,
-/// - no doses → no section (1.4 B2).
+/// - no doses → no section.
 ///
 /// There is no failure branch: with nothing to fetch there is nothing whose
 /// failure could paint over the chart. The type name is kept — the section is
 /// still MDR-bounded, and the name is what the UI census and the screen's call
 /// site already address.
 ///
-/// **14-02 (A3) — there IS a third branch now, and it is a loading branch.**
+/// **There IS a third branch now, and it is a loading branch.**
 /// The 12-10 "no skeleton zoo" decision is amended, not overturned: it was made
 /// about a section whose input was assumed to be present, and the input is
 /// `intakes`, which arrives as a first page plus up to 80 sequential drain
@@ -46,13 +46,13 @@ struct MDRGatedDrugLevelSection: View {
     let drug: GLP1DrugCatalog.DrugRecord
 
     var body: some View {
-        // 1.4 B2 — without a logged dose there is no curve and nothing to do
+        // Without a logged dose there is no curve and nothing to do
         // here (logging happens on the card), so the section is absent rather
         // than a card saying so. The label carries "(relative)", the unit-less
         // framing the caption above the chart used to state on its own line.
         if store.drugLevelSection != .empty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("Estimated drug level")
+            Group {
+                HLSectionHeader("Estimated drug level", rank: .area)
                 switch store.drugLevelSection {
                 case .loading, .empty:
                     DrugLevelLoadingPlaceholder()
@@ -64,7 +64,7 @@ struct MDRGatedDrugLevelSection: View {
     }
 }
 
-// MARK: - Loading (14-02)
+// MARK: - Loading
 
 /// The reserved frame the curve will fill. Same caption line and same ghost
 /// card as the chart, and the height comes from `HLChartStyle.heightRegular` —
@@ -72,8 +72,8 @@ struct MDRGatedDrugLevelSection: View {
 /// Phase 17's consistency sweep has no hardcoded point value to chase.
 private struct DrugLevelLoadingPlaceholder: View {
     var body: some View {
-        HLCard(style: .ghost) {
-            ProgressView()
+        HLCard {
+            HLInlineProgress()
                 .frame(maxWidth: .infinity)
                 .frame(height: HLChartStyle.heightRegular)
         }
@@ -94,8 +94,7 @@ private struct DisclaimerCaption: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(String(localized: "Educational estimate from EMA-published population pharmacokinetics. Not a measurement."))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
             HLSourcesLink(topic: .glp1Pharmacokinetics(drugID))
         }
@@ -111,7 +110,7 @@ private struct DisclaimerCaption: View {
 /// catch every formulation. Trust the regulatory ceiling.
 private struct DrugLevelChartView: View {
     let drug: GLP1DrugCatalog.DrugRecord
-    /// 14-02 (A3) — the settled curve, computed once by the store. The window
+    /// The settled curve, computed once by the store. The window
     /// (21 d back, no projection, 6 h step — web parity, 2026-07-18) moved to
     /// `MedicationDetailStore.drugLevelChartOptions` together with the
     /// computation it parameterizes. Nothing in this view computes a curve, and
@@ -134,26 +133,11 @@ private struct DrugLevelChartView: View {
     }
 
     var body: some View {
-        HLCard(style: .ghost) {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 Chart {
                     ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
-                        AreaMark(
-                            x: .value("Date", date(for: sample.tHours)),
-                            y: .value("medication.drugLevel.chart.level", sample.concentration)
-                        )
-                        .foregroundStyle(
-                            // v0.6.1 mono refresh — Trulicity PK chart drops
-                            // Dracula-Purple/-PurpleDeep across area, line,
-                            // point and annotation in favour of the mono
-                            // primary text token. Axis stays hidden per the
-                            // MDR boundary lock further down this file.
-                            LinearGradient(
-                                colors: [HLText.primary.opacity(0.4), HLText.primary.opacity(0.06)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        // Only the line: no fill under the curve (Z15).
                         LineMark(
                             x: .value("Date", date(for: sample.tHours)),
                             y: .value("medication.drugLevel.chart.level", sample.concentration)
@@ -179,10 +163,15 @@ private struct DrugLevelChartView: View {
                     RuleMark(x: .value("Now", asOf))
                         .foregroundStyle(HLText.tertiary.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                        .annotation(position: .top, alignment: .leading) {
+                        // Kept inside the plot: above it the label sat on
+                        // the card's top edge and was cut.
+                        .annotation(
+                            position: .top,
+                            alignment: .leading,
+                            overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
+                        ) {
                             Text(String(localized: "Now"))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
+                                .hlText(.footnote)
                                 .padding(.horizontal, HLSpace.xs)
                         }
                 }
@@ -192,7 +181,7 @@ private struct DrugLevelChartView: View {
                 // SwiftLint custom rule in `Pharmacokinetics/.swiftlint.yml`
                 // tries to catch obvious regressions; trust the boundary.
                 .chartYAxis(.hidden)
-                // 1.4 B4 — the app's one date-axis rule.
+                // The app's one date-axis rule.
                 .chartXAxis { ChartDateAxis.marks(for: samples.map { date(for: $0.tHours) } + [asOf]) }
                 .frame(height: HLChartStyle.heightRegular)
                 .accessibilityChartDescriptor(
@@ -208,7 +197,7 @@ private struct DrugLevelChartView: View {
     /// sample shot-phase (rising / peak / fading) so VoiceOver reads
     /// "Rising at March 7th, 14:00" instead of "0.32 at March 7th".
     ///
-    /// **14-02 (A3)** — the phase classification is no longer computed here.
+    /// The phase classification is no longer computed here.
     /// `Glp1PK.shotPhase` runs a whole probe curve per sample, so this loop was
     /// O(samples × doses × probe) on every body pass of a section whose input
     /// settles exactly once. The store computes the phases with the curve; this
@@ -222,19 +211,15 @@ private struct DrugLevelChartView: View {
         let title = String(localized: "Estimated drug level — \(drug.inn)")
         let summary = String(localized: "Qualitative trend. Y axis without unit. Educational estimate.")
 
-        // AUD-2 H3 — index-keyed x label gives VoiceOver a readable date for
-        // each sample. The formatter is a static cached instance (was a fresh
-        // `DateFormatter()` per `buildDescriptor` call, reached from the
-        // accessibility-chart-descriptor render path — ~50-100µs init + heap
-        // churn on a live-updating PK curve).
-        let formatter = Self.axDateFormatter
+        // Index-keyed x label gives VoiceOver a readable date for
+        // each sample.
 
         let points = samples.enumerated().map { idx, sample -> (x: Double, y: Double, xLabel: String) in
             let absoluteDate = asOf.addingTimeInterval(sample.tHours * 3600)
             return (
                 x: Double(idx),
                 y: sample.concentration,
-                xLabel: formatter.string(from: absoluteDate)
+                xLabel: HLDateFormat.dateTime(absoluteDate)
             )
         }
 
@@ -261,17 +246,6 @@ private struct DrugLevelChartView: View {
             }
         )
     }
-
-    /// AUD-2 H3 — cached medium-date/short-time formatter for the
-    /// accessibility chart descriptor's x-axis labels. Hoisted to a static
-    /// `let` so the descriptor build path no longer allocates a `DateFormatter`
-    /// per render. `DateFormatter` is thread-safe for read-only formatting.
-    private nonisolated static let axDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
 
     private static func phaseLabel(_ phase: Glp1PK.ShotPhase) -> String {
         switch phase {

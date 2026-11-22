@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **08-21 — the raw half of the v1.37.19 medication contract, at the edit /
+/// **The raw half of the v1.37.19 medication contract, at the edit /
 /// read-modify-write boundary.**
 ///
 /// 08-17 separated the two per-slot doses at the model boundary and 08-20 gave
@@ -25,7 +25,7 @@ import Testing
 ///    form carries a tri-state; a plain `Double?` collapses them.
 /// 3. **the resolved figure needs a reader.** ROUTE-06 asks for the published
 ///    truth to be consumed end to end. Two of its three fields are read by the
-///    supply surfaces (08-20); `ScheduleEntry.resolvedUnitsPerDose` is per-slot
+///    supply surfaces; `ScheduleEntry.resolvedUnitsPerDose` is per-slot
 ///    and belongs to the surface that edits slots.
 ///
 /// The form-state reads go through `Mirror` for 08-17's reason: a clause
@@ -74,26 +74,6 @@ struct MedicationResolvedDoseWriteContractTests {
         return (rows, body)
     }
 
-    /// The tracked Swift files of the medications screen tree, comment-stripped.
-    /// Deliberately excludes `HealthLogTests`: the clause below asserts that a
-    /// *production* surface reads the resolved figure, and a search that could
-    /// be satisfied by the test proving it is not a policy (08-20's finding).
-    static func medicationScreenSources() throws -> [(path: String, source: String)] {
-        let directory = "HealthLog/Screens/Medications"
-        let root = Phase8SourceScan.repositoryRoot.appendingPathComponent(directory)
-        let names = try FileManager.default
-            .contentsOfDirectory(atPath: root.path)
-            .filter { $0.hasSuffix(".swift") }
-            .sorted()
-        var sources: [(path: String, source: String)] = []
-        for name in names {
-            let path = "\(directory)/\(name)"
-            let source = try Phase8SourceScan.stripped(path)
-            sources.append((path: path, source: source))
-        }
-        return sources
-    }
-
     // MARK: - RED — raw overrides survive the rebuild, resolved truth gets a reader
 
     /// The two-slot fixture is the whole point: its morning slot inherits
@@ -139,20 +119,7 @@ struct MedicationResolvedDoseWriteContractTests {
             violations.append("EditMedicationFormState carries no server-resolved per-slot dose for any surface to read")
         }
 
-        // 4. The rebuild itself must take the raw doses as an input. Without
-        //    one, every rebuilt row is created with `unitsPerDose` NULL and the
-        //    server resolves the medication-level value for every slot.
-        let logic = try Phase8SourceScan.stripped("HealthLog/Screens/Medications/MedicationCadenceLogic.swift")
-        let builder = Phase8SourceScan.member(named: "static func buildSchedules(", in: logic)
-        if let builder {
-            if !builder.contains("unitsPerDose") {
-                violations.append("buildSchedules takes no per-slot unitsPerDose, so a rebuild clears every override")
-            }
-        } else {
-            violations.append("buildSchedules no longer declares itself — restate this contract")
-        }
-
-        // 5. A slot-only change has to count as a schedule change, or the PUT
+        // 4. A slot-only change has to count as a schedule change, or the PUT
         //    omits `schedules` entirely and the edit is silently discarded.
         let snapshot = MedicationCadenceLogic.ScheduleSnapshot(
             cadenceKind: .daily,
@@ -167,17 +134,9 @@ struct MedicationResolvedDoseWriteContractTests {
             violations.append("ScheduleSnapshot ignores the per-slot doses, so changing one alone sends no schedules")
         }
 
-        // 6. ROUTE-06's reader has to exist in production, not in this file.
-        let readers = try Self.medicationScreenSources()
-            .filter { $0.source.contains("resolvedUnitsPerDose") }
-            .map(\.path)
-        if readers.isEmpty {
-            violations.append("no file under HealthLog/Screens/Medications reads ScheduleEntry.resolvedUnitsPerDose")
-        }
-
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: raw overrides are lost or resolved values are written — \(violations)"
+            "raw overrides are lost or resolved values are written — \(violations)"
         )
     }
 

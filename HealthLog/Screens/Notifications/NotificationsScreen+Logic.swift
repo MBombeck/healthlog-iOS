@@ -75,7 +75,7 @@ extension NotificationsScreen {
     private static let apnsOnlyEvents: Set<String> = ["MEDICATION_INTAKE_SYNC"]
 
     func lastDeliveryLine(for channel: NotificationChannel) -> String? {
-        // v0.5.5.1 — operator feedback: the previous
+        // Operator feedback: the previous
         // `RelativeDateTimeFormatter(dateTimeStyle: .named)` rendered
         // "vor 1 Stunde" / "vor 5 Sekunden", crowding the row. Channel
         // status now uses the compact helper which yields "vor 5min",
@@ -90,7 +90,7 @@ extension NotificationsScreen {
         return String(localized: "No delivery yet")
     }
 
-    /// REG-12 (v0.5.6): when the server flagged the channel as
+    /// When the server flagged the channel as
     /// auto-disabled (hard reject) or paused (transient backoff),
     /// surface the upstream's stable reason code so the operator can
     /// tell *why* the channel stopped working. Reason strings come
@@ -183,7 +183,7 @@ extension NotificationsScreen {
             container?.wireMoodReminderHourChanges(on: created)
             store = created
         }
-        // v0.14.2 FW7 — ntfy + Telegram channel settings store. Server-first,
+        // Ntfy + Telegram channel settings store. Server-first,
         // built off the same pinned `APIClient`.
         if servicesStore == nil, let api = container?.api {
             servicesStore = NotificationServicesStore(repo: NotificationServicesRepository(api: api))
@@ -191,7 +191,7 @@ extension NotificationsScreen {
         await refreshSystemStatus()
         await store?.load()
         await servicesStore?.load()
-        // v0.5.4.3 HP5 — the screen renders the mood-reminder toggle off
+        // The screen renders the mood-reminder toggle off
         // the SettingsStore.profile snapshot. Deep-links into this
         // screen (notification → settings/notifications) skip the
         // parent SettingsScreen .task so the profile may not be hot —

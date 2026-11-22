@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// A2 (1.4) — a queued HealthKit page on replay.
+/// A queued HealthKit page on replay.
 ///
 /// * Production, 1.3.0: 6 to 10 full 500-row pages a day reached the server
 ///   without a `syncTrigger`. They were outbox replays: the row kept the
@@ -110,7 +110,7 @@ struct OutboxHealthKitTriggerAndBisectionTests {
         }
     }
 
-    /// SYNC-TRIG (1.5) — a server that takes every trigger (v1.43 with
+    /// A server that takes every trigger (v1.43 with
     /// `syncTriggerBackfill`), so a kept word replays unchanged.
     static func currentServer() -> SyncTriggerContext {
         let context = SyncTriggerContext()
@@ -189,7 +189,7 @@ struct OutboxHealthKitTriggerAndBisectionTests {
         #expect(await outbox.snapshot.isEmpty)
     }
 
-    // MARK: - Halving a 422 that names no row (S7)
+    // MARK: - Halving a 422 that names no row
 
     @Test("one bad row: the page is halved until it stands alone; only it is registered, the rest delivered")
     func halvingIsolatesTheBadRow() async throws {
@@ -214,7 +214,9 @@ struct OutboxHealthKitTriggerAndBisectionTests {
         #expect(await outbox.deadLetterCount == 0)
         let registered = await register.rows(ownerID: Self.owner)
         #expect(registered.map(\.id) == ["row-5"])
-        #expect(registered.first?.reason == HealthKitBatchRejection.unclassifiedReason(status: 422))
+        // A verdict of its own: it counts towards the register's bound.
+        #expect(registered.first?.reason == HealthKitBatchRejection.individuallyRefusedReason(status: 422))
+        #expect(registered.first?.awaitsVerdict == false)
         let delivered = Set(wire.all.filter { !$0.ids.contains("row-5") }.flatMap(\.ids))
         #expect(delivered == Set(Self.rows(8).map(\.externalId)).subtracting(["row-5"]))
         // The whole page, then 0-3, 4-7, 4-5, 4, 5, 6-7.
@@ -275,6 +277,45 @@ struct OutboxHealthKitTriggerAndBisectionTests {
         #expect(wire.all.count == 1 + OutboxReplayService.maxBisectionPosts)
         #expect(await outbox.snapshot.count == 1)
         #expect(await register.rows(ownerID: Self.owner).isEmpty)
+    }
+
+    @Test("bad rows in different halves: a spent budget keeps what it found and queues the rest as smaller rows (#14)")
+    func spentBudgetQueuesTheRest() async throws {
+        let wire = Wire()
+        let rows = Self.rows(64)
+        let bad: Set = ["row-3", "row-20", "row-50"]
+        Self.install(refusing: bad, wire: wire)
+        let register = HealthKitSkippedRowRegister(storage: SkipRegisterBacking().storage)
+        let outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { Self.owner })
+        try await outbox.enqueueHealthKitBatch(
+            rows,
+            encoder: .hlBatch,
+            idempotencyKey: "a2-spent-\(UUID().uuidString)",
+            syncTrigger: .background,
+            requiringCurrentOwner: Self.owner
+        )
+        let replay = Self.makeReplay(outbox: outbox)
+
+        await HealthKitSkippedRowRegister.$bound.withValue(register) {
+            await replay.runOnce()
+        }
+        let afterFirst = await outbox.snapshot
+        #expect(!afterFirst.isEmpty, "the parts the budget did not reach wait as rows of their own")
+        #expect(afterFirst.allSatisfy { !HealthKitReplayParked.wasHalved($0) }, "none of them is parked as halved")
+        #expect(afterFirst.allSatisfy { $0.idempotencyKey.contains(".rest") })
+
+        for _ in 0 ..< 6 {
+            if await outbox.snapshot.isEmpty { break }
+            await HealthKitSkippedRowRegister.$bound.withValue(register) {
+                await replay.runOnce()
+            }
+        }
+
+        #expect(await outbox.snapshot.isEmpty, "every row is settled")
+        #expect(await Set(register.rows(ownerID: Self.owner).map(\.id)) == bad)
+        let delivered = Set(wire.all.filter { !$0.ids.contains(where: bad.contains) }.flatMap(\.ids))
+        #expect(delivered == Set(rows.map(\.externalId)).subtracting(bad))
+        #expect(wire.all.allSatisfy { $0.syncTrigger == .background })
     }
 }
 

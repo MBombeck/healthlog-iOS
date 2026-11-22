@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - HLDashboardTile previews
 
 //
-// Split out of `HLDashboardTile.swift` (AUD-2 H4) so the context-line memo
+// Split out of `HLDashboardTile.swift` so the context-line memo
 // additions kept the tile file under the `file_length` budget. Preview-only —
 // no behaviour change.
 

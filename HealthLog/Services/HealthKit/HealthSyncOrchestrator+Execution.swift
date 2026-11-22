@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 4 — the bounded execution plan for one trigger.
+// The bounded execution plan for one trigger.
 //
 // Three rules, and every one of them exists because its absence produced a real
 // defect in this codebase:
@@ -142,7 +142,7 @@ extension HealthSyncOrchestrator {
         return nil
     }
 
-    /// SYNC-HR (1.5, #159) — the longest one capability may hold its
+    /// The longest one capability may hold its
     /// lane. Above every capability's own limit (the pulse sweep's is two
     /// minutes), so it only ever catches a capability that has none. A
     /// task-local so a test can shorten it.
@@ -190,7 +190,7 @@ extension HealthSyncOrchestrator {
         context: HealthSyncRunContext
     ) async -> HealthSyncCapabilityResult {
         let started = DispatchTime.now().uptimeNanoseconds
-        // W1 (1.3.0) — persisted brackets around every capability, so a pass
+        // Persisted brackets around every capability, so a pass
         // that never returns (see `SweepCoalescer`) names the capability it
         // hangs in. Trigger and capability are fixed vocabulary.
         let name = adapter.capability.rawValue, trigger = context.trigger.rawValue

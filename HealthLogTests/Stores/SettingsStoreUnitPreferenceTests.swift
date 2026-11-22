@@ -196,12 +196,16 @@ struct SettingsStoreUnitPreferenceTests {
         let state = RouterState(serverUnit: "metric")
         installRouter(state)
 
-        let store = makeStore(defaults: defaults)
+        let client = makeClient()
+        let store = SettingsStore(repo: SettingsRepository(api: client), defaults: defaults)
         await store.load()
         #expect(store.weightUnit == .kg) // metric → kg, no override
 
         // Web flips the binary → a second load adopts it and weightUnit follows.
+        // The client keeps `/api/auth/me` for ten seconds (D5 #2); the flip here
+        // lands milliseconds later, so the snapshot is let go as time would.
         state.serverUnit = "imperial"
+        await client.configureAuthMeSnapshot(ttl: .zero)
         await store.load()
         #expect(store.unitPreference == .imperial)
         #expect(store.weightUnit == .lb)

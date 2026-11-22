@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// v0.14.1 — the **discreet last-synced status line** at the bottom of the
+/// The **discreet last-synced status line** at the bottom of the
 /// scroll content. Operator brief: "nett, nicht überfrachtet, nicht zu
 /// plakativ" — so this is intentionally the quietest possible affordance: one
 /// centered `HLText.tertiary` caption, NO badge, NO spinner, NO chrome. The
 /// only motion in the sync story stays the native pull-to-refresh control
 /// above it.
 ///
-/// v0.14.8 W2-SYNCUX — promoted from `Screens/Dashboard/` into the
+/// Promoted from `Screens/Dashboard/` into the
 /// DesignSystem and rolled out to every refreshable screen via the shared
 /// `HLSyncStatusFooter` wrapper. New call sites mount the wrapper, not this
 /// view directly.
@@ -23,7 +23,7 @@ import SwiftUI
 ///    style: "Zuletzt synchronisiert HH:MM". Self-suppresses entirely until
 ///    something has synced (no timestamp → render nothing).
 ///
-/// U1 (#16) — this line is now the *secondary* sync surface. The live
+/// This line is now the *secondary* sync surface. The live
 /// feedback sits at the top of the Dashboard (`HLSyncActivityGlyph`, the
 /// attention glyph and `DashboardSyncStatusPanel`); all of them read the same
 /// store, so the footer and the header cannot disagree.
@@ -76,7 +76,7 @@ struct SyncStatusCaption: View {
             case .syncing(pending: 0):
                 caption("sync.status.syncing", identifier: "sync.status.syncing")
             case let .syncing(pending):
-                // b177 W-SYNCPROGRESS — the WHOOP-style quantity: counts down
+                // The WHOOP-style quantity: counts down
                 // live as the fan-out finishes / the outbox drains. Numeric
                 // digit roll is reduce-motion-gated; the layout/chrome is
                 // byte-identical to the plain "Wird synchronisiert…" line.
@@ -113,7 +113,7 @@ struct SyncStatusCaption: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        // b178 W-SYNCVIS — phase transitions crossfade quietly (monochrome,
+        // Phase transitions crossfade quietly (monochrome,
         // no chrome); under Reduce Motion the caption switches hard-cut.
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: resolved)
     }
@@ -125,11 +125,11 @@ struct SyncStatusCaption: View {
     /// backlog, then the settled timestamp, else nothing.
     ///
     /// **Self-suppression contract is unchanged:** every new arm (transmitted /
-    /// queued) is additionally gated on `lastSyncAt != nil`, so standalone
-    /// installs and never-synced sessions render exactly what they did
+    /// queued) is additionally gated on `lastSyncAt != nil`, so never-synced
+    /// sessions render exactly what they did
     /// before b177 — nothing (or the unchanged preparing/syncing lines).
     ///
-    /// U1 (#16) — `lastSyncAt` is `SyncStateStore.lastSync`, no longer the
+    /// `lastSyncAt` is `SyncStateStore.lastSync`, no longer the
     /// handshake alone: an Apple Health upload the server accepted in the
     /// background counts, so the line is no longer older than the data.
     enum CaptionState: Equatable {
@@ -144,7 +144,7 @@ struct SyncStatusCaption: View {
         case lastSynced(Date)
         /// 1.4 — writes that wait or were given up on, as one calm sentence.
         case attention(SyncAttention)
-        /// 1.4 B4 — outside Today: a failed or day-old sync, said as that
+        /// Outside Today: a failed or day-old sync, said as that
         /// state with the time of the last good one, so it never reads as the
         /// plain "Zuletzt synchronisiert" line that Today alone shows.
         case failedSince(Date)
@@ -178,7 +178,7 @@ struct SyncStatusCaption: View {
     /// sync names the time of the last one, writes waiting for a connection or
     /// given up on say so, and a healthy state shows nothing at all.
     ///
-    /// 1.4 B4 — the failed and the day-old sync say what they are
+    /// The failed and the day-old sync say what they are
     /// ("Synchronisierung fehlgeschlagen, zuletzt erfolgreich 13:28", "Seit
     /// 21. Okt., 13:28 nicht synchronisiert"). Rendered as "Zuletzt
     /// synchronisiert 13:28" they looked like Today's settled line, the one
@@ -208,7 +208,7 @@ struct SyncStatusCaption: View {
 
     private func syncTimeText(_ at: Date) -> String {
         Calendar.current.isDateInToday(at)
-            ? at.formatted(date: .omitted, time: .shortened)
+            ? HLTimeFormat.time(at)
             : at.formatted(.dateTime.day().month(.abbreviated).hour().minute())
     }
 
@@ -220,7 +220,7 @@ struct SyncStatusCaption: View {
             .accessibilityIdentifier("sync.status.attention")
     }
 
-    /// W2-SYNCUX — the in-flight states now carry stable accessibility
+    /// The in-flight states now carry stable accessibility
     /// identifiers too (the settled state always had one), so walkthrough
     /// tests + AX can address every caption state.
     private func caption(_ key: LocalizedStringKey, identifier: String) -> some View {
@@ -230,7 +230,7 @@ struct SyncStatusCaption: View {
             .accessibilityIdentifier(identifier)
     }
 
-    /// b177 W-SYNCPROGRESS — a caption whose embedded number counts down
+    /// A caption whose embedded number counts down
     /// live. Same font/tint/placement as every other caption arm (monochrome,
     /// `HLText.tertiary`); the only addition is the numeric digit-roll
     /// content transition, suppressed entirely under Reduce Motion.

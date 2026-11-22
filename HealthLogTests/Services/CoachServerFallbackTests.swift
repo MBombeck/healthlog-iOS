@@ -7,7 +7,7 @@ import Testing
     import SpeziChat
 #endif
 
-/// **v0.7.1 W-COACH-FALLBACK** — coverage for the server-Coach fallback
+/// Coverage for the server-Coach fallback
 /// path that replaces the kill-card on non-Apple-Intelligence iPhones.
 ///
 /// Two seams under test:
@@ -140,7 +140,7 @@ struct CoachServerFallbackTests {
         #expect(reply.conversationId == "c")
     }
 
-    // MARK: - v1.18.1 (§3) cadence suggestion frame
+    // MARK: - v1.18.1 cadence suggestion frame
 
     @Test("parseSSE captures a suggestion frame alongside the reply")
     func parseSuggestionFrame() throws {
@@ -188,7 +188,7 @@ struct CoachServerFallbackTests {
         #expect(reply.suggestion == nil)
     }
 
-    // MARK: - CO4 provenance + CO5 token-usage store stash (v0154)
+    // MARK: - CO4 provenance + CO5 token-usage store stash
 
     //
     // The pure `parseSSE` decode tests for the provenance + usage frames live in
@@ -265,7 +265,7 @@ struct CoachServerFallbackTests {
         #expect(store.usageByEntity.isEmpty == true)
     }
 
-    // MARK: - AUD-5 H2 — turn cancellation on sheet teardown
+    // MARK: - Turn cancellation on sheet teardown
 
     @MainActor
     @Test("cancelInFlightTurn() tears down a mid-stream server turn — no reply persisted")
@@ -401,7 +401,7 @@ struct CoachServerFallbackTests {
         #expect(store.serverFallbackNeedsConsent == false)
     }
 
-    // MARK: - Explicit "External AI" pick honoured (AI-1)
+    // MARK: - Explicit "External AI" pick honoured
 
     @MainActor
     @Test("explicit .online pick on an AI-capable device routes to the server arm, not on-device")
@@ -656,7 +656,7 @@ private actor StubCoachAPIClient: APIClientProtocol {
     }
 }
 
-/// AUD-5 H2 — a coach API stub whose `download` suspends until the calling task
+/// A coach API stub whose `download` suspends until the calling task
 /// is **cancelled**, modelling an in-flight SSE stream the server hasn't closed.
 /// Signals when the download has started (so the test can cancel deterministically
 /// instead of racing) and throws `CancellationError` on cancel, mirroring

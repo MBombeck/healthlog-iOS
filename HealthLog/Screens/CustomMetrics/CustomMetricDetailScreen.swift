@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// The custom-metric detail page — modelled on ``BiomarkerDetailScreen`` so the
-/// two "one metric over time" surfaces read identically: header with a gear that
-/// opens the definition editor, an optional description, a latest-value card,
-/// the Min/Ø/Max/Median stat strip, a value-over-time chart with the target band,
-/// and a recent-values list with a link to the full "Alle Werte" page.
+/// The custom-metric detail page in the section order of the Insights metric
+/// pages: title, latest value, Min/Ø/Max/Median, the chart with the target
+/// band, the latest values with the way to all of them, and the description
+/// last as background. Log and edit live in the system bar of the pushed page.
 ///
 /// **The chart is the shared ``BiomarkerChart``**, driven through its generic
 /// `points:` initialiser — same tokens, same neutral band styling, same
@@ -13,14 +12,14 @@ struct CustomMetricDetailScreen: View {
     let store: CustomMetricsStore
     let metricID: String
 
-    @State private var range: CustomMetricSeries.Range = .month
+    @State private var range: CustomMetricSeries.Range = .standard
     @State private var showEditor = false
     @State private var showEntrySheet = false
     @State private var editingEntry: CustomMetricEntryDTO?
 
-    /// How many values the detail page lists inline before deferring to the
-    /// dedicated "Alle Werte" screen.
-    private static let inlinePreviewCount = 10
+    /// How many values the detail page lists inline before the drill row to
+    /// the dedicated "Alle Werte" screen.
+    static let inlinePreviewCount = 5
 
     /// The live definition, re-read from the store so an edit repaints here.
     private var metric: CustomMetricDTO? {
@@ -41,29 +40,45 @@ struct CustomMetricDetailScreen: View {
         allEntries.first
     }
 
+    /// Failed when the values did not load and none are left to show;
+    /// otherwise the slots draw what there is, an empty chart included.
+    private var valuesPhase: HLLoadPhase {
+        let failed = CustomMetricsListScreen.showsLoadFailure(
+            isEmpty: allEntries.isEmpty, isLoading: store.isLoadingEntries, lastError: store.lastError
+        )
+        guard failed else { return .loaded }
+        return .error(retry: { await store.loadEntries(metricID: metricID) })
+    }
+
     var body: some View {
-        ScrollView {
+        HLPage {
             if let metric {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    header(metric)
-                    descriptionSlot(metric)
+                header(metric)
+                // The values did not load: say so instead of an empty chart.
+                HLStateContainer(valuesPhase) {
+                    EmptyView()
+                } empty: {
+                    EmptyView()
+                } content: {
+                    // The order of every metric page: the latest value, the
+                    // key figures as tiles, then the chart.
                     latestSlot(metric)
                     statsSlot
                     chartSlot(metric)
                     recentValuesSlot(metric)
-                    HLSyncStatusFooter(screenLoading: store.isLoading || store.isLoadingEntries)
                 }
-                .padding(HLSpace.lg)
+                descriptionSlot(metric)
+                HLSyncStatusFooter(screenLoading: store.isLoading || store.isLoadingEntries)
             }
         }
-        .hlScreenBackground()
+        // The header in the content carries the title; the bar stays compact
+        // and holds the back button and the page's actions.
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            HLFloatingPeriodControl(
-                selection: $range,
-                accessibilityLabelText: "customMetric.detail.range.a11y"
-            )
-        }
+        // Editing the definition is an entry of "More"; logging a value is
+        // the plus at the trailing edge.
+        .hlPageActions(pageActions)
+        // The period bar of every detail page, floating at the bottom edge.
+        .hlPeriodBar(selection: $range, label: "customMetric.detail.range.a11y")
         .task { await store.loadEntries(metricID: metricID) }
         .refreshable {
             await store.load()
@@ -86,60 +101,76 @@ struct CustomMetricDetailScreen: View {
         }
     }
 
+    private var pageActions: HLTabHeaderActions {
+        Self.pageActions(
+            hasMetric: metric != nil,
+            editDefinition: { showEditor = true },
+            logValue: { showEntrySheet = true }
+        )
+    }
+
+    /// Logging a value is the plus at the trailing edge; editing the
+    /// definition is an entry of "More", never the page-setting slider.
+    static func pageActions(
+        hasMetric: Bool,
+        editDefinition: @escaping () -> Void,
+        logValue: @escaping () -> Void
+    ) -> HLTabHeaderActions {
+        guard hasMetric else { return .none }
+        return [
+            .more(identifier: "customMetric.detail.more") {
+                Button("customMetric.detail.editDefinition", systemImage: "pencil", action: editDefinition)
+                    .accessibilityIdentifier("customMetric.detail.gear")
+            },
+            .add(label: "customMetric.detail.logValue", identifier: "customMetric.detail.add", action: logValue)
+        ]
+    }
+
     // MARK: - Sections
 
     private func header(_ metric: CustomMetricDTO) -> some View {
-        InsightsPageHeader(
-            LocalizedStringKey(metric.name),
-            accessibilityIdentifierSuffix: "customMetric"
-        ) {
-            InsightsHeaderActionCircle(
-                systemImage: "plus",
-                accessibilityLabelText: String(localized: "customMetric.detail.logValue"),
-                accessibilityIdentifier: "customMetric.detail.add"
-            ) {
-                showEntrySheet = true
-            }
-            InsightsHeaderActionCircle(
-                systemImage: "slider.horizontal.3",
-                accessibilityLabelText: String(localized: "customMetric.detail.editDefinition"),
-                accessibilityIdentifier: "customMetric.detail.gear"
-            ) {
-                showEditor = true
-            }
-        }
+        HLTabHeader(
+            LocalizedStringResource(String.LocalizationValue(metric.name)),
+            titleIdentifier: "insights.page.header.title.customMetric",
+            actions: .none
+        )
     }
 
     @ViewBuilder
     private func descriptionSlot(_ metric: CustomMetricDTO) -> some View {
         if let description = metric.description, !description.isEmpty {
-            Text(verbatim: description)
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HLSectionHeader("About", rank: .area)
+            HLCard {
+                Text(verbatim: description)
+                    .font(.hlBody)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
     @ViewBuilder
     private func latestSlot(_ metric: CustomMetricDTO) -> some View {
         if let latest {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("customMetric.detail.lastValue")
-                HLCard {
-                    HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                        Text(verbatim: latest.displayValue(decimals: metric.decimals))
-                            .font(.hlMetric(.title))
-                            .monospacedDigit()
-                            .foregroundStyle(HLText.primary)
-                        CustomMetricBandBadge(status: latest.bandStatus(in: metric))
-                        Spacer(minLength: HLSpace.sm)
+            HLSectionHeader("customMetric.detail.lastValue", rank: .area)
+            HLCard {
+                HStack(alignment: .top, spacing: HLSpace.sm) {
+                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                        // The entry's own unit snapshot, as everywhere else.
+                        HLValueText(
+                            latest.value,
+                            unit: HLUnit(symbol: latest.unit),
+                            size: .hero,
+                            fractionDigits: CustomMetricSeries.fractionDigits(decimals: metric.decimals)
+                        )
                         Text(verbatim: LabsDateFormat.mediumDateTime(latest.measuredAt))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: HLSpace.sm)
+                    CustomMetricBandBadge(status: latest.bandStatus(in: metric))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -147,8 +178,8 @@ struct CustomMetricDetailScreen: View {
     @ViewBuilder
     private var statsSlot: some View {
         if let stats = CustomMetricSeries.stats(for: windowedEntries) {
-            // No section header — `StatsRow` labels each cell itself, exactly as
-            // the biomarker + Insights metric pages render it.
+            // No section header: `StatsRow` labels each tile itself, exactly
+            // as the biomarker and Insights metric pages render it.
             StatsRow(
                 stats: stats,
                 median: CustomMetricSeries.median(for: windowedEntries),
@@ -158,7 +189,7 @@ struct CustomMetricDetailScreen: View {
     }
 
     /// "N von M im Zielbereich" — a plain count, never a score or a grade.
-    /// 1.4 B2-c: the chart card's one line, under the band it counts against,
+    /// The chart card's one line, under the band it counts against,
     /// instead of a loose line between the stats and the chart.
     private func inBandCaption(_ metric: CustomMetricDTO) -> String? {
         CustomMetricSeries.inBandCount(windowedEntries, metric: metric).map { counts in
@@ -183,26 +214,25 @@ struct CustomMetricDetailScreen: View {
     @ViewBuilder
     private func recentValuesSlot(_ metric: CustomMetricDTO) -> some View {
         if !windowedEntries.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("customMetric.detail.recentValues")
-                HLCard {
-                    VStack(spacing: 0) {
-                        ForEach(Array(windowedEntries.prefix(Self.inlinePreviewCount).enumerated()), id: \.element.id) { index, entry in
-                            if index > 0 {
-                                Divider().overlay(HLColor.separator)
-                            }
-                            CustomMetricEntryRow(entry: entry, metric: metric)
-                                .padding(.vertical, HLSpace.xs)
-                                .contentShape(Rectangle())
-                                .onTapGesture { editingEntry = entry }
-                        }
+            HLSectionHeader("customMetric.detail.recentValues", rank: .area)
+            HLCard(layout: .rows) {
+                ForEach(windowedEntries.prefix(Self.inlinePreviewCount)) { entry in
+                    // A tap edits the value, as before; no chevron on a data row.
+                    HLRowButton {
+                        editingEntry = entry
+                    } label: {
+                        CustomMetricEntryRow(entry: entry, metric: metric)
                     }
                 }
-                NavigationLink {
+                // The count of the chosen period, like every drill row; the
+                // list behind it holds all values.
+                HLDrillRow(
+                    "Show all measurements",
+                    count: windowedEntries.count,
+                    hasEntriesOutsidePeriod: !allEntries.isEmpty
+                )
+                .hlRowLink {
                     CustomMetricValuesScreen(store: store, metricID: metricID)
-                } label: {
-                    Text("customMetric.detail.allValues \(store.entryTotalByMetric[metricID] ?? allEntries.count)")
-                        .font(.hlSubhead)
                 }
                 .accessibilityIdentifier("customMetric.detail.allValues")
             }
@@ -212,35 +242,19 @@ struct CustomMetricDetailScreen: View {
 
 // MARK: - Entry row
 
-/// One logged value: date + note on the left, value + band badge on the right.
-/// Renders the entry's OWN snapshotted unit — a later unit rename must not
-/// relabel history.
+/// One logged value as a history row: date and time, the note in the detail
+/// line, the value with its band as a status text. Renders the entry's OWN
+/// snapshotted unit — a later unit rename must not relabel history.
 struct CustomMetricEntryRow: View {
     let entry: CustomMetricEntryDTO
     let metric: CustomMetricDTO
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(verbatim: LabsDateFormat.mediumDateTime(entry.measuredAt))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                if let note = entry.note, !note.isEmpty {
-                    Text(verbatim: note)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .lineLimit(2)
-                }
-            }
-            Spacer(minLength: HLSpace.sm)
-            VStack(alignment: .trailing, spacing: HLSpace.xxs) {
-                Text(verbatim: entry.displayValue(decimals: metric.decimals))
-                    .font(.hlMetric(.body))
-                    .monospacedDigit()
-                    .foregroundStyle(HLText.primary)
-                CustomMetricBandBadge(status: entry.bandStatus(in: metric))
-            }
-        }
-        .accessibilityElement(children: .combine)
+        HLHistoryRow(
+            date: Text(verbatim: LabsDateFormat.mediumDateTime(entry.measuredAt)),
+            detail: HLRowDetail.text([entry.note]),
+            value: Text(verbatim: entry.displayValue(decimals: metric.decimals)),
+            status: CustomMetricBandBadge.rowStatus(entry.bandStatus(in: metric))
+        )
     }
 }

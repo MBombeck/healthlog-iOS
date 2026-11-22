@@ -43,7 +43,7 @@ public final class ChartDetailStore {
         /// Short Apple-Health-style label for segmented control rendering.
         public var label: String {
             switch self {
-            // 1.4 B4 — "T" was German in English too; Apple Health says "D".
+            // "T" was German in English too; Apple Health says "D".
             case .day: String(localized: "range.label.day", defaultValue: "T")
             case .week: "W"
             case .month: "M"
@@ -82,7 +82,7 @@ public final class ChartDetailStore {
     /// steps) where linear hides everyday detail under the peaks. The
     /// segmented toggle lives in the chart toolbar; UI-only, no re-fetch.
     public var useLogScale: Bool = false
-    /// 1.5 LAB-LINES — the blood pressure chart card narrowed to one part of the day (`+PartOfDay`).
+    /// The blood pressure chart card narrowed to one part of the day (`+PartOfDay`).
     public internal(set) var partOfDayChart = PartOfDayChart()
 
     // MARK: - Outputs
@@ -94,12 +94,12 @@ public final class ChartDetailStore {
     /// ``findingsConsentClosed`` is true and the UI surfaces a CTA).
     public internal(set) var findings: MetricStatusDTO?
     /// True when the most recent `load()` skipped the Befunde fetch because
-    /// the AI-consent gate is closed (PB1 H1). Drives a dedicated UI state
+    /// the AI-consent gate is closed. Drives a dedicated UI state
     /// in `FindingsList` — distinguishes "user hasn't consented" from
     /// "server returned empty findings". Mirrors the consent-gate surfacing
     /// on the Insights tab.
     public internal(set) var findingsConsentClosed: Bool = false
-    /// v0.7.0 W-API-RENDER — per-metric ``MetricSummary`` from the
+    /// Per-metric ``MetricSummary`` from the
     /// comprehensive digest (`/api/insights/comprehensive`). Carries the
     /// 7/30/90-day regression slopes + the `avg30LastYear` baseline that the
     /// HeroStrip surfaces as trend chips + a "vor 1 Jahr" delta row. `nil`
@@ -107,12 +107,17 @@ public final class ChartDetailStore {
     /// comprehensive summary (walking-* / BMI / sleep / steps). A failed
     /// fetch leaves it `nil` — the hero simply renders without decoration.
     public internal(set) var metricSummary: MetricSummary?
+    /// **#176 (v1.48)** — the server's comparison of this window with the
+    /// previous one (`/api/analytics/range`), the rule behind the dashboard
+    /// card's arrow. Keyed by the window it was read for, so a range switch
+    /// never shows the previous range's change (``rangeChange``).
+    public internal(set) var rangeTrend: (windowDays: Int, value: AnalyticsRangeTrend)?
     public internal(set) var isLoading: Bool = false
     public internal(set) var error: HLError?
     /// Unified `MetricDataState` derived from the same `recent(kind:)` page
     /// the drill-down `MeasurementListScreen` consumes — so the chart's
     /// "X Einträge im Zeitraum" subtitle matches the actual list page row
-    /// count (PA4 #6) and the chart-card / hero / drill-down empty
+    /// count and the chart-card / hero / drill-down empty
     /// predicates can never disagree (PA4 #2–#5).
     public internal(set) var dataState: MetricDataState = .unknown
     /// In-range, post-filter measurements for the current `(kind, range,
@@ -120,8 +125,11 @@ public final class ChartDetailStore {
     /// if the user tapped through right now. Held alongside `series` so
     /// the subtitle ("X Einträge") + drill-down stay in lockstep.
     public internal(set) var recentInRange: [Measurement] = []
+    /// The page limit when the last `recent(kind:)` page was full and ended
+    /// inside the range, else `nil` (``rawChartCapLimit``).
+    var recentPageCapLimit: Int?
 
-    /// v0.14.6 N4 — the TRUE most-recent raw measurement for `(kind,
+    /// The TRUE most-recent raw measurement for `(kind,
     /// sourceFilter)`, **independent of the selected range**. Captured from the
     /// full unfiltered `recent(kind:)` page (max by `recordedAt`, respecting the
     /// active source filter only), NOT the range-aggregated `displaySeries`.
@@ -179,33 +187,33 @@ public final class ChartDetailStore {
     /// Resolver for the BCP-47 language tag. Sync + Sendable so it can be
     /// captured into a `Task` without strict-concurrency complaints.
     let resolveLocale: @Sendable () -> String
-    /// Optional consent gate (PB1 H1). When non-nil and closed, the
+    /// Optional consent gate. When non-nil and closed, the
     /// Befunde fetch is skipped at the store layer AND the
     /// ``findingsConsentClosed`` flag flips so `FindingsList` can render
     /// the consent-required CTA instead of the generic "empty" state.
     /// Default `nil` keeps unit tests building (gate-not-wired ⇒ legacy
     /// behaviour: hit the repo, which has its own gate when production-wired).
     let consentGate: (@MainActor () -> Bool)?
-    /// v0.6.2.x bug-c10 — optional pre-load hook fired BEFORE the server
+    /// Optional pre-load hook fired BEFORE the server
     /// `series` + `recent` fan-out. The dashboard wires it to the HK
     /// daily-stats refresh for cumulative kinds (Steps + future sum-per-
     /// day metrics) so the chart never paints a stale day-total. `nil`
     /// keeps existing call sites + unit tests building unchanged.
     let preLoadHook: (@Sendable () async -> Void)?
-    /// v0.6.2.x bug-c10-ios-direct — closure that resolves today's
+    /// Closure that resolves today's
     /// HK-direct step total. Honored only for `kind == .steps`. The chart-
     /// detail screen uses this to swap the today series-point value (which
     /// reads from the frozen server `stats:` row for the rest of the day)
     /// for the live HK number. `nil` keeps existing call sites + unit
     /// tests building unchanged.
     private let liveTodayStepsProvider: (@MainActor () -> Double?)?
-    /// v0.14 DATA — user height (cm) from the server profile, for the derived
+    /// User height (cm) from the server profile, for the derived
     /// `.bmi` series (BMI = weight_kg / height_m²). `nil` keeps existing call
     /// sites + tests building unchanged; without it the `.bmi` page falls back to
     /// the prior (empty) behaviour rather than mis-charting.
     let heightCmProvider: (@MainActor () -> Double?)?
     var loadTask: Task<Void, Never>?
-    /// 1.4 B1 — bumped by every `load()`. Only the load holding the current
+    /// Bumped by every `load()`. Only the load holding the current
     /// value may clear `isLoading`: a load cancelled by a newer one unwinds
     /// after the newer one has set the flag, and clearing it there ended the
     /// spinner while the newer request was still on the wire, so the chart
@@ -213,7 +221,7 @@ public final class ChartDetailStore {
     @ObservationIgnored var loadGeneration: Int = 0
     private var _queryKeyVersion: Int = 0
 
-    /// 1.4 B1 — cancels the running load and opens the generation the new
+    /// Cancels the running load and opens the generation the new
     /// load owns (see ``loadGeneration``).
     func supersedeLoad() -> Int {
         loadTask?.cancel()
@@ -221,7 +229,7 @@ public final class ChartDetailStore {
         return loadGeneration
     }
 
-    /// 1.4 B1 — a read that failed without any evidence of emptiness is a
+    /// A read that failed without any evidence of emptiness is a
     /// failed load, surfaced like the series failure, so the chart card shows
     /// the error face instead of an empty history. A cancelled load reports
     /// nothing; its successor owns the outcome.
@@ -230,7 +238,7 @@ public final class ChartDetailStore {
         error = (failure as? HLError) ?? .unknown(String(describing: failure))
     }
 
-    /// 1.4 B1 — the empty settle after a failed measurements page with no
+    /// The empty settle after a failed measurements page with no
     /// usable series. An empty series is evidence of „no rows"; a kind without
     /// a series has none, so there the failed page is a failed load.
     func settleEmptyAfterFailedPage(_ failure: Error) {
@@ -260,7 +268,7 @@ public final class ChartDetailStore {
         self.heightCmProvider = heightCmProvider
     }
 
-    /// v0.6.2.x bug-c10-ios-direct — resolved current HK-direct today step
+    /// Resolved current HK-direct today step
     /// total, or `nil` when the provider returns no value (non-steps kind,
     /// no HK permission, no provider wired). The chart-detail HeroStrip +
     /// ChartCard read this to swap today's bar value out from under the
@@ -272,7 +280,7 @@ public final class ChartDetailStore {
 
     // MARK: - Convenience derived state
 
-    /// v0.6.2.x bug-c10-ios-direct — display-side overlay of `series` that
+    /// Display-side overlay of `series` that
     /// swaps today's bar value out for the HK-direct step total whenever
     /// the live store has a number. `series` itself stays untouched (it's
     /// the wire payload from the server, used by other consumers like
@@ -291,12 +299,12 @@ public final class ChartDetailStore {
             dayStart: dayStart,
             dayEnd: dayEnd
         )
-        // W-B187 (#29) — preserve the server-resolved unit through the today-patch
+        // Preserve the server-resolved unit through the today-patch
         // (#135: and the server's verdict and reference lines).
         return series.replacing(points: patched)
     }
 
-    /// W-B187 (#29) — display unit label: the server-resolved series `unit`
+    /// Display unit label: the server-resolved series `unit`
     /// (v1.16.16 unit-at-source, e.g. glucose `mg/dL` | `mmol/L`) when present,
     /// else the per-`MetricKind` default. The `points`/`stats` are already
     /// converted server-side, so iOS renders this label as-is and never
@@ -305,7 +313,7 @@ public final class ChartDetailStore {
         series?.resolvedUnit(for: kind) ?? kind.unit
     }
 
-    /// A360-5 C-1 — unit-aware display label for the chart surfaces.
+    /// Unit-aware display label for the chart surfaces.
     ///
     /// The series endpoint converts glucose AT SOURCE (server v1.16.16) but
     /// leaves weight + blood-pressure CANONICAL (kg / mmHg) on the wire. So the
@@ -315,7 +323,7 @@ public final class ChartDetailStore {
     /// `displayUnit` (already the user's unit, value already converted). Every
     /// other kind has no re-unitable family → server label / canonical default.
     public func displayUnit(units: UnitPreferences) -> String {
-        // #115 P2 — every client-converted family (mass, BP, temperature,
+        // Every client-converted family (mass, BP, temperature,
         // waist, distance, speed) flips to the account's label; glucose keeps
         // the server-resolved series unit, the identity branch the server label.
         guard kind.unitFamily != .glucose, let suffix = units.transform(for: kind).suffix else {
@@ -324,7 +332,7 @@ public final class ChartDetailStore {
         return suffix
     }
 
-    /// A360-5 — converts a SERIES-derived delta (e.g. `deltaVsPriorWindow`) into
+    /// Converts a SERIES-derived delta (e.g. `deltaVsPriorWindow`) into
     /// the user's unit. The kg→lb / mmHg→kPa / mg/dL→mmol/L conversions are all
     /// purely multiplicative (no offset), so a difference converts with the same
     /// factor as a level. Glucose series points are ALREADY server-converted, so
@@ -336,18 +344,32 @@ public final class ChartDetailStore {
         kind.unitFamily == .glucose ? delta : units.displayDelta(delta, kind: kind)
     }
 
-    /// **#115 P2** — a SERIES value (a plotted point, a Min/Ø/Max stat) in the
+    /// A range change in the account's unit: a window comparison from server
+    /// 1.49.0 is already there and passes as sent; every other change
+    /// converts like a series delta.
+    public func displayDelta(of change: RangeChange, units: UnitPreferences) -> Double {
+        change.inAccountUnit ? change.delta : convertDelta(change.delta, units: units)
+    }
+
+    /// The unit beside a change: the one the server sent with it (1.49.0,
+    /// shown as sent, never derived from the preferences), else the page's.
+    public func displayUnit(of change: RangeChange, units: UnitPreferences) -> String {
+        if change.inAccountUnit, let unit = change.unit { return unit }
+        return displayUnit(units: units)
+    }
+
+    /// A SERIES value (a plotted point, a Min/Ø/Max stat) in the
     /// account's unit. Series glucose is already converted by the server and
     /// passes through; every other family converts from canonical SI.
     public func convertSeriesValue(_ value: Double, units: UnitPreferences) -> Double {
         kind.unitFamily == .glucose ? value : units.displayValue(value, kind: kind)
     }
 
-    /// **#115 P2** — the chart points in the account's unit, for the plot, the
+    /// The chart points in the account's unit, for the plot, the
     /// y-axis and the audio-graph descriptor. Before this the plot drew kg on
     /// an axis labelled with the series' "kg" under a hero that said "lb", and
     /// temperatures/waists never converted at all.
-    /// **#115 P2** — the series the chart's audio graph describes, in the same
+    /// The series the chart's audio graph describes, in the same
     /// unit as the plot: the converted points plus the server's stats (or the
     /// on-device fallback stats) converted alongside them.
     public func accessibilitySeries(units: UnitPreferences) -> MeasurementSeries {
@@ -383,7 +405,7 @@ public final class ChartDetailStore {
         }
     }
 
-    /// **#108 — the units THIS chart renders in.** The settings units, with the
+    /// **The units THIS chart renders in.** The settings units, with the
     /// glucose unit pinned to the one the server converted the series into
     /// (`series.unit`). The series is already in that unit, so the hero, the
     /// scrub callout and every summary figure on the screen follow it. Before
@@ -400,7 +422,7 @@ public final class ChartDetailStore {
         return pinned
     }
 
-    /// A360-5 — converts a SUMMARY-derived canonical value (e.g. the
+    /// Converts a SUMMARY-derived canonical value (e.g. the
     /// `avg30LastYear` baseline + its delta) into the user's unit. UNLIKE the
     /// series, the analytics summary is canonical for EVERY family (including
     /// glucose), so glucose converts here too. Multiplicative → safe for both
@@ -411,7 +433,7 @@ public final class ChartDetailStore {
         return units.displayValue(value, kind: kind)
     }
 
-    /// A360-5 — the unit label for SUMMARY-derived values (year-over-year). For
+    /// The unit label for SUMMARY-derived values (year-over-year). For
     /// glucose the summary is canonical, so the label is the user's glucose
     /// suffix (`displayUnit` would echo the SERIES unit which is correct here
     /// too, but resolve explicitly for clarity).
@@ -420,7 +442,7 @@ public final class ChartDetailStore {
         return units.transform(for: kind).suffix ?? displayUnit
     }
 
-    /// v0.8.6 — chart-render points with a `recentInRange` fallback. For the
+    /// Chart-render points with a `recentInRange` fallback. For the
     /// kinds whose server `/api/measurements/series` endpoint isn't wired
     /// (`kindSupportsSeries == false`: walking speed / step length etc.),
     /// `displaySeries` is forced `nil`, so the chart card used to always
@@ -431,27 +453,15 @@ public final class ChartDetailStore {
     /// from the same rows the list shows. Behaviour for series-backed kinds is
     /// unchanged because `displaySeries` is non-nil for those.
     public var chartPoints: [SeriesPoint] {
-        if let points = displaySeries?.points {
-            return points
-        }
-        return recentInRange
-            .sorted { $0.recordedAt < $1.recordedAt }
-            .map { measurement in
-                SeriesPoint(
-                    id: measurement.id,
-                    at: measurement.recordedAt,
-                    value: measurement.value.primaryComponent,
-                    secondary: nil
-                )
-            }
+        Self.chartPoints(series: displaySeries, recent: recentInRange)
     }
 
     /// Most recent point in the visible series, if any. Drives the hero strip.
-    /// v0.6.2.x bug-c10-ios-direct — reads from `displaySeries` so the
+    /// Reads from `displaySeries` so the
     /// HeroStrip's primary number reflects the HK-direct step total when
     /// available.
     ///
-    /// v0.14.6 N4 — for every kind EXCEPT `.steps`, the "Letzte Messung"
+    /// For every kind EXCEPT `.steps`, the "Letzte Messung"
     /// headline is now the true latest RAW reading (`latestRawMeasurement`),
     /// range-independent, so it no longer jumps to a bucket-average-at-midnight
     /// when the bottom range switches to Month/Year. `.steps` keeps the
@@ -537,7 +547,7 @@ public final class ChartDetailStore {
     // per-point provenance on `/api/measurements/series`.
 }
 
-/// v0.11 — adopt the canonical `HLRangePicker` so the detail chart's period
+/// Adopt the canonical `HLRangePicker` so the detail chart's period
 /// control is the same primitive every other chart uses.
 extension ChartDetailStore.Range: HLRangeOption {
     var rangeAccessibilityLabel: String {
@@ -545,10 +555,10 @@ extension ChartDetailStore.Range: HLRangeOption {
     }
 }
 
-// MARK: - N4 latest-raw helper
+// MARK: - Latest-raw helper
 
 private extension Measurement {
-    /// v0.14.6 N4 — projects this raw measurement to the `SeriesPoint` shape the
+    /// Projects this raw measurement to the `SeriesPoint` shape the
     /// HeroStrip "Letzte Messung" headline consumes, carrying the BP diastolic
     /// peer as `secondary`. Lives in an extension so it doesn't count toward the
     /// store's `type_body_length`.
@@ -569,7 +579,7 @@ private extension Measurement {
 // MARK: - Cross-source non-summing overlay core
 
 extension ChartDetailStore {
-    /// v0.14.8 W-WORKOUT-E2E — pure core of ``displaySeries``. The HK-direct
+    /// Pure core of ``displaySeries``. The HK-direct
     /// live value **replaces** today's server datapoint; it is never *added*
     /// to it. This is the iOS half of the cross-source non-summing contract
     /// (the server half is the per-day source-priority ladder pick): when two

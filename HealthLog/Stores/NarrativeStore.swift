@@ -27,7 +27,7 @@ public final class NarrativeStore {
     /// `404`/`422` does NOT land here (the repo returns `nil` → settled-empty);
     /// only a thrown error does. Cleared the moment a period's load is retried.
     public private(set) var errored: Set<NarrativeDTO.Period> = []
-    /// v0.14.6 H2 — periods whose server returned `revalidating: true,
+    /// Periods whose server returned `revalidating: true,
     /// narrative: null` (a background AI warm is in flight) and for which a
     /// bounded in-session re-poll is scheduled. Lets the card show an honest
     /// "preparing your retrospective…" hint during the warm window instead of
@@ -40,7 +40,7 @@ public final class NarrativeStore {
 
     private let repo: NarrativeRepository
 
-    /// **#114 / #115 · 0.2 — the `periodNarrative` capability.** The narrative
+    /// **The `periodNarrative` capability.** The narrative
     /// read is mixed: the deterministic narrative is data and always served,
     /// the model-written one is nulled by the server while the capability is
     /// unavailable. A model-written narrative this device cached while it WAS
@@ -78,18 +78,18 @@ public final class NarrativeStore {
         errored.contains(period)
     }
 
-    /// v0.14.6 H2 — `true` while a background AI warm is in flight for this
+    /// `true` while a background AI warm is in flight for this
     /// period and a re-poll is scheduled, so the card shows "preparing…" rather
     /// than the settled-empty copy.
     public func isWarming(_ period: NarrativeDTO.Period) -> Bool {
         warming.contains(period)
     }
 
-    /// v0.14.3 B5 — number of in-session re-polls already issued per period
+    /// Number of in-session re-polls already issued per period
     /// when the server returned `revalidating: true, narrative: null` (a warm
     /// is in flight). Capped so a never-warming provider can't loop forever.
     private var revalidatePolls: [NarrativeDTO.Period: Int] = [:]
-    /// L-1 — the pending warm re-polls, held so logout can cancel them.
+    /// The pending warm re-polls, held so logout can cancel them.
     ///
     /// N5.2 (v0.14.8 tech audit) — keyed **per period**: the store previously
     /// tracked ONE task across both periods, so scheduling a warm re-poll for
@@ -98,14 +98,14 @@ public final class NarrativeStore {
     /// One pending task per period; replacing a period's own task still cancels
     /// the prior one (no double-poll per period).
     private var revalidateTasks: [NarrativeDTO.Period: Task<Void, Never>] = [:]
-    /// Re-poll cap + delay for the warm-in-flight case (B5).
+    /// Re-poll cap + delay for the warm-in-flight case.
     private static let maxRevalidatePolls = 3
     private static let revalidatePollDelay: Duration = .seconds(4)
 
     /// Loads a single period. Skips the network when already settled unless
     /// `force` is set (pull-to-refresh / toggle-refresh).
     ///
-    /// **v0.14.3 B5 — warm-in-flight re-poll.** When the server returns
+    /// **Warm-in-flight re-poll.** When the server returns
     /// `narrative: nil` together with `revalidating: true`, a fresh narrative is
     /// being warmed out-of-band. Settling the key would freeze the empty state
     /// until the next Berlin-day rollover. Instead we keep the period UNSETTLED
@@ -115,7 +115,7 @@ public final class NarrativeStore {
         if !force, hasSettled(period) { return }
         loading.insert(period)
         error = nil
-        // F1 — a retry clears the prior error so the card drops the "couldn't
+        // A retry clears the prior error so the card drops the "couldn't
         // load" hint while the new attempt is in flight.
         errored.remove(period)
         defer { loading.remove(period) }
@@ -125,21 +125,21 @@ public final class NarrativeStore {
                 locale: locale,
                 bypassCache: !(modelNarrativeAvailable?() ?? true)
             )
-            // B5 — warm in flight + still empty → don't settle; re-poll soon.
+            // Warm in flight + still empty → don't settle; re-poll soon.
             if let dto, dto.narrative == nil, dto.revalidating == true,
                (revalidatePolls[period] ?? 0) < Self.maxRevalidatePolls
             {
                 revalidatePolls[period, default: 0] += 1
-                // H2 — mark the period as warming so the card shows an honest
+                // Mark the period as warming so the card shows an honest
                 // "preparing…" hint (content is coming) instead of the
                 // settled-empty "not enough data" copy during the re-poll window.
                 warming.insert(period)
                 // Do NOT write `byPeriod[period]` — leave it unsettled so the
                 // card keeps showing its loading/empty arm and re-polls.
-                // L-1 — hold the handle so `clearOnLogout` can cancel a pending
+                // Hold the handle so `clearOnLogout` can cancel a pending
                 // re-poll (otherwise a ~4 s-later fetch fires on a logged-out
                 // session; it 401-self-heals, but the cancel avoids the spurious
-                // request entirely). N5.2 — keyed per period so week/month warm
+                // request entirely). Keyed per period so week/month warm
                 // windows never cancel each other.
                 revalidateTasks[period]?.cancel()
                 revalidateTasks[period] = Task { [weak self] in
@@ -150,10 +150,10 @@ public final class NarrativeStore {
                 return
             }
             revalidatePolls[period] = nil
-            // N5.2 — the period settled; drop its pending re-poll handle (the
+            // The period settled; drop its pending re-poll handle (the
             // running task, if this IS the re-poll, is past its sleep already).
             revalidateTasks[period] = nil
-            // H2 — warm window over (settled with content, or cap hit): drop
+            // Warm window over (settled with content, or cap hit): drop
             // the warming flag so the card resolves to prose or the honest
             // empty state.
             warming.remove(period)

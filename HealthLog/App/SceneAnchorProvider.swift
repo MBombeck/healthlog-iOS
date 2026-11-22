@@ -44,7 +44,15 @@ import SwiftUI
             // PasskeyService prueft auf einen fensterlosen Anchor und wirft,
             // bevor das System-Sheet ins Leere praesentieren wuerde.
             HLLog.auth.error("Passkey: kein praesentierbares Window gefunden — fensterloser Anchor.")
-            return ASPresentationAnchor()
+            return Self.windowlessAnchor()
+        }
+
+        /// The scene-less `UIWindow()` init is deprecated from iOS 26, but a
+        /// windowless anchor is exactly what `PasskeyService` detects and refuses.
+        @diagnose(DeprecatedDeclaration, as: ignored)
+        @MainActor
+        static func windowlessAnchor() -> ASPresentationAnchor {
+            ASPresentationAnchor()
         }
     }
 #endif

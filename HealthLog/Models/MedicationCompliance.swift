@@ -10,7 +10,7 @@ public struct ComplianceDay: Codable, Sendable, Identifiable {
     public let scheduled: Int
     public let taken: Int
 
-    /// **v0.14.x M4 — a no-dose day is NOT 100 % compliant.** Per-day adherence
+    /// **A no-dose day is NOT 100 % compliant.** Per-day adherence
     /// ratio (0…1). A day with zero scheduled doses returns `0`, not `1`: a
     /// genuine 0/0 day has no adherence to report, and the old `1` inflated
     /// every rolling mean / heatmap aggregate and painted a false 100 % spike
@@ -32,7 +32,7 @@ public struct ComplianceDay: Codable, Sendable, Identifiable {
     }
 }
 
-/// **v0.6.1.4 Y4.2 — server compliance payload.**
+/// **Server compliance payload.**
 ///
 /// Mirrors `src/app/api/medications/[id]/compliance/route.ts` 1:1.
 /// The server bundles three things into one round-trip:
@@ -51,7 +51,7 @@ public struct MedicationCompliancePayload: Codable, Sendable {
     public let compliance30: ComplianceWindowResult
     public let dailyCompliance: [String: DailyComplianceBucket]
 
-    /// **v0.14.1 #127 — cadence-scaled two-row card display (server 2026-06-01).**
+    /// **Cadence-scaled two-row card display (server 2026-06-01).**
     ///
     /// The med card's two compliance rows now come from the server's
     /// `complianceDisplay` block whose windows SCALE with cadence: a daily med
@@ -66,7 +66,7 @@ public struct MedicationCompliancePayload: Codable, Sendable {
     /// Optional: nil against a pre-2026-06-01 server / older fixtures, in which
     /// case the card falls back to the fixed 7/30 `compliance7`/`compliance30`.
     public let complianceDisplay: ComplianceDisplay?
-    /// #115 · 1.3 — `applicable` (server v1.37+): `false` for a scheduled
+    /// `applicable` (server v1.37+): `false` for a scheduled
     /// medication with no HealthLog-owned expected-dose grid
     /// (`notApplicableReason: NO_LOCAL_SCHEDULE`). Its `compliance7/30` are
     /// then all-zero compatibility placeholders that must not be rendered as a
@@ -126,7 +126,7 @@ public struct MedicationComplianceSummaryEntry: Codable, Sendable, Equatable, Id
     public let compliance7: ComplianceWindowResult
     public let compliance30: ComplianceWindowResult
     public let complianceDisplay: ComplianceDisplay?
-    /// #115 · 1.3 — see ``MedicationCompliancePayload/applicable``.
+    /// See ``MedicationCompliancePayload/applicable``.
     public let applicable: Bool?
     /// See ``MedicationCompliancePayload/notApplicableReason``.
     public let notApplicableReason: ComplianceNotApplicableReason?
@@ -176,7 +176,7 @@ public enum ComplianceNotApplicableReason: String, Codable, Sendable, Equatable,
     public static let wireVocabulary: StaticString = "compliance.notApplicableReason"
 }
 
-/// **v0.14.1 #127 — server cadence-scaled card display block.**
+/// **Server cadence-scaled card display block.**
 /// Mirror of the server `complianceDisplay` object: two windows whose spans
 /// (`shortDays`/`longDays`) scale with the medication's cadence. The card uses
 /// `shortDays`/`longDays` verbatim as the row labels and `short.rate`/`long.rate`
@@ -186,12 +186,87 @@ public struct ComplianceDisplay: Codable, Sendable, Equatable {
     public let longDays: Int
     public let short: ComplianceDisplayWindow
     public let long: ComplianceDisplayWindow
+    /// **#191 (final) — the current dose as the server resolved it**, the
+    /// earliest slot still due or overdue, else the next one. `nil` from an
+    /// older server or a mistyped block; never computed on the device.
+    public let currentDose: ComplianceCurrentDose?
 
-    public init(shortDays: Int, longDays: Int, short: ComplianceDisplayWindow, long: ComplianceDisplayWindow) {
+    public init(
+        shortDays: Int,
+        longDays: Int,
+        short: ComplianceDisplayWindow,
+        long: ComplianceDisplayWindow,
+        currentDose: ComplianceCurrentDose? = nil
+    ) {
         self.shortDays = shortDays
         self.longDays = longDays
         self.short = short
         self.long = long
+        self.currentDose = currentDose
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case shortDays, longDays, short, long, currentDose
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        shortDays = try c.decode(Int.self, forKey: .shortDays)
+        longDays = try c.decode(Int.self, forKey: .longDays)
+        short = try c.decode(ComplianceDisplayWindow.self, forKey: .short)
+        long = try c.decode(ComplianceDisplayWindow.self, forKey: .long)
+        currentDose = try? c.decodeIfPresent(ComplianceCurrentDose.self, forKey: .currentDose)
+    }
+}
+
+/// `complianceDisplay.currentDose` (#191, final): `status`, `targetAt`,
+/// `state`, `takenLate`, `dueAt`, `overdueSince`, `missedAfter`,
+/// `lateTakeCounts`. Tolerant field by field; `targetAt` null means there is
+/// no current dose.
+public struct ComplianceCurrentDose: Codable, Sendable, Equatable {
+    public let status: String?
+    public let targetAt: Date?
+    public let state: String?
+    public let takenLate: Bool
+    public let dueAt: Date?
+    public let overdueSince: Date?
+    public let missedAfter: Date?
+    public let lateTakeCounts: Bool
+
+    public init(
+        status: String? = nil,
+        targetAt: Date?,
+        state: String? = nil,
+        takenLate: Bool = false,
+        dueAt: Date? = nil,
+        overdueSince: Date? = nil,
+        missedAfter: Date? = nil,
+        lateTakeCounts: Bool = false
+    ) {
+        self.status = status
+        self.targetAt = targetAt
+        self.state = state
+        self.takenLate = takenLate
+        self.dueAt = dueAt
+        self.overdueSince = overdueSince
+        self.missedAfter = missedAfter
+        self.lateTakeCounts = lateTakeCounts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, targetAt, state, takenLate, dueAt, overdueSince, missedAfter, lateTakeCounts
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        status = try? c.decodeIfPresent(String.self, forKey: .status)
+        targetAt = try? c.decodeIfPresent(Date.self, forKey: .targetAt)
+        state = try? c.decodeIfPresent(String.self, forKey: .state)
+        takenLate = (try? c.decodeIfPresent(Bool.self, forKey: .takenLate)) == true
+        dueAt = try? c.decodeIfPresent(Date.self, forKey: .dueAt)
+        overdueSince = try? c.decodeIfPresent(Date.self, forKey: .overdueSince)
+        missedAfter = try? c.decodeIfPresent(Date.self, forKey: .missedAfter)
+        lateTakeCounts = (try? c.decodeIfPresent(Bool.self, forKey: .lateTakeCounts)) == true
     }
 }
 
@@ -200,7 +275,7 @@ public struct ComplianceDisplay: Codable, Sendable, Equatable {
 /// decoded for completeness; `expected` is `Double` because a weekly med's
 /// expected-dose count over the window can be fractional.
 ///
-/// **v0.14.2 M5 — `streak`.** The server emits `{rate, streak}` on the SHORT
+/// **`streak`.** The server emits `{rate, streak}` on the SHORT
 /// window (`docs/api/openapi.yaml`, server `buildComplianceDisplay` — `short:
 /// { rate, streak }`); the long window carries only `rate`. Decoding it here
 /// (optional, so the long window + older servers stay valid) lets the card
@@ -257,7 +332,7 @@ public struct DailyComplianceBucket: Codable, Sendable, Equatable {
     public let veryLate: Int
     public let early: Int?
 
-    // MARK: - v1.7.0 SB-SCHED-2 additive per-day signal (W-Meds-A2)
+    // MARK: - v1.7.0 SB-SCHED-2 additive per-day signal
 
     /// **`due` (LOCKED).** Whether a dose was actually due on this day per the
     /// server's canonical recurrence engine. iOS reads `due == false` to
@@ -292,7 +367,7 @@ public struct DailyComplianceBucket: Codable, Sendable, Equatable {
         self.expectedCount = expectedCount
     }
 
-    /// **v0.10 W-Meds-A2 — canonical "was a dose due this day?" predicate.**
+    /// **Canonical "was a dose due this day?" predicate.**
     /// Prefers the v1.7.0 `due`/`expectedCount` signal; falls back to the
     /// legacy `expected > 0` when the server hasn't shipped the field yet.
     public var wasDue: Bool {

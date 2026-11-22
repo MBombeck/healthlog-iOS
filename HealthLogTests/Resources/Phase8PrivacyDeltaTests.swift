@@ -2,16 +2,10 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 08 Wave 0 — the privacy delta, in both directions.
+/// The privacy surface that must not move.
 ///
-/// Phase 08 removes one thing that touches privacy: the locally typed
-/// reviewer identity behind the LOINC physician-review surface. A name typed
-/// on the device is clinical identity, it is persisted in the Keychain, and it
-/// buys a sign-off that no clinician gave. The RED below enumerates every
-/// place that identity is currently stored, injected, mutated or shown, so the
-/// removal is provable rather than assumed.
-///
-/// Everything else must not move. The safety flag the removal is supposed to
+/// The locally typed LOINC reviewer identity is gone; what made its removal
+/// safe must stay. The safety flag the removal is supposed to
 /// protect (`physicianReviewPending`), the disclaimers, the privacy manifest,
 /// the entitlements, the purpose strings and the dependency set are frozen
 /// here, because "we deleted the screen" is not the same as "the claim is now
@@ -52,7 +46,7 @@ struct Phase8PrivacyDeltaTests {
         }
         #expect(about.contains("disclaimerCard"), "the disclaimer card stays mounted unconditionally")
 
-        // 18-03 — the FHIR export surface became one form of the unified sharing
+        // The FHIR export surface became one form of the unified sharing
         // screen. The claim follows the surface, not the filename.
         let export = try Self.strippedSource("HealthLog/Screens/Sharing/UnifiedSharingScreen.swift")
         #expect(export.contains("HealthExportDisclaimerCard"), "control: the disclaimer surface was read")
@@ -68,15 +62,22 @@ struct Phase8PrivacyDeltaTests {
         #expect((manifest["NSPrivacyTrackingDomains"] as? [String] ?? []).isEmpty)
         let apiTypes = (manifest["NSPrivacyAccessedAPITypes"] as? [[String: Any]]) ?? []
         let categories = Set(apiTypes.compactMap { $0["NSPrivacyAccessedAPIType"] as? String })
+        // SystemBootTime is no Phase 08 addition: `systemUptime` was in the
+        // binary before and went undeclared until 1.7 (D4 finding 8).
         #expect(categories == [
             "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPICategoryFileTimestamp"
+            "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPICategorySystemBootTime"
         ], "Phase 08 adds no required-reason API category")
 
         let entitlements = try Self.plist("HealthLog/Resources/HealthLog.entitlements")
         #expect((entitlements["com.apple.developer.healthkit"] as? Bool) == true)
         #expect((entitlements["com.apple.developer.healthkit.background-delivery"] as? Bool) == true)
-        #expect(entitlements["com.apple.developer.healthkit.access"] == nil, "no clinical-record access is claimed")
+        // 1.7 (#180) — Health Records lab results, and nothing beyond them.
+        #expect(
+            (entitlements["com.apple.developer.healthkit.access"] as? [String]) == ["health-records"],
+            "clinical-record access is claimed for the Labs Health Records sync only"
+        )
 
         let info = try Self.plist("HealthLog/Resources/Info.plist")
         for key in [
@@ -94,8 +95,8 @@ struct Phase8PrivacyDeltaTests {
     func phase8AddsNoCollectionSurface() throws {
         #if canImport(HealthKit)
             #expect(
-                HealthLogSampleTypeRegistry.baseExpectedCount == 42,
-                "the frozen registry grows only by decision: 1.2 V4 RMSSD (OS-gated), 1.4 B5 waist circumference (read only), 1.5 HK-NEW the six server-v1.44 types (server-gated, read only)"
+                HealthLogSampleTypeRegistry.baseExpectedCount == 57,
+                "the registry grows only by decision: RMSSD (1.2), waist (1.4), six v1.44 types (1.5), resting energy and fourteen per-sample quantity types (1.7)"
             )
         #endif
 
@@ -115,57 +116,6 @@ struct Phase8PrivacyDeltaTests {
             }
         }
     }
-
-    // MARK: - RED
-
-    /// Every place a locally typed clinical identity is stored, injected,
-    /// mutated or displayed today. All of it goes; nothing here may survive as
-    /// a hidden key, an orphaned migrator, or a dead composition root entry.
-    @Test("no reviewer identity is stored, injected, mutated or shown")
-    func reviewerIdentityStorageAndCompositionAreAbsent() throws {
-        var violations: [String] = []
-
-        for path in Self.reviewerOwnedFiles
-            where FileManager.default.fileExists(atPath: Self.root.appendingPathComponent(path).path)
-        {
-            violations.append("\(path) still ships")
-        }
-
-        let sources = try Self.productionSources()
-        for (path, source) in sources where !Self.reviewerOwnedFiles.contains(path) {
-            for symbol in Self.reviewerSymbols where source.contains(symbol) {
-                violations.append("\(path) still names `\(symbol)`")
-            }
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-01 privacy reviewer identity storage or composition remains")
-    }
-
-    /// The two files whose entire purpose is the reviewer identity.
-    private static let reviewerOwnedFiles = [
-        "HealthLog/FHIR/LOINCReviewRegistry.swift",
-        "HealthLog/Screens/Settings/Sub/SettingsLOINCReviewScreen.swift"
-    ]
-
-    /// Persisted keys, injected symbols, mutating actions and reviewed-success
-    /// copy — the complete current reference set, enumerated so the removal
-    /// cannot be partial.
-    private static let reviewerSymbols = [
-        "dev.healthlog.app.fhir.loinc.review.v1",
-        "dev.healthlog.app.fhir.loinc.review.v2",
-        "fhir.loinc.reviewer.name",
-        "LOINCReviewRegistry",
-        "loincReviewRegistry",
-        "SettingsLOINCReviewScreen",
-        "loincReviewCard",
-        "settings.advanced.loincReviewRow",
-        "settings.loincReview",
-        "markReviewed",
-        "reviewerName",
-        "maxReviewerNameLength",
-        "loinc.review.bulk.confirm",
-        "physician-reviewed"
-    ]
 
     // MARK: - File access
 

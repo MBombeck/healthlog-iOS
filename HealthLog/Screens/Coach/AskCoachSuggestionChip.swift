@@ -1,12 +1,8 @@
 import SwiftUI
 
-/// **POLISH-COACH (v0.5.5.6)** — single suggestion chip inside the
-/// `AskCoachSheet` welcome panel.
-///
-/// Apple-Award restraint: tinted-but-not-loud capsule (12 % accent fill,
-/// 22 % accent stroke) so 3-4 chips can sit next to each other without
-/// shouting over the welcome lockup above them. Reads as "suggestion"
-/// the way Apple Maps' "Try searching" capsules do.
+/// Single suggestion chip inside the `AskCoachSheet` welcome panel: the
+/// app's one choosable chip (`HLChip`), never selected, because a tap sends
+/// the question at once.
 ///
 /// **Accessibility:** entire chip is a single tappable element with the
 /// suggestion text as its label.
@@ -16,36 +12,8 @@ struct AskCoachSuggestionChip: View {
     let action: () -> Void
 
     var body: some View {
-        Button {
-            action()
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: icon)
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(.tint)
-                Text(text)
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, HLSpace.md)
-            .padding(.vertical, HLSpace.sm)
-            .background(
-                RoundedRectangle(cornerRadius: HLRadius.button, style: .continuous)
-                    .fill(.tint.opacity(0.12))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: HLRadius.button, style: .continuous)
-                    .stroke(.tint.opacity(0.22), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: HLRadius.button, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(text)
-        .accessibilityHint(String(localized: "Insert suggestion into the input field"))
-        .accessibilityAddTraits(.isButton)
+        HLChip(verbatim: text, systemImage: icon, isSelected: false, action: action)
+            .accessibilityHint(String(localized: "Insert suggestion into the input field"))
     }
 }
 

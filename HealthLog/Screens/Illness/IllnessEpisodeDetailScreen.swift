@@ -16,9 +16,8 @@ struct IllnessEpisodeDetailScreen: View {
     @State private var showEdit = false
     @State private var showLogDay = false
     @State private var showResolveConfirm = false
-    @State private var showDeleteConfirm = false
     @State private var actionError: String?
-    /// #141 — the list row carries no `related`; the single read does.
+    /// The list row carries no `related`; the single read does.
     @State private var related = RelatedRecordsModel()
 
     init(store: IllnessStore, episode: IllnessEpisodeDTO) {
@@ -28,35 +27,33 @@ struct IllnessEpisodeDetailScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                headerCard
-                if let note = current.note, !note.isEmpty {
-                    noteCard(note)
-                }
-                logDayButton
-                timelineCard
-                EpisodeSymptomsSection(store: store, episode: current)
-                IllnessCorrelationSection(
-                    correlation: store.correlation,
-                    isLoading: store.isLoadingCorrelation
-                )
-                // Document-vault integration — the documents linked to this
-                // episode (module-gated; renders nothing when `inboundDocuments`
-                // is off). Mirrors the web `episode-documents-card`.
-                EpisodeDocumentsCard(episodeId: current.id)
-                RelatedRecordsLoadedSection(model: related)
-                if let actionError {
-                    HLFormErrorText(actionError)
-                }
-                HLSyncStatusFooter(screenLoading: store.isLoading)
+        HLPage {
+            headerCard
+            if let note = current.note, !note.isEmpty {
+                noteCard(note)
             }
-            .padding(HLSpace.lg)
+            logDayButton
+            timelineCard
+            EpisodeSymptomsSection(store: store, episode: current)
+            IllnessCorrelationSection(
+                correlation: store.correlation,
+                isLoading: store.isLoadingCorrelation
+            )
+            // Document-vault integration — the documents linked to this
+            // episode (module-gated; renders nothing when `inboundDocuments`
+            // is off). Mirrors the web `episode-documents-card`.
+            EpisodeDocumentsCard(episodeId: current.id)
+            RelatedRecordsLoadedSection(model: related)
+            if let actionError {
+                HLFormErrorText(actionError)
+            }
+            HLSyncStatusFooter(screenLoading: store.isLoading)
         }
-        .hlScreenBackground()
         .navigationTitle(Text(verbatim: current.label))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .hlPageActions(pageActions)
+        // Asks for the menu's delete entry in the bar above.
+        .hlDeleteConfirmation()
         .task { await onAppear() }
         .task(id: current.id) {
             guard let repo = container?.illnessRepo else { return }
@@ -80,45 +77,25 @@ struct IllnessEpisodeDetailScreen: View {
                 Task { await resolve() }
             }
         }
-        .hlConfirmDestructive(
-            Text("illness.delete.confirm.title"),
-            isPresented: $showDeleteConfirm,
-            confirm: Text("illness.delete.action"),
-            action: {
-                Task {
-                    await store.deleteEpisode(current, undoMessage: String(localized: "illness.delete.undo"))
-                    dismiss()
-                }
-            }
-        )
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Button {
+    private var pageActions: HLTabHeaderActions {
+        [
+            .more(identifier: "illness.detail.menu") {
+                Button("illness.edit.action", systemImage: "pencil") {
                     showEdit = true
-                } label: {
-                    Label("illness.edit.action", systemImage: "pencil")
                 }
                 if current.isActive, current.lifecycle.isResolvable {
-                    Button {
+                    Button("illness.resolve.action", systemImage: "checkmark.circle") {
                         showResolveConfirm = true
-                    } label: {
-                        Label("illness.resolve.action", systemImage: "checkmark.circle")
                     }
                 }
-                Button(role: .destructive) {
-                    showDeleteConfirm = true
-                } label: {
-                    Label("illness.delete.action", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
+                HLDeleteMenuItem(.confirmed(title: "illness.delete.confirm.title") {
+                    await store.deleteEpisode(current, undoMessage: String(localized: "illness.delete.undo"))
+                    dismiss()
+                })
             }
-            .accessibilityIdentifier("illness.detail.menu")
-        }
+        ]
     }
 
     private var badgeLayout: AnyLayout {
@@ -130,7 +107,7 @@ struct IllnessEpisodeDetailScreen: View {
     private var headerCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // POLISH-C (F-AX-EPISODE) — at an accessibility text size the
+                // At an accessibility text size the
                 // badges stand under each other instead of being squeezed
                 // into one letter per line.
                 badgeLayout {
@@ -141,13 +118,11 @@ struct IllnessEpisodeDetailScreen: View {
                     }
                 }
                 Label(onsetCaption, systemImage: "calendar")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                 if let resolvedAt = current.resolvedAt, !resolvedAt.isEmpty {
                     let template = String(localized: "illness.detail.resolvedAt")
                     Label(String(format: template, IllnessDateFormat.mediumDate(resolvedAt)), systemImage: "checkmark.seal")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                 }
             }
         }
@@ -156,30 +131,29 @@ struct IllnessEpisodeDetailScreen: View {
     private func noteCard(_ note: String) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HLSectionLabel("illness.detail.note")
+                HLCardLabel("illness.detail.note")
                 Text(note)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     private var logDayButton: some View {
-        HLButton("illness.daylog.add", icon: "square.and.pencil", variant: .secondary) {
+        HLButton("illness.daylog.add", systemImage: "square.and.pencil", variant: .secondary) {
             showLogDay = true
         }
         .accessibilityIdentifier("illness.detail.logDay")
     }
 
-    /// 1.4 B2 — no logged day yet: no "Verlauf" heading over an empty line.
+    /// No logged day yet: no "Verlauf" heading over an empty line.
     @ViewBuilder
     private var timelineCard: some View {
         if case .empty = store.dayLogTimelineState {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("illness.daylog.timeline.title")
+            Group {
+                HLSectionHeader("illness.daylog.timeline.title", rank: .area)
                 IllnessDayLogTimeline(state: store.dayLogTimelineState) {
                     Task { await store.loadDayLogs(episodeId: current.id) }
                 }

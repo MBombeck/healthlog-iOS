@@ -17,9 +17,9 @@ import Observation
 ///     refresh-from-stale (the repo returns stale on error) so the UI
 ///     can surface "showing cached" + the failure both.
 ///   - `loadMoreError` — last follow-up-page failure. Blocks further
-///     automatic page loads until `retryNextPage()` (#19).
+///     automatic page loads until `retryNextPage()`.
 ///
-/// **Paging (#19):** `load()` fetches page one and resets paging;
+/// **Paging:** `load()` fetches page one and resets paging;
 /// `loadNextPage()` appends `GET /api/workouts?offset=<next>` until the
 /// server's `meta.total` is reached. The server dedups over the whole
 /// filtered set and slices afterwards (`src/lib/workouts/list-read.ts`),
@@ -58,22 +58,36 @@ public final class WorkoutsStore {
     @ObservationIgnored private var settled = false
     @ObservationIgnored private var isRevalidating = false
 
-    // MARK: - Detail surface (v0.5.4-SP5)
+    // MARK: - Detail surface
 
     /// Last-loaded rich detail (per workout id). Survives a refresh of
     /// the list so the detail screen can paint cache-first.
     public private(set) var detail: WorkoutListEntryDTO?
-    /// HR-time-series read from HK for the currently loaded detail. nil
-    /// while the fetch is in-flight or when HK didn't return anything
-    /// (no auth, no samples, Withings/Manual source).
-    public private(set) var detailHRSeries: [WorkoutHRSample]?
+    /// The heart-rate curve of the last resolved detail, bound to the
+    /// workout it belongs to. nil while the fetch is in flight or when no
+    /// source returned anything (no auth, no samples, Withings/Manual source).
+    ///
+    /// The curve lives in this shared store, so it is keyed: a curve that was
+    /// resolved for workout A must never paint on workout B's page, not for a
+    /// frame and not after B's own load failed. Read it through
+    /// ``hrCurve(for:)``.
+    public private(set) var detailHRCurve: WorkoutHRCurve?
+    /// The full-resolution samples of ``detailHRCurve``, whatever workout it
+    /// belongs to. Kept for the callers that only ask "is there a curve".
+    public var detailHRSeries: [WorkoutHRSample]? {
+        detailHRCurve?.samples
+    }
+
+    /// Bumped by every `loadDetail`. A detail load that lands after a newer
+    /// one started belongs to the page the user already left.
+    @ObservationIgnored private var detailGeneration = 0
     public private(set) var detailLoading: Bool = false
     public private(set) var detailError: HLError?
 
     private let repo: WorkoutsRepository
     private let hkDetail: HealthKitWorkoutDetailServicing?
 
-    /// A2-M4 — appear-revalidation freshness gate (60s TTL, matching the
+    /// Appear-revalidation freshness gate (60s TTL, matching the
     /// repo-level SWR window). Lets the list re-validate the partial-then-stale
     /// case on re-entry instead of only reloading when empty.
     @ObservationIgnored private var revalidationGate = RevalidationGate(ttl: 60)
@@ -252,9 +266,9 @@ public final class WorkoutsStore {
     /// Upper bound for one re-sync pass (200 rows per page max → 10 000 rows).
     private static let maxPagesPerCall = 50
 
-    /// A2-M4 — appear-revalidation entry point. A cold (empty) list loads page
+    /// Appear-revalidation entry point. A cold (empty) list loads page
     /// one. Once the freshness window elapsed, page one is re-read and MERGED
-    /// into the held rows (#19): the list the user scrolled through is never
+    /// into the held rows: the list the user scrolled through is never
     /// cut back to the first page, new or deleted workouts inside page one are
     /// applied, and a change further down marks the tail for re-fetch on the
     /// next scroll. A rapid re-appear inside the window is a no-op.
@@ -276,27 +290,41 @@ public final class WorkoutsStore {
         }
     }
 
-    /// v0.5.4-SP5 — loads the rich detail envelope from
+    /// Loads the rich detail envelope from
     /// `GET /api/workouts/{id}` and, in parallel, fetches the HR-time-
     /// series from HealthKit when the workout's start/end window is
     /// known. Both arms are best-effort: the server detail surfaces
     /// `detailError` on failure; the HR fetch silently keeps the chart
     /// hidden when HK is unauthorised or empty.
     public func loadDetail(id: String) async {
+        detailGeneration += 1
+        let token = detailGeneration
+        // Another workout's curve goes the moment this one is asked for, so a
+        // failing or slow load can never leave it standing on this page.
+        if detailHRCurve?.workoutID != id { detailHRCurve = nil }
         detailLoading = true
         detailError = nil
-        defer { detailLoading = false }
+        defer { if token == detailGeneration { detailLoading = false } }
         do {
             let dto = try await repo.workout(id: id)
+            guard token == detailGeneration, !Task.isCancelled else { return }
             detail = dto
             // Resolve the HR curve by source priority (raw server samples → local
             // HK fetch → server-resolved `hrSeries`); see `resolveDetailHRSeries`.
-            detailHRSeries = await resolveDetailHRSeries(dto)
-        } catch let err as HLError {
-            detailError = err
+            let series = await resolveDetailHRSeries(dto)
+            guard token == detailGeneration, !Task.isCancelled else { return }
+            detailHRCurve = series.map { WorkoutHRCurve(workoutID: id, samples: $0) }
         } catch {
-            detailError = .unknown(String(describing: error))
+            guard token == detailGeneration, !Self.isCancellation(error) else { return }
+            detailError = Self.mapped(error)
         }
+    }
+
+    /// The heart-rate curve for `workoutID`, or nil when the held curve
+    /// belongs to another workout (or there is none).
+    public func hrCurve(for workoutID: String) -> WorkoutHRCurve? {
+        guard let curve = detailHRCurve, curve.workoutID == workoutID else { return nil }
+        return curve
     }
 
     /// Resolve the detail HR curve by source priority (7.8):
@@ -322,7 +350,7 @@ public final class WorkoutsStore {
         return Self.hrSeries(from: dto.hrSeries, startedAt: dto.startedAt)
     }
 
-    /// **W-B182** — map the server `WorkoutSamples` blob into the chart's
+    /// Map the server `WorkoutSamples` blob into the chart's
     /// `WorkoutHRSample` shape, keeping only entries that carry a heart-rate
     /// reading. Returns nil when no HR-bearing samples exist so the caller can
     /// fall back to the local HK fetch.
@@ -366,7 +394,36 @@ public final class WorkoutsStore {
         currentOffset = 0
         currentSportType = nil
         detail = nil
-        detailHRSeries = nil
+        detailHRCurve = nil
         detailError = nil
+        detailGeneration += 1
+    }
+}
+
+/// One workout's heart-rate curve, bound to the workout it was resolved for.
+///
+/// `samples` is the full series: the VoiceOver summary, the minimum and the
+/// maximum read it. `plotted` is the LTTB-thinned copy the chart draws. A long
+/// Watch session (a hike, a marathon) brings up to 5000 raw samples, and one
+/// `LineMark` per sample made every scrub frame re-evaluate thousands of marks
+/// for no visible difference past the device's pixel width.
+public struct WorkoutHRCurve: Sendable, Equatable {
+    public let workoutID: String
+    public let samples: [WorkoutHRSample]
+    public let plotted: [WorkoutHRSample]
+    public let minimumBPM: Double
+    public let maximumBPM: Double
+
+    public init(workoutID: String, samples: [WorkoutHRSample], plotThreshold: Int = LTTB.seriesPlotThreshold) {
+        self.workoutID = workoutID
+        self.samples = samples
+        plotted = LTTB.downsample(
+            samples,
+            threshold: plotThreshold,
+            x: { $0.timestamp.timeIntervalSinceReferenceDate },
+            y: \.bpm
+        )
+        minimumBPM = samples.map(\.bpm).min() ?? 0
+        maximumBPM = samples.map(\.bpm).max() ?? 0
     }
 }

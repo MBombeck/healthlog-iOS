@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Tolerant decode for `GET /api/sleep/rhythm` (parity Build 4 · 4.7).**
+/// **Tolerant decode for `GET /api/sleep/rhythm`.**
 ///
 /// Pins the payload against the server's real serialiser
 /// (`W/src/lib/insights/derived/sleep-rhythm.ts` → `SleepRhythmDto`) along the

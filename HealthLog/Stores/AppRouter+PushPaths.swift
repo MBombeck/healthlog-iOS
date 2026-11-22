@@ -1,6 +1,6 @@
 import Foundation
 
-/// #141 / #126 3.2 — the More-stack screens a link opens. Split out of
+/// The More-stack screens a link opens. Split out of
 /// `AppRouter.swift` (file length and the `applyImmediate` complexity budget):
 /// `healthlog://settings/notifications` and the four screens only a push `url`
 /// names (``DeepLinkRoute/fromPushPath(_:)``) all land on the More tab with the
@@ -16,16 +16,36 @@ extension AppRouter {
             requestSettingsIntegrations()
         case .checkups:
             focusedVisitId = nil
-            openMoreDestination(.checkups)
+            openSidebarDestination(.checkups)
         case let .checkupsVisit(id):
             // VISIT — `/checkups?visit=<id>`: Vorsorge, whose "Nächster
             // Termin" shows that visit while it is booked.
             focusVisit(id)
-            openMoreDestination(.checkups)
+            openSidebarDestination(.checkups)
         case .cycle:
-            openMoreDestination(.cycle)
+            openSidebarDestination(.cycle)
+        case .timeline:
+            timeline.noteOpened()
+            openSidebarDestination(.timeline)
+        case .seizures:
+            openSidebarDestination(.seizures)
+        case let .seizureEvent(id):
+            openSidebarDestination(.seizures)
+            appendToSeizures(SeizureEventRoute(id: id))
         default:
             break
+        }
+    }
+
+    /// Pushes `value` onto the stack the diary just opened on: its own
+    /// sidebar tab, or More behind the diary's row.
+    private func appendToSeizures(_ value: some Hashable) {
+        if shellLayout.visibleSections.contains(.seizures) {
+            var path = sectionPath(.seizures)
+            path.append(value)
+            sectionPaths[.seizures] = path
+        } else {
+            morePath.append(value)
         }
     }
 
@@ -42,12 +62,5 @@ extension AppRouter {
         morePath = .init()
         morePath.append(SettingsRoute.root)
         morePath.append(leaf)
-    }
-
-    /// Mehr, then the clinical-spine screen the More list itself links to.
-    private func openMoreDestination(_ destination: SettingsRoute) {
-        selectedTab = .more
-        morePath = .init()
-        morePath.append(destination)
     }
 }

@@ -109,7 +109,7 @@ struct MedicationUnitsPerDoseTests {
         #expect(object["unitsPerDose"] as? Double == 0.5)
     }
 
-    // MARK: - #1034 — a combined value (1½, 2¼) is shown and kept, never rounded
+    // MARK: - A combined value (1½, 2¼) is shown and kept, never rounded
 
     @Test("#1034 — 1.5 and 2.25 stay what they are and read as 1½ / 2¼")
     func combinedValuesKept() {

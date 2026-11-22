@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **FW8-FIX — wrist "N today" optimistic count-combine math.**
+/// **Wrist "N today" optimistic count-combine math.**
 ///
 /// The watch renders "N today" as the phone's authoritative
 /// `WatchSnapshot.moodCountToday` PLUS the wrist taps the latest snapshot does

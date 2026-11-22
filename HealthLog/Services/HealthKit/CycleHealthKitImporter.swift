@@ -31,10 +31,9 @@ import Foundation
     /// date); the externalId is the date-stable `cycle-hk:<YYYY-MM-DD>` so a
     /// re-import upserts rather than duplicating.
     ///
-    /// Gated entirely behind `FeatureFlag.cycleTracking` via `CycleGate` — the
-    /// owner only constructs + starts this once the gate passes (never for men).
+    /// Gated by `CycleGate` — the owner only constructs + starts this once the gate passes (never for men).
     ///
-    /// **Phase 07 / plan 07-06 — admitted, owner-partitioned, durable.**
+    /// **Admitted, owner-partitioned, durable.**
     ///
     ///   * A sweep is admitted before it queries. The account comes from one
     ///     ``HealthSyncAuthenticatedLease`` captured before the first suspension
@@ -63,11 +62,25 @@ import Foundation
         let defaults: UserDefaults
         let admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)?
         let cursors: DurableHealthCursorStore?
-        /// #115 1.5 — the zone a sample's day is cut in: the account's
+        /// The zone a sample's day is cut in: the account's
         /// (``ProfileDay``). Injectable for tests.
         let profileTimeZone: @Sendable () -> TimeZone
+        /// Sample UUID to day, so a deletion in Apple Health finds its day-log
+        /// (``CycleSampleDayMap``).
+        let sampleDays: CycleSampleDayStore
+        /// The outbox, asked for at the moment it is needed: the composition
+        /// root binds it after this importer may already run. Queued day-logs
+        /// of a deleted day leave it before the delete goes out.
+        let retryQueue: (@Sendable () async -> (any HealthSyncBatchRetryEnqueuing)?)?
+        /// Every sample of one type that starts in `[from, to)`, for the
+        /// earliest temperature of a day and the rebuild of a day after a
+        /// deletion. `nil` reads HealthKit; tests hand samples in.
+        let rangeSamples: (@Sendable (HKSampleType, Date, Date) async throws -> [HKSample])?
+        /// The one-time local seed of ``sampleDays`` in flight, so two
+        /// interleaved sweeps read HealthKit for it only once.
+        var sampleDaySeed: Task<Bool, Never>?
         private var observers: [HKObserverQuery] = []
-        /// N5.3 — serializes sweeps per category type: actor reentrancy would
+        /// Serializes sweeps per category type: actor reentrancy would
         /// otherwise let two rapid observer fires interleave two sweeps from
         /// the same per-type anchor (server-deduped, but redundant network).
         /// A mid-sweep fire coalesces into one trailing re-run for that type.
@@ -99,7 +112,10 @@ import Foundation
             defaults: UserDefaults = .standard,
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
             cursors: DurableHealthCursorStore? = nil,
-            profileTimeZone: @escaping @Sendable () -> TimeZone = { ProfileDay.timeZone }
+            profileTimeZone: @escaping @Sendable () -> TimeZone = { ProfileDay.timeZone },
+            sampleDays: CycleSampleDayStore = .standard,
+            retryQueue: (@Sendable () async -> (any HealthSyncBatchRetryEnqueuing)?)? = nil,
+            rangeSamples: (@Sendable (HKSampleType, Date, Date) async throws -> [HKSample])? = nil
         ) {
             self.store = store
             self.repo = repo
@@ -107,6 +123,9 @@ import Foundation
             self.admission = admission
             self.cursors = cursors
             self.profileTimeZone = profileTimeZone
+            self.sampleDays = sampleDays
+            self.retryQueue = retryQueue
+            self.rangeSamples = rangeSamples
             partitionToken = HealthKitService.partitionToken(for: userID)
             anchorPrefix = "hl.cycle.hk.anchor." + partitionToken + "."
         }
@@ -117,9 +136,9 @@ import Foundation
         /// anchored sweep. Idempotent — a second call is a no-op while live.
         @discardableResult
         func start() async -> HealthSyncDisposition {
-            guard #available(iOS 18.0, *) else { return .unsupported }
             guard observers.isEmpty else { return .deferred }
-            for type in Self.readCategoryTypes() {
+            CycleBasalTemperature.recordCycleImport(active: true, defaults: defaults)
+            for type in Self.readSampleTypes() {
                 let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, error in
                     if let error {
                         HLLog.healthKit.error(
@@ -149,9 +168,8 @@ import Foundation
         /// into), and the result is a named disposition rather than "it ran".
         @discardableResult
         func refresh() async -> HealthSyncDisposition {
-            guard #available(iOS 18.0, *) else { return .unsupported }
             var results: [HealthSyncDisposition] = []
-            for type in Self.readCategoryTypes() {
+            for type in Self.readSampleTypes() {
                 // A teardown that lands mid-refresh stops the remaining types
                 // rather than sweeping them under an account that is going away.
                 guard !Task.isCancelled else {
@@ -174,6 +192,7 @@ import Foundation
                 store.stop(query)
             }
             observers.removeAll()
+            CycleBasalTemperature.recordCycleImport(active: false, defaults: defaults)
             let draining = observerTasks
             observerTasks.removeAll()
             for task in draining.values {
@@ -193,17 +212,16 @@ import Foundation
         /// captured at `init`. Does NOT re-read `KeychainKey.userID` — the
         /// keychain may already be wiped by the concurrent logout cascade.
         func resetAnchors() {
-            guard #available(iOS 18.0, *) else { return }
-            for type in Self.readCategoryTypes() {
+            for type in Self.readSampleTypes() {
                 defaults.removeObject(forKey: anchorKey(for: type))
             }
+            sampleDays.remove(partitionToken: partitionToken)
         }
 
         // MARK: - Owned observer work
 
         /// Registers one observer signal as owned, coalesced work.
-        @available(iOS 18.0, *)
-        func enqueueObservedSweep(type: HKCategoryType) {
+        func enqueueObservedSweep(type: HKSampleType) {
             let id = UUID()
             observerTasks[id] = Task { [weak self] in
                 _ = await self?.runAnchoredSweep(type: type)
@@ -215,32 +233,36 @@ import Foundation
             observerTasks[id] = nil
         }
 
+        /// One anchored read of `type`: the new samples, the UUIDs HealthKit
+        /// deleted since `anchor`, and the anchor after them. The basal body
+        /// temperature reads one bounded page; the reproductive categories read
+        /// everything, as before.
         ///
-        /// N5.4 (v0.14.8 tech audit) — the `[HKCategorySample]` array crosses
-        /// from HK's callback queue into this actor through the continuation.
-        /// Sound under complete strict-concurrency checking (HK objects are
-        /// immutable + `Sendable` in current SDKs; exactly one resume per
-        /// query). Belt-and-braces alternative if the SDK annotation ever
-        /// regresses: route + group to `CycleDayLogWrite` inside the callback
-        /// and resume with the value-type array instead.
-        @available(iOS 18.0, *)
+        /// N5.4 (v0.14.8 tech audit) — the sample array crosses from HK's
+        /// callback queue into this actor through the continuation. Sound under
+        /// complete strict-concurrency checking (HK objects are immutable +
+        /// `Sendable` in current SDKs; exactly one resume per query).
         func fetch(
-            type: HKCategoryType,
+            type: HKSampleType,
             anchor: HKQueryAnchor?
-        ) async throws -> (samples: [HKCategorySample], newAnchor: HKQueryAnchor?) {
-            try await withCheckedThrowingContinuation { continuation in
+        ) async throws -> CycleAnchoredPage {
+            let limit = type.identifier == CycleBasalTemperature.identifier ? CycleBasalTemperature.pageLimit : HKObjectQueryNoLimit
+            return try await withCheckedThrowingContinuation { continuation in
                 let query = HKAnchoredObjectQuery(
                     type: type,
                     predicate: nil,
                     anchor: anchor,
-                    limit: HKObjectQueryNoLimit
-                ) { _, samples, _, newAnchor, error in
+                    limit: limit
+                ) { _, samples, deleted, newAnchor, error in
                     if let error {
                         continuation.resume(throwing: error)
                         return
                     }
-                    let categories = (samples as? [HKCategorySample]) ?? []
-                    continuation.resume(returning: (categories, newAnchor))
+                    continuation.resume(returning: CycleAnchoredPage(
+                        samples: samples ?? [],
+                        deletedIDs: (deleted ?? []).map(\.uuid.uuidString),
+                        newAnchor: newAnchor
+                    ))
                 }
                 store.execute(query)
             }
@@ -256,7 +278,7 @@ import Foundation
             let timeZone = profileTimeZone()
             var byDate: [String: CycleDayLogWrite] = [:]
             for sample in samples {
-                // Echo guard (W-HK-RELIABILITY G-7) — skip only OUR own write
+                // Echo guard — skip only OUR own write
                 // round-tripping back (our externalUUID AND this app's HK
                 // source). A third-party cycle sample carrying an externalUUID
                 // now flows in instead of being silently dropped.
@@ -301,10 +323,16 @@ import Foundation
             }
         }
 
+        /// Every type the import observes and reads: the reproductive
+        /// categories and, since 1.7, the basal body temperature.
+        static func readSampleTypes() -> [HKSampleType] {
+            let categories: [HKSampleType] = readCategoryTypes()
+            return categories + [CycleBasalTemperature.sampleType].compactMap { $0 }
+        }
+
         /// The cycle category types we observe + read. Vaginal bleeding is the
         /// iOS-18 reproductive type; menstrual flow is the legacy fallback. Both
         /// are present so a device that only carries the legacy type still syncs.
-        @available(iOS 18.0, *)
         static func readCategoryTypes() -> [HKCategoryType] {
             let identifiers: [String] = [
                 "HKCategoryTypeIdentifierMenstrualFlow",
@@ -321,7 +349,7 @@ import Foundation
             }
         }
 
-        /// **#115 1.5 — the day a cycle sample belongs to, and with it the
+        /// **The day a cycle sample belongs to, and with it the
         /// `cycle-hk:<day>` externalId.**
         ///
         /// Cut in the ACCOUNT zone, the zone the server keys cycle days in. The
@@ -354,6 +382,13 @@ import Foundation
             f.formatOptions = [.withInternetDateTime]
             return f
         }()
+    }
+
+    /// One anchored cycle read. Immutable after delivery.
+    struct CycleAnchoredPage: @unchecked Sendable {
+        let samples: [HKSample]
+        let deletedIDs: [String]
+        let newAnchor: HKQueryAnchor?
     }
 
 #endif

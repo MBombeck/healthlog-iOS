@@ -1,6 +1,6 @@
 import Foundation
 
-/// **X4 (1.3, #138)**: the two HealthKit upload flags of the one
+/// The two HealthKit upload flags of the one
 /// `features` reader (``ServerFeatures``), as the set
 /// ``KnownServerVersion`` keeps next to the server version. The statistics
 /// coordinator and ``SyncTriggerContext`` read them there, gated on the
@@ -13,6 +13,9 @@ extension ServerFeatures {
         var set: Set<KnownServerVersion.Feature> = []
         if features.cumulativeHourBuckets { set.insert(.cumulativeHourBuckets) }
         if features.syncTriggerBackfill { set.insert(.syncTriggerBackfill) }
+        if features.appleHealthSymptoms { set.insert(.appleHealthSymptoms) }
+        if features.appleHealthDeletes { set.insert(.appleHealthDeletes) }
+        if features.nutrientMacros { set.insert(.nutrientMacros) }
         return set
     }
 }

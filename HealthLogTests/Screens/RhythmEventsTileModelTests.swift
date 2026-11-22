@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.15.7 W-RHYTHM-FRONTDOOR — pins the pure logic behind the Home
+/// **Pins the pure logic behind the Home
 /// rhythm-events (ECG/AFib device-health-notifications) front-door tile.**
 ///
 /// Two decisions keep the tile (a SwiftUI view) a thin renderer over verified

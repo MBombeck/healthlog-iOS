@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Build-8 (b239) coherence guard — enforces the checked-in parity glossary
+/// Build-8 coherence guard — enforces the checked-in parity glossary
 /// (`HealthLogTests/Resources/ParityGlossary.json`) against the German catalog.
 ///
 /// The glossary is the reviewed record of HealthLog's canonical German

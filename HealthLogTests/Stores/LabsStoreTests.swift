@@ -68,31 +68,6 @@ struct LabsStoreTests {
         return LabsStore(repository: repo, undo: undo)
     }
 
-    @Test("load groups labs by panel, named panels first + no-panel bucket last")
-    func grouping() async throws {
-        let rows = [
-            LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose"),
-            LabsTestJSON.row(id: "b", panel: nil, analyte: "Custom"),
-            LabsTestJSON.row(id: "c", panel: "CBC", analyte: "Hemoglobin")
-        ]
-        MockURLProtocol.install { req in
-            let body: Data = req.url?.path == "/api/biomarkers"
-                ? LabsTestJSON.emptyBiomarkers
-                : LabsTestJSON.labsList(rows)
-            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
-        }
-        let store = try makeStore()
-        await store.load()
-        #expect(store.labs.count == 3)
-        let groups = store.groupedByPanel
-        // CBC, Metabolic (alphabetical), then the nil bucket.
-        #expect(groups.count == 3)
-        #expect(groups[0].panel == "CBC")
-        #expect(groups[1].panel == "Metabolic")
-        #expect(groups[2].panel == nil)
-        #expect(groups[2].rows.first?.analyte == "Custom")
-    }
-
     @Test("optimistic delete removes the row + enqueues an undo action")
     func optimisticDelete() async throws {
         let rows = [LabsTestJSON.row(id: "a", panel: "Metabolic", analyte: "Glucose")]
@@ -122,7 +97,7 @@ struct LabsStoreTests {
 
     @Test("retriable delete failure (enqueued to Outbox) KEEPS the optimistic removal + undo")
     func retriableDeleteKeepsOptimisticRemoval() async throws {
-        // v0150 C-M3 — a 500 on DELETE is retriable, so the repository enqueues
+        // A 500 on DELETE is retriable, so the repository enqueues
         // the delete to the Outbox (it will replay + succeed). The store must NOT
         // roll the row back in — that would make it flicker back then vanish on
         // the next load. Mirror MeasurementsStore/MedicationsStore: keep the
@@ -294,7 +269,7 @@ struct LabsStoreTests {
 
 // swiftlint:disable force_unwrapping
 
-/// H-2 — an offline (durably-enqueued) lab-result / biomarker create must surface
+/// An offline (durably-enqueued) lab-result / biomarker create must surface
 /// as SUCCESS, not failure. `LabsRepository.createLab`/`createBiomarker` mint an
 /// idempotency key, enqueue the write to the encrypted outbox on a retriable
 /// failure, and re-throw `HLError.shouldPersistToOutbox`. If the store reported
@@ -366,10 +341,10 @@ struct LabsStoreOfflineTests {
 
 // swiftlint:enable force_unwrapping
 
-// MARK: - LabsSortModeTests (v0.15.3 LR1)
+// MARK: - LabsSortModeTests
 
 /// Locks the two sort axes the `LabsScreen` toggle switches between:
-/// ``LabsStore/groupedByAnalyte`` (the "by type" mode) and
+/// ``LabsStore/markerIndex`` (the "by type" mode) and
 /// ``LabsStore/sortedByDate`` (the "chronological" mode). Pure derivations over a
 /// seeded in-memory snapshot — no network round-trip needed.
 @MainActor
@@ -408,62 +383,43 @@ struct LabsSortModeTests {
         )
     }
 
-    @Test("groupedByAnalyte buckets by analyte, named first (alphabetical) + blank bucket last")
-    func groupedByAnalyte() throws {
+    @Test("without an overview the marker list is the newest reading per analyte, alphabetical")
+    func markerIndexFromPage() throws {
         let store = try makeStore()
         store.seedForTesting(labs: [
             row(id: "a", analyte: "Glucose", takenAt: "2026-06-10T08:00:00.000Z"),
             row(id: "b", analyte: "", takenAt: "2026-06-09T08:00:00.000Z"),
-            row(id: "c", analyte: "Albumin", takenAt: "2026-06-08T08:00:00.000Z")
-        ])
-        let groups = store.groupedByAnalyte
-        // Albumin, Glucose (alphabetical), then the blank bucket.
-        #expect(groups.count == 3)
-        #expect(groups[0].analyte == "Albumin")
-        #expect(groups[1].analyte == "Glucose")
-        #expect(groups[2].analyte == nil)
-        #expect(groups[2].rows.first?.id == "b")
-    }
-
-    @Test("groupedByAnalyte orders bucket NAMES case-insensitively (mirrors groupedByPanel)")
-    func groupedByAnalyteCaseInsensitiveOrder() throws {
-        let store = try makeStore()
-        // Like `groupedByPanel`, bucket KEYS are the exact analyte string (so
-        // "Glucose"/"glucose" are distinct buckets — the server controls the
-        // canonical casing), but the section ORDER is case-insensitive. Here
-        // "albumin" sorts before "Glucose" despite the lowercase first letter.
-        store.seedForTesting(labs: [
-            row(id: "a", analyte: "Glucose", takenAt: "2026-06-10T08:00:00.000Z"),
             row(id: "c", analyte: "albumin", takenAt: "2026-06-08T08:00:00.000Z")
         ])
-        let groups = store.groupedByAnalyte
-        #expect(groups.map(\.analyte) == ["albumin", "Glucose"])
+        // Case-insensitive order: "albumin" before "Glucose"; no blank entry.
+        #expect(store.markerIndex.map(\.name) == ["albumin", "Glucose"])
+        #expect(store.blankAnalyteRows.map(\.id) == ["b"])
+        // No overview, no categories: one headless, flat section.
+        #expect(store.markerSections.map(\.title) == [nil])
+        #expect(store.markerSections.first?.entries.map(\.name) == ["albumin", "Glucose"])
     }
 
-    @Test("groupedByAnalyte keeps server (newest-first) order within an analyte bucket")
-    func groupedByAnalyteWithinBucketOrder() throws {
+    @Test("the page fallback keeps one marker per analyte, newest row as latest, case-insensitive")
+    func markerIndexWithinBucket() throws {
         let store = try makeStore()
-        // Two Glucose rows arrive newest-first (server order); grouping must NOT
-        // re-sort within the bucket.
         store.seedForTesting(labs: [
             row(id: "new", analyte: "Glucose", takenAt: "2026-06-10T08:00:00.000Z"),
-            row(id: "old", analyte: "Glucose", takenAt: "2026-06-01T08:00:00.000Z")
+            row(id: "old", analyte: "glucose", takenAt: "2026-06-01T08:00:00.000Z")
         ])
-        let groups = store.groupedByAnalyte
-        #expect(groups.count == 1)
-        #expect(groups[0].rows.map(\.id) == ["new", "old"])
+        let index = store.markerIndex
+        #expect(index.count == 1)
+        #expect(index[0].latest.id == "new")
+        #expect(index[0].count == 2)
     }
 
-    @Test("groupedByAnalyte with no blank rows omits the nil bucket")
-    func groupedByAnalyteNoBlankBucket() throws {
+    @Test("a list without blank analytes has no blank rows")
+    func noBlankRows() throws {
         let store = try makeStore()
         store.seedForTesting(labs: [
             row(id: "a", analyte: "Glucose", takenAt: "2026-06-10T08:00:00.000Z"),
             row(id: "b", analyte: "Albumin", takenAt: "2026-06-09T08:00:00.000Z")
         ])
-        let groups = store.groupedByAnalyte
-        #expect(groups.count == 2)
-        #expect(groups.allSatisfy { $0.analyte != nil })
+        #expect(store.blankAnalyteRows.isEmpty)
     }
 
     @Test("sortedByDate returns a flat list newest-first regardless of input order")

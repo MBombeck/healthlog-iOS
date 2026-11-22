@@ -14,7 +14,7 @@ public final class MoodStore {
     /// instead of letting the tags vanish silently.
     public private(set) var lastWriteDroppedKeys: [String] = []
 
-    /// **Phase 09 / plan 09-04 — the O(1) invalidation axis.**
+    /// **The O(1) invalidation axis.**
     ///
     /// Advanced by every store mutation that actually changed the history, and
     /// by nothing else. The Mood analysis key carries this number instead of a
@@ -23,9 +23,9 @@ public final class MoodStore {
     /// history. A revalidation that comes back with byte-identical entries is
     /// deliberately *not* a change: it must not throw away a resident analysis.
     public private(set) var entriesRevision: Int = 0
-    /// #115 · 1.3 — the server's daily mood series, the Mood analysis's day
+    /// The server's daily mood series, the Mood analysis's day
     /// spine. Loaded lazily by the analysis surface (never on the launch path).
-    /// `nil` = not loaded / standalone / unreachable.
+    /// `nil` = not loaded / unreachable.
     private(set) var dailySeries: MoodAnalyticsEnrichment?
 
     /// The bounded, actor-owned analysis cache for this account's history. It
@@ -36,7 +36,7 @@ public final class MoodStore {
 
     private let repo: MoodRepository
     private let healthKit: AnyHealthKitWriter?
-    /// On-device AI tag-suggestion service (D-2). `nil` in older tests +
+    /// On-device AI tag-suggestion service. `nil` in older tests +
     /// pre-D-2 build configs — the screen surfaces no "Tags vorschlagen"
     /// affordance in that case. Injected by `AppContainer` so the same
     /// `MoodTagExtractionService` instance can be observed across the
@@ -49,15 +49,17 @@ public final class MoodStore {
     /// Stays `nil` in headless / unit-test contexts.
     private let undoCoordinator: UndoCoordinator?
 
-    /// A2-M4 — appear-revalidation freshness gate (60s TTL).
+    /// Appear-revalidation freshness gate (60s TTL).
     @ObservationIgnored private var revalidationGate = RevalidationGate(ttl: 60)
 
-    /// **v0.10.0 W-Mood-B** — fired after `entries` change (load / log /
+    /// Fired after `entries` change (load / log /
     /// update / delete) so the composition-root can refresh the mood widget
     /// glance. `nil` in headless / unit-test contexts; the composition-root
     /// wires it onto the `WidgetSnapshotWriter`. Synchronous + cheap (the
     /// closure reads the latest entry + writes one tiny JSON blob).
     public var onEntriesDidChange: (@MainActor () -> Void)?
+    /// Fired once per mood the user records that landed or was queued.
+    var onLogged: (@MainActor (Int, MedicationsStore.WriteOutcome) -> Void)?
 
     public init(
         repo: MoodRepository,
@@ -71,7 +73,7 @@ public final class MoodStore {
         self.undoCoordinator = undoCoordinator
     }
 
-    // MARK: - The one write path for `entries` (09-04)
+    // MARK: - The one write path for `entries`
 
     /// Assigns `entries` and advances ``entriesRevision`` — but only when the
     /// assignment actually changed the history.
@@ -125,7 +127,7 @@ public final class MoodStore {
         }
     }
 
-    /// #115 · 1.3 — refresh ``dailySeries``. Keeps the last good series on a
+    /// Refresh ``dailySeries``. Keeps the last good series on a
     /// transient failure. Called by the Mood analysis surface when it appears
     /// and whenever `entriesRevision` moves (a write dropped the SWR row).
     func loadDailySeries() async {
@@ -139,7 +141,7 @@ public final class MoodStore {
         try await repo.history(query: query)
     }
 
-    /// A2-M4 — appear-revalidation entry point: reload when empty (cold) OR
+    /// Appear-revalidation entry point: reload when empty (cold) OR
     /// stale (partial-then-stale), no-op inside the freshness window.
     public func revalidateIfStale() async {
         if entries.isEmpty || revalidationGate.isStale() {
@@ -153,7 +155,7 @@ public final class MoodStore {
         error = nil
         lastWriteDroppedKeys = []
         onEntriesDidChange?()
-        // 09-04 — the revision bump above already makes every cached analysis
+        // The revision bump above already makes every cached analysis
         // key unreachable, but an unreachable snapshot is still a resident one.
         // This drops the derived daily averages, tag names and correlation
         // sentences of the account that just signed out. It is synchronous by
@@ -162,7 +164,7 @@ public final class MoodStore {
         analysisCache.removeAll()
     }
 
-    // MARK: - Derived accessors (B3 / v0.4.1)
+    // MARK: - Derived accessors
 
     /// Latest mood entry recorded today (caller-locale day). `nil` if the user
     /// has not logged anything today yet. Used by the Mood-screen
@@ -210,7 +212,7 @@ public final class MoodStore {
 
     /// Optimistic delete — drops the entry immediately, restores on failure.
     ///
-    /// **Undo (v0.5.5.1):** an optional `UndoCoordinator` surfaces a
+    /// **Undo:** an optional `UndoCoordinator` surfaces a
     /// `Rückgängig`-pill that re-posts the entry via the standard `log`
     /// path. The re-post allocates a fresh server id; the original id is
     /// lost. On a non-retriable delete failure the optimistic remove
@@ -228,7 +230,7 @@ public final class MoodStore {
         }
         do {
             try await repo.delete(id: entry.id)
-            // v0.10.0 W10 M1 — mirror the delete into Apple Health so a removed
+            // Mirror the delete into Apple Health so a removed
             // mood doesn't linger in HKStateOfMind. Self-gated on the sync
             // toggle (no auth → swallowed no-op). Offline deletes propagate via
             // the outbox-replay path (`OutboxReplayService.deleteMood`).
@@ -263,7 +265,7 @@ public final class MoodStore {
     /// original id is gone. Documented trade-off per the v0.5.5.1 undo
     /// brief.
     private func restoreDeletedEntry(_ entry: MoodEntry) async {
-        // **Audit B-4 — an entry whose level this build cannot name is not
+        // **An entry whose level this build cannot name is not
         // resurrected.** Undo re-CREATES the row (the original id is gone), and
         // a create must carry a level. This build has none for the sentinel, and
         // the one thing worse than a lost undo is an entry that comes back
@@ -290,7 +292,7 @@ public final class MoodStore {
     /// not clobber the structured tag-links. Pass an explicit value to change
     /// them.
     ///
-    /// **Audit B-4 — `score` is optional.** Annotating an entry whose level this
+    /// **`score` is optional.** Annotating an entry whose level this
     /// build cannot name (adding a note or tags to it) must leave the level
     /// alone: `nil` omits `mood` from the partial-update PUT, so the server
     /// keeps the value it holds instead of receiving a level the client made up.
@@ -307,7 +309,7 @@ public final class MoodStore {
         let snapshot = entries
         let cleanTags = tags.filter { !$0.hasPrefix("note:") }
         let resolvedTagKeys = tagKeys ?? entry.tagKeys
-        // Audit B-4 — a `nil` score keeps the entry's existing level (including
+        // A `nil` score keeps the entry's existing level (including
         // the `.unknown` sentinel) in the optimistic row, rather than inventing
         // one for the split second before the server answers.
         let optimistic = MoodEntry(
@@ -342,7 +344,7 @@ public final class MoodStore {
             }
             lastWriteDroppedKeys = saved.droppedKeys
             onEntriesDidChange?()
-            // v0.10.0 W-Mood-B — mirror edits into HKStateOfMind too (the
+            // Mirror edits into HKStateOfMind too (the
             // original write only mirrored on `log`). Anti-dupe via the same
             // externalUUID = server-id; HealthKit treats a re-save of the same
             // externalUUID as an update. Gated inside the writer (no-op when
@@ -372,19 +374,14 @@ public final class MoodStore {
         }
     }
 
-    // MARK: - D-2 on-device tag suggestions
+    // MARK: - On-device tag suggestions
 
-    /// True when the store has an extraction-service wired AND the device is
-    /// at least iOS 26 (the runtime gate inside the service itself catches
-    /// the rest). UI uses this to decide whether to render the "Tags
-    /// vorschlagen" affordance at all — we don't want a dead button on
-    /// older OS or builds without the service injected.
+    /// True when the store has an extraction-service wired (the runtime gate
+    /// inside the service itself catches the rest). UI uses this to decide
+    /// whether to render the "Tags vorschlagen" affordance at all — we don't
+    /// want a dead button on builds without the service injected.
     public var supportsTagSuggestions: Bool {
-        guard tagExtraction != nil else { return false }
-        if #available(iOS 26.0, *) {
-            return true
-        }
-        return false
+        tagExtraction != nil
     }
 
     /// Delegates to `MoodTagExtractionService.suggestTags(forNote:)`. Returns
@@ -422,7 +419,7 @@ public final class MoodStore {
 
     /// Entry-returning variant of ``log(score:tags:note:recordedAt:)``.
     /// Returns the persisted (or optimistic-on-`.queued`) `MoodEntry` so the
-    /// undo path (v0.11 W26) can target the just-logged row for removal.
+    /// undo path can target the just-logged row for removal.
     /// Returns `nil` only when a non-retriable failure rolled the optimistic
     /// insert back (nothing landed).
     public func logReturningEntry(
@@ -474,6 +471,7 @@ public final class MoodStore {
                 HLLog.healthKit
                     .warning("HK-Mirror writeMood (log) fehlgeschlagen: \(error.localizedDescription, privacy: .public)")
             }
+            onLogged?(score, .success)
             return MoodLogResult(entry: saved, outcome: .success)
         } catch let err as HLError {
             error = err
@@ -486,6 +484,7 @@ public final class MoodStore {
             if err.shouldPersistToOutbox {
                 // Optimistic row stays, outbox replays. Hand the local row back
                 // so undo can still target it (the delete path is outbox-aware).
+                onLogged?(score, .queued)
                 return MoodLogResult(entry: local, outcome: .queued)
             }
             removeEntry(id: local.id)
@@ -498,7 +497,7 @@ public final class MoodStore {
         }
     }
 
-    /// v0.11 W26 — quick-entry mood log with an undo affordance. Logs the
+    /// Quick-entry mood log with an undo affordance. Logs the
     /// score (no tags / note — the fast face-tap path) and, on a landed
     /// write, enqueues a `Rückgängig` toast whose closure removes the
     /// just-logged entry. Removal routes through the standard ``delete(_:)``

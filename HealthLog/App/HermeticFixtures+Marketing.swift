@@ -28,11 +28,11 @@
     /// `GET /api/medications/intake?scope=today` rows itself, computed against
     /// the simulator's own calendar day so `ComplianceSnapshot.reconciled`
     /// (which buckets strictly by "today" and, once medications are loaded,
-    /// trusts the local view over the server summary) counts them: two doses
-    /// taken this morning, one evening dose still open → the ring reads 2/3.
-    /// The b162 dose-safety rule means a capture run before 08:00 local would
-    /// honestly read the taken doses as not-yet-due; the captures run later in
-    /// the day.
+    /// trusts the local view over the server summary) counts them. Every
+    /// time is relative to now and comes from `AreaMedsDetailFixtures`, the
+    /// history the detail reads as well, so list, detail and ring agree: later
+    /// in the day two doses are taken and one is open (2/3); before eight the
+    /// morning doses are still to come and the last intake is yesterday's.
     ///
     /// **Greeting.** `/api/dashboard/summary` is re-served with an EMPTY
     /// salutation so `DashboardHeader` renders its bare "Hi" fallback instead
@@ -50,7 +50,7 @@
     /// ``avatarPathArgument``; the simulator shares the host filesystem, the
     /// same seam the capture writer uses). The bytes ride the REAL display
     /// pipeline — `AvatarRepository.fetchImageData` through the pinned
-    /// client, `AvatarStore`'s bounded ImageIO thumbnail (20-03) — so the
+    /// client, `AvatarStore`'s bounded ImageIO thumbnail — so the
     /// shot shows the product path, not a mock. The profile's display name
     /// ("Emma Weber", as synthetic as the photo) keeps any name-showing
     /// surface coherent with it; the GREETING is untouched — it reads the
@@ -68,10 +68,17 @@
             method: String,
             query: [URLQueryItem] = []
         ) -> (status: Int, body: Data)? {
-            // 1.5 DOCS-TRASH — Recently deleted documents (`-uitest-docs-trash`).
+            // Recently deleted documents (`-uitest-docs-trash`).
             // 1.5 SHOTS — the LAB-DOC surfaces for the picture sweep (`-uitest-lab-doc`).
-            if let overlay = DocsTrashFixtures.response(forPath: path, method: method)
-                ?? LabDocFixtures.response(forPath: path, method: method) { return overlay }
+            // The account routes every other sweep boot shares (`sweepAccountResponse`).
+            // Server 1.48 on the app side (`-uitest-server148`), above the sweep.
+            // Server 1.49 part B (`-uitest-catchup-b`): its reads and the refused target.
+            if let overlay = Server148Fixtures.response(forPath: path, method: method, query: query)
+                ?? CatchupBFixtures.response(forPath: path, method: method)
+                ?? CatchupAFixtures.response(forPath: path, method: method, query: query)
+                ?? DocsTrashFixtures.response(forPath: path, method: method)
+                ?? LabDocFixtures.response(forPath: path, method: method)
+                ?? sweepAccountResponse(forPath: path, method: method, query: query) { return overlay }
             // 1.5 VERDICTS — the server-judged trends (`-uitest-verdicts`).
             if HermeticUITestSupport.isVerdictsOverlayActive,
                let verdicts = VerdictFixtures.response(forPath: path, method: method, query: query)
@@ -86,14 +93,14 @@
                 return area
             }
             guard method == "GET" else { return nil }
-            // 1.4 B3 — the recovery and HRV pages' wearable readings, only
+            // The recovery and HRV pages' wearable readings, only
             // under `-uitest-recovery` (never during the App Store motifs).
             if HermeticUITestSupport.isRecoveryOverlayActive,
                let recovery = RecoveryFixtures.response(forPath: path, method: method, query: query)
             {
                 return recovery
             }
-            // #115 P2 — the imperial-account overlay (`-uitest-imperial`) outranks
+            // The imperial-account overlay (`-uitest-imperial`) outranks
             // this table's `/me`.
             if HermeticUITestSupport.isImperialOverlayActive,
                let imperial = ImperialUnitFixtures.response(forPath: path, method: method)
@@ -105,7 +112,7 @@
             }
             // Order matters: the intake route sits under the list route's prefix.
             if path.hasPrefix("/api/medications/intake") { return ok(todayIntakesJSON) }
-            // POLISH-C (F-REL-1) — the list, and the single read behind a
+            // The list, and the single read behind a
             // medication's "Related" section: the list's own row, without
             // relations. Before, the list's prefix answered it with `[]` and
             // the section showed its error.
@@ -120,6 +127,24 @@
             // Everything else — layout, compliance, per-id routes, the whole
             // rest of the API — falls through to the shared hermetic table.
             return nil
+        }
+
+        /// The rest of the sweep shares the medications world's per-medication
+        /// routes, notification settings and cycle, so a detail,
+        /// Benachrichtigungen or Zyklus opened there reads like a real account
+        /// instead of failing on the empty default. Today's intake rows stay
+        /// this table's. `nil` outside the sweep and under `-uitest-area-meds`,
+        /// whose own table answers the same routes after its overlays.
+        private static func sweepAccountResponse(
+            forPath path: String,
+            method: String,
+            query: [URLQueryItem]
+        ) -> (status: Int, body: Data)? {
+            guard HermeticUITestSupport.isSweepOverlayActive, !HermeticUITestSupport.isAreaMedsOverlayActive,
+                  path != "/api/medications/intake" else { return nil }
+            return AreaMedsDetailFixtures.response(forPath: path, method: method, query: query)
+                ?? AreaNotificationsFixtures.response(forPath: path, method: method)
+                ?? AreaCycleFixtures.response(forPath: path, method: method)
         }
 
         /// Content-type override for the routes whose bodies are not JSON.
@@ -162,27 +187,33 @@
         /// the taken 08:00 rows so `MedicationWindowStatus.reduce` does not read
         /// a taken morning dose as "very overdue" on a late-morning capture.
         static var medicationsJSON: String {
-            let takenAt = ISO8601DateFormatter().string(from: morningSlot(hour: 8).addingTimeInterval(300))
+            let iso = ISO8601DateFormatter()
+            /// The list's "Letzte Einnahme" and today's count, from the one
+            /// invented history the detail reads too, relative to now.
+            func taken(_ id: String) -> String {
+                let last = AreaMedsDetailFixtures.lastTakenAt(medicationID: id).map { "\"\(iso.string(from: $0))\"" } ?? "null"
+                return #""lastTakenAt": \#(last), "todayEventCount": \#(AreaMedsDetailFixtures.todayEventCount(medicationID: id))"#
+            }
             return """
             [
               { "id": "\(lisinoprilID)", "name": "Lisinopril", "dose": "10 mg",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "ORAL",
                 "stockDosesRemaining": 28, "runwayDays": 28,
-                "createdAt": "2026-03-02T08:00:00.000Z", "lastTakenAt": "\(takenAt)", "todayEventCount": 1,
+                "createdAt": "2026-03-02T08:00:00.000Z", \(taken(lisinoprilID)),
                 "schedules": [
                   { "windowStart": "08:00", "timesOfDay": ["08:00"], "scheduleType": "SCHEDULED" }
                 ] },
               { "id": "\(naproxenID)", "name": "Naproxen", "dose": "250 mg",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "ORAL",
                 "stockDosesRemaining": 42, "runwayDays": 21,
-                "createdAt": "2026-05-11T08:00:00.000Z", "lastTakenAt": "\(takenAt)", "todayEventCount": 1,
+                "createdAt": "2026-05-11T08:00:00.000Z", \(taken(naproxenID)),
                 "schedules": [
                   { "windowStart": "08:00", "timesOfDay": ["08:00", "20:00"], "scheduleType": "SCHEDULED" }
                 ] },
               { "id": "\(trulicityID)", "name": "Trulicity", "dose": "\(trulicityDose)",
                 "active": true, "notificationsEnabled": true, "deliveryForm": "INJECTION",
                 "stockDosesRemaining": 4, "runwayDays": 28,
-                "createdAt": "2026-04-06T08:00:00.000Z",
+                "createdAt": "2026-04-06T08:00:00.000Z", \(taken(trulicityID)),
                 "schedules": [
                   { "windowStart": "09:00", "timesOfDay": ["09:00"], "daysOfWeek": "1",
                     "scheduleType": "SCHEDULED" }
@@ -198,8 +229,8 @@
         private static var trulicityDose: String {
             // The bundle's resolved localization, like the citations overlay:
             // it is what `Text()` renders from, so dose and chrome agree.
-            // German and Dutch both write a decimal comma.
-            AppLanguage.current == .en ? "1.5 mg" : "1,5 mg"
+            // German, Dutch and Spanish write a decimal comma, English and Korean a point.
+            AppLanguage.current.pick(de: "1,5 mg", en: "1.5 mg", nl: "1,5 mg", ko: "1.5 mg", es: "1,5 mg")
         }
 
         /// `/api/dashboard/summary` with the empty salutation, re-dated to the
@@ -238,11 +269,10 @@
                     "updatedAt": updatedAt
                 ]
             }
-            // The server's day counters for the three medications' intake rows
-            // (two morning doses taken, the evening one open). The compliance
-            // ring renders these as they are; the shared table's 2/1 would
-            // show 1/2 next to a medication list with three doses.
-            summary["compliance"] = ["scheduledToday": 3, "takenToday": 2]
+            // The server's day counters for today's intake rows. The
+            // compliance ring renders these as they are; the shared table's
+            // 2/1 would show 1/2 next to a medication list with three doses.
+            summary["compliance"] = todayCompliance
             summary["metrics"] = metrics + [
                 vital("restingHeartRate", 58, "bpm", "flat", [60, 59, 59, 58, 58]),
                 vital("heartRateVariability", 46, "ms", "up", [41, 43, 42, 45, 46]),
@@ -257,35 +287,24 @@
             Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now) ?? .now
         }
 
-        /// `GET /api/medications/intake?scope=today` — today's dose rows,
-        /// computed at request time against the simulator's calendar day (a
-        /// static date would fall out of "today" and the reconciler would
-        /// honestly report an empty day). Two morning doses taken, the
-        /// evening Naproxen still pending.
+        /// `GET /api/medications/intake?scope=today` — today's dose rows from
+        /// the same invented history as the list and the detail, taken only
+        /// once their time has passed. Later in the day two morning doses are
+        /// taken and the evening Naproxen is open; a capture before eight
+        /// honestly shows the morning still to come.
         private static var todayIntakesJSON: String {
-            let iso = ISO8601DateFormatter()
-            func slot(hour: Int) -> Date {
-                Calendar.current.date(
-                    bySettingHour: hour, minute: 0, second: 0, of: .now
-                ) ?? .now
-            }
-            func row(id: String, medication: String, at scheduledAt: Date, taken: Bool) -> String {
-                let takenAt = taken
-                    ? "\"\(iso.string(from: scheduledAt.addingTimeInterval(300)))\""
-                    : "null"
-                let status = taken ? "taken" : "pending"
-                return """
-                {"id":"\(id)","medicationId":"\(medication)",\
-                "scheduledAt":"\(iso.string(from: scheduledAt))","takenAt":\(takenAt),\
-                "status":"\(status)","snoozedUntil":null}
-                """
-            }
-            let rows = [
-                row(id: "mkshot-intake-1", medication: lisinoprilID, at: slot(hour: 8), taken: true),
-                row(id: "mkshot-intake-2", medication: naproxenID, at: slot(hour: 8), taken: true),
-                row(id: "mkshot-intake-3", medication: naproxenID, at: slot(hour: 20), taken: false)
+            let rows = AreaMedsDetailFixtures.todayIntakes()
+            guard let data = try? JSONSerialization.data(withJSONObject: rows) else { return "[]" }
+            return String(bytes: data, encoding: .utf8) ?? "[]"
+        }
+
+        /// The summary's day counters, counted from ``todayIntakesJSON``'s rows.
+        static var todayCompliance: [String: Int] {
+            let rows = AreaMedsDetailFixtures.todayIntakes()
+            return [
+                "scheduledToday": rows.count,
+                "takenToday": rows.count { $0["status"] as? String == "taken" }
             ]
-            return "[\(rows.joined(separator: ","))]"
         }
 
         // MARK: - Profile + avatar (third pass)
@@ -311,7 +330,8 @@
         /// completed tour stay byte-for-byte the shared world's values — the
         /// keychain-seeded `hermetic-user` identity (and the
         /// `hl.healthkit.*.hermetic-user` argument-domain keys the capture
-        /// boot plants) must keep resolving.
+        /// boot plants) must keep resolving. The metric `unitPreference`
+        /// resets a simulator an imperial run (`-uitest-imperial`) left in lb.
         private static let meJSON = """
         {
           "id": "hermetic-user",
@@ -322,7 +342,8 @@
           "createdAt": "2024-01-01T00:00:00.000Z",
           "disclaimerAcknowledgedAt": "2024-01-01T00:00:00.000Z",
           "onboardingTourCompleted": true,
-          "moodReminderEnabled": false
+          "moodReminderEnabled": false,
+          "unitPreference": "metric"
         }
         """
 

@@ -1,108 +1,32 @@
 import Charts
 import SwiftUI
 
-/// #135 (server v1.43) — the reference lines the series route asks a chart to
-/// draw (`referenceLines`: value, edge, source, label). The app draws them as
-/// delivered and owns no threshold of its own: no line is placed, moved,
-/// merged or dropped here, and an older server that sends none draws none
-/// (the empty ``MetricChartContent/clinicalThresholds(for:)`` stays empty).
-///
-/// Style follows the existing threshold rules (`HLChartGrid`): an upper edge
-/// in `thresholdHigh`, a lower edge in `thresholdLow`. A clinical line is
-/// dashed, a line the person set themselves is solid. The label rides above
-/// the line in the caption font, so it scales with Dynamic Type, and each line
-/// is one VoiceOver element ("Upper edge, 140 mmHg, Blutdruck-Grenze").
-struct ReferenceLineMarks: ChartContent {
-    /// Already in the unit the chart plots in (``ChartDetailStore/plotReferenceLines(units:)``).
-    let lines: [SeriesReferenceLine]
-    /// The axis unit, spoken after the value.
-    let unit: String
-
-    /// Nothing to draw: every chart without server lines.
-    static let none = ReferenceLineMarks(lines: [], unit: "")
-
-    var body: some ChartContent {
-        ForEach(lines) { line in
-            let style = ReferenceLineStyle(line: line)
-            RuleMark(y: .value(line.label, line.value))
-                .foregroundStyle(style.tint)
-                .lineStyle(StrokeStyle(
-                    lineWidth: HLChartGrid.thresholdWidth,
-                    dash: style.isDashed ? HLChartGrid.thresholdDash : []
-                ))
-                .annotation(position: .top, alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(line.label)
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.secondary)
-                        .lineLimit(1)
-                }
-                .accessibilityLabel(Text(style.accessibilityLabel))
-                .accessibilityValue(Text(style.accessibilityValue(unit: unit)))
-        }
-    }
-}
-
-/// The pure half of a reference line's look and speech, so the mapping is
-/// testable without a chart host.
-struct ReferenceLineStyle: Equatable {
-    enum TintRole: Equatable {
-        case upper
-        case lower
-        case neutral
-    }
-
-    let line: SeriesReferenceLine
-
-    var tintRole: TintRole {
-        switch line.kind {
-        case .upper: .upper
-        case .lower: .lower
-        case .unknown: .neutral
-        }
-    }
-
-    var tint: Color {
-        switch tintRole {
-        case .upper: HLChartTints.thresholdHigh
-        case .lower: HLChartTints.thresholdLow
-        case .neutral: HLText.tertiary
-        }
-    }
-
-    /// Clinical (and any source this build does not know) dashed; a line the
-    /// person set themselves solid.
-    var isDashed: Bool {
-        line.source != .personal
-    }
-
-    var accessibilityLabel: String {
-        switch line.kind {
-        case .upper: String(localized: "chart.referenceLine.a11y.upper")
-        case .lower: String(localized: "chart.referenceLine.a11y.lower")
-        case .unknown: String(localized: "chart.referenceLine.a11y.line")
-        }
-    }
-
-    func accessibilityValue(unit: String) -> String {
-        let number = line.value.formatted(.number.precision(.fractionLength(0 ... 1)))
-        let value = unit.isEmpty ? number : "\(number) \(unit)"
-        return line.label.isEmpty ? value : "\(value), \(line.label)"
-    }
-}
+// The server's reference lines (#135, server v1.43) draw through the design
+// system's `HLChartReferenceLines`; these names stay until every chart
+// switches over.
+typealias ReferenceLineMarks = HLChartReferenceLines
+typealias ReferenceLineStyle = HLReferenceLineStyle
 
 extension MetricChartContent {
     /// ``marks(for:points:emphasisTint:includeThresholds:showsPoints:seriesLineWidth:)``
-    /// for a detail chart, with the server's reference lines drawn first so the
-    /// series paints on top.
+    /// for a detail chart, with the server's reference lines drawn after the
+    /// series: a line's label then stands on the plot instead of under the
+    /// curve.
     @ChartContentBuilder
     static func marks(
         for kind: MetricKind,
         points: [SeriesPoint],
         emphasisTint: Color?,
-        references: ReferenceLineMarks
+        references: ReferenceLineMarks,
+        bands: [MetricTargetBand] = []
     ) -> some ChartContent {
+        // The pale bands under everything, the measured points on top.
+        ForEach(bands) { band in
+            RectangleMark(yStart: .value("Lower", band.lower), yEnd: .value("Upper", band.upper))
+                .foregroundStyle(MetricTargetBand.fill)
+        }
+        marks(for: kind, points: points, emphasisTint: emphasisTint, showsPoints: kind.showsMeasuredPoints)
         references
-        marks(for: kind, points: points, emphasisTint: emphasisTint)
     }
 }
 
@@ -124,5 +48,42 @@ extension ChartDetailStore {
     /// chart plots in (empty on an older server).
     func referenceLineMarks(units: UnitPreferences) -> ReferenceLineMarks {
         ReferenceLineMarks(lines: plotReferenceLines(units: units), unit: displayUnit(units: units))
+    }
+}
+
+/// The target range of a chart as a pale band, from the server's reference
+/// lines: a lower and an upper line of the same series make one band. It
+/// answers "do I stand well?" without a tap; the lines keep their labels.
+struct MetricTargetBand: Identifiable, Equatable {
+    let lower: Double
+    let upper: Double
+    let appliesTo: SeriesReferenceLine.AppliesTo
+
+    var id: String {
+        appliesTo.rawValue
+    }
+
+    /// The warm sage of "in range", faint enough that the points stay in front.
+    static var fill: Color {
+        HLColor.statusOK.opacity(0.10)
+    }
+
+    /// One band per series that has both edges, lower below upper.
+    static func bands(from lines: [SeriesReferenceLine]) -> [MetricTargetBand] {
+        [SeriesReferenceLine.AppliesTo.value, .secondary].compactMap { series in
+            let own = lines.filter { $0.appliesTo == series && $0.value.isFinite }
+            guard let lower = own.first(where: { $0.kind == .lower })?.value,
+                  let upper = own.first(where: { $0.kind == .upper })?.value,
+                  lower < upper else { return nil }
+            return MetricTargetBand(lower: lower, upper: upper, appliesTo: series)
+        }
+    }
+}
+
+extension MetricKind {
+    /// The kinds whose detail chart shows every reading as a point: spot
+    /// measurements, where a smooth curve would invent values between them.
+    var showsMeasuredPoints: Bool {
+        self == .bloodPressure || self == .glucose
     }
 }

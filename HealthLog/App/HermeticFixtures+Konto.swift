@@ -17,7 +17,7 @@
             let body: String? = switch path {
             case "/api/version": #"{"data":{"version":"1.46.6"},"error":null}"#
             case "/api/settings/privacy-summary":
-                #"{"data":{"retention":{"coachMessagesDays":365,"auditLogDays":365,"deliveryLogDays":90,"accountDeletionGraceDays":14}},"error":null}"#
+                #"{"data":{"retention":{"coachMessagesDays":365,"auditLogDays":365,"deliveryLogDays":90,"accountDeletionGraceDays":\#(graceDays)}},"error":null}"#
             case "/api/integrations/status":
                 #"{"data":{"threshold":3,"metricFreshnessDegraded":false,"integrations":[{"integration":"fitbit","connected":true,"#
                     + #""retirement":{"endsOn":"2026-10-30","ended":true,"successor":"google-health","offered":true}}]},"error":null}"#
@@ -27,11 +27,18 @@
             return body.map { (200, Data($0.utf8)) }
         }
 
-        /// The password sign-in of an account locked for deletion.
+        /// The grace window the privacy summary reports.
+        static let graceDays = 14
+
+        /// The password sign-in of an account locked for deletion. The purge
+        /// date is the grace window from today, the same date the deletion and
+        /// reset sheets of the same run compute.
         static func loginResponse() -> (status: Int, body: Data)? {
             guard ProcessInfo.processInfo.arguments.contains(deletionPendingArgument) else { return nil }
+            let purge = Calendar.current.date(byAdding: .day, value: graceDays, to: .now) ?? .now
+            let purgeAt = purge.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
             let body = #"{"data":null,"error":"Account pending deletion","#
-                + #""meta":{"errorCode":"auth.account.deletion_pending","purgeAt":"2026-11-18T09:30:00.000Z"}}"#
+                + #""meta":{"errorCode":"auth.account.deletion_pending","purgeAt":"\#(purgeAt)"}}"#
             return (403, Data(body.utf8))
         }
     }

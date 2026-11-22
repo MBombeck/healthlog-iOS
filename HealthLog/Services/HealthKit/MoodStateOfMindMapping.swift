@@ -3,7 +3,7 @@ import Foundation
     import HealthKit
 #endif
 
-/// **v0.10.0 W-Mood-B** — pure mapping between HealthLog mood (`score 1…5` +
+/// Pure mapping between HealthLog mood (`score 1…5` +
 /// free-text `tags`) and `HKStateOfMind` (`valence -1…1` + closed-enum
 /// `Label`/`Association`).
 ///
@@ -46,7 +46,6 @@ enum MoodStateOfMindMapping {
     #if canImport(HealthKit)
         /// Best-effort one-way map: free-text tags → `HKStateOfMind.Label`.
         /// Unmatched tags are dropped. Deduped + order-stable.
-        @available(iOS 18.0, *)
         static func labels(forTags tags: [String]) -> [HKStateOfMind.Label] {
             var seen = Set<HKStateOfMind.Label>()
             var out: [HKStateOfMind.Label] = []
@@ -59,7 +58,6 @@ enum MoodStateOfMindMapping {
         }
 
         /// Best-effort one-way map: free-text tags → `HKStateOfMind.Association`.
-        @available(iOS 18.0, *)
         static func associations(forTags tags: [String]) -> [HKStateOfMind.Association] {
             var seen = Set<HKStateOfMind.Association>()
             var out: [HKStateOfMind.Association] = []
@@ -75,7 +73,6 @@ enum MoodStateOfMindMapping {
         /// Keys are lower-cased; matching is exact on the normalized tag. A
         /// word two languages share ("stress", "familie") is listed once: a
         /// dictionary literal with a duplicate key traps at runtime.
-        @available(iOS 18.0, *)
         private static var labelTable: [String: HKStateOfMind.Label] {
             [
                 "angst": .anxious, "ängstlich": .anxious, "anxious": .anxious, "angstig": .anxious, "bang": .anxious,
@@ -95,7 +92,6 @@ enum MoodStateOfMindMapping {
         }
 
         /// Small German, English and Dutch keyword → context `Association` table.
-        @available(iOS 18.0, *)
         private static var associationTable: [String: HKStateOfMind.Association] {
             [
                 "arbeit": .work, "work": .work, "job": .work, "werk": .work,

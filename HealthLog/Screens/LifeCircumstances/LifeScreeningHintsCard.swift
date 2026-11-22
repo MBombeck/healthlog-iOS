@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **LIFE (1.5.0)** — the screening hints the server derives from the life
+/// The screening hints the server derives from the life
 /// circumstances (low-dose CT for lung cancer, ultrasound of the abdominal
 /// aorta), each with its status, the server's reasons and the rule it comes
 /// from, linked. A hint, never a reminder and never advice: nothing here is
@@ -10,11 +10,7 @@ struct LifeScreeningHintsCard: View {
     let hints: [LifeDerived.ScreeningHint]
 
     var body: some View {
-        HLSettingsCard(
-            icon: "stethoscope",
-            title: "life.screening.cardTitle",
-            footer: "life.screening.noReminder"
-        ) {
+        HLCard("life.screening.cardTitle", footer: "life.screening.noReminder") {
             ForEach(hints) { hint in
                 hintRow(hint)
             }
@@ -24,10 +20,9 @@ struct LifeScreeningHintsCard: View {
 
     private func hintRow(_ hint: LifeDerived.ScreeningHint) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(verbatim: LifeCopy.screeningTitle(hint.id))
-                .font(.hlSubhead.weight(.semibold))
+            // Whole words only: "Niedrigdosis-CT" broke into "Niedrig-/dosis-CT".
+            HLWholeWordText(LifeCopy.screeningTitle(hint.id), font: .hlSubhead.weight(.semibold))
                 .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
             Text(verbatim: LifeCopy.screeningStatus(hint.status))
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)

@@ -9,7 +9,7 @@ import Testing
 /// ovulation mapped from dates), the centre copy per state, and the phase the
 /// explainer keys its copy off.
 ///
-/// **Z1 (#72).** The suite used to assert that the client derived all of this
+/// The suite used to assert that the client derived all of this
 /// from the per-day calendar labels — the current cycle window, the day count,
 /// the segment collapse, a population-default backdrop when the data looked
 /// sparse. Those functions are gone: every one of them was a second opinion
@@ -213,7 +213,7 @@ struct CycleScreenModelTests {
         }
     }
 
-    /// v0.14.10 §4 — only the menstrual highlight image bottom-anchors (its art is
+    /// Only the menstrual highlight image bottom-anchors (its art is
     /// black at the top + colour at the bottom); the other three phases stay
     /// centred. Pins the per-phase content alignment so the slot can't silently
     /// re-centre the menstrual image (hiding its colourful bottom).

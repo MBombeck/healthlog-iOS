@@ -5,7 +5,7 @@ import Testing
 #if canImport(UserNotifications) && canImport(UIKit)
     import UserNotifications
 
-    /// **W-FOCUS-FILTER (v0.15.2)** — coverage for the HealthLog Focus filter.
+    /// Coverage for the HealthLog Focus filter.
     ///
     /// Three load-bearing contracts:
     ///   1. **Safety invariant** — an urgent (`.timeSensitive` / `.critical`)

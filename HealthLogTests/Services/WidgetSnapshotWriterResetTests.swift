@@ -103,7 +103,7 @@
             try await writer.reset() // must not throw
         }
 
-        // MARK: - Phase 09 / plan 09-03 — the account boundary
+        // MARK: - The account boundary
 
         /// **What logout has to guarantee once widget writes are asynchronous.**
         ///
@@ -142,7 +142,7 @@
             let placeholderSurvived = afterLateCallback == .placeholder
             #expect(
                 placeholderSurvived,
-                "EXPECTED_RED: logout completed before widget tail reset"
+                "logout completed before widget tail reset"
             )
 
             // …and the next account is served normally.

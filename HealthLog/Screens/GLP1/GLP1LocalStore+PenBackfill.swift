@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-// **#52 — server → local pen back-fill.**
+// **Server → local pen back-fill.**
 //
 // Sits in its own file for the `file_length` discipline (`GLP1LocalStore.swift`
 // is at the 600-line cap). Everything here is one operation: replaying a server

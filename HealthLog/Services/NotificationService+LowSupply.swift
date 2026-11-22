@@ -3,7 +3,7 @@ import Foundation
     import UserNotifications
 #endif
 
-/// **MED-4 / AUDIT-PARITY C3** — once-per-crossing local low-supply alert guard.
+/// Once-per-crossing local low-supply alert guard.
 ///
 /// The server cron is the authority for the cross-device low-supply push, but
 /// the iOS app schedules a **local** alert too so a user who opened a med detail
@@ -67,7 +67,7 @@ public enum LowSupplyAlertLedger {
             "low-supply-local.\(medicationID)"
         }
 
-        /// **MED-4 / C3** — reconcile the local low-supply alert for one
+        /// Reconcile the local low-supply alert for one
         /// medication against its current server-stock-derived runway.
         ///
         /// - `medicationID`: the medication the supply belongs to.
@@ -88,6 +88,13 @@ public enum LowSupplyAlertLedger {
         ) async {
             let center = UNUserNotificationCenter.current()
             let identifier = Self.lowSupplyLocalIdentifier(medicationID: medicationID)
+
+            // A device that does not plan reminders arms no supply alert and
+            // leaves the once-per-crossing ledger for the device that does.
+            guard plansLocalReminders() else {
+                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                return
+            }
 
             // Above threshold / alert off → clear any pending request + re-arm
             // the ledger for the next crossing.
@@ -115,7 +122,7 @@ public enum LowSupplyAlertLedger {
             )
             do {
                 center.removePendingNotificationRequests(withIdentifiers: [identifier])
-                // W-FOCUS-FILTER — a supply heads-up is informational (`.active`),
+                // A supply heads-up is informational (`.active`),
                 // so a HealthLog Focus filter holds it back. Record the alert only
                 // when it was actually delivered, so the once-per-crossing ledger
                 // re-offers it after the Focus ends.
@@ -142,21 +149,26 @@ public enum LowSupplyAlertLedger {
         nonisolated static func buildLowSupplyRequest(
             medicationID: String,
             medicationName: String,
-            runwayDays: Int
+            runwayDays: Int,
+            hidesName: Bool = LockScreenPrivacy.hideMedicationName()
         ) -> UNNotificationRequest {
             let content = UNMutableNotificationContent()
             content.title = String(localized: "med.lowstock.push.title")
-            content.body = String(
-                format: String(localized: "med.lowstock.push.body"),
-                medicationName,
-                runwayDays
-            )
+            // "Hide medication names" covers this heads-up too: it lands on the
+            // lock screen like a reminder. The tap still opens the medication.
+            content.body = hidesName
+                ? String(localized: "med.lowstock.push.body.hidden")
+                : String(
+                    format: String(localized: "med.lowstock.push.body"),
+                    medicationName,
+                    runwayDays
+                )
             content.sound = .default
             // A supply heads-up is informational, not time-critical — keep it at
             // the default interruption level (the time-sensitive entitlement is
             // reserved for the medication *intake* reminders).
             content.interruptionLevel = .active
-            // W-B185 — dedicated action-free category: a supply alert must NOT
+            // Dedicated action-free category: a supply alert must NOT
             // carry the Taken/Snooze/Skipped intake actions (tapping "Taken"
             // would record a phantom dose). Body-tap still deep-links below.
             content.categoryIdentifier = Self.categoryMedicationLowStock
@@ -170,6 +182,8 @@ public enum LowSupplyAlertLedger {
                 "medicationId": medicationID,
                 "deepLink": "healthlog://medications/\(medicationID)"
             ]
+            // Hide content in notifications: no name, no supply in the store.
+            NotificationContentPrivacy.apply(to: content, kind: .healthData)
 
             // Fire ~2 s out: the threshold crossing already occurred, this is a
             // near-immediate heads-up. A tiny delay keeps it off the main

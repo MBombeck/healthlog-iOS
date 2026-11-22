@@ -1,6 +1,6 @@
 import Foundation
 
-/// **S1 / public #11, A6 (1.4)** — server ids whose HealthLog copy the person
+/// Server ids whose HealthLog copy the person
 /// deleted in Apple Health, so the server→Health mirror does not write them
 /// back.
 ///

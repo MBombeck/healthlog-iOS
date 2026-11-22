@@ -1,6 +1,9 @@
 import Foundation
+#if canImport(UserNotifications)
+    import UserNotifications
+#endif
 
-// **Phase 16 Plan 01 — the onboarding route as a value, out of the view that
+// **The onboarding route as a value, out of the view that
 // walks it.**
 //
 // Everything here is `nonisolated static` and pure: the step vocabulary, which
@@ -11,19 +14,15 @@ import Foundation
 // It lives beside `OnboardingFlow` for the reason `OnboardingRouteProgress.swift`
 // and `PostAuthenticationRouteSteps.swift` already do: that file carries the
 // flow's own state and effects and was over the 600-line budget before this
-// plan added a scope to it. 16-01 moved VALUES rather than views — the three
-// private chrome views stay where they are on purpose, because
-// `AdoptUploadIndicator` is a counted member of the frozen Phase-06
-// presentation inventory and walking it into another file would move a census
-// row without changing a single behaviour.
+// plan added a scope to it. 16-01 moved VALUES rather than views — the private
+// chrome views stay where they are.
 
 extension OnboardingFlow {
     enum Step: Equatable, Hashable {
         case welcome
-        case mode
         case serverURL
         case auth
-        /// Phase 08 Wave 1 — authentication succeeded and the app is asking the
+        /// Authentication succeeded and the app is asking the
         /// server whether this account already finished setup. A visible state
         /// rather than a hidden `await`: the alternative is a frozen auth form.
         case checkingCompletion
@@ -34,7 +33,7 @@ extension OnboardingFlow {
         case completionUnavailable
         case healthKit
         case notifications
-        /// Task #53 — the AI-source choice step (None / On-device / External AI /
+        /// The AI-source choice step (None / On-device / External AI /
         /// Own key, mode- + capability-gated).
         /// Placed last before `done` so the user has seen the app's purpose
         /// (permissions) before deciding how the assistant should work. Skippable
@@ -54,7 +53,7 @@ extension OnboardingFlow {
         case baselineProfile
         case done
 
-        /// **Phase 16 Plan 01 (K10) — which resource a step configures.**
+        /// **Which resource a step configures.**
         ///
         /// Written down once, as a property of the step, because the alternative
         /// is the thing that produced K10: the distinction existed only in
@@ -79,29 +78,29 @@ extension OnboardingFlow {
             switch self {
             case .healthKit, .notifications:
                 .deviceLocal
-            case .welcome, .mode, .serverURL, .auth, .aiSource, .anamnesis, .baselineProfile:
+            case .welcome, .serverURL, .auth, .aiSource, .anamnesis, .baselineProfile:
                 .accountLevel
             case .checkingCompletion, .completionUnavailable, .done:
                 .transient
             }
         }
 
-        /// **D-24-01-A (24-02) — which side of the login this step stands on.**
+        /// **Which side of the login this step stands on.**
         ///
-        /// These four are the steps a flow can be *re-created* on:
+        /// These three are the steps a flow can be *re-created* on:
         /// ``OnboardingFlow/initialStep`` is one of them, and a remount after a
         /// scene deactivation lands there whatever the session says. Naming the
         /// set is what lets the routing ask "is this step in front of a login
         /// that has already happened?" — a question the flow could not ask while
         /// its only forward path was a notification.
         ///
-        /// It is deliberately not derived from ``activeRoute(chosenMode:standaloneModeAvailable:setupScope:)``:
+        /// It is deliberately not derived from ``activeRoute(setupScope:)``:
         /// the boundary is a fact about authentication, not a position in an
-        /// array, exactly as ``previousStep(from:chosenMode:standaloneModeAvailable:setupScope:)``
+        /// array, exactly as ``previousStep(from:setupScope:)``
         /// already argues for the one-way door it guards.
         var isPreAuthentication: Bool {
             switch self {
-            case .welcome, .mode, .serverURL, .auth:
+            case .welcome, .serverURL, .auth:
                 true
             case .checkingCompletion, .completionUnavailable, .healthKit, .notifications,
                  .aiSource, .anamnesis, .baselineProfile, .done:
@@ -110,7 +109,7 @@ extension OnboardingFlow {
         }
     }
 
-    // **H3 auth-journey (audit-v0162).** The step the flow opens on. In DEBUG,
+    // **Auth journey.** The step the flow opens on. In DEBUG,
     // the `-uitest-auth-journey` boot opens straight on `.auth` so a hermetic
     // UITest can drive the real login form + `MfaChallengeSheet` without first
     // walking Welcome → ServerURL (the ServerURL probe hits a live host that the
@@ -126,20 +125,9 @@ extension OnboardingFlow {
         }
     #endif
 
-    /// Pure routing decision for the step that follows Welcome — gated by the
-    /// standalone availability flag. Server-mandatory builds bypass the
-    /// `ModeSelectionStep` fork (no standalone option is ever offered);
-    /// standalone-enabled builds show the fork.
-    ///
-    /// Extracted as a `static` pure function so the gate can be unit-tested
-    /// without standing up the whole view tree.
-    nonisolated static func stepAfterWelcome(standaloneModeAvailable: Bool) -> Step {
-        standaloneModeAvailable ? .mode : .serverURL
-    }
-
     /// Reine Form von ``resolvedStep`` — ohne View-Baum testbar.
     ///
-    /// **D-24-01-A (24-02) — a second question of exactly the same kind.**
+    /// **A second question of exactly the same kind.**
     ///
     /// R1 already established the shape: a step the flow *thinks* it is on can
     /// be wrong for the world it is in, and the resolved step is where that is
@@ -158,7 +146,6 @@ extension OnboardingFlow {
     /// question and gets the R1 answer.
     nonisolated static func resolveStep(
         _ step: Step,
-        chosenMode: OnboardingMode?,
         hasServerAddress: Bool,
         phase: AuthStore.Phase = .unknown
     ) -> Step {
@@ -169,7 +156,7 @@ extension OnboardingFlow {
         return .serverURL
     }
 
-    /// **D-24-01-A (24-02) — the forward route is a question about the phase the
+    /// **The forward route is a question about the phase the
     /// flow is looking at, never about a change in it.**
     ///
     /// `true` when this flow owes the post-authentication decision: the session
@@ -197,9 +184,8 @@ extension OnboardingFlow {
     /// destination, the progress numerator and the progress denominator. Before
     /// 08-10 those were three separate hand-maintained tables — a `switch` of
     /// predecessors, a `switch` of fractions and a `switch` of labels that named
-    /// counts ("Schritt 4 von 6") no branch ever had — and they disagreed. A
-    /// standalone user was charged for the server URL and login steps they never
-    /// saw; a server user finished at 0.97 of a route with eight steps in it.
+    /// counts ("Schritt 4 von 6") no branch ever had — and they disagreed: a
+    /// user finished at 0.97 of a route with eight steps in it.
     ///
     /// A step a branch does not show is **absent**, not zero-weighted: that is
     /// what makes a skipped step uncounted rather than invisibly counted.
@@ -208,30 +194,32 @@ extension OnboardingFlow {
     /// and the terminal handoff — are deliberately not members. They are not
     /// places in the route; ``RouteProgress`` anchors them to the ones they
     /// stand on.
-    /// 16-01 — `setupScope` narrows the same array rather than introducing a
+    /// `setupScope` narrows the same array rather than introducing a
     /// second one. A device-local-only run walks exactly the steps whose
     /// ``Step/scope`` says they configure this handset, so the back
     /// destination, the numerator and the denominator all follow it for free:
     /// a returning user on a new phone is told "Schritt 1 von 2", not
     /// "Schritt 5 von 7" of a route they are not walking.
+    ///
+    /// `includesHealthKit` is `false` on a device that reads no HealthKit (the
+    /// iPad, see ``HealthKitAvailabilityPolicy``): the step is absent, so it is
+    /// neither shown nor counted, and the route starts the device-local head at
+    /// the notifications step.
     nonisolated static func activeRoute(
-        chosenMode: OnboardingMode?,
-        standaloneModeAvailable: Bool,
-        setupScope: PostAuthenticationSetupScope = .full
+        setupScope: PostAuthenticationSetupScope = .full,
+        includesHealthKit: Bool = true
     ) -> [Step] {
-        var route: [Step] = [.welcome]
-        if standaloneModeAvailable { route.append(.mode) }
-        if chosenMode == .standalone {
-            // No server: no address to give, no account to sign into, and the
-            // two server-only intake steps are unreachable.
-            route.append(contentsOf: [.healthKit, .notifications, .aiSource])
-        } else {
-            route.append(contentsOf: [
-                .serverURL, .auth, .healthKit, .notifications, .aiSource, .anamnesis, .baselineProfile
-            ])
-        }
+        let route: [Step] = [
+            .welcome, .serverURL, .auth, .healthKit, .notifications, .aiSource, .anamnesis, .baselineProfile
+        ].filter { includesHealthKit || $0 != .healthKit }
         guard setupScope == .deviceLocalOnly else { return route }
         return route.filter { $0.scope == .deviceLocal }
+    }
+
+    /// The first step after the login: the HealthKit sheet where the device
+    /// reads HealthKit, the notifications step where it does not.
+    nonisolated static func firstPostAuthenticationStep(includesHealthKit: Bool) -> Step {
+        includesHealthKit ? .healthKit : .notifications
     }
 
     /// Pure predecessor decision for the back affordance. `nil` means "no back"
@@ -241,7 +229,7 @@ extension OnboardingFlow {
     /// across the login into the auth form. The pre-auth pair (`serverURL ↔
     /// auth`) — the trap the audit called out — is fully reversible.
     ///
-    /// 08-10 — the predecessor is now read off ``activeRoute(chosenMode:standaloneModeAvailable:)``
+    /// The predecessor is now read off ``activeRoute(setupScope:)``
     /// instead of being a second table that had to agree with it. The two
     /// answers that are *not* route positions stay explicit above the lookup,
     /// because a one-way door is not a position: the boundary is a rule about
@@ -249,41 +237,25 @@ extension OnboardingFlow {
     /// would make it an accident of ordering.
     nonisolated static func previousStep(
         from step: Step,
-        chosenMode: OnboardingMode?,
-        standaloneModeAvailable: Bool,
-        setupScope: PostAuthenticationSetupScope = .full
+        setupScope: PostAuthenticationSetupScope = .full,
+        includesHealthKit: Bool = true
     ) -> Step? {
+        // Without the HealthKit step the notifications step is the first one
+        // behind the login, so it inherits the post-auth boundary.
+        if !includesHealthKit, step == .notifications { return nil }
         switch step {
         // `checkingCompletion` and `completionUnavailable` sit on the far side
         // of the login, so they share the post-auth boundary's answer: there is
         // no back across an authentication. `done` is terminal.
-        case .done, .checkingCompletion, .completionUnavailable:
-            return nil
-        // Server (and the legacy `.demo` value): authenticated by the time
-        // HealthKit shows. Standalone reached it straight from the fork and
-        // keeps its ordinary predecessor.
-        case .healthKit where chosenMode != .standalone:
+        // The user is authenticated by the time HealthKit shows.
+        case .done, .checkingCompletion, .completionUnavailable, .healthKit:
             return nil
         default:
             break
         }
-        let route = activeRoute(
-            chosenMode: chosenMode,
-            standaloneModeAvailable: standaloneModeAvailable,
-            setupScope: setupScope
-        )
+        let route = activeRoute(setupScope: setupScope, includesHealthKit: includesHealthKit)
         guard let index = route.firstIndex(of: step), index > 0 else { return nil }
         return route[index - 1]
-    }
-
-    /// Pure routing decision for the step after the AI-source choice — gated by
-    /// whether this is a standalone install. Standalone has no server, so the
-    /// server-only about-me anamnesis step (`PUT /api/coach/about-me`) is not
-    /// reachable and the flow finishes directly; server mode routes into the
-    /// optional anamnesis step. Extracted `static` so the gate is unit-testable
-    /// without the view tree.
-    nonisolated static func stepAfterAISource(isStandalone: Bool) -> Step {
-        isStandalone ? .done : .anamnesis
     }
 
     // MARK: - Progress
@@ -292,22 +264,43 @@ extension OnboardingFlow {
     /// fraction and the two strings assistive technology reads.
     ///
     /// Everything it returns is derived from
-    /// ``activeRoute(chosenMode:standaloneModeAvailable:)``, so a branch that
+    /// ``activeRoute(setupScope:)``, so a branch that
     /// does not walk a step is never charged for it and a route that grows a
     /// step does not need a second table updated to match.
     nonisolated static func progress(
         for step: Step,
-        chosenMode: OnboardingMode?,
-        standaloneModeAvailable: Bool,
-        setupScope: PostAuthenticationSetupScope = .full
+        setupScope: PostAuthenticationSetupScope = .full,
+        includesHealthKit: Bool = true
     ) -> RouteProgress {
-        RouteProgress(
-            step: step,
-            in: activeRoute(
-                chosenMode: chosenMode,
-                standaloneModeAvailable: standaloneModeAvailable,
-                setupScope: setupScope
-            )
-        )
+        RouteProgress(step: step, in: activeRoute(setupScope: setupScope, includesHealthKit: includesHealthKit))
+    }
+
+    /// What this device can say about its own setup, as a pure decision.
+    ///
+    /// With HealthKit the persisted "sheet shown" flag answers. Without it (the
+    /// iPad) the one thing the device owes is the notification permission, and
+    /// `notDetermined` means it is still open. No composed container, or a
+    /// permission that cannot be read, is `unknown`, never work.
+    nonisolated static func deviceLocalSetupState(
+        includesHealthKit: Bool,
+        healthKitRequested: Bool?,
+        notificationPermissionOpen: Bool?
+    ) -> DeviceLocalSetupState {
+        if includesHealthKit {
+            guard let healthKitRequested else { return .unknown }
+            return healthKitRequested ? .complete : .outstanding
+        }
+        guard let notificationPermissionOpen else { return .unknown }
+        return notificationPermissionOpen ? .outstanding : .complete
+    }
+
+    /// `true` while the system has not yet asked the person about notifications.
+    static func notificationPermissionIsOpen() async -> Bool? {
+        #if canImport(UserNotifications)
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            return settings.authorizationStatus == .notDetermined
+        #else
+            return nil
+        #endif
     }
 }

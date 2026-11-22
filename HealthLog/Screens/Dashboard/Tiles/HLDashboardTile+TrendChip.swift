@@ -14,7 +14,7 @@ import SwiftUI
 /// Gamification, Withings-Reference") plus the cross-dashboard load of
 /// 8+ tinted pills painting the grid as visual noise (R5 felt-UX audit).
 ///
-/// Colour rules (1.5 VERDICTS, #135): the colour is the server's verdict and
+/// Colour rules: the colour is the server's verdict and
 /// nothing else. Favourable → `statusOK`, adverse → `statusBad`, everything
 /// else (no verdict, `neutral`, `hold` with a move, an unknown word) →
 /// `textSecondary`. The per-metric polarity table that used to decide
@@ -56,20 +56,24 @@ struct TrendChip: View {
     var body: some View {
         if let symbolName {
             Image(systemName: symbolName)
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 11, weight: .bold))
+                .font(.hlIcon(HLIconSize.xs, weight: .bold))
                 .foregroundStyle(foregroundColor)
                 .accessibilityHidden(true) // surfaced via the parent label
         }
     }
 
-    /// `nil` → render nothing (unknown trends suppress the chip entirely).
+    /// `nil` → render nothing. A steady trend draws no glyph: a `minus`
+    /// in front of a value read as a negative number („−95 %“). VoiceOver
+    /// still says the trend through ``spokenClause``.
     private var symbolName: String? {
+        Self.symbolName(for: trend)
+    }
+
+    static func symbolName(for trend: TrendIndicator) -> String? {
         switch trend {
         case .up: "arrow.up"
         case .down: "arrow.down"
-        case .flat: "minus"
-        case .unknown: nil
+        case .flat, .unknown: nil
         }
     }
 
@@ -149,22 +153,37 @@ extension DashboardMetric {
     /// one the tile shows no arrow. Steps and sleep used to derive a direction
     /// from the first and last sparkline point (weight until #115 · 1.1); that
     /// guess is gone since #115 B7.
+    ///
+    /// **#176 (v1.48)** — a card that says its arrow follows no month window
+    /// (`trendWindowDays: null`: mood, BMI, a card without a previous month)
+    /// shows no arrow. That arrow would mean something else than the month
+    /// comparison on the metric page one tap away. An older server without
+    /// the field keeps its arrow.
     var dashboardTrend: TrendIndicator {
-        trend
+        Self.shownTrend(trend, windowDelivered: deliversTrendWindow, windowDays: trendWindowDays)
+    }
+
+    nonisolated static func shownTrend(
+        _ trend: TrendIndicator,
+        windowDelivered: Bool,
+        windowDays: Int?
+    ) -> TrendIndicator {
+        guard windowDelivered else { return trend }
+        return windowDays == nil ? .unknown : trend
     }
 
     /// VoiceOver hears the verdict the colour shows ("Trend rising, a good
     /// direction for you"). Empty when the arrow is monochrome.
     func spokenVerdictSuffix(_ verdicts: TileTrendVerdicts) -> String {
-        verdicts.mode(for: self).spokenClause(for: trend).map { ", \($0)" } ?? ""
+        verdicts.mode(for: self).spokenClause(for: dashboardTrend).map { ", \($0)" } ?? ""
     }
 
     /// The spoken direction plus the verdict, for surfaces whose label did not
     /// speak a trend before v1.43. `nil` without a verdict colour (the label
     /// stays as it was) or without a known direction.
     func spokenTrendWithVerdict(_ verdicts: TileTrendVerdicts) -> String? {
-        guard let clause = verdicts.mode(for: self).spokenClause(for: trend) else { return nil }
-        let direction: String? = switch trend {
+        guard let clause = verdicts.mode(for: self).spokenClause(for: dashboardTrend) else { return nil }
+        let direction: String? = switch dashboardTrend {
         case .up: String(localized: "Trend rising")
         case .down: String(localized: "Trend falling")
         case .flat: String(localized: "Trend stable")

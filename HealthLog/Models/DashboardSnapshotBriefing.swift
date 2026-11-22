@@ -5,7 +5,7 @@ import Foundation
 /// Briefing lifecycle state on `GET /api/dashboard/snapshot` (server
 /// `src/lib/dashboard/snapshot.ts` `BriefingState`).
 ///
-/// **v1.16.x tolerant-first decode (GH issue #15):** the server enum grew
+/// **v1.16.x tolerant-first decode:** the server enum grew
 /// `no-provider` in v1.16.0 and may grow further values. A strict
 /// `String`-raw enum would throw `DecodingError.dataCorrupted` on the first
 /// unknown value and poison the WHOLE snapshot decode — so unknown raw
@@ -67,7 +67,7 @@ public enum DashboardBriefingState: Codable, Sendable, Hashable {
 /// layoutCatalogue / metricStates) is ignored by `Codable`, so an unrelated
 /// snapshot schema change can never break this read.
 ///
-/// **v1.16.x additive contract (GH issue #15):**
+/// **v1.16.x additive contract:**
 /// - `briefingState` decodes tolerantly (see ``DashboardBriefingState``).
 /// - `briefingStale` (required since v1.15.20) decodes with a `false`
 ///   default so the same DTO works against ≤v1.15.19 servers.
@@ -103,7 +103,7 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
     /// `null` when the rollup coverage is cold or the composite is not `ok` —
     /// an honest "no score yet", never a zero.
     public let healthScore: HealthScore?
-    /// **#114 / #115 · 0.2 — the `briefing` capability** (server v1.39
+    /// **The `briefing` capability** (server v1.39
     /// `briefingAi`), applied on every server read after the cache: while it is
     /// unavailable the server nulls `briefing`. `nil` on an older server or an
     /// older cached body.
@@ -120,6 +120,11 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
     /// counts for this person. Empty on an older server and on a block this
     /// build cannot read; a row it cannot read is dropped on its own.
     public let directions: [String: TrendVerdict]
+    /// **#182 A8 (server v1.48)** — `medsToday.scheduledTodayAt`: the slot
+    /// instants of the doses `scheduledToday` counts, ascending (as-needed
+    /// doses and those of a medication paused or ended earlier today left
+    /// out). `nil` when absent: an older server, or a snapshot it cached.
+    public let scheduledTodayAt: [Date]?
 
     public init(
         briefing: DailyBriefing? = nil,
@@ -130,7 +135,8 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         healthScore: HealthScore? = nil,
         briefingAi: AICapabilityState? = nil,
         weightTrend: WeightTrendJudgement? = .legacyReading,
-        directions: [String: TrendVerdict] = [:]
+        directions: [String: TrendVerdict] = [:],
+        scheduledTodayAt: [Date]? = nil
     ) {
         self.briefing = briefing
         self.briefingState = briefingState
@@ -141,10 +147,16 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         self.briefingAi = briefingAi
         self.weightTrend = weightTrend
         self.directions = directions
+        self.scheduledTodayAt = scheduledTodayAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case briefing, briefingState, briefingUpdatedAt, briefingStale, scoreRings, healthScore, briefingAi, tiles
+        case medsToday
+    }
+
+    private enum MedsTodayKeys: String, CodingKey {
+        case scheduledTodayAt
     }
 
     private enum TilesKeys: String, CodingKey {
@@ -179,6 +191,16 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
         briefingAi = try? c.decodeIfPresent(AICapabilityState.self, forKey: .briefingAi)
         weightTrend = Self.decodeWeightTrend(from: c)
         directions = Self.decodeDirections(from: c)
+        scheduledTodayAt = Self.decodeScheduledTodayAt(from: c)
+    }
+
+    /// `medsToday.scheduledTodayAt`, tolerant: an absent block or field is
+    /// `nil`, an instant this build cannot parse is left out, and the rest
+    /// stays in the server's order.
+    private static func decodeScheduledTodayAt(from c: KeyedDecodingContainer<CodingKeys>) -> [Date]? {
+        guard let meds = try? c.nestedContainer(keyedBy: MedsTodayKeys.self, forKey: .medsToday),
+              let raw = try? meds.decodeIfPresent([String].self, forKey: .scheduledTodayAt) else { return nil }
+        return raw.compactMap { ISO8601DateFormatter.fractional.date(from: $0) ?? ISO8601DateFormatter.plain.date(from: $0) }
     }
 
     /// `tiles.directions`, row by row: an absent block (a server before v1.43)
@@ -222,6 +244,13 @@ public struct DashboardSnapshotBriefing: Codable, Sendable, Hashable {
             try tiles.encodeIfPresent(weightTrend, forKey: .weightTrend)
             if !directions.isEmpty { try tiles.encode(directions, forKey: .directions) }
         }
+        if let scheduledTodayAt {
+            var meds = c.nestedContainer(keyedBy: MedsTodayKeys.self, forKey: .medsToday)
+            try meds.encode(
+                scheduledTodayAt.map { ISO8601DateFormatter.fractional.string(from: $0) },
+                forKey: .scheduledTodayAt
+            )
+        }
     }
 }
 
@@ -256,7 +285,7 @@ public extension DashboardSnapshotBriefing {
     ///    deterministic fallback — never a spinner the server can't resolve.
     /// 5. Only `preparing` without stale content shows a preparing hint.
     var renderPolicy: DashboardBriefingRenderPolicy {
-        // #115 · 0.2 — the `briefing` capability wins over any text in the
+        // The `briefing` capability wins over any text in the
         // slot: no model prose while it is unavailable (the server maps the
         // state the same way: `no_provider` → deterministic, else hidden).
         if let briefingAi, !briefingAi.isAvailable {

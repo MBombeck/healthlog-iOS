@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **v0.14.1 #127 — cadence-scaled `complianceDisplay` card rows.**
+/// **Cadence-scaled `complianceDisplay` card rows.**
 ///
 /// Locks the server 2026-06-01 contract: the med card's two compliance rows come
 /// from `complianceDisplay.short`/`.long` whose windows scale with cadence (daily
@@ -79,7 +79,7 @@ struct MedicationComplianceDisplayTests {
         #expect(snapshot.listRow == nil)
     }
 
-    /// 1.4 B4 — the list card paints one bar, the 30-day window both server
+    /// The list card paints one bar, the 30-day window both server
     /// cadences carry; the detail page keeps every window.
     @Test("The list bar is the 30-day window for daily and weekly cadences alike")
     func listRowIsTheThirtyDayWindow() {
@@ -102,7 +102,7 @@ struct MedicationComplianceDisplayTests {
         #expect(MedicationsStore.ComplianceCardSnapshot.unavailable.listRow == nil)
     }
 
-    /// **v0.14.2 M5 — short-window streak decode.** The server emits
+    /// **Short-window streak decode.** The server emits
     /// `{rate, streak}` on `complianceDisplay.short`; the field was previously
     /// decoded-away. It must now survive the round-trip (and stay `nil` on the
     /// long window, which carries only `rate`).

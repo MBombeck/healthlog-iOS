@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// **CU-30 / C5 — "Wie sonst um diese Zeit".** Today's cumulative standing for
+/// **"Wie sonst um diese Zeit".** Today's cumulative standing for
 /// one of the four cumulative types against the operator's own typical standing
 /// at the SAME hour of day (server v1.34.0, `SAME_TIME_BASELINE`).
 ///
@@ -31,7 +31,7 @@ import SwiftUI
 /// card is not there at all (1.4 B2, R2 rule 4: empty cards disappear). None
 /// of them is an error.
 ///
-/// ## One line per figure (1.4 B2)
+/// ## One line per figure
 ///
 /// The hour sits in the title row, the usual range under the "usual" figure.
 /// What the dashed curve is and what the comparison rests on are in the
@@ -43,20 +43,16 @@ struct SameTimeBaselineBlock: View {
     var type: SameTimeBaselineType = .default
 
     @Environment(DerivedInsightsStore.self) private var store
+    /// The hour the curve chart is scrubbed to.
+    @State private var selectedDate: Date?
 
     /// The block's PLACEMENT gate, pure logic so the wiring on
     /// ``InsightsMetricScreen`` is testable without a view host.
     ///
-    /// Two load-bearing conditions: the page's metric must be one the server
-    /// actually baselines (no other metric page may fire the read), and the
-    /// value is pure server compute — in standalone / no-server there is
-    /// nothing to ask for, so the block must not exist rather than sit empty.
-    nonisolated static func supportedType(
-        for kind: MetricKind,
-        canShowCloudInsights: Bool
-    ) -> SameTimeBaselineType? {
-        guard canShowCloudInsights else { return nil }
-        return SameTimeBaselineType.allCases.first { $0.metricKind == kind }
+    /// The page's metric must be one the server actually baselines (no other
+    /// metric page may fire the read).
+    nonisolated static func supportedType(for kind: MetricKind) -> SameTimeBaselineType? {
+        SameTimeBaselineType.allCases.first { $0.metricKind == kind }
     }
 
     var body: some View {
@@ -75,27 +71,21 @@ struct SameTimeBaselineBlock: View {
 
     // MARK: - Shell
 
+    /// The card head carries the title and the hour the comparison stands at.
     private func card(asOfHour: Int?, @ViewBuilder content: () -> some View) -> some View {
-        HLCard {
+        HLCard("insights.sameTimeBaseline.title", trailing: {
+            if let asOfHour {
+                // The last full hour the comparison stands at.
+                Text("insights.sameTimeBaseline.asOf \(asOfHour)")
+                    .hlText(.rowSubtitle)
+                    .fixedSize()
+                    .accessibilityIdentifier("insights.sameTimeBaseline.asOf")
+            }
+        }, content: {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                    Text("insights.sameTimeBaseline.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 0)
-                    if let asOfHour {
-                        // The last full hour the comparison stands at.
-                        Text("insights.sameTimeBaseline.asOf \(asOfHour)")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize()
-                            .accessibilityIdentifier("insights.sameTimeBaseline.asOf")
-                    }
-                }
                 content()
             }
-        }
+        })
         .accessibilityIdentifier("insights.sameTimeBaseline")
     }
 
@@ -103,7 +93,7 @@ struct SameTimeBaselineBlock: View {
 
     @ViewBuilder
     private func okContent(_ baseline: SameTimeBaseline) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.lg) {
+        HStack(alignment: .firstTextBaseline, spacing: HLLayout.cardGap) {
             figure(
                 label: "insights.sameTimeBaseline.today",
                 value: baseline.todayValue,
@@ -118,8 +108,7 @@ struct SameTimeBaselineBlock: View {
         }
 
         Text(bandLine(baseline))
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.primary)
+            .hlText(.prose)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("insights.sameTimeBaseline.band")
 
@@ -137,16 +126,12 @@ struct SameTimeBaselineBlock: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(label)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-            Text(verbatim: unit.isEmpty ? number(value) : "\(number(value)) \(unit)")
-                .font(.hlMetric(.title2))
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
+                .hlText(.rowSubtitle)
+            // A grid cell: the compact value size, half steps kept.
+            HLValueText(value, unit: HLUnit(symbol: unit), size: .compact, fractionDigits: Self.fractionDigits(value))
             if let range {
                 Text("insights.sameTimeBaseline.range \(number(range.low)) \(number(range.high))")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -175,8 +160,7 @@ struct SameTimeBaselineBlock: View {
     private func percentLine(_ baseline: SameTimeBaseline) -> some View {
         if let percent = baseline.percentOfTypical {
             Text("insights.sameTimeBaseline.percent \(HLNumberFormat.percent(percent))")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .accessibilityIdentifier("insights.sameTimeBaseline.percent")
         }
     }
@@ -198,7 +182,7 @@ struct SameTimeBaselineBlock: View {
             Chart {
                 ForEach(points) { point in
                     LineMark(
-                        x: .value("Hour", point.hour),
+                        x: .value("Hour", point.scrubDate),
                         y: .value("Value", point.typical),
                         series: .value("Series", "typical")
                     )
@@ -211,7 +195,7 @@ struct SameTimeBaselineBlock: View {
                 }
                 ForEach(points) { point in
                     LineMark(
-                        x: .value("Hour", point.hour),
+                        x: .value("Hour", point.scrubDate),
                         y: .value("Value", point.today),
                         series: .value("Series", "today")
                     )
@@ -219,31 +203,25 @@ struct SameTimeBaselineBlock: View {
                     .lineStyle(StrokeStyle(lineWidth: HLChartStyle.lineWidth, lineCap: .round))
                     .foregroundStyle(HLChartTints.series)
                 }
-            }
-            .chartXScale(domain: 0 ... max(baseline.asOfHour, 1))
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
-                    AxisValueLabel {
-                        if let hour = value.as(Int.self) {
-                            Text(verbatim: "\(hour)")
-                                .font(.hlCaption2)
-                                .foregroundStyle(HLText.secondary)
-                        }
-                    }
+                HLChartScrubber.marks(
+                    selectedDate: selectedDate,
+                    in: points,
+                    date: \.scrubDate,
+                    value: \.today
+                ) { point in
+                    HLScrubCallout(
+                        title: Self.hourLabel(point.hour),
+                        value: number(point.today),
+                        unit: baseline.displayUnit
+                    )
                 }
             }
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
-                    AxisValueLabel {
-                        if let raw = value.as(Double.self) {
-                            Text(verbatim: number(raw))
-                                .font(.hlCaption2)
-                                .foregroundStyle(HLText.secondary)
-                        }
-                    }
-                }
+            .chartXScale(domain: Self.date(forHour: 0) ... Self.date(forHour: max(baseline.asOfHour, 1)))
+            .chartXAxis { Self.hourAxis }
+            // Values on the leading edge, like every chart with axes.
+            .hlChartValueAxis(label: Self.formatted)
+            .hlChartScrub($selectedDate) { date in
+                scrubAnnouncement(at: date, in: points, unit: baseline.displayUnit)
             }
             .frame(height: HLChartStyle.heightRegular)
             .accessibilityElement(children: .ignore)
@@ -289,19 +267,76 @@ struct SameTimeBaselineBlock: View {
     /// tint, no retry.
     private func learningContent(_ historyDays: Int) -> some View {
         Text("insights.sameTimeBaseline.gate.learning \(historyDays) \(SameTimeBaselineMetric.requiredHistoryDays)")
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("insights.sameTimeBaseline.gate")
     }
 
+    // MARK: - Hour axis
+
+    /// The hours under the curves, in caption type.
+    static var hourAxis: some AxisContent {
+        AxisMarks(values: .automatic(desiredCount: 4)) { value in
+            AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
+            AxisValueLabel {
+                if let date = value.as(Date.self) {
+                    Text(verbatim: "\(hour(of: date))")
+                        .hlText(.rowSubtitle)
+                }
+            }
+        }
+    }
+
+    /// An hour of the day on the anchor day the intraday pulse chart uses,
+    /// so this chart scrubs like every other time series.
+    nonisolated static func date(forHour hour: Int) -> Date {
+        IntradayPulseChartView.date(forMinute: hour * 60)
+    }
+
+    nonisolated static func hour(of date: Date) -> Int {
+        IntradayPulseChartView.minute(of: date) / 60
+    }
+
+    /// "09:00" for the scrub callout.
+    nonisolated static func hourLabel(_ hour: Int) -> String {
+        IntradayPulseMath.minuteLabel(hour * 60)
+    }
+
+    /// What VoiceOver reads when the scrub snaps: hour, today's total, unit.
+    private func scrubAnnouncement(at date: Date, in points: [SameTimeBaseline.Point], unit: String) -> String? {
+        guard let point = HLChartScrubber.nearest(to: date, in: points, date: \.scrubDate) else { return nil }
+        return HLScrubCallout.spokenText(
+            title: Self.hourLabel(point.hour),
+            value: number(point.today),
+            unit: unit,
+            marksRecord: false
+        )
+    }
+
     // MARK: - Formatting
+
+    /// A whole figure without decimals, a half step with one.
+    nonisolated static func fractionDigits(_ value: Double) -> ClosedRange<Int> {
+        value == value.rounded() ? 0 ... 0 : 1 ... 1
+    }
 
     /// Locale-aware rendering of a server figure. The server does NOT round
     /// `todayValue` / `typicalValue` (a median of integers can be `x.5`), so a
     /// half step is shown as a half step rather than being quietly re-rounded.
     private func number(_ value: Double) -> String {
+        Self.formatted(value)
+    }
+
+    /// The same for the value axis, which takes a plain function.
+    nonisolated static func formatted(_ value: Double) -> String {
         let isWhole = value == value.rounded()
         return HLNumberFormat.decimal(value, fractionDigits: isWhole ? 0 : 1)
+    }
+}
+
+extension SameTimeBaseline.Point {
+    /// The hour on the chart's time axis.
+    var scrubDate: Date {
+        SameTimeBaselineBlock.date(forHour: hour)
     }
 }

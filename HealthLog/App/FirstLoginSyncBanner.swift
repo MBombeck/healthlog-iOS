@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.8 W2-SYNCUX — the first-login sync indicator (AUDIT-QOL-UX §4 spec).
+/// The first-login sync indicator (AUDIT-QOL-UX §4 spec).
 ///
 /// Reuses the two existing primitives ONLY — `HLSyncBanner` (the calm
 /// `AdoptUploadIndicator` strip) for the chrome and the `SyncStatusCaption`
@@ -25,8 +25,7 @@ import SwiftUI
 ///    the flag every new-day cold launch would re-open the window). From
 ///    here on the quiet `HLSyncStatusFooter` caption owns the sync story.
 ///
-/// Standalone sessions (`AuthStore.Phase.standalone`) never open the window —
-/// there is no server handshake to wait for (spec §4.6). Reduce-Motion
+/// Reduce-Motion
 /// suppresses the slide/spring entirely (cross-dissolve via `nil` animation).
 struct FirstLoginSyncBanner: View {
     /// UserDefaults key for the one-shot completion flag (UI-pref — allowed
@@ -76,7 +75,7 @@ struct FirstLoginSyncBanner: View {
         syncState.isLoading || dashboardStore.isLoading
     }
 
-    /// b177 W-SYNCPROGRESS — the banner copy. While actively syncing WITH a
+    /// The banner copy. While actively syncing WITH a
     /// known outstanding quantity (outbox backlog + in-flight revalidations)
     /// the strip shows the honest count ("Wird synchronisiert… N ausstehend",
     /// same key as the footer caption). Still no invented percent bar — the

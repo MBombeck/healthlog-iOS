@@ -1,13 +1,13 @@
 import SwiftUI
 
-// MARK: - Convergent wellness-gradient card surface (v0.14.4 FW-WELL)
+// MARK: - Convergent wellness-gradient card surface
 
 /// A card surface that paints a `WellnessGradient` Verlauf (saturated metric hue
 /// at the OUTER corner → shared light end at the INNER grid-centre corner) under
 /// the mono ring + label. When `gradient` is `nil` (non-wellness or insufficient
 /// state) it falls back to the plain `HLCard` surface so semantics are unchanged.
 ///
-/// **Contrast handling (v0.14.10 §1).** The ring + value + label are WHITE on the
+/// **Contrast handling.** The ring + value + label are WHITE on the
 /// gradient, which is now a TINTED-DARK field (hue→near-black base). White reads
 /// crisply on the dark tile with no extra wash needed, so the old dark legibility
 /// scrim is dropped and replaced with a faint WHITE radial lift centred on the
@@ -20,7 +20,7 @@ import SwiftUI
 /// Motion the breath is OFF (the static mid value renders, no `TimelineView`).
 struct WellnessGradientCard<Content: View>: View {
     let gradient: WellnessGradient?
-    /// v0.14.11 — the tile's grid index, used ONLY to phase-offset the "living
+    /// The tile's grid index, used ONLY to phase-offset the "living
     /// light" glow breath so neighbours never pulse in unison. Defaults to 0
     /// (callers that don't thread an index get a single, valid phase).
     var glowPhaseIndex: Int = 0
@@ -33,7 +33,7 @@ struct WellnessGradientCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 1.4 B4 — `false` once the overview's motion window has closed.
+    /// `false` once the overview's motion window has closed.
     @Environment(\.insightsRingMotionActive) private var motionActive
 
     /// Live Low-Power read — the breath drops to its static mid value when on,
@@ -46,24 +46,28 @@ struct WellnessGradientCard<Content: View>: View {
     var body: some View {
         if let backdrop = gradient?.linearGradient ?? customGradient {
             content
-                .padding(HLSpace.lg)
+                .padding(HLLayout.cardInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background {
                     ZStack {
                         backdrop
-                        // v0.14.10 §1 — the tile is now a TINTED-DARK field, so the
+                        // The tile is now a TINTED-DARK field, so the
                         // old dark legibility scrim is unnecessary (white already
                         // reads on dark). A faint WHITE radial lift centred on the
                         // ring/label lockup adds a subtle premium glow without
                         // lightening the tile, and fades to clear toward the edges.
-                        // v0.14.11 — the glow now BREATHES very subtly (opacity +
+                        // The glow now BREATHES very subtly (opacity +
                         // radius), phase-offset per tile, gated OFF under Reduce
                         // Motion (then the static mid value renders).
                         glow
                     }
                 }
+                // The gradient tile is the brand appearance the user picks
+                // for the score cards; it draws its own shape and border.
+                // swiftlint:disable:next hl_no_handmade_card
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
                 .overlay(
+                    // swiftlint:disable:next hl_no_handmade_card
                     RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
                         .strokeBorder(HLColor.wellnessTileBorder, lineWidth: 1)
                 )

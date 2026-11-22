@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// #153 (public #27) — what the user has entered during setup, kept where a
+/// What the user has entered during setup, kept where a
 /// view rebuild cannot reach it.
 ///
 /// `RootPrivacyShieldPolicy` replaces the whole window content as soon as the
@@ -24,7 +24,7 @@ final class OnboardingDraftStore {
 
     /// The step the flow stands on.
     var step: OnboardingFlow.Step = OnboardingFlow.initialStep
-    var chosenMode: OnboardingMode?
+    var hasStartedServerSetup = false
     var setupScope: PostAuthenticationSetupScope = .full
     /// The answers of the address-dependent probes, so a rebuilt sign-in step
     /// shows the same doors as before instead of the optimistic defaults.
@@ -53,7 +53,7 @@ final class OnboardingDraftStore {
     init() {}
 
     /// Called by every flow that appears. A flow appears with no session in
-    /// it (signed out, standalone pairing) or after the privacy shield
+    /// it (signed out) or after the privacy shield
     /// rebuilt it mid-setup. Settings drafts belong to a session that is gone
     /// either way. The onboarding draft starts over when the last run reached
     /// its hand-over, or when it stands past the sign-in while no sign-in is
@@ -62,8 +62,7 @@ final class OnboardingDraftStore {
         settingsAccessHeaderRows = nil
         changeServerAddress = nil
         let sessionInProgress = if case .authenticating = phase { true } else { false }
-        // Standalone walks the device steps without any session by design.
-        let orphaned = !sessionInProgress && !step.isPreAuthentication && chosenMode != .standalone
+        let orphaned = !sessionInProgress && !step.isPreAuthentication
         if step == .done || orphaned {
             resetOnboarding()
         }
@@ -74,7 +73,7 @@ final class OnboardingDraftStore {
         routeResolution?.cancel()
         routeResolution = nil
         step = OnboardingFlow.initialStep
-        chosenMode = nil
+        hasStartedServerSetup = false
         setupScope = .full
         registrationEnabled = true
         oidcStatus = .unknown

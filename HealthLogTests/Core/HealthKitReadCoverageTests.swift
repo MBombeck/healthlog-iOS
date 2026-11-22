@@ -1,4 +1,4 @@
-// W-HKREAD — read-coverage parity for the nine additive quantity signals +
+// Read-coverage parity for the nine additive quantity signals +
 // the seven categorical EVENT classes the server maps end-to-end. Calls
 // HealthKit symbols, so it stays out of the SPM test build.
 #if !SWIFT_PACKAGE && canImport(HealthKit)

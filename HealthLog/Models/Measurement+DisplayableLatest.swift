@@ -1,13 +1,13 @@
 import Foundation
 
-/// #33 — the single, shared client-side validity rule for the "latest / last
+/// The single, shared client-side validity rule for the "latest / last
 /// measurement" value. A malformed blood-pressure row whose systolic or
 /// diastolic component is `0` (a seed/validation gap, or an unmerged
 /// `BLOOD_PRESSURE_SYS`/`BLOOD_PRESSURE_DIA` wire pair whose peer decoded to
 /// `0`) must never surface as the newest value on any surface — it renders as
 /// the nonsensical "0/77 mmHg". Every consumer that selects a single latest BP
 /// (the dashboard tile via `MetricDataState.derive`, the chart-detail HeroStrip
-/// via `latestRawMeasurement`, the standalone dashboard snapshot, the
+/// via `latestRawMeasurement`, the
 /// AI/Spotlight summaries) routes its validity check through here so the rule
 /// lives in exactly one place.
 ///

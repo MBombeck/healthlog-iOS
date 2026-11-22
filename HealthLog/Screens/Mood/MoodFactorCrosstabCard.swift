@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.8 — the **"What your ratings show"** card on the Insights → Mood page.
+/// The **"What your ratings show"** card on the Insights → Mood page.
 /// Renders the server's `factorCrosstab` rows (`GET /api/mood/insights`, server
 /// v1.14.0): for each RATED factor, the mean of a tracked metric on the days
 /// the factor was scored LOW vs HIGH (median split, inverse-aware, Welch + FDR).
@@ -23,8 +23,7 @@ struct MoodFactorCrosstabCard: View {
     let rows: [FactorMetricCrosstabRow]
     /// Resolves a factor's label from the live catalog (`labelKey` fallback).
     @Environment(MoodTagCatalogStore.self) private var catalog
-    /// QoL-2 (A360-4) — gate the expand/collapse spring like the rest of the app.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Gate the expand/collapse spring like the rest of the app.
 
     @State private var expanded = false
 
@@ -38,19 +37,10 @@ struct MoodFactorCrosstabCard: View {
         if rows.isEmpty {
             EmptyView()
         } else {
-            HLCard {
+            // The standing association-not-cause caption, once, up top, so
+            // every row reads under it.
+            HLCard("mood.factorCrosstab.title", subtitle: "mood.factorCrosstab.caption") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    Text("mood.factorCrosstab.title")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-
-                    // The standing association-not-cause caption — once, up top,
-                    // so every row reads under it.
-                    Text("mood.factorCrosstab.caption")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleRows) { row in
                             MoodFactorCrosstabRowView(
@@ -62,15 +52,8 @@ struct MoodFactorCrosstabCard: View {
                     }
 
                     if rows.count > Self.collapsedCap {
-                        Button {
-                            withAnimation(reduceMotion ? nil : HLMotion.spring) { expanded.toggle() }
-                        } label: {
-                            Text(expanded ? "Show fewer" : "Show more")
-                                .font(.hlSubhead.weight(.medium))
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("insights.mood.factorCrosstab.toggle")
+                        MoodShowMoreLink(isExpanded: $expanded)
+                            .accessibilityIdentifier("insights.mood.factorCrosstab.toggle")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,18 +85,15 @@ struct MoodFactorCrosstabRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
             Image(systemName: resolvedSymbol)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .frame(width: 22, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: HLSpace.hair) {
                 Text(resolvedLabel)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                     .lineLimit(1)
                 Text(Self.associationSentence(for: row))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -163,8 +143,8 @@ struct MoodFactorCrosstabRowView: View {
     /// read as integers; everything else to one fraction digit.
     nonisolated static func formatted(_ value: Double, display: String) -> String {
         switch display {
-        case "steps": value.formatted(.number.precision(.fractionLength(0)))
-        default: value.formatted(.number.precision(.fractionLength(1)))
+        case "steps": HLValueFormat.number(value, fractionDigits: 0 ... 0)
+        default: HLValueFormat.number(value, fractionDigits: 1 ... 1)
         }
     }
 
@@ -192,7 +172,7 @@ struct MoodFactorCrosstabRowView: View {
 private extension FactorMetricCrosstabRow {
     /// Human factor label for the sentence — resolves the server `labelKey`
     /// (lowercased so it reads naturally mid-sentence: "your worse sleep days").
-    /// 1.4 B4: in German a noun keeps its capital; "arbeit-Tagen" was wrong.
+    /// In German a noun keeps its capital; "arbeit-Tagen" was wrong.
     var labelKeyHumanFallback: String {
         let label = MoodTagCatalogL10n.resolve(labelKey)
         return AppLanguage.current == .de ? label : label.lowercased()

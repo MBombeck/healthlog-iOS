@@ -1,4 +1,4 @@
-// Parity 2.2 — `GET /api/auth/me/sessions` decode + row-formatting contract.
+// `GET /api/auth/me/sessions` decode + row-formatting contract.
 //
 // The session row is the one surface where a formatting slip is a security
 // problem rather than a cosmetic one: a row that silently drops its location /

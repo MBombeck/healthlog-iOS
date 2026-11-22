@@ -18,7 +18,7 @@ import Foundation
         }
 
         /// The read set for a system that resolves RMSSD to `rmssd` (iOS 27
-        /// and later) or to `nil` (everything older). 1.2 / V4: the type is
+        /// and later) or to `nil` (everything older). The type is
         /// read-only and joins the set only where it resolves, so an older
         /// system asks for exactly what it asked for before. A function of its
         /// input so a test can pin the iOS 27 shape on an older simulator.
@@ -32,7 +32,7 @@ import Foundation
             set.insert(HKQuantityType(.bloodPressureDiastolic))
             set.insert(HKQuantityType(.bloodGlucose))
             set.insert(HKQuantityType(.oxygenSaturation))
-            // v0.7.0 — respiratory rate (breaths/min). Apple Watch + supported
+            // Respiratory rate (breaths/min). Apple Watch + supported
             // sensors write it overnight; closes the stale v0.5.6-deferred note.
             set.insert(HKQuantityType(.respiratoryRate))
             // Cardio (point + cumulative)
@@ -46,27 +46,40 @@ import Foundation
             // Activity (cumulative, sum semantics)
             set.insert(HKQuantityType(.stepCount))
             set.insert(HKQuantityType(.activeEnergyBurned))
+            // Resting energy (server v1.47.1). Like the v1.44 types it joins
+            // the sheet unconditionally; nothing is sent before the server maps
+            // it, and a returning install is asked after the "what is new" card.
+            set.insert(HKQuantityType(.basalEnergyBurned))
+            // 1.7: insulin, inhaler, spirometry, effort, cycling, running
+            // form and rowing. Same rule as resting energy: in the first sheet,
+            // nothing sent before the server maps the type, and a returning
+            // install is asked after the "new data types" card, never at launch.
+            for identifier in AppleHealthIngestQuantityTypes.allIdentifiers {
+                if let type = AppleHealthIngestQuantityTypes.sampleType(for: identifier) {
+                    set.insert(type)
+                }
+            }
             set.insert(HKQuantityType(.flightsClimbed))
             set.insert(HKQuantityType(.distanceWalkingRunning))
-            // v0.5.2 F2 — mobility + body-composition additions. iPhone reports
+            // Mobility + body-composition additions. iPhone reports
             // walkingSpeed / walkingAsymmetry / walkingStepLength automatically
             // when carried during walks; BMI is written by Apple's Health-App
             // whenever weight + height are present, plus by most smart scales.
             set.insert(HKQuantityType(.walkingSpeed))
             set.insert(HKQuantityType(.walkingAsymmetryPercentage))
             set.insert(HKQuantityType(.walkingStepLength))
-            // v0.7.0 — sibling of walking asymmetry. Apple Health surfaces
+            // Sibling of walking asymmetry. Apple Health surfaces
             // the four-metric mobility cluster (speed / asymmetry / step
             // length / double-support); we now cover all four.
             set.insert(HKQuantityType(.walkingDoubleSupportPercentage))
-            // W28d — Apple walking-steadiness fall-risk classifier.
+            // Apple walking-steadiness fall-risk classifier.
             set.insert(HKQuantityType(.appleWalkingSteadiness))
             set.insert(HKQuantityType(.bodyMassIndex))
-            // B5 (1.4) — waist circumference, read only (never written back).
+            // Waist circumference, read only (never written back).
             // An installation that answered the sheet before 1.4 is asked once
             // (`HKReadinessStore.requestLateReadAuthorizationIfNeeded`).
             set.insert(HKQuantityType(.waistCircumference))
-            // W-HKREAD — nine additive quantity signals the server maps
+            // Nine additive quantity signals the server maps
             // end-to-end (server v1.10.0). Collected via the Spezi
             // `CollectSamples` path; their read auth must join the always-on
             // sheet so the collectors don't trip `HKErrorAuthorizationDenied`.
@@ -79,7 +92,7 @@ import Foundation
             set.insert(HKQuantityType(.stairAscentSpeed))
             set.insert(HKQuantityType(.stairDescentSpeed))
             set.insert(HKQuantityType(.numberOfTimesFallen))
-            // HK-NEW (1.5) — the exercise and stand rings, stand hours, mindful
+            // The exercise and stand rings, stand hours, mindful
             // sessions and AFib burden, mapped by the server since v1.44.0
             // (State of Mind is already here, see below). Read only. Like RMSSD
             // they join the onboarding sheet unconditionally, so a new install
@@ -92,7 +105,7 @@ import Foundation
             set.insert(HKCategoryType(.appleStandHour))
             set.insert(HKCategoryType(.mindfulSession))
             set.insert(HKQuantityType(.atrialFibrillationBurden))
-            // W-HKREAD — six categorical EVENT classes collected by the
+            // Six categorical EVENT classes collected by the
             // dedicated `HeartHealthEventImporter` (not expressible in the
             // Spezi `CollectSamples` DSL the same way the importer needs).
             // Their read auth must also join the always-on sheet.
@@ -106,9 +119,8 @@ import Foundation
             // build doesn't require the symbol on older SDKs. The HK runtime just
             // ignores unknown identifiers if the device's iOS version doesn't
             // support it.
-            if #available(iOS 17.0, *),
-               let timeInDaylight = HKObjectType
-               .quantityType(forIdentifier: HKQuantityTypeIdentifier(rawValue: "HKQuantityTypeIdentifierTimeInDaylight"))
+            if let timeInDaylight = HKObjectType
+                .quantityType(forIdentifier: HKQuantityTypeIdentifier(rawValue: "HKQuantityTypeIdentifierTimeInDaylight"))
             {
                 set.insert(timeInDaylight)
             }
@@ -129,8 +141,8 @@ import Foundation
             // device-local concern the server knows nothing about — still true,
             // and still not a reason to bury it under Einstellungen → Apple
             // Health → Weitere Synchronisierungen, which is the drawer the
-            // operator called unauffindbar (J1) and the reason he did not find
-            // either type in the first sheet's list (K11).
+            // operator called unauffindbar and the reason he did not find
+            // either type in the first sheet's list.
             //
             // Apple always asks: "in the first sheet" means the types are in
             // this set, not that anything is granted silently. The
@@ -156,7 +168,7 @@ import Foundation
             return set
         }
 
-        /// W-HKREAD — the categorical EVENT-class category types the
+        /// The categorical EVENT-class category types the
         /// ``HeartHealthEventImporter`` reads. Each is a discrete on-device
         /// notification (the device's own certified verdict), NOT a continuous
         /// reading; the server ingests the classification result and never
@@ -177,7 +189,7 @@ import Foundation
             return set
         }
 
-        /// **1.5 ROUTES (#149)** — the GPS track of a workout. Deliberately
+        /// The GPS track of a workout. Deliberately
         /// NOT in ``defaultReadTypes``: routes are location data, so the app
         /// asks for them only when the person switches "Send routes" on
         /// (``HealthKitService/requestWorkoutRouteAuthorization()``), never in
@@ -186,7 +198,7 @@ import Foundation
             [HKSeriesType.workoutRoute()]
         }
 
-        /// v0.5.4 BF-5: write-types-set spans every kind that can be entered
+        /// Write-types-set spans every kind that can be entered
         /// manually via `MeasureSheetView`. Before this expansion, only weight,
         /// BP, glucose, pulse made it back into HK on manual entry — every
         /// other kind (BodyFat, BodyTemp, SpO2, BodyWater, BoneMass, RHR, HRV,
@@ -213,7 +225,7 @@ import Foundation
             set.insert(HKQuantityType(.heartRateVariabilitySDNN))
             set.insert(HKQuantityType(.vo2Max))
             set.insert(HKQuantityType(.bodyMassIndex))
-            // 16-03 / E2 — the mood sync is read AND write: moods the user
+            // The mood sync is read AND write: moods the user
             // records in HealthLog are mirrored into Apple Health's State of
             // Mind (`MoodStore.writeMood`), so a read-only membership would
             // ship a sync whose writes silently no-op with

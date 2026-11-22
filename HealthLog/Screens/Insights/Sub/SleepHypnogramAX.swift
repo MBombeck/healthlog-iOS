@@ -1,7 +1,7 @@
 import Accessibility
 import Foundation
 
-/// A11Y (audit-v0162 §5) — pure builder for the measured-hypnogram VoiceOver
+/// A11Y — pure builder for the measured-hypnogram VoiceOver
 /// chart descriptor behind ``SleepHypnogramScreen``. Extracted into its own
 /// file (file_length discipline) so the ordered-segment contract stays
 /// unit-testable without a SwiftUI render host and the descriptor wiring thin.
@@ -27,8 +27,10 @@ enum SleepHypnogramAX {
         let segments = orderedSegments(for: session)
         let duration = max(1, session.end.timeIntervalSince(session.start))
 
+        // #181: the night's own zone when the server names one.
+        let zone = SleepHypnogramScreen.displayZone(for: session)
         func clock(_ date: Date) -> String {
-            date.formatted(.dateTime.hour().minute())
+            SleepHypnogramScreen.clock(date, in: zone)
         }
 
         let xAxis = AXNumericDataAxisDescriptor(

@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// **R1 — the local snooze holds one slot, like the server's (1.39.3, A5).**
+    /// **The local snooze holds one slot, like the server's (1.39.3, A5).**
     ///
     /// Server rule: a medication snooze holds only the slot whose reminder
     /// window was open when it was set; later slots of the same medication are

@@ -10,7 +10,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// E1 — `cycle.bulk.invalid` / `cycle.bulk.too_large` (422, final "for the
+    /// `cycle.bulk.invalid` / `cycle.bulk.too_large` (422, final "for the
     /// batch as sent", `src/app/api/cycle/day-logs/bulk/route.ts`, codes present
     /// since v1.39.0, documented as final in v1.39.1) must never be repeated
     /// forever and never deleted silently.

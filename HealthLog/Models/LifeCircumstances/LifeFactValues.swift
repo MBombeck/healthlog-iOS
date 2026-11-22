@@ -1,6 +1,6 @@
 import Foundation
 
-// **LIFE (1.5.0, #132, Server #614) — the six answer shapes of the life
+// **The six answer shapes of the life
 // circumstances.**
 //
 // Every object kind is `schema: 1` with a closed set of keys

@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// CAT-1: HK-Permission-Picker-Gruppierung über die Server-Categorisation-
+/// HK-Permission-Picker-Gruppierung über die Server-Categorisation-
 /// Overlay. Die Tests pinnen:
 ///
 ///   - Jede Default-Row trägt eine gültige `categoryId`, die zu einem

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Audit v0.14.8 N5.3 — anchored-sweep interleave guard.**
+/// **Anchored-sweep interleave guard.**
 ///
 /// The HK importers (`WorkoutHealthKitImporter`, `CycleHealthKitImporter`) run
 /// `runAnchoredSweep()` from every observer fire. The sweep is actor-isolated,

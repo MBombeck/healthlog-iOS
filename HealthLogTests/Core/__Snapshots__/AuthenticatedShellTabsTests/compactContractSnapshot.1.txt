@@ -1,0 +1,6 @@
+▿ 5 elements
+  - "tab home | Home | house"
+  - "tab meds | Meds | pills"
+  - "tab measure | Log | plus.circle | action"
+  - "tab insights | Insights | sparkles"
+  - "tab more | More | ellipsis"

@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-18 / GH #64 — Dosis-Provenienz auf `GET /api/medications/{id}/dose-history`.**
+/// **Dosis-Provenienz auf `GET /api/medications/{id}/dose-history`.**
 ///
 /// Seit Server v1.32.8 trägt jede Intake-Zeile ein nullbares `source`
 /// (`WEB | API | REMINDER | IMPORT | APPLE_HEALTH`); vor der Migration
@@ -80,7 +80,7 @@ struct MedicationDoseProvenanceWireTests {
         #expect(ledger.rows.map { $0.intake?.source } == ["WEB", "API", "REMINDER", "IMPORT", "APPLE_HEALTH"])
     }
 
-    @Test("Provenienz-Labels sind übersetzt (kein Key-Durchschlag im Chip)")
+    @Test("Provenienz-Labels sind übersetzt (kein Key-Durchschlag in der Detailzeile)")
     func labelsResolveFromCatalog() {
         for provenance in DoseIntakeProvenance.allCases {
             let label = String(localized: provenance.labelResource)
@@ -92,10 +92,6 @@ struct MedicationDoseProvenanceWireTests {
             #expect(!label.hasPrefix("med.ledger."), "Unaufgelöster Katalog-Key: \(label)")
             #expect(!provenance.systemImage.isEmpty)
         }
-        // Die a11y-Hülle des Chips ist ebenfalls übersetzt und trägt den Platzhalter.
-        let a11y = String(localized: "med.ledger.provenance.a11y")
-        #expect(a11y.contains("%@"))
-        #expect(a11y != "med.ledger.provenance.a11y")
     }
 
     // MARK: - Ehrliche Leerstellen

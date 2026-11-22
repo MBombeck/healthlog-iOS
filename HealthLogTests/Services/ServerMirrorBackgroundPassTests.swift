@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **MIRROR (1.5, public #28)** — the bounded server→Apple-Health mirror in
+    /// The bounded server→Apple-Health mirror in
     /// the background health sync.
     ///
     /// (c) one request, at most 50 readings, a closed window leaves nothing half
@@ -93,14 +93,12 @@
             source: (any ServerMirrorSource)?,
             writer: (any BoundedServerMirrorWriting)?,
             serverIsNew: Bool = true,
-            standalone: Bool = false,
             lease: AuthenticatedSessionLease?
         ) -> ServerMirrorBackgroundPass.Environment {
             ServerMirrorBackgroundPass.Environment(
                 source: source,
                 writer: writer,
                 serverIsNewEnough: { serverIsNew },
-                isStandalone: { standalone },
                 lease: { lease },
                 now: { Self.now }
             )
@@ -299,15 +297,10 @@
             #expect(log.paths.isEmpty)
         }
 
-        @Test("standalone, no HealthKit writer, or no admitted account: no request")
+        @Test("no HealthKit writer, or no admitted account: no request")
         func noRequestWithoutAServerOrAWriter() async throws {
             let log = RequestLog()
             let source = try await repo(log: log, page: MeasurementListWireResponse(measurements: [weightWire(0)]))
-            let standalone = try await ServerMirrorBackgroundPass.run(
-                context(.appRefresh),
-                environment: environment(source: source, writer: RecordingWriter(), standalone: true, lease: lease())
-            )
-            #expect(standalone.disposition == .disabled)
             let noWriter = try await ServerMirrorBackgroundPass.run(
                 context(.appRefresh),
                 environment: environment(source: source, writer: nil, lease: lease())

@@ -6,14 +6,12 @@ import SwiftUI
 /// catalog); only value / date / note are editable. A free-text row keeps all
 /// fields editable.
 struct EditLabResultSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: LabsStore
     let result: LabResultDTO
 
     @State private var analyte: String
     @State private var unit: String
-    /// #160 — "No unit" on a free-text row (the unity `"1"`). ``unit``
+    /// "No unit" on a free-text row (the unity `"1"`). ``unit``
     /// keeps what was typed for the way back.
     @State private var noUnit: Bool
     /// Whether the "No unit" switch is offered (server 1.46.6, or a row that
@@ -32,14 +30,12 @@ struct EditLabResultSheet: View {
     /// its decrypted body failed. The field is empty for the WRONG reason, so a
     /// save must leave the note untouched rather than clear it.
     @State private var noteLoadFailed = false
-    @State private var isSaving = false
     @State private var saveError: String?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-1 — the note loads async; capture its loaded value so a note edit is
+    /// Drives the discard-confirmation dialog.
+    /// The note loads async; capture its loaded value so a note edit is
     /// detectable and an untouched note never reads as dirty.
     @State private var initialNote = ""
-    /// FORM-2 (Audit v0162) — initial-focus + submit-chain across the text fields.
+    /// Initial-focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
     private let initialTakenAt: Date
@@ -48,7 +44,7 @@ struct EditLabResultSheet: View {
     private let initialValueText: String
     private let initialQualitative: String
 
-    /// Item 1.5 — the row's result type is a FACT about the row, not a choice
+    /// The row's result type is a FACT about the row, not a choice
     /// the editor offers (the server refuses type switches on `PUT`).
     private var resultType: LabResultType {
         result.isQualitative ? .qualitative : .numeric
@@ -66,9 +62,9 @@ struct EditLabResultSheet: View {
         _unit = State(initialValue: storedWithoutUnit ? "" : result.unit)
         _noUnit = State(initialValue: storedWithoutUnit)
         offersNoUnit = LabUnit.offersNoUnit(current: result.unit)
-        // Item 1.5 — an absent / qualitative row prefills an EMPTY numeric field
+        // An absent / qualitative row prefills an EMPTY numeric field
         // instead of the old fabricated "0".
-        let seededValueText = result.value.map { $0.formatted(.number.precision(.fractionLength(0 ... 2))) } ?? ""
+        let seededValueText = Self.editableValueText(result.value)
         _valueText = State(initialValue: seededValueText)
         initialValueText = seededValueText
         let seededQualitative = result.valueText ?? ""
@@ -76,8 +72,9 @@ struct EditLabResultSheet: View {
         initialQualitative = seededQualitative
         _referenceLowText = State(initialValue: result.referenceLow.map { $0.formatted() } ?? "")
         _referenceHighText = State(initialValue: result.referenceHigh.map { $0.formatted() } ?? "")
-        _panel = State(initialValue: result.panel ?? "")
-        let parsedTakenAt = LabsDateFormat.parse(result.takenAt) ?? .now
+        // The stored panel can be a key ("coagulation"); the field shows its label.
+        _panel = State(initialValue: LabPanelName.display(result.panel) ?? "")
+        let parsedTakenAt = LabsDateFormat.readingDate(result.takenAt) ?? .now
         _takenAt = State(initialValue: parsedTakenAt)
         initialTakenAt = parsedTakenAt
         _note = State(initialValue: "")
@@ -103,7 +100,7 @@ struct EditLabResultSheet: View {
         return hasResult && (isLinked || !analyte.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
-    /// FORM-1 — any field diverges from the prefilled value. Free-text-only
+    /// Any field diverges from the prefilled value. Free-text-only
     /// fields are compared only when the row is unlinked (they're read-only when
     /// linked, so they can never drift).
     private var isDirty: Bool {
@@ -114,7 +111,7 @@ struct EditLabResultSheet: View {
         if !isLinked {
             if analyte != result.analyte { return true }
             if (LabUnit.wire(typed: unit, noUnit: noUnit) ?? "") != result.unit { return true }
-            if panel != (result.panel ?? "") { return true }
+            if panel != (LabPanelName.display(result.panel) ?? "") { return true }
             if referenceLowText != (result.referenceLow.map { $0.formatted() } ?? "") { return true }
             if referenceHighText != (result.referenceHigh.map { $0.formatted() } ?? "") { return true }
         }
@@ -122,36 +119,29 @@ struct EditLabResultSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "labs.edit.title",
+            action: .save(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                if isLinked {
-                    linkedReadOnlySection
-                } else {
-                    freeTextSection
-                }
-                valueSection
-                noteSection
-                if let saveError {
-                    Section { HLFormErrorText(saveError) }
-                }
-            }
-            .navigationTitle(Text("labs.edit.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("labs.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
+                Group {
+                    if isLinked {
+                        linkedReadOnlySection
+                    } else {
+                        freeTextSection
+                    }
+                    valueSection
+                    noteSection
+                    if let saveError {
+                        Section { HLFormErrorText(saveError) }
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("labs.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave || isSaving)
-                }
+                .hlFormRowSurface()
             }
+            .hlPageMargins()
             .task { await loadNote() }
-            // FORM-2 — seed focus onto the primary editable field once settled
+            // Seed focus onto the primary editable field once settled
             // (value for a linked row, analyte for a free-text one).
             .task {
                 // A legacy row whose `takenAt` is already in the future must not
@@ -168,53 +158,78 @@ struct EditLabResultSheet: View {
                 }
             }
         }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
     }
 
     private var linkedReadOnlySection: some View {
         Section {
-            LabeledContent("labs.add.analyte", value: result.analyte)
-            LabeledContent("labs.add.unit", value: LabUnit.standalone(result.unit) ?? "")
+            LabeledContent {
+                Text(verbatim: result.analyte)
+            } label: {
+                HLRowTitle("labs.add.analyte")
+            }
+            LabeledContent {
+                Text(verbatim: LabUnit.standalone(result.unit) ?? "")
+            } label: {
+                HLRowTitle("labs.add.unit")
+            }
             if let lower = result.referenceLow {
-                LabeledContent("labs.add.referenceLow", value: lower.formatted())
+                LabeledContent {
+                    Text(verbatim: lower.formatted())
+                } label: {
+                    HLRowTitle("labs.add.referenceLow")
+                }
             }
             if let upper = result.referenceHigh {
-                LabeledContent("labs.add.referenceHigh", value: upper.formatted())
+                LabeledContent {
+                    Text(verbatim: upper.formatted())
+                } label: {
+                    HLRowTitle("labs.add.referenceHigh")
+                }
             }
         } header: {
-            // 1.4 B2-c — the header says these rows belong to the linked
+            // The header says these rows belong to the linked
             // marker; the footer that said they can't be edited is gone.
             Text("labs.edit.linked.section")
         }
     }
 
+    /// Label above each field, like the marker editor.
     private var freeTextSection: some View {
         Section("labs.add.freeText.section") {
-            TextField("labs.add.analyte", text: $analyte)
-                .focused($focusedField, equals: .analyte)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .unit }
-            TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
-                .focused($focusedField, equals: .unit)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .panel }
-                .disabled(noUnit)
+            LabFormField("labs.add.analyte") {
+                TextField("labs.add.analyte", text: $analyte)
+                    .focused($focusedField, equals: .analyte)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .unit }
+            }
+            // "No unit" hides the field instead of leaving an empty one.
+            if !noUnit {
+                LabFormField("labs.add.unit") {
+                    TextField("labs.unit.placeholder", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
+                        .focused($focusedField, equals: .unit)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .panel }
+                }
+            }
             if offersNoUnit {
                 LabNoUnitToggle(isOn: $noUnit)
             }
-            TextField("labs.add.panel", text: $panel)
-                .focused($focusedField, equals: .panel)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .value }
-            TextField("labs.add.referenceLow", text: $referenceLowText)
-                .keyboardType(.decimalPad)
-                .focused($focusedField, equals: .referenceLow)
-            TextField("labs.add.referenceHigh", text: $referenceHighText)
-                .keyboardType(.decimalPad)
-                .focused($focusedField, equals: .referenceHigh)
+            LabFormField("biomarker.editor.panel") {
+                TextField("labs.add.panel", text: $panel)
+                    .focused($focusedField, equals: .panel)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .value }
+            }
+            LabFormField("labs.add.referenceLow") {
+                TextField("labs.add.referenceLow", text: $referenceLowText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .referenceLow)
+            }
+            LabFormField("labs.add.referenceHigh") {
+                TextField("labs.add.referenceHigh", text: $referenceHighText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .referenceHigh)
+            }
         }
     }
 
@@ -243,13 +258,14 @@ struct EditLabResultSheet: View {
                 LabQualitativeSuggestionChips(text: $qualitativeText)
             }
             DatePicker(
-                "labs.add.takenAt",
                 selection: $takenAt,
                 in: ...backdateBound,
                 displayedComponents: [.date, .hourAndMinute]
-            )
+            ) {
+                HLRowTitle("labs.add.takenAt")
+            }
         } header: {
-            // 1.4 B2-c — no standing footer about a switch nobody tried.
+            // No standing footer about a switch nobody tried.
             Text("labs.add.value.section")
         }
     }
@@ -271,7 +287,7 @@ struct EditLabResultSheet: View {
         }
         if let detail = try? await store.fetchDetail(id: result.id) {
             note = detail.note ?? ""
-            // FORM-1 — the loaded note is the dirty baseline, not "".
+            // The loaded note is the dirty baseline, not "".
             initialNote = note
         } else {
             // Build 3 / item 3.2 — the detail GET failed, so the field shows ""
@@ -283,23 +299,40 @@ struct EditLabResultSheet: View {
         loadedNote = true
     }
 
-    private func save() async {
-        // Item 1.5 — send exactly the arm the operator is editing in.
+    /// The stored value as the field shows it: every digit the server holds,
+    /// so a 0,0042 stays 0,0042 instead of reading as 0.
+    nonisolated static func editableValueText(_ value: Double?, locale: Locale = .current) -> String {
+        guard let value else { return "" }
+        // An edit field needs every significant digit the server holds; the
+        // display helpers round to a fixed number of fraction digits.
+        // swiftlint:disable:next hl_number_via_helper
+        return value.formatted(.number.precision(.significantDigits(1 ... 15)).grouping(.never).locale(locale))
+    }
+
+    /// The value the save sends: only one the person changed. An untouched
+    /// field leaves the stored number alone, so editing the note or the date
+    /// can never rewrite the result.
+    nonisolated static func valueToSend(valueText: String, initialValueText: String, locale: Locale = .current) -> Double? {
+        guard valueText != initialValueText else { return nil }
+        return LocaleDecimalParser.parse(valueText, locale: locale)
+    }
+
+    /// Returns `true` when the sheet may close.
+    private func save() async -> Bool {
+        // Send exactly the arm the operator is editing in.
         let numericValue: Double?
         let qualitativeValue: String?
         switch resultType {
         case .numeric:
-            guard let parsed = parsedValue else { return }
-            numericValue = parsed
+            guard parsedValue != nil else { return false }
+            numericValue = Self.valueToSend(valueText: valueText, initialValueText: initialValueText)
             qualitativeValue = nil
         case .qualitative:
-            guard !trimmedQualitative.isEmpty else { return }
+            guard !trimmedQualitative.isEmpty else { return false }
             numericValue = nil
             qualitativeValue = trimmedQualitative
         }
-        isSaving = true
         saveError = nil
-        defer { isSaving = false }
 
         let iso = ISO8601DateFormatter()
         let trimmedNote = note.trimmingCharacters(in: .whitespaces)
@@ -311,7 +344,9 @@ struct EditLabResultSheet: View {
         var patch = LabResultPatch(
             value: numericValue,
             valueText: qualitativeValue,
-            takenAt: iso.string(from: takenAt),
+            // An untouched date keeps the stored value: a date-only reading
+            // (noon or midnight UTC) stays date-only instead of becoming local noon.
+            takenAt: takenAt == initialTakenAt ? result.takenAt : iso.string(from: takenAt),
             note: noteLoadFailed ? .unchanged : .fromEditor(trimmedNote)
         )
         if !isLinked {
@@ -322,15 +357,15 @@ struct EditLabResultSheet: View {
             // bug, same fix. A cleared bound sends `null`, a typo'd bound sends
             // nothing (see `RecordPatchField.fromEditor`) so a slip of the
             // finger can never wipe a stored range.
-            patch.panel = .fromEditor(panel)
+            patch.panel = .fromEditor(LabPanelName.toSave(typed: panel, stored: result.panel))
             patch.referenceLow = .fromEditor(referenceLowText, parse: { LocaleDecimalParser.parse($0) })
             patch.referenceHigh = .fromEditor(referenceHighText, parse: { LocaleDecimalParser.parse($0) })
         }
 
         if await store.updateLab(id: result.id, patch) {
-            dismiss()
-        } else {
-            saveError = store.lastError ?? String(localized: "labs.save.failed")
+            return true
         }
+        saveError = store.lastError ?? String(localized: "labs.save.failed")
+        return false
     }
 }

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Renders the four scatter-correlation cards from `comprehensive.digest`.
 ///
-/// **Background (A8 §7):** Server emits four correlation matrices on
+/// **Background:** Server emits four correlation matrices on
 /// `/api/insights/comprehensive` — BP × Weight, BP × Medication-Compliance,
 /// Mood × BP, Mood × Weight, Mood × Pulse. Until v0.4.0 iOS rendered none
 /// of them (the placeholder `/api/insights/correlations` route returns `[]`).
@@ -29,7 +29,7 @@ public enum CorrelationPair: CaseIterable, Sendable {
     case moodPulse
     case moodWeight
 
-    /// **A360 H2 (v0156)** — the Coach launch scope spanning both metrics in this
+    /// The Coach launch scope spanning both metrics in this
     /// pair, so an "Ask the coach about this" tap opens the Coach pre-scoped to
     /// exactly the relationship the card describes (web parity with
     /// `correlation-card.tsx`'s `COACH_SOURCES_BY_KIND`).
@@ -43,7 +43,7 @@ public enum CorrelationPair: CaseIterable, Sendable {
         }
     }
 
-    /// **A360 H2 (v0156)** — a localized composer opener referencing this pair's
+    /// A localized composer opener referencing this pair's
     /// relationship, so the Coach composer pre-fills instead of opening blank.
     public var coachSeed: String {
         switch self {
@@ -66,10 +66,10 @@ public struct CorrelationsPanel: View {
     /// The subset of pairs this panel renders. The overview passed `.allCases`
     /// (now relocated per-metric); a metric page passes only the pair(s) it owns.
     let pairs: Set<CorrelationPair>
-    /// **A360 H2 (v0156)** — "Ask the coach about this" affordance per correlation
+    /// "Ask the coach about this" affordance per correlation
     /// card. The host opens the Coach pre-scoped to both metrics in the tapped
     /// pair (`pair.coachLaunchScope`) with a localized opener (`pair.coachSeed`).
-    /// `nil` (the Coach surface gated off / standalone) hides the affordance.
+    /// `nil` (the Coach surface gated off) hides the affordance.
     let onAskCoach: ((CorrelationPair) -> Void)?
 
     public init(
@@ -82,7 +82,7 @@ public struct CorrelationsPanel: View {
         self.onAskCoach = onAskCoach
     }
 
-    /// #115 P2 — the weight axis (title and scatter values) reads in the
+    /// The weight axis (title and scatter values) reads in the
     /// account's unit; the digest scatter is canonical kg.
     @Environment(\.unitPreferences) private var unitPreferences
 
@@ -92,8 +92,8 @@ public struct CorrelationsPanel: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            // MED-2: the section label is owned by the ONE canonical
-            // `InsightsSectionHeader` at the call site (inline row) /
+            // The section label is owned by the ONE canonical
+            // `HLSectionHeader` at the call site (inline row) /
             // `navigationTitle` (standalone screen). The panel no longer paints
             // its own duplicate header.
 
@@ -105,6 +105,7 @@ public struct CorrelationsPanel: View {
                scatter.count >= 5
             {
                 CorrelationCard(
+                    titleKey: "Blood pressure × medication compliance",
                     title: String(localized: "Blood pressure × medication compliance"),
                     strength: strengthLabel(corr.strength),
                     interpretation: bpMedicationInterpretation(corr: corr),
@@ -124,6 +125,7 @@ public struct CorrelationsPanel: View {
                scatter.count >= 5
             {
                 CorrelationCard(
+                    titleKey: "Weight × blood pressure",
                     title: String(localized: "Weight × blood pressure"),
                     strength: strengthLabel(corr.strength),
                     interpretation: "",
@@ -143,6 +145,7 @@ public struct CorrelationsPanel: View {
                scatter.count >= 5
             {
                 CorrelationCard(
+                    titleKey: "Mood × blood pressure",
                     title: String(localized: "Mood × blood pressure"),
                     strength: strengthLabel(corr.strength),
                     interpretation: "",
@@ -162,6 +165,7 @@ public struct CorrelationsPanel: View {
                scatter.count >= 5
             {
                 CorrelationCard(
+                    titleKey: "Mood × heart rate",
                     title: String(localized: "Mood × heart rate"),
                     strength: strengthLabel(corr.strength),
                     interpretation: "",
@@ -181,6 +185,7 @@ public struct CorrelationsPanel: View {
                scatter.count >= 5
             {
                 CorrelationCard(
+                    titleKey: "Mood × weight",
                     title: String(localized: "Mood × weight"),
                     strength: strengthLabel(corr.strength),
                     interpretation: "",
@@ -198,10 +203,10 @@ public struct CorrelationsPanel: View {
             // full-set "no correlations yet" card: since I-1 D every caller
             // passes its own subset, so it could never show).
             if hasAnyCard {
-                // v0.11 — causal-misread guard. A correlation card is the
+                // Causal-misread guard. A correlation card is the
                 // highest-risk surface for "X causes Y" misreading.
                 //
-                // UI-Standard R17 (U1) — the line is a READING INSTRUCTION for
+                // UI-Standard R17 — the line is a READING INSTRUCTION for
                 // the number above it, not a disclaimer: it is now the same
                 // three words the mood cross-tab already uses („Zusammenhänge,
                 // keine Ursachen."). The „talk to your doctor" tail fell — that
@@ -219,7 +224,7 @@ public struct CorrelationsPanel: View {
                 //
                 // 1.4.1 — the reading instruction says what the number is not;
                 // the link says where the method comes from. Both belong to the
-                // same correlation statement, so they share one line (1.4 B2),
+                // same correlation statement, so they share one line,
                 // stacked only when the line is too narrow for both.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: HLSpace.md) {
@@ -237,8 +242,7 @@ public struct CorrelationsPanel: View {
 
     private var disclaimer: some View {
         Text("correlations.disclaimer")
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("insights.correlations.disclaimer")
     }
@@ -318,6 +322,9 @@ public struct CorrelationsPanel: View {
 // MARK: - CorrelationCard
 
 private struct CorrelationCard<Point: Sendable>: View {
+    /// The pair as the card head shows it.
+    let titleKey: LocalizedStringKey
+    /// The same pair, resolved, for the chart's VoiceOver descriptor.
     let title: String
     /// Short strength word ("schwach"/"mittel"/"stark").
     let strength: String
@@ -329,95 +336,58 @@ private struct CorrelationCard<Point: Sendable>: View {
     let xValue: (Point) -> Double
     let yValue: (Point) -> Double
     let tone: Color
-    /// A360 H2 — fired when the user taps "Ask the coach about this" on this card.
-    /// `nil` hides the affordance (Coach gated off / standalone).
+    /// Fired when the user taps "Ask the coach about this" on this card.
+    /// `nil` hides the affordance (Coach gated off).
     var onAskCoach: (() -> Void)?
     @Environment(\.appContainer) private var appContainer
 
-    /// The trailing chip on the SAME row as the pair label: the strength and
-    /// the days it rests on ("Moderat, 23 Tage"). 1.4 B2 — this replaced the
-    /// "r = 0,42, basierend auf 23 Tagen" caption under the scatter; what r
-    /// means is in the method behind the Sources link and the page's (i).
+    /// The status in the card head: the strength and the days it rests on
+    /// ("Moderat, 23 Tage"). What r means is in the method behind the
+    /// Sources link and the page's (i).
     private var strengthLabel: String {
         String(localized: "correlations.chip \(strength) \(n)")
     }
 
     var body: some View {
-        // v0.14.1 §5/§8 — the Zusammenhänge block reads as grey flowing text in
-        // the SAME voice as the page's prose, NOT a loud boxed `HLCard`.
-        // The title + plain-language interpretation flow as calm grey prose
-        // (`HLText.secondary`), the scatter sits inline (no card chrome), and the
-        // sample size rides in the strength chip. Matches the operator's
-        // "not loud cards, same grey flowing style as the intro" on every metric.
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // C1 — pair label leading, strength as a trailing chip on the SAME
-            // row (like a settings row's value), instead of the strength on a
-            // separate line below.
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Text(title)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: HLSpace.sm)
-
-                Text(strengthLabel)
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .padding(.horizontal, HLSpace.sm)
-                    .padding(.vertical, HLSpace.xxs)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(HLSurface.tertiary)
-                    )
-                    .fixedSize()
-                    .accessibilityLabel(Text(strengthLabel))
-            }
-
-            if !interpretation.isEmpty {
-                Text(interpretation)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Chart {
-                ForEach(0 ..< points.count, id: \.self) { idx in
-                    let p = points[idx]
-                    PointMark(
-                        x: .value(xAxisTitle, xValue(p)),
-                        y: .value(yAxisTitle, yValue(p))
-                    )
-                    .foregroundStyle(tone)
-                    .symbolSize(40)
+        // A card like every other on the metric page: the pair in the head,
+        // the strength as its one status capsule, then the reading and the
+        // scatter.
+        HLCard(titleKey, trailing: { HLBadge(strengthLabel) }, content: {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                if !interpretation.isEmpty {
+                    Text(interpretation)
+                        .hlText(.factLabel)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            .chartXAxisLabel(xAxisTitle)
-            .chartYAxisLabel(yAxisTitle)
-            .frame(height: HLChartStyle.heightRegular)
-            .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
 
-            // A360 H2 — discreet "Ask the coach about this" footer link, scoped to
-            // both metrics in the pair. Monochrome, footnote-weight — a quiet
-            // affordance, never a loud CTA (the medication-card restraint rule).
-            // #115 · 0.2 — only while the `coach` capability offers an entry.
-            if let onAskCoach, appContainer.offersCoach {
-                Button(action: onAskCoach) {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: "sparkles")
-                            .font(.hlIcon(HLIconSize.sm))
-                        Text(String(localized: "Ask the coach about this"))
-                            .font(.hlFootnote)
+                Chart {
+                    ForEach(0 ..< points.count, id: \.self) { idx in
+                        let p = points[idx]
+                        PointMark(
+                            x: .value(xAxisTitle, xValue(p)),
+                            y: .value(yAxisTitle, yValue(p))
+                        )
+                        .foregroundStyle(tone)
+                        .symbolSize(40)
                     }
-                    .foregroundStyle(HLText.secondary)
                 }
-                .buttonStyle(.plain)
-                .padding(.top, HLSpace.xxs)
-                .accessibilityIdentifier("insights.correlations.askCoach")
+                // Values on the leading edge, like every chart with axes.
+                .hlChartValueAxis()
+                .chartXAxisLabel(xAxisTitle)
+                .hlChartUnit(yAxisTitle)
+                .frame(height: HLChartStyle.heightRegular)
+                .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
+
+                // Discreet "Ask the coach about this" footer link, scoped to
+                // both metrics in the pair. Monochrome, footnote-weight — a quiet
+                // affordance, never a loud CTA (the medication-card restraint rule).
+                // Only while the `coach` capability offers an entry.
+                if let onAskCoach, appContainer.offersCoach {
+                    HLLinkButton("Ask the coach about this", systemImage: "sparkles", alignment: .leading, action: onAskCoach)
+                        .accessibilityIdentifier("insights.correlations.askCoach")
+                }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
+        })
     }
 
     /// AX descriptor — single scatter series so VoiceOver users can rotor

@@ -32,6 +32,15 @@ public final class NutrientStore {
     /// detail surface via ``loadDaily(_:)``.
     public private(set) var dailyByCode: [NutrientCode: NutrientDailySeriesDTO] = [:]
 
+    /// #182 A2 (v1.48) — the person's own targets, keyed by raw code. Empty
+    /// until ``loadTargets()``, and on an older server.
+    public private(set) var targets: [String: NutrientPersonalTarget] = [:]
+    /// Codes whose target is being saved (the editor's button).
+    public private(set) var savingTarget: Set<String> = []
+    /// `true` once the server answered the targets read: it keeps targets
+    /// (v1.48+). An older server answers 404 and the editor is not offered.
+    public private(set) var targetsSupported = false
+
     public private(set) var isLoading = false
     /// Codes whose `/daily` series is currently in flight (detail spinner).
     public private(set) var loadingDaily: Set<NutrientCode> = []
@@ -39,7 +48,7 @@ public final class NutrientStore {
     public private(set) var isDisabled = false
     public private(set) var lastError: String?
 
-    /// **N2 — this process has already run the nutrient read-authorization
+    /// **This process has already run the nutrient read-authorization
     /// request.** Deliberately in-memory and NOT persisted: HealthKit refuses to
     /// report whether a READ permission was granted, so any persisted flag would
     /// record only *our own act*, never the truth — and a stale one would then
@@ -64,7 +73,7 @@ public final class NutrientStore {
     /// freshly granted permission lands its 30-day backfill immediately.
     private let dailySync: (any NutrientDailySyncing)?
     private var isReloading = false
-    /// #115 B5 — the zone and clock the optimistic today-row is keyed with.
+    /// The zone and clock the optimistic today-row is keyed with.
     /// Test seams; production reads the account zone (``ProfileDay``).
     @ObservationIgnored var profileTimeZone: () -> TimeZone = { ProfileDay.timeZone }
     @ObservationIgnored var now: () -> Date = { Date() }
@@ -84,7 +93,7 @@ public final class NutrientStore {
     /// The default water quick-add chip amounts (mL) — matches the web card.
     public static let waterQuickAddAmountsMl: [Double] = [200, 300, 500]
 
-    /// **14-04 (F1) — the window the Ernährung screen reads.**
+    /// **The window the Ernährung screen reads.**
     ///
     /// `GET /api/nutrients` returns one row per nutrient **with data inside the
     /// requested window** and omits the rest, and the screen used to ask for the
@@ -95,7 +104,7 @@ public final class NutrientStore {
     /// get "nothing" back — then told the reader Apple Health had not delivered.
     ///
     /// 90 is the web's own gate, not a number invented here, and it is the same
-    /// route with a different `days` — no new endpoint (L1).
+    /// route with a different `days` — no new endpoint.
     public nonisolated static let overviewWindowDays = 90
     /// The server's own default, and the fallback if a deployed server refuses
     /// the widened window (see ``readOverview(days:)``).
@@ -121,9 +130,9 @@ public final class NutrientStore {
         moduleGate?.isEnabled(.nutrients) != false
     }
 
-    // MARK: - HealthKit access lifecycle (N2)
+    // MARK: - HealthKit access lifecycle
 
-    /// **N2 — the state-driven counterpart to the settings toggle.**
+    /// **The state-driven counterpart to the settings toggle.**
     ///
     /// Until N2 the dietary read-authorization was requested at exactly one
     /// place: the moment somebody flipped the `nutrients` switch
@@ -174,7 +183,7 @@ public final class NutrientStore {
         await load(days: windowDays)
     }
 
-    /// **N2 — the one action the "module is off" empty state offers.**
+    /// **The one action the "module is off" empty state offers.**
     ///
     /// Flips the module ON server-side and then walks the same path the
     /// switchboard walks: request the dietary read authorization, run a first
@@ -219,7 +228,7 @@ public final class NutrientStore {
         }
     }
 
-    /// **14-04 (F1)** — read the window, and degrade honestly if the deployed
+    /// Read the window, and degrade honestly if the deployed
     /// server refuses it.
     ///
     /// The `days` parameter is part of the published route, but its ceiling is
@@ -259,7 +268,7 @@ public final class NutrientStore {
     /// Fetch (or refresh) one nutrient's day-series + reference for the detail
     /// surface. Idempotent per code; a `403` flips ``isDisabled``.
     ///
-    /// **Audit B-4 — the sentinel never reaches the query string.**
+    /// **The sentinel never reaches the query string.**
     /// `/api/nutrients/daily` validates `nutrient` against the server catalogue
     /// enum and answers 400 for `__UNKNOWN__`; there is also nothing to fetch,
     /// since the sentinel is a bucket rather than a catalogue member. The list
@@ -275,6 +284,53 @@ public final class NutrientStore {
             isDisabled = false
         } catch {
             handle(error)
+        }
+    }
+
+    // MARK: - Personal targets (#182 A2)
+
+    /// The target for one nutrient: the saved list first, else the series'
+    /// `personalTarget` (the detail may open before the list is read).
+    public func personalTarget(for code: NutrientCode) -> NutrientPersonalTarget? {
+        targets[code.rawValue] ?? dailyByCode[code]?.personalTarget
+    }
+
+    /// `GET /api/nutrients/targets`. Best-effort: an older server without the
+    /// route (404) or any failure keeps what is known; `403 module.disabled`
+    /// flips ``isDisabled`` like every read here.
+    public func loadTargets() async {
+        do {
+            targets = try await repository.targets().targets
+            targetsSupported = true
+        } catch {
+            if NutrientReadRepository.isNutrientsDisabled(error) { isDisabled = true }
+        }
+    }
+
+    /// Sets (or, with `nil`, clears) one nutrient's target. Returns `true`
+    /// once the server has it; on a refusal the editor stays open with
+    /// ``lastError`` set. The detail's series takes the new target at once.
+    @discardableResult
+    public func setTarget(_ target: NutrientPersonalTarget?, for code: NutrientCode) async -> Bool {
+        guard code != .unknown else { return false }
+        let key = code.rawValue
+        savingTarget.insert(key)
+        defer { savingTarget.remove(key) }
+        do {
+            let merged = try await repository.updateTargets(NutrientTargetsPatchDTO(targets: [key: target]))
+            targets = merged.targets
+            if let series = dailyByCode[code] {
+                dailyByCode[code] = series.withPersonalTarget(merged.targets[key])
+            }
+            lastError = nil
+            return true
+        } catch {
+            if NutrientReadRepository.isNutrientsDisabled(error) {
+                isDisabled = true
+            } else {
+                applyError(error)
+            }
+            return false
         }
     }
 
@@ -345,7 +401,7 @@ public final class NutrientStore {
         }
     }
 
-    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// The visible error is localized copy, not a Swift description.
     /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
     /// user-facing surface; the sanitized description belongs in the log line,
     /// where triage reads it. `HLError.userFacingText(for:)` resolves the
@@ -355,7 +411,7 @@ public final class NutrientStore {
         lastError = HLError.userFacingText(for: error)
     }
 
-    /// `yyyy-MM-dd` of today in the ACCOUNT zone (#115 B5) — the zone the
+    /// `yyyy-MM-dd` of today in the ACCOUNT zone — the zone the
     /// server keys a water quick-add without a `day` in (`userDayKey(now,
     /// user.timezone)`) and the zone the upload keys its HealthKit day totals
     /// in (Audit B-7, `HealthKitStatisticsService` on ``ProfileTimeZoneBox``).
@@ -374,12 +430,15 @@ extension NutrientStore: LogoutClearable {
     public func clearOnLogout() {
         rows = []
         dailyByCode = [:]
+        targets = [:]
+        savingTarget = []
+        targetsSupported = false
         loadingDaily = []
         windowDays = 14
         isLoading = false
         isDisabled = false
         lastError = nil
-        // N2 — the next user on this device must run the lifecycle again. The
+        // The next user on this device must run the lifecycle again. The
         // HealthKit prompt itself will stay silent for already-determined types,
         // but the first sync it kicks carries the NEW user's per-user backfill,
         // which would otherwise wait for a foreground sweep.

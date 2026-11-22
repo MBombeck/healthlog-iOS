@@ -3,7 +3,7 @@
     import AppIntents
     import Foundation
 
-    /// **v0.10 W-LiveActivity-POLISH — the medication Live-Activity "Genommen"
+    /// **The medication Live-Activity "Genommen"
     /// button.**
     ///
     /// Unlike the Siri/Spotlight ``MarkMedicationTakenIntent`` (which has no
@@ -34,7 +34,7 @@
     /// fallback on a retriable network error — that the in-app card, the Siri
     /// intent, and the notification action handler use.
     struct MarkDoseFromLiveActivityIntent: LiveActivityIntent {
-        static let title: LocalizedStringResource = "la.med.action.taken"
+        static let title: LocalizedStringResource = "med.dose.action.take"
         static let openAppWhenRun: Bool = false
 
         @Parameter(title: "Medication ID")
@@ -50,47 +50,37 @@
             self.scheduledFor = scheduledFor
         }
 
-        /// Auto-revert window: how long the `pendingConfirm` ("Erneut tippen
-        /// zum Bestätigen") state stays armed before it reverts to the plain
-        /// "Genommen" button if no second tap lands. 4 s is long enough for a
-        /// deliberate second tap, short enough that a stale armed button never
-        /// lingers on the Lock Screen.
-        static let pendingConfirmWindow: Duration = .seconds(4)
-
+        /// **#188 (7) — one tap.** The button records on the first tap. The
+        /// two-step confirm guarded against an accidental tap because nothing
+        /// could undo it; the next open of the app now offers that undo
+        /// (``ExternalTakeLog``), so the Lock Screen behaves like every other
+        /// surface. A running Activity from an older build that is still armed
+        /// (`pendingConfirm`) records on the next tap as well.
         @MainActor
         func perform() async throws -> some IntentResult {
-            // LA2 — anti-accidental TWO-STEP tap-confirm. Resolve which step we
-            // are on from the running Activity's current ContentState. One
-            // accidental tap can therefore NEVER record an intake — the first
-            // tap only arms the confirm state.
             switch tapStep() {
             case .none:
                 // No matching pending Activity (already confirmed / none
                 // running) — pure no-op.
                 return .result()
-
-            case let .arm(armed):
-                // FIRST tap: flip to the pending-confirm state in-place. The
-                // button relabels to "Erneut tippen zum Bestätigen"; NO intake
-                // recorded yet. Then hold the window and auto-revert if the
-                // second tap never came.
-                await applyState(armed)
-                try? await _Concurrency.Task.sleep(for: Self.pendingConfirmWindow)
-                await revertIfStillPending(armed.pendingConfirmStartedAt)
-                return .result()
-
             case let .commit(confirming):
-                // SECOND tap (button was armed): actually record the dose.
                 await commit(confirming)
                 return .result()
             }
         }
 
-        /// Step 2 of the two-step confirm — the real record + confirm + end.
         @MainActor
         private func commit(
             _ confirming: MedicationActivityAttributes.ContentState
         ) async {
+            // 1. Signed out nothing can be recorded, so no check is shown either.
+            //    The Activity falls back to its plain button.
+            let deps = IntentDependencies.resolve()
+            guard IntentDependencies.isSignedIn(deps) else {
+                await applyState(Self.reverted(from: confirming))
+                return
+            }
+
             // 2. Flip to confirmed IMMEDIATELY (optimistic) so the green check
             //    animates the instant the finger lifts — before the network.
             //    Each ActivityKit mutation is awaited inline inside a helper so
@@ -101,24 +91,37 @@
             // 3. Record server-first (idempotency-keyed, Outbox fallback) against
             //    the SCHEDULED instant — not "now" — so the row collapses onto the
             //    in-app card's row.
-            let deps = IntentDependencies.resolve()
-            if IntentDependencies.isSignedIn(deps) {
-                do {
-                    try await deps.medicationsRepo.recordFromReminder(
-                        medicationId: medicationId,
-                        scheduledFor: scheduledFor,
-                        status: .taken
-                    )
-                } catch {
-                    // Retriable errors are already enqueued on the Outbox inside
-                    // recordFromReminder; the check stays (optimistic) — the dose
-                    // IS recorded, just not yet synced. Non-retriable: logged, the
-                    // check stays (the user DID press taken).
-                    HLLog.notifications.error(
-                        "LA mark-taken failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
-                    )
-                }
+            var failure: Error?
+            var receipt: ReminderIntakeReceipt?
+            let idempotencyKey = IdempotencyKey()
+            do {
+                receipt = try await deps.medicationsRepo.recordFromReminderReturningReceipt(
+                    medicationId: medicationId,
+                    scheduledFor: scheduledFor,
+                    status: .taken,
+                    idempotencyKey: idempotencyKey
+                )
+            } catch {
+                failure = error
+                HLLog.notifications.error(
+                    "LA mark-taken failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                )
             }
+            // A queued write keeps the check (it is saved and will sync). A
+            // dropped one takes it back, so the Lock Screen never claims a dose
+            // that no ledger will ever see.
+            guard Self.commitOutcome(signedIn: true, error: failure) == .recorded else {
+                await applyState(Self.reverted(from: confirming))
+                return
+            }
+            // R1 (1): bound to the row this tap wrote; `alreadyTaken` keeps
+            // the check but logs nothing, so no undo can remove another take.
+            ExternalTakeLog().record(
+                medicationId: medicationId,
+                scheduledFor: scheduledFor,
+                source: .liveActivity,
+                binding: ExternalTakeLog.Binding.forCommit(error: failure, receipt: receipt, idempotencyKey: idempotencyKey.raw)
+            )
 
             // 4. Hold the green-check confirmation frame (~1.6 s — long enough to
             //    read the check + feel acknowledged, short enough not to linger),
@@ -128,8 +131,7 @@
             await endActivity(with: confirming)
         }
 
-        /// Resolve which step of the two-step confirm the running Activity is
-        /// on, mapping its current `ContentState` through the pure
+        /// Resolve what a tap on the running Activity does, mapping its current `ContentState` through the pure
         /// ``MarkDoseFromLiveActivityIntent/step(for:)`` decision.
         ///
         /// `nonisolated` so the (non-`Sendable`) `Activity` originates in a
@@ -141,68 +143,69 @@
             return Self.step(for: activity.content.state)
         }
 
-        /// Pure, Activity-free decision for the two-step confirm state machine —
-        /// extracted so it is unit-testable without a live ActivityKit Activity.
+        /// Pure, Activity-free decision for a tap — extracted so it is
+        /// unit-testable without a live ActivityKit Activity.
         ///
         /// - `confirmed` already true → `.none` (idempotent; a stray tap on an
         ///   already-recorded dose does nothing).
-        /// - `pendingConfirm == false` → `.arm` with the same dose flipped into
-        ///   the pending-confirm state (FIRST tap — no intake yet).
-        /// - `pendingConfirm == true` → `.commit` with the dose flipped to
-        ///   `confirmed`/`.taken` (SECOND tap — records the intake).
+        /// - otherwise → `.commit` with the dose flipped to `confirmed`/`.taken`,
+        ///   armed (`pendingConfirm`, older builds) or not (#188 (7)).
         static func step(
             for state: MedicationActivityAttributes.ContentState,
-            now: Date = .now
+            now _: Date = .now
         ) -> TapStep {
             guard state.confirmed == false else { return .none }
-            if state.pendingConfirm {
-                var confirming = state
-                confirming.status = .taken
-                confirming.confirmed = true
-                confirming.pendingConfirm = false
-                confirming.pendingConfirmStartedAt = nil
-                return .commit(confirming)
-            }
-            var armed = state
-            armed.pendingConfirm = true
-            armed.pendingConfirmStartedAt = now
-            return .arm(armed)
+            var confirming = state
+            confirming.status = .taken
+            confirming.confirmed = true
+            confirming.pendingConfirm = false
+            confirming.pendingConfirmStartedAt = nil
+            return .commit(confirming)
         }
 
-        /// Result of the two-step decision. Carries the plain-value
+        enum CommitOutcome: Equatable {
+            /// Saved on the server or durably queued: the check stays.
+            case recorded
+            /// Nothing was saved: back to the plain button.
+            case notRecorded
+        }
+
+        /// Pure rule behind the check: only a write that landed or sits in
+        /// the outbox counts. Signed out or a non-retriable failure is not one.
+        static func commitOutcome(signedIn: Bool, error: Error?) -> CommitOutcome {
+            guard signedIn else { return .notRecorded }
+            guard let error else { return .recorded }
+            // #189 (6): taken already, elsewhere — the check is the truth.
+            if error is MedicationAlreadyTaken { return .recorded }
+            if let hlError = error as? HLError, hlError.shouldPersistToOutbox { return .recorded }
+            return .notRecorded
+        }
+
+        /// The plain pending state a failed or signed-out commit returns to.
+        static func reverted(
+            from state: MedicationActivityAttributes.ContentState
+        ) -> MedicationActivityAttributes.ContentState {
+            var reverted = state
+            reverted.status = .pending
+            reverted.confirmed = false
+            reverted.pendingConfirm = false
+            reverted.pendingConfirmStartedAt = nil
+            return reverted
+        }
+
+        /// Result of the tap decision. Carries the plain-value
         /// `ContentState` to push next, never an `Activity`.
         enum TapStep: Equatable {
             /// No actionable Activity (none running, or already confirmed).
             case none
-            /// First tap — arm the pending-confirm state (no intake recorded).
-            case arm(MedicationActivityAttributes.ContentState)
-            /// Second tap — record the intake + confirm + end.
+            /// Record the intake + confirm + end.
             case commit(MedicationActivityAttributes.ContentState)
-        }
-
-        /// Auto-revert the armed pending-confirm state if no second tap landed.
-        /// Reverts only when the Activity is STILL in the same armed window
-        /// (matching `pendingConfirmStartedAt`) and not yet confirmed — so a
-        /// committed second tap, or a freshly re-armed window, is never clobbered.
-        private nonisolated func revertIfStillPending(_ startedAt: Date?) async {
-            guard let activity = runningActivity() else { return }
-            let current = activity.content.state
-            guard
-                current.confirmed == false,
-                current.pendingConfirm,
-                current.pendingConfirmStartedAt == startedAt else
-            {
-                return
-            }
-            var reverted = current
-            reverted.pendingConfirm = false
-            reverted.pendingConfirmStartedAt = nil
-            await activity.update(ActivityContent(state: reverted, staleDate: nil))
         }
 
         /// Push an updated `ContentState` to the running Activity. The lookup +
         /// `await` happen in one `nonisolated` body so the `Activity` value never
         /// leaves a MainActor region (it was never in one).
+        @concurrent
         private nonisolated func applyState(_ state: MedicationActivityAttributes.ContentState) async {
             guard let activity = runningActivity() else { return }
             await activity.update(ActivityContent(state: state, staleDate: nil))
@@ -210,6 +213,7 @@
 
         /// End the running Activity with the confirmed final frame, fading it off
         /// the Lock Screen shortly after.
+        @concurrent
         private nonisolated func endActivity(with state: MedicationActivityAttributes.ContentState) async {
             guard let activity = runningActivity() else { return }
             await activity.end(
@@ -218,9 +222,14 @@
             )
         }
 
+        /// The live Activity of exactly this dose. A tap that arrives after the
+        /// Activity was replaced for a later slot finds nothing and books nothing.
         private nonisolated func runningActivity() -> Activity<MedicationActivityAttributes>? {
-            Activity<MedicationActivityAttributes>.activities
-                .first { $0.attributes.medicationId == medicationId }
+            Activity<MedicationActivityAttributes>.activities.first {
+                $0.attributes.medicationId == medicationId
+                    && abs($0.attributes.intakeScheduledFor.timeIntervalSince(scheduledFor)) < 1
+                    && ($0.activityState == .active || $0.activityState == .stale)
+            }
         }
     }
 #endif

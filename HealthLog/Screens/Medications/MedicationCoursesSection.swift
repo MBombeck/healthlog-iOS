@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-/// **MED-PLUS (1.5.0, #126 3.4) — the treatment courses of a medication,
+/// **The treatment courses of a medication,
 /// under "Erweitert" on its page.**
 ///
 /// A centred text link "Erweitert" (the pattern of the Coach and the report
@@ -12,9 +12,8 @@ import SwiftUI
 /// delete it; "Neue Behandlung starten" appears only where the server says
 /// `canStartCourse`. Ending stays the edit sheet's "Behandlung beenden" (MED).
 ///
-/// Shown only with a paired server whose rows carry the course summary
-/// (v1.40, `courseCount`); an older server and a standalone install see the
-/// page as before. The list is read when the person opens it, not on every
+/// Shown only with a server whose rows carry the course summary
+/// (v1.40, `courseCount`); an older server sees the page as before. The list is read when the person opens it, not on every
 /// visit. A refusal (the module off, or a delegate: the read is owner-only)
 /// shows ``FeatureDisabledCard``; any other failure one sentence and "Retry".
 struct MedicationCoursesSection: View {
@@ -27,7 +26,7 @@ struct MedicationCoursesSection: View {
     @State private var isExpanded = false
 
     var body: some View {
-        if let container, container.syncModeStore.isPaired, medication.offersCourseHistory {
+        if let container, medication.offersCourseHistory {
             VStack(spacing: HLSpace.sm) {
                 advancedLink
                 if isExpanded {
@@ -53,24 +52,10 @@ struct MedicationCoursesSection: View {
     }
 
     private var advancedLink: some View {
-        Button {
+        HLLinkButton("Advanced", isExpanded: isExpanded) {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isExpanded.toggle() }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text("Advanced")
-                    .font(.hlSubhead.weight(.semibold))
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("med.courses.advanced")
-        .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
     }
 
     @ViewBuilder
@@ -78,11 +63,9 @@ struct MedicationCoursesSection: View {
         switch model.state {
         case .idle:
             // A real view, so the `.task` above runs (it never does on `EmptyView`).
-            HStack {
-                ProgressView()
-            }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .accessibilityLabel(Text("med.courses.loading"))
+            HLInlineProgress()
+                .frame(maxWidth: .infinity, minHeight: HLHitTarget.minimum)
+                .accessibilityLabel(Text("med.courses.loading"))
         case let .loaded(list):
             MedicationCoursesCard(list: list, medication: medication, model: model)
         case let .disabled(reason):
@@ -91,12 +74,11 @@ struct MedicationCoursesSection: View {
         case .failed:
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("med.courses.title")
+                    HLCardLabel("med.courses.title")
                     Text("med.courses.loadFailed")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary, size: .compact) {
+                    HLButton(HLControlWord.retry.key, variant: .secondary) {
                         Task { await model.reload() }
                     }
                     .accessibilityIdentifier("med.courses.retry")
@@ -115,21 +97,17 @@ struct MedicationCoursesCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HLCard {
+        HLCard("med.courses.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("med.courses.title")
                 if list.courses.isEmpty {
-                    Text("med.courses.none")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HLEmptyNote("med.courses.none")
                 } else {
                     ForEach(list.newestFirst) { course in
                         row(course)
                     }
                 }
                 if MedicationCoursesModel.offersStart(list: list, medication: medication) {
-                    HLButton("med.lifecycle.start", variant: .secondary, size: .compact) {
+                    HLButton("med.lifecycle.start", variant: .secondary) {
                         Task { await model.start() }
                     }
                     .disabled(model.isWorking)
@@ -149,13 +127,11 @@ struct MedicationCoursesCard: View {
     @ViewBuilder
     private func row(_ course: MedicationCourse) -> some View {
         if course.isCorrectable {
-            NavigationLink {
-                MedicationCourseEditPage(course: course, model: model)
-            } label: {
-                MedicationCourseRowLabel(course: course, stacked: dynamicTypeSize.isAccessibilitySize, opens: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("med.courses.row.\(course.id)")
+            // A course is an entry, not a menu: the whole row opens it and
+            // carries no chevron (Z2+).
+            MedicationCourseRowLabel(course: course, stacked: dynamicTypeSize.isAccessibilitySize, opens: true)
+                .hlRowLink { MedicationCourseEditPage(course: course, model: model) }
+                .accessibilityIdentifier("med.courses.row.\(course.id)")
         } else {
             MedicationCourseRowLabel(course: course, stacked: dynamicTypeSize.isAccessibilitySize, opens: false)
                 .accessibilityIdentifier("med.courses.row.\(course.id)")
@@ -170,29 +146,11 @@ struct MedicationCourseRowLabel: View {
     let opens: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: HLSpace.sm) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(verbatim: MedicationCourseFormat.range(course))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let status = MedicationCourseFormat.status(course) {
-                    Text(verbatim: status)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if opens, !stacked {
-                Image(systemName: "chevron.right")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(.vertical, HLSpace.xxs)
-        .contentShape(Rectangle())
+        HLRowLayout(
+            title: Text(verbatim: MedicationCourseFormat.range(course)),
+            subtitle: MedicationCourseFormat.status(course).map { Text(verbatim: $0) },
+            indicator: .hidden
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: MedicationCourseFormat.accessibilityLabel(course)))
         .accessibilityAddTraits(opens ? .isButton : [])

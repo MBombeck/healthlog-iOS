@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.4 B4 — one unit per value, everywhere.**
+/// **One unit per value, everywhere.**
 ///
 /// Energy expenditure arrives in kJ (WHOOP's unit; the server keeps it and has
 /// no energy preference). The recovery page converted it to kcal (plan
@@ -42,11 +42,5 @@ struct EnergyAndStrainUnitTests {
         #expect(transform.display(12.4) == 12.4)
         #expect(units.unitLabel(for: kind) == String(localized: "metric.strain.ofTwentyOne"))
         #expect(String(localized: kind.descriptor.unitLabel) == String(localized: "metric.strain.ofTwentyOne"))
-    }
-
-    @Test("the recovery page and the metric page write energy the same way")
-    func recoveryRowMatchesTransform() {
-        let row = RecoveryValueText.value(10460, kind: .energyExpenditureKJ)
-        #expect(row == "\(2500.formatted(.number)) \(String(localized: "kcal"))")
     }
 }

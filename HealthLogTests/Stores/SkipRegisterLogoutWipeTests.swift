@@ -5,7 +5,7 @@
     @testable import HealthLog
     import Testing
 
-    /// #113 — the skip register holds health values of the signed-in account;
+    /// The skip register holds health values of the signed-in account;
     /// every logout reason removes them, like every other account-bound store.
     @MainActor
     @Suite("Skip register logout wipe (#113)", .serialized)
@@ -34,7 +34,7 @@
                 endDate: Date(timeIntervalSince1970: 1_726_300_800),
                 externalId: "logout-wipe-\(reason)"
             )
-            // INT-A — nutrient refusals live in the same register and go too.
+            // Nutrient refusals live in the same register and go too.
             let nutrient = NutrientIntakeEntryDTO(day: "2026-09-14", nutrient: .zinc, unit: "mg", amount: 999_999)
             try await HealthKitSkippedRowRegister.shared.record(
                 [

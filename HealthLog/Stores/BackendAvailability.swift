@@ -2,30 +2,18 @@ import Foundation
 import Observation
 
 /// Single read-only **capability surface** that views and stores consult instead
-/// of hard-reading `SyncModeStore.isStandalone` (and `AuthStore.phase`,
-/// `Reachability`) scattered across the codebase.
+/// of hard-reading `AuthStore.phase` and `Reachability` scattered across the
+/// codebase.
 ///
-/// **R4 §3.1 (offline-architecture research) — groundwork primitive.** It models
-/// whether the HealthLog backend is *reachable and usable* by folding three
-/// existing signals into one observable:
+/// It models whether the HealthLog
+/// backend is *reachable and usable* by folding two signals into one observable:
 ///
-/// 1. **Mode** — derived from ``SyncModeStore``. A `.standalone` install has no
-///    server by definition; a `.paired` install expects one.
-/// 2. **Auth** — derived from ``AuthStore/Phase``. Even a paired install loses
-///    the backend the instant the session is invalidated (401-cascade →
+/// 1. **Auth** — derived from ``AuthStore/Phase``. The install loses the
+///    backend the instant the session is invalidated (401-cascade →
 ///    `.unauthenticated`).
-/// 3. **Reachability** — the cheap interface signal from ``Reachability``. A
-///    paired + authenticated user behind a dead network can still *use* cached
-///    data, so reachability gates ``isReachable`` but **not** ``hasServer`` /
-///    the capability flags (those describe whether the surface exists at all,
-///    not whether it can refresh this instant).
-///
-/// **Paired-path invariant (the whole point of this groundwork):** on a normal
-/// paired + authenticated install every capability flag returns `true`, exactly
-/// as the scattered `!isStandalone` checks do today. Nothing user-visible
-/// changes. The value of the abstraction is the *seam*: when v0.11 flips
-/// standalone on, surfaces flip to their placeholder by populating capabilities
-/// here, not by touching every view twice.
+/// 2. **Reachability** — the cheap interface signal from ``Reachability``. An
+///    authenticated user behind a dead network can still *use* cached data, so
+///    reachability gates ``isReachable`` only.
 ///
 /// `@MainActor @Observable` — read on the main actor by SwiftUI views. The
 /// online flag is fed from the actor-isolated ``Reachability`` stream via
@@ -35,17 +23,6 @@ import Observation
 @MainActor
 @Observable
 public final class BackendAvailability {
-    /// Coarse runtime classification a screen can branch on.
-    public enum Mode: Sendable, Equatable {
-        /// The install is paired with a server (token expected). Server-derived
-        /// surfaces are live (subject to ``isReachable`` for *fresh* data).
-        case paired
-        /// The install runs fully local — no server account, no token. Every
-        /// server-derived surface renders its ``HLCloudDerivedPlaceholder``.
-        case standalone
-    }
-
-    private weak var syncMode: SyncModeStore?
     private weak var authStore: AuthStore?
 
     /// Interface-level connectivity, fed from ``Reachability/isOnlineStream``.
@@ -53,10 +30,10 @@ public final class BackendAvailability {
     /// before the first path update lands (matching `ReachabilityBanner`).
     public private(set) var isOnline: Bool = true
 
-    /// **R1 — ist überhaupt eine Serveradresse hinterlegt?**
+    /// **Ist überhaupt eine Serveradresse hinterlegt?**
     ///
     /// Beobachtbare Spiegelung von ``AppEnvironment/isServerConfigured``. Die
-    /// drei Signale oben beantworten „darf/kann diese Installation mit einem
+    /// zwei Signale oben beantworten „darf/kann diese Installation mit einem
     /// Server reden"; dieses hier beantwortet die Frage davor: *kennt sie
     /// überhaupt eine Adresse*. Ohne sie wirft jeder Request
     /// ``HLError/serverNotConfigured``, bevor ein Transport anläuft — kein
@@ -71,8 +48,7 @@ public final class BackendAvailability {
 
     private var streamTask: Task<Void, Never>?
 
-    public init(syncMode: SyncModeStore?, authStore: AuthStore?, hasServerAddress: Bool = true) {
-        self.syncMode = syncMode
+    public init(authStore: AuthStore?, hasServerAddress: Bool = true) {
         self.authStore = authStore
         self.hasServerAddress = hasServerAddress
     }
@@ -98,74 +74,20 @@ public final class BackendAvailability {
 
     // MARK: - Derived state
 
-    /// `.standalone` iff the runtime ``SyncMode`` is standalone; `.paired`
-    /// otherwise (including before onboarding resolves a mode — a fresh paired
-    /// install is the default expectation).
-    public var mode: Mode {
-        syncMode?.isStandalone == true ? .standalone : .paired
-    }
-
-    /// True iff this install is paired with a server. The single signal that
-    /// gates whether a server-derived surface *exists* (vs renders the
-    /// placeholder). In paired mode this is always `true`.
-    public var hasServer: Bool {
-        mode == .paired
-    }
-
-    /// True iff a paired install currently holds a usable session. A paired
-    /// install whose token was invalidated (401-cascade → `.unauthenticated`)
-    /// reports `false` even though `hasServer` stays `true` — the server exists,
-    /// we just can't talk to it until re-auth.
+    /// True iff the install currently holds a usable session. An install whose
+    /// token was invalidated (401-cascade → `.unauthenticated`) reports
+    /// `false` — the server exists, we just can't talk to it until re-auth.
     public var isAuthenticated: Bool {
         switch authStore?.phase {
         case .authenticated, .authenticating: true
-        case .standalone, .unauthenticated, .unknown, nil: false
+        case .unauthenticated, .unknown, nil: false
         }
     }
 
-    /// True iff the backend is paired, authenticated, **and** the interface is
+    /// True iff the backend is authenticated **and** the interface is
     /// up — i.e. a fresh request would plausibly reach the server right now.
-    /// Use this to decide whether to *fire* a server call; use ``hasServer`` to
-    /// decide whether a *surface* should exist at all.
+    /// Use this to decide whether to *fire* a server call.
     public var isReachable: Bool {
-        hasServer && isAuthenticated && isOnline
-    }
-
-    // MARK: - Capability flags (read intent, not raw mode)
-
-    // v0.12 W7-5 — `canShowCloudBriefing` / `canShowCloudCoach` were removed:
-    // they were declared on this surface but had ZERO production call sites. The
-    // Daily Briefing gated via its hero's on-device-vs-server resolver
-    // (`hasServer = serverFallback != nil`; that hero was deleted in 1.4 B4)
-    // and the Coach via its own `standalonePlaceholder` routing in
-    // `AskCoachSheet+ServerFallback.swift`. Two dead flags invited a future
-    // maintainer to wire a third, divergent gate — deleting them keeps the
-    // capability surface honest (every flag below has a live consumer).
-
-    /// Server-computed Health Score.
-    public var canShowHealthScore: Bool {
-        hasServer
-    }
-
-    /// Server-computed Insights surfaces (correlations, trends mother-page).
-    public var canShowCloudInsights: Bool {
-        hasServer
-    }
-
-    /// Server-rendered Personal Records.
-    public var canShowPersonalRecords: Bool {
-        hasServer
-    }
-
-    // SET-V2-B — `canShowDoctorReportPDF` was removed: the consolidated
-    // the doctor-report path no longer gates a placeholder on it. The surface
-    // always renders (prefer-server via ``isReachable``, on-device fallback in
-    // standalone/offline — FW5-C pattern), so the flag lost its last consumer
-    // and keeping it would invite a divergent gate (same honesty rule as the
-    // W7-5 removals above).
-
-    /// Multi-device sync (the `/api/sync/changes` consumer, v0.11).
-    public var canSyncMultiDevice: Bool {
-        hasServer
+        isAuthenticated && isOnline
     }
 }

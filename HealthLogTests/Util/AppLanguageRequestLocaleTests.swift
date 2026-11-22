@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 L10N-CORE — what every route sends as its language (R2 3.2).**
+/// **What every route sends as its language.**
 ///
 /// Each case runs the app's own code under a pinned interface language and
 /// reads the value off the wire object the route actually sends: the query of
@@ -73,7 +73,7 @@ struct AppLanguageRequestLocaleTests {
             ("HealthLog/Screens/Insights/InsightsMetricScreen+Assessment.swift", "let locale = AppLanguage.current.serverCode"),
             ("HealthLog/Services/InsightsPrefetchService.swift", "AppLanguage.current.serverCode"),
             ("HealthLog/Stores/ChartDetailStore.swift", "AppLanguage.current.serverCode"),
-            // L10N-REPORT: the PDF goes out in the chosen report language,
+            // The PDF goes out in the chosen report language,
             // which starts as the interface language.
             ("HealthLog/Screens/Sharing/UnifiedSharingScreen.swift", "locale: store.reportLanguage.rawValue,"),
             ("HealthLog/Stores/UnifiedSharingStore.swift", "reportLanguage: ReportLocale = .init(AppLanguage.current)"),
@@ -90,7 +90,7 @@ struct AppLanguageRequestLocaleTests {
 
     // MARK: - Chat bodies
 
-    /// R2 3.2: German and English always; Dutch only to a server known to be
+    /// German and English always; Dutch only to a server known to be
     /// 1.46.2 or newer, otherwise no field. Unknown version counts as too old.
     @Test(
         "Coach and document chat bodies follow the server version",
@@ -133,7 +133,7 @@ struct AppLanguageRequestLocaleTests {
 
     // MARK: - Screener
 
-    /// L10N-MH: the screener sends the interface language with the device
+    /// The screener sends the interface language with the device
     /// region (``AppLanguage/regionTag``), so the server picks the country's
     /// crisis set. The language part is the interface language, never `de`
     /// for a French device.

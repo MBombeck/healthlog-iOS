@@ -2,37 +2,29 @@ import SwiftUI
 
 /// `/settings/ai` — KI & Insights. Mirrors `ai-section.tsx`.
 ///
-/// **UI-Standard R12 (U4) — die größte Einzelabweichung ist aufgelöst.**
+/// **UI-Standard R12 — die größte Einzelabweichung ist aufgelöst.**
 /// Dieser Screen war der einzige Einstellungs-Screen ohne Kartenhülle auf
 /// oberster Ebene: ein `ScrollView { VStack(spacing: 0) }`, dessen
 /// Blockstruktur nur dadurch entstand, dass die Seitenränder pro Block dreimal
-/// von Hand wiederholt wurden. Er war der einzige Nutzer von `HLSectionLabel`
-/// in den Einstellungen (versale Mikro-Überschriften statt Kartentitel), und
+/// von Hand wiederholt wurden. Er trug als einziger in den Einstellungen
+/// versale Mikro-Überschriften statt Kartentitel, und
 /// er bettete mit `AIProviderScreen` einen kompletten anderen Screen **samt
 /// eigenem Scrollbereich** mitten auf der Seite ein — die Formensprache
 /// wechselte im Scrollen.
 ///
-/// Jetzt: ein `HLSettingsPage`, ein Scrollbereich, ein Kartenrhythmus. Die
-/// Abschnittsmarken sind Kartentitel (R12), die Ränder kommen ausschließlich
-/// vom Primitive (R14), und der Provider-Teil ist zu einer Karten-Sektion
+/// Jetzt: ein `HLPage`, ein Scrollbereich, ein Kartenrhythmus. Die
+/// Abschnittsmarken sind Kartentitel, die Ränder kommen ausschließlich
+/// vom Primitive, und der Provider-Teil ist zu einer Karten-Sektion
 /// (``AIProviderSection``) geworden, die das Gerüst des Hosts benutzt statt ein
 /// zweites mitzubringen.
 struct SettingsAIScreen: View {
     @Environment(\.appContainer) private var appContainer
-    /// v0.11 W3 — the on-device intelligence section above (Daily Briefing,
-    /// trend hints, Coach toggles) is (A) and stays in every mode. Only the
-    /// embedded `AIProviderScreen` — the **server** provider/key/chain config —
-    /// is server-derived; in standalone it yields to `HLCloudDerivedPlaceholder`.
-    /// (§4 matrix: ai-provider = (B).)
-    @Environment(BackendAvailability.self) private var backend
-    /// v0.11 W3 — shared "Server verbinden" CTA path for the placeholder.
-    @Environment(AuthStore.self) private var authStore
-    /// v0.13 W3 — re-probe on-device availability on foreground so a disabled
+    /// Re-probe on-device availability on foreground so a disabled
     /// On-device card unlocks live after the user toggles Apple Intelligence.
     @Environment(\.scenePhase) private var scenePhase
-    /// v0.13 W3 — recovery deep-link for the disabled On-device card.
+    /// Recovery deep-link for the disabled On-device card.
     @Environment(\.openURL) private var openURL
-    /// v0.13 W4 — the inline "Own key" entry model, built lazily on first reveal
+    /// The inline "Own key" entry model, built lazily on first reveal
     /// so the drafts persist across body re-evaluations while the card is open.
     @State private var byoKeyEntryModel: BYOKeyEntryModel?
 
@@ -46,12 +38,12 @@ struct SettingsAIScreen: View {
     /// Scrollbereich dieser Seite).
     @State private var refreshTick: Int = 0
 
-    /// 1.5 COACH-R — the Coach's thinking depth, read once per visit. `nil`
+    /// The Coach's thinking depth, read once per visit. `nil`
     /// until the read lands; a server without `coachReasoning` shows nothing.
     @State private var reasoning: CoachReasoningSettingsModel?
 
     var body: some View {
-        // Bug 3 (RCA v0.14.8) — anchor the body to `AIConsentStore.revision` so
+        // Bug 3 — anchor the body to `AIConsentStore.revision` so
         // it re-renders on every mode/consent change. `displayedMode` reads
         // `aiMode`, which is *computed* from UserDefaults + Keychain (neither
         // tracked by Observation) — so without this the picker did not visibly
@@ -61,17 +53,17 @@ struct SettingsAIScreen: View {
         // surface pattern (`AIConsentStore.revision` doc-comment).
         // swiftlint:disable:next redundant_discardable_let
         let _ = appContainer?.aiConsentStore.revision
-        // R12 — EIN Gerüst, EIN Scrollbereich. Der frühere handgebaute
+        // EIN Gerüst, EIN Scrollbereich. Der frühere handgebaute
         // `ScrollView { VStack(spacing: 0) }` mit dreimal von Hand wiederholten
         // Seitenrändern und einem zweiten, eingebetteten Scrollbereich ist
         // ersatzlos gefallen; Ränder, Rhythmus und Canvas kommen jetzt aus
-        // `HLSettingsPage`. Die Y9.2-E2- und Bug-6-Reparaturen von 2026-05-23
+        // `HLPage`. Die Y9.2-E2- und Bug-6-Reparaturen von 2026-05-23
         // waren Kompensationen genau dieser Verschachtelung und sind mit ihr
         // hinfällig.
-        HLSettingsPage(title: "Assistant") {
+        HLPage {
             sourceCard
 
-            // v0.13 W4 — reveal the inline "Own key" (BYO) entry card when the
+            // Reveal the inline "Own key" (BYO) entry card when the
             // user picked it (resolved `.byoKey` OR a pending intent). Works in
             // BOTH operating modes — BYO is client-side, so it never needs a
             // server. Eigene Karte statt eingeschobener Block: sie ist eine
@@ -90,50 +82,37 @@ struct SettingsAIScreen: View {
             // block was dropped. On-device generation stays gated by the
             // server `assistant.*` flags + the mode picker above.
 
-            if displayedMode == .onDevice || backend.hasServer {
-                coachCard
-            }
+            coachCard
 
-            // 1.5 COACH-R — rare, so it waits under „Erweitert".
-            if backend.hasServer, let reasoning, reasoning.state != nil {
+            // Rare, so it waits under „Erweitert".
+            if let reasoning, reasoning.state != nil {
                 CoachReasoningAdvanced(model: reasoning)
             }
 
-            if backend.hasServer, let usage = appContainer?.aiCapabilityGate.account?.usage {
+            if let usage = appContainer?.aiCapabilityGate.account?.usage {
                 AIUsageCard(usage: usage) { level in try await AIUsageCard.choose(level, in: appContainer) }
             }
 
-            if backend.hasServer {
-                AIProviderSection()
-            } else {
-                // v0.11 W3 — standalone: no server to configure a cloud AI
-                // provider against. The on-device toggles above remain the
-                // operative controls; this placeholder explains the server
-                // provider chain is paired-only + offers the shared CTA.
-                HLCloudDerivedPlaceholder(
-                    surfaceName: String(localized: "cloud_derived.surface.ai_provider"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-            }
+            AIProviderSection()
         }
-        // R12 — Pull-to-Refresh gehört an den Scrollbereich, und den besitzt
+        // Pull-to-Refresh gehört an den Scrollbereich, und den besitzt
         // jetzt diese Seite. Vorher hing es am eingebetteten Provider-Screen
         // und aktualisierte nur dessen Ausschnitt.
         .refreshable {
-            guard backend.hasServer, let store = appContainer?.aiProviderStore else { return }
+            guard let store = appContainer?.aiProviderStore else { return }
             await store.load()
             refreshTick &+= 1
         }
-        // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
+        // Success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
         .task {
-            guard backend.hasServer, reasoning == nil, let container = appContainer else { return }
+            guard reasoning == nil, let container = appContainer else { return }
             let model = CoachReasoningSettingsModel(repo: AICoachSettingsRepository(api: container.api))
             await model.load()
             reasoning = model
         }
         .onAppear {
-            // v0.13 W4 — if the screen opens already in "Own key" mode (prior
+            // If the screen opens already in "Own key" mode (prior
             // grant or pending intent), build the entry model so the card shows
             // its configured/entry state without requiring a re-pick.
             if displayedMode == .byoKey { ensureBYOKeyEntryModel() }
@@ -142,7 +121,7 @@ struct SettingsAIScreen: View {
             carryThroughOnlineIntentIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in
-            // v0.13 W3 — re-probe on-device availability when returning from
+            // Re-probe on-device availability when returning from
             // System Settings so a disabled On-device card unlocks without a
             // relaunch (e.g. the user just enabled Apple Intelligence).
             if phase == .active { appContainer?.localLLMService.refresh() }
@@ -153,23 +132,22 @@ struct SettingsAIScreen: View {
 
     // MARK: - Cards
 
-    /// Task #53 — the single, elegant AI-source choice. The user picks WHETHER
+    /// The single, elegant AI-source choice. The user picks WHETHER
     /// + WHICH assistant — None / On-device / External AI / Own key (mode- +
     /// capability-gated) — in one place, mirroring the onboarding step exactly.
     /// `.none` hides every AI surface; `.onDevice` drives local generation;
     /// `.online` routes through the informed-consent sheet.
     ///
-    /// R12 — die Abschnittsmarke ist der Kartentitel. Vorher stand hier ein
-    /// `HLSectionLabel`, das einzige in den ganzen Einstellungen.
+    /// Die Abschnittsmarke ist der Kartentitel.
     ///
-    /// R3 — der frühere „Dein Server stellt den KI-Anbieter bereit …"-Hinweis
+    /// Der frühere „Dein Server stellt den KI-Anbieter bereit …"-Hinweis
     /// unter dem Picker ist gefallen: die Status-Karte der Provider-Sektion
     /// **auf derselben scrollenden Seite** sagt dasselbe, und zwar dort, wo das
     /// Bedienelement steht, das den Zustand ändert. Die Bug-4-Bedingung
     /// (niemals „nicht konfiguriert" behaupten, solange die Konfiguration erst
     /// lädt) lebt unverändert in ``AIProviderSection`` weiter.
     private var sourceCard: some View {
-        HLSettingsCard(icon: "sparkles", title: "Assistant source") {
+        HLCard("Assistant source") {
             AISourceChoicePicker(
                 selection: displayedMode,
                 options: offeredOptions,
@@ -182,20 +160,16 @@ struct SettingsAIScreen: View {
     /// SET-V2-C (B.3) — the single Coach entry point. Coach toggle (+ kill-switch
     /// caption) and the About-me link used to live inline on this screen,
     /// fragmenting the Coach across four surfaces (audit AUDIT-SETTINGS-V2 B.3);
-    /// both moved onto the consolidated `SettingsCoachScreen`. Visibility is the
-    /// union of the gates that moved with them: the on-device toggle was gated on
-    /// `displayedMode == .onDevice`, the About-me link on `backend.hasServer` — so
-    /// the row shows when either gate is open and stays hidden in standalone
-    /// non-on-device arms (same reachability as before the merge).
+    /// both moved onto the consolidated `SettingsCoachScreen`.
     ///
     /// R8/R10 — `HLSettingsRow` ist das Zuhause der Hub-Zeilen; innerhalb einer
     /// Karte ist eine Navigation eine `HLSettingsActionRow(presents: .push)`.
     /// Der Untertitel „Alles zum Coach an einem Ort." ist gefallen: er stand
     /// wortgleich noch einmal auf der Zielseite, einen Navigationsschritt später
     /// (R3), und sagte nichts, was der Titel nicht sagt.
-    /// 1.4 B4 — one row, one heading: "Coach" with its chevron.
+    /// One row, one heading: "Coach" with its chevron.
     private var coachCard: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "Coach", presents: .push) {
                 SettingsCoachScreen()
             }
@@ -203,7 +177,7 @@ struct SettingsAIScreen: View {
         }
     }
 
-    /// M1 (Audit-2) — the mode the picker should DISPLAY. Normally the resolved
+    /// The mode the picker should DISPLAY. Normally the resolved
     /// ``AppContainer/aiMode``; but when the user picked `.online` without a
     /// configured provider, `aiMode` legitimately stays `.none` (no grant could
     /// land) — so we surface the persisted pending intent instead, keeping the
@@ -211,7 +185,7 @@ struct SettingsAIScreen: View {
     /// than snapping silently back to None.
     private var displayedMode: AIMode {
         let resolved = appContainer?.aiMode ?? .none
-        // v0.13 W4 — a pending "Own key" intent keeps the picker on byoKey + the
+        // A pending "Own key" intent keeps the picker on byoKey + the
         // inline entry card revealed until a grant lands (mirrors the online
         // intent). Checked first: a user mid-key-entry hasn't granted yet, so
         // `aiMode` is still on the prior arm.
@@ -224,10 +198,10 @@ struct SettingsAIScreen: View {
         return resolved
     }
 
-    /// Task #53 — apply a three-way `AIMode` pick. `.none` / `.onDevice` persist
+    /// Apply a three-way `AIMode` pick. `.none` / `.onDevice` persist
     /// immediately (no off-device traffic); `.online` routes through the
     /// informed-consent sheet (`AIConsentSheet`, Apple 5.1.2(i)) for the
-    /// resolved provider via `AppContainer.setAIMode`. M1: when `.online` is
+    /// resolved provider via `AppContainer.setAIMode`. When `.online` is
     /// picked without a configured provider the choice is persisted as a pending
     /// intent (`AIConsentStore.onlineIntentDefaultsKey`) so ``displayedMode``
     /// keeps the picker on Online and the inline hint + embedded
@@ -237,12 +211,12 @@ struct SettingsAIScreen: View {
     /// AI gates.
     private func handleModePick(_ mode: AIMode) {
         appContainer?.setAIMode(mode)
-        // v0.13 W4 — build the BYO entry model on first pick so the card has a
+        // Build the BYO entry model on first pick so the card has a
         // stable model to bind to (drafts survive re-renders while open).
         if mode == .byoKey {
             ensureBYOKeyEntryModel()
         }
-        // RCA-coach-ai (v0.15.1) — close the SERVER-MANAGED dead pick. For the
+        // RCA-coach-ai — close the SERVER-MANAGED dead pick. For the
         // admin/server-managed external-AI case (`managedBy:"server"`, per-user
         // `provider:null`) `setAIMode(.online)` resolves `activeProvider ==
         // .unconfigured`, so `setMode(.online, …)` falls to the intent-only
@@ -264,7 +238,7 @@ struct SettingsAIScreen: View {
         }
     }
 
-    /// RCA-coach-ai (v0.15.1) — the testable decision behind both the
+    /// RCA-coach-ai — the testable decision behind both the
     /// External-AI pick (``handleModePick``) and the online-intent carry-through
     /// (``carryThroughOnlineIntentIfNeeded``): should picking External AI route
     /// to the server-managed consent sheet? True iff the server reports
@@ -307,7 +281,7 @@ struct SettingsAIScreen: View {
               displayedMode == .online,
               container.aiOnlineIntentPending else { return }
         guard container.aiProviderStore.config?.isServerAIAvailable == true else { return }
-        // RCA-coach-ai (v0.15.1) — SERVER-MANAGED branch. When the displayed
+        // RCA-coach-ai — SERVER-MANAGED branch. When the displayed
         // online pick is server/admin-managed (`managedBy:"server"`, per-user
         // `provider:null` → `resolvedAIProvider == .unconfigured`), the
         // per-provider carry-through below can never fire (its `provider !=
@@ -338,25 +312,22 @@ struct SettingsAIScreen: View {
         container.aiConsentStore.requestExplicitPrompt()
     }
 
-    /// v0.13 W4 — lazily build the BYO entry model if not already present.
+    /// Lazily build the BYO entry model if not already present.
     private func ensureBYOKeyEntryModel() {
         guard byoKeyEntryModel == nil, let container = appContainer else { return }
         byoKeyEntryModel = container.makeBYOKeyEntryModel()
     }
 
-    /// v0.13 W3 — the mode- + capability-aware option list driving the picker.
-    /// Standalone drops the External AI card; on-device is capability-gated
-    /// (hidden when permanently incapable, disabled-with-reason when
-    /// recoverable). `.byoKey` is offered in both modes (mode-invariant —
-    /// client-side, needs no server).
+    /// The capability-aware option list driving the picker.
+    /// On-device is capability-gated (hidden when permanently incapable,
+    /// disabled-with-reason when recoverable).
     private var offeredOptions: [AISourceOption] {
         AISourceOptions.offered(
-            operatingMode: backend.mode,
             onDeviceAvailability: appContainer?.onDeviceAIAvailability ?? .unsupported
         )
     }
 
-    /// v0.13 W3 — recovery action from a disabled On-device card. Opens the
+    /// Recovery action from a disabled On-device card. Opens the
     /// app's System Settings page so the user can enable Apple Intelligence
     /// (no public deep-link to the Apple Intelligence pane exists; the app
     /// settings page is the standard recovery affordance). The scenePhase
@@ -367,7 +338,7 @@ struct SettingsAIScreen: View {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             openURL(url)
         case .openAssistantSettings:
-            // v0.14.1 — no-op here: this screen IS the Assistant hub, so the
+            // No-op here: this screen IS the Assistant hub, so the
             // provider/BYO config is already on-screen below. The recovery only
             // routes meaningfully from the Coach chooser (a different host).
             break

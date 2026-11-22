@@ -35,8 +35,7 @@ struct ManualSyncStatusRow: View {
                     .foregroundStyle(tint)
                     .accessibilityHidden(true)
                 Text(message)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

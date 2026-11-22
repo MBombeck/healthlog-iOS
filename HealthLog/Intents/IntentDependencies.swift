@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.7.1 W-APPINTENTS** — minimal dependency resolver for App Intents.
+/// Minimal dependency resolver for App Intents.
 ///
 /// App Intents run **outside** a full app launch — Siri / Spotlight /
 /// Shortcuts invoke `perform()` in a lightweight extension-like context
@@ -24,7 +24,7 @@ import Foundation
 /// no token is present the repo call 401s and the intent surfaces a
 /// "sign in first" dialog rather than silently dropping the write.
 ///
-/// **Outbox (audit-v0162 H2):** `OutboxQueue.makeWithRecovery()` opens the
+/// **Outbox:** `OutboxQueue.makeWithRecovery()` opens the
 /// outbox store in the **shared App Group container**
 /// (`group.dev.healthlog.app`, see `OutboxStore.persistentStoreURL()`). When
 /// this resolver runs inside the widget / Live-Activity extension process, that
@@ -116,7 +116,7 @@ enum IntentDependencies {
         return SWRCoordinator(cacheTask: SWRCache.makeWithRecoveryTask(), reachability: Reachability())
     }
 
-    /// **#115 B5 — the unit a spoken glucose value is in: the account's.**
+    /// **The unit a spoken glucose value is in: the account's.**
     ///
     /// First the account-scoped App-Group mirror (``SharedAccountPrefs``), the
     /// only copy the widget extension can see. Then, for an intent the system
@@ -136,7 +136,7 @@ enum IntentDependencies {
         return appMirror.flatMap(GlucoseUnit.init(rawValue:)) ?? .mgdL
     }
 
-    /// **#115 P2 — the unit system and weight unit a spoken weight or
+    /// **The unit system and weight unit a spoken weight or
     /// temperature is in: the account's.** Same order as the glucose unit: the
     /// account-scoped App-Group mirror, then the app's own mirrors (an intent in
     /// the app process before the first copy), else metric/kg — what every
@@ -175,9 +175,9 @@ enum IntentDependencies {
         let moodRepo: MoodRepository
         /// 1.5 SHORTCUT — the custom-metric write path of ``LogCustomMetricValueIntent``.
         let customMetricsRepo: CustomMetricsRepository
-        /// #115 B5 — the account's glucose unit, read at perform time.
+        /// The account's glucose unit, read at perform time.
         let glucoseUnit: () -> GlucoseUnit
-        /// #115 P2 — the account's unit system + weight unit, read at perform time.
+        /// The account's unit system + weight unit, read at perform time.
         let accountUnits: () -> UnitPreferences
 
         init(

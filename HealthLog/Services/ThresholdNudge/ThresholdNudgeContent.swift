@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-THRESHOLD-NUDGE — the factual, non-diagnostic copy for an out-of-range
+/// **The factual, non-diagnostic copy for an out-of-range
 /// nudge.**
 ///
 /// Built ONLY from the server-resolved reading + its server / user-defined
@@ -38,7 +38,7 @@ struct ThresholdNudgeContent: Equatable {
     /// verdict. Returns `nil` when the verdict is in-range/unknown, or when the
     /// breached side has no numeric bound (so there is nothing factual to state).
     static func boundedValue(for lab: LabResultDTO) -> Bounded? {
-        // Item 1.5 — no number, nothing factual to state about a numeric bound.
+        // No number, nothing factual to state about a numeric bound.
         // A qualitative or absent row can never produce a bounded breach.
         guard let value = lab.value else { return nil }
         switch lab.rangeStatus {
@@ -70,7 +70,7 @@ struct ThresholdNudgeContent: Equatable {
 
         let analyte = lab.analyte
         let bounded = Self.boundedValue(for: lab)
-        // Item 1.5 — fall back to the row's rendered reading (which covers the
+        // Fall back to the row's rendered reading (which covers the
         // qualitative + absent cases) instead of a force-unwrapped number.
         let valueText: String = if let bounded {
             Self.formatValue(bounded.value, unit: bounded.unit)
@@ -94,7 +94,7 @@ struct ThresholdNudgeContent: Equatable {
         // disclaimer is appended (not interpolated) so it reads as a distinct,
         // standing sentence on every nudge.
         //
-        // UI-Standard R16 (U1) — dies ist die EINE Fläche, auf der der
+        // UI-Standard R16 — dies ist die EINE Fläche, auf der der
         // Pauschalhinweis den Ack-Schalter überlebt: eine Push verlässt die App
         // und erreicht den Nutzer auf dem Sperrbildschirm, wo er seine einmalige
         // Bestätigung nicht dabei hat. Gekürzt wurde er trotzdem — von einem
@@ -123,7 +123,7 @@ struct ThresholdNudgeContent: Equatable {
         } else {
             value.formatted(.number.precision(.fractionLength(0 ... 1)))
         }
-        // #160 — the unity "1" (a ratio or index) prints nothing.
+        // The unity "1" (a ratio or index) prints nothing.
         return LabUnit.appending(unit, to: numberText)
     }
 

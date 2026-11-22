@@ -11,23 +11,23 @@ import Synchronization
 public protocol HealthKitHRBucketSyncing: AnyObject, Sendable {
     /// One sweep, awaited — the orchestrated `heartRateBuckets` capability.
     /// `lookbackHours` is kept for the call site's budget vocabulary; the
-    /// sweep's reach is decided by the per-day ledger (#12), not by it.
+    /// sweep's reach is decided by the per-day ledger, not by it.
     func triggerHRBucketSync(lookbackHours: Int) async
 
-    /// SYNC-HR — the same sweep for a caller with a window. When `isExpired`
+    /// The same sweep for a caller with a window. When `isExpired`
     /// turns true while the caller waits (a background grant running out),
     /// the sweep is abandoned and its HealthKit query stopped, so iOS never
     /// suspends the app on a query nobody will collect.
     func triggerHRBucketSync(lookbackHours: Int, isExpired: @escaping @Sendable () -> Bool) async
 
-    /// #12 — fire-and-forget sweep request, issued whenever the per-sample
+    /// Fire-and-forget sweep request, issued whenever the per-sample
     /// path hands heart rate to the bucket path. Runs in its own task, so a
     /// foreground pass that is cancelled at its deadline cannot take the
     /// sweep down with it; concurrent requests coalesce into one sweep.
     func requestHRBucketSweep()
 
-    /// **V1 (1.2)** — returns once no sweep is running. A HealthKit delivery
-    /// waits on it before it hands back its completion handler. SYNC-HR: never
+    /// Returns once no sweep is running. A HealthKit delivery
+    /// waits on it before it hands back its completion handler. Never
     /// longer than the sweep deadline, and not at all for a sweep already past
     /// it.
     func awaitHRBucketSweep() async
@@ -47,7 +47,7 @@ public protocol HealthKitHRBucketReading: Sendable {
     func bucketRows(from: Date, to: Date) async throws -> [HealthKitHRBucketRow]
 }
 
-/// SYNC-HR — the heart-rate sweep this process is running right now, for
+/// The heart-rate sweep this process is running right now, for
 /// Sync Diagnostics ("läuft seit …") and the copied report. Process memory
 /// only: a sweep of an earlier launch is gone with it.
 struct HRBucketSweepActivity: Equatable, Sendable {
@@ -83,7 +83,7 @@ enum HRBucketSweepActivityBoard {
 
     extension HealthKitHRBucketService: HealthKitHRBucketReading {}
 
-    /// Coordinator for the 10-minute-HR-bucket upload path (GH #34, #12).
+    /// Coordinator for the 10-minute-HR-bucket upload path.
     ///
     /// **Per-day exclusivity (the invariant):** a bucket is emitted ONLY for a
     /// UTC day that ``HRUploadModeSchedule/mode(at:userId:now:defaults:)`` puts
@@ -92,7 +92,7 @@ enum HRBucketSweepActivityBoard {
     /// drops a sample only for days the bucket path owns (``HRBucketRawGate``),
     /// so no UTC day carries both shapes.
     ///
-    /// **No day in neither shape (#12):** the sweep's reach is a set of days,
+    /// **No day in neither shape:** the sweep's reach is a set of days,
     /// not a cursor. Every bucket-regime day since the cutover (at most
     /// ``backfillDays`` back) that is not settled is read again: today and
     /// yesterday on every sweep, older days until one successful sweep has
@@ -100,8 +100,8 @@ enum HRBucketSweepActivityBoard {
     /// sample for. Only buckets whose accepted fingerprint changed are posted,
     /// one request per day, so the acceptance gate names the day that failed.
     ///
-    /// **Gating order** (cheapest first): standalone, share-auth, feature
-    /// flag, cutover not reached. Every gate records its name in the ledger
+    /// **Gating order** (cheapest first): share-auth, cutover not
+    /// reached. Every gate records its name in the ledger
     /// (Sync Diagnostics) and logs it at `.notice`.
     ///
     /// **Completed buckets only:** the query window ends at the start of the
@@ -110,9 +110,7 @@ enum HRBucketSweepActivityBoard {
     public actor HealthKitHRBucketSyncCoordinator {
         private let service: any HealthKitHRBucketReading
         private let uploader: MeasurementBatchUploader
-        private let featureFlags: FeatureFlagsServicing
         private let keychain: KeychainStoring
-        private let isStandalone: @Sendable () -> Bool
         private let clock: @Sendable () -> Date
         /// `UserDefaults` is not `Sendable`, so it is injected behind a
         /// `@Sendable` provider closure rather than stored directly — this keeps
@@ -129,7 +127,7 @@ enum HRBucketSweepActivityBoard {
         /// was abandoned: whatever it still gets back writes nothing.
         private var generation: UInt64 = 0
         /// How long one sweep may run before a request abandons it, and the
-        /// longest any caller waits for it (SYNC-HR).
+        /// longest any caller waits for it.
         let staleAfter: TimeInterval
 
         private struct Run {
@@ -139,7 +137,7 @@ enum HRBucketSweepActivityBoard {
             var sweepStartedAt: Date
         }
 
-        /// SYNC-HR — two minutes: twice the HealthKit query's own limit, far
+        /// Two minutes: twice the HealthKit query's own limit, far
         /// above a healthy sweep (seconds), far below "until the app is
         /// restarted".
         public static let defaultStaleAfter: TimeInterval = 120
@@ -151,7 +149,7 @@ enum HRBucketSweepActivityBoard {
         static let lastBucketDefaultsKeyPrefix = HRBucketCutoverStore.lastBucketDefaultsKeyPrefix
 
         /// How far back a sweep may reach for a day that never got buckets.
-        /// One-time cost after an update from a build that lost days (#12):
+        /// One-time cost after an update from a build that lost days:
         /// at most ~144 rows per day, one request per day.
         static let backfillDays = 90
 
@@ -162,18 +160,14 @@ enum HRBucketSweepActivityBoard {
         public init(
             service: any HealthKitHRBucketReading,
             uploader: MeasurementBatchUploader,
-            featureFlags: FeatureFlagsServicing,
             keychain: KeychainStoring,
-            isStandalone: @escaping @Sendable () -> Bool,
             clock: @escaping @Sendable () -> Date = { Date() },
             defaultsProvider: @escaping @Sendable () -> UserDefaults = { .standard },
             staleAfter: TimeInterval = HealthKitHRBucketSyncCoordinator.defaultStaleAfter
         ) {
             self.service = service
             self.uploader = uploader
-            self.featureFlags = featureFlags
             self.keychain = keychain
-            self.isStandalone = isStandalone
             self.clock = clock
             self.defaultsProvider = defaultsProvider
             self.staleAfter = staleAfter
@@ -298,20 +292,11 @@ enum HRBucketSweepActivityBoard {
         private func sweepOnce(generation id: UInt64) async -> Int {
             let startedAt = clock()
             let userID = keychain.getString(forKey: KeychainKey.userID)
-            // Gate 1 — standalone: no server in offline mode.
-            guard !isStandalone() else {
-                return finish(.standalone, userID: userID, startedAt: startedAt)
-            }
             // Gate 2 — share-auth: no token, no upload (mirrors the rest of the
             // server-bound HK path; a missing bearer means we are pre-login).
             guard keychain.getString(forKey: KeychainKey.authToken)?.isEmpty == false else {
                 return finish(.noAuthToken, userID: userID, startedAt: startedAt)
             }
-            // Gate 3 — feature flag.
-            guard featureFlags.isEnabled(.enableHRBuckets) else {
-                return finish(.flagOff, userID: userID, startedAt: startedAt)
-            }
-
             let now = startedAt
             let defaults = defaults
             // Arm + read the cutover boundary (per-day exclusivity anchor).
@@ -319,7 +304,7 @@ enum HRBucketSweepActivityBoard {
             // End at the start of the CURRENT UTC 10-minute bucket — never
             // upload the in-progress bucket.
             let currentBucketStart = HealthKitHRBucketRow.flooredToUTCTenMinutes(now)
-            // Gate 4 — no closed bucket on-or-after the cutover yet.
+            // Gate 3 — no closed bucket on-or-after the cutover yet.
             guard currentBucketStart > cutover else {
                 return finish(.cutoverPending, userID: userID, startedAt: startedAt)
             }
@@ -351,7 +336,7 @@ enum HRBucketSweepActivityBoard {
                 }
                 return finish(gate, userID: userID, startedAt: startedAt)
             }
-            // SYNC-HR — a late answer to an abandoned run changes nothing.
+            // A late answer to an abandoned run changes nothing.
             guard isCurrent(id), !Task.isCancelled else { return 0 }
 
             let byDay = Dictionary(grouping: rows.filter { $0.bucketStartUTC >= cutover && $0.bucketStartUTC < currentBucketStart }) {
@@ -406,7 +391,7 @@ enum HRBucketSweepActivityBoard {
                 // are idempotent, the run that replaced it posts them again.
                 guard isCurrent(id) else { return }
                 progress.accepted += changed.count
-                // V1 — the persistent per-type record Sync Diagnostics shows.
+                // The persistent per-type record Sync Diagnostics shows.
                 HealthKitStatsUploadLogStore.recordUpload(
                     identifier: HealthKitHRBucketRow.hkIdentifier,
                     count: changed.count,
@@ -439,7 +424,7 @@ enum HRBucketSweepActivityBoard {
             }
             if !changed.isEmpty, let newest = changed.map(\.bucketStartUTC).max() {
                 // Kept for ``HRBucketCutoverStore/cutover(userId:now:defaults:)``,
-                // which re-arms a logged-out account on the cursor's day (A7).
+                // which re-arms a logged-out account on the cursor's day.
                 let key = HRBucketCutoverStore.lastBucketKey(for: userID)
                 if newest > (defaults.object(forKey: key) as? Date ?? .distantPast) {
                     defaults.set(newest, forKey: key)

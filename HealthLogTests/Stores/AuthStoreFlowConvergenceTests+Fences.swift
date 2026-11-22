@@ -1,4 +1,4 @@
-// **Phase 09 / plan 09-07 — the two clauses the extraction exists to make true.**
+// **The two clauses the extraction exists to make true.**
 //
 // An extension of `AuthStoreFlowConvergenceTests`, in a sibling file, so the
 // suite stays one type and one `-only-testing:` selector.
@@ -6,7 +6,7 @@
 // Both clauses are about the same thing from two sides: an authentication
 // result is *perishable*. It is asked for at one instant and arrives at
 // another, and everything that can happen in between — a second attempt, a
-// standalone choice, a terminal 401 — has to be able to refuse it.
+// phase change without a new owner, a terminal 401 — has to be able to refuse it.
 
 // swiftlint:disable force_unwrapping
 
@@ -49,12 +49,11 @@
 
             // ── The clause: an account decision taken mid-flight is honoured ──
             //
-            // `enterStandaloneMode()` is the user choosing local-only. It takes
-            // no authentication boundary and moves neither the attempt epoch nor
-            // the admission epoch — nil owner before, nil owner after — so it is
-            // exactly the same-generation account change a generation alone
-            // cannot catch, and only a transition that re-reads the situation it
-            // began in can refuse the session that lands afterwards.
+            // A phase change with nil owner before and nil owner after moves
+            // neither the attempt epoch nor the admission epoch, so it is exactly
+            // the same-generation account change a generation alone cannot
+            // catch; only a transition that re-reads the situation it began in
+            // can refuse the session that lands afterwards.
             var unfenced: [String] = []
             for flow in Phase09AuthFlow.allCases {
                 let gate = Phase09Gate()
@@ -64,11 +63,13 @@
                 let parked = await phase09AwaitCondition { gate.waitingCount == 1 }
                 #expect(parked, "\(flow.rawValue) never reached its acceptance hop")
 
-                harness.store.enterStandaloneMode()
+                // Whichever owner-less phase the attempt did not start in.
+                let decided: AuthStore.Phase = harness.store.phase == .unknown ? .unauthenticated : .unknown
+                harness.store.setPhaseForTesting(decided)
                 gate.open()
                 await running.value
 
-                if harness.store.phase != .standalone { unfenced.append(flow.rawValue) }
+                if harness.store.phase != decided { unfenced.append(flow.rawValue) }
             }
 
             // Never the case's own task — a case that cancels itself is reported
@@ -76,7 +77,7 @@
             #expect(!Task.isCancelled)
             #expect(
                 unfenced.isEmpty,
-                "EXPECTED_RED: authentication flows do not share one acceptance transition"
+                "authentication flows do not share one acceptance transition"
             )
         }
 
@@ -152,7 +153,7 @@
             #expect(!Task.isCancelled)
             #expect(
                 overwrites.isEmpty,
-                "EXPECTED_RED: a late authentication attempt overwrote newer state"
+                "a late authentication attempt overwrote newer state"
             )
         }
     }

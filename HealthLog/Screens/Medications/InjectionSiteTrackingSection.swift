@@ -17,11 +17,13 @@ struct InjectionSiteTrackingSection: View {
 
     var body: some View {
         if isInjection {
-            Toggle("med.injection.track.toggle", isOn: $trackInjectionSites)
+            Toggle(isOn: $trackInjectionSites) {
+                HLRowTitle("med.injection.track.toggle")
+            }
             if trackInjectionSites {
                 ForEach(InjectionSite.serverCases, id: \.self) { site in
                     Toggle(isOn: binding(for: site)) {
-                        Text(site.localizedLabel)
+                        HLRowTitle(Text(site.localizedLabel))
                     }
                 }
             }

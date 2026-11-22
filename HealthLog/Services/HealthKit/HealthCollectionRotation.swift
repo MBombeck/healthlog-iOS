@@ -15,7 +15,7 @@ import Foundation
 /// nothing is read twice in one pass; only the starting point moves.
 enum HealthCollectionRotation {
     static let offsetKey = "hl.healthkit.collectionRotationOffset"
-    /// 1.3 (#127) — the history leg's own start, independent of the live one.
+    /// The history leg's own start, independent of the live one.
     static let historyOffsetKey = "hl.healthkit.historyRotationOffset"
 
     /// `types` rotated to start at the persisted offset.

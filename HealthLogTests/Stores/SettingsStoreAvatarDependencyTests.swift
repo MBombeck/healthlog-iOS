@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.1 / #142 — locks the avatar dependency that `RootView`'s auth-phase
+/// Locks the avatar dependency that `RootView`'s auth-phase
 /// trigger resolves. `DashboardHeader`'s `.task(id: avatarReloadToken)` keys on
 /// `settings.profile?.avatarUrl`; if `profile` is nil the avatar stays blank.
 ///

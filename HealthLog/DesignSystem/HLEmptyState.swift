@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Audit-01 C1 — the ONE canonical empty-state lockup.
+/// The ONE canonical empty-state lockup.
 ///
 /// Before this primitive the app spoke two empty-state languages: ~20 screens
 /// used the system `ContentUnavailableView` (system title2-bold + body, system
@@ -16,13 +16,15 @@ import SwiftUI
 /// - **Actions:** optional `@ViewBuilder` slot (typically an `HLButton`),
 ///   spaced `HLSpace.xs` below the copy.
 ///
-/// The lockup is horizontally greedy (`maxWidth: .infinity`) but does NOT
-/// claim vertical space — hosts keep their placement intent (a `List` row, an
-/// `HLCard`, or a full-bleed centre via `.containerCentered()`).
+/// The lockup stands in the middle of the area it is given, centred across
+/// the width with the page margin at both sides; its button is never wider
+/// than ``HLLayout/actionMaxWidth``. In a host that offers no height (a
+/// `List` row, a scrolling page) it stays as tall as its content; a page
+/// gives it the free area with ``SwiftUI/View/hlStateFreeArea()``.
 ///
 /// MONOCHROME: the lockup is informational, never a signal — no status colour.
 ///
-/// **1.4 B4 — the one form, and how to fill it.** An empty or failed surface
+/// **The one form, and how to fill it.** An empty or failed surface
 /// is this lockup placed directly on the page or list, never inside an
 /// `HLCard`, a ghost card or a settings card (a box around "nothing" is a
 /// card in a card). It carries a symbol, a title, at most one sentence that
@@ -63,6 +65,11 @@ struct HLEmptyState<Actions: View>: View {
         self.actions = actions()
     }
 
+    /// Gap between the header above and the symbol.
+    static var topGap: CGFloat {
+        HLSpace.xl
+    }
+
     var body: some View {
         VStack(spacing: HLSpace.sm) {
             Image(systemName: icon)
@@ -81,10 +88,13 @@ struct HLEmptyState<Actions: View>: View {
                     .multilineTextAlignment(.center)
             }
             actions
+                .frame(maxWidth: HLLayout.actionMaxWidth)
                 .padding(.top, HLSpace.xs)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, HLSpace.lg)
+        .padding(.top, Self.topGap)
+        .padding(.bottom, HLSpace.lg)
+        .padding(.horizontal, HLLayout.pageMargin)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -101,8 +111,8 @@ extension HLEmptyState where Actions == EmptyView {
 }
 
 extension View {
-    /// Centers an `HLEmptyState` in a full-bleed host (the placement
-    /// `ContentUnavailableView` used to supply for whole-screen empties).
+    /// Centers a view in a full-bleed host. ``HLEmptyState`` does this on its
+    /// own; the modifier stays for the other views that use it.
     func containerCentered() -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.10 R1 §3.7 — course-window editor. Mirrors the web oracle
+/// Course-window editor. Mirrors the web oracle
 /// (`src/components/medications/scheduling/CourseWindowRow.tsx`): a `startsOn`
 /// date picker, an `endsOn` date picker gated by a "No end date" toggle, and
 /// the `oneShot` toggle. One-shot forces `endsOn == startsOn` and hides the end
@@ -15,23 +15,26 @@ struct CourseWindowRow: View {
     @Binding var isOneShot: Bool
 
     var body: some View {
-        Toggle("med.schedule.course.oneShot.toggle", isOn: $isOneShot)
-            .onChange(of: isOneShot) { _, oneShot in
-                if oneShot {
-                    // One-shot requires a start date; default to today, and
-                    // collapse the window to a single day.
-                    let start = startsOn ?? Self.today()
-                    startsOn = start
-                    endsOn = start
-                }
+        Toggle(isOn: $isOneShot) {
+            HLRowTitle("med.schedule.course.oneShot.toggle")
+        }
+        .onChange(of: isOneShot) { _, oneShot in
+            if oneShot {
+                // One-shot requires a start date; default to today, and
+                // collapse the window to a single day.
+                let start = startsOn ?? Self.today()
+                startsOn = start
+                endsOn = start
             }
+        }
 
         DatePicker(
-            "med.schedule.course.startsOn",
             selection: startsBinding,
             displayedComponents: [.date]
-        )
-        // #115 1.5 — course days are UTC-midnight day anchors; show them in UTC
+        ) {
+            HLRowTitle("med.schedule.course.startsOn")
+        }
+        // Course days are UTC-midnight day anchors; show them in UTC
         // so the picker names the stored day on every device zone.
         .environment(\.timeZone, Self.anchorTimeZone)
         .onChange(of: startsOn) { _, newStart in
@@ -40,13 +43,16 @@ struct CourseWindowRow: View {
         }
 
         if !isOneShot {
-            Toggle("med.schedule.course.noEndDate", isOn: noEndBinding)
+            Toggle(isOn: noEndBinding) {
+                HLRowTitle("med.schedule.course.noEndDate")
+            }
             if endsOn != nil {
                 DatePicker(
-                    "med.schedule.course.endsOn",
                     selection: endsBinding,
                     displayedComponents: [.date]
-                )
+                ) {
+                    HLRowTitle("med.schedule.course.endsOn")
+                }
                 .environment(\.timeZone, Self.anchorTimeZone)
                 if !isRangeValid {
                     HLFormErrorText(String(localized: "med.schedule.course.invalidRange"))
@@ -54,7 +60,7 @@ struct CourseWindowRow: View {
                 }
             }
         }
-        // 1.4 B2 — the one-shot toggle's title says it; no caption under it.
+        // The one-shot toggle's title says it; no caption under it.
     }
 
     // MARK: - Bindings
@@ -91,7 +97,7 @@ struct CourseWindowRow: View {
         )
     }
 
-    // MARK: - #115 1.5 — course days as day anchors
+    // MARK: - Course days as day anchors
 
     /// Course `startsOn`/`endsOn` arrive as server `YYYY-MM-DD` decoded to UTC
     /// midnight (`JSONDecoder.hlDefault`). The row keeps that one

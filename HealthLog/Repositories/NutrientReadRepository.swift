@@ -81,6 +81,28 @@ public actor NutrientReadRepository {
         return try await api.send(req)
     }
 
+    // MARK: - Personal targets (v1.48, #182 A2)
+
+    /// `GET /api/nutrients/targets` — the targets the person set, keyed by
+    /// raw catalogue code. Owner only; `403 module.disabled` propagates.
+    public func targets() async throws -> NutrientTargetsDTO {
+        let req: APIRequest<NutrientTargetsDTO> = .get("/api/nutrients/targets")
+        return try await api.send(req)
+    }
+
+    /// `PATCH /api/nutrients/targets` — sets or (with `nil`) clears the named
+    /// codes and returns the merged targets. A value outside the code's
+    /// plausibility range answers 422. Not outbox-backed: a target is a
+    /// setting the person waits for, and the editor says when it failed.
+    public func updateTargets(_ patch: NutrientTargetsPatchDTO) async throws -> NutrientTargetsDTO {
+        let req: APIRequest<NutrientTargetsDTO> = try .patch(
+            "/api/nutrients/targets",
+            body: patch,
+            encoder: encoder
+        )
+        return try await api.send(req)
+    }
+
     // MARK: - Water quick-add (outbox-backed)
 
     /// `POST /api/nutrients/water` — manual water quick-add against the MANUAL
@@ -92,7 +114,7 @@ public actor NutrientReadRepository {
     /// keeps its optimistic total). A `module.disabled` / other non-retriable
     /// reject re-throws WITHOUT queueing.
     ///
-    /// #115 B6 — the body always names the day the tap happened on, in the
+    /// The body always names the day the tap happened on, in the
     /// profile zone. Without it the server filed the write under ITS today at
     /// the moment the request arrived, so a quick-add queued offline at 23:50
     /// and replayed after midnight landed on the next day.
@@ -109,11 +131,8 @@ public actor NutrientReadRepository {
             day: day ?? ProfileDay.key(for: capturedAt)
         )
         let key = IdempotencyKey()
-        do {
-            return try await send(body, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.logNutrientWater, payload: OutboxQueue.Payloads.LogNutrientWater(body: body), key: key)
-            throw err
+        return try await writeAhead(.logNutrientWater, payload: OutboxQueue.Payloads.LogNutrientWater(body: body), key: key) { [self] in
+            try await send(body, idempotencyKey: key)
         }
     }
 
@@ -144,29 +163,18 @@ public actor NutrientReadRepository {
         return try await api.send(req)
     }
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
-        key: IdempotencyKey
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Nutrient-water outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

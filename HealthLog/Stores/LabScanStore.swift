@@ -29,17 +29,17 @@ struct LabScanRow: Identifiable {
     /// The qualitative reading ("negativ") as an editable string.
     var qualitativeText: String
     var unit: String
-    /// #160 — the person switched on "No unit" (the unity `"1"`). Never
+    /// The person switched on "No unit" (the unity `"1"`). Never
     /// set by the scan itself: only a person asserts that a value has no unit.
     var noUnit = false
     var referenceLow: String
     var referenceHigh: String
-    /// LAB-OCR — the reference window exactly as the report printed it, from a
+    /// The reference window exactly as the report printed it, from a
     /// server read; sent back on commit so a worded range is not lost.
     var referenceText: String?
-    /// LAB-OCR — the unit the matched marker is tracked in (server read).
+    /// The unit the matched marker is tracked in (server read).
     var markerUnit: String?
-    /// LAB-OCR — a server commit needs a unit on every numeric reading.
+    /// A server commit needs a unit on every numeric reading.
     var requiresUnit = false
     /// Set when the analyte resolved to a marker in the user's catalog — then
     /// the server resolves unit + range and the local fields are read-only.
@@ -77,7 +77,7 @@ struct LabScanRow: Identifiable {
         resultType = candidate.isQualitative ? .qualitative : .numeric
         value = candidate.value.map { Self.editableNumber($0) } ?? ""
         qualitativeText = candidate.valueText ?? ""
-        // #160 — a bare "1" read off the page is not a person saying "no
+        // A bare "1" read off the page is not a person saying "no
         // unit". The field starts empty and the row is flagged for a look,
         // so nothing goes out as the unity unless the switch is turned on.
         let readUnity = LabUnit.isUnity(candidate.unit)
@@ -136,7 +136,7 @@ final class LabScanStore {
         case noRows
         case platform
         case generic
-        /// LAB-OCR — a server read ended without rows; its own sentence.
+        /// A server read ended without rows; its own sentence.
         case server(LabsOCRFailure)
 
         var messageKey: String {
@@ -170,7 +170,7 @@ final class LabScanStore {
     /// Set after a partial batch commit: the already-localized summary.
     private(set) var saveSummary: String?
 
-    /// LAB-OCR — where the rows came from. A server read commits through
+    /// Where the rows came from. A server read commits through
     /// `POST /api/labs/ocr/commit`; an on-device read row by row as before.
     enum Origin: Equatable {
         case device
@@ -178,9 +178,9 @@ final class LabScanStore {
     }
 
     private(set) var origin: Origin = .device
-    /// LAB-OCR — the limits a server read ran into, one calm line each.
+    /// The limits a server read ran into, one calm line each.
     private(set) var readLimits: [LabsOCRLimitLine] = []
-    /// LAB-OCR — set by the sheet when the server can read reports.
+    /// Set by the sheet when the server can read reports.
     var ocrRepository: LabsOCRRepository?
     /// One commit key per body, so saving the same rows again reuses it.
     private var commitKeys: [LabsOCRCommitRequest: IdempotencyKey] = [:]
@@ -282,14 +282,14 @@ final class LabScanStore {
         step = .review
     }
 
-    /// LAB-OCR — a server read is under way.
+    /// A server read is under way.
     func beginServerRead() {
         failure = nil
         saveSummary = nil
         step = .processing
     }
 
-    /// LAB-OCR — the rows a server read proposed, into the same review list.
+    /// The rows a server read proposed, into the same review list.
     /// The server's own marker match wins; the local one fills the gap.
     func ingest(server result: LabsOCRExtractResult) {
         guard !result.rows.isEmpty else {
@@ -373,7 +373,7 @@ final class LabScanStore {
         return false
     }
 
-    /// LAB-OCR — writes the confirmed rows through `POST /api/labs/ocr/commit`
+    /// Writes the confirmed rows through `POST /api/labs/ocr/commit`
     /// (at most 400 per request). Written rows leave the list; a row the
     /// server skipped (already there, or a unit its marker cannot take) stays,
     /// switched off and flagged, so saving again does not repeat it.

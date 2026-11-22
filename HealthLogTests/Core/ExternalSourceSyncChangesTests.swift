@@ -6,9 +6,8 @@ import Testing
 /// `measurements:write` ingest token: a Home Assistant bridge, a scale script)
 /// arriving on the `/api/sync/changes` delta page.
 ///
-/// The app has no `/api/sync/changes` consumer of its own today (only the
-/// intake upsert type exists, `SyncIntakeUpsert`), so this pins the one thing a
-/// consumer will rely on: the measurement upsert element, in the exact
+/// The app has no `/api/sync/changes` consumer of its own today, so this pins
+/// the one thing a consumer will rely on: the measurement upsert element, in the exact
 /// `SyncMeasurementUpsert` shape the server publishes
 /// (`docs/api/openapi.yaml` at v1.39.0, `SyncChangesEnvelope` →
 /// `changes.measurements.upserts[]`), decodes through the app's own

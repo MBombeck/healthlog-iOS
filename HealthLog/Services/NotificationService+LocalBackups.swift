@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// v0.5.4.3 HP5 — local-fallback scheduling for medication reminders.
+    /// Local-fallback scheduling for medication reminders.
     ///
     /// **Background:** the server's APNs cron is the primary delivery
     /// mechanism for `MEDICATION_REMINDER` pushes. But APNs is not a
@@ -67,7 +67,7 @@ import Foundation
                     continue
                 }
                 do {
-                    // W-FOCUS-FILTER — gate routine med-backup banners behind a
+                    // Gate routine med-backup banners behind a
                     // HealthLog Focus filter. A held-back backup is NOT counted
                     // (it was not delivered); the intake ledger is untouched, so
                     // the next post-Focus sweep re-offers it.
@@ -105,7 +105,7 @@ import Foundation
             content.title = String(localized: "Medication")
             content.body = String(localized: "Reminder — please take your medication.")
             content.sound = .default
-            content.categoryIdentifier = Self.categoryMedication
+            content.categoryIdentifier = RelayCategoryIdentity.medication()
             // userInfo carries the same shape an APNs payload would, so
             // a tap on the local-fallback banner hits the same action-
             // dispatch path as a real push (medicationId present →
@@ -120,6 +120,8 @@ import Foundation
                 // key.
                 "localBackup": true
             ]
+            // Hide content in notifications: only the neutral text is stored.
+            NotificationContentPrivacy.apply(to: content, kind: .reminder)
 
             let interval = intake.scheduledAt.timeIntervalSince(now)
             let trigger = UNTimeIntervalNotificationTrigger(

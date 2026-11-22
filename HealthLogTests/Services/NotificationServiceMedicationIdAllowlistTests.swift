@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// **v0.7.0 W-SEC-M-2 — defensive allowlist for `medicationId` from
+    /// **Defensive allowlist for `medicationId` from
     /// APN payloads.**
     ///
     /// `DeepLinkRoute.idAllowlist` covers IDs that travel through a

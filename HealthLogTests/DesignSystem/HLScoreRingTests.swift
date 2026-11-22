@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// **I-2** — locks the pure presentation contracts behind the monochrome
+/// Locks the pure presentation contracts behind the monochrome
 /// `HLScoreRing` + the wellness-score cards / detail sheet: the band → signal +
 /// tick logic, the confidence gate, the contributor ranking, and the
 /// contributor → metric deep-nav mapping. All exercised off the main actor (no
@@ -177,7 +177,7 @@ struct HLScoreRingTests {
             ]
         )
         let ranked = WellnessScorePresentation.rankedContributors(Self.dto(metric: "READINESS", value: value))
-        // v0.14.3 F4 — the null-value contributor ("respiratory") is dropped, so no
+        // The null-value contributor ("respiratory") is dropped, so no
         // empty "—" row shows; only present rows remain, ordered by descending weight.
         #expect(ranked.count == 3)
         #expect(ranked.allSatisfy { $0.value != nil })
@@ -279,7 +279,7 @@ struct HLScoreRingTests {
         #expect(summary?.checked == 2)
     }
 
-    /// v0.14.8 Item-3 (b184 M4) — "Signals of the day" must hide the WHOLE section
+    /// v0.14.8 Item-3 — "Signals of the day" must hide the WHOLE section
     /// when there are no signals. A calm "all within range" envelope resolves to a
     /// non-nil summary with `fired == false` / zero contributing, so it must NOT
     /// satisfy the guard (no dangling heading). This delegates to the PRODUCTION

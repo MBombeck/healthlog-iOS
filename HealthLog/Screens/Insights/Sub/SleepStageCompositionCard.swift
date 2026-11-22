@@ -2,27 +2,34 @@ import Accessibility
 import Charts
 import SwiftUI
 
-/// Per-night sleep-stage composition over 7 / 14 / 30 nights, plus the stage
-/// percentages for the active window (parity Build 4 · item 4.7).
+/// Per-night sleep-stage composition over the page's time range, plus the
+/// stage percentages for those nights (parity Build 4 · item 4.7).
 ///
 /// Mirrors the web `sleep-stage-stacked-bar.tsx`: one stacked column per night,
-/// Apple Health's sleep tab as the visual reference, a 7 / 14 / 30-day toggle
-/// defaulting to 7. The audit recorded BOTH the chart (`09-…md:121`) and the
-/// stage percentages (`:122`) as missing on iOS — the hypnogram legend showed
-/// per-stage MINUTES for one night and nothing across nights.
+/// Apple Health's sleep tab as the visual reference.
 ///
-/// The toggle is a pure client-side tail slice of the one trailing-30-night
-/// array the server already sent, so switching windows costs no round-trip.
-/// The percentage rows are computed from the SLICED nights, so they always
-/// describe the columns actually on screen rather than a fixed 30-day average.
+/// The card has no time range of its own: it follows the page's one period
+/// control. The server sends the trailing 30 nights, so a longer range shows
+/// all of them; the slice is client-side and costs no round-trip. The
+/// percentage rows are computed from the SLICED nights, so they always
+/// describe the columns actually on screen.
 struct SleepStageCompositionCard: View {
     let breakdown: SleepStageBreakdownDTO
+    /// The days of the page's selected range (`HLTimeRange.days`).
+    var rangeDays: Int = SleepStageCompositionCard.maxNights
 
-    @State private var window: SleepStageWindow = .week
+    /// The server's trailing window; no range shows more nights than this.
+    nonisolated static let maxNights = 30
 
-    /// The nights the chart paints — the trailing slice for the active window.
+    /// How many nights a page range shows: at least one, at most the 30 the
+    /// server sends.
+    nonisolated static func nightCount(forRangeDays days: Int) -> Int {
+        min(max(days, 1), maxNights)
+    }
+
+    /// The nights the chart paints — the trailing slice for the page's range.
     private var nights: [SleepStageNight] {
-        SleepStageComposition.trailing(breakdown.perNight, days: window.days)
+        SleepStageComposition.trailing(breakdown.perNight, days: Self.nightCount(forRangeDays: rangeDays))
     }
 
     /// Per-stage shares of the SLICED window (not the server's 30-day totals).
@@ -30,7 +37,7 @@ struct SleepStageCompositionCard: View {
         SleepStageComposition.shares(of: SleepStageComposition.totals(of: nights))
     }
 
-    /// 1.4 B2 — a source that reports only a total has no stages in any
+    /// A source that reports only a total has no stages in any
     /// night: then the card is not there at all instead of saying so.
     private var hasAnyStages: Bool {
         !SleepStageComposition.shares(of: SleepStageComposition.totals(of: breakdown.perNight)).isEmpty
@@ -38,21 +45,17 @@ struct SleepStageCompositionCard: View {
 
     var body: some View {
         if hasAnyStages {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("sleep.composition.section")
+            Group {
+                HLSectionHeader("sleep.composition.section", rank: .area)
                 HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
-                        HLRangePicker(selection: $window, style: .inline)
                         if nights.isEmpty || shares.isEmpty {
-                            // Stage-less nights in this window only (other
-                            // windows have stages). Say so; do not draw an
+                            // Stage-less nights in this range only (other
+                            // ranges have stages). Say so; do not draw an
                             // empty axis that looks like zero sleep.
-                            Text("sleep.composition.noStages")
-                                .font(.hlFootnote)
-                                .foregroundStyle(HLText.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HLEmptyNote("sleep.composition.noStages")
                         } else {
-                            // The picker names the window; no caption repeats it.
+                            // The page's period control names the range.
                             chart
                                 .frame(height: HLChartStyle.heightRegular)
                                 .accessibilityLabel(Text("sleep.composition.a11y"))
@@ -62,7 +65,7 @@ struct SleepStageCompositionCard: View {
                         // 1.0.3 (App Review 1.4.1, audit row 17) — the stage
                         // shares are read against what a night is expected to
                         // look like, a claim with a literature behind it (AASM
-                        // 2015 and the rhythm set). 1.4 B2: at the card's foot,
+                        // 2015 and the rhythm set). At the card's foot,
                         // where every other card carries its citation.
                         HLSourcesLink(topic: .sleepRhythm)
                     }
@@ -90,31 +93,20 @@ struct SleepStageCompositionCard: View {
                 }
             }
         }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel {
-                    if let minutes = value.as(Double.self) {
-                        // Hours read better than a 480-minute tick.
-                        Text(verbatim: "\(Int(minutes / 60))")
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
-            }
-        }
+        // Hours on the leading edge: they read better than a 480-minute tick.
+        .hlChartValueAxis(label: Self.hoursLabel)
+        .hlChartUnit(String(localized: "unit.hours.short"))
         .chartXAxis {
             // Only the window edges are labelled: at 30 columns on a 393 pt
             // screen every per-night tick collides, and a rotated forest of
             // dates is less legible than none.
             AxisMarks(values: edgeDayKeys) { value in
-                // 1.4 B4 — the edge labels start and end at their columns, so
+                // The edge labels start and end at their columns, so
                 // neither is cut (the app's one date-axis rule).
                 AxisValueLabel(anchor: ChartDateAxis.labelAnchor(index: value.index, count: value.count)) {
                     if let key = value.as(String.self) {
                         Text(SleepNightDay.label(forDayKey: key) ?? key)
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     }
                 }
             }
@@ -156,6 +148,11 @@ struct SleepStageCompositionCard: View {
         )
     }
 
+    /// A minutes tick as whole hours.
+    nonisolated static func hoursLabel(_ minutes: Double) -> String {
+        "\(Int(minutes / 60))"
+    }
+
     /// First + last night of the window — the only two x labels that fit.
     private var edgeDayKeys: [String] {
         guard let first = nights.first?.dayKey, let last = nights.last?.dayKey else { return [] }
@@ -179,12 +176,10 @@ struct SleepStageCompositionCard: View {
                         .foregroundStyle(HLText.primary)
                     Spacer()
                     Text(SleepDurationFormat.hoursMinutes(share.minutes))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .monospacedDigit()
                     Text("sleep.composition.percent \(share.percent)")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.note)
                         .monospacedDigit()
                 }
             }
@@ -211,39 +206,5 @@ struct SleepStageCompositionCard: View {
         case .core: HLColor.sleepStageCore
         case .deep: HLColor.sleepStageDeep
         }
-    }
-}
-
-/// 7 / 14 / 30-night window for the composition chart, on the canonical
-/// ``HLRangePicker`` so it looks and speaks like every other range control in
-/// the app rather than a fourth bespoke toggle.
-enum SleepStageWindow: CaseIterable, Hashable, HLRangeOption {
-    case week
-    case fortnight
-    case month
-
-    var id: Self {
-        self
-    }
-
-    /// Nights in the window — the tail slice length.
-    var days: Int {
-        switch self {
-        case .week: 7
-        case .fortnight: 14
-        case .month: 30
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .week: String(localized: "sleep.composition.window.7")
-        case .fortnight: String(localized: "sleep.composition.window.14")
-        case .month: String(localized: "sleep.composition.window.30")
-        }
-    }
-
-    var rangeAccessibilityLabel: String {
-        String(localized: "sleep.composition.window.a11y \(days)")
     }
 }

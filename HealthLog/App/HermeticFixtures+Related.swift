@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **RELATED (1.5.0, #141) — the "Related" section on four pages.**
+    /// **The "Related" section on four pages.**
     ///
     /// Under `-uitest-related` (with `-uitest-area-meds`) the single reads of
     /// Metformin, the Influenza episode, one HbA1c value and the scanned
@@ -95,7 +95,7 @@
             """
         }
 
-        /// POLISH-A A2 — the report is linked to the Influenza episode, and the
+        /// The report is linked to the Influenza episode, and the
         /// server lists that stored link in `related` as well (v1.47.0,
         /// `document:conditionEpisode` is a stored cell), exactly as it does live.
         private static var documentJSON: String {

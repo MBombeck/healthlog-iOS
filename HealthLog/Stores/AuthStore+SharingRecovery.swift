@@ -12,7 +12,7 @@ public extension AuthStore {
             switch phase {
             case let .authenticated(current), let .authenticating(current):
                 guard current.id == user.id else { return }
-            case .unknown, .unauthenticated, .standalone:
+            case .unknown, .unauthenticated:
                 return
             }
         }

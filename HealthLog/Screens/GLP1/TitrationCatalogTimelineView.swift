@@ -24,7 +24,7 @@ struct TitrationCatalogTimelineView: View {
     var body: some View {
         if !steps.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("medication.titration.plan.title")
+                HLCardLabel("medication.titration.plan.title")
 
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
@@ -36,8 +36,7 @@ struct TitrationCatalogTimelineView: View {
                 // and hand the reader the EMA source it comes from. The link
                 // stays outside every `.combine` group above it.
                 Text(String(localized: "Per the manufacturer's guide — discuss any change with your doctor."))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
                 HLSourcesLink(topic: .titration(drugID))
             }
@@ -56,8 +55,10 @@ private struct TitrationCatalogRow: View {
             rail
             VStack(alignment: .leading, spacing: 0) {
                 Text(TitrationLadderSection.formatDose(step.doseMg))
-                    .font(step.isCurrent ? .hlHeadline : .hlSubhead)
-                    .foregroundStyle(step.isCurrent ? Color.accentColor : HLText.primary)
+                    // The dose reached reads as a row title, the earlier
+                    // ones step back in secondary ink.
+                    .font(step.isCurrent ? HLRowTitle.font : .hlSubhead)
+                    .foregroundStyle(step.isCurrent ? HLText.primary : HLText.secondary)
                     .monospacedDigit()
                     .padding(.vertical, HLSpace.xs)
             }

@@ -2,7 +2,7 @@
     import Foundation
     import os
 
-    /// **W-HERMETIC-E2E (v0152).** Debug-only UI-test infrastructure that boots
+    /// Debug-only UI-test infrastructure that boots
     /// the app into a deterministic, network-free authenticated state.
     ///
     /// The seven `HealthLogUITests` walkthrough classes used to authenticate
@@ -26,7 +26,7 @@
     enum HermeticUITestSupport {
         static let launchArgument = "-uitest-hermetic"
 
-        /// **H3 auth-journey (audit-v0162).** Boots UNAUTHENTICATED onto the
+        /// **Auth journey.** Boots UNAUTHENTICATED onto the
         /// onboarding auth step with the SAME fixture-backed backend as the
         /// authenticated hermetic boot, so a UITest can drive the *real* login
         /// form — password → shell, and the second-factor `MfaChallengeSheet` —
@@ -39,7 +39,7 @@
         /// `-uitest-mfa-verify-dead` (see `HermeticFixtures`).
         static let authJourneyArgument = "-uitest-auth-journey"
 
-        /// **Phase 08 Wave 0.** The one typed scenario vocabulary the Phase-8 UI
+        /// The one typed scenario vocabulary the Phase-8 UI
         /// REDs steer their fixtures with. Passed as `-uitest-phase8 <rawValue>`
         /// and read here, before ``AppContainer`` composes anything, so the
         /// scenario can only ever change what the *fixtures* answer — there is
@@ -63,7 +63,7 @@
             /// An unauthenticated boot whose `/api/auth/me` says the tour is
             /// already complete — the returning user who should not be re-asked.
             case returningLoginCompleted
-            /// **08-08.** The same boot for an account whose setup is genuinely
+            /// The same boot for an account whose setup is genuinely
             /// outstanding: `/api/auth/me` answers `onboardingTourCompleted:
             /// false`, so the optional tail is reached truthfully rather than by
             /// the flow ignoring the answer. Every case that asserts *about* the
@@ -75,7 +75,7 @@
             /// Its `/api/auth/me` also says the tour is outstanding — the step it
             /// exercises lives inside the setup tail.
             case onboardingProfileFailure
-            /// **08-11.** The authenticated shell with four renderable wellness
+            /// The authenticated shell with four renderable wellness
             /// scores on the derived batch route, so the Insights score grid has
             /// something to lay out. Without it `/api/insights/*` answers `{}`,
             /// the block self-suppresses, and an accessibility-size layout case
@@ -107,7 +107,7 @@
             ProcessInfo.processInfo.arguments.contains(marketingOverlayArgument)
         }
 
-        /// **13-04 — the web-handoff outcome, without a browser.**
+        /// **The web-handoff outcome, without a browser.**
         ///
         /// `ASWebAuthenticationSession` presents a system sheet out of process.
         /// A UI test cannot drive it, and a test that tried would be measuring
@@ -131,10 +131,10 @@
 
         static let webLoginOutcomeArgument = "-uitest-weblogin-outcome"
 
-        /// **13-04 — this run is about the web-handoff leg.**
+        /// **This run is about the web-handoff leg.**
         ///
         /// Scoped deliberately rather than made the fixture default. The
-        /// availability gate is honest now (13-02): on a self-hosted instance
+        /// availability gate is honest now: on a self-hosted instance
         /// whose login route answers, the browser CTA takes the primary slot
         /// and the password form starts closed behind the fallback link. That
         /// is #65's shipped design and it is correct — and it means a fixture
@@ -201,11 +201,21 @@
             isAuthenticatedBoot || isAuthJourneyBoot
         }
 
+        /// **1.7 measurement seam.** `-uitest-latency-ms <n>` holds every
+        /// fixture answer back by `n` milliseconds, a slow wire for timing
+        /// "open to confirmed dose state". Zero without the argument.
+        static var fixtureLatency: TimeInterval {
+            let args = ProcessInfo.processInfo.arguments
+            guard let index = args.firstIndex(of: "-uitest-latency-ms"), index + 1 < args.count,
+                  let millis = Double(args[index + 1]) else { return 0 }
+            return max(0, millis) / 1000
+        }
+
         /// Seed the keychain + UserDefaults so `AuthStore.bootstrap()` lands on
         /// `.authenticated` and the onboarding/disclaimer/biometric gates are
         /// satisfied. Runs from `applyUITestEnvironmentOverrides` BEFORE
         /// `AppEnvironment.resolve`, so the seeded base URL wins. `@MainActor`
-        /// because the seeded keys (`SyncModeStore`, `FirstLoginSyncBanner`) are
+        /// because the seeded key (`FirstLoginSyncBanner`) is
         /// MainActor-isolated; the caller (`HealthLogApp.init`) is on MainActor.
         @MainActor
         static func seedAuthenticatedSession(keychain: KeychainStoring) {
@@ -216,11 +226,6 @@
             try? keychain.setString("hermetic-bearer-token", forKey: KeychainKey.authToken)
             try? keychain.setString(seededUserID, forKey: KeychainKey.userID)
             try? keychain.setString(seededDisplayName, forKey: KeychainKey.userDisplayName)
-            // `.paired` sync + onboarding mode so SyncModeStore resolves a
-            // non-nil paired mode and never drops into the standalone /
-            // re-onboard branch.
-            UserDefaults.standard.set("paired", forKey: SyncModeStore.storageKey)
-            UserDefaults.standard.set("paired", forKey: SyncModeStore.onboardingModeKey)
             // Disable the biometric-lock gate (no enrolled biometric on CI sims).
             UserDefaults.standard.set(false, forKey: "hl.settings.biometricLock")
             // Mark the first-login banner consumed so the walkthrough lands on a
@@ -231,7 +236,7 @@
             HermeticURLProtocol.activate()
         }
 
-        /// **CU-05.** Device-local UI-pref residue that makes a hermetic boot ask
+        /// Device-local UI-pref residue that makes a hermetic boot ask
         /// iOS for a *system permission sheet* — the one class of leftover that
         /// survives a keychain purge and then hijacks the NEXT test.
         ///
@@ -255,7 +260,7 @@
         /// passes it via `-hl.settings.cycleTracking.optIn` (the argument domain
         /// wins over the persistent one), so this cannot disarm such a test.
         ///
-        /// **09-16 — a second residue of the same shape, and an honest limit on
+        /// **A second residue of the same shape, and an honest limit on
         /// what removing it buys.** `MarketingScreenshotsTest` taps
         /// `healthkitConnectBanner.dismissButton` for a calmer hero shot;
         /// `HKReadinessStore.dismissBanner()` persists
@@ -308,7 +313,7 @@
         private static func purgePermissionPromptingResidue() {
             UserDefaults.standard.removeObject(forKey: "hl.settings.cycleTracking.optIn")
             HKReadinessStore.clearPersisted(for: seededUserID)
-            // **25-01.** The update-notice card is armed from the install
+            // The update-notice card is armed from the install
             // sentinel, and a reused simulator's container carries one from
             // every earlier run — so without this line the FIRST hermetic run
             // on a new build would meet an armed card on the very Dashboard
@@ -320,23 +325,21 @@
             HealthKitUpdateNotice.disarm()
         }
 
-        /// **H3 auth-journey (audit-v0162).** Seed the UNAUTHENTICATED auth-journey
+        /// **Auth journey.** Seed the UNAUTHENTICATED auth-journey
         /// boot: the seeded server URL so the login `POST` resolves against the
         /// fixture host, but NO auth token — the app stays on the onboarding auth
         /// step (`AuthStore.bootstrap()` → `.unauthenticated`). Activates the
         /// fixture protocol so the login / MFA-verify endpoints answer from
-        /// `HermeticFixtures`. Purges residual mode keys so a reused simulator
+        /// `HermeticFixtures`. Purges a residual token so a reused simulator
         /// can't bootstrap into a shell. `@MainActor` for parity with
-        /// `seedAuthenticatedSession` (SyncModeStore keys are MainActor-adjacent).
+        /// `seedAuthenticatedSession`.
         @MainActor
         static func seedAuthJourney(keychain: KeychainStoring) {
             guard isAuthJourneyBoot else { return }
             try? keychain.removeAll()
             try? keychain.setString(seededBaseURL, forKey: KeychainKey.serverURL)
-            // No token AND no paired/standalone mode → bootstrap resolves cleanly
-            // to `.unauthenticated`, mounting `OnboardingFlow` (opened on `.auth`).
-            UserDefaults.standard.removeObject(forKey: SyncModeStore.storageKey)
-            UserDefaults.standard.removeObject(forKey: SyncModeStore.onboardingModeKey)
+            // No token → bootstrap resolves cleanly to `.unauthenticated`,
+            // mounting `OnboardingFlow` (opened on `.auth`).
             UserDefaults.standard.set(false, forKey: "hl.settings.biometricLock")
             // Same residue purge as the authenticated boot — the auth-journey run
             // ends up in the very same shell once the login lands.
@@ -377,7 +380,7 @@
             let perfMethod = request.httpMethod ?? "GET"
             // swiftlint:disable:next hllog_public_privacy_interpolation
             Self.perfTrace.notice("request \(perfMethod, privacy: .public) \(path, privacy: .public)")
-            // Phase 08 — the document filter contract is about *which* answer is
+            // The document filter contract is about *which* answer is
             // on screen, so the fixture router needs the query, not just the
             // path. Everything without a Phase-8 scenario resolves exactly as
             // before through the same path-keyed table.
@@ -390,15 +393,21 @@
                     } ?? []
                 )
             }
-            // 1.5 COACH-R — the v1.41 Coach overlay, only under `-uitest-coach-r`.
-            // LIFE (1.5.0) — the writable life circumstances read the request
+            // The v1.41 Coach overlay, only under `-uitest-coach-r`.
+            // The writable life circumstances read the request
             // body, so they answer before the Coach overlay and the path-keyed table.
-            // 1.5 LAB-LINES — timeline module, lab marker, part of day, usual range (`-uitest-lab-lines`).
-            let (status, body) = LifeFixtures.response(for: request) ?? CoachRFixtures.response(
-                forPath: path,
-                method: request.httpMethod ?? "GET",
-                base: base
-            ) ?? LabLinesFixtures.response(for: request, base: base) ?? base()
+            // Timeline module, lab marker, part of day, usual range (`-uitest-lab-lines`).
+            // The iOS 1.7 overlay (`-uitest-wo17`) answers first and builds on
+            // whatever the rest of the chain would have answered.
+            let rest = {
+                LifeFixtures.response(for: self.request) ?? CoachRFixtures.response(
+                    forPath: path,
+                    method: self.request.httpMethod ?? "GET",
+                    base: base
+                ) ?? LabLinesFixtures.response(for: self.request, base: base)
+                    ?? TimelineFixtures.response(for: self.request, base: base) ?? base()
+            }
+            let (status, body) = WO17Fixtures.response(for: request, base: rest) ?? rest()
             let fallbackURL = URL(string: HermeticUITestSupport.seededBaseURL) ?? URL(fileURLWithPath: "/")
             let url = request.url ?? fallbackURL
             // 12-12 third pass — the marketing overlay's avatar route answers
@@ -424,15 +433,21 @@
                 return
             }
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            // 1.5 COACH-R — a Coach stream that keeps running for a moment.
+            // A Coach stream that keeps running for a moment.
             if let split = CoachRFixtures.split(forPath: path, method: request.httpMethod ?? "GET") {
                 client?.urlProtocol(self, didLoad: split.head)
                 pendingTail = split.tail
                 perform(#selector(deliverTail), with: nil, afterDelay: CoachRFixtures.tailDelay)
                 return
             }
-            client?.urlProtocol(self, didLoad: body)
-            client?.urlProtocolDidFinishLoading(self)
+            let latency = HermeticUITestSupport.fixtureLatency
+            guard latency > 0 else {
+                client?.urlProtocol(self, didLoad: body)
+                client?.urlProtocolDidFinishLoading(self)
+                return
+            }
+            pendingTail = body
+            perform(#selector(deliverTail), with: nil, afterDelay: latency)
         }
 
         private var stopped = false

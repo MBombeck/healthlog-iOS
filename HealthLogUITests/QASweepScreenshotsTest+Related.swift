@@ -1,6 +1,6 @@
 import XCTest
 
-/// **RELATED (1.5.0, #141) — "Related" on four pages, photographed.**
+/// **"Related" on four pages, photographed.**
 ///
 /// Opens Metformin (`-uitest-area-meds`), whose single read carries `related`
 /// under `-uitest-related` (`RelatedFixtures`), shoots the section and then
@@ -33,7 +33,7 @@ extension QASweepScreenshotsTest {
         }
     }
 
-    /// POLISH-A — the list and header layouts the SHOTS sweep found cut at an
+    /// The list and header layouts the SHOTS sweep found cut at an
     /// accessibility size: the medication list and a medication's header, the
     /// lab list and a marker page (statistics row), the document list with its
     /// "Recently deleted" link. Same world as `test_19_related`, so it runs at
@@ -89,30 +89,20 @@ extension QASweepScreenshotsTest {
         }
     }
 
-    /// POLISH-A — the lab list and a marker page in the world that has lab
+    /// The lab list and a marker page in the world that has lab
     /// values (`-uitest-citations`, as `test_17b_recordsArea`).
     func test_25b_polishLabs() {
         boot(extra: ["-uitest-citations"])
         let size = isXXL ? "-xxl" : ""
-        tab("ellipsis")
-        scrollUpToTop()
-        guard let labs = probe("more.row.labs") else {
-            note("25b: More row not present: labs")
-            return
-        }
-        labs.tap()
-        settle(3)
+        guard openArea("labs") else { return }
         shot("25b-labs\(size)-top")
         scrollDown()
         shot("25b-labs\(size)-scroll1")
         scrollUpToTop()
-        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'labs.byType.item'")).firstMatch
-        guard first.waitForExistence(timeout: 4), first.isHittable else {
+        guard openLabMarker() != nil else {
             note("25b: no biomarker row")
             return
         }
-        first.tap()
-        settle(3)
         shot("25b-labs-marker\(size)-top")
         scrollDown()
         shot("25b-labs-marker\(size)-scroll1")

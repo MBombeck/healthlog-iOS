@@ -84,7 +84,7 @@ public actor DerivedMetricsRepository {
         }
     }
 
-    /// **CU-30 / C5.** Fetches the Same-Time-Baseline envelope for one of the
+    /// Fetches the Same-Time-Baseline envelope for one of the
     /// four cumulative types (`GET /api/insights/derived?metric=SAME_TIME_BASELINE&type=…`).
     ///
     /// Deliberately the SINGLE route, uncached: the batch route is served from

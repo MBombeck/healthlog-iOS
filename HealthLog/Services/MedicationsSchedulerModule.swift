@@ -134,13 +134,13 @@
 
         /// Whether `reconcile` arms any reminder task for `medication`.
         ///
-        /// **v1.39.1 (#1033)** — a medication kept as a record (`trackIntake:
+        /// **v1.39.1** — a medication kept as a record (`trackIntake:
         /// false`) never reminds, whatever its schedule says. Leaving it out of
         /// the desired set is also what REMOVES reminders armed before the
         /// switch: `purgeOrphanedTasks` drops every `med-` task this set does
         /// not name.
         ///
-        /// **N1** — one predicate with ``MedicationReminderDeliveryPolicy``, so
+        /// One predicate with ``MedicationReminderDeliveryPolicy``, so
         /// the `clientManaged` claim never asserts a reminder this pass skips.
         static func plansReminders(for medication: Medication) -> Bool {
             MedicationReminderDeliveryPolicy.plansLocalReminder(for: medication)
@@ -175,7 +175,7 @@
             var isRunwayTail = false
         }
 
-        /// **v0.10 R1 §3.4 — project a medication's `ScheduleEntry` rows onto
+        /// **Project a medication's `ScheduleEntry` rows onto
         /// SpeziScheduler tasks.** The single-medication view of
         /// ``plannedProjections(for:now:timeZone:)`` — the medication planned as
         /// if it were the only one, so it may use the whole budget.
@@ -199,12 +199,12 @@
         /// - `monthly` / `everyNMonths(interval == 1)` (day ≤ 28, unbounded) /
         ///   `yearly` (stable month/day, unbounded) → an OS-delivered REPEATING
         ///   calendar trigger (`.monthly` / `.yearly`, `repeats: true`) that
-        ///   survives background / force-quit with zero re-arm (v0.14.1 H1).
+        ///   survives background / force-quit with zero re-arm.
         /// - everything else (`everyNWeeks(interval > 1)`, `everyNMonths(interval
         ///   > 1)`, `rolling`, `oneShot`, `cyclic`, day-29–31 monthly, Feb-29
         ///   yearly, and — R1 — a daily/weekly course that has not started or
         ///   ends within the horizon) → single occurrences as one-off `.once`
-        ///   tasks, re-armed and extended on every reconcile (v0.14.1 H3).
+        ///   tasks, re-armed and extended on every reconcile.
         ///
         /// **R5 — the runway depth is the budget, not a constant.** Which
         /// occurrences are armed comes from ``MedicationReminderRunway/plan(for:now:timeZone:budget:)``:
@@ -223,7 +223,7 @@
             var result: [PlannedProjection] = []
             for medication in medications where plansReminders(for: medication) {
                 let context = MedicationRecurrenceEngine.Context(medication: medication, timeZone: timeZone, now: now)
-                // R1 — a repeating daily/weekly trigger knows neither a first nor
+                // A repeating daily/weekly trigger knows neither a first nor
                 // a last day: it fired before `startsOn` and kept firing after
                 // `endsOn`, on days the server lists no dose. Such a course rides
                 // the engine runway instead, which honours both calendar days.
@@ -257,7 +257,7 @@
             case let .weekdays(days), let .everyNWeeks(_, days):
                 // `everyNWeeks` only gets here with interval 1 — a recurring
                 // Spezi `.weekly(interval: N)` would anchor the N-week phase on
-                // reconcile time, so interval > 1 rides the runway (H3).
+                // reconcile time, so interval > 1 rides the runway.
                 appendWeekly(entry: entry, entryIndex: entryIndex, days: days, interval: 1, into: &result)
             case let .legacy(days, intervalWeeks):
                 if let days, !days.isEmpty {
@@ -410,7 +410,7 @@
             "\(taskIDPrefix)\(medicationID)\(taskIDSlotSeparator)\(scheduleSlot)"
         }
 
-        /// v0.10 R1 §3.4 — task id from a string slot key (`e0-w1-t0`,
+        /// Task id from a string slot key (`e0-w1-t0`,
         /// `e0-once`, …). The slot key never contains `taskIDSlotSeparator`
         /// (`__slot-`), so `medicationId(fromTaskID:)` still round-trips the
         /// medication id back out cleanly.

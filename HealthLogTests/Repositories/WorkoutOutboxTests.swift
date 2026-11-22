@@ -7,7 +7,7 @@ import Testing
 // partial acceptance, and auth-lease regressions together.
 // swiftlint:disable force_unwrapping type_body_length
 
-/// **Audit v0.14.8 Wave A (C4.1)** — locks the Outbox-Mandate compliance of the
+/// Locks the Outbox-Mandate compliance of the
 /// workout batch upload: a retriably-failed `POST /api/workouts/batch` enrolls
 /// as `.uploadWorkoutBatch` carrying the SAME idempotency key that was used on
 /// the wire; replay re-issues the POST under that persisted key; success
@@ -113,7 +113,7 @@ struct WorkoutOutboxTests {
         let repo = WorkoutsRepository(api: makeAPI(), outbox: outbox)
         nonisolated(unsafe) var wireKey: String?
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — record only OUR route.
+            // The handler is process-global — record only OUR route.
             if req.targets("/api/workouts/batch") {
                 wireKey = req.value(forHTTPHeaderField: "Idempotency-Key")
             }
@@ -266,7 +266,7 @@ struct WorkoutOutboxTests {
         nonisolated(unsafe) var replayKey: String?
         nonisolated(unsafe) var bodyData: Data?
         MockURLProtocol.install { req in
-            // CU-07: a parallel suite's request must not clear `hitBatch` again
+            // A parallel suite's request must not clear `hitBatch` again
             // nor overwrite the recorded key/body.
             if req.targets("/api/workouts/batch") {
                 hitBatch = true

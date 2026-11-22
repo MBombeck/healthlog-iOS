@@ -1,4 +1,4 @@
-// W2 — server-support contract config.
+// Server-support contract config.
 // Pins the single source of truth for which HK identifiers the server can
 // persist today, the re-enable flag default, and the gate semantics that both
 // the registration gate (`HealthLogSpeziDelegate`) and the anchor-decision
@@ -12,7 +12,7 @@
     struct HealthKitServerSupportConfigTests {
         @Test("Gate is now empty — every authorized HK type persists (server v1.6.0)")
         func deferredIdentifierSetIsEmpty() {
-            // v0.8.4 W-WALK — the last two operator-requested gait types
+            // The last two operator-requested gait types
             // (walkingStepLength + walkingSpeed) landed server-side in v1.6.0,
             // so the deferred set is now empty: no authorized HK identifier is
             // gated. The two-layer defense stays wired for future gating.

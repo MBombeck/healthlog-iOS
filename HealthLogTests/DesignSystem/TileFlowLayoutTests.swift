@@ -106,7 +106,7 @@ struct TileFlowLayoutTests {
         #expect(slots.allSatisfy { $0.column == 0 })
     }
 
-    // MARK: - W-REORDER — row-item-counts (compositional layout group mapping)
+    // MARK: - Row-item-counts (compositional layout group mapping)
 
     // The `ReorderableTileCollection` compositional layout builds one
     // horizontal group per packed row: count 1 → a full-width item, count 2 →
@@ -142,7 +142,7 @@ struct TileFlowLayoutTests {
         #expect(TileReorderMath.rowItemCounts(spans: [], columns: 2).isEmpty)
     }
 
-    // MARK: - W-REORDER — order commit from a reordered id snapshot
+    // MARK: - Order commit from a reordered id snapshot
 
     /// The engine commits a drag by reading `transaction.finalSnapshot`'s id
     /// order and forwarding it to the store. This models that hand-off: moving

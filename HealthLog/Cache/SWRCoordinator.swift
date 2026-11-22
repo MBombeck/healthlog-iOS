@@ -18,7 +18,7 @@ public enum SWRState<T: Sendable>: Sendable {
     case failed(HLError, lastKnown: T?)
 }
 
-/// **21-03 (D-14-06-C)** — who asked for a revalidation.
+/// Who asked for a revalidation.
 ///
 /// Deliberately a separate axis from `forceRevalidate`. That flag answers
 /// "revalidate even though the cached row is still fresh"; this one answers
@@ -66,7 +66,7 @@ public actor SWRCoordinator {
 
     private var cacheState: CacheState
     private let reachability: ReachabilityProviding
-    /// W8-B2 — single-flight registry. Concurrent revalidations of the SAME
+    /// Single-flight registry. Concurrent revalidations of the SAME
     /// key (e.g. the Dashboard + Insights pull-to-refresh fan-outs both
     /// hitting `dashboardSummary`/`measurementsRecent`, or two observers of
     /// one key on the same screen) collapse into ONE network round-trip: the
@@ -76,7 +76,7 @@ public actor SWRCoordinator {
     /// because the key→type mapping is structurally fixed per `CacheKey` case.
     private var inflight: [String: Task<any Sendable, Error>] = [:]
 
-    /// b177 W-SYNCPROGRESS — observers of the live in-flight revalidation
+    /// Observers of the live in-flight revalidation
     /// count. The sync-status footer aggregates this with the outbox backlog
     /// so a pull-to-refresh can show an HONEST "N ausstehend" quantity (the
     /// number of distinct keys currently being fetched — no invented
@@ -84,7 +84,7 @@ public actor SWRCoordinator {
     /// registration and on every insert/removal in the single-flight registry.
     private var inflightObservers: [UUID: AsyncStream<Int>.Continuation] = [:]
 
-    /// **v0.13 WS Item 2 — cross-user / cross-server stale-write guard.**
+    /// **Cross-user / cross-server stale-write guard.**
     /// Monotonic session token bumped on every `invalidateAll()` (logout,
     /// account-delete, switch-server). A revalidation captures the epoch
     /// *before* its `fetch()`; the write-through re-checks it *after* the
@@ -95,7 +95,7 @@ public actor SWRCoordinator {
     /// would still run its `cache.write` before observing cancellation.
     private(set) var sessionEpoch: Int = 0
 
-    /// **W-PERF-SWR C2 — non-blocking write-through.** Handles for the
+    /// **Non-blocking write-through.** Handles for the
     /// fire-and-forget cache persists kicked by `fetchAndWriteThrough`. The
     /// on-screen repaint no longer awaits the SwiftData `save()` flush (~10-50
     /// ms): the fresh value is returned to the store IMMEDIATELY and the disk
@@ -111,7 +111,7 @@ public actor SWRCoordinator {
     /// to assert the read-after-write contract without timing flakiness.
     var pendingWrites: [UUID: Task<Void, Never>] = [:]
 
-    /// Build 273 (A9) — per-key write generation. `writeThrough` and
+    /// Per-key write generation. `writeThrough` and
     /// `invalidate(_:)` bump it; a revalidation captures it before its fetch and
     /// persists to disk only if nothing newer was written for that key in the
     /// meantime. The session epoch guarded logout; nothing guarded a foreground
@@ -173,7 +173,7 @@ public actor SWRCoordinator {
         }
     }
 
-    /// **v0.12 W8-4** — Sweep cached snapshots older than `maxAge`. Resolves
+    /// Sweep cached snapshots older than `maxAge`. Resolves
     /// the deferred cache (single-flight) and forwards to
     /// `SWRCache.sweepOlderThan`. Best-effort: errors are swallowed + logged so
     /// the BGTask path never fails on a cache-maintenance hiccup. Returns the
@@ -198,7 +198,7 @@ public actor SWRCoordinator {
     /// blow the ≤100 ms cache-paint budget).
     public static let defaultMaxRows = 4000
 
-    /// **AUD-8 H-1** — enforce the hard row-count cap (evict the oldest rows
+    /// Enforce the hard row-count cap (evict the oldest rows
     /// beyond `maxRows`). Best-effort, off the hot path. Returns the number of
     /// rows evicted.
     @discardableResult
@@ -214,7 +214,7 @@ public actor SWRCoordinator {
         }
     }
 
-    /// **AUD-8 H-1** — the foreground / cold-launch maintenance pass: age-sweep
+    /// The foreground / cold-launch maintenance pass: age-sweep
     /// AND row-count cap, in one call. Wired off the hot path (detached
     /// `.utility`) so it never depends on a BGProcessingTask wake — the cache
     /// stays bounded even with Background-App-Refresh disabled. Returns the
@@ -241,10 +241,10 @@ public actor SWRCoordinator {
     ///   - forceRevalidate: when `true`, the staleness short-circuit is
     ///     bypassed — a fresh-enough cached row still triggers a network
     ///     revalidation (`.cached → .fresh`). This is the explicit
-    ///     pull-to-refresh path (W8-B1); the offline-serve guard still
+    ///     pull-to-refresh path; the offline-serve guard still
     ///     applies so a forced refresh while offline serves cache rather
     ///     than erroring.
-    ///   - intent: **21-03 (D-14-06-C)** — who asked. `.system` keeps today's
+    ///   - intent: **21-03** — who asked. `.system` keeps today's
     ///     single-flight semantics exactly: attach to an in-flight winner for
     ///     however long it takes, so N identical background revalidations stay
     ///     one round-trip. `.userInitiated` attaches only for
@@ -272,7 +272,7 @@ public actor SWRCoordinator {
 
                 // 1. Synchronous emit from cache.
                 //
-                // **21-02 — the decode does not happen on the cache actor.**
+                // **The decode does not happen on the cache actor.**
                 // `SWRCache` is a `@ModelActor` with a serial executor, and
                 // 21-01 measured the consequence: across an eight-surface
                 // foreground fan-out, ZERO pairs of distinct keys ever decoded
@@ -307,7 +307,7 @@ public actor SWRCoordinator {
                     return
                 }
 
-                // 4. Fetch + write-through, single-flighted (W8-B2) so
+                // 4. Fetch + write-through, single-flighted so
                 //    concurrent observers / pull-to-refresh fan-outs hitting
                 //    the same key collapse into one network round-trip.
                 do {
@@ -331,7 +331,7 @@ public actor SWRCoordinator {
         }
     }
 
-    /// **21-02 — decode a cached payload off every actor.**
+    /// **Decode a cached payload off every actor.**
     ///
     /// `nonisolated` **and** `async`, and both words are load-bearing. Under
     /// SE-0338 a non-actor-isolated `async` function runs on the generic
@@ -342,16 +342,19 @@ public actor SWRCoordinator {
     /// (which would merely relocate it, and is the mistake this shape is
     /// written to avoid).
     ///
-    /// That makes the fix depend on an isolation default. Enabling the
-    /// `NonisolatedNonsendingByDefault` upcoming feature, or writing
-    /// `nonisolated(nonsending)` here, would silently reinstate the
-    /// serialization — which is precisely why
+    /// That made the fix depend on an isolation default: under
+    /// `NonisolatedNonsendingByDefault` (the Swift 7 mode, Approachable
+    /// Concurrency) a plain `nonisolated async` runs on its caller's actor and
+    /// would silently reinstate the serialization. `@concurrent` (D5 #5) states
+    /// the intent in the declaration, so it holds in every language mode. That
+    /// is also why
     /// `SWRCacheContentionTests.slowDecodeOfOneKeyMustNotDelayAnotherKeysFirstPaint`
     /// exists and asserts the ordering rather than the implementation.
     ///
     /// A `nil` payload stays `nil`, and a decode failure becomes `nil` — the
     /// same cache-miss the in-actor decode produced, mapped to the same
     /// `.empty` emission, so the ladder's contract is unchanged.
+    @concurrent
     private nonisolated static func decodeOffActor<T: Decodable & Sendable>(
         _ raw: Cached<Data>?,
         key: CacheKey,
@@ -362,14 +365,14 @@ public actor SWRCoordinator {
         return Cached(value: value, updatedAt: raw.updatedAt)
     }
 
-    /// W8-B2 — single-flight fetch + write-through for one key. Concurrent
+    /// Single-flight fetch + write-through for one key. Concurrent
     /// callers for the same key share one network round-trip: the first
     /// registers an in-flight task, later callers await it. The result is
     /// written through the cache once (by the winner) so the observe ladder
     /// sees it on its next pass. Throws the underlying fetch error to ALL
     /// waiters (so each observer reports `.failed` with its own `lastKnown`).
     ///
-    /// **21-03 (D-14-06-C) — the sharing contract now depends on who asked.**
+    /// **The sharing contract now depends on who asked.**
     /// 14-06 measured the operator's *"das Runterziehen bringt keine Lösung …
     /// ich habe gewartet"*: the winner is an unstructured `Task`, a cancelled
     /// foreground pass does not cancel the fetch it started, and a pull
@@ -393,11 +396,11 @@ public actor SWRCoordinator {
         fetch: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         let hash = key.persistentHash
-        // v0.13 WS Item 2 — capture the session epoch BEFORE the fetch so the
+        // Capture the session epoch BEFORE the fetch so the
         // write-through can detect an intervening `invalidateAll()` (logout /
         // switch-server) and drop a now-stale write.
         let epoch = sessionEpoch
-        // Re-entrancy short-circuit (W25): if this key is already being
+        // Re-entrancy short-circuit: if this key is already being
         // fetched on the present task's own call-stack, awaiting the
         // registered in-flight task would mean awaiting our own ancestor —
         // a self-deadlock. Run the fetch directly + write-through instead.
@@ -457,7 +460,7 @@ public actor SWRCoordinator {
         return typed
     }
 
-    /// b177 W-SYNCPROGRESS — live stream of the in-flight revalidation count.
+    /// Live stream of the in-flight revalidation count.
     /// Yields the current count immediately on registration, then once per
     /// insert/removal in the single-flight registry. Mirrors the
     /// `OutboxQueue.changes` continuation pattern (register on the actor,
@@ -493,9 +496,9 @@ public actor SWRCoordinator {
     // Fetch a fresh value and write it through the cache (best-effort — a
     // cache-write failure is logged, not propagated, so the caller still
     // receives the fresh value). Single shared site for both the
-    // single-flight winner and the re-entrant short-circuit (W25).
+    // single-flight winner and the re-entrant short-circuit.
     //
-    // **v0.13 WS Item 2 — epoch guard.** This is an actor-isolated instance
+    // **Epoch guard.** This is an actor-isolated instance
     // method (was `static`) so that after `fetch()` resumes it can compare
     // the captured `epoch` against the live `sessionEpoch`. If an
     // `invalidateAll()` ran during the fetch (user logout / switch-server),
@@ -504,7 +507,7 @@ public actor SWRCoordinator {
     // to the in-flight observer (which is finishing its own stream; a
     // post-purge re-observe under the new session re-fetches cleanly).
 
-    // W-PERF-SWR C2 — fire-and-forget persist of an already-encoded payload.
+    // Fire-and-forget persist of an already-encoded payload.
     // Re-checks the session epoch on the actor before writing (a logout between
     // scheduling and execution drops the stale write) and logs — never
     // propagates — a write failure. Registered in `pendingWrites` so
@@ -584,7 +587,7 @@ public actor SWRCoordinator {
     ///   3. Otherwise call `fetch`, write the fresh value back through the
     ///      cache, return the fresh value.
     ///
-    /// **Used by `MeasurementsRepository` (W1-1)** so chart-detail tap-load
+    /// **Used by `MeasurementsRepository`** so chart-detail tap-load
     /// hits cached values instead of cold network round-trips. The repo is
     /// itself an actor and can't subscribe to `observe`'s AsyncStream from
     /// its method body, so this single-value shape is the right adapter.
@@ -614,7 +617,7 @@ public actor SWRCoordinator {
         if let cached, !isOnline {
             return cached.value
         }
-        // Network path, single-flighted (W8-B2) so it shares a round-trip
+        // Network path, single-flighted so it shares a round-trip
         // with any concurrent observe()/fetchCachingFirst of the same key.
         // Write-through happens inside the single-flight so the observe
         // ladder emits `.cached(...)` to other subscribers on their next pass.
@@ -647,14 +650,14 @@ public actor SWRCoordinator {
     ///   retry once, then recreate the store (delete SQLite + rebuild container)
     ///   so a previous account's rows can't paint as the new user's data.
     public func invalidateAll() async {
-        // Item 2 — fence the session BEFORE the purge.
+        // Fence the session BEFORE the purge.
         sessionEpoch &+= 1
         for task in inflight.values {
             task.cancel()
         }
         inflight.removeAll()
         broadcastInflightCount()
-        // W-PERF-SWR C2 + W-RECONCILE M-1 — cancel AND drain detached persists.
+        // Cancel AND drain detached persists.
         // Cancellation alone races: a persist already past its `epochIsCurrent`
         // check is mid-`await cache.write` and would serialize on the `SWRCache`
         // actor AFTER the purge, re-inserting a stale-session row. Awaiting every
@@ -676,7 +679,7 @@ public actor SWRCoordinator {
         } catch {
             HLLog.cache.warning("Cache invalidateAll failed — retrying once")
         }
-        // Item 3 — retry once.
+        // Retry once.
         do {
             try await cache.invalidateAll()
             return

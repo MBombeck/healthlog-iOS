@@ -3,7 +3,7 @@ import UIKit
 
 /// Compliance day-cell grid styled after GitHub's contribution graph.
 ///
-/// **v0.5.5.2 — empty-state path** (W-DATA-FLOW-AUDIT BLOCKER #6). When
+/// **Empty-state path**. When
 /// every cell in the grid would paint at level 0 (no intakes anywhere
 /// in the window), we render a discrete empty-state hint pointing
 /// at the Medikamente tab instead of a wall of grey circles. The wall
@@ -66,12 +66,12 @@ struct ComplianceHeatmapSection: View {
         self.onSelectDay = onSelectDay
     }
 
-    /// v0.13 WP — hide the sub-10pt weekday micro-labels at accessibility text
+    /// Hide the sub-10pt weekday micro-labels at accessibility text
     /// sizes instead of pinning a tiny font (the cells are fixed-size and can't
     /// scale). Mirrors the Mood heatmap twin.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// **#13 — live window-length pref.** Optional so previews / render
+    /// **Live window-length pref.** Optional so previews / render
     /// harnesses without the app environment fall back to the 12-week
     /// REG-4 default instead of crashing on a missing observable.
     @Environment(SettingsStore.self) private var settingsStore: SettingsStore?
@@ -114,7 +114,7 @@ struct ComplianceHeatmapSection: View {
 
     private static let cellSpacing: CGFloat = HLSpace.xxs
 
-    /// QoL 4/7 (v0.5.6) — leading weekday labels (Mon top → Sun bottom)
+    /// QoL 4/7 — leading weekday labels (Mon top → Sun bottom)
     /// pulled from the current locale's short weekday symbols so the row
     /// reads "M D M D F S S" in German and "M T W T F S S" in English.
     /// `DateFormatter.veryShortWeekdaySymbols` is Sunday-indexed; we
@@ -123,70 +123,52 @@ struct ComplianceHeatmapSection: View {
     /// allocate per repaint. Both symbol arrays are typed as
     /// implicitly-unwrapped optionals so we coalesce defensively.
     private nonisolated static let weekdayLabels: [String] = {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        let veryShort: [String] = formatter.veryShortWeekdaySymbols ?? []
-        let short: [String] = formatter.shortWeekdaySymbols ?? []
+        let calendar = Calendar.autoupdatingCurrent
+        let veryShort = calendar.veryShortWeekdaySymbols
+        let short = calendar.shortWeekdaySymbols
         let raw: [String] = veryShort.count == 7 ? veryShort : short
         guard raw.count == 7 else { return Array(repeating: "", count: 7) }
         // Reorder Mon=0 … Sun=6 to match the grid's row indexing.
         return [raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[0]]
     }()
 
-    /// **POLISH-MED (v0.5.5.6) / v0.6.1.4 Y4.2.** The section host is no
-    /// longer rendered on the main `MedicationsScreen`. In v0.5.5.6 the
-    /// screen-level summary moved to a slim 36-pt stripe; in v0.6.1.4
-    /// Y4.2 even that stripe was dropped on operator direction — the
-    /// per-card 7- and 30-day bars now carry the headline number on
-    /// the tab. The section stays alive as a sub-component (the
-    /// section header + the heatmap grid, no `HLCard` wrapper) so the
-    /// MedicationDetail screen can reuse the 12 × 7 detail
-    /// visualisation when the user drills into a specific medication,
-    /// and so the existing `hasEnoughHistory(in:now:)` gate-contract
-    /// tests in `ComplianceHeatmapSectionTests` keep their production
-    /// callsite. The internal `HLCard` wrapper was dropped — the
-    /// heatmap renders directly on the host's surface without a
-    /// second-level card chrome.
+    /// Not rendered on the main `MedicationsScreen`, where the per-card 7-
+    /// and 30-day bars carry the headline number. The section (header and
+    /// heatmap grid) lets the MedicationDetail screen show the 12 × 7 detail
+    /// visualisation for one medication, and it renders directly on the
+    /// host's surface without a second card chrome.
     var body: some View {
         if !hasEnoughHistory {
-            // REG-4: hide entirely until the user has ≥ 90 d of compliance
+            // Hide entirely until the user has ≥ 90 d of compliance
             // history. A 12×7 grid with mostly level-0 cells reads as a
             // broken chart on fresh devices; deferring rendering keeps the
             // Meds surface honest.
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack {
-                    // POLISH-MED: Apple grouped-list label style.
-                    HLSectionLabel(titleKey)
+                HStack(alignment: .firstTextBaseline) {
+                    // The head in the size of every card head (Z4); the host
+                    // supplies the card around it.
+                    Text(titleKey)
+                        .font(HLRowTitle.font)
+                        .foregroundStyle(HLText.primary)
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Text(rateLabel)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .monospacedDigit()
                 }
 
                 Group {
                     if isAllZero {
-                        // v0.5.5.2 — discrete hint instead of a wall of 84
+                        // Discrete hint instead of a wall of 84
                         // grey circles. Reads as "you haven't started yet"
                         // instead of "broken chart" on a fresh device.
-                        VStack(alignment: .leading, spacing: HLSpace.xs) {
-                            Text(String(localized: "No intakes logged yet"))
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
-                            Text(
-                                String(
-                                    localized: "Once you log medications and acknowledge reminders, your \(weeks)-week compliance history appears here."
-                                )
-                            )
-                            .font(.hlFootnote)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        HLEmptyNote(Text(String(
+                            localized: "Once you log medications and acknowledge reminders, your \(weeks)-week compliance history appears here."
+                        )))
                     } else {
-                        // QoL 4/7 (v0.5.6): leading weekday-label column.
+                        // QoL 4/7: leading weekday-label column.
                         // GitHub's contribution graph leaves rows unlabelled
                         // because the surrounding chrome makes weekday
                         // parsing visual; in HealthLog the heatmap sits
@@ -206,7 +188,7 @@ struct ComplianceHeatmapSection: View {
                                             // keep the weekday label row-height locked
                                             // to the heatmap cell grid (matches the Mood
                                             // heatmap weekday labels). Hidden entirely at
-                                            // accessibility sizes (v0.13 WP).
+                                            // accessibility sizes.
                                             // swiftlint:disable:next dynamic_type_bypass
                                             .font(.system(size: 9, weight: .medium))
                                             .foregroundStyle(HLText.tertiary)
@@ -221,7 +203,7 @@ struct ComplianceHeatmapSection: View {
                                 // GitHub-style "weeks as columns" reads correctly (each
                                 // column = one calendar week, each row = one weekday).
                                 //
-                                // W-CHART-WIDTH (v0.5.5.1): each cell wraps in a
+                                // Each cell wraps in a
                                 // `.frame(maxWidth: .infinity)` so the columns
                                 // distribute across the card's full content width
                                 // instead of hugging the intrinsic cluster on the
@@ -229,7 +211,7 @@ struct ComplianceHeatmapSection: View {
                                 // diameter); only the spacing between columns expands.
                                 ForEach(0 ..< Self.daysPerWeek, id: \.self) { row in
                                     HStack(spacing: Self.cellSpacing) {
-                                        // #13 — non-constant range: `weeks` follows the
+                                        // Non-constant range: `weeks` follows the
                                         // Settings pick live; `id: \.self` keeps identity
                                         // stable per column index across re-lays.
                                         ForEach(0 ..< weeks, id: \.self) { column in
@@ -240,7 +222,7 @@ struct ComplianceHeatmapSection: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            // A11Y (audit-v0162 §5) — group the day cells as one
+                            // A11Y — group the day cells as one
                             // navigable container so VoiceOver treats the heatmap as
                             // a coherent grid (mirrors the Mood heatmap twin's
                             // `.contain`) instead of scattering the per-cell labels
@@ -253,7 +235,7 @@ struct ComplianceHeatmapSection: View {
         }
     }
 
-    /// **#13** — localized section title for the active window pick. The four
+    /// Localized section title for the active window pick. The four
     /// fixed keys (instead of one format key) keep the xcstrings entries
     /// hand-translatable per length and reuse the pre-existing 4/8/12 keys.
     private var titleKey: LocalizedStringKey {
@@ -265,7 +247,7 @@ struct ComplianceHeatmapSection: View {
         }
     }
 
-    /// **REG-4** — true when the user has ≥ 90 days of compliance history.
+    /// True when the user has ≥ 90 days of compliance history.
     /// Derived from the oldest **data-bearing** `ComplianceDay` in the
     /// store-supplied window; sidesteps an extra `MedicationsStore` accessor
     /// for the gate. Empty arrays fail the check (no history → hidden).
@@ -320,7 +302,7 @@ struct ComplianceHeatmapSection: View {
         daysPerWeek
     }
 
-    /// **v0.5.5.2** — true when the user has no compliance history with
+    /// True when the user has no compliance history with
     /// any non-zero day. Catches both the "no data at all" path (empty
     /// `days` array) and the "data present but everything is level 0"
     /// path (server reported scheduled rows but every day's rate is 0).
@@ -341,7 +323,7 @@ struct ComplianceHeatmapSection: View {
         // VoiceOver action set.
         if let day, day.scheduled > 0, let onSelectDay {
             Button { onSelectDay(day) } label: { circle }
-                .buttonStyle(.plain)
+                .buttonStyle(.hlRow)
                 .accessibilityHint(Text("Double-tap to open"))
         } else {
             circle
@@ -357,7 +339,7 @@ struct ComplianceHeatmapSection: View {
         Self.day(forRow: row, column: column, weeks: weeks, in: days, now: .now, timeZone: ProfileDay.timeZone)
     }
 
-    /// **#115 1.5 — the cell's day is a day in the ACCOUNT's zone, matched by
+    /// **The cell's day is a day in the ACCOUNT's zone, matched by
     /// key.** Pure so the matching is testable without a render pass.
     ///
     /// `ComplianceDay.date` is a server `YYYY-MM-DD` decoded as UTC midnight
@@ -399,11 +381,11 @@ struct ComplianceHeatmapSection: View {
 
     private func accessibilityLabel(for day: ComplianceDay?) -> Text {
         guard let day else { return Text("") }
-        // v0.8.3 W-B — surface the green/yellow/red STATUS word alongside
+        // Surface the green/yellow/red STATUS word alongside
         // the percentage so VoiceOver + colour-blind users get the same
         // taken / partial / missed read the recoloured fill encodes, not
         // just the hue.
-        // audit-v0162 L10N-6 / A11Y-2 — was a raw interpolated string with a
+        // Was a raw interpolated string with a
         // hardcoded English "percent" (+ ": "/", " separators) that had no
         // catalog key, so German VoiceOver read "80 percent". Route through a
         // localized key so the whole label translates.
@@ -426,17 +408,17 @@ struct ComplianceHeatmapSection: View {
     }
 
     private var rateLabel: String {
-        // M4 — average only over days that actually scheduled a dose;
+        // Average only over days that actually scheduled a dose;
         // 0-scheduled days carry no adherence and must not dilute the mean.
         let scheduledRates = days.compactMap(\.scheduledRate)
         guard !scheduledRates.isEmpty else { return "" }
         let avg = scheduledRates.reduce(0, +) / Double(scheduledRates.count)
-        // F1 — rounded (was truncated) and with the locale's percent sign (was a
+        // Rounded (was truncated) and with the locale's percent sign (was a
         // glued "80%" in German too).
         return "\(HLNumberFormat.percent(fraction: avg)) Ø"
     }
 
-    /// #115 1.5 — `date` is a UTC-midnight day anchor; format it in UTC so the
+    /// `date` is a UTC-midnight day anchor; format it in UTC so the
     /// VoiceOver label names the same day the cell stands for.
     private func formatted(_ date: Date) -> String {
         date.formatted(Date.FormatStyle(timeZone: ProfileDay.utcCalendar.timeZone).day().month())

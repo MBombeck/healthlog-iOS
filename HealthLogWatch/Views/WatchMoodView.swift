@@ -56,7 +56,7 @@ struct WatchMoodView: View {
             client.logMood(score: level.score)
             WKInterfaceDevice.current().play(.success)
         } label: {
-            HStack(spacing: HLSpace.xs) {
+            HStack(spacing: WatchMetrics.rowSpacing) {
                 ZStack {
                     Image(WatchMoodLevel.iconName(for: level.score))
                         .resizable()
@@ -69,7 +69,7 @@ struct WatchMoodView: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .frame(width: 22, height: 22)
+                .frame(width: WatchMetrics.rowIconSide, height: WatchMetrics.rowIconSide)
                 Text(level.title)
                     .font(.hlBody)
                     .lineLimit(1)

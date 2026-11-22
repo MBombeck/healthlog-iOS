@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **SYMPTOM (1.5.0, #144, server #1237)** — "Erfasste Symptome" on an
+/// "Erfasste Symptome" on an
 /// illness episode: the symptom occurrences the server files against this
 /// episode, and only those, as on the web.
 ///
@@ -10,7 +10,7 @@ import SwiftUI
 /// episode link, delete). Under the card, while the episode runs, a centred
 /// text link "Symptom erfassen" opens the same page for a new occurrence.
 ///
-/// Shown only with a paired server from v1.43.4 on (an older one ignores the
+/// Shown only with a server from v1.43.4 on (an older one ignores the
 /// `episodeId` filter and would mix every symptom of the record in), and only
 /// when there is something to show or, while the episode runs, something to
 /// log. A refusal shows ``FeatureDisabledCard``; any other failure the heading
@@ -20,22 +20,21 @@ struct EpisodeSymptomsSection: View {
     let episode: IllnessEpisodeDTO
 
     @Environment(\.appContainer) private var container
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Observed so the section appears as soon as the version probe lands.
     @AppStorage(KnownServerVersion.defaultsKey) private var serverVersion: String?
+    /// The `/api/version` keys; `day.dose-offset` opens the offset line.
+    @AppStorage(ServerFeatureKeys.defaultsKey) private var featureKeys: String?
     @State private var model = EpisodeSymptomsModel()
 
     /// The placement gate, pure so it is testable without a view host. An
     /// unknown version answers no (Regel 10).
-    nonisolated static func isAvailable(isPaired: Bool, serverVersion: String?) -> Bool {
-        guard isPaired, let serverVersion else { return false }
+    nonisolated static func isAvailable(serverVersion: String?) -> Bool {
+        guard let serverVersion else { return false }
         return ServerVersionInfo(version: serverVersion).isAtLeast(SymptomEventsRepository.minimumServerVersion)
     }
 
     var body: some View {
-        if let container,
-           Self.isAvailable(isPaired: container.syncModeStore.isPaired, serverVersion: serverVersion)
-        {
+        if let container, Self.isAvailable(serverVersion: serverVersion) {
             content
                 .task(id: episode.id) {
                     let repo = SymptomEventsRepository(api: container.api)
@@ -72,46 +71,32 @@ struct EpisodeSymptomsSection: View {
             FeatureDisabledCard(variant: .inline, reason: reason)
                 .accessibilityIdentifier("symptoms.disabled")
         case .failed:
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("symptoms.episode.title")
-                    Text("symptoms.loadFailed")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary, size: .compact) {
-                        Task { await model.reload() }
-                    }
-                    .accessibilityIdentifier("symptoms.retry")
+            HLCard("symptoms.episode.title") {
+                HLEmptyNote("symptoms.loadFailed")
+                HLButton(HLControlWord.retry.key, variant: .secondary) {
+                    Task { await model.reload() }
                 }
+                .accessibilityIdentifier("symptoms.retry")
             }
         }
     }
 
     private func card(_ rows: [EpisodeSymptomsModel.Row]) -> some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "waveform.path.ecg")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                    HLSectionLabel("symptoms.episode.title")
-                }
-                if rows.isEmpty {
-                    Text("symptoms.episode.empty")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(rows) { row in
-                        NavigationLink {
+        HLCard("symptoms.episode.title", layout: rows.isEmpty ? .free : .rows) {
+            if rows.isEmpty {
+                HLEmptyNote("symptoms.episode.empty")
+            } else {
+                ForEach(rows) { row in
+                    let offset = EpisodeSymptomsModel.doseOffset(of: row, featureKeys: featureKeys)
+                    SymptomEventRow(row: row, doseOffset: offset)
+                        .hlRowLink {
                             editor(.edit(row.event, label: row.label))
-                        } label: {
-                            SymptomEventRowLabel(row: row, stacked: dynamicTypeSize.isAccessibilitySize)
                         }
-                        .buttonStyle(.plain)
-                    }
+                        // On the link, so the identifier names the tap target.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(SymptomEventFormat.spokenLabel(row, doseOffset: offset)))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("symptoms.row.\(row.event.id)")
                 }
             }
         }
@@ -122,22 +107,9 @@ struct EpisodeSymptomsSection: View {
 
     /// The centred text link under the card, like "Erweitert" elsewhere.
     private var addLink: some View {
-        NavigationLink {
+        HLLinkButton("symptoms.add", systemImage: "plus", destination: {
             editor(.create(model.activeDefinitions))
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "plus")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-                Text("symptoms.add")
-                    .font(.hlSubhead.weight(.semibold))
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        })
         .accessibilityIdentifier("symptoms.add")
     }
 
@@ -153,57 +125,27 @@ struct EpisodeSymptomsSection: View {
     }
 }
 
-/// One occurrence: the symptom, its intensity out of ten, and when. At the
-/// accessibility sizes the three stand under each other.
-struct SymptomEventRowLabel: View {
+/// One occurrence as a two-line row: the symptom, when, and its intensity
+/// out of ten as the value. The row stacks itself at the accessibility sizes.
+/// With a server that names the `day.dose-offset` key, one quiet line under it says where the
+/// symptom sat against the day's dose ("2 Std. 10 Min. nach Metformin").
+struct SymptomEventRow: View {
     let row: EpisodeSymptomsModel.Row
-    let stacked: Bool
+    var doseOffset: DayDoseOffset?
 
     var body: some View {
-        Group {
-            if stacked {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    name
-                    intensity
-                    time
-                }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        name
-                        time
-                    }
-                    Spacer(minLength: HLSpace.sm)
-                    intensity
-                }
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            HLRow(
+                title: Text(verbatim: SymptomEventFormat.label(row.label)),
+                detail: Text(verbatim: SymptomEventFormat.time(row.event)),
+                value: Text("symptoms.intensity.pill \(row.event.intensity)")
+            )
+            if let doseOffset {
+                Text(verbatim: DoseOffsetFormat.text(doseOffset))
+                    .hlText(.rowStatus)
+                    .accessibilityIdentifier("symptoms.row.doseOffset")
             }
         }
-        .padding(.vertical, HLSpace.xxs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(SymptomEventFormat.spokenLabel(row)))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("symptoms.row.\(row.event.id)")
-    }
-
-    private var name: some View {
-        Text(verbatim: SymptomEventFormat.label(row.label))
-            .font(.hlSubhead.weight(.medium))
-            .foregroundStyle(HLText.primary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var intensity: some View {
-        Text("symptoms.intensity.pill \(row.event.intensity)")
-            .font(.hlSubhead.monospacedDigit())
-            .foregroundStyle(HLText.secondary)
-    }
-
-    private var time: some View {
-        Text(verbatim: SymptomEventFormat.time(row.event))
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
     }
 }
 
@@ -220,9 +162,11 @@ enum SymptomEventFormat {
         IllnessDateFormat.mediumDateTime(event.occurredAt)
     }
 
-    /// What VoiceOver reads: the symptom, its intensity out of ten, when.
-    static func spokenLabel(_ row: EpisodeSymptomsModel.Row) -> String {
-        String(localized: "symptoms.row.a11y \(label(row.label)) \(row.event.intensity) \(time(row.event))")
+    /// What VoiceOver reads: the symptom, its intensity out of ten, when, and
+    /// where it sat against the day's dose when the server says so.
+    static func spokenLabel(_ row: EpisodeSymptomsModel.Row, doseOffset: DayDoseOffset? = nil) -> String {
+        let base = String(localized: "symptoms.row.a11y \(label(row.label)) \(row.event.intensity) \(time(row.event))")
+        return HLRowDetail.joined([base, doseOffset.map { DoseOffsetFormat.text($0) }]) ?? base
     }
 }
 
@@ -282,6 +226,15 @@ final class EpisodeSymptomsModel {
         } catch {
             state = Self.stateAfter(error, offReason: offReason?()) ?? state
         }
+    }
+
+    /// #191 — the row's distance to the day's dose, straight from the
+    /// occurrence the list read (`doseOffset` on `GET /api/symptoms/events`).
+    /// Only behind the `day.dose-offset` key of `/api/version`: a server
+    /// without it shows no offset, and the app never keys a day to find one.
+    nonisolated static func doseOffset(of row: Row, featureKeys: String?) -> DayDoseOffset? {
+        guard ServerFeatureKeys.isOpen(.dayDoseOffset, in: featureKeys) else { return nil }
+        return row.event.doseOffset
     }
 
     /// `nil` keeps the current state (a cancelled read changes nothing). A

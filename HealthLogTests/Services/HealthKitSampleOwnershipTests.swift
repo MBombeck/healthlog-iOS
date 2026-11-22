@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **W-HK-RELIABILITY G-7 — foreign-filter ownership.**
+    /// **Foreign-filter ownership.**
     ///
     /// The HK read foreign-filter must skip ONLY samples that are OURS (carry
     /// our `HKMetadataKeyExternalUUID` AND are authored by this app's own HK

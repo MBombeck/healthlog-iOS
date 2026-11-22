@@ -1,5 +1,5 @@
 //
-// v0.6.1.3 Y4.1 — App-Badge service.
+// App-Badge service.
 //
 // The Home-screen app icon now surfaces a numeric badge that reflects
 // the medication doses still pending. The badge is a single
@@ -57,7 +57,7 @@
             await setBadgeCount(store.dueOrMissedCount())
         }
 
-        /// LOGOUT-NOTIF — purge every notification surface on sign-out so PHI
+        /// Purge every notification surface on sign-out so PHI
         /// can't linger for the next user on a shared device. Clears:
         ///   - delivered notifications (a med reminder on the lock screen
         ///     reveals medication use),

@@ -2,7 +2,7 @@
 import Foundation
 @testable import HealthLog
 
-/// **LIFE (1.5.0)** — a small in-memory life-circumstances server for the
+/// A small in-memory life-circumstances server for the
 /// store and repository tests: the fact writes change what the next read
 /// returns, every request is recorded with its decoded body, and single
 /// routes can be told to fail.
@@ -31,7 +31,7 @@ final class LifeServerStub: @unchecked Sendable {
     var aboutMeToken: String? = "2026-11-01T08:00:00.000Z"
     /// AUDITC: the AUDIT-C routes and the read route's `auditC` block.
     private let auditCServer = AuditCServerStub()
-    /// POLISH-C (C7): `false` reads like a server before AUDIT-C (no block).
+    /// `false` reads like a server before AUDIT-C (no block).
     var offersAuditC = true
 
     /// Changes the AUDIT-C state under the lock the routes run under.

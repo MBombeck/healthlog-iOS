@@ -21,7 +21,7 @@ import Testing
 /// 1. Jede eingetragene Adresse ist `.selfHosted` — nur die Demo faellt
 ///    heraus.
 /// 2. Die Passkey-Schaltflaeche haengt an den mitgelieferten
-///    Relying-Party-Domains, nicht am Namen des Hosts (GH #65).
+///    Relying-Party-Domains, nicht am Namen des Hosts.
 /// 3. Die `IdentifiableURL.id`-Identitaet fuer `.sheet(item:)` ist der
 ///    absolute String, damit zwei Proben desselben Hosts keine Sheets
 ///    stapeln.
@@ -43,7 +43,7 @@ struct OnboardingTrustBoundaryTests {
         #expect(AppEnvironment.inferRegion(for: demo) == .demo)
     }
 
-    // MARK: - Passkey-Schranke (GH #65)
+    // MARK: - Passkey-Schranke
 
     /// `ServerAuthStep.passkeySupportedForHost` zeigt die Schaltflaeche genau
     /// dann, wenn dieses Build eine `webcredentials:`-Domain fuer den
@@ -83,7 +83,7 @@ struct OnboardingTrustBoundaryTests {
         // `.sheet(item:)` re-presents only when the item id changes — two
         // probes of the same host must produce the same id so the boundary
         // sheet never stacks on itself. The scoped wrapper keeps this
-        // identity off the module-global `URL` type (v0.7.1 H-2).
+        // identity off the module-global `URL` type.
         #expect(a.id == b.id)
         #expect(a.id == "https://hl.example.com")
         #expect(a.id != other.id)

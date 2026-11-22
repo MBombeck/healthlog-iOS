@@ -1,7 +1,7 @@
 import Foundation
 @testable import HealthLog
 
-// **Phase 09 Wave 0 — the deterministic Mood history fixtures.**
+// **The deterministic Mood history fixtures.**
 //
 // Split out of `Phase09PerformanceFixtures.swift` by Plan 09-02 (a pure move,
 // not one line changed) when that file crossed the 600-line `file_length`
@@ -57,7 +57,7 @@ enum Phase09MoodFixture {
     }
 }
 
-/// **Phase 09 / plan 09-04 — the invocation ledger the whole plan is stated in.**
+/// **The invocation ledger the whole plan is stated in.**
 ///
 /// The budgets this plan's flows carry are a 1 ms cache hit, a 50 ms cold
 /// analysis and a 5 ms main-thread ceiling — all durations, none of them

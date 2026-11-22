@@ -1,12 +1,12 @@
 import Foundation
 
-// v0.14.8 W3 — multi-select bulk delete, split into a focused extension so
+// Multi-select bulk delete, split into a focused extension so
 // `MeasurementsStore.swift` stays under the SwiftLint `file_length` /
 // `type_body_length` baselines (the same seam `+SeriesBacked.swift` uses).
 //
-// 1.5 FIX-DATA — the single delete and its undo live here too, so every
+// The single delete and its undo live here too, so every
 // lease-fenced delete effect stays in a file the Phase-06 effect inventory
-// assigns (06-03). What a delete removes and sends is decided without any
+// assigns. What a delete removes and sends is decided without any
 // effect in `MeasurementsStore+ReadingDelete.swift`.
 
 @MainActor
@@ -22,7 +22,7 @@ public extension MeasurementsStore {
     ///
     /// BP rows: the merged pair's diastolic peer id is included so the
     /// server tombstones BOTH halves (a lone DIA half would resurface).
-    /// 1.5 FIX-DATA: a 1.46.2 server also deletes the reading's pulse and
+    /// A 1.46.2 server also deletes the reading's pulse and
     /// counts it, so `deleted` may exceed the ids sent; the pulse rows leave
     /// the list with the reading (`MeasurementsStore+ReadingDelete.swift`).
     func bulkDelete(_ measurementsToDelete: [Measurement]) async -> Bool {
@@ -42,7 +42,7 @@ public extension MeasurementsStore {
             }
         }
         removedIDs.formUnion(ids)
-        // audit-v0162 H-3 — bump before the optimistic multi-row removal so an
+        // Bump before the optimistic multi-row removal so an
         // in-flight `.fresh` can't resurrect any of the deleted rows.
         bumpMutationGeneration()
         recent.removeAll { removedIDs.contains($0.id) }
@@ -50,6 +50,7 @@ public extension MeasurementsStore {
             try lease.requireCurrent()
             _ = try await repo.bulkDelete(ids: ids)
             try lease.requireCurrent()
+            removeOwnHealthKitCopies(of: measurementsToDelete)
             return true
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(lease) else { return false }
@@ -74,7 +75,7 @@ public extension MeasurementsStore {
     /// Optimistic delete — drops the row immediately, restores it on a
     /// non-retriable failure.
     ///
-    /// **Undo (v0.5.5.1):** if an `UndoCoordinator` was injected, the
+    /// **Undo:** if an `UndoCoordinator` was injected, the
     /// optimistic remove is paired with an undo affordance enqueued BEFORE
     /// the network call. On a non-retriable failure we roll back the
     /// optimistic remove AND dismiss the toast (the row still lives on the
@@ -87,7 +88,7 @@ public extension MeasurementsStore {
         let snapshot = recent
         let plan = deletePlan(for: measurement)
         let outcome = MeasurementDeleteOutcome()
-        // audit-v0162 H-3 — bump BEFORE the optimistic removal so an in-flight
+        // Bump BEFORE the optimistic removal so an in-flight
         // `.fresh` (fetched before this delete) is dropped instead of re-adding
         // the row.
         bumpMutationGeneration()
@@ -112,6 +113,7 @@ public extension MeasurementsStore {
             }
             try lease.requireCurrent()
             outcome.landed = true
+            removeOwnHealthKitCopies(of: [plan.row] + plan.pulseRows)
             return true
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(lease) else { return false }
@@ -175,7 +177,7 @@ public extension MeasurementsStore {
     /// the acceptable trade-off documented in the v0.5.5.1 undo brief.
     private func restoreDeletedMeasurement(_ measurement: Measurement) async {
         guard let lease = captureAuthenticatedSessionLease() else { return }
-        // audit-v0162 H-3 — a re-insert is an optimistic mutation too; bump so a
+        // A re-insert is an optimistic mutation too; bump so a
         // stale `.fresh` from before the restore can't drop the row again.
         bumpMutationGeneration()
         reinsert(measurement)
@@ -192,5 +194,30 @@ public extension MeasurementsStore {
         // restored snapshot. Drop the snapshot copy now that the real row
         // is in place so the list doesn't show a duplicate.
         recent.removeAll { $0.id == measurement.id }
+    }
+}
+
+// MARK: - HealthKit copies of edited and deleted readings
+
+@MainActor
+extension MeasurementsStore {
+    /// Hands a landed edit to the HealthKit writer, which replaces only the
+    /// copy HealthLog itself wrote. Queued in call order: a rewrite never
+    /// overtakes a later delete of the same reading.
+    func replaceOwnHealthKitCopy(of old: Measurement, with new: Measurement) {
+        guard let healthKit else { return }
+        HealthKitCopyEditQueue.shared.enqueue {
+            await healthKit.replaceOwnCopy(of: old, with: new)
+        }
+    }
+
+    /// Hands a landed delete to the HealthKit writer, same rules as above.
+    func removeOwnHealthKitCopies(of measurements: [Measurement]) {
+        guard let healthKit, !measurements.isEmpty else { return }
+        HealthKitCopyEditQueue.shared.enqueue {
+            for measurement in measurements {
+                await healthKit.removeOwnCopies(of: measurement)
+            }
+        }
     }
 }

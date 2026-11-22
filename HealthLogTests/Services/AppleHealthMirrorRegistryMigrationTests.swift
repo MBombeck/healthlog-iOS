@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-10 / GH #47** — the poisoned-registry migration.
+/// The poisoned-registry migration.
 ///
 /// Every key written before CU-10 was
 /// `String(describing: HKHealthConceptIdentifier)` — a memory address that never
@@ -87,7 +87,7 @@ struct AppleHealthMirrorRegistryMigrationTests {
         #expect(first.conceptMap().isEmpty)
 
         first.recordMirror(conceptIdentifier: stableKey, medicationId: "srv-real")
-        // **Plan 07-05.** `advanceDoseCursor(to:)` is gone — the date watermark
+        // `advanceDoseCursor(to:)` is gone — the date watermark
         // it wrote is the defect ``AppleHealthDoseLedger`` replaces, and nothing
         // in production writes it any more. What this test always meant is
         // unchanged and still asserted: a second construction re-runs the

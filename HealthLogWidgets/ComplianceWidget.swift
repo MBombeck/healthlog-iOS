@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// **v0.8.4 WWIDGET-2 — today's-compliance widget.**
+/// **Today's-compliance widget.**
 ///
 /// `systemSmall` + Lock-Screen `accessoryCircular`. Renders today's
 /// medication adherence as a ring (the widget-safe ``WidgetRing``, visually
@@ -26,7 +26,7 @@ struct ComplianceEntry: TimelineEntry {
     let date: Date
     let compliance: WidgetSnapshot.ComplianceSummary
 
-    /// **audit-v0162 M3** — `true` when the backing snapshot was generated on
+    /// `true` when the backing snapshot was generated on
     /// an earlier local day (or is > 24 h old), so its "today's" taken /
     /// scheduled counts can no longer be trusted (midnight rollover / no
     /// BGTask over a weekend). The view then paints a neutral "open the app"
@@ -59,7 +59,7 @@ struct ComplianceProvider: TimelineProvider {
     func getTimeline(in _: Context, completion: @escaping @Sendable (Timeline<ComplianceEntry>) -> Void) {
         let now = Date.now
         let snapshot = store.read() ?? .placeholder
-        // audit-v0162 M3 — a snapshot from a previous local day (or > 24 h old)
+        // A snapshot from a previous local day (or > 24 h old)
         // can't be shown as today's adherence; flag it so the view renders the
         // neutral "open the app" state instead of yesterday's counts.
         let stale = WidgetTimelinePolicy.isComplianceStale(generatedAt: snapshot.generatedAt, now: now)
@@ -84,17 +84,9 @@ private struct ComplianceWidgetView: View {
     }
 
     private var homeSmall: some View {
-        VStack(spacing: 8) {
-            Label {
-                Text("widget.compliance.header")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(LAColor.textSecondary)
-            } icon: {
-                Image(systemName: "pills.fill")
-                    .foregroundStyle(LAColor.accent)
-            }
-            .labelStyle(.titleAndIcon)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: WidgetMetrics.ringStackSpacing) {
+            WidgetHeader(title: Text("widget.compliance.header"), symbol: "pills.fill", surface: .compliance)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if entry.isStale {
                 staleBody
@@ -105,14 +97,15 @@ private struct ComplianceWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// **audit-v0162 M3** — neutral state for a stale snapshot: no ring, no
+    /// Neutral state for a stale snapshot: no ring, no
     /// counts (which would be yesterday's), just a prompt to open the app.
     private var staleBody: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: WidgetMetrics.stackSpacing) {
             Spacer(minLength: 0)
             Image(systemName: "exclamationmark.arrow.circlepath")
                 .font(.title2)
                 .foregroundStyle(LAColor.textSecondary)
+                .widgetLayer(.statusSymbol, in: .compliance)
             Text("widget.stale.open_app")
                 .font(.caption)
                 .foregroundStyle(LAColor.textSecondary)
@@ -123,7 +116,7 @@ private struct ComplianceWidgetView: View {
     }
 
     private var freshBody: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: WidgetMetrics.ringStackSpacing) {
             WidgetRing(
                 // W-B183 coherence — the ring ARC tracks the SERVER ledger
                 // adherence (`ringFraction` prefers `serverCompliancePercent`,
@@ -131,7 +124,8 @@ private struct ComplianceWidgetView: View {
                 // today's count only when the server value is unavailable.
                 progress: entry.compliance.ringFraction,
                 value: ringValue,
-                caption: String(localized: "widget.compliance.today")
+                caption: String(localized: "widget.compliance.today"),
+                surface: .compliance
             )
 
             Text(dosesLabel)
@@ -143,19 +137,21 @@ private struct ComplianceWidgetView: View {
     }
 
     private var accessoryCircular: some View {
-        // audit-v0162 M3 — a stale snapshot drives an empty gauge + em-dash
+        // A stale snapshot drives an empty gauge + em-dash
         // rather than yesterday's fraction/counts painted as today's.
         Gauge(value: entry.isStale ? 0 : entry.compliance.ringFraction) {
             Image(systemName: entry.isStale ? "exclamationmark.arrow.circlepath" : "pills.fill")
+                .widgetLayer(.statusSymbol, in: .compliance)
         } currentValueLabel: {
             Text(ringValue)
                 .minimumScaleFactor(0.5)
+                .widgetLayer(.primaryValue, in: .compliance)
         }
         .gaugeStyle(.accessoryCircular)
         .widgetAccessibilityLabel(
             entry.isStale
                 ? Text("widget.stale.open_app")
-                : Text("widget.compliance.header") + Text(": ") + Text(dosesLabel)
+                : Text("\(Text("widget.compliance.header")): \(Text(dosesLabel))")
         )
     }
 

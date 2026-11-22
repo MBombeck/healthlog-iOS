@@ -71,7 +71,7 @@ struct SourcePriorityRepositoryTests {
 
     @Test("update — PUT carries an Idempotency-Key header (M1)")
     func updateAttachesIdempotencyKey() async throws {
-        // V0.5.2 R2 / M1: PROJECT_GUIDE.md contract requires Idempotency-Keys on
+        // PROJECT_GUIDE.md contract requires Idempotency-Keys on
         // every POST/PUT. The default `IdempotencyKey()` flows through the
         // explicit overload — assert the header lands on the wire.
         let repo = SourcePriorityRepository(api: makeAPI())
@@ -120,7 +120,7 @@ struct SourcePriorityRepositoryTests {
 
     @Test("invalidateCache — drops the snapshot so next fetch hits the wire")
     func invalidateCacheWipesSnapshot() async throws {
-        // V0.5.2 R2 / H1: logout must reach the per-repo actor cache so
+        // Logout must reach the per-repo actor cache so
         // the next user never sees the previous user's ladder.
         let repo = SourcePriorityRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0

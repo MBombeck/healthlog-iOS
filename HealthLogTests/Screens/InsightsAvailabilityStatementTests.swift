@@ -19,7 +19,7 @@
             try #require(
                 InsightsAvailabilityStatement.statement(for: .pending, latchedKindsAreEmpty: true) == .loading,
                 """
-                EXPECTED_RED: while the availability read is still in flight and the strip knows no kind, \
+                while the availability read is still in flight and the strip knows no kind, \
                 the strip region carries no statement at all — a short list that says nothing reads like \
                 a complete one
                 """

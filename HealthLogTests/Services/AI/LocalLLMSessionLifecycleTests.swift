@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Issue #14 — hoisted `LanguageModelSession` lifecycle.** The session is
+/// **Hoisted `LanguageModelSession` lifecycle.** The session is
 /// created lazily on the first turn, reused across turns for the store's
 /// lifetime (so the model carries the conversation context), and dropped on:
 ///

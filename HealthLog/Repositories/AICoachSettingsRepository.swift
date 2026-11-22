@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Build 6 / Item 6.6** — thin server seam for the two Coach/AI privacy flags.
+/// Thin server seam for the two Coach/AI privacy flags.
 /// Wraps the real routes (verified against the server repo) so the wire shapes
 /// are contract-testable against a stubbed `URLSession` rather than hand-rolled
 /// inline in the store.
@@ -11,7 +11,7 @@ import Foundation
 public actor AICoachSettingsRepository {
     let api: APIClientProtocol
 
-    /// **CU-20 (#69)** — last `updatedAt` seen from `/api/auth/me/coach-prefs`.
+    /// Last `updatedAt` seen from `/api/auth/me/coach-prefs`.
     /// `nil` when the user has never saved (the GET omits the key entirely —
     /// see ``token(in:)``), which makes the first save an unconditional write.
     private var coachPrefsToken: String?
@@ -60,7 +60,7 @@ public actor AICoachSettingsRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - disableCoach (Build 9 / 9.2)
+    // MARK: - disableCoach
 
     /// `GET /api/auth/me/disable-coach` → the server-wide "coach unavailable"
     /// flag (`?? false`). 1:1 the ``fetchDocumentsAutoAiRead`` posture.
@@ -97,7 +97,7 @@ public actor AICoachSettingsRepository {
         return raw
     }
 
-    /// **CU-20 (#69) — special case 7a.** A user who has never saved coach
+    /// **Special case 7a.** A user who has never saved coach
     /// prefs gets the pure defaults with the `updatedAt` key **omitted
     /// entirely**, not null (`api/auth/me/coach-prefs/route.ts:43-51`, gated on
     /// `coachPrefsJson == null` — the `User` row itself always exists). So an
@@ -165,7 +165,7 @@ public actor AICoachSettingsRepository {
     public func setReminderSuggestionsEnabled(_ enabled: Bool) async throws -> [String: HLJSONValue] {
         let raw = try await fetchCoachPrefsRaw()
         let applied = Self.applyingReminderSuggestionsEnabled(enabled, to: raw)
-        // CU-20 — on a 409 the mutation is re-applied to the FRESHLY re-read
+        // On a 409 the mutation is re-applied to the FRESHLY re-read
         // object, so the retry preserves the other session's sibling edits
         // instead of resurrecting our stale copy of the whole blob.
         try await putCoachPrefs(applied) { fresh in

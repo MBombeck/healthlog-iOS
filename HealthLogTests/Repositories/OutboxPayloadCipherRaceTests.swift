@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.7.0 W-SEC-M-4 — OutboxPayloadCipher first-call race.**
+/// **OutboxPayloadCipher first-call race.**
 ///
 /// Pins the contract that two writers entering `fetchOrCreateKey()`
 /// simultaneously *before* any key has been persisted must each end up

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0154 LR-REDO — locks the pure derivation helpers behind the Insights-class
+/// Locks the pure derivation helpers behind the Insights-class
 /// biomarker detail page: the per-biomarker series filter, the range-window
 /// filter, the on-device stats / median compute, and the explainer-lookup
 /// (slug → string, with the `context` + empty fallbacks). All pure value math —
@@ -138,7 +138,7 @@ struct BiomarkerSeriesTests {
         #expect(BiomarkerSeries.median(for: []) == nil)
     }
 
-    // MARK: - Absent-value contamination (MED-1)
+    // MARK: - Absent-value contamination
 
     @Test("stats / median ignore valueIsAbsent rows (phantom 0 sentinel)")
     func absentRowsExcludedFromStatsAndMedian() throws {

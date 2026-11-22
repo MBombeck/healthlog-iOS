@@ -2,7 +2,7 @@
     import Foundation
     import Synchronization
 
-    /// **DOCS-TRASH (1.5.0, #151) — Recently deleted documents.**
+    /// **Recently deleted documents.**
     ///
     /// Under `-uitest-docs-trash` the fixture server is a v1.46 vault with two
     /// live documents and three deleted ones (`deletedCount` 3). Restore and

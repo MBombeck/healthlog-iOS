@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A360-1 H1 — `UserProfile.dateFormat` decode (server `User.dateFormat`,
+/// `UserProfile.dateFormat` decode (server `User.dateFormat`,
 /// v1.21.0 / migration 0192). Must decode when present, and tolerate the key
 /// being absent (servers pre-v1.21.0) by resolving to `nil` (→ `.auto`).
 @Suite("UserProfile dateFormat decode")

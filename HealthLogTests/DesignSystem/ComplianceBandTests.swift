@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// v0.12 W4-1 — locks the SINGLE compliance-band source of truth.
+/// Locks the SINGLE compliance-band source of truth.
 ///
 /// Before W4-1 the same adherence percentage was classified three different
 /// ways across three med surfaces (detail KPI ≥0.9 green-topped ratio ramp;
@@ -99,7 +99,7 @@ struct ComplianceBandTests {
     /// paints is always the band the displayed integer implies.
     @Test("the detail KPI colours the server's integer rate, the same integer it shows")
     func detailKPIBandFollowsServerRate() {
-        // #115 1.3 — the KPI now paints the server's rounded `rate` verbatim, so
+        // The KPI now paints the server's rounded `rate` verbatim, so
         // the band and the text share one integer by construction.
         for rate in 0 ... 100 {
             let adherence = MedicationDetailStore.ServerAdherence(rate: rate, taken: rate, expected: 100)

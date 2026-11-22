@@ -216,7 +216,7 @@ struct InsightsPagerOrderReconcileTests {
 @Suite("Insights flat category-aware pager (v0152 I1)")
 struct InsightsFlatCategoryPagerTests {
     private let overview = InsightsTabSelection.overview
-    /// Parity Build 4 — `weight` is one of the web's five PINNED slugs, so it is
+    /// `weight` is one of the web's five PINNED slugs, so it is
     /// the flat standalone here (BMI moved into the `body` group).
     private let weight = InsightsTabSelection.metric(.weight)
     /// Three `.heart` members, consecutive in the fixture order.

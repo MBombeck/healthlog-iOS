@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 3 — how an opt-in importer learns which account it works for.
+// How an opt-in importer learns which account it works for.
 //
 // The sample path resolves its owner through `AppOwnedHealthCollection`, which
 // the composition root installs with a closure over the Keychain and the
@@ -54,7 +54,7 @@ public struct HealthSyncImporterAdmission: Sendable {
 
     /// Why this source cannot be admitted right now, or `nil` when it can.
     ///
-    /// **Phase 07 / plan 07-07.** Every admission-gated importer already refuses
+    /// Every admission-gated importer already refuses
     /// on its own, and every one of them refuses *silently* — which is how a
     /// composition where admission can never succeed stayed invisible through
     /// four waves of green suites. The orchestrator asks this question once per

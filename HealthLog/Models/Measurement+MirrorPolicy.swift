@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-HKBACKFILL** — platform-free server→Apple-Health mirror policy.
+/// Platform-free server→Apple-Health mirror policy.
 ///
 /// The single source of truth for WHICH ingest sources and WHICH kinds
 /// round-trip from the server into Apple Health, shared by the b198 latest-page
@@ -18,7 +18,7 @@ public extension MeasurementSource {
     /// `.withings` / `.import_` / `.manual`: rows the user genuinely authored
     /// and for which the server is a legitimate authoring source.
     ///
-    /// **S1 / public #11 — `.manual` joined the allowlist.** It was excluded
+    /// **`.manual` joined the allowlist.** It was excluded
     /// as "already round-tripped at create-time", which holds only for a row
     /// typed in THIS app. A reading typed on the web, or on another device, is
     /// stored as `MANUAL` too, and never reached Apple Health. A manual row this
@@ -42,7 +42,7 @@ public extension MeasurementSource {
         case .withings, .import_, .manual: true
         case .appleHealth, .whoop, .fitbit, .googleHealth, .computed,
              .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .external, .telegram, .mcp,
-             // Audit B-4 — the closed allowlist doing its job: a source this
+             // The closed allowlist doing its job: a source this
              // build cannot name never writes into Apple Health.
              .unknown: false
         }
@@ -54,7 +54,7 @@ public extension MeasurementSource {
 }
 
 public extension Measurement {
-    /// **MIRROR (1.5, #152, server #1272)** — whether the server allows this
+    /// Whether the server allows this
     /// row into Apple Health. The source half of the mirror decision; the kind,
     /// the person's direction and the duplicate probes still follow.
     ///
@@ -69,8 +69,12 @@ public extension Measurement {
     /// Apple Health, and writing it back would duplicate it there. The server
     /// says `false` for those rows anyway; this keeps the echo guard local.
     ///
-    /// A row that turns `false` only stops future writes. Nothing here, and
-    /// nothing in the mirror, ever deletes a sample from Apple Health.
+    /// A row that turns `false` only stops future writes; the mirror never
+    /// deletes a sample from Apple Health. The one exception is an edit made
+    /// in HealthLog: where HealthLog may no longer write the row, its own copy
+    /// is removed only if the value, unit or time changed, because a stale
+    /// number in Apple Health would be a wrong health value. A note alone
+    /// leaves the copy standing (`HealthKitOwnCopyEditor`).
     /// The first server that resolves `appleHealthMirror` per row and filters
     /// the list by it (`?appleHealthMirror=true`). An older server ignores the
     /// filter and returns every source, so the filter waits for this version.

@@ -2,10 +2,10 @@ import Foundation
 
 /// Thin projection of the `GET /api/auth/me` payload — the setup-completion
 /// evidence and nothing else. Decoupled from `UserProfile` so an unrelated
-/// `/me` schema change can't break the read, mirroring `AuthMeAvatar` /
-/// `AuthMeDisclaimer` / `AuthMeModules`.
+/// `/me` schema change can't break the read, mirroring `AuthMeDisclaimer` /
+/// `AuthMeModules`.
 ///
-/// **25-03 (GH #1) — three evidence classes, not one flag.** The tour marker
+/// **Three evidence classes, not one flag.** The tour marker
 /// (`onboardingTourCompleted`) is stamped by `POST /api/onboarding/tour`:
 /// this app's setup wizard on finish, and the web's coachmark tour — but
 /// **not** the web setup wizard, whose own completion is a different column
@@ -187,13 +187,12 @@ public struct TourUpdateResponse: Decodable, Sendable, Equatable {
 /// completion flag (`OnboardingTourStore`) for offline launches and reconciles
 /// to the server when reachable; the server is authoritative.
 ///
-/// **Disposition (#32).** iOS does NOT (yet) ship an in-app guided coachmark
+/// **Disposition.** iOS does NOT (yet) ship an in-app guided coachmark
 /// tour — the b198 step flow (`OnboardingFlow`) is a one-shot permission/setup
 /// wizard, not a replayable module tour. This repo is the durable seam: it
 /// stamps `completed` when the iOS setup wizard finishes (so a reinstall / a
-/// second device does not re-run it, and the web tour state is shared), and the
-/// `setProgress` / `reset` calls are ready for a future replayable tour without
-/// any further wiring.
+/// second device does not re-run it, and the web tour state is shared), and
+/// `reset` is ready for a future replayable tour without any further wiring.
 ///
 /// **Privacy.** No health-related payloads cross this route (opaque stop ids +
 /// a bool); nothing is logged here — failures surface to the caller, which
@@ -233,15 +232,6 @@ public actor OnboardingTourRepository {
     @discardableResult
     public func markCompleted(outcome: TourUpdateBody.Outcome = .completed) async throws -> TourUpdateResponse {
         let body = TourUpdateBody(completed: true, outcome: outcome)
-        let req: APIRequest<TourUpdateResponse> = try .post("/api/onboarding/tour", body: body)
-        return try await api.send(req)
-    }
-
-    /// Post a mid-tour resume checkpoint (the per-stop progress write). Ready
-    /// for a future replayable iOS tour; unused by the one-shot setup wizard.
-    @discardableResult
-    public func setProgress(_ progress: TourProgress) async throws -> TourUpdateResponse {
-        let body = TourUpdateBody(progress: progress)
         let req: APIRequest<TourUpdateResponse> = try .post("/api/onboarding/tour", body: body)
         return try await api.send(req)
     }

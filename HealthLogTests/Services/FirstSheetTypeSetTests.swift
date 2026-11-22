@@ -10,7 +10,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **Phase 16 Plan 03 — decision E2: EKG und Stimmung wandern in das erste
+    /// **Decision E2: EKG und Stimmung wandern in das erste
     /// HealthKit-Sheet.**
     ///
     /// The operator's own wording, chosen against the planning recommendation on
@@ -65,7 +65,7 @@
                     violations.append("the ECG type is listed more than once")
                 }
 
-                #expect(violations.isEmpty, "EXPECTED_RED: both types are still settings-only opt-ins")
+                #expect(violations.isEmpty, "both types are still settings-only opt-ins")
             }
 
             @Test("completing the onboarding grant turns the two device-local syncs on")
@@ -102,7 +102,7 @@
 
                 #expect(
                     violations.isEmpty,
-                    "EXPECTED_RED: granting in onboarding does not activate the sync stores"
+                    "granting in onboarding does not activate the sync stores"
                 )
             }
 
@@ -491,7 +491,6 @@
         func attachUploader(_: MeasurementBatchUploader) async {}
         func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
         func setInitialBackfillCutoff(_: Date?) async {}
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
         func stopWorkoutImportObserver() async {}
         func resetWorkoutImportObserver() async {}
     }

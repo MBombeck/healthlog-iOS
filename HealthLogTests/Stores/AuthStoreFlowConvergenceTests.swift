@@ -1,4 +1,4 @@
-// **Phase 09 / plan 09-07 — the six authentication flows, held to one contract.**
+// **The six authentication flows, held to one contract.**
 //
 // `AuthStore` grew six ways into the same state: password, MFA, registration,
 // passkey, native OIDC SSO and the hosted web-handoff login each carried their
@@ -9,8 +9,7 @@
 //
 // This file holds the clauses that are true **before and after** the extraction:
 // the begin state, the benign-cancellation classification, the terminal-error
-// mapping, the untouched five-field credential persistence, and the enumeration
-// of every route that admits an authenticated phase. The two clauses the
+// mapping, and the untouched five-field credential persistence. The two clauses the
 // extraction exists to make true live in the sibling `+Fences` file.
 //
 // Nothing here is timed. Every figure is a count, a state or an ordering.
@@ -149,53 +148,14 @@
             #expect(harness.store.isWorking == false)
         }
 
-        @Test("every route that admits an authenticated phase is enumerated")
-        func everyRouteThatAdmitsAnAuthenticatedPhaseIsEnumerated() throws {
-            // 09-05's rule, applied to acceptance: before claiming that one
-            // transition owns the admitted phase, list every production site
-            // that assigns one. Verdicts are bound to `Bool`s first so no file
-            // body can reach the log.
-            let admitting = try FirstFrameSignalTests.productionFiles(naming: "phase = .authenticat")
-            let inventoryIsExact = admitting == ["HealthLog/Stores/AuthStore.swift"]
-
-            let root = Phase09SignpostContractTests.repositoryRoot()
-            let storeSource = try FirstFrameSignalTests.withoutCommentLines(
-                String(contentsOf: root.appendingPathComponent("HealthLog/Stores/AuthStore.swift"), encoding: .utf8)
-            )
-            // The four in-file writers, each of which is deliberately NOT a
-            // login flow's acceptance and therefore outside this plan's fence:
-            //   1. `bootstrap()` — a cold launch rehydrating a stored token,
-            //      under the account boundary.
-            //   2. `completeOnboarding()` — the terminal `.authenticating` →
-            //      `.authenticated` promotion, guarded by its own phase check.
-            //   3. `applySharingRecoveryUser(_:)` — refreshes the carried actor
-            //      in place; it changes no phase case and carries a same-owner
-            //      guard in `handleSharingRecovery(_:)`.
-            //   4. `setPhaseForTesting(_:)` — DEBUG-only, never in Release.
-            let inFileWriters = [
-                "func bootstrap()",
-                "func completeOnboarding()",
-                "func applySharingRecoveryUser(",
-                "func setPhaseForTesting("
-            ]
-            let writersAreOwned = inFileWriters.allSatisfy {
-                FirstFrameSignalTests.occurrences(of: $0, in: storeSource) == 1
-            }
-            let testSeamIsDebugOnly = FirstFrameSignalTests.occurrences(of: "#if DEBUG", in: storeSource) == 1
-
-            // The one seam every other file reaches an admitted phase through.
-            // Two production files may name it: the funnel's own, and the fenced
-            // transition that is its single caller.
-            let funnelRoutes = try FirstFrameSignalTests.productionFiles(naming: "admitAuthenticating(")
-            let funnelIsOwned = funnelRoutes == [
+        /// `phase` is `private(set)`, but the internal admission funnel is callable
+        /// from anywhere in the module; a new caller could admit a session unseen.
+        @Test("only AuthStore admits an authenticating session")
+        func onlyAuthStoreAdmitsASession() throws {
+            #expect(try FirstFrameSignalTests.productionFiles(naming: "admitAuthenticating(") == [
                 "HealthLog/Stores/AuthStore+Phase.swift",
                 "HealthLog/Stores/AuthStore.swift"
-            ]
-
-            #expect(inventoryIsExact, "the admitting-file inventory moved: \(admitting.count) files")
-            #expect(writersAreOwned)
-            #expect(testSeamIsDebugOnly)
-            #expect(funnelIsOwned, "the admission funnel inventory moved: \(funnelRoutes.count) files")
+            ])
         }
     }
 

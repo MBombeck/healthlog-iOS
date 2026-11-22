@@ -12,9 +12,9 @@ import Testing
 ///
 /// **Warum ausgerechnet ein `alert` das Substrat ist.** Zentriert und ankerlos
 /// ist auf dem iPhone genau eine System-Präsentation. Ein
-/// `confirmationDialog` ist per Konstruktion ein Anker — Aktionsblatt an der
-/// Unterkante (iOS 18–25) bzw. Blase an der Interaktionsquelle (iOS 26) — und
-/// kann „zentriert" gar nicht liefern. Genau daran ist **b174** gescheitert,
+/// `confirmationDialog` ist per Konstruktion ein Anker — eine Blase an der
+/// Interaktionsquelle — und kann „zentriert" gar nicht liefern. Genau daran
+/// ist **b174** gescheitert,
 /// und der eigene Fix des Betreibers (`cf3f8777`, „Lösch-Bestätigung im
 /// Med-Verlauf unten verankert statt Popover auf Zeilenhöhe", 2026-06-11) hat
 /// die Blase deshalb absichtlich an die Unterkante genagelt. Ein `alert` hat
@@ -54,10 +54,6 @@ struct DestructiveConfirmationShapeTests {
             out.append((rel, text))
         }
         return out.sorted { $0.0 < $1.0 }
-    }
-
-    private nonisolated static func contents(of relative: String) -> String? {
-        try? String(contentsOf: repoRoot().appendingPathComponent(relative), encoding: .utf8)
     }
 
     // MARK: - Blockweiser Scan
@@ -163,13 +159,17 @@ struct DestructiveConfirmationShapeTests {
     func scanSeesTheSourceTree() {
         let files = Self.sourceFiles()
         #expect(files.count > 400, "Quellbaum-Scan lieferte nur \(files.count) Dateien — der Pfad stimmt nicht.")
-        let blocks = files.flatMap { Self.blocks(in: $0.contents, file: $0.relative) }
-        // Nach der Umstellung bleiben genau die **nicht**-destruktiven Fälle
-        // übrig: zwei Dialoge und zwölf Alerts. Die Schwelle sichert nur, dass
-        // der Blockscanner überhaupt greift — ein Zähler, der nichts findet,
-        // wäre grün, ohne etwas geprüft zu haben. Sie ist bewusst keine exakte
-        // Zahl, sonst wäre jeder neue neutrale Alert ein falsches Rot.
-        #expect(blocks.count >= 10, "Nur \(blocks.count) Präsentationsblöcke gefunden — der Blockscanner greift nicht.")
+        // Ob der Blockscanner greift, zeigt eine feste Probe, nicht die Zahl
+        // der Alerts im Baum: die OK-Hinweise laufen inzwischen über
+        // `hlAcknowledgeAlert`, und jede weitere Umstellung ließe eine
+        // Schwelle grundlos rot werden.
+        let probe = """
+        .alert("t", isPresented: $a) { Button("OK") {} } message: { Text("m") }
+        .confirmationDialog("t", isPresented: $b) { Button("Weg", role: .destructive) {} }
+        """
+        let found = Self.blocks(in: probe, file: "probe")
+        #expect(found.map(\.modifier) == ["alert", "confirmationDialog"], "Der Blockscanner greift nicht.")
+        #expect(found.map(\.isDestructive) == [false, true], "Der Blockscanner liest die Rolle nicht.")
     }
 
     @Test("Keine destruktive Bestätigung ist an einer Aufrufstelle handgebaut")
@@ -177,7 +177,7 @@ struct DestructiveConfirmationShapeTests {
         let hits = Self.handBuiltDestructiveConfirmations()
         let listing = hits.map { "  \($0.file):\($0.line) — \($0.modifier)" }.joined(separator: "\n")
         #expect(hits.isEmpty, """
-        EXPECTED_RED: 31 destructive confirmations are hand-built at their call sites
+        31 destructive confirmations are hand-built at their call sites
         R13-A1: \(hits.count) handgebaute destruktive Bestätigung(en) außerhalb von \
         \(Self.carrierDirectory):
 
@@ -192,78 +192,20 @@ struct DestructiveConfirmationShapeTests {
         """)
     }
 
-    @Test("Die geteilte Form existiert und präsentiert zentriert/ankerlos")
+    /// Ein Alert hat keine Präsentationsquelle, an der er fehl-ankern kann; ein
+    /// Dialog oder Popover am Träger brächte die Fehlankerung an jede Rückfrage zurück.
+    @Test("Der Träger baut einen Alert, keinen Dialog und kein Popover")
     func theSharedShapeIsAnAlert() throws {
-        let path = "HealthLog/DesignSystem/HLConfirmDestructive.swift"
-        let source = try #require(
-            Self.contents(of: path),
-            "EXPECTED_RED: HLConfirmDestructive.swift does not exist — \(path) fehlt, die geteilte Form gibt es nicht."
+        let carrier = try #require(
+            Self.sourceFiles().first { $0.relative == "\(Self.carrierDirectory)HLConfirmDestructive.swift" },
+            "der Träger HLConfirmDestructive.swift fehlt"
         )
-        #expect(
-            source.contains("func hlConfirmDestructive"),
-            "EXPECTED_RED: HLConfirmDestructive.swift does not exist — der Träger deklariert `hlConfirmDestructive` nicht."
-        )
-        // Ohne führenden Punkt: der Träger ist selbst eine `View`-Extension und
-        // ruft `alert(…)` unqualifiziert auf. Der Fließtext oben nennt `alert`
-        // nur ohne Klammer, ein Doku-Treffer ist damit ausgeschlossen.
-        #expect(source.contains("alert("), """
-        Der Träger präsentiert nicht über `alert`. Zentriert und ankerlos ist auf dem \
-        iPhone genau diese eine System-Präsentation, und sie ist die einzige ohne \
-        Präsentationsquelle — deshalb kann die iOS-26-Fehlankerung aus b174 hier nicht \
-        zurückkommen.
-        """)
-        #expect(!source.contains("confirmationDialog("), "Der Träger baut selbst einen Anker.")
-        #expect(!source.contains("popover("), "Der Träger baut selbst einen Anker.")
-        #expect(source.contains("cf3f8777"), """
-        Der aufgehobene b174/b175-Fix des Betreibers muss dort benannt bleiben, wo seine \
-        Ablösung wohnt — sonst ist die Blase in einem Jahr ein Versehen statt eine \
-        Entscheidung.
-        """)
-    }
-
-    @Test("Die beiden DesignSystem-Träger bauen nicht doppelt")
-    func designSystemCarriersRouteThroughTheSharedShape() throws {
-        var offenders: [String] = []
-        for path in [
-            "HealthLog/DesignSystem/HLDiscardGuard.swift",
-            "HealthLog/DesignSystem/LogoutConfirmationModifier.swift"
-        ] {
-            let source = try #require(Self.contents(of: path), "\(path) fehlt.")
-            if !source.contains(".hlConfirmDestructive(") { offenders.append("\(path): benutzt die geteilte Form nicht") }
-            if source.contains(".confirmationDialog(") { offenders.append("\(path): baut weiterhin einen eigenen Anker") }
-        }
-        // Eine einzige Zusicherung, nicht vier: der Grund einer erwarteten
-        // Rot-Phase muss im Protokoll **genau einmal** stehen, sonst kann
-        // `assert-behavioral-red.sh` nicht zwischen „der erwartete Fehler" und
-        // „derselbe Text zufällig mehrfach" unterscheiden.
-        #expect(offenders.isEmpty, """
-        EXPECTED_RED: both DesignSystem carriers still build their own anchor
-        \(offenders.joined(separator: "\n"))
-
-        `HLDiscardGuard` und `LogoutConfirmationModifier` sind zwei destruktive \
-        Bestätigungen mit 14 Aufrufstellen. Wenn sie ihre eigene Präsentation bauen, \
-        gibt es drei Formen statt einer — und die Verwerfen-Rückfrage bliebe die \
-        untenverankerte Blase aus b174.
-        """)
-    }
-
-    /// Die beiden neutralen Dialoge bleiben, was sie sind — und das steht hier,
-    /// damit ihr Verbleib eine Entscheidung ist und kein Übersehen. Keiner von
-    /// beiden trägt einen destruktiven Knopf: `CycleCaptureSheet` lässt zwischen
-    /// zwei gleichrangigen Zyklus-Aktionen wählen, `IllnessEpisodeDetailScreen`
-    /// bestätigt eine Genesung. R13-A1 spricht nur über destruktive Rückfragen.
-    @Test("Die neutralen Dialoge bleiben Dialoge")
-    func neutralDialogsStayDialogs() throws {
-        for path in [
-            "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-            "HealthLog/Screens/Illness/IllnessEpisodeDetailScreen.swift"
-        ] {
-            let source = try #require(Self.contents(of: path), "\(path) fehlt.")
-            let neutral = Self.blocks(in: source, file: path).filter { !$0.isDestructive }
-            #expect(
-                neutral.contains { $0.modifier == "confirmationDialog" },
-                "\(path) hat seinen neutralen confirmationDialog verloren — R13-A1 verlangt das nicht."
-            )
-        }
+        let code = carrier.contents
+            .components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        #expect(code.contains("alert("))
+        #expect(!code.contains("confirmationDialog("))
+        #expect(!code.contains("popover("))
     }
 }

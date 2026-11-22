@@ -1,6 +1,6 @@
 import Foundation
 
-/// b241 — tile-state fallbacks that don't come from the `/api/measurements`
+/// Tile-state fallbacks that don't come from the `/api/measurements`
 /// wide-page fan-out. Two data sources the fan-out structurally can't cover:
 ///
 /// - **Mood** (`Fix 2`) — mood is a `MoodEntry` served only by
@@ -54,7 +54,7 @@ extension DashboardStore {
     /// actor. The projected rows are display-only (they never round-trip to the
     /// server) — mood writes still flow exclusively through `MoodStore`.
     nonisolated static func moodTileState(entries: [MoodEntry]) -> MetricDataState {
-        // Audit B-4 — the tile headline is ONE number, so it reads the newest
+        // The tile headline is ONE number, so it reads the newest
         // NAMEABLE entry. A newer entry whose level this build cannot name has
         // no number for that slot and must not displace the person's real
         // latest mood; `.empty(.noData)` is the honest render when the window
@@ -138,7 +138,7 @@ extension DashboardStore {
     /// scheme). Bucket start-of-day + arithmetic mean live in `SeriesDownsampler`;
     /// this only bridges `MoodEntry` ⇄ `SeriesPoint` ⇄ `Measurement`.
     private nonisolated static func dailyMeanMoodSamples(from entries: [MoodEntry]) -> [Measurement] {
-        // Audit B-4 — the sparkline is a mean per day; an entry whose level this
+        // The sparkline is a mean per day; an entry whose level this
         // build cannot name has no value to average, so it is not a point.
         let points = MoodEntry.scored(entries).map { entry, score in
             SeriesPoint(id: entry.id, at: entry.recordedAt, value: Double(score), secondary: nil)

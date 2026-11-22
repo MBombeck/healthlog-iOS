@@ -64,7 +64,7 @@ enum HealthScoreSignal {
     /// The monochrome ring carries no per-score hue; the single status colour is
     /// reserved for the centre band word + the accessibility announcement. This
     /// maps the server band to the sanctioned signal colour, matching
-    /// `HLScoreRing.ScorePresentation`; no server band → neutral (#115 B7).
+    /// `HLScoreRing.ScorePresentation`; no server band → neutral.
     static func color(band: String?) -> Color {
         switch band {
         case "green": LAColor.success
@@ -103,25 +103,22 @@ private struct HealthScoreWidgetView: View {
     }
 
     private var homeSmall: some View {
-        VStack(spacing: 8) {
-            Label {
-                Text("widget.health_score.header")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(LAColor.textSecondary)
-            } icon: {
-                Image(systemName: "heart.text.square.fill")
-                    .foregroundStyle(LAColor.accent)
-            }
-            .labelStyle(.titleAndIcon)
+        VStack(spacing: WidgetMetrics.ringStackSpacing) {
+            WidgetHeader(
+                title: Text("widget.health_score.header"),
+                symbol: "heart.text.square.fill",
+                surface: .healthScore
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let glance = entry.glance {
                 WidgetRing(
                     progress: glance.fraction,
                     value: "\(glance.score)",
-                    caption: HealthScoreSignal.word(band: glance.band)
+                    caption: HealthScoreSignal.word(band: glance.band),
+                    surface: .healthScore
                 )
-                // v1.35.0 (GH #83) — the Home widget is the number and nothing
+                // v1.35.0 — the Home widget is the number and nothing
                 // else, so it carries the provenance mark: a chosen composition
                 // is not the default one, and a widget that said nothing would
                 // let a 82 out of five pillars read like a 82 out of eight.
@@ -147,16 +144,19 @@ private struct HealthScoreWidgetView: View {
         WidgetRing(
             progress: 0,
             value: "—",
-            caption: String(localized: "widget.health_score.empty")
+            caption: String(localized: "widget.health_score.empty"),
+            surface: .healthScore
         )
     }
 
     private var accessoryCircular: some View {
         Gauge(value: entry.glance?.fraction ?? 0) {
             Image(systemName: "heart.text.square.fill")
+                .widgetLayer(.statusSymbol, in: .healthScore)
         } currentValueLabel: {
             Text(entry.glance.map { "\($0.score)" } ?? "—")
                 .minimumScaleFactor(0.5)
+                .widgetLayer(.primaryValue, in: .healthScore)
                 // Lock-screen accessory: redact the health-score value when the
                 // device is locked (QA-b198 Sec-L-3 — PHI on the Lock Screen).
                 .privacySensitive()
@@ -170,9 +170,9 @@ private struct HealthScoreWidgetView: View {
             // The lock-screen accessory has room for a two-digit number and
             // nothing else, so the mark reaches it through VoiceOver only —
             // where it costs no space and still qualifies the number.
-            let base = Text("widget.health_score.header") + Text(": ") + Text("\(glance.score)")
+            let base = Text("\(Text("widget.health_score.header")): \(Text("\(glance.score)"))")
             return glance.configured
-                ? base + Text(verbatim: ". ") + Text("widget.health_score.configured")
+                ? Text("\(base). \(Text("widget.health_score.configured"))")
                 : base
         } else {
             return Text("widget.health_score.empty")
@@ -183,7 +183,7 @@ private struct HealthScoreWidgetView: View {
     /// where the full Personal Health Score lives. The score is a composite, not
     /// a single chartable `MetricKind`, so this deliberately lands on the
     /// Insights root (`.insights(metric: nil)` → pager index 0) rather than a
-    /// per-metric page (W-WIDGET-DEEPLINK).
+    /// per-metric page.
     private static let insightsDeepLink = URL(string: InsightsLatestMeasurementDeepLink.rootURLString)
 }
 

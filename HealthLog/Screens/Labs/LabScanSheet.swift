@@ -18,7 +18,6 @@ import UniformTypeIdentifiers
 /// lassen" (``LabServerScanFlow``), off on every scan. Only while it is on does
 /// the photo or a PDF go to the server; its rows land in the same review list.
 struct LabScanSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.appContainer) private var container
 
     let labsStore: LabsStore
@@ -27,12 +26,12 @@ struct LabScanSheet: View {
     @State private var showScanner = false
     @State private var showPhotos = false
     @State private var photoSelection: [PhotosPickerItem] = []
-    /// LAB-OCR — the server read, `nil` without a server.
+    /// The server read, `nil` without a server.
     @State private var server: LabServerScanFlow?
     @State private var showPDFImporter = false
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(isReviewing ? "labs.scan.reviewTitle" : "labs.scan.title", action: barAction) {
             Group {
                 if let scan {
                     content(scan: scan)
@@ -41,13 +40,6 @@ struct LabScanSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .hlScreenBackground()
-            // 1.4 B4 — while the values are reviewed, "Speichern" joins
-            // "Abbrechen" in the bar and the long title was cut.
-            .navigationTitle(Text(scan.map { $0.step == .review || $0.step == .saving } ?? false
-                    ? "labs.scan.reviewTitle" : "labs.scan.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbar }
             .task {
                 if scan == nil { scan = LabScanStore(labsStore: labsStore) }
                 await prepareServerRead()
@@ -99,81 +91,73 @@ struct LabScanSheet: View {
         }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Bar
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("labs.action.cancel") { dismiss() }
-                .disabled(scan.map { $0.step == .saving } ?? false)
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if let scan, scan.step == .review || scan.step == .saving {
-                Button("labs.scan.save") {
-                    Task { await save(scan: scan) }
-                }
-                .disabled(!scan.canCommit)
-                .accessibilityIdentifier("labs.scan.save")
-            }
+    private var isReviewing: Bool {
+        scan.map { $0.step == .review || $0.step == .saving } ?? false
+    }
+
+    /// Saving joins the bar only once there are values to review.
+    private var barAction: HLSheetAction {
+        guard let scan, isReviewing else { return .none }
+        return .confirm("labs.scan.save", isEnabled: scan.canCommit) {
+            // `commit()` reloads the labs list once for the whole batch; a
+            // partial failure keeps the sheet open with the failed rows.
+            await scan.commit()
         }
     }
 
     // MARK: - Step 1 — source chooser
 
     private func chooser(scan: LabScanStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    Text("labs.scan.choose.title")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-                    // The on-device promise ("never leaves your iPhone") only
-                    // stands while the server read is off.
-                    Text(usesServerRead ? "labs.ocr.choose.body" : "labs.scan.choose.body")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HLPage {
+            VStack(alignment: .leading, spacing: HLSpace.xs) {
+                Text("labs.scan.choose.title")
+                    .font(.hlTitle3)
+                    .foregroundStyle(HLText.primary)
+                // The on-device promise ("never leaves your iPhone") only
+                // stands while the server read is off.
+                Text(usesServerRead ? "labs.ocr.choose.body" : "labs.scan.choose.body")
+                    .hlText(.factLabel)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                if serverReadOffered, let server {
-                    LabServerReadToggle(flow: server)
-                }
+            if serverReadOffered, let server {
+                LabServerReadToggle(flow: server)
+            }
 
-                VStack(spacing: HLSpace.sm) {
-                    #if canImport(UIKit) && canImport(VisionKit)
-                        if DocumentScannerView.isSupported {
-                            HLButton("labs.scan.capture", icon: "doc.viewfinder", variant: .primary) {
-                                showScanner = true
-                            }
-                            .accessibilityIdentifier("labs.scan.capture")
+            VStack(spacing: HLSpace.sm) {
+                #if canImport(UIKit) && canImport(VisionKit)
+                    if DocumentScannerView.isSupported {
+                        HLButton("labs.scan.capture", systemImage: "doc.viewfinder", variant: .primary) {
+                            showScanner = true
                         }
-                    #endif
-                    HLButton("labs.scan.library", icon: "photo.on.rectangle", variant: .secondary) {
-                        showPhotos = true
+                        .accessibilityIdentifier("labs.scan.capture")
                     }
-                    .accessibilityIdentifier("labs.scan.library")
-                    if usesServerRead, server?.acceptsPDF == true {
-                        HLButton("labs.ocr.choose.pdf", icon: "doc", variant: .secondary) {
-                            showPDFImporter = true
-                        }
-                        .accessibilityIdentifier("labs.ocr.choose.pdf")
-                    }
+                #endif
+                HLButton("labs.scan.library", systemImage: "photo.on.rectangle", variant: .secondary) {
+                    showPhotos = true
                 }
-
-                if let failure = scan.failure {
-                    VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        Text("labs.scan.error.title")
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                        HLFormErrorText(failure.message)
+                .accessibilityIdentifier("labs.scan.library")
+                if usesServerRead, server?.acceptsPDF == true {
+                    HLButton("labs.ocr.choose.pdf", systemImage: "doc", variant: .secondary) {
+                        showPDFImporter = true
                     }
+                    .accessibilityIdentifier("labs.ocr.choose.pdf")
                 }
             }
-            .padding(HLSpace.lg)
+
+            if let failure = scan.failure {
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    Text("labs.scan.error.title")
+                        .hlText(.objectName)
+                    HLFormErrorText(failure.message)
+                }
+            }
         }
     }
 
-    // MARK: - LAB-OCR — the server read
+    // MARK: - The server read
 
     /// The server can read reports, the person consented to document AI, and
     /// the `labsOcr` capability is on. Read in the body, so the switch follows
@@ -205,7 +189,6 @@ struct LabScanSheet: View {
                 return
             }
         #endif
-        guard container.backendAvailability.hasServer else { return }
         let flow = LabServerScanFlow(repository: LabsOCRRepository(
             api: container.api,
             consent: container.makeDocumentAIConsentLeaseProvider(),
@@ -216,12 +199,6 @@ struct LabScanSheet: View {
     }
 
     // MARK: - Actions
-
-    private func save(scan: LabScanStore) async {
-        // `commit()` reloads the labs list once for the whole batch; a partial
-        // failure keeps the sheet open with the failed rows still listed.
-        if await scan.commit() { dismiss() }
-    }
 
     /// Photo-library source. Images are decoded in-process and handed straight
     /// to the recogniser — nothing is written to disk.
@@ -257,7 +234,7 @@ struct LabScanSheet: View {
         }
     #endif
 
-    /// LAB-OCR — a picked PDF goes to the server unchanged.
+    /// A picked PDF goes to the server unchanged.
     private func handlePDF(_ result: Result<URL, Error>) {
         guard let scan, let server, usesServerRead else { return }
         guard case let .success(url) = result else {

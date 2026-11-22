@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0158 — v1.25 clinical measurement types (`PAIN_NRS`, `GRIP_STRENGTH`,
+/// v1.25 clinical measurement types (`PAIN_NRS`, `GRIP_STRENGTH`,
 /// `WAIST_CIRCUMFERENCE`, `WAIST_TO_HEIGHT`). Pins the wire↔domain contract,
 /// the manual create-DTO arms, the descriptor/range coverage, and the
 /// render-only posture of waist-to-height.

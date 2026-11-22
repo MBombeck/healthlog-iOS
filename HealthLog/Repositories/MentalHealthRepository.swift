@@ -51,7 +51,7 @@ public actor MentalHealthRepository {
     /// newest-first. Totals + bands + flags only; raw item answers are never
     /// returned. `instrument` filters server-side when set.
     ///
-    /// **QOL-OFF-2:** the UNFILTERED first page (no instrument filter, `offset == 0`
+    /// The UNFILTERED first page (no instrument filter, `offset == 0`
     /// — the store's default read) routes through
     /// `swr.fetchCachingFirst(.mentalHealthHistory)` so the history is
     /// offline-readable. An instrument-filtered / paged read stays network-direct.
@@ -92,6 +92,15 @@ public actor MentalHealthRepository {
         return try await networkFetch()
     }
 
+    /// `GET /api/mental-health/assessments/{id}` — one administration with
+    /// its answers (server v1.48). Network-direct and never cached: the
+    /// answers are PHI and only ever held for the screen that shows them.
+    public func assessment(id: String) async throws -> MentalHealthAssessmentDetailDTO {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let req: APIRequest<MentalHealthAssessmentDetailDTO> = .get("/api/mental-health/assessments/\(encoded)")
+        return try await api.send(req)
+    }
+
     // MARK: - Write (optimistic; idempotency-keyed; outbox-backed)
 
     /// `POST /api/mental-health/assessments`. Returns the server-authoritative
@@ -101,13 +110,17 @@ public actor MentalHealthRepository {
     /// is resolved separately from the LOCAL item-9 flag, never blocked on this.
     @discardableResult
     public func submit(_ body: CreateAssessmentRequest) async throws -> CreateAssessmentResponse {
-        // #39 — bind the idempotency-key header to the body's `externalId` so the
+        // Bind the idempotency-key header to the body's `externalId` so the
         // header dedup (24h server window) and the durable `externalId` dedup
         // (no expiry) key on the SAME value: an outbox replay after >24h then
         // still collapses to one administration. Falls back to a fresh key only
         // for a legacy body with no externalId.
         let key = body.externalId.map { IdempotencyKey(raw: $0) } ?? IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createMentalHealthAssessment,
+            payload: OutboxQueue.Payloads.CreateMentalHealthAssessment(body: body),
+            key: key
+        ) { [self] in
             let req: APIRequest<CreateAssessmentResponse> = try .post(
                 "/api/mental-health/assessments", body: body, idempotencyKey: key
             )
@@ -116,13 +129,6 @@ public actor MentalHealthRepository {
             // never masked by a fresh-enough cached snapshot on the store's reload.
             await swr?.invalidate([.mentalHealthHistory])
             return response
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
-                .createMentalHealthAssessment,
-                payload: OutboxQueue.Payloads.CreateMentalHealthAssessment(body: body),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -135,23 +141,20 @@ public actor MentalHealthRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - Outbox enqueue helper
+    // MARK: - Outbox write-ahead helper
 
-    /// Persist a retriable failed write to the encrypted outbox under its
-    /// idempotency key. The payload carries the (PHI) item answers ONLY inside the
-    /// encrypted outbox blob until replay; a persistence failure is logged
-    /// (sanitized, never the items) + swallowed; the original `HLError` is the one
-    /// re-thrown (mirrors ``AllergiesRepository``).
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
-        key: IdempotencyKey
-    ) async {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
-        } catch {
-            HLLog.outbox.error("Mental-health outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-        }
+        key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

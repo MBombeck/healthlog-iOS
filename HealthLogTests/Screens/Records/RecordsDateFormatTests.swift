@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// M1 — the allergy onset date must not smear by a day across timezones. The
+/// The allergy onset date must not smear by a day across timezones. The
 /// editor encodes a picked calendar day as noon UTC of that LOCAL day, so the
 /// stored DATE is stable everywhere (the old local-midnight→UTC path rolled the
 /// day back for users west of UTC).

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **CU-25 (#72) — the reconciliation moment: flow logged without a period.**
+/// **The reconciliation moment: flow logged without a period.**
 ///
 /// Logging menstrual flow on a day and marking a period start are two different
 /// acts. A cycle span is created ONLY by `POST /api/cycle/period`

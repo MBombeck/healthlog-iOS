@@ -252,32 +252,28 @@ custom_rules:
   #
   # ## Stand nach U9 — was scharf ist und was bewusst Warnung bleibt
   #
-  # Scharf (`error`) sind die zwei Regeln, deren Restmenge in der Ratsche bei
-  # **null** steht: `hl_no_hlcard_in_settings` (U2 hat Gerüst C→A migriert) und
-  # `hl_no_sectionlabel_in_settings` (U4 hat `SettingsAIScreen` auf Gerüst A
-  # gehoben). Kehrt `HLCard(` oder `HLSectionLabel(` in die Einstellungen
-  # zurück, bricht ab jetzt der Build.
+  # Karte und Abschnittskopf regeln für alle Bereiche R8 und R10 unten, weil es
+  # je nur einen Baustein gibt.
   #
   # Die übrigen bleiben `warning`. Das ist eine Entscheidung, keine
   # Nachlässigkeit: ihre Restmenge liegt zum großen Teil **außerhalb** der
   # Einstellungen und damit außerhalb aller sieben Wellen — U1–U7 waren nach
-  # Fläche geschnitten, nicht nach Regel. Stand der Ratsche (Summe 137,
-  # `HealthLogTests/Resources/UIStandardBaseline.json`):
+  # Fläche geschnitten, nicht nach Regel. Stand der Ratsche
+  # (`HealthLogTests/Resources/UIStandardBaseline.json`; die verworfenen
+  # Knopfvarianten zählt R1 unten je Paket):
   #
-  #   hl_no_raw_toggle          70  Cycle, Medications, Notifications,
+  #   hl_no_raw_toggle          49  Cycle, Medications, Notifications,
   #                                 DoctorReport, Illness, Onboarding, Labs …
-  #   hl_button_legacy_variant  41  (nur Ratsche — kein SwiftLint-Regex, weil
-  #                                 jede Fundstelle die R9-Entscheidung braucht)
-  #   hl_no_handmade_chevron    18  Insights, Charts, Labs, Coach, Cycle …
-  #   hl_no_system_buttonstyle   7
+  #   hl_no_handmade_chevron     4  Insights, Charts, Labs, Coach, Cycle …
+  #   hl_no_system_buttonstyle   1
   #   hl_card_both_slots         1  (nur Ratsche — Argumentlisten-Sonderfall)
   #
-  # Eine Regel scharfzuschalten, die sofort siebzig Verstöße meldet, ist eine
+  # Eine Regel scharfzuschalten, die sofort fünfzig Verstöße meldet, ist eine
   # Regel, die am nächsten Tag wieder abgeschaltet wird — und bis dahin färbt
   # sie jeden anderen, echten Fehler grau. Gehalten wird der Bestand ohnehin
   # nicht von der Severity, sondern vom zählenden Ratschen-Test
-  # `UIStandardBaselineTests`: der vergleicht **exakt** und pro Datei, also kann
-  # keine dieser Zahlen unbemerkt steigen. Wer eine Fläche außerhalb der
+  # `UIStandardBaselineTests`: der vergleicht pro Datei, also kann keine dieser
+  # Zahlen unbemerkt steigen. Wer eine Fläche außerhalb der
   # Einstellungen aufräumt, senkt dort seine Zeile; steht eine Regel bei null,
   # wird sie hier auf `error` gehoben — dieselbe Prozedur, die U9 für die zwei
   # oberen gefahren ist.
@@ -286,10 +282,11 @@ custom_rules:
   # Eine `excluded:`-Liste würde neue Verstöße in bereits gelisteten Dateien
   # stillschweigend schlucken. Der Bestand hängt stattdessen am zählenden
   # Ratschen-Test `UIStandardBaselineTests` (+ `UIStandardBaseline.json`):
-  # der kennt die Verletzungen PRO DATEI und schlägt in beide Richtungen an —
-  # eine neue Verletzung failt, eine beseitigte Verletzung failt ebenfalls
-  # (mit der Aufforderung, die Zahl zu senken). Die Baseline kann damit nur
-  # schrumpfen; SwiftLint liefert dazu die Fundstelle im Editor.
+  # der kennt die Verletzungen PRO DATEI. Eine neue Verletzung failt. Toggle,
+  # Chevron und System-Knopfstil gelten als Obergrenze, damit mehrere Zweige
+  # parallel senken können, ohne dieselbe Datei zu ändern; gesenkt wird die
+  # Datei zentral über `scripts/refresh-ui-standard-baseline.py`. SwiftLint
+  # liefert dazu die Fundstelle im Editor.
   # ---------------------------------------------------------------------
 
   # R8 — die handgebaute Chevron-Zeile ist kein Muster mehr, sondern ein
@@ -303,7 +300,7 @@ custom_rules:
       - "HealthLogTests/.*"
       - "HealthLogUITests/.*"
     message: "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen."
-    severity: warning
+    severity: error
 
   # R8 — rohe System-Button-Styles fallen aus dem Designsystem heraus.
   hl_no_system_buttonstyle:
@@ -312,7 +309,7 @@ custom_rules:
     included:
       - "HealthLog/Screens/.*"
     message: "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`."
-    severity: warning
+    severity: error
 
   # R11 — genau ein Umschalt-Baustein.
   hl_no_raw_toggle:
@@ -323,35 +320,530 @@ custom_rules:
     message: "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap."
     severity: warning
 
-  # R12 — `HLCard` ist Dashboard-/Insights-Primitive. In den Einstellungen
-  # gilt `HLSettingsCard` (14pt Inset, 0,5pt Kontur, eigener Kartentitel).
-  hl_no_hlcard_in_settings:
-    name: "UI-Standard R12 — kein HLCard in den Einstellungen"
-    regex: '\bHLCard\('
-    included:
-      - "HealthLog/Screens/Settings/.*"
-      - "HealthLog/Screens/PersonalSettings/.*"
-    message: "R12: Einstellungs-Flächen benutzen `HLSettingsPage` + `HLSettingsCard`. `HLCard(style: .elevated)` bringt einen anderen Innenabstand, eine andere Kontur und keinen Kartentitel — daher die 17-pt-Kartenköpfe der vier Integrations-Screens."
-    # U9 scharfgeschaltet: Ratsche steht bei 0 (U2 hat Gerüst C→A migriert).
-    severity: error
-
-  # R12 — die Abschnittsmarke in den Einstellungen ist der Kartentitel.
-  hl_no_sectionlabel_in_settings:
-    name: "UI-Standard R12 — kein HLSectionLabel in den Einstellungen"
-    regex: '\bHLSectionLabel\('
-    included:
-      - "HealthLog/Screens/Settings/.*"
-      - "HealthLog/Screens/PersonalSettings/.*"
-    message: "R12: die Abschnittsmarke einer Einstellungsseite ist der `HLSettingsCard`-Titel (15pt semibold). `HLSectionLabel` ist eine Eigenheit eines einzigen Screens (`SettingsAIScreen`) und wandert mit dessen Migration auf Gerüst A weg."
-    # U9 scharfgeschaltet: Ratsche steht bei 0 (U4 hat SettingsAIScreen migriert).
-    severity: error
-
   # R14 / E5 `hl_no_system_font_size` — bewusst KEINE eigene Regel: die
   # bestehende `dynamic_type_bypass` oben deckt exakt dasselbe Muster
   # (`\.system\(size:`) ab, gilt bereits repo-weit statt nur unter `Screens/`
   # und steht schon auf `error`. Eine zweite Regel mit gleichem Regex würde
   # jede Fundstelle doppelt melden, ohne irgendetwas zusätzlich zu verbieten.
   # E5 ist an dieser Stelle also strenger erfüllt als gefordert.
+
+  # ---------------------------------------------------------------------
+  # C0-Design-Fundament, Abschnitt 5 (Muster mit Kennung in Anhang A). Eine
+  # Regel je Elementklasse,
+  # gültig für `HealthLog/Screens/`; Design-System und Tests liegen außerhalb.
+  #
+  # Seit dem C0-Nachlauf stehen alle 18 auf `error`: Screens trägt keinen
+  # Verstoß mehr, begründete Restfälle stehen mit `disable:next` und Grund an
+  # der Stelle. Den Fortschritt je Paket zählt
+  # `scripts/design-ratchet.sh` mit denselben Mustern (es liest sie aus dieser
+  # Datei) gegen `scripts/design-ratchets/C<n>.json`; dort kann eine Zahl nur
+  # fallen. Kommentare zählen nicht (`excluded_match_kinds`), damit eine
+  # Erklärung im Code keinen Treffer erzeugt. Muster, die an einen Aufruf
+  # gebunden sind, laufen über mehrere Zeilen, damit Umbrechen nichts senkt.
+  # ---------------------------------------------------------------------
+
+  # R1 — HLButton hat drei Varianten in einer Höhe. Das Muster ist an den
+  # Aufruf `HLButton(` gebunden (auch mehrzeilig, Argumente bis fünf Klammer-
+  # ebenen tief), weil andere Bausteine eigene Größen `.compact` und `.large`
+  # haben (HLSheetSize, HLDashboardTile). Ein Aufruf zählt einmal. Statt
+  # `excluded_match_kinds` schließt `^(?:(?!//)…)` Kommentarzeilen aus: sonst
+  # würde ein Kommentar zwischen den Argumenten den ganzen Aufruf verstecken.
+  hl_no_rejected_button_variant:
+    name: "C0 Knopf: keine verworfene Variante oder Größe"
+    regex: '(?m)^(?:(?!//)[^\n])*?\bHLButton\((?:[^()]|\((?:[^()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\))*?(?:variant: \.(?:ghost|restrained)|size: \.compact)'
+    included:
+      - "HealthLog/Screens/.*"
+    message: "HLButton kennt nur .primary, .secondary und .destructive in einer Höhe. Die schwächere Zweitaktion ist HLLinkButton unter der Karte, eine Aktion in einer Kachel HLTileActionButton."
+    severity: error
+
+  # R2 — 56 pt bleiben dem Onboarding vorbehalten (Abschnitt 7). Gebunden an
+  # `HLButton(` wie R1.
+  hl_button_large_only_onboarding:
+    name: "C0 Knopf: Größe .large nur im Onboarding"
+    regex: '(?m)^(?:(?!//)[^\n])*?\bHLButton\((?:[^()]|\((?:[^()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\))*?size: \.large'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded:
+      - "HealthLog/Screens/Onboarding/.*"
+    message: "Außerhalb des Onboardings haben alle Knöpfe 48 pt. Die Größe weglassen."
+    severity: error
+
+  # R3 — die zwei Rollenplätze der Sheet-Leiste gehören dem Gerüst.
+  hl_no_raw_sheet_roles:
+    name: "C0 Sheet-Gerüst: keine eigenen Rollenplätze"
+    regex: 'placement: \.(confirmationAction|cancellationAction)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Abbrechen und Bestätigen setzt nur HLSheetScaffold. Aktion über HLSheetAction übergeben."
+    severity: error
+
+  # R4 — ein Schlüssel je Bedienwort, das Wort kommt aus dem Gerüst. Nur
+  # `Button(`: Knöpfe im Inhalt (HLButton) ersetzt das Gerüst nicht. Abbrechen
+  # mit `role: .cancel` ist die Systemform in Alerts und Dialogen und zählt
+  # nicht.
+  hl_no_literal_sheet_verbs:
+    name: "C0 Sheet-Gerüst: keine wörtlichen Bedienwörter"
+    regex: '\bButton\(\s*(String\(localized:\s*)?"(Save|Done|Cancel|Close)"(?!\)?\s*,\s*role:\s*\.cancel\b)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Sichern, Fertig, Abbrechen und Schließen zeichnet HLSheetScaffold über HLSheetAction (.save, .add, .done, .none). Kein eigener Knopf mit diesen Wörtern."
+    severity: error
+
+  # R5 — Detents, Griff, Fläche und Radius des Sheets kommen aus HLSheetSize.
+  hl_no_raw_presentation:
+    name: "C0 Sheet-Gerüst: keine rohen Präsentationsmodifikatoren"
+    regex: '\.presentationDetents\(|\.presentationBackground\(|\.presentationDragIndicator\(|\.presentationCornerRadius\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Detents und Griff setzt HLSheetScaffold aus HLSheetSize, die Fläche zeichnet das System. Sheets ohne Kopf nutzen hlSheetPresentation."
+    severity: error
+
+  # R6 — ein Symbolknopf ist HLIconButton, nicht ein Rahmen von Hand.
+  hl_no_raw_icon_frame:
+    name: "C0 Symbolknopf: kein roher 44er-Rahmen"
+    regex: '\.frame\(width: 44, height: 44\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Symbolknöpfe sind HLIconButton (44 x 44 pt, Beschriftung für VoiceOver ist Pflicht)."
+    severity: error
+
+  # R7 — eine Karte, eigene Flächen nur für Markenflächen mit Begründung.
+  hl_no_handmade_card:
+    name: "C0 Karte: keine Eigenbau-Karte"
+    regex: 'RoundedRectangle\(cornerRadius: HLRadius\.(card|tile|lg|xl)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Inhalt in eine HLCard, Bild oder Diagramm bis an den Rand mit hlCardSurface(). Bewusst eigen gezeichnete Markenflächen tragen die Begründung in der Zeile."
+    severity: error
+
+  # R8 — HLSettingsCard geht in HLCard auf, eine Karte für alle Bereiche.
+  hl_no_settingscard:
+    name: "C0 Karte: HLCard statt HLSettingsCard"
+    regex: '\bHLSettingsCard\s*(\(|\{)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "HLSettingsCard ist ein Alias auf HLCard. HLCard(title) zeichnet denselben Kartentitel, in allen Bereichen."
+    severity: error
+
+  # R9 — Leer, Fehler und Laden zeigt der Zustandsbaustein.
+  hl_no_local_state_view:
+    name: "C0 Zustand: keine lokalen Leer- und Fehleransichten"
+    regex: 'struct \w*(Empty|Error|Failure|Unavailable)\w*\s*:\s*View|\bContentUnavailableView\b'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Leer und Fehler zeigen HLStateContainer, HLEmptyState und HLErrorState. Kein eigener Struct und kein ContentUnavailableView."
+    severity: error
+
+  # R10 — ein Abschnittskopf in zwei Rängen, für alle Bereiche.
+  hl_no_local_section_header:
+    name: "C0 Kopf: HLSectionHeader statt der alten Köpfe"
+    regex: '\b(HLSectionLabel|InsightsSectionHeader|MeasurementListSectionHeader)\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Abschnittsköpfe sind HLSectionHeader(_, rank: .area oder .group). Er bringt Schrift und Abstände selbst mit."
+    severity: error
+
+  # R11 — Köpfe sind gemischt geschrieben wie die Systemköpfe. Gezählt wird nur
+  # Anzeige: `.textCase(.uppercase)` und `.uppercased()` als Argument eines
+  # Text, Label oder Kopfs. `uppercased()` für Vergleiche und Schlüssel ist
+  # Logik und bleibt außen vor.
+  hl_no_uppercase_header:
+    name: "C0 Kopf: keine Versalien"
+    regex: '\.textCase\(\.uppercase\)|\b(?:Text|Label|HLSectionLabel|HLSectionHeader|InsightsSectionHeader|MeasurementListSectionHeader)\((?:verbatim:\s*)?[^()\n]*(?:\([^()\n]*\)[^()\n]*)*\.uppercased\(\)\s*[,)]'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Köpfe stehen ohne Versalien. Eine Auszeichnung innerhalb einer Karte trägt die Begründung in der Zeile."
+    severity: error
+
+  # R12 — Datum und Uhrzeit folgen der 12/24-Stunden-Einstellung.
+  hl_date_via_helper:
+    name: "C0 Formate: Datum und Uhrzeit nur über die Helfer"
+    regex: '\bDateFormatter\(\)|\.formatted\(\s*(?:\.dateTime|date:)|String\(format: "%0?2?d:%02d"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "HLDateFormat oder HLTimeFormat benutzen, sonst gilt die 12/24-Stunden-Einstellung nicht."
+    severity: error
+
+  # R13 — Zahl mit Einheit über einen Helfer, ein Abstand, ein Platzhalter.
+  # Uhrzeiten (`%02d:%02d`) zählt R12, nicht beide.
+  hl_number_via_helper:
+    name: "C0 Formate: Zahlen nur über die Helfer"
+    regex: '\.number\.precision|String\(format: "(?!%0?2?d:%02d)[^"]*%\.?[0-9]*[fd]'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "HLNumberFormat oder HLValueFormat benutzen, im View HLValueText. Locale, Einheit und fehlender Wert sind dort festgelegt."
+    severity: error
+
+  # R14 — kein Bildschirm setzt ein eigenes Farbschema.
+  hl_no_fixed_color_scheme:
+    name: "C0 Erscheinungsbild: kein festes Farbschema"
+    regex: '\.preferredColorScheme\(\.(dark|light)\)|\.environment\(\\\.colorScheme, \.(dark|light)\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Das Farbschema setzt nur die Wurzel der App. Erlaubt sind Vorschauen, die hell und dunkel nebeneinander zeigen."
+    severity: error
+
+  # R15 — Erneut versuchen hat einen Schlüssel und einen Ort, auch als "Retry".
+  hl_single_retry_key:
+    name: "C0 Zustand: Erneut versuchen nur über HLErrorState"
+    regex: '"Try again"|"Retry"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Den Wiederholen-Knopf zeichnet HLErrorState (Vollbild) oder ErrorBanner. Kein eigener Knopf mit \"Try again\" oder \"Retry\"."
+    severity: error
+
+  # R16 — Seitenrand 16 pt, außer im Onboarding (Abschnitt 7).
+  hl_page_margin:
+    name: "C0 Seite: Rand 16 pt"
+    regex: 'padding\(\.horizontal, HLSpace\.xl\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded:
+      - "HealthLog/Screens/Onboarding/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Seitenränder kommen aus HLPage oder hlPageMargins() (16 pt). Kein eigener 20er-Rand."
+    severity: error
+
+  # R17 — eine Stelle setzt den Segmentstil.
+  hl_no_raw_segmented:
+    name: "C0 Segment: nur HLAdaptiveSegmentedPicker"
+    regex: '\.pickerStyle\(\.segmented\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "HLAdaptiveSegmentedPicker benutzen: höchstens fünf Optionen, bei großer Schrift ein Menü. Der Zeitraum läuft über die schwebende Zeitraumsteuerung."
+    severity: error
+
+  # R18 — Glas nur für die Bedienebene (Entscheidung 1: Inhaltskarten opak).
+  hl_no_glass_in_content:
+    name: "C0 Karte: kein Glas in der Inhaltsebene"
+    regex: 'hlGlassBackground\(|hlGlassEffect\(|\.glassEffect\(|\.(ultraThin|thin|regular|thick)Material'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Inhaltskarten sind opak (HLCard). Glas bleibt für Leisten, schwebende Steuerungen und die Symbolknöpfe im Tab-Kopf, und dort nur über die Bausteine."
+    severity: error
+
+  # ---------------------------------------------------------------------
+  # E-P0b: Diagramme, Kopfleisten, Glas (Zielformen Z12 bis Z23). Die
+  # Bausteine gibt es; diese Regeln halten die Bereichspakete auf ihnen. Sie
+  # stehen zuerst auf `warning`, die heutigen Treffer liegen in der
+  # Warn-Baseline und fallen mit P1 bis P4; danach gehen sie auf `error`.
+  # `.font(.system(size:))` deckt schon `dynamic_type_bypass` ab.
+  # ---------------------------------------------------------------------
+
+  # Z12 — jede Sparkline hat dieselbe Tönung (`HLSparkline.defaultTint`).
+  hl_sparkline_own_tint:
+    name: "E-P0b Diagramm: Sparkline ohne eigene Tönung"
+    regex: '\bHLSparkline\((?:[^()\n]|\([^()\n]*\))*\btint:'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "HLSparkline hat eine Tönung für alle. Das Argument `tint:` weglassen."
+    severity: warning
+
+  # Z14 — eine Zeitraumwahl je Seite, schwebend unten.
+  hl_no_period_picker_in_card:
+    name: "E-P0b Zeitraum: kein Picker in Karten"
+    regex: '\bHLRangePicker\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Eine Seite hat genau eine Zeitraumwahl: HLFloatingPeriodControl mit HLTimeRange (T, W, M, 6M, J, Alle). Karten folgen ihr."
+    severity: error
+
+  # Z17 — „Mehr“ in Leisten ist das nackte `ellipsis`, wie im System.
+  hl_bar_more_without_circle:
+    name: "E-P0b Leiste: Mehr ohne Kreis"
+    regex: '"ellipsis\.circle(\.fill)?"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Mehr ist `ellipsis` (die Leiste zeichnet das Glas). In Zeilen einer Karte stehen die Aktionen im Kontextmenü."
+    severity: warning
+
+  # Z18 — ein Zeichen für „verlässt die App“: `arrow.up.right`.
+  hl_one_external_sign:
+    name: "E-P0b Zubehör: ein Zeichen für externe Ziele"
+    regex: '"arrow\.up\.right\.square(\.fill)?"|"arrow\.up\.forward\.app"'
+    included:
+      - "HealthLog/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Externe Ziele zeigen `arrow.up.right` rechts in der Zubehörspalte, ohne Kasten und ohne zusätzlichen Chevron."
+    severity: error
+
+  # Z20 — untere Leisten über `hlBottomBar` (System-safeAreaBar), kein Material.
+  hl_no_material_bar:
+    name: "E-P0b Glas: keine Materialleiste in Screens"
+    regex: '\bHLMaterialBackground\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Leisten unten sind `hlBottomBar { }` (System-safeAreaBar mit Kante); Flächen im Inhalt sind HLCard."
+    severity: warning
+
+  # ---------------------------------------------------------------------
+  # E3 Standardisierung (Aktionsformen). Die Regeln stehen zuerst auf
+  # `warning`; der Bestand hängt je Datei am Ratschen-Test
+  # `scripts/design-ratchet.sh` (`scripts/design-ratchets/E3.json`), die
+  # Bereichspakete senken ihn. Steht eine Regel bei null, geht sie auf
+  # `error`.
+  # ---------------------------------------------------------------------
+
+  # F7/Z30 — eine tippbare Zeile hat Druck-Rückmeldung.
+  hl_no_plain_buttonstyle:
+    name: "E3 F7 Tippfläche: kein .plain-Knopfstil"
+    regex: '\.buttonStyle\(\.plain\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Tippbare Fläche: `.buttonStyle(.hlRow)` oder `HLRowButton`; leise Textaktion: `HLLinkButton`; Symbol: `HLIconButton`; Auswahl: `HLChoiceRow`."
+    severity: warning
+
+  # F5/Z28 — ergänzt `hl_no_raw_icon_frame` (genau 44 x 44) um minWidth/minHeight und 28 pt.
+  hl_no_raw_hit_frame:
+    name: "E3 F5 Symbolknopf: kein Trefferrahmen von Hand"
+    regex: '\.frame\((?:minWidth: (?:44|28), minHeight: (?:44|28)|width: 28, height: 28)\b'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Symbolknöpfe sind `HLIconButton` (44 pt, auch `size: .inline`); 28 pt sind keine Trefferfläche."
+    severity: warning
+
+  # F4/Z27 — ein Unterstrich ist keine iOS-Form.
+  hl_no_underline:
+    name: "E3 F4 Link: kein Unterstrich"
+    regex: '\.underline\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Links ohne Unterstrich: `HLTextLink` im Fließtext, `HLLinkButton` als leise Aktion."
+    severity: warning
+
+  # F4/Z27 — „Mehr anzeigen“ und „Mehr laden“ haben je einen Baustein.
+  hl_no_literal_more_toggle:
+    name: "E3 F4 Mehr-Schalter von Hand"
+    regex: '"(?:Show more|Show fewer|Load more)"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Aufklappen: `HLLinkButton(_:isExpanded:)`; Nachladen: `HLLoadMoreRow`."
+    severity: warning
+
+  # F7/Z30 — kein Radio-Kreis, iOS kennt ihn nicht.
+  hl_no_choice_glyph:
+    name: "E3 F7 Auswahlzeile von Hand"
+    regex: '"largecircle\.fill\.circle"|\? "checkmark\.circle\.fill" : "circle"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Auswahl ist `HLChoiceRow(mode: .single)` (Haken rechts) oder `.multiple` (Kreis links)."
+    severity: warning
+
+  # F3/Z26 — rotes Minus links, 44 pt, wie im System-Bearbeitungsmodus.
+  hl_no_remove_glyph:
+    name: "E3 F3 Zeile entfernen von Hand"
+    regex: '"minus\.circle(?:\.fill)?"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Ein Element aus einer Eingabeliste entfernen ist `HLDeleteButton(form: .remove, …)`."
+    severity: warning
+
+  # F5/Z28 — Trefferfläche 44 pt auch für das kleine Kreuz.
+  hl_no_clear_glyph:
+    name: "E3 F5 Leeren-Kreuz von Hand"
+    regex: 'Image\(systemName: "xmark\.circle\.fill"\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Leeren ist `HLIconButton(systemImage: \"xmark.circle.fill\", …, size: .inline)`; ein Statussymbol bekommt `swiftlint:disable:next` mit Grund."
+    severity: warning
+
+  # F9/Z32 — ein Alert für Hinweise, nie einer für Ladefehler.
+  hl_no_raw_ok_alert:
+    name: "E3 F9 Hinweis-Alert von Hand"
+    regex: 'Button\((?:String\(localized: )?"OK"|Text\("OK"\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Hinweise nach einer Aktion: `hlAcknowledgeAlert`; Ladefehler: `ErrorBanner`."
+    severity: warning
+
+  # F6/Z29 — eine Gruppe, ein Platz, eine Ordnung.
+  hl_toolbar_via_page_actions:
+    name: "E3 F6 Leiste gepushter Seiten"
+    regex: 'placement: \.(?:primaryAction|topBarTrailing)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Aktionen gepushter Seiten setzt `hlPageActions(_:)` in fester Ordnung (Info, Filter, Auswählen, Teilen, Coach, Mehr, Hinzufügen)."
+    severity: warning
+
+  # F6/Z29 — Vor/Zurück in einem Inhalt ist `HLStepperHeader`.
+  hl_no_custom_back:
+    name: "E3 F6 kein eigener Zurück-Knopf"
+    regex: '"chevron\.backward"|Image\(systemName: "chevron\.left"\)|Label\("Back"'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Zurück zeichnet das System; eine Rückfrage vor dem Verlassen macht `hlDiscardGuard`."
+    severity: warning
+
+  # F1/Z24 — eine Tönung je Baustein.
+  hl_no_button_tint:
+    name: "E3 F1 keine Knopffarbe von Hand"
+    regex: '\.tint\((?:HLAccent\.primary|HLText\.primary)\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Knöpfe tragen ihre Farbe selbst; ein Fortschrittsbalken bekommt `swiftlint:disable:next` mit Grund."
+    severity: warning
+
+  # ---------------------------------------------------------------------
+  # F9 „Aus einem Guss“: Rollen statt freier Werte. Schrift und Abstand ab
+  # 16 pt kommen aus `DesignSystem/` (HLTextRole, HLLayout). R19 und R20
+  # (freie Schrift, freie Textfarbe) zählt nur `design-ratchet.sh`, sie sind
+  # zu zahlreich für die Warn-Baseline. R21 bis R24 stehen auf `warning`
+  # mit Baseline und gehen auf `error`, sobald die Bereichspakete sie auf
+  # null gesenkt haben.
+  # ---------------------------------------------------------------------
+
+  # R21 — ab 16 pt ist jeder Abstand eine Rolle aus HLLayout.
+  hl_free_page_spacing:
+    name: "F9 Abstand: ab 16 pt nur Rollen"
+    regex: '(?:spacing: |\.padding\([^)\n]*)HLSpace\.(?:lg|x+l)\b'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded:
+      - "HealthLog/Screens/Onboarding/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei."
+    severity: warning
+
+  # R22 — keine Zahl als Abstand. Kalender, Hypnogramm, Heatmap und das
+  # Teilen-Bild sind dichte Raster mit eigenem Takt und bleiben ausgenommen.
+  hl_raw_spacing:
+    name: "F9 Abstand: keine rohe Zahl"
+    regex: 'spacing: [1-9]|\.padding\((?:\.\w+, )?-?[1-9]'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded:
+      - "HealthLog/Screens/Onboarding/.*"
+      - "HealthLog/Screens/Cycle/CycleCalendarGrid\\.swift"
+      - "HealthLog/Screens/Insights/Sub/SleepHypnogramScreen\\.swift"
+      - "HealthLog/Screens/Mood/MoodHeatmapSection\\.swift"
+      - "HealthLog/Screens/PersonalRecords/RecordShareImage\\.swift"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Abstände kommen aus HLSpace oder HLLayout, nie als Zahl."
+    severity: warning
+
+  # R23 — Seitentitel ist immer HLTabHeader; der Systemtitel bleibt inline.
+  hl_system_large_title:
+    name: "F9 Titel: kein System-Großtitel"
+    regex: 'hlTabRootTitleDisplayMode\(\)|navigationBarTitleDisplayMode\(\.large\)'
+    included:
+      - "HealthLog/Screens/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Der Seitentitel ist HLTabHeader (in Listen hlTabHeaderListRow()), der Systemtitel bleibt .inline."
+    severity: warning
+
+  # R24 — Karten nur über HLCard; die rohe Fläche bleibt den Diagrammen.
+  hl_card_surface_in_screens:
+    name: "F9 Karte: keine rohe Kartenfläche"
+    regex: 'hlCardSurface\('
+    included:
+      - "HealthLog/Screens/.*"
+    excluded:
+      - "HealthLog/Screens/Charts/.*"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Eine Karte ist HLCard (Rubrik) oder HLCard(object:) (ein Ding). hlCardSurface() bleibt Diagrammen bis an den Rand."
+    severity: warning
 
   # i18n boundary (v0.8.0 W5): the German-leak guard is enforced by
   # `scripts/i18n-guard.py` (wired into the CI lint step), NOT a SwiftLint
@@ -382,6 +874,7 @@ type_body_length:
 file_length:
   warning: 600
   error: 1000
+  ignore_comment_only_lines: true
 
 function_body_length:
   warning: 60

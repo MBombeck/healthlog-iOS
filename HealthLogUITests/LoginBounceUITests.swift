@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 24 / plan 24-02 — D-24-01-A: the login lock-out.**
+/// **D-24-01-A: the login lock-out.**
 ///
 /// The operator, having signed out as a stopgap, could not sign back in. On the
 /// passkey path the system sheet appeared, his passkey was accepted, the
@@ -39,7 +39,7 @@ import XCTest
 ///
 /// ## Scene deactivation, honestly obtained
 ///
-/// A passkey sheet and iOS's own "Passwort sichern?" prompt (D-09-16-D) are
+/// A passkey sheet and iOS's own "Passwort sichern?" prompt are
 /// presented by another process and resign the scene. A UI test cannot drive
 /// either on demand — 11-03, 12-12 and 14-05 each tried. What it CAN do is
 /// produce the same scene transition the same way the operating system does:
@@ -60,13 +60,13 @@ final class LoginBounceUITests: XCTestCase {
 
     /// The skippable post-authentication steps, in route order. Walking them is
     /// how a `returningLoginIncomplete` account reaches the shell.
-    private static let setupTailSkips = [
+    @MainActor private static let setupTailSkips = OnboardingTail.owed([
         "onboarding.healthKit.skip",
         "onboarding.notifications.skip",
         "onboarding.aiSource.skip",
         "onboarding.anamnesis.skip",
         "onboarding.baselineProfile.skip"
-    ]
+    ])
 
     /// What the app settled on. Named rather than boolean so a failure says
     /// which of the three screens the user was actually looking at.
@@ -81,7 +81,7 @@ final class LoginBounceUITests: XCTestCase {
         case neither
     }
 
-    // MARK: - 24-02-A — the bounce
+    // MARK: - The bounce
 
     /// A sign-in that succeeds, a scene that deactivates and reactivates around
     /// it, and the shell as the assertion.
@@ -114,11 +114,11 @@ final class LoginBounceUITests: XCTestCase {
         XCTAssertEqual(
             outcome,
             .shell,
-            "EXPECTED_RED: 24-02-A a scene deactivation across a successful sign-in returns the user to the sign-in door with a live session and no way forward"
+            "a scene deactivation across a successful sign-in returns the user to the sign-in door with a live session and no way forward"
         )
     }
 
-    // MARK: - 24-02-B — the repeat attempt
+    // MARK: - The repeat attempt
 
     /// The half that makes the trap permanent rather than transient.
     ///
@@ -164,7 +164,7 @@ final class LoginBounceUITests: XCTestCase {
         XCTAssertEqual(
             outcome,
             .shell,
-            "EXPECTED_RED: 24-02-B a repeat sign-in with the same account assigns an equal phase, so no notification is published and the app never leaves the sign-in door"
+            "a repeat sign-in with the same account assigns an equal phase, so no notification is published and the app never leaves the sign-in door"
         )
     }
 
@@ -307,7 +307,7 @@ final class LoginBounceUITests: XCTestCase {
         let welcome = app.buttons["onboarding.welcome.cta"]
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            // D-09-16-D — clear the OS password prompt before reading the
+            // Clear the OS password prompt before reading the
             // screen, so an app surface is never mistaken for absent because
             // something the app does not own is standing over it.
             clearTheOSPasswordPromptIfSettled(app)
@@ -321,7 +321,7 @@ final class LoginBounceUITests: XCTestCase {
     }
 
     /// Tap at most one offered skip per sweep, after clearing an OS-owned sheet
-    /// that may be standing over it (D-09-16-D). One per sweep so the loop
+    /// that may be standing over it. One per sweep so the loop
     /// re-reads the screen between taps instead of firing at a step that has
     /// already left.
     @MainActor

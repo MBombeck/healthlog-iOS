@@ -1,4 +1,4 @@
-// **Phase 09 / plan 09-07 — one harness, six flows.**
+// **One harness, six flows.**
 //
 // The convergence claim is only worth making if all six flows are driven the
 // same way, so the harness owns the whole shape: a real `AuthService` over the

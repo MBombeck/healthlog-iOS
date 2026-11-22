@@ -1,6 +1,6 @@
 import Foundation
 
-/// **B5 (1.4)** — the word typed to confirm deleting the account or all data.
+/// The word typed to confirm deleting the account or all data.
 ///
 /// The catalog shows it per language (`DELETE` key: „LÖSCHEN“ in German,
 /// „DELETE“ in English). Up to 1.3 the German word was spelled „LOESCHEN“,

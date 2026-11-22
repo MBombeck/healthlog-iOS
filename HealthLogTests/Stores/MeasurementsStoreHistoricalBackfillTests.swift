@@ -7,15 +7,14 @@
     @testable import HealthLog
     import Testing
 
-    /// **W-HKBACKFILL** — one-shot historical backfill of server-origin
+    /// One-shot historical backfill of server-origin
     /// measurements into Apple Health.
     ///
-    /// Covers the four invariants the driver owns on top of the reused b198
+    /// Covers the three invariants the driver owns on top of the reused b198
     /// mirror primitive (`mirrorServerMeasurements`, which carries the source
     /// whitelist + externalUUID anti-dup + per-sample `existsInHealth` probe +
     /// share-auth gate):
     /// - run-once gate (a second eligible call no-ops),
-    /// - standalone suppression (no mirror, no flag flip),
     /// - source-policy filter (only `.withings` / `.import_` / `.manual` history
     ///   reaches the mirror; `.appleHealth` / `.whoop` / `.fitbit` never do),
     /// - that ALL eligible history (not just the latest page) is handed to the
@@ -95,8 +94,7 @@
             recorder: HistoryRecorder,
             hk: MockHealthKitWriter,
             defaults: UserDefaults,
-            userID: String?,
-            standalone: Bool
+            userID: String?
         ) async throws -> MeasurementsStore {
             let api = StubAPIClient()
             await api.setHandler { request in
@@ -123,7 +121,6 @@
             return try MeasurementsStore(
                 repo: repo,
                 healthKit: hk,
-                isStandalone: { standalone },
                 userIDProvider: { userID },
                 backfillDefaults: defaults,
                 serverVersionDefaults: freshDefaults()
@@ -158,8 +155,7 @@
                 recorder: recorder,
                 hk: hk,
                 defaults: defaults,
-                userID: "user-a",
-                standalone: false
+                userID: "user-a"
             )
 
             await store.runHistoricalBackfillForTesting()
@@ -187,8 +183,7 @@
                 recorder: recorder,
                 hk: hk,
                 defaults: freshDefaults(),
-                userID: "user-a",
-                standalone: false
+                userID: "user-a"
             )
 
             await store.runHistoricalBackfillForTesting()
@@ -199,7 +194,7 @@
             #expect(ids.isSuperset(of: ["w-1", "w-2"]))
         }
 
-        // MARK: - S1 / public #11 — manual rows typed on the web
+        // MARK: - Manual rows typed on the web
 
         @Test("Update path: a user whose v1 backfill completed re-runs once and the web MANUAL history reaches the mirror")
         func completedV1BackfillReRunsForManualRows() async throws {
@@ -222,8 +217,7 @@
                 recorder: recorder,
                 hk: hk,
                 defaults: defaults,
-                userID: "user-a",
-                standalone: false
+                userID: "user-a"
             )
 
             await store.runHistoricalBackfillForTesting()
@@ -249,8 +243,7 @@
                 recorder: recorder,
                 hk: hk,
                 defaults: defaults,
-                userID: "user-a",
-                standalone: false
+                userID: "user-a"
             )
 
             await store.runHistoricalBackfillForTesting()
@@ -276,8 +269,7 @@
                 recorder: recorder,
                 hk: hk,
                 defaults: freshDefaults(),
-                userID: "user-a",
-                standalone: false
+                userID: "user-a"
             )
 
             // The person's direction setting was not known: nothing written,
@@ -302,7 +294,7 @@
 
             let hkA = MockHealthKitWriter()
             let storeA = try await makeStore(
-                recorder: recorder, hk: hkA, defaults: defaults, userID: "user-a", standalone: false
+                recorder: recorder, hk: hkA, defaults: defaults, userID: "user-a"
             )
             await storeA.runHistoricalBackfillForTesting()
             #expect(hkA.mirrorCallCount == 1)
@@ -313,38 +305,10 @@
             // Different user on the same device + same defaults → fresh one-shot.
             let hkB = MockHealthKitWriter()
             let storeB = try await makeStore(
-                recorder: recorder, hk: hkB, defaults: defaults, userID: "user-b", standalone: false
+                recorder: recorder, hk: hkB, defaults: defaults, userID: "user-b"
             )
             await storeB.runHistoricalBackfillForTesting()
             #expect(hkB.mirrorCallCount == 1)
-        }
-
-        // MARK: - Standalone suppression
-
-        @Test("Standalone mode suppresses the backfill (no mirror, marker stays unset)")
-        func standaloneSuppression() async throws {
-            let recorder = HistoryRecorder(rowsForSource: [
-                ServerMeasurementSource.withings.rawValue: [withingsWeight(id: "w-1")]
-            ])
-            let hk = MockHealthKitWriter()
-            let defaults = try freshDefaults()
-            // The repo's `historyForBackfill` returns [] in standalone, and the
-            // trigger gate in `load()` never even calls the driver in standalone
-            // — here we drive the repo path directly to prove the suppression is
-            // structural (no rows fetched → empty mirror feed).
-            let store = try await makeStore(
-                recorder: recorder,
-                hk: hk,
-                defaults: defaults,
-                userID: "user-a",
-                standalone: true
-            )
-
-            await store.runHistoricalBackfillForTesting()
-
-            // Standalone repo returns no history, so the mirror sees an empty feed.
-            #expect(hk.mirroredMeasurements.isEmpty)
-            #expect(recorder.requestCount == 0)
         }
 
         @Test
@@ -390,7 +354,7 @@
                 hk.mirroredMeasurements.isEmpty
                     && defaults.integer(forKey: prefix + "account-a") == 0
                     && defaults.integer(forKey: prefix + "account-b") == 0,
-                "EXPECTED_RED: late A backfill mirrored or marked complete"
+                "late A backfill mirrored or marked complete"
             )
 
             registry.invalidate()
@@ -403,8 +367,7 @@
     /// Test-only synchronous entry point so the suite can drive the backfill and
     /// `await` its completion (the production trigger dispatches detached so it
     /// can't gate paint — untestable directly). Exercises the SAME driver body
-    /// + run-once gate. Standalone suppression is exercised through the repo's
-    /// own `historyForBackfill` short-circuit (returns [] offline).
+    /// + run-once gate.
     @MainActor
     extension MeasurementsStore {
         func runHistoricalBackfillForTesting() async {

@@ -48,7 +48,7 @@ extension JSONDecoder.DateDecodingStrategy {
 extension JSONDecoder.DateDecodingStrategy {
     /// ISO8601 with or without fractional seconds — the strict variant without
     /// the `YYYY-MM-DD` day-key fallback above. Moved here verbatim from
-    /// `Services/APIClient.swift` (v0.17 / CU-02) so both date strategies live
+    /// `Services/APIClient.swift` so both date strategies live
     /// side by side; no behaviour change.
     static var iso8601WithFractional: JSONDecoder.DateDecodingStrategy {
         .custom { decoder in

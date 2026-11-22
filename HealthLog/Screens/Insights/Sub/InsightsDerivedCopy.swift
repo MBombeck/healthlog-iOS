@@ -6,7 +6,7 @@ import Foundation
 /// cards, the re-frame ring cards, `WellnessScoreDetailSheet` and the Insights
 /// customization screen.
 ///
-/// 1.4 B4 — these resolvers used to live on `InsightsDerivedBlock`, the
+/// These resolvers used to live on `InsightsDerivedBlock`, the
 /// "More from your data" text lane. Every derived score became a ring tile, so
 /// that lane rendered nothing and was deleted; the copy it shared with the live
 /// surfaces stayed and moved here.
@@ -14,7 +14,7 @@ enum InsightsDerivedCopy {
     /// Localized display title per derived metric id (web parity copy).
     nonisolated static func title(for metric: String) -> String {
         switch metric {
-        // v0.14.1 §4 — clearer, "wertig" wellness names. "Readiness"/"Strain"
+        // Clearer, "wertig" wellness names. "Readiness"/"Strain"
         // were unclear (operator feedback); renamed to plain "daily condition /
         // daily load". EN+DE in Localizable.xcstrings. 1.4: German says
         // "Belastung" like the web, because WHOOP's 0 to 21 day strain is
@@ -61,7 +61,7 @@ enum InsightsDerivedCopy {
         }
     }
 
-    /// **W-B187 #29 — provenance-aware honesty caveat.**
+    /// **Provenance-aware honesty caveat.**
     ///
     /// RECOVERY_SCORE flips between a WHOOP-native recovery and the computed HRV
     /// proxy server-side (v1.17 W2b). The static `caveat(for:)` copy hardcodes the
@@ -85,7 +85,7 @@ enum InsightsDerivedCopy {
         switch metric {
         case "READINESS": String(localized: "A wellness proxy, not a recovery or clinical score.")
         case "RECOVERY_SCORE": String(localized: "A descriptive wellness proxy, not a training-grade or clinical recovery measure.")
-        // 1.4 B2 — STRESS_SCORE carries no caveat any more: "descriptive, not
+        // STRESS_SCORE carries no caveat any more: "descriptive, not
         // clinical" is confirmed once at launch, and its "what is it" already
         // says the number comes from heart-rate variability.
         case "STRAIN_SCORE": String(localized: "A descriptive activity-load proxy, not a clinical or training-grade load measure.")
@@ -105,7 +105,7 @@ enum InsightsDerivedCopy {
         }
     }
 
-    /// **W-B187 #29 — provenance-aware "Was ist Erholung?" explainer.**
+    /// **Provenance-aware "Was ist Erholung?" explainer.**
     ///
     /// The static `whatIs(for:)` recovery copy describes the COMPUTED proxy
     /// ("read mainly from your heart-rate variability"). When the server resolves
@@ -122,7 +122,7 @@ enum InsightsDerivedCopy {
         return whatIs(for: dto.metric)
     }
 
-    /// v0.14.1 §6 — "Was ist [Metrik]?" explainer body: WHAT the metric IS
+    /// "Was ist [Metrik]?" explainer body: WHAT the metric IS
     /// (plain-language definition), NOT how it's computed. Replaces the boring
     /// "Server-computed from your own data" line on the score-detail sheet. EN+DE
     /// in Localizable.xcstrings. `nil` → the sheet omits the explainer body and
@@ -159,9 +159,9 @@ enum InsightsDerivedCopy {
     }
 
     /// The provenance transparency line: "From your last N days · <source> data".
-    /// 1.4 B2 — "Aus Tageswerten der letzten 30 Tage" (it read "Aus deinen
+    /// "Aus Tageswerten der letzten 30 Tage" (it read "Aus deinen
     /// letzten 30 Tagen, täglich-Daten").
-    /// 1.4 B4 — a source token this build does not name ("none", or one a
+    /// A source token this build does not name ("none", or one a
     /// newer server adds) reads as the window alone, never as the raw token
     /// ("Aus none der letzten 30 Tage").
     nonisolated static func provenanceLine(for provenance: DerivedMetricDTO.Provenance) -> String {

@@ -165,16 +165,14 @@ public struct MedicationQuickMarkButton: View {
     /// below (UX-H2 reconcile).
     public nonisolated static let visualSize: CGFloat = 32
 
+    /// The size of the mark glyph. The intake sheet on Home draws its mark
+    /// at the same size, so the one action looks the same in both places.
+    public static let symbolSize: CGFloat = HLIconSize.lg
+
     /// HIG-mandated minimum tap-target. Applied via `.frame(minWidth:
     /// minHitTarget, minHeight: minHitTarget)` so the chip's hit area
     /// extends past the visual edge into the surrounding row padding.
     public nonisolated static let minHitTarget: CGFloat = 44
-
-    /// v0.14.x Q — reduce-motion gate for the taken-confirmation bounce.
-    /// The `.symbolEffect(.bounce)` is pure flourish, so the system
-    /// reduce-motion preference disables it (the symbol still swaps to the
-    /// filled check, just without the one-shot bounce).
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(state: MedicationQuickMarkState, onTap: @escaping () -> Void) {
         self.state = state
@@ -182,36 +180,36 @@ public struct MedicationQuickMarkButton: View {
     }
 
     public var body: some View {
-        // v0.5.5.1 — body reads from the snapshot-friendly descriptor
+        // Body reads from the snapshot-friendly descriptor
         // so the unit-tested presentation contract + the rendered view
         // share a single source of truth. Symbol-name, hit-target,
         // accessibility strings all flow from one place.
         let descriptor = state.presentationDescriptor()
         Button(action: handleTap) {
-            Image(systemName: descriptor.symbolName)
-                .font(.hlIcon(HLIconSize.lg, weight: .regular))
-                .foregroundStyle(tint)
-                // v0.14.x Q — bounce the leading dose-checkmark exactly on the
-                // discrete `actionable → takenToday` flip (`circle` →
-                // `checkmark.circle.fill`). Keyed on `isTakenToday` so it fires
-                // once per mark, not on every body pass; reduce-motion gated.
-                // `.contentTransition(.symbolEffect(.replace))` makes the glyph
-                // swap itself read as a morph rather than a hard cut.
-                .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.bounce, value: reduceMotion ? false : isTakenToday)
-                .opacity(descriptor.isSymbolHidden ? 0 : 1)
-                // W-UX2 (2026-05-21): the 44 pt HIG hit-target only
-                // applies when the button is actually tappable
-                // (`.actionable`). For `.takenToday`, `.upcoming`, and
-                // `.notScheduledToday` the visual chip stays at 32 pt —
-                // same column-width as the pill-icon chip beside it —
-                // so non-interactive rows align with the natural icon
-                // column instead of reserving a phantom 44 pt slot.
-                .frame(width: descriptor.visualSize, height: descriptor.visualSize)
-                .frame(minWidth: descriptor.hitTarget, minHeight: descriptor.hitTarget)
-                .contentShape(Rectangle())
+            ZStack {
+                // The open state's glyph; the taken check draws itself on
+                // over it the moment the dose is marked, the same check as
+                // a saved value and a logged mood. Without motion it stands
+                // drawn at once.
+                Image(systemName: descriptor.symbolName)
+                    .opacity(isTakenToday ? 0 : 1)
+                HLConfirmGlyph(isConfirmed: isTakenToday)
+            }
+            .font(.hlIcon(Self.symbolSize, weight: .regular))
+            .foregroundStyle(tint)
+            .opacity(descriptor.isSymbolHidden ? 0 : 1)
+            // W-UX2 (2026-05-21): the 44 pt HIG hit-target only
+            // applies when the button is actually tappable
+            // (`.actionable`). For `.takenToday`, `.upcoming`, and
+            // `.notScheduledToday` the visual chip stays at 32 pt —
+            // same column-width as the pill-icon chip beside it —
+            // so non-interactive rows align with the natural icon
+            // column instead of reserving a phantom 44 pt slot.
+            .frame(width: descriptor.visualSize, height: descriptor.visualSize)
+            .frame(minWidth: descriptor.hitTarget, minHeight: descriptor.hitTarget)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .hlPressable()
         .disabled(descriptor.isDisabled)
         .accessibilityLabel(Text(descriptor.accessibilityLabel))
         .accessibilityHint(Text(descriptor.accessibilityHint))
@@ -225,8 +223,7 @@ public struct MedicationQuickMarkButton: View {
     }
 
     /// True once a dose for this med is logged today — the discrete state the
-    /// `.symbolEffect(.bounce)` keys on so the leading checkmark celebrates the
-    /// mark exactly once.
+    /// drawn check keys on, so it draws itself exactly once per mark.
     private var isTakenToday: Bool {
         state == .takenToday
     }
@@ -241,7 +238,7 @@ public struct MedicationQuickMarkButton: View {
     }
 }
 
-// W-MEDS-VISUAL-IMPL (Issue #7) extracted the row component into
+// W-MEDS-VISUAL-IMPL extracted the row component into
 // `ActiveMedicationRow.swift`. This file now scopes to the quick-mark
 // state machine + the button view that renders it, plus the offline
 // banner emitted by the surrounding screen.
@@ -267,8 +264,7 @@ struct QuickMarkQueuedBanner: View {
                 // gated (the icon stays static when motion is disabled).
                 .symbolEffect(.pulse, isActive: !reduceMotion)
             Text(String(localized: "medication.quick_mark.queued"))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
             Spacer()
         }
         .padding(.horizontal, HLSpace.md)
@@ -281,14 +277,14 @@ struct QuickMarkQueuedBanner: View {
                         .strokeBorder(HLColor.separator, lineWidth: 1)
                 )
         )
-        .padding(.horizontal, HLSpace.lg)
+        .padding(.horizontal, HLLayout.cardInset)
         .padding(.top, HLSpace.sm)
         .accessibilityElement(children: .combine)
     }
 }
 
 #Preview("Quick-Mark states") {
-    VStack(alignment: .leading, spacing: HLSpace.lg) {
+    VStack(alignment: .leading, spacing: HLLayout.cardGap) {
         MedicationQuickMarkButton(state: .takenToday, onTap: {})
         MedicationQuickMarkButton(state: .actionable(intakeId: "x"), onTap: {})
         MedicationQuickMarkButton(state: .upcoming, onTap: {})

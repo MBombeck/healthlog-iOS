@@ -1,10 +1,10 @@
 import SwiftUI
 
-// `MetricDrillDown` + `DrillDownErrorState` live in `DashboardDrillDown.swift`
+// `MetricDrillDown` lives in `DashboardDrillDown.swift`
 // to keep this file under the 600-line `file_length` swiftlint budget.
 
 struct DashboardScreen: View {
-    /// v0.12 W0-3 — bind the Home tab's `NavigationStack` to the router's
+    /// Bind the Home tab's `NavigationStack` to the router's
     /// `homePath` so the path is no longer dead state. The router resets
     /// `homePath` on the `.dashboard` deep link, on the mood-quick-entry
     /// request, and on a Home tab re-tap (`tabSelectionBinding`); with the
@@ -13,7 +13,7 @@ struct DashboardScreen: View {
     /// but its in-screen pushes (profile / customize / tile drill-downs) now
     /// live on the shared `homePath` so a re-tap returns them to root too.
     @Environment(AppRouter.self) private var router
-    // W-FILELEN — internal (not private) so the `DashboardScreen+Ordering.swift`
+    // Internal (not private) so the `DashboardScreen+Ordering.swift`
     // same-module extension can read these. Pure visibility relax; no behaviour.
     @Environment(DashboardStore.self) var store
     @Environment(DashboardLayoutStore.self) var layoutStore
@@ -26,43 +26,40 @@ struct DashboardScreen: View {
     @Environment(InsightsTargetsStore.self) private var insightsTargets
     @Environment(HealthScoreStore.self) private var healthScore
     @Environment(MeasurementsStore.self) private var measurementsStore
-    /// v0.15 W-FRONTDOORS — app-wide Vorsorge reminder store backing the Home
+    /// App-wide Vorsorge reminder store backing the Home
     /// next-due tile. Shared (SWR-deduped) with `MeasurementRemindersScreen`.
     @Environment(MeasurementRemindersStore.self) private var remindersStore
-    /// v0.15.7 W-RHYTHM-FRONTDOOR — device-health-notifications (ECG/AFib
+    /// Device-health-notifications (ECG/AFib
     /// rhythm-events) store, shared with the Insights overview card. W-FILELEN —
     /// internal so `+Ordering.swift` reads it for `rhythmEventsSummary`.
     @Environment(RhythmEventsStore.self) var rhythmEventsStore
-    /// Paired-only gate — the rhythm front door is a pure server read, warmed
-    /// only when a server is reachable (standalone hides it like the card).
-    @Environment(BackendAvailability.self) private var backend
-    /// v0.5.3 D1 — wires /api/insights/generate payload as serverFallback.
+    /// Wires /api/insights/generate payload as serverFallback.
     @Environment(DailyBriefingStore.self) private var briefingStore
     /// Web-parity `TodayHero` — the daily-digest store backing the dashboard
-    /// hero. Warmed on cold-launch + pull-to-refresh (paired-only, self-hiding).
+    /// hero. Warmed on cold-launch + pull-to-refresh (self-hiding).
     @Environment(DailyDigestStore.self) private var digestStore
-    /// v0.5.4 BF-1 — mood + meds feed the Statistik-Mode floor on the hero.
+    /// Mood + meds feed the Statistik-Mode floor on the hero.
     /// b241 Fix 2 — non-private so the `DashboardScreen+Ordering` extension can
     /// read `moodStore.entries` when it hands the mood snapshot to
     /// `refreshMetricStates` (the `.mood` tile derives its state from MoodStore).
     @Environment(MoodStore.self) var moodStore
     @Environment(MedicationsStore.self) private var medicationsStore
-    /// W-FILELEN — internal so `DashboardScreen+Ordering.swift` can read it.
+    /// Internal so `DashboardScreen+Ordering.swift` can read it.
     @Environment(\.appContainer) var container
-    /// v0.6.2.x bug-c10-ios-direct — HK-direct today step total. The
+    /// HK-direct today step total. The
     /// dashboard Steps tile reads from here for the "today" value so the
     /// operator's freshly-walked steps render even when the server
     /// `stats:` row is frozen (insert-only batch route — see
     /// `LiveHealthKitTodayStore` doc). Refreshed on `.task`,
     /// pull-to-refresh, and scenePhase=.active hooks.
     @Environment(LiveHealthKitTodayStore.self) private var liveTodayStore
-    /// W-IMPL-MOTION-POLISH (v0.5.5.1) — reduce-motion gate for the greeting
+    /// Reduce-motion gate for the greeting
     /// fade + matched-geometry transition. When `true`, the greeting opacity
     /// stays at 1.0 and the matched-geometry namespace resolves to `nil`.
     /// (Wave 2 / 2.4 — the hero parallax this also gated is gone.)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// v0.6.2.x — observed scenePhase so the dashboard can re-fan-out
+    /// Observed scenePhase so the dashboard can re-fan-out
     /// per-kind `MetricDataState` after the app returns to foreground.
     /// Without this, `RootView.refreshHealthKitDailyStatsIfReady` posts
     /// today's fresh HK day-totals to the server but the in-memory
@@ -74,21 +71,21 @@ struct DashboardScreen: View {
     /// avatar tap. Wrapping the bool in a typed `.navigationDestination`
     /// keeps the push declarative + survives state restoration.
     @State private var showProfile = false
-    // v0.13.1 IC — the Home-stack metric drill-down state (`drillDown`
+    // The Home-stack metric drill-down state (`drillDown`
     // + the eagerly-built `drillDownStore`) was RETIRED. The tile tap now
     // drives `router.selectInsightsMetric(_:)` so it lands the operator in the
     // Insights tab on that metric (one canonical surface), instead of pushing a
     // second `InsightsMetricScreen` instance onto `homePath`. See
     // `openDetail(for:)`.
-    /// W-IMPL-MOTION-POLISH — live scroll offset driving `HealthScoreTile`
-    /// translation + `DashboardHeader` greeting opacity. v0.14.8 AUDIT-HOME
+    /// Live scroll offset driving the
+    /// `DashboardHeader` greeting opacity. v0.14.8 AUDIT-HOME
     /// M11: an `@Observable` box written by `onScrollGeometryChange` instead
     /// of a screen-level `@State` — the per-frame write no longer
     /// invalidates this whole body (header, hero, grid construction,
     /// `orderedMetrics`); only the tiny readers re-evaluate. See
     /// `DashboardParallax.swift` for the math + reduce-motion contract.
     @State private var parallaxModel = DashboardParallaxModel()
-    /// W-IMPL-MOTION-POLISH — namespace for the matched-geometry shared
+    /// Namespace for the matched-geometry shared
     /// element transition that lifts a tile's value text into the
     /// `ChartDetailScreen.HeroStrip`. When `accessibilityReduceMotion` is
     /// true we forward `nil` instead of this namespace into the drill-down
@@ -96,132 +93,55 @@ struct DashboardScreen: View {
     /// `View.matchedTileGeometry` no-op branches — guaranteeing no implicit
     /// frame animation runs.
     @Namespace private var dashboardNamespace
-    /// **v0.5.6 HOME-COMPLIANCE-SHEET.** Drives the
+    /// Drives the
     /// `AnstehendeEinnahmenSheet` presentation triggered by the Compliance
-    /// ring card tap. v0.6.1.26 — the standalone Überfällig-banner tap was
+    /// ring card tap. The standalone Überfällig-banner tap was
     /// removed; the ring tap is now the single entry-point to the sheet.
     @State private var showIntakesSheet = false
-    /// v0.8.7 W-NATIVE-REORDER — drives the push to the native
+    /// Drives the push to the native
     /// `DashboardCustomizationScreen` (List + .onMove + visibility toggles).
     /// Replaces the removed in-grid jiggle edit mode (`isEditingTiles`) +
     /// add-tile sheet (`showAddTileSheet`). Toggled by the always-on toolbar
     /// button and the empty-state "Add tiles" CTA.
     @State private var showCustomize = false
-    /// v0.15 W-FRONTDOORS — drives the push to `MeasurementRemindersScreen` (the
+    /// #186 — the symptom quick entry, pushed from the quick-actions card.
+    @State private var showSymptomEntry = false
+    /// Drives the push to `MeasurementRemindersScreen` (the
     /// Vorsorge manage surface) when the Home tile's card body is tapped. The
     /// deep path (More → … → Notifications → preventive card) still works; this
     /// is the direct front door.
     @State private var showVorsorge = false
+    /// Whether the window is short (``TodayLayout/isShortWindow(height:width:)``).
+    @State private var isShortWindow = false
+    /// Device logic, not layout: whether this device offers Apple Health.
+    @Environment(\.deviceProfile) private var deviceProfile
 
-    /// Operator-feedback b235 — the error the top banner should show, or `nil`
-    /// when it must stay silent because the INLINE metrics error card (#67) is
-    /// already carrying the same failure.
-    ///
-    /// On a dashboard partial failure (`summary == nil`, a load error, no
-    /// in-flight retry) `DashboardMetricsHost` renders `DashboardMetricsErrorState`
-    /// in the metrics section. Pre-fix the red top banner (`store.error`) rendered
-    /// AS WELL, so the same outage screamed twice. We suppress the banner in
-    /// EXACTLY the state that shows the inline card — reusing the same
-    /// `DashboardMetricsSectionState.resolve` the host branches on — so the two
-    /// surfaces can never disagree. Every other banner case (a secondary-request
-    /// error while a cached summary still renders the tiles) is unchanged: the
-    /// inline card is not shown there, so the banner remains the only surface.
+    /// The error the top banner shows. Content stands around every Home
+    /// failure, so the banner is the one place it is reported; the metrics
+    /// section shows no card of its own (operator-feedback b235: never twice).
     private var topBannerError: HLError? {
-        let inlineErrorShown = DashboardMetricsSectionState.suppressesTopBanner(
-            hasSummary: store.summary != nil,
-            hasError: store.error != nil,
-            isLoading: store.isLoading
-        )
-        return inlineErrorShown ? nil : store.error
+        store.error
     }
 
     var body: some View {
         @Bindable var router = router
         return NavigationStack(path: $router.homePath) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    // v0.14.8 AUDIT-HOME M11 — the zero-height GeometryReader
-                    // probe is gone; the ScrollView publishes its offset via
-                    // `onScrollGeometryChange` below. The header reads the
-                    // model itself so only its greeting fades per frame.
-                    DashboardHeader(
-                        showProfile: $showProfile,
-                        parallax: parallaxModel
-                    )
-                    HealthKitConnectBanner()
-                    // 25-01 (E-2026-08-28) — the one-time update notice for
-                    // existing installs. Its own rule, NOT the banner's: the
-                    // banner refuses on `isConnected` first (K10, pinned by
-                    // 12-12), which is exactly the latch that left an updated,
-                    // never-connected device with no affordance at all. Armed
-                    // once per install from the launch prologue's update
-                    // evidence; dismissed once by its ✕; gone by itself after
-                    // a successful connect.
-                    HealthKitUpdateNoticeCard()
-                    // v0.5.6 HOME-COMPLIANCE-SHEET — operator brief
-                    // (2026-05-22): the standalone "Anstehende
-                    // Einnahmen" card is consolidated into a bottom-sheet
-                    // v0.6.1.26 — Überfällig-Banner removed per operator
-                    // brief 2026-05-24 ("ist sehr alarmierend, lieber in
-                    // der Medikamenten-Compliance haben"). The overdue
-                    // indicator now renders inline inside ComplianceRingCard
-                    // — same intake-sheet on tap, less screaming Home.
-                    // v0.5.4.2 — briefing hero collapsed into HealthScoreTile.
-                    // b172 — operator: the per-pillar finding chips ("Blood
-                    // Pressure", "Weight is slightly different", …) read as
-                    // noise on Home; the tile stays the ring + band + delta
-                    // only. The findings still live in the Insights overview.
-                    // v0.14.8 AUDIT-HOME M11 — the wrapper hosts the
-                    // per-frame offset read; the tile itself keeps identity
-                    // and never re-evaluates from scrolling alone.
-                    // Web-parity `TodayHero` (v1.29.1) — the promoted day's read
-                    // REPLACES the old `HealthScoreTile` + `DashboardScoreRingsHost`
-                    // cluster at the top of Home (operator brief, decision 1+2).
-                    // Server-authoritative daily digest (`GET /api/daily/digest`);
-                    // self-hides on absent / gated-off / calm-degrade. The single
-                    // health ring taps into Insights. The score-rings live in
-                    // Insights ONLY now (they already render there as the wellness
-                    // score-ring cards, `InsightsScoreCardsBlock`); the
-                    // `checkup.view` rail action opens the Vorsorge front door.
-                    //
-                    // **Wave 2 / 2.4 (b227): the hero parallax was REMOVED.** The
-                    // `DashboardParallaxOffset` wrapper that translated the hero
-                    // at `HLMotion.parallaxRate` is gone — the web hero has no
-                    // parallax (parity), HIG scroll-views cautions that custom
-                    // scroll effects break Look-to-Scroll, and the effect made
-                    // the hero read as detached from its own rail. The greeting
-                    // fade in `DashboardHeader` still reads `parallaxModel`.
-                    //
-                    // **Wave 2 / 2.6:** the standalone `DashboardVorsorgeHost`
-                    // was REMOVED. It rendered the `VorsorgeTile` in exactly the
-                    // situation the hero rail already fires its `preventive_care`
-                    // item, so a due reminder showed up TWICE on Home. The hero
-                    // rail is now the single due-surface, and its `checkup.view`
-                    // action inherited the tile's straight-to-measuring routing
-                    // (see `TodayHeroHost.openVorsorge`).
-                    TodayHeroHost(
-                        onOpenVorsorge: { showVorsorge = true },
-                        onShowIntakes: { showIntakesSheet = true }
-                    )
-                    // v0.15.7 W-RHYTHM-FRONTDOOR — front door to the device-health-
-                    // notifications (ECG/AFib rhythm-events) card. Surfaces ONLY
-                    // when the wearable flagged events (summary nil on empty →
-                    // self-suppresses, no dead slab), routing to the Insights
-                    // overview that hosts the full regulator-aware card. See
-                    // `RhythmEventsTile` for the non-diagnostic doctrine.
-                    if let rhythmEventsSummary {
-                        RhythmEventsTile(summary: rhythmEventsSummary)
-                    }
-                    // INV-3 (v0157) — the metric composition (highlight card,
-                    // compliance reconcile + rings, the layout switch, all three
-                    // empty-state branches, `orderedMetrics`, `emptyMetricsState`)
-                    // moved INTO `DashboardMetricsHost`. It reads `DashboardStore`,
-                    // `DashboardLayoutStore`, `SettingsStore.dashboardLayout`,
-                    // `MedicationsStore` (reconcile), `LiveHealthKitTodayStore`
-                    // (the frequent HK step tick) and the `moduleGate` on its OWN
-                    // body, so those mutations no longer re-render this whole home
-                    // surface (header → footer). Behaviour byte-identical.
-                    DashboardMetricsHost(
+            // A page of tiles: no readable width. One column at every width:
+            // on the phone the day's read above the tiles, as Today always
+            // had; on a wide page the hero across, the tiles under it, the
+            // day's cards last. The greeting heads the column.
+            HLPage(readable: false) {
+                // The model publishes the scroll offset; the header reads it
+                // itself, so only its greeting fades per frame.
+                DashboardHeader(
+                    showProfile: $showProfile,
+                    parallax: parallaxModel
+                )
+                TodayStack(
+                    head: dayColumn,
+                    cards: dayCards,
+                    tiles: DashboardMetricsHost(
+                        part: .tiles,
                         matchedNamespace: matchedGeometryNamespace,
                         zoomNamespace: dashboardNamespace,
                         allowsMotion: !reduceMotion,
@@ -229,29 +149,14 @@ struct DashboardScreen: View {
                         onShowIntakes: { showIntakesSheet = true },
                         onShowCustomize: { showCustomize = true },
                         onRequestCapture: { router.requestCapture() },
-                        // #67 — retry the failed summary load + re-derive the
-                        // per-kind tile states (force past the SWR TTL).
-                        onRetry: {
-                            Task {
-                                await store.refresh(force: true)
-                                await refreshTileStates()
-                            }
-                        }
+                        onLogSymptom: { showSymptomEntry = true }
                     )
-                    // v0.14.1 — discreet last-synced caption (operator: "nett,
-                    // nicht überfrachtet"). INV-3 — the `store.isLoading` /
-                    // `settings.profile` reads moved into `DashboardSyncFooterHost`
-                    // so a refresh-flag flip invalidates only the footer, not the
-                    // metrics grid above it.
-                    DashboardSyncFooterHost()
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.lg)
-                // Native iOS-18 TabView inserts the tab-bar safe-area inset
-                // automatically (M2-A2). HLSpace.lg gives a breathing-gap.
-                .padding(.bottom, HLSpace.lg)
+                )
+                // Discreet last-synced caption under the column. Its own
+                // host, so a refresh-flag flip invalidates only the footer.
+                DashboardSyncFooterHost()
             }
-            // v0.14.8 AUDIT-HOME M11 — native iOS-18 scroll-geometry stream.
+            // Native iOS-18 scroll-geometry stream.
             // `contentOffset.y + contentInsets.top` is 0 at rest and grows
             // positive as the user scrolls DOWN — the canonical semantic the
             // math helpers expect. The write lands in the @Observable model
@@ -262,14 +167,23 @@ struct DashboardScreen: View {
             } action: { _, newValue in
                 parallaxModel.scrollOffset = newValue
             }
-            .hlScreenBackground()
             // v0.11 perf: mark Dashboard first content paint so the
             // cold-launch first-paint budget (≤300 ms p95) is measurable in
             // Instruments → Points of Interest. No behavioural effect.
             .hlSignpostFirstPaint(.dashboardFirstPaint)
-            // v0.5.x C-9 — iOS 26+ soft scroll-edge; iOS 18-25 no-op.
-            .hlScrollEdgeSoft()
-            // W-B184 — WHOOP-style pull-to-refresh: custom pull glyph + a
+            // Regular: Log as the "+" of this tab root.
+            .hlShellCaptureItem(.home)
+            // The window's size, safe areas included: in a short window
+            // (the folded Duo, a small Stage Manager window) the hero keeps
+            // to its short height. Only the verdict is kept, so a resize
+            // runs this body only when it crosses the line.
+            .onGeometryChange(for: Bool.self) { proxy in
+                TodayLayout.isShortWindow(
+                    height: proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom,
+                    width: proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing
+                )
+            } action: { isShortWindow = $0 }
+            // WHOOP-style pull-to-refresh: custom pull glyph + a
             // `.done`-driven checkmark + one success haptic, replacing stock
             // `.refreshable`. The handshake that drives the phase machine (→
             // checkmark) is now owned by `hlPullToRefresh`, so it is dropped
@@ -280,7 +194,7 @@ struct DashboardScreen: View {
                 // machine (clears prior verdicts so the next fan-out can
                 // re-derive without the monotonic-transition guard).
                 store.resetMetricStatesForRefresh()
-                // v0.6.2.x — pull-to-refresh is also the operator's
+                // Pull-to-refresh is also the operator's
                 // explicit "give me the current value NOW" signal. Fire
                 // the HK daily-stats sync FIRST so the server has
                 // today's fresh totals before we reload the dashboard
@@ -290,11 +204,11 @@ struct DashboardScreen: View {
                 // also kicks the live HK-direct today-step store so the
                 // tile's HK-direct number lands first-paint.
                 if let container {
-                    // W8-A1 — explicit user refresh bypasses the foreground
+                    // Explicit user refresh bypasses the foreground
                     // self-throttle.
                     await container.refreshHealthKitDailyStatsForToday(force: true)
                 }
-                // W8-B2 — the remaining store refreshes now fan out
+                // The remaining store refreshes now fan out
                 // CONCURRENTLY (previously a chain of sequential awaits). The
                 // set is unchanged — same stores, same force-flags — but the
                 // round-trips run in parallel and the SWR coordinator
@@ -304,22 +218,22 @@ struct DashboardScreen: View {
                 // (the summary re-read must see today's fresh server rows),
                 // and `refreshTileStates()` stays sequential BELOW (it
                 // re-derives per-kind state from the refreshed summary +
-                // measurements). W8-B1: dashboard + measurements force past
+                // measurements). Dashboard + measurements force past
                 // the TTL; the rest respect their own TTLs.
                 async let dashboard: Void = store.refresh(force: true)
                 async let layout: Void = layoutStore.refresh()
                 async let insightsRefresh: Void = insights.refresh()
                 // Build 7 / item 7.1 — refresh the tile target bands alongside
-                // the digest (paired-only server read).
-                async let targetsRefresh: Void = backend.hasServer ? insightsTargets.refresh() : ()
+                // the digest.
+                async let targetsRefresh: Void = insightsTargets.refresh()
                 async let score: Void = healthScore.refresh()
                 async let measurements: Void = measurementsStore.load(force: true)
                 async let briefing: Void = briefingStore.load()
                 async let mood: Void = moodStore.load()
                 // Web-parity `TodayHero` — the pull is an explicit refresh of the
-                // daily-digest hero too. Paired-only (server-authoritative read).
-                async let digest: Void = backend.hasServer ? digestStore.refresh() : ()
-                // v0.14.1 — the pull is the explicit sync point. The sync
+                // daily-digest hero too.
+                async let digest: Void = digestStore.refresh()
+                // The pull is the explicit sync point. The sync
                 // handshake (which flips the bottom caption to "Zuletzt
                 // synchronisiert HH:MM" and drives the W-B184 checkmark) now
                 // runs inside `hlPullToRefresh`, concurrently with this block.
@@ -329,6 +243,9 @@ struct DashboardScreen: View {
                 )
                 await refreshTileStates()
             }
+            // 1.7: switching back to Home holds a stale dose state neutral and
+            // reloads it (the store throttles and joins a reload in flight).
+            .onAppear { medicationsStore.refreshDoseStateIfStale() }
             .task {
                 // Cold-launch parallel fan-out (F5/F6 v0.4.1).
                 async let dashboard: () = (store.summary == nil ? store.load() : ())
@@ -337,32 +254,31 @@ struct DashboardScreen: View {
                 async let healthScoreLoad: () = (healthScore.score == nil ? healthScore.load() : ())
                 async let measurementsLoad: () = (measurementsStore.recent.isEmpty ? measurementsStore.load() : ())
                 async let briefingLoad: () = (briefingStore.response == nil ? briefingStore.load() : ())
-                // v0.5.4 BF-1 — mood + meds feed the Statistik-Mode floor.
+                // Mood + meds feed the Statistik-Mode floor.
                 async let moodLoad: () = (moodStore.entries.isEmpty ? moodStore.load() : ())
                 async let medsLoad: () = (medicationsStore.medications.isEmpty ? medicationsStore.load() : ())
-                // v0.6.2.x bug-c10-ios-direct — kick the live HK-direct
+                // Kick the live HK-direct
                 // today-step read in parallel with the rest of cold-launch
                 // so the Steps tile lands a fresh number first-paint
                 // (TTL-gated so the call collapses to a no-op when the
                 // store already has a recent value).
                 async let liveTodayLoad: () = liveTodayStore.refreshIfStale()
-                // v0.15 W-FRONTDOORS — warm the Vorsorge tile's reminder list
+                // Warm the Vorsorge tile's reminder list
                 // (SWR-deduped, so the manage screen's own load collapses to a
                 // no-op when it follows). Skipped when already hydrated.
                 async let remindersLoad: () = (remindersStore.reminders.isEmpty ? remindersStore.load() : ())
-                // v0.15.7 W-RHYTHM-FRONTDOOR — warm the rhythm-events store so the
-                // Home front-door tile can gate on real data first-paint. Paired-
-                // only (pure server read); skipped in standalone and when already
-                // hydrated (SWR-deduped with the Insights overview's own load). The
+                // Warm the rhythm-events store so the
+                // Home front-door tile can gate on real data first-paint. Skipped
+                // when already hydrated (SWR-deduped with the Insights overview's own load). The
                 // gate is read on the MainActor BEFORE the `async let` so the
                 // autoclosure doesn't capture the actor-isolated `response`.
-                let warmRhythm = backend.hasServer && rhythmEventsStore.response == nil
+                let warmRhythm = rhythmEventsStore.response == nil
                 async let rhythmLoad: () = (warmRhythm ? rhythmEventsStore.load() : ())
                 // Build 7 / item 7.1 — warm the tile target bands so the Zielband
                 // paints first Home visit. Gate read on the MainActor BEFORE the
                 // `async let` so the autoclosure doesn't capture the isolated
-                // `response`. Paired-only, SWR-deduped, skipped when hydrated.
-                let warmTargets = backend.hasServer && insightsTargets.response == nil
+                // `response`. SWR-deduped, skipped when hydrated.
+                let warmTargets = insightsTargets.response == nil
                 async let targetsLoad: () = (warmTargets ? insightsTargets.load() : ())
                 _ = await (
                     dashboard, comprehensive, layout, healthScoreLoad,
@@ -377,7 +293,7 @@ struct DashboardScreen: View {
                 await refreshTileStates()
             }
             .onChange(of: layoutStore.layout) { _, _ in
-                // v0.14 b147 — a pin/unpin (or any layout mutation, e.g. the
+                // A pin/unpin (or any layout mutation, e.g. the
                 // customize screen) changes which tiles should surface. Kick
                 // the per-kind fan-out so a newly pinned tile derives its
                 // `MetricDataState` immediately instead of waiting for the
@@ -389,7 +305,7 @@ struct DashboardScreen: View {
                 }
             }
             .onChange(of: scenePhase) { _, newPhase in
-                // W8-A1 — RootView now OWNS the foreground HK-stats sync +
+                // RootView now OWNS the foreground HK-stats sync +
                 // dashboard summary revalidation (previously both this
                 // handler and RootView fired them, running the HK read +
                 // `dashboardSummary` revalidation twice concurrently on every
@@ -403,20 +319,22 @@ struct DashboardScreen: View {
                     await refreshTileStates()
                 }
             }
-            // v0.12 W3-3 — banner SLIDES in via `hlErrorBannerOverlay`, which
+            // Banner SLIDES in via `hlErrorBannerOverlay`, which
             // bakes in the `.animation(.easeInOut(0.3), value: store.error)`
             // driver that was missing here. Pre-fix the `ErrorBanner`
             // transition never played (no value-driver on the overlay), so the
             // banner popped in/out instantly on the primary entry screen.
-            // Operator-feedback b235 — suppressed when the inline metrics error
-            // card (#67) is already showing, so a partial failure isn't reported
-            // by BOTH the top banner and the inline card. See `topBannerError`.
+            // The one surface of a Home failure; see `topBannerError`.
             .hlErrorBannerOverlay(error: topBannerError) {
-                // Explicit user retry → force past the TTL.
-                Task { await store.refresh(force: true) }
+                // Explicit user retry → force past the TTL, then re-derive the
+                // per-kind tile states.
+                Task {
+                    await store.refresh(force: true)
+                    await refreshTileStates()
+                }
             }
             // v0.10 R5 — the always-on `slider.horizontal.3` customise button
-            // (v0.8.7) is removed: the operator found it "fürchterlich" at the
+            // is removed: the operator found it "fürchterlich" at the
             // dashboard top. Customisation stays reachable via Settings →
             // "Dashboard anpassen" (`SettingsDashboardScreen` → customizeRow)
             // and the all-tiles-hidden empty-state escape hatch below still
@@ -425,16 +343,24 @@ struct DashboardScreen: View {
             .navigationDestination(isPresented: $showCustomize) {
                 DashboardCustomizationScreen()
             }
-            // v0.15 W-FRONTDOORS — direct front door to the Vorsorge manage
+            // Direct front door to the Vorsorge manage
             // surface from the Home tile's card-body tap. Same destination the
             // deep path (More → Notifications → preventive card) reaches.
             .navigationDestination(isPresented: $showVorsorge) {
                 MeasurementRemindersScreen()
             }
+            // #186 — "Symptom erfassen" from the quick-actions card.
+            .navigationDestination(isPresented: $showSymptomEntry) {
+                SymptomQuickEntryPage()
+            }
+            // #191 QoL — "Symptom" from the capture picker lands here.
+            .onChange(of: router.symptomQuickEntryRequestCount) {
+                showSymptomEntry = true
+            }
             .sheet(isPresented: $showIntakesSheet) {
                 AnstehendeEinnahmenSheet()
             }
-            // v0.13.1 IC — the Home-stack metric drill-down was RETIRED here.
+            // The Home-stack metric drill-down was RETIRED here.
             // A tile tap now drives `router.selectInsightsMetric(_:)` →
             // `.insights(metric:)`, landing the operator in the Insights tab on
             // that metric's page (one canonical surface). The old
@@ -445,20 +371,20 @@ struct DashboardScreen: View {
             // across the tab switch — see `openDetail(for:)`. The web-mirror
             // `InsightsMetricScreen` is still reachable (and identical) via the
             // Insights tab; nothing about the detail SURFACE was lost.
-            // v0.5.4.1 — avatar moved INLINE into the greeting row (see
+            // Avatar moved INLINE into the greeting row (see
             // `Header(showProfile:)` below). The toolbar still owns the
             // `navigationDestination` push so the inline tap can flip
             // the binding and trigger the same `ProfileScreen` push that
             // the v0.5.4 NF-1 toolbar item previously fired.
             .dashboardProfileDestination(isPresented: $showProfile)
         }
-        // v0.11 N1 — thread the user's display-unit prefs into the tile
+        // Thread the user's display-unit prefs into the tile
         // subtree so every metric surface converts weight/BP/glucose at
         // display time without prop-drilling.
         .environment(\.unitPreferences, settings.unitPreferences)
     }
 
-    // INV-3 (v0157) — `emptyMetricsState` + `vorsorgeDue` +
+    // `emptyMetricsState` + `vorsorgeDue` +
     // `medicationsTileVisible` + `hasUserHiddenAllMetricTiles` moved off this
     // screen: the empty-state + ordering helpers now live in
     // `DashboardMetricOrdering` (called by `DashboardMetricsHost`), and the
@@ -466,7 +392,51 @@ struct DashboardScreen: View {
     // stays in `DashboardScreen+Ordering.swift` (still read by this body's
     // `RhythmEventsTile` placement).
 
-    /// W-IMPL-MOTION-POLISH — resolves the matched-geometry namespace
+    /// The head of Today's one column (named for the column; the presentation
+    /// inventory keys its banner by this name): the Apple Health cards where
+    /// the device reads Apple Health and the day's read with its hints.
+    @ViewBuilder
+    private var dayColumn: some View {
+        // The connect banner and the one-time update notice (each with its
+        // own rule) only where this device asks for Apple Health at all; on
+        // the iPad they would be a call that leads nowhere.
+        if TodayLayout.showsAppleHealthCards(deviceProfile) {
+            HealthKitConnectBanner()
+            HealthKitUpdateNoticeCard()
+        }
+        // #190: the relay's one-time card and its quiet lines.
+        PushRelayDashboardSection()
+        // The promoted day's read (`GET /api/daily/digest`); self-hides on
+        // absent / gated-off / calm-degrade. The rail is the one due-surface.
+        TodayHeroHost(
+            onOpenVorsorge: { showVorsorge = true },
+            onShowIntakes: { showIntakesSheet = true },
+            isShortWindow: isShortWindow
+        )
+    }
+
+    /// The day's cards after the hero: on the phone above the tiles, on a
+    /// wide page under them.
+    @ViewBuilder
+    private var dayCards: some View {
+        // Front door to the rhythm-events card, only when the wearable
+        // flagged events.
+        if let rhythmEventsSummary {
+            RhythmEventsTile(summary: rhythmEventsSummary)
+        }
+        DashboardMetricsHost(
+            part: .lead,
+            matchedNamespace: matchedGeometryNamespace,
+            zoomNamespace: dashboardNamespace,
+            allowsMotion: !reduceMotion,
+            onTap: openDetail,
+            onShowIntakes: { showIntakesSheet = true },
+            onShowCustomize: { showCustomize = true },
+            onRequestCapture: { router.requestCapture() }
+        )
+    }
+
+    /// Resolves the matched-geometry namespace
     /// forwarded into tiles + the drill-down payload. When the user has
     /// `Reduce Motion` enabled, returns `nil` so both the source tile and
     /// the destination hero fall through to their no-op branches in
@@ -476,7 +446,7 @@ struct DashboardScreen: View {
         reduceMotion ? nil : dashboardNamespace
     }
 
-    // v0.14.8 AUDIT-HOME M11 — the invisible GeometryReader/PreferenceKey
+    // The invisible GeometryReader/PreferenceKey
     // `parallaxProbe` was deleted; `onScrollGeometryChange` on the
     // ScrollView (see `body`) is the offset source now.
 
@@ -485,7 +455,7 @@ struct DashboardScreen: View {
         // Insights metric page's first content paint closes it. Pure
         // measurement; no behaviour change.
         HLPerfSignpost.beginTapToDetail()
-        // v0.13.1 IC — NAV UNIFICATION. The tile tap no longer pushes
+        // NAV UNIFICATION. The tile tap no longer pushes
         // `InsightsMetricScreen` onto the Home `NavigationStack` (a second
         // navigation INSTANCE of the same screen, on the wrong tab — the
         // operator's "feels like a duplicate view" report). It now drives the
@@ -532,11 +502,10 @@ struct DashboardScreen: View {
 // under the 600-line `file_length` swiftlint budget.
 
 // `HighlightInsightCard` + `InsightRecommendationActions` + `MetricsGrid` live
-// in `DashboardScreen+Sections.swift`; `DrillDownErrorState` lives in
-// `DashboardDrillDown.swift` — both to keep this file under the 600-line
+// in `DashboardScreen+Sections.swift` to keep this file under the 600-line
 // `file_length` swiftlint budget.
 
-// v0.5.1-A B3 — `ComplianceRingCard` extracted to its own file so the
+// `ComplianceRingCard` extracted to its own file so the
 // per-snapshot subtitle helper doesn't push `DashboardScreen.swift` past
 // the 600-line file-length lint baseline. See `ComplianceRingCard.swift`.
 

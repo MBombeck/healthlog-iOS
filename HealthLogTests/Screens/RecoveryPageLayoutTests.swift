@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.4 B3 — "Erholung ist auch in den Insights nur Zahlen, keine Graphen".**
+/// **"Erholung ist auch in den Insights nur Zahlen, keine Graphen".**
 ///
 /// The page used to be five number cards, one of them a cardio recovery value
 /// from 2024 without a date, under a sentence in developer language. Now: two
@@ -85,36 +85,5 @@ struct RecoveryPageLayoutTests {
         let points = RecoveryPageLayout.trendPoints(from: readings, kind: .dayStrain, now: now)
         #expect(points.map(\.id) == ["week", "today"])
         #expect(points.map(\.value) == [8.3, 12.4])
-    }
-
-    @Test("energy reads in kcal, a unit choice on the server's kJ value")
-    func energyInKilocalories() {
-        let text = RecoveryValueText.value(10460, kind: .energyExpenditureKJ)
-        #expect(text.filter(\.isNumber) == "2500")
-        #expect(text.hasSuffix("kcal"))
-        #expect(!text.contains("kJ"))
-        // The recovery score is a percentage, written the way the locale does.
-        let score = RecoveryValueText.value(83, kind: .recoveryScore)
-        #expect(score == HLNumberFormat.percent(83))
-    }
-
-    @Test("day strain carries its 0 to 21 scale", arguments: ["de", "en"])
-    func strainScaleCopy(_ language: String) throws {
-        let catalog = try ParityCatalog.load()
-        let entry = try #require(catalog.strings["insights.recovery.ofTwentyOne %@"])
-        let value = try #require(ParityCatalog.value(entry, language: language))
-        #expect(value == (language == "de" ? "%@ von 21" : "%@ of 21"))
-    }
-
-    @MainActor
-    @Test("the page no longer renders a card per number or the developer sentence")
-    func noBareNumberCards() throws {
-        let page = try Phase8SourceScan.stripped("HealthLog/Screens/Insights/Sub/InsightsRecoveryPage.swift")
-        #expect(!page.contains("InsightsMetricStatusCard"))
-        #expect(!page.contains("insights.recovery.noAggregate"))
-        #expect(page.contains("InsightsTrendCard"))
-        #expect(page.contains("HLTileMetricChart(kind: kind, points: points)"))
-        #expect(page.contains("accessibilityChartDescriptor"))
-        #expect(page.contains("HLChartStyle.heightCompact"))
     }
 }

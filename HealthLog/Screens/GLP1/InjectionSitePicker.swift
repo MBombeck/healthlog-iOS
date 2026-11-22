@@ -1,9 +1,14 @@
 import SwiftUI
 
-/// Renders the injection-site picker section: body-map grid that
-/// surfaces last-used + suggested-next via subtle highlights, the
-/// rotation suggestion as the map card's first line, and a recent-history
-/// list.
+/// Renders the injection-site section: the body map with the rotation
+/// suggestion as its first line, the last injection and its site, and the
+/// recent history.
+///
+/// **#169 — a site belongs to a dose.** Picking a spot on the map no longer
+/// logs a site of its own; it sets the site of the last recorded injection
+/// (`PUT …/intake/{eventId}`). Sites an older build kept only on the device
+/// are offered for their dose and go up once the person confirms. A site the
+/// medication does not allow gets one plain sentence and is not retried.
 ///
 /// **MDR boundary:** rotation is hygiene guidance (avoid local
 /// lipohypertrophy from repeated same-site injections), not a clinical
@@ -18,19 +23,29 @@ public struct InjectionSitePicker: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // T2-4: section label Withings rhythm.
-            HLSectionLabel("Injektionsstelle")
+        // The page's gap, so the header keeps its own room.
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+            HLSectionHeader("Injektionsstelle", rank: .area)
             bodyMapCard
+            offersCard
             historyCard
         }
+        // Each row's delete asks first; the question hangs here, not on the menu.
+        .hlDeleteConfirmation()
     }
 
     // MARK: - Sections
 
-    /// 1.4 B2 — the rotation suggestion is the body map's own first line, with
+    /// A device-only site is gone for good once deleted, so it asks first.
+    private func deleteAction(id: String) -> HLDeleteAction {
+        .confirmed(title: "Delete entry?", message: "The history entry will be removed. This action cannot be undone.") {
+            await store.delete(id: id)
+        }
+    }
+
+    /// The rotation suggestion is the body map's own first line, with
     /// its citation beside it, instead of a ghost card above the map. Nothing
-    /// renders there before the first site is logged.
+    /// renders there before the first site is known.
     @ViewBuilder
     private var rotationLine: some View {
         if let suggested = store.suggestedNextSite {
@@ -38,8 +53,7 @@ public struct InjectionSitePicker: View {
                 format: String(localized: "Vorschlag laut Rotationsplan: %@"),
                 suggested.localizedLabel
             ))
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.primary)
+            .hlText(.prose)
             // 1.0.3 (App Review 1.4.1) — the rotation hygiene claim is Frid et
             // al. 2016 (FITTER injection technique).
             ViewThatFits(in: .horizontal) {
@@ -56,108 +70,169 @@ public struct InjectionSitePicker: View {
         }
     }
 
+    /// The last dose and its site, or what to do before there is one.
+    @ViewBuilder
+    private var lastInjectionLine: some View {
+        if let intake = store.lastInjection, let takenAt = intake.takenAt {
+            let when = "\(HLDateFormat.dayMonth(takenAt)), \(HLTimeFormat.time(takenAt))"
+            let line = store.lastInjectionSite.map { site in
+                String(
+                    format: String(
+                        localized: "glp1.site.lastInjection.withSite",
+                        defaultValue: "Last injection %1$@: %2$@"
+                    ),
+                    when,
+                    site.localizedLabel
+                )
+            } ?? String(
+                format: String(
+                    localized: "glp1.site.lastInjection.noSite",
+                    defaultValue: "Last injection %@: no site yet"
+                ),
+                when
+            )
+            Text(verbatim: line)
+                .hlText(.footnote)
+        } else {
+            Text(String(
+                localized: "glp1.site.noDose",
+                defaultValue: "Once a dose is recorded, you can set its site here."
+            ))
+            .hlText(.footnote)
+        }
+    }
+
     private var bodyMapCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 rotationLine
+                lastInjectionLine
                 InjectionBodyMap(
                     lastUsed: store.lastUsedSite,
                     suggested: store.suggestedNextSite,
                     selected: stagedSite
                 ) { site in
-                    stagedSite = site
+                    // Without a dose to put it on, the map only shows.
+                    guard store.canSetSite else { return }
+                    stagedSite = stagedSite == site ? nil : site
                 }
-                if let staged = stagedSite {
-                    HStack(spacing: HLSpace.sm) {
-                        Text(String(
-                            format: String(localized: "Selected: %@"),
-                            staged.localizedLabel
-                        ))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                        Spacer()
-                        Button {
-                            stagedSite = nil
-                        } label: {
-                            Text(String(localized: "Reset"))
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        Button {
-                            Task {
-                                await store.log(site: staged)
-                                stagedSite = nil
-                            }
-                        } label: {
-                            Text(String(localized: "Log"))
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(.tint)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                if let notice = store.notice {
+                    HLFormErrorText(notice)
                 }
+                actions
             }
         }
     }
 
-    /// The logged sites, when there are any. 1.4 B2: no card saying there are
-    /// none; the body map above is where the first one is logged.
+    @ViewBuilder
+    private var actions: some View {
+        if let staged = stagedSite {
+            Text(String(
+                format: String(localized: "Selected: %@"),
+                staged.localizedLabel
+            ))
+            .hlText(.prose)
+            HLButtonPair {
+                HLButton(
+                    LocalizedStringKey("glp1.site.setOnLastInjection"),
+                    isLoading: store.isSaving
+                ) {
+                    Task {
+                        // A refused or failed write keeps the selection, so
+                        // the person sees what was not saved.
+                        if await store.setSiteOnLastInjection(staged) { stagedSite = nil }
+                    }
+                }
+                .accessibilityIdentifier("glp1.site.setOnLastInjection")
+            } secondary: {
+                HLButton("Reset", variant: .secondary) {
+                    stagedSite = nil
+                }
+            }
+        } else if store.canSetSite, store.lastInjectionSite != nil {
+            HLButton(LocalizedStringKey("glp1.site.clearOnLastInjection"), variant: .secondary) {
+                Task { await store.setSiteOnLastInjection(nil) }
+            }
+            .accessibilityIdentifier("glp1.site.clearOnLastInjection")
+        }
+    }
+
+    /// Sites an older build kept only on this device, each offered for the
+    /// dose it fits. A tap puts it on that dose.
+    @ViewBuilder
+    private var offersCard: some View {
+        let offers = store.offers
+        if !offers.isEmpty {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HLCard(layout: .rows) {
+                    ForEach(offers) { offer in
+                        OfferRow(offer: offer) {
+                            Task { await store.apply(offer) }
+                        }
+                    }
+                }
+                Text(String(
+                    localized: "glp1.site.offers.footer",
+                    defaultValue: "These sites were saved only on this device. Tap one to add it to its dose."
+                ))
+                .hlText(.footnote)
+            }
+        }
+    }
+
+    /// The known sites, when there are any. No card saying there are none.
     @ViewBuilder
     private var historyCard: some View {
         if !store.mergedHistory.isEmpty {
-            HLCard {
-                VStack(spacing: 0) {
-                    let history = store.mergedHistory
-                    ForEach(Array(history.enumerated()), id: \.element.id) { idx, record in
-                        HistoryRow(record: record) {
-                            if record.source == .local {
-                                Task { await store.delete(id: record.id) }
-                            }
-                        }
-                        if idx < history.count - 1 {
-                            Divider().background(HLColor.separator)
-                        }
-                    }
+            HLCard(layout: .rows) {
+                ForEach(store.mergedHistory, id: \.id) { record in
+                    HistoryRow(record: record, delete: deleteAction(id: record.id))
                 }
             }
         }
     }
 }
 
-// MARK: - History row
+// MARK: - Rows
+
+/// One device-only site and the dose it fits.
+private struct OfferRow: View {
+    let offer: InjectionSiteOfferMatcher.Offer
+    let apply: () -> Void
+
+    var body: some View {
+        let when = "\(HLDateFormat.dayMonth(offer.takenAt)), \(HLTimeFormat.time(offer.takenAt))"
+        HLRowButton(action: apply) {
+            HLRow(
+                title: Text(verbatim: offer.site.localizedLabel),
+                detail: Text(verbatim: String(
+                    format: String(
+                        localized: "glp1.site.offer.detail",
+                        defaultValue: "For the dose on %@"
+                    ),
+                    when
+                )),
+                accessory: .symbol("plus.circle")
+            )
+        }
+        .accessibilityHint(Text(String(
+            localized: "glp1.site.offer.hint",
+            defaultValue: "Adds this site to the dose"
+        )))
+    }
+}
 
 private struct HistoryRow: View {
     let record: InjectionSiteRecord
-    let onDelete: () -> Void
+    let delete: HLDeleteAction
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(record.site.localizedLabel)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text(record.when.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .monospacedDigit()
-            }
-            Spacer()
-            // 1.4 B2 — a synced row simply has no delete menu; it no longer
-            // wears a "Server" mark (no technical words in user copy).
-            if record.source == .local {
-                Menu {
-                    Button(role: .destructive, action: onDelete) {
-                        Label(String(localized: "Delete"), systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundStyle(HLText.secondary)
-                }
-                .accessibilityLabel(Text(String(localized: "Entry actions")))
-            }
-        }
-        .padding(.vertical, HLSpace.sm)
-        .accessibilityElement(children: .combine)
+        HLRow(
+            title: Text(verbatim: record.site.localizedLabel),
+            detail: Text(verbatim: "\(HLDateFormat.dayMonth(record.when)), \(HLTimeFormat.time(record.when))")
+        )
+        // A dose's site has no actions here; it no longer wears a "Server"
+        // mark (no technical words in user copy).
+        .glp1RowActions(delete: record.source == .local ? delete : nil)
     }
 }

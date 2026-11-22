@@ -118,7 +118,7 @@ public actor GLP1LocalStore {
         }
     }
 
-    /// v0.12 SP3 — back-write the server log id onto a mirrored local row.
+    /// Back-write the server log id onto a mirrored local row.
     public func setSideEffectServerID(localID: String, serverID: String) throws {
         let descriptor = FetchDescriptor<SideEffectEntry>(
             predicate: #Predicate { $0.id == localID }
@@ -129,7 +129,7 @@ public actor GLP1LocalStore {
         try modelContext.save()
     }
 
-    /// v0.12 SP3 — resolve the server log id for a local row (if mirrored).
+    /// Resolve the server log id for a local row (if mirrored).
     public func sideEffectServerID(localID: String) throws -> String? {
         let descriptor = FetchDescriptor<SideEffectEntry>(
             predicate: #Predicate { $0.id == localID }
@@ -192,7 +192,7 @@ public actor GLP1LocalStore {
         }
     }
 
-    /// v0.12 SP4 — back-write the server inventory-item id onto a mirrored pen.
+    /// Back-write the server inventory-item id onto a mirrored pen.
     public func setPenServerID(localID: String, serverID: String) throws {
         let descriptor = FetchDescriptor<PenInventoryEntry>(
             predicate: #Predicate { $0.id == localID }
@@ -203,10 +203,10 @@ public actor GLP1LocalStore {
         try modelContext.save()
     }
 
-    // #52 — `upsertPenFromServer` lives in `GLP1LocalStore+PenBackfill.swift`
+    // `upsertPenFromServer` lives in `GLP1LocalStore+PenBackfill.swift`
     // (file_length discipline: this file sits just under the 600-line cap).
 
-    /// v0.12 SP4 — resolve the server inventory-item id for a local pen.
+    /// Resolve the server inventory-item id for a local pen.
     public func penServerID(localID: String) throws -> String? {
         let descriptor = FetchDescriptor<PenInventoryEntry>(
             predicate: #Predicate { $0.id == localID }
@@ -317,6 +317,9 @@ public struct TitrationStepEntrySnapshot: Sendable, Hashable, Identifiable {
     public let doseMg: Double
     public let note: String?
     public let createdAt: Date
+    /// #169 — the server step once uploaded; `nil` while the step waits
+    /// for its upload (every row a 1.7 build wrote).
+    public let serverID: String?
 
     init(from model: TitrationStepEntry) {
         id = model.id
@@ -325,6 +328,7 @@ public struct TitrationStepEntrySnapshot: Sendable, Hashable, Identifiable {
         doseMg = model.doseMg
         note = model.note
         createdAt = model.createdAt
+        serverID = model.serverID
     }
 
     public init(
@@ -333,7 +337,8 @@ public struct TitrationStepEntrySnapshot: Sendable, Hashable, Identifiable {
         effectiveFrom: Date,
         doseMg: Double,
         note: String?,
-        createdAt: Date
+        createdAt: Date,
+        serverID: String? = nil
     ) {
         self.id = id
         self.medicationID = medicationID
@@ -341,6 +346,7 @@ public struct TitrationStepEntrySnapshot: Sendable, Hashable, Identifiable {
         self.doseMg = doseMg
         self.note = note
         self.createdAt = createdAt
+        self.serverID = serverID
     }
 }
 
@@ -352,8 +358,8 @@ public struct SideEffectEntrySnapshot: Sendable, Hashable, Identifiable {
     public let severity: Int
     public let note: String?
     public let createdAt: Date
-    /// v0.12 SP3 — server log id once this row has been mirrored to
-    /// `…/side-effects`; `nil` for purely-local (standalone or not-yet-synced)
+    /// Server log id once this row has been mirrored to
+    /// `…/side-effects`; `nil` for not-yet-synced
     /// rows and for server-origin rows hydrated by reconcile (where it equals
     /// `id`).
     public let serverID: String?
@@ -407,8 +413,8 @@ public struct PenInventoryEntrySnapshot: Sendable, Hashable, Identifiable {
     public let finishedAt: Date?
     public let notes: String?
     public let createdAt: Date
-    /// v0.12 SP4 — server inventory-item id once mirrored; `nil` for purely-local
-    /// (standalone or not-yet-synced) pens.
+    /// Server inventory-item id once mirrored; `nil` for
+    /// not-yet-synced pens.
     public let serverID: String?
 
     /// Whether the pen is "in use" — has been started but not finished.

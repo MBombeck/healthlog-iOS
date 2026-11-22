@@ -1,4 +1,4 @@
-// 20-03 (R6) — the QR code that eats its own rows.
+// The QR code that eats its own rows.
 //
 // `QRCodeImage.makeCGImage(from:)` scales the CoreImage bitmap by a FIXED 12×
 // and `filter.correctionLevel = "H"` raised the redundancy, so a 100–130-byte
@@ -75,7 +75,7 @@ struct QRCodeImageRenderTests {
         #expect(
             fitsAndAligns,
             """
-            EXPECTED_RED: the fixed 12× scale renders \(image.width) px into \
+            the fixed 12× scale renders \(image.width) px into \
             \(Self.targetPixels) px, so `.interpolation(.none)` drops module rows
             """
         )

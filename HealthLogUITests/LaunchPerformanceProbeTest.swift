@@ -1,6 +1,6 @@
 import XCTest
 
-/// **H2 (1.1.0) — a launch-time probe for comparing two builds.**
+/// **A launch-time probe for comparing two builds.**
 ///
 /// Not a gate and not a budget: the simulator is not a phone, and the numbers
 /// are only meaningful next to the same probe run against another build on the
@@ -62,7 +62,7 @@ final class LaunchPerformanceProbeTest: XCTestCase {
                 continue
             }
             let dashboard = Date().timeIntervalSince(launchStart)
-            let insightsTab = app.tabBars.buttons.containing(.image, identifier: "sparkles").firstMatch
+            let insightsTab = ShellNavigator.button(symbol: "sparkles", in: app)
             _ = insightsTab.waitForExistence(timeout: 10)
             // Let launch work settle so the tab switch is measured on its own.
             Thread.sleep(forTimeInterval: 3)

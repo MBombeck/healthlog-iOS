@@ -5,7 +5,7 @@ import Observation
 /// the detail sheet. Pure server-rendering — score, band, delta, composition
 /// and confidence come from the response and are never recomputed locally.
 ///
-/// **v1.34.0 (CU-31) — the source moved.** The server rebuilt the score and the
+/// **v1.34.0 — the source moved.** The server rebuilt the score and the
 /// flat client DTO now rides `GET /api/dashboard/snapshot` (`healthScore`);
 /// `/api/analytics.healthScore` became the server's internal
 /// `HealthScoreReport` and no longer decodes into ``HealthScore``. The store is
@@ -46,7 +46,7 @@ public final class HealthScoreStore {
     private let repo: AnalyticsRepository
     private let swr: SWRCoordinator?
 
-    /// Seams for the `+CompositionNotice` extension (#115 B6).
+    /// Seams for the `+CompositionNotice` extension.
     var analyticsRepository: AnalyticsRepository {
         repo
     }
@@ -67,7 +67,7 @@ public final class HealthScoreStore {
     public func load() async {
         // SWR-aware path — kicks in once `swr` is wired by `AppContainer`.
         // Falls back to direct fetch when nil (unit tests).
-        // 14-06 — see `MedicationsStore.load`.
+        // See `MedicationsStore.load`.
         defer {
             if isLoading {
                 StoreEffectDiagnostics.recordRefusal(.loadInterrupted, store: .healthScore)

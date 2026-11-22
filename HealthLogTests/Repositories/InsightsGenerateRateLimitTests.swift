@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **1.2 V5 — `POST /api/insights/generate` stays inside the server's limits.**
+/// **`POST /api/insights/generate` stays inside the server's limits.**
 ///
 /// Production 2026-10-07..09: twelve 429s from `HealthLog-iOS/1.1.1`, in
 /// bursts of four within six seconds (`insights.briefing.budget_exceeded`, a

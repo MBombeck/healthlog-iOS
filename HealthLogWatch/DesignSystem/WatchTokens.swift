@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Watch-local design tokens
 
 //
-// **v0.12 P2 — watchOS companion.** Self-contained tokens for the watch app.
+// **watchOS companion.** Self-contained tokens for the watch app.
 // The iOS `Tokens.swift` / `LiveActivityTokens.swift` use UIKit APIs that are
 // unavailable on watchOS (`UIColor(dynamicProvider:)`, `UIColor.label` /
 // `.secondaryLabel`, `UITraitCollection.userInterfaceStyle`), so the watch
@@ -31,6 +31,15 @@ enum HLRadius {
     static let sm: CGFloat = 10
     static let card: CGFloat = 20
     static let button: CGFloat = 14
+}
+
+/// Sizes that recur across the watch rows, so a dose row, a mood row, and a
+/// measurement row line their symbols up on the same column.
+enum WatchMetrics {
+    /// Side of the leading symbol box in a list row.
+    static let rowIconSide: CGFloat = 22
+    /// Gap between the leading symbol and the row text.
+    static let rowSpacing: CGFloat = HLSpace.sm
 }
 
 /// Semantic type tokens — mirror `Font.hl*` (semantic Apple text styles, so

@@ -25,7 +25,7 @@ struct A360SecurityAppStoreFixTests {
         try String(contentsOf: repoRoot().appendingPathComponent(relativePath), encoding: .utf8)
     }
 
-    // MARK: - S-1 — app-switcher privacy cover
+    // MARK: - App-switcher privacy cover
 
     @Test("PrivacyCoverView compiles + conforms to View")
     func privacyCoverCompiles() {
@@ -33,25 +33,19 @@ struct A360SecurityAppStoreFixTests {
         _ = view
     }
 
-    @Test("RootView gates the privacy cover on a non-active scene phase")
-    func rootViewShowsCoverWhenNotActive() throws {
-        let text = try source("HealthLog/App/RootView.swift")
-        // The cover is driven UNCONDITIONALLY by `scenePhase != .active` so the
-        // `.inactive` snapshot frame is covered — independent of the opt-in
-        // biometric lock.
-        #expect(text.contains("if scenePhase != .active {"))
-        #expect(text.contains("PrivacyCoverView()"))
+    /// The shield is what the app switcher snapshots; reading any environment value
+    /// beyond the colour scheme could paint health data into that frame.
+    @Test("the root privacy shield reads no environment value but the colour scheme")
+    func privacyShieldIsPhiFree() throws {
+        let code = try source("HealthLog/App/RootPrivacyShield.swift")
+            .components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+        let environmentReads = code.filter { $0.contains("@Environment") }
+        #expect(environmentReads.count == 1)
+        #expect(environmentReads.allSatisfy { $0.contains("@Environment(\\.colorScheme)") })
     }
 
-    @Test("PrivacyCoverView reads no PHI — only the brand glyph + app name")
-    func privacyCoverIsPhiFree() throws {
-        let text = try source("HealthLog/App/PrivacyCoverView.swift")
-        // The cover must not reach into any @Environment store (no PHI source).
-        #expect(!text.contains("@Environment"))
-        #expect(text.contains("HLColor.background"))
-    }
-
-    // MARK: - S-2 — share-link clipboard privacy
+    // MARK: - Share-link clipboard privacy
 
     @Test("ShareLinkTokenSheet copies via setItems with localOnly + 120s expiry")
     func shareLinkClipboardUsesPrivacyGuards() throws {
@@ -65,19 +59,7 @@ struct A360SecurityAppStoreFixTests {
         #expect(text.contains(".expirationDate: Date().addingTimeInterval(120)"))
     }
 
-    // MARK: - S-4 — outbox file-protection failure is observable
-
-    @Test("Outbox file-protection failure is logged, not silently swallowed")
-    func outboxFileProtectionFailureIsObservable() throws {
-        let text = try source("HealthLog/Repositories/OutboxStore.swift")
-        // The `try?` that swallowed a protection-apply failure must be gone;
-        // the failure now routes through the logger.
-        #expect(!text.contains("try? applyFileProtection(to: storeURL)"))
-        #expect(text.contains("try applyFileProtection(to: storeURL)"))
-        #expect(text.contains("HLLog.outbox.error("))
-    }
-
-    // MARK: - R1 — FHIR / Doctor-Report disclaimer + wording
+    // MARK: - FHIR / Doctor-Report disclaimer + wording
 
     @Test("HealthExportDisclaimerCard compiles + conforms to View")
     func disclaimerCardCompiles() {
@@ -87,7 +69,7 @@ struct A360SecurityAppStoreFixTests {
 
     @Test("FHIR export copy drops the 'Clinical-grade' over-claim")
     func fhirSubtitleIsNotClinicalGrade() throws {
-        // 18-03 — `SettingsFHIRExportScreen` is gone; FHIR is one of four output
+        // `SettingsFHIRExportScreen` is gone; FHIR is one of four output
         // forms on the unified sharing surface. The claim did not move with the
         // file, it moved with the copy: the over-claim must not reappear
         // anywhere the user reads about the FHIR export, and the visible
@@ -107,7 +89,7 @@ struct A360SecurityAppStoreFixTests {
 
     @Test("The surface that hands a report over surfaces the visible disclaimer card")
     func doctorReportSurfacesDisclaimer() throws {
-        // 18-03 — `DoctorReportScreen` became the `pdf` output form of the one
+        // `DoctorReportScreen` became the `pdf` output form of the one
         // sharing surface. The disclaimer belongs wherever a report leaves the
         // device, so the pin follows the report rather than the filename.
         let text = try source("HealthLog/Screens/Sharing/UnifiedSharingScreen.swift")
@@ -128,16 +110,11 @@ struct A360SecurityAppStoreFixTests {
         }
     }
 
-    // MARK: - M1 — drop the "coming soon" forward-promise
+    // MARK: - Drop the "coming soon" forward-promise
 
-    /// 1.4 B2-b — the hint is gone altogether: it named a "server operator"
-    /// and claimed device-only delivery, while the medication row has carried
-    /// the roaming value since server v1.7.0. No forward-promise can return
-    /// through it.
-    @Test("Medication delivery-scope hint is gone, and no forward-promise came back")
-    func medScopeHintHasNoComingSoon() throws {
-        let sheet = try source("HealthLog/Screens/Medications/EditMedicationSheet.swift")
-        #expect(!sheet.contains("med.edit.scope.sync_pending"))
+    /// The medication footers must not promise features that are not there.
+    @Test("Medication footers make no forward-promise")
+    func medScopeHintHasNoComingSoon() {
         for key in ["med.edit.live_activity.footer", "med.edit.critical_alarm.footer"] {
             let value = String(localized: String.LocalizationValue(key)).lowercased()
             #expect(!value.contains("coming soon") && !value.contains("folgt"))

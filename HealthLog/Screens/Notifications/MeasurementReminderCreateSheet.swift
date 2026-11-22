@@ -25,27 +25,38 @@ import SwiftUI
 /// `MeasurementReminderRow+EditingPatch.swift`). The server owns `nextDueAt`;
 /// the client never sets or predicts due dates.
 ///
-/// `onCreate` / `onUpdate` return `true` on success (the parent re-lists +
-/// dismisses).
+/// `onCreate` / `onUpdate` answer `nil` on success (the parent re-lists and
+/// the sheet closes) and the failure otherwise, which the sheet shows under
+/// the form and stays open.
 struct MeasurementReminderCreateSheet: View {
-    /// Returns `true` when the create succeeded. Used in create mode.
-    let onCreate: (MeasurementReminderCreate) async -> Bool
+    /// Answers `nil` when the create succeeded. Used in create mode.
+    let onCreate: (MeasurementReminderCreate) async -> HLError?
     /// The reminder being edited, or `nil` for create mode.
     let editing: MeasurementReminderRow?
-    /// Returns `true` when the PATCH succeeded. Used in edit mode.
-    let onUpdate: (String, MeasurementReminderUpdate) async -> Bool
+    /// Answers `nil` when the PATCH succeeded. Used in edit mode.
+    let onUpdate: (String, MeasurementReminderUpdate) async -> HLError?
 
     init(
         editing: MeasurementReminderRow? = nil,
-        onCreate: @escaping (MeasurementReminderCreate) async -> Bool,
-        onUpdate: @escaping (String, MeasurementReminderUpdate) async -> Bool = { _, _ in false }
+        onCreate: @escaping (MeasurementReminderCreate) async -> HLError?,
+        onUpdate: @escaping (String, MeasurementReminderUpdate) async -> HLError? = { _, _ in .unknown("") }
     ) {
         self.editing = editing
         self.onCreate = onCreate
         self.onUpdate = onUpdate
     }
 
-    @Environment(\.dismiss) private var dismiss
+    /// Hands a failed save to the sheet instead of the screen's alert: the
+    /// alert sits under the sheet and would only show once it closed.
+    static func outcome(_ succeeded: Bool, store: MeasurementRemindersStore) -> HLError? {
+        guard !succeeded else { return nil }
+        let error = store.error ?? .unknown("")
+        store.error = nil
+        return error
+    }
+
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
     @State var label = ""
     /// `nil` = free-text reminder (no auto-resolve type).
     @State var selectedType: String?
@@ -59,13 +70,16 @@ struct MeasurementReminderCreateSheet: View {
     @State var location = ""
     @State var enabled = true
     @State private var submitting = false
+    /// The failed save, shown inside the sheet. An alert on the screen below
+    /// would only appear once the sheet is gone.
+    @State var submitError: HLError?
+    /// The preset in use before the custom rule was opened, for the way back.
+    @State var presetBeforeCustom: RRulePreset = .yearly
     @State private var prefilled = false
     /// Captured once after prefill so the discard guard compares against the
     /// real starting state (create-defaults or the edited reminder's values).
     @State private var initialSnapshot: FormSnapshot?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial focus onto the label field. Internal (not
+    /// Initial focus onto the label field. Internal (not
     /// private) so the section builders in the `+Sections` extension can bind it.
     @FocusState var labelFocused: Bool
 
@@ -130,7 +144,13 @@ struct MeasurementReminderCreateSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "reminders.edit.title" : "reminders.create.title",
+            action: isEditing
+                ? .save(isEnabled: canSubmit) { await submit() }
+                : .add(isEnabled: canSubmit) { await submit() },
+            isDirty: isDirty
+        ) {
             Form {
                 labelSection
                 typeSection
@@ -139,38 +159,17 @@ struct MeasurementReminderCreateSheet: View {
                 notifyHourSection
                 locationSection
                 if isEditing { enabledSection }
+                if let submitError {
+                    Section { HLFormErrorText(submitError.userFacingDescription) }
+                        .hlFormRowSurface()
+                }
             }
-            .navigationTitle(isEditing ? Text("reminders.edit.title") : Text("reminders.create.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+            .hlPageMargins()
             .onAppear(perform: prefillIfNeeded)
-            // FORM-2 — seed focus onto the label field once the sheet settles.
+            // Seed focus onto the label field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 labelFocused = true
-            }
-        }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits; keep the
-        // existing in-flight submit lock.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: submitting, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") {
-                if isDirty { showDiscardConfirm = true } else { dismiss() }
-            }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            if submitting {
-                ProgressView()
-            } else {
-                Button("reminders.create.save") { Task { await submit() } }
-                    .disabled(!canSubmit)
-                    .accessibilityIdentifier("MeasurementReminderCreateSheet.save")
             }
         }
     }
@@ -206,8 +205,11 @@ struct MeasurementReminderCreateSheet: View {
         enabled = row.enabled
     }
 
-    private func submit() async {
+    /// `true` once the reminder went out and the sheet may close.
+    private func submit() async -> Bool {
+        guard !submitting else { return false }
         submitting = true
+        submitError = nil
         defer { submitting = false }
         let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let anchor = useAnchorDate ? anchorDate : nil
@@ -222,7 +224,8 @@ struct MeasurementReminderCreateSheet: View {
                 location: location,
                 enabled: enabled
             )
-            if await onUpdate(row.id, patch) { dismiss() }
+            submitError = await onUpdate(row.id, patch)
+            return submitError == nil
         } else {
             let body = MeasurementReminderCreate(
                 label: trimmedLabel,
@@ -233,7 +236,8 @@ struct MeasurementReminderCreateSheet: View {
                 location: location,
                 enabled: enabled
             )
-            if await onCreate(body) { dismiss() }
+            submitError = await onCreate(body)
+            return submitError == nil
         }
     }
 }
@@ -267,6 +271,12 @@ enum RRulePreset: String, CaseIterable, Identifiable {
 
     var id: String {
         rawValue
+    }
+
+    /// The presets the picker offers. A custom rule is rare and needs the
+    /// calendar standard's syntax, so it sits behind "Advanced" instead.
+    static var standardCases: [RRulePreset] {
+        allCases.filter { $0 != .custom }
     }
 
     /// The canonical wire rule, or `nil` for `custom` (the user types their own).

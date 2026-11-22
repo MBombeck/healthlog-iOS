@@ -8,7 +8,7 @@ import Observation
 /// **Server-authoritative.** The family is the server's summaries, the trend
 /// lines are the server's readings; nothing here recomputes a value.
 ///
-/// **1.4 B3 — trend lines.** After the family, the store loads the readings
+/// **Trend lines.** After the family, the store loads the readings
 /// for each trend card through `MeasurementsRepository.recent(kind:limit:)`,
 /// the very read the metric screen behind the card makes (same query, same
 /// SWR row), so opening the card's detail is instant and both show the same

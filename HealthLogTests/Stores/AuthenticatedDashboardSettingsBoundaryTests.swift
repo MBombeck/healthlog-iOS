@@ -198,7 +198,7 @@ struct AuthenticatedDashboardSettingsBoundaryTests {
 
         #expect(
             store.summary == accountB,
-            "EXPECTED_RED: late A response published into B"
+            "late A response published into B"
         )
     }
 
@@ -241,14 +241,14 @@ struct AuthenticatedDashboardSettingsBoundaryTests {
             && store.error == nil
         #expect(
             accountBStateRemainsCurrent,
-            "EXPECTED_RED: late A terminal state repainted B"
+            "late A terminal state repainted B"
         )
 
         await api.releaseAccountBExtras()
         await accountBLoad.value
     }
 
-    /// **20-02 / D-14-06-A — the dashboard twin of the test directly above.**
+    /// **The dashboard twin of the test directly above.**
     ///
     /// 13-03 gave `DashboardStore.load()` an **unconditional** covering defer.
     /// That is right for cancellation — the exit 13-03 existed to close — and
@@ -317,7 +317,7 @@ struct AuthenticatedDashboardSettingsBoundaryTests {
 
         #expect(
             store.isLoading,
-            "EXPECTED_RED: a superseded dashboard load's unconditional defer cleared account B's skeleton"
+            "a superseded dashboard load's unconditional defer cleared account B's skeleton"
         )
         #expect(store.summary == nil, "and it published no summary either")
 

@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 4 — the composition half of the orchestrator.
+// The composition half of the orchestrator.
 //
 // `HealthSyncOrchestrator` deliberately knows nothing about this app: it takes
 // twelve `Sendable` closures and returns twelve named results. This file is the
@@ -35,7 +35,7 @@ extension AppContainer {
         let medications: MedicationHealthSyncStore
         let moodRepo: MoodRepository
         let cycleRepo: CycleRepository
-        /// **Plan 07-09** — the workout pass and the outbox drain are reached
+        /// The workout pass and the outbox drain are reached
         /// through the coordinator's own hooks rather than re-implemented here.
         /// Those hooks carry the authenticated-user resolution, the post-ingest
         /// revalidation and the reachability probe that
@@ -47,6 +47,14 @@ extension AppContainer {
         let sessionRegistry: AuthenticatedSessionLeaseRegistry
         /// MIRROR (1.5) — the one list request of the background server mirror.
         let measurementsRepo: MeasurementsRepository
+        /// 1.7 (#180) — lab results from Health Records; `nil` where the
+        /// app does not read Apple Health.
+        var clinicalLabRecords: ClinicalLabRecordImporter?
+        /// #6 — renews an access token past its expiry before a pass. The
+        /// owner-leased HealthKit requests pin the bearer and never refresh
+        /// on a 401 of their own, so a wake after the token's day would spend
+        /// every page on it.
+        var renewExpiredSession: (@Sendable () async -> Void)?
     }
 
     /// Collects the handles off the finished container and installs the pass.
@@ -69,7 +77,13 @@ extension AppContainer {
                 backgroundSync: backgroundSync,
                 keychain: keychain,
                 sessionRegistry: authenticatedSessionRegistry,
-                measurementsRepo: measurementsRepo
+                measurementsRepo: measurementsRepo,
+                clinicalLabRecords: clinicalLabRecordsStore.importer,
+                renewExpiredSession: { [keychain, refreshCoordinator] in
+                    let stored = keychain.getString(forKey: KeychainKey.accessTokenExpiresAt)
+                    guard OutboxReplaySessionGate.isExpired(stored, now: Date()) else { return }
+                    _ = await refreshCoordinator.attemptRefresh()
+                }
             ),
             report: { pass in
                 await Self.publishHealthSyncPass(pass, to: syncStateStore)
@@ -89,7 +103,9 @@ extension AppContainer {
             report: report
         )
         #if canImport(HealthKit) && canImport(SpeziHealthKit)
+            let renewExpiredSession = handles.renewExpiredSession
             AppOwnedHealthCollection.install { trigger, observedSource, isExpired in
+                await renewExpiredSession?()
                 let pass = await orchestrator.run(
                     trigger,
                     observedSource: observedSource,
@@ -145,7 +161,7 @@ extension AppContainer {
             },
             heartRateBuckets: { context in
                 guard let sync = handles.hrBuckets else { return .unsupported(.heartRateBuckets) }
-                // SYNC-HR — the window reaches the sweep: when it closes, the sweep is abandoned and its query stopped.
+                // The window reaches the sweep: when it closes, the sweep is abandoned and its query stopped.
                 await sync.triggerHRBucketSync(lookbackHours: context.budget.incrementalOnly ? 6 : 48, isExpired: context.isExpired)
                 return .ran(.heartRateBuckets)
             },
@@ -162,7 +178,7 @@ extension AppContainer {
                 }
             },
             appleMedicationImport: { context in
-                // W3 — a short wake (AppRefresh, silent push) runs the same
+                // A short wake (AppRefresh, silent push) runs the same
                 // sweep with a one-chunk dose budget; the rest stays pending.
                 await admitted(.appleMedicationImport, admission) {
                     await handles.medications.triggerSyncIfEnabled(incrementalOnly: context.budget.incrementalOnly)
@@ -200,8 +216,24 @@ extension AppContainer {
             },
             serverMirror: { context in
                 await ServerMirrorBackgroundPass.run(context, environment: serverMirrorEnvironment(handles))
+            },
+            clinicalLabRecords: { context in
+                await admitted(.clinicalLabRecords, admission) {
+                    await runClinicalLabRecords(handles.clinicalLabRecords, context: context)
+                }
             }
         )
+    }
+
+    /// The `clinicalLabRecords` capability for one pass (#180). A short
+    /// wake would read one page; lab results arrive rarely.
+    static func runClinicalLabRecords(
+        _ importer: ClinicalLabRecordImporter?,
+        context: HealthSyncRunContext
+    ) async -> HealthSyncCapabilityResult {
+        guard let importer else { return .unsupported(.clinicalLabRecords) }
+        let pages = context.budget.incrementalOnly ? 1 : ClinicalLabRecordImporter.pagesPerPass
+        return await importer.sync(pages: pages).capabilityResult(.clinicalLabRecords)
     }
 
     /// The `workoutImport` capability for one pass. Through the coordinator's
@@ -224,10 +256,10 @@ extension AppContainer {
             : HealthSyncCapabilityResult(capability: .workoutImport, disposition: .deferred)
     }
 
-    /// **MIRROR (1.5, public #28)** — what the background server mirror reads:
+    /// What the background server mirror reads:
     /// the measurement list as its source, the HealthKit service as its bounded
-    /// writer, the remembered server version, standalone mode and the account
-    /// the session registry admits right now.
+    /// writer, the remembered server version and the account the session
+    /// registry admits right now.
     static func serverMirrorEnvironment(_ handles: HealthSyncCapabilityHandles) -> ServerMirrorBackgroundPass.Environment {
         let repo = handles.measurementsRepo
         let keychain = handles.keychain
@@ -236,7 +268,6 @@ extension AppContainer {
             source: repo,
             writer: handles.healthKit as? any BoundedServerMirrorWriting,
             serverIsNewEnough: { KnownServerVersion.isAtLeast(ServerMirrorBackgroundPass.minimumServerVersion) },
-            isStandalone: { repo.standalone?.isActive == true },
             lease: {
                 guard let owner = keychain.getString(forKey: KeychainKey.userID) else { return nil }
                 return registry.capture(ownerID: owner)
@@ -264,13 +295,21 @@ extension AppContainer {
             ? 1
             : dailyStatsLookbackForNextSweep(keychain: keychain)
         let completed = await sync.triggerDailyStatsSync(lookbackDays: lookback)
-        // v0.7.1 M-3 — burn the one-shot flag ONLY after the sync returns;
-        // Build 273 (A8) — and only if it COMPLETED. A held or killed sweep
+        // Burn the one-shot flag ONLY after the sync returns;
+        // Build 273 — and only if it COMPLETED. A held or killed sweep
         // returned Void before, and the flag was burnt anyway.
+        let sharedBackfillPending = lookback > incrementalLookbackDays
         if shouldBurnDailyStatsAllTimeBackfill(
             incrementalOnly: context.budget.incrementalOnly, completed: completed
         ) {
             markDailyStatsAllTimeBackfillCompleted(keychain: keychain)
+        }
+        if !context.budget.incrementalOnly {
+            await runLateDailyStatsBackfills(
+                sync,
+                keychain: keychain,
+                sharedBackfillRan: sharedBackfillPending && completed
+            )
         }
         return .ran(.dailyStatistics)
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// INV-3 (v0157) — the body-render ordering/visibility helpers, hoisted off
+/// The body-render ordering/visibility helpers, hoisted off
 /// `extension DashboardScreen` into a free static namespace so the new
 /// store-scoped leaf hosts (`DashboardMetricsHost` in `Sub/DashboardSlots.swift`)
 /// can call them WITHOUT re-introducing a body dependency on `DashboardScreen`
@@ -22,7 +22,7 @@ import SwiftUI
 /// `@Observable` dependency chain is preserved on the calling leaf.
 @MainActor
 enum DashboardMetricOrdering {
-    /// #30 — the union of `MetricKind`s owned by every server-disabled module.
+    /// The union of `MetricKind`s owned by every server-disabled module.
     /// Empty when no `ModuleGate` is wired (previews / tests) or every module is
     /// on. Reading `moduleGate.modules` (via the memoised accessor) makes the
     /// CALLER re-evaluate when the map changes (the gate is `@Observable`).
@@ -56,7 +56,7 @@ enum DashboardMetricOrdering {
         layoutStore: DashboardLayoutStore,
         container: AppContainer?
     ) -> [DashboardMetric] {
-        // W-B187 — the two id→order / id→visibility dictionaries depend ONLY on
+        // The two id→order / id→visibility dictionaries depend ONLY on
         // the layout, so they're memoized on the store (`widgetOrderLookup`) and
         // recomputed only when the layout changes — not on every body eval driven
         // by an unrelated store's churn. The per-metric live reads (`policyTick`,
@@ -65,7 +65,7 @@ enum DashboardMetricOrdering {
         let lookup = layoutStore.widgetOrderLookup
         let orderById = lookup.orderById
         let visibilityById = lookup.visibilityById
-        // #30 — drop tiles whose owning module is switched OFF server-side. The
+        // Drop tiles whose owning module is switched OFF server-side. The
         // gate fails open (all-on) when the server map is absent / not loaded,
         // so this is a no-op until the #30 deploy goes live.
         let moduleDisabledKinds = moduleDisabledMetricKinds(container: container)
@@ -75,7 +75,7 @@ enum DashboardMetricOrdering {
             .slots(for: metrics, digest: digest, pulseTileVisible: pulseTileVisible)
             .compactMap { slot -> (Int, DashboardMetric)? in
                 let metric = slot.metric
-                // #30 — module-gated kind hidden by a server-disabled module.
+                // Module-gated kind hidden by a server-disabled module.
                 if moduleDisabledKinds.contains(slot.layoutKind) || moduleDisabledKinds.contains(metric.kind) {
                     return nil
                 }
@@ -90,14 +90,14 @@ enum DashboardMetricOrdering {
                 // `.unknown`/`.loading` after `recentAll()` failed (fan-out
                 // settled but no derivation landed). Both branches require
                 // the metric itself to carry no remembered value or sparkline.
-                // V052-R3 A-H1 — touch `policyTick` so the @Observable
+                // Touch `policyTick` so the @Observable
                 // dependency chain re-evaluates this predicate when the
                 // post-settle 1.6s tick fires. Without this read, a cold
                 // launch with HK + network both failing would leave tiles
                 // on `.loading` forever (no further state change drives a
                 // re-render past the 1.5s grace window).
                 _ = store.policyTick
-                // v0.14 b147 — NEVER auto-hide a tile the user explicitly
+                // NEVER auto-hide a tile the user explicitly
                 // pinned via "Add to Home". A freshly pinned synth tile has
                 // no data yet, so the empty-tile policy would filter it right
                 // back out (operator bug: "pin does nothing"). The explicit
@@ -117,7 +117,7 @@ enum DashboardMetricOrdering {
             .map(\.1)
     }
 
-    /// v0.14.8 AUDIT-HOME H1 — tile visibility of the `medications` widget row.
+    /// Tile visibility of the `medications` widget row.
     /// Gates every compliance surface on Home (ring card on cards/list, mini-card
     /// on hero) so the customize screen's "Medications" toggle has a real effect.
     /// Defaults to visible when the row is missing (defensive against a server

@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// v0.5.5 NOTIF-FIX — regression-guard for the `scheduleLocalReminder`
+    /// Regression-guard for the `scheduleLocalReminder`
     /// trigger contract.
     ///
     /// **Bug:** `scheduleLocalReminder(...)` previously built a

@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **B5 (1.4) — waist circumference for installations that already
+    /// **Waist circumference for installations that already
     /// answered the first sheet.**
     ///
     /// The type joins the read set in 1.4. A new install gets it in the

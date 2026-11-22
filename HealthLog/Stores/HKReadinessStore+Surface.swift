@@ -49,7 +49,7 @@ public extension HKReadinessStore {
         return []
     }
 
-    /// **#154 (MIRROR, 1.5)** — welche Handlung die Apple-Health-Karte anbietet.
+    /// Welche Handlung die Apple-Health-Karte anbietet.
     ///
     /// Bis 1.4.1 standen „Mit Apple Health verbinden“ und „In Apple Health
     /// öffnen“ immer da, solange nicht jeder Schreibtyp erteilt war. Mit
@@ -95,7 +95,7 @@ public extension HKReadinessStore {
         Self.connectionAction(state: state, isConnected: isConnected, sheetAnswered: sheetAnswered)
     }
 
-    /// #10 — welcher Zeitpunkt unter "Last synced" steht.
+    /// Welcher Zeitpunkt unter "Last synced" steht.
     ///
     /// Zuerst der eigene Stempel dieses Geräts (``lastSyncedAt``), sonst der des
     /// Servers (`GET /api/integrations/healthkit` → `lastSyncedAt`, gestempelt bei

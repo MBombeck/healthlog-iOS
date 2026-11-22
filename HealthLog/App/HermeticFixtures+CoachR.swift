@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **1.5 COACH-R — a v1.41 Coach for the screenshot sweep.** Under
+    /// **A v1.41 Coach for the screenshot sweep.** Under
     /// `-uitest-coach-r` the fixture server publishes `coachReasoning` on
     /// `/api/auth/me` and answers a Coach turn with the live trail, a plan
     /// proposal and a trail to open. The turn's stream is split: the first
@@ -87,37 +87,52 @@
                 "a1",
                 "thinking",
                 "done",
-                lang.pick(de: "Denkt nach…", en: "Thinking…", nl: "Nadenken…"),
+                lang.pick(de: "Denkt nach…", en: "Thinking…", nl: "Nadenken…", ko: "생각하는 중…", es: "Pensando…"),
                 title: lang.pick(
                     de: "Schlaf der letzten Woche ansehen",
                     en: "Look at last week's sleep",
-                    nl: "Slaap van de afgelopen week bekijken"
+                    nl: "Slaap van de afgelopen week bekijken",
+                    ko: "지난주 수면 살펴보기", es: "Ver el sueño de la semana pasada"
                 )
             )
                 + activity(
                     "a2", "fetch", "running",
-                    lang.pick(de: "Holt Schlaf, 7 Tage…", en: "Fetching sleep, 7 days…", nl: "Slaap ophalen, 7 dagen…")
+                    lang.pick(
+                        de: "Holt Schlaf, 7 Tage…", en: "Fetching sleep, 7 days…",
+                        nl: "Slaap ophalen, 7 dagen…", ko: "수면 가져오는 중, 7일…", es: "Obteniendo el sueño, 7 días…"
+                    )
                 )
             let answer = lang.pick(
                 de: "Deine Nächte waren in dieser Woche im Mittel 6 Stunden 40 Minuten lang, etwas kürzer als in den Wochen davor. Am Wochenende hast du länger geschlafen.",
                 en: "Your nights this week averaged 6 hours 40 minutes, a little shorter than the weeks before. At the weekend you slept longer.",
-                nl: "Je nachten duurden deze week gemiddeld 6 uur en 40 minuten, iets korter dan de weken ervoor. In het weekend sliep je langer."
+                nl: "Je nachten duurden deze week gemiddeld 6 uur en 40 minuten, iets korter dan de weken ervoor. In het weekend sliep je langer.",
+                ko: "이번 주 밤 수면 시간은 평균 6시간 40분으로, 그전 몇 주보다 조금 짧았어요. 주말에는 더 오래 잤어요.",
+                es: "Esta semana tus noches duraron de media 6 horas y 40 minutos, algo menos que las semanas anteriores. El fin de semana dormiste más."
             )
             var tail = activity(
                 "a2", "fetch", "done",
-                lang.pick(de: "7 Werte aus 1 Bereich", en: "7 readings from 1 area", nl: "7 metingen uit 1 gebied")
+                lang.pick(
+                    de: "7 Werte aus 1 Bereich", en: "7 readings from 1 area",
+                    nl: "7 metingen uit 1 gebied", ko: "1개 영역에서 값 7개", es: "7 valores de 1 área"
+                )
             )
                 + activity(
                     "a3", "answer", "running",
-                    lang.pick(de: "Schreibt die Antwort…", en: "Writing the answer…", nl: "Antwoord schrijven…")
+                    lang.pick(
+                        de: "Schreibt die Antwort…", en: "Writing the answer…",
+                        nl: "Antwoord schrijven…", ko: "답변을 쓰는 중…", es: "Escribiendo la respuesta…"
+                    )
                 )
             for word in answer.split(separator: " ") {
                 tail += frame(["type": "token", "token": String(word) + " "])
             }
             tail += frame(["type": "planProposal", "proposal": [
                 "planId": "pl-hermetic", "metric": "sleep", "reviewInDays": 14,
-                "ifCue": lang.pick(de: "es 22 Uhr ist", en: "it is 10 pm", nl: "het 22.00 uur is"),
-                "thenAction": lang.pick(de: "lege ich das Handy weg", en: "I put my phone away", nl: "leg ik mijn telefoon weg")
+                "ifCue": lang.pick(de: "es 22 Uhr ist", en: "it is 10 pm", nl: "het 22.00 uur is", ko: "밤 10시가 되면", es: "son las 22:00"),
+                "thenAction": lang.pick(
+                    de: "lege ich das Handy weg", en: "I put my phone away",
+                    nl: "leg ik mijn telefoon weg", ko: "휴대폰을 내려놓아요", es: "dejo el móvil a un lado"
+                )
             ]])
             tail += frame(["type": "done", "conversationId": "c-hermetic", "messageId": "m-hermetic"])
             return (head, tail)
@@ -131,12 +146,15 @@
                     "title": lang.pick(
                         de: "Schlaf der letzten Woche ansehen",
                         en: "Look at last week's sleep",
-                        nl: "Slaap van de afgelopen week bekijken"
+                        nl: "Slaap van de afgelopen week bekijken",
+                        ko: "지난주 수면 살펴보기", es: "Ver el sueño de la semana pasada"
                     ),
                     "text": lang.pick(
                         de: "Die Frage betrifft die Schlafdauer, also zuerst die letzten sieben Nächte.",
                         en: "The question is about sleep length, so the last seven nights first.",
-                        nl: "De vraag gaat over slaapduur, dus eerst de afgelopen zeven nachten."
+                        nl: "De vraag gaat over slaapduur, dus eerst de afgelopen zeven nachten.",
+                        ko: "수면 시간에 관한 질문이라서 먼저 최근 7일 밤을 살펴봐요.",
+                        es: "La pregunta trata de la duración del sueño, así que primero las últimas siete noches."
                     )
                 ],
                 ["id": "a2"],
@@ -145,7 +163,10 @@
             let object: [String: Any] = [
                 "data": [
                     "trail": ["entries": entries, "recalled": [
-                        lang.pick(de: "Läuft lieber morgens", en: "Prefers running in the morning", nl: "Loopt liever 's ochtends")
+                        lang.pick(
+                            de: "Läuft lieber morgens", en: "Prefers running in the morning",
+                            nl: "Loopt liever 's ochtends", ko: "아침에 달리기를 더 좋아해요", es: "Prefiere correr por la mañana"
+                        )
                     ]],
                     "ai": ["available": true]
                 ],

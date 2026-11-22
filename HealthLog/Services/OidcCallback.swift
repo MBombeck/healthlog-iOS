@@ -4,7 +4,7 @@ import Foundation
 /// callback can return on `healthlog://oidc-callback?error=…`. Each maps to a
 /// localized, surfaced message — the app never renders a web error page.
 ///
-/// R2 / #115 A2 — **the server's spelling is `oidc_<snake_case>`** and always
+/// **The server's spelling is `oidc_<snake_case>`** and always
 /// was (`src/app/api/auth/oidc/login/route.ts`, `…/callback/route.ts`, listed
 /// in the OpenAPI description of `GET /api/auth/oidc/login` since v1.39.3).
 /// This type matched only the hyphenated shorthand (`no-email`), so every SSO
@@ -104,7 +104,7 @@ public enum OidcErrorReason: Sendable, Equatable {
     }
 }
 
-/// The parsed outcome of a `healthlog://oidc-callback?…` redirect (#49), and,
+/// The parsed outcome of a `healthlog://oidc-callback?…` redirect, and,
 /// SEC, of the same query on an `https` return (``OidcReturnRoute``). One of:
 /// a one-time handoff `code`, an `mfa_ticket` (+ offered methods), a closed-set
 /// `error`, or an unrecognized shape.

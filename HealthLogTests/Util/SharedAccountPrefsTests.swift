@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B5 — the account zone and glucose unit reach the widget extension.**
+/// **The account zone and glucose unit reach the widget extension.**
 ///
 /// `ProfileTimeZoneBox` mirrored the account zone into the app's own
 /// `UserDefaults.standard`, a domain the widget extension cannot read, so every

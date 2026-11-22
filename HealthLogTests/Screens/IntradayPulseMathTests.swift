@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// The pure math behind the intraday day curve (P7). No view, no store, no
+/// The pure math behind the intraday day curve. No view, no store, no
 /// network — just the rules the surface's honesty depends on:
 /// gaps never get bridged, a caveat only fires when there IS a gap, wall-clock
 /// labels are raw minutes, and the navigator can never step into the future.

@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.13 W4 — the `BYOKeyEntryModel` validate → save → grant flow (the View-free
+/// The `BYOKeyEntryModel` validate → save → grant flow (the View-free
 /// engine behind `BYOKeyEntryCard`). The `BYOLLMService` validation runs through
 /// a stubbed `URLSession` (`MockURLProtocol`, never a mock server); the keychain
 /// + consent store are in-memory doubles.

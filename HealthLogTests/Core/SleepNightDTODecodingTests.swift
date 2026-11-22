@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Locks the wire shape of `GET /api/sleep/night?date=YYYY-MM-DD` (#124) against
+/// Locks the wire shape of `GET /api/sleep/night?date=YYYY-MM-DD` against
 /// the server contract: the `data`-wrapped main night + naps array, the partial
 /// per-stage minutes map, the ordered hypnogram segments, and the `main == null`
 /// (no-data) arm.
@@ -139,7 +139,7 @@ struct SleepNightDTODecodingTests {
         #expect(main.stages.count == 1) // FUTURE_STAGE dropped
     }
 
-    // MARK: - W-SLEEP (v0.14.8) — fractional minutes + stage-less segments
+    // MARK: - Fractional minutes + stage-less segments
 
     //
     // The live route serialises every summary minute field UNROUNDED
@@ -329,7 +329,7 @@ struct SleepNightDTODecodingTests {
         #expect(SleepStage.core.depthRank < SleepStage.deep.depthRank)
     }
 
-    // MARK: - W-CRASHGUARD — non-finite / out-of-range server values must not
+    // MARK: - Non-finite / out-of-range server values must not
 
     // trap the decoder (they were `Int(x.rounded())` traps before the fix).
 

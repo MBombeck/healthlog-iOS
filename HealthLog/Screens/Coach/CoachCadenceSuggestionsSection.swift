@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **W-COACH-CADENCE (#30) — proactive coach cadence-suggestion cards.**
+/// **Proactive coach cadence-suggestion cards.**
 ///
 /// Rendered on the Insights overview, near the coach surface, when a coach chat
 /// turn surfaced an inline cadence suggestion (routed here via
@@ -24,11 +24,11 @@ struct CoachCadenceSuggestionsSection: View {
     var body: some View {
         // Self-suppress: nothing to offer ⇒ render nothing (no empty card).
         if !store.suggestions.isEmpty {
-            // 1.4 B4 — the overview's heading form: a section title above its
-            // cards (`InsightsSectionHeader`, like "Vitalwerte"), not a caption
+            // The overview's heading form: a section title above its
+            // cards (`HLSectionHeader`, like "Vitalwerte"), not a caption
             // kicker with a sparkle inside each card.
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("coach.cadenceSuggestion.title")
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("coach.cadenceSuggestion.title", rank: .area)
                 ForEach(store.suggestions) { suggestion in
                     CoachCadenceSuggestionCard(
                         suggestion: suggestion,
@@ -37,6 +37,7 @@ struct CoachCadenceSuggestionsSection: View {
                     )
                 }
             }
+            .hlContainerGap(HLLayout.cardGap)
             .accessibilityIdentifier("InsightsScreen.coachCadenceSuggestions")
         }
     }
@@ -51,24 +52,24 @@ private struct CoachCadenceSuggestionCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                // The cadence label (resolved i18n key, generic fallback).
-                Text(cadenceLabel)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // 1.4 B4 — the in-card action pair of the medication and
-                // Vorsorge tiles (`HLTileActionButton`), not a retired
-                // `.restrained` button beside a `.ghost` one.
-                HStack(spacing: HLSpace.sm) {
-                    HLTileActionButton("coach.cadenceSuggestion.accept", action: onAccept)
-                        .accessibilityIdentifier("coach.cadenceSuggestion.accept")
-                    HLTileActionButton("coach.cadenceSuggestion.dismiss", action: onDismiss)
-                        .accessibilityIdentifier("coach.cadenceSuggestion.dismiss")
-                }
-            }
+        // The cadence label (resolved i18n key, generic fallback) is the
+        // card's head; it is already final text, so the lookup finds nothing
+        // and shows it as it is.
+        HLCard(LocalizedStringKey(cadenceLabel)) {
+            // The in-card action pair of the medication and Vorsorge tiles,
+            // which stacks when a label would break.
+            HLTileActions([
+                HLTileAction.Item(
+                    "coach.cadenceSuggestion.accept",
+                    identifier: "coach.cadenceSuggestion.accept",
+                    action: onAccept
+                ),
+                HLTileAction.Item(
+                    "coach.cadenceSuggestion.dismiss",
+                    identifier: "coach.cadenceSuggestion.dismiss",
+                    action: onDismiss
+                )
+            ])
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coach.cadenceSuggestion.card")

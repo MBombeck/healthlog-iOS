@@ -86,7 +86,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
         let store = MedicationsStore(repo: repo)
 
-        // Phase 1 — offline retro-mark.
+        // Offline retro-mark.
         MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
@@ -101,7 +101,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         #expect(queued.first?.kind == .updateIntake)
         let queuedKey = queued.first?.idempotencyKey
 
-        // Phase 2 — network recovers, replay drains. Same idempotency-key
+        // Network recovers, replay drains. Same idempotency-key
         // must be reused (server-side dedup integrity).
         let captured = RetroMethodRecorder()
         MockURLProtocol.install { [resp = Self.intakeResp] req in
@@ -234,7 +234,7 @@ struct MedicationsIntakeRetroMutateRoundTripTests {
         // outlives it.
         let snapshotBefore = await outboxA.snapshot
 
-        // Phase 2 — fresh facade against the same container, network up.
+        // Fresh facade against the same container, network up.
         let outboxB = OutboxQueue(testContainer: container)
         let snapshotAfter = await outboxB.snapshot
         #expect(snapshotAfter.count == 2, "Both ops must survive the facade swap")

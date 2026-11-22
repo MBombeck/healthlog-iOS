@@ -1,8 +1,6 @@
 import Foundation
 
-// Wire WRITE bodies for the labs + biomarker-catalog surface. Split out of
-// `LabsDTO.swift` under the PROJECT_GUIDE.md file-length discipline when Build 1 /
-// item 1.5 added the `valueText` arm; pure move, same contracts.
+// Wire WRITE bodies for the labs + biomarker-catalog surface.
 //
 // Read DTOs (`LabResultDTO`, `LabResultDetailDTO`, `BiomarkerDTO`) and the list
 // envelopes stay in `LabsDTO.swift`.
@@ -14,7 +12,7 @@ import Foundation
 /// server resolves analyte/unit/range — the client still MAY send analyte/unit
 /// for an unlinked row.
 ///
-/// Item 1.5 — mirrors `lab-form.tsx:173-199`, which posts exactly one of
+/// Mirrors `lab-form.tsx:173-199`, which posts exactly one of
 /// `{ value }` / `{ valueText }` and never both.
 public struct LabResultCreate: Codable, Sendable, Equatable {
     public var biomarkerId: String?
@@ -106,7 +104,7 @@ public struct LabResultPatch: Codable, Sendable, Equatable {
     public var panel: RecordPatchField<String>
     public var analyte: String?
     public var value: Double?
-    /// Item 1.5 — qualitative result text. Sent INSTEAD of ``value`` when the
+    /// Qualitative result text. Sent INSTEAD of ``value`` when the
     /// editor is in qualitative mode.
     public var valueText: String?
     public var unit: String?
@@ -316,7 +314,7 @@ public struct BiomarkerPatch: Codable, Sendable, Equatable {
     }
 }
 
-// MARK: - Reading display (item 1.5)
+// MARK: - Reading display
 
 /// The ONE way a lab reading renders across list row, biomarker card and detail
 /// header, so a qualitative row can never read as an empty measurement on one
@@ -329,10 +327,18 @@ public struct BiomarkerPatch: Codable, Sendable, Equatable {
 public enum LabValueDisplay {
     public static let absentPlaceholder = "—"
 
-    public static func text(value: Double?, valueText: String?, unit: String) -> String {
+    /// `printed` is the figure the report printed when the server converted
+    /// the reading into the marker's unit (`sourceValue`), else `nil`.
+    public static func text(
+        value: Double?,
+        valueText: String?,
+        unit: String,
+        printed: Double? = nil,
+        locale: Locale = .current
+    ) -> String {
         if let value {
-            let formatted = value.formatted(.number.precision(.fractionLength(0 ... 2)))
-            // #160 — the unity "1" (a ratio or index) prints nothing.
+            let formatted = RecordedNumber.text(value, printed: printed, locale: locale)
+            // The unity "1" (a ratio or index) prints nothing.
             return LabUnit.appending(unit, to: formatted)
         }
         if let valueText, !valueText.isEmpty {
@@ -345,14 +351,14 @@ public enum LabValueDisplay {
 public extension LabResultDTO {
     /// Rendered reading — numeric + unit, qualitative text, or an em-dash.
     var displayValue: String {
-        LabValueDisplay.text(value: value, valueText: valueText, unit: unit)
+        LabValueDisplay.text(value: value, valueText: valueText, unit: unit, printed: sourceValue)
     }
 }
 
 public extension LabResultDetailDTO {
     /// Rendered reading — numeric + unit, qualitative text, or an em-dash.
     var displayValue: String {
-        LabValueDisplay.text(value: value, valueText: valueText, unit: unit)
+        LabValueDisplay.text(value: value, valueText: valueText, unit: unit, printed: sourceValue)
     }
 }
 

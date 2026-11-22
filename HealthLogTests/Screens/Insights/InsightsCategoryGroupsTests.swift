@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.11 W28 — the Insights tab-strip **category grouping** taxonomy + the
+/// The Insights tab-strip **category grouping** taxonomy + the
 /// strip render model (`InsightsStripEntry`). Pure value-type math: no view, no
 /// store. Verifies web parity (every grouped slug → exactly one category; the
 /// category union == the grouped slug set; flat/primary slugs excluded) and the
@@ -48,7 +48,7 @@ struct InsightsCategoryGroupsTests {
 
     @Test("category membership mirrors the web SUB_PAGE_GROUP 1:1")
     func webParityMembership() {
-        // Parity Build 4 / 4.1 — a verbatim mirror of `SUB_PAGE_GROUP`
+        // A verbatim mirror of `SUB_PAGE_GROUP`
         // (`src/lib/insights/sub-page-metric.ts:195-256`). The only omission is
         // `audio-events`, which has no iOS `MetricKind` (HK category type) and so
         // could never render a pill.
@@ -92,7 +92,7 @@ struct InsightsCategoryGroupsTests {
             ],
             .hearing: [
                 InsightsLayoutTileId.environmentalAudio, InsightsLayoutTileId.headphoneAudio,
-                // Audit B-4 — `audio-events` was the one place iOS diverged from
+                // `audio-events` was the one place iOS diverged from
                 // the web's map, and only because no iOS `MetricKind` existed to
                 // hang a pill on. The web has grouped it under hearing since
                 // v1.7.0 (`sub-page-metric.ts:235`); now that
@@ -100,6 +100,8 @@ struct InsightsCategoryGroupsTests {
                 InsightsLayoutTileId.audioEvents
             ],
             .environment: [InsightsLayoutTileId.daylight],
+            // Recovery is a pager category without slugs: its pages are known by kind.
+            .recovery: [],
             .metabolic: [
                 InsightsLayoutTileId.bloodGlucose,
                 // 4.1 — the b215 divergence is resolved: skin + wrist temperature
@@ -160,9 +162,10 @@ struct InsightsCategoryGroupsTests {
         #expect(InsightsCategoryGroups.category(for: .breathingDisturbances) == nil)
     }
 
-    @Test("Recovery is never a group member — it is the fixed second pill")
-    func recoveryUngrouped() {
-        #expect(InsightsCategoryGroups.category(for: InsightsSpecialPage.recovery) == nil)
+    @Test("the recovery family groups under Recovery in the pager, never in the measurement lists")
+    func recoveryIsAPagerCategory() {
+        #expect(InsightsCategoryGroups.category(for: InsightsTabSelection.metric(.dayStrain)) == .recovery)
+        #expect(InsightsCategoryGroups.category(for: MetricKind.dayStrain) == nil)
     }
 
     // MARK: - Strip render model (presentation, not swipe order)
@@ -170,12 +173,13 @@ struct InsightsCategoryGroupsTests {
     /// Builds a layout with the given visible slugs (overview implied), then the
     /// flat ordered swipe list + the strip render model. By default every slug's
     /// kind/special is available; `availableKinds` / `availableSpecials` override
-    /// the gate so a test can drop a metric (module-disabled / no data) or add the
-    /// fixed `recovery` pill.
+    /// the gate so a test can drop a metric (module-disabled / no data);
+    /// `recoveryKinds` adds the fixed recovery block.
     private func model(
         visibleSlugs: [String],
         availableKinds: Set<MetricKind>? = nil,
-        availableSpecials: Set<InsightsSpecialPage>? = nil
+        availableSpecials: Set<InsightsSpecialPage>? = nil,
+        recoveryKinds: [MetricKind] = []
     ) -> (flat: [InsightsTabSelection], strip: [InsightsStripEntry]) {
         let tiles = [InsightsLayoutTile(id: InsightsLayoutTileId.overview, visible: true, order: 0)]
             + visibleSlugs.enumerated().map { idx, slug in
@@ -187,7 +191,8 @@ struct InsightsCategoryGroupsTests {
         let flat = InsightsTabSelection.ordered(
             layout: layout,
             availableKinds: kinds,
-            availableSpecials: specials
+            availableSpecials: specials,
+            recoveryKinds: recoveryKinds
         )
         return (flat, InsightsStripEntry.strip(from: flat))
     }
@@ -392,7 +397,7 @@ struct InsightsCategoryGroupsTests {
     func gatedMemberStaysContiguous() throws {
         // Layout: oxygen(vitals) · hrv(heart) · resting-pulse(heart) · pulse(heart) ·
         // weight(pinned). resting-pulse is NOT available (module-disabled / no data),
-        // so it drops out of `ordered` entirely. Recovery is on → fixed slot 1.
+        // so it drops out of `ordered` entirely. Recovery has a page → fixed slot 1.
         let slugs = [
             InsightsLayoutTileId.oxygen, InsightsLayoutTileId.hrv,
             InsightsLayoutTileId.restingPulse, InsightsLayoutTileId.pulse,
@@ -403,15 +408,15 @@ struct InsightsCategoryGroupsTests {
         let (flat, strip) = model(
             visibleSlugs: slugs,
             availableKinds: allKinds.subtracting([gatedKind]),
-            availableSpecials: [.recovery]
+            recoveryKinds: [.recoveryScore]
         )
 
         // The gated member is gone; no page/pill for it, no hole in the mapping.
         #expect(!flat.contains(.metric(gatedKind)))
         #expect(expanded(strip) == flat, "expansion stays hole-free after a member is gated out")
-        // Recovery stays the fixed second entry (Slot 1).
+        // Recovery stays the fixed block after Übersicht (Slot 1).
         #expect(flat.first == .overview)
-        #expect(flat[1] == .special(.recovery))
+        #expect(flat[1] == .metric(.recoveryScore))
         // The two REMAINING heart members are still consecutive.
         let heartPositions = flat.enumerated().compactMap { idx, sel in
             InsightsCategoryGroups.category(for: sel) == .heart ? idx : nil
@@ -484,7 +489,7 @@ struct InsightsCategoryContiguityTests {
 
     @Test("clusters the workouts special into the activity block")
     func clustersWorkouts() {
-        // Parity 4.4 — the workouts SPECIAL page is an activity member and MUST
+        // The workouts SPECIAL page is an activity member and MUST
         // cluster with the chartable activity metrics (widened from `MetricKind`).
         // steps(activity) · bmi(body) · workouts(→activity) · walkingSpeed(activity).
         let input: [InsightsTabSelection] = [
@@ -507,12 +512,12 @@ struct InsightsCategoryContiguityTests {
         #expect(InsightsTabSelection.categoryContiguous(once) == once)
     }
 
-    @Test("leaves overview, pinned/flat metrics, and recovery/mood/medications verbatim")
+    @Test("leaves overview, pinned/flat metrics, and mood/medications verbatim")
     func leavesUngroupedVerbatim() {
-        // None of these carry a category (recovery is the fixed pill, mood/medications
+        // None of these carry a category (mood/medications
         // are pinned, weight/sleep are flat) → the order is returned unchanged.
         let input: [InsightsTabSelection] = [
-            .overview, .special(.recovery), .metric(.weight),
+            .overview, .metric(.weight),
             .special(.mood), .metric(.sleep), .special(.medications)
         ]
         #expect(InsightsTabSelection.categoryContiguous(input) == input)

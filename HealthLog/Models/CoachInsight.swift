@@ -16,7 +16,7 @@ import Foundation
 // `OnDeviceBriefing`?** This is the first surface where the on-device
 // model directly drives a top-level user-facing object. Wrapping the
 // `@Generable` declaration in `#if canImport(FoundationModels)` keeps
-// the type compilable on the iOS 18 / 25 floor — the macro itself only
+// the type compilable without FoundationModels — the macro itself only
 // expands when FoundationModels is linkable. The struct is `Equatable +
 // Sendable` so the `@Observable` `AskCoachStore` (G.3) can diff
 // re-renders and the LocalLLMService can return values across actor
@@ -39,7 +39,6 @@ import Foundation
 // description says "in the language of the prompt" so the German half does
 // not pull that answer into German.
 #if canImport(FoundationModels)
-    @available(iOS 26.0, *)
     @Generable
     public struct CoachInsight: Equatable, Sendable {
         @Guide(description: "Short headline, max 50 characters, in the language of the prompt. "
@@ -52,9 +51,9 @@ import Foundation
             + "keine Therapie- oder Dosisempfehlung.")
         public var body: String
 
-        /// **R29 — the count is a constraint, not a request.**
+        /// **The count is a constraint, not a request.**
         ///
-        /// R11 took the count out of the schema along with the action framing:
+        /// Dropping the action framing also took the count out of the schema:
         /// `suggestedActions` had coerced a list out of any prompt, and losing
         /// that coercion was the point. But the *count* was collateral. A 3B
         /// model does not reliably honour "1-3" from prose, and the live
@@ -84,12 +83,11 @@ import Foundation
         }
     }
 #else
-    /// iOS 18 / 25 fallback shape. Keeps the public API symbol resolvable
-    /// from non-FoundationModels build configurations (Mac Catalyst, sim
-    /// without Apple Intelligence). Call-sites that branch on
-    /// `LocalLLMService.availability` never reach the
-    /// `@available(iOS 26.0, *)` `respond(_:)` path on these builds, so
-    /// this fallback exists purely so type-name references compile.
+    /// Fallback shape. Keeps the public API symbol resolvable from
+    /// non-FoundationModels build configurations. Call-sites that branch on
+    /// `LocalLLMService.availability` never reach the `respond(_:)` path on
+    /// these builds, so this fallback exists purely so type-name references
+    /// compile.
     public struct CoachInsight: Equatable, Sendable {
         public var title: String
         public var body: String

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **Phase 18 / E1.1 — the one sharing surface's model.**
+/// **The one sharing surface's model.**
 ///
 /// The walkthrough's D2 finding was that "es ist nicht durchgängig klar, was
 /// womit geteilt wird": four cards (Gesundheitsakte ZIP, Arzt-Link,
@@ -27,7 +27,7 @@ import Observation
 @Observable
 public final class UnifiedSharingStore {
     /// The complete question set of the sharing surface, in the order it asks.
-    /// Three, and the form is deliberately last (E1.1).
+    /// Three, and the form is deliberately last.
     public enum Question: String, CaseIterable, Sendable, Hashable {
         /// Which leaves ride — the single ``ReportSelection``.
         case what
@@ -120,7 +120,7 @@ public final class UnifiedSharingStore {
     /// opt out of.
     ///
     /// The rationale lives in four places on purpose — here, in
-    /// `.planning/active/v1-readiness/DECISIONS.md` (E1.2), in the phase's
+    /// `.planning/active/v1-readiness/DECISIONS.md`, in the phase's
     /// `18-CONTEXT.md`, and in the failure message of
     /// `UnifiedSharingModelTests.emptyDefaultWithSelectAll`, which fails loudly
     /// and names DECISIONS.md if this ever becomes non-empty. The walkthrough
@@ -129,7 +129,9 @@ public final class UnifiedSharingStore {
 
     // MARK: - State
 
-    public private(set) var outputForm: OutputForm
+    /// `nil` until the user picks a form. The surface opens undecided so the
+    /// first tap on a form runs ``setOutputForm(_:)`` instead of looking done.
+    public private(set) var outputForm: OutputForm?
 
     /// When the link stops working. **Not** the period — see
     /// ``validateExpiry()``. Link-only; the three export forms ignore it.
@@ -143,7 +145,7 @@ public final class UnifiedSharingStore {
     /// field is the user's answer and rides as an omitted key, never as `null`.
     public var practiceName: String = ""
 
-    /// L10N-REPORT — the language the PDF is written in. PDF-only; starts as
+    /// The language the PDF is written in. PDF-only; starts as
     /// the interface language and changes only under "Advanced".
     public var reportLanguage: ReportLocale = .init(AppLanguage.current)
 
@@ -207,12 +209,11 @@ public final class UnifiedSharingStore {
 
     public init(
         profile: ReportSelectionStore,
-        form: OutputForm = .link,
+        form: OutputForm? = nil,
         now: @escaping () -> Date = { .now },
         calendar: Calendar = .current
     ) {
         self.profile = profile
-        outputForm = form
         self.now = now
         self.calendar = calendar
         expiresAt = calendar.date(
@@ -220,6 +221,7 @@ public final class UnifiedSharingStore {
             value: Self.defaultExpiryDays,
             to: now()
         )
+        if let form { setOutputForm(form) }
     }
 
     // MARK: - Derived (delegating to the profile — never a second copy)
@@ -254,7 +256,7 @@ public final class UnifiedSharingStore {
     }
 
     /// Leaf ids the **current output form** may carry, in the server's
-    /// catalogue order.
+    /// catalogue order. Before a form is chosen nothing is narrowed yet.
     ///
     /// One documented subtraction, and only one: `POST /api/share-links`
     /// refuses `INSURANCE` (`ShareLinkSelectionPolicy`), so a link never offers
@@ -334,18 +336,26 @@ public final class UnifiedSharingStore {
     /// whole surface: all four outputs run from what lands here.
     public func load() async {
         await profile.loadIfNeeded()
+        reapplyOutputForm()
     }
 
     /// Force a fresh read of both.
     public func reload() async {
         await profile.reload()
+        reapplyOutputForm()
+    }
+
+    /// A preset form was set before the saved profile arrived; narrow what the
+    /// profile brought in, exactly as a tap on that form would.
+    private func reapplyOutputForm() {
+        if let outputForm { setOutputForm(outputForm) }
     }
 
     /// Persist the current scope + presentation as the account's report
     /// profile, stamping the chosen output form into `format` where it has a
     /// representation. Adopts the server's canonical echo.
     public func save() async {
-        if let format = outputForm.profileFormat {
+        if let format = outputForm?.profileFormat {
             profile.format = format
         }
         await profile.save()

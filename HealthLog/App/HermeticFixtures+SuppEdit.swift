@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **SUPP-EDIT (1.5.0, #131 P3) — editing the composition, also from a
+    /// **Editing the composition, also from a
     /// label photo.**
     ///
     /// Under `-uitest-supp-edit` (with `-uitest-area-meds -uitest-supp`) the

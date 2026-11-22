@@ -19,7 +19,6 @@ public extension MeasurementsRepository {
         from: Date,
         to: Date
     ) async throws -> [SeriesPoint]? {
-        if isStandalone { return nil }
         async let systolic = partOfDayRows(type: "BLOOD_PRESSURE_SYS", part: part, from: from, to: to)
         async let diastolic = partOfDayRows(type: "BLOOD_PRESSURE_DIA", part: part, from: from, to: to)
         let (sys, dia) = try await (systolic, diastolic)

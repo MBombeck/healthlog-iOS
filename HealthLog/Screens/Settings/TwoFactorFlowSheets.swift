@@ -10,28 +10,26 @@ struct RecoveryCodesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text("settings.security.twoFactor.recovery.saveTitle")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle("settings.security.twoFactor.recovery.saveTitle")
             Text("settings.security.twoFactor.recovery.saveBody")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 ForEach(codes, id: \.self) { code in
-                    Text(verbatim: code)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(HLText.primary)
-                        .textSelection(.enabled)
+                    HLIdentifierText(code, style: .body, monospaced: true)
                 }
             }
             .padding(HLSpace.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(HLColor.surface)
+            .background(HLTextField.plate)
             .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
             ShareLink(item: codes.joined(separator: "\n")) {
-                Label("settings.security.twoFactor.recovery.share", systemImage: "square.and.arrow.up")
-                    .font(.hlSubhead)
+                HLButtonLabel(
+                    "settings.security.twoFactor.recovery.share",
+                    systemImage: "square.and.arrow.up",
+                    variant: .secondary
+                )
             }
+            .hlPressable()
         }
     }
 }
@@ -56,19 +54,9 @@ struct TotpEnableSheet: View {
     @State private var heldElevation: ConsumableElevation?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    stepBody
-                }
-                .padding(HLSpace.lg)
-            }
-            .navigationTitle("settings.security.twoFactor.enable.sheetTitle")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
-                }
+        HLSheetScaffold("settings.security.twoFactor.enable.sheetTitle") {
+            HLPage {
+                stepBody
             }
         }
     }
@@ -79,7 +67,7 @@ struct TotpEnableSheet: View {
         case .verifySetup:
             // TOTP is not active yet → no app-code arm. Setup is non-fresh on an
             // account without a second factor; on a security-key-only account
-            // server v1.39.3 wants the key or a passkey (R2 / #115 A3), so the
+            // server v1.39.3 wants the key or a passkey, so the
             // password arm is hidden there.
             StepUpArmPicker(
                 requiresFresh: MfaManagementOperation.totpSetup
@@ -96,9 +84,9 @@ struct TotpEnableSheet: View {
                 await confirm(with: elevation)
             }
         case .recovery:
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                 RecoveryCodesView(codes: codes)
-                HLButton(String(localized: "settings.security.twoFactor.done"), variant: .primary) {
+                HLButton("settings.security.twoFactor.done", variant: .primary) {
                     store.clearPendingTotpSetup()
                     dismiss()
                 }
@@ -126,29 +114,22 @@ struct TotpEnableSheet: View {
     private var scanStep: some View {
         if let setup = store.pendingTotpSetup {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text("settings.security.twoFactor.enrol.scanTitle")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                HLRowTitle("settings.security.twoFactor.enrol.scanTitle")
                 QRCodeImage(payload: setup.otpauthUri, side: 200)
                     .frame(maxWidth: .infinity, alignment: .center)
                 Text("settings.security.twoFactor.enrol.manualLabel")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                Text(verbatim: setup.totpSecret)
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowSubtitle)
+                HLIdentifierText(setup.totpSecret, style: .callout, monospaced: true)
                 Text("settings.security.twoFactor.enrol.codeLabel")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                 TextField("", text: $code)
                     .keyboardType(.numberPad)
                     .textContentType(.oneTimeCode)
                     .font(.hlBody)
                     .padding(HLSpace.md)
-                    .background(HLColor.surface)
+                    .background(HLTextField.plate)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                HLButton(String(localized: "settings.security.twoFactor.enrol.continue"), variant: .primary) {
+                HLButton("settings.security.twoFactor.enrol.continue", variant: .primary) {
                     // A retained (unspent) elevation from a previous wrong code
                     // goes straight back to confirm — no second ceremony.
                     if let held = heldElevation, !held.isSpent {
@@ -183,50 +164,45 @@ struct DisableTotpSheet: View {
     @State private var heldElevation: ConsumableElevation?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    Text("settings.security.twoFactor.disable.body")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Picker("settings.security.twoFactor.disable.method", selection: $useRecovery) {
-                        Text("settings.security.twoFactor.disable.methodTotp").tag(false)
-                        Text("settings.security.twoFactor.disable.methodRecovery").tag(true)
+        HLSheetScaffold("settings.security.twoFactor.disable.sheetTitle") {
+            HLPage {
+                Text("settings.security.twoFactor.disable.body")
+                    .hlText(.factLabel)
+                HLAdaptiveSegmentedPicker(
+                    "settings.security.twoFactor.disable.method",
+                    selection: $useRecovery,
+                    labels: [
+                        "settings.security.twoFactor.disable.methodTotp",
+                        "settings.security.twoFactor.disable.methodRecovery"
+                    ]
+                ) {
+                    Text("settings.security.twoFactor.disable.methodTotp").tag(false)
+                    Text("settings.security.twoFactor.disable.methodRecovery").tag(true)
+                }
+                TextField("", text: $code)
+                    .keyboardType(useRecovery ? .default : .numberPad)
+                    .textContentType(.oneTimeCode)
+                    .autocorrectionDisabled()
+                    .font(.hlBody)
+                    .padding(HLSpace.md)
+                    .background(HLTextField.plate)
+                    .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+                if let held = heldElevation, !held.isSpent {
+                    HLButton("settings.security.twoFactor.stepUp.retryHeld", variant: .primary) {
+                        Task { await disable(with: held) }
                     }
-                    .pickerStyle(.segmented)
-                    TextField("", text: $code)
-                        .keyboardType(useRecovery ? .default : .numberPad)
-                        .textContentType(.oneTimeCode)
-                        .autocorrectionDisabled()
-                        .font(.hlBody)
-                        .padding(HLSpace.md)
-                        .background(HLColor.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                    if let held = heldElevation, !held.isSpent {
-                        HLButton(String(localized: "settings.security.twoFactor.stepUp.retryHeld"), variant: .primary) {
-                            Task { await disable(with: held) }
-                        }
-                        .disabled(code.isEmpty)
-                    } else {
-                        // Fresh-factor route: password arm hidden.
-                        StepUpArmPicker(operation: .totpDisable, hasTotp: store.isTotpEnabled) { elevation in
-                            await disable(with: elevation)
-                        }
-                    }
-                    if let error = store.actionError {
-                        Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
+                    .disabled(code.isEmpty)
+                } else {
+                    // Fresh-factor route: password arm hidden.
+                    StepUpArmPicker(operation: .totpDisable, hasTotp: store.isTotpEnabled) { elevation in
+                        await disable(with: elevation)
                     }
                 }
-                .padding(HLSpace.lg)
+                if let error = store.actionError {
+                    Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
+                }
             }
-            .navigationTitle("settings.security.twoFactor.disable.sheetTitle")
-            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: code) { _, _ in store.clearActionError() }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
-                }
-            }
         }
     }
 
@@ -254,35 +230,24 @@ struct RegenerateRecoveryCodesSheet: View {
     @State private var done = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    if done {
-                        RecoveryCodesView(codes: codes)
-                        HLButton(String(localized: "settings.security.twoFactor.done"), variant: .primary) { dismiss() }
-                    } else {
-                        Text("settings.security.twoFactor.recovery.regenerateBody")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                        StepUpArmPicker(operation: .recoveryRegenerate, hasTotp: store.isTotpEnabled) { elevation in
-                            await store.regenerateRecoveryCodes(elevation: elevation)
-                            if let revealed = store.consumeRevealedRecoveryCodes() {
-                                codes = revealed
-                                done = true
-                            }
-                        }
-                        if let error = store.actionError {
-                            Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
+        HLSheetScaffold("settings.security.twoFactor.recovery.sheetTitle") {
+            HLPage {
+                if done {
+                    RecoveryCodesView(codes: codes)
+                    HLButton("settings.security.twoFactor.done", variant: .primary) { dismiss() }
+                } else {
+                    Text("settings.security.twoFactor.recovery.regenerateBody")
+                        .hlText(.factLabel)
+                    StepUpArmPicker(operation: .recoveryRegenerate, hasTotp: store.isTotpEnabled) { elevation in
+                        await store.regenerateRecoveryCodes(elevation: elevation)
+                        if let revealed = store.consumeRevealedRecoveryCodes() {
+                            codes = revealed
+                            done = true
                         }
                     }
-                }
-                .padding(HLSpace.lg)
-            }
-            .navigationTitle("settings.security.twoFactor.recovery.sheetTitle")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
+                    if let error = store.actionError {
+                        Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
+                    }
                 }
             }
         }
@@ -303,29 +268,19 @@ struct SecurityKeyRenameSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    TextField("", text: $name)
-                        .font(.hlBody)
-                        .padding(HLSpace.md)
-                        .background(HLColor.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                    // Rename is non-fresh — password arm allowed.
-                    StepUpArmPicker(operation: .securityKeyRename, hasTotp: store.isTotpEnabled) { elevation in
-                        await store.renameSecurityKey(id: key.id, name: name, elevation: elevation)
-                        if store.actionError == nil { dismiss() }
-                    }
-                    .disabled(!WebAuthnKeyName.isValid(name))
+        HLSheetScaffold("settings.security.twoFactor.securityKeys.rename") {
+            HLPage {
+                TextField("", text: $name)
+                    .font(.hlBody)
+                    .padding(HLSpace.md)
+                    .background(HLTextField.plate)
+                    .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+                // Rename is non-fresh — password arm allowed.
+                StepUpArmPicker(operation: .securityKeyRename, hasTotp: store.isTotpEnabled) { elevation in
+                    await store.renameSecurityKey(id: key.id, name: name, elevation: elevation)
+                    if store.actionError == nil { dismiss() }
                 }
-                .padding(HLSpace.lg)
-            }
-            .navigationTitle("settings.security.twoFactor.securityKeys.rename")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
-                }
+                .disabled(!WebAuthnKeyName.isValid(name))
             }
         }
     }
@@ -337,28 +292,17 @@ struct DeleteSecurityKeySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    Text("settings.security.twoFactor.securityKeys.removeBody \(key.name)")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    // Removal is a fresh-factor route — password arm hidden.
-                    StepUpArmPicker(operation: .securityKeyRemove, hasTotp: store.isTotpEnabled) { elevation in
-                        await store.deleteSecurityKey(id: key.id, elevation: elevation)
-                        if store.actionError == nil { dismiss() }
-                    }
-                    if let error = store.actionError {
-                        Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
-                    }
+        HLSheetScaffold("settings.security.twoFactor.securityKeys.remove") {
+            HLPage {
+                Text("settings.security.twoFactor.securityKeys.removeBody \(key.name)")
+                    .hlText(.factLabel)
+                // Removal is a fresh-factor route — password arm hidden.
+                StepUpArmPicker(operation: .securityKeyRemove, hasTotp: store.isTotpEnabled) { elevation in
+                    await store.deleteSecurityKey(id: key.id, elevation: elevation)
+                    if store.actionError == nil { dismiss() }
                 }
-                .padding(HLSpace.lg)
-            }
-            .navigationTitle("settings.security.twoFactor.securityKeys.remove")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
+                if let error = store.actionError {
+                    Text(verbatim: error).font(.hlCaption).foregroundStyle(HLColor.statusBad)
                 }
             }
         }
@@ -380,6 +324,6 @@ enum SecurityKeyDateFormat {
             return plain.date(from: raw)
         }()
         guard let date else { return nil }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        return HLDateFormat.date(date)
     }
 }

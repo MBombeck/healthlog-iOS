@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.2 FW5-C — coach-memory ("what the assistant knows") contract (server B4).**
+/// **Coach-memory ("what the assistant knows") contract (server B4).**
 ///
 /// Pins the list / forget-one / forget-all wire shapes against the *real* `APIClient`
 /// with a stubbed `URLSession` (`MockURLProtocol`) — never a mock server (PROJECT_GUIDE.md)
@@ -97,7 +97,7 @@ struct CoachFactsRepositoryTests {
     func forgetFalseIdempotent() async throws {
         let api = makeAPI()
         MockURLProtocol.install { req in
-            // B4: the existence channel never leaks — unknown id is still 200.
+            // The existence channel never leaks — unknown id is still 200.
             let payload = #"{"data":{"deleted":false},"error":null}"#
             let http = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (http, Data(payload.utf8))

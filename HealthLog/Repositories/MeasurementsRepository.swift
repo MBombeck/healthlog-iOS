@@ -16,7 +16,7 @@ extension MeasurementsRepository: MeasurementDeletionReconciler {
 
 public actor MeasurementsRepository {
     /// `internal` (not `private`) so the `+BloodPressure.swift` extension can
-    /// issue its paired type-scoped fetches (mirrors the `standalone` seam).
+    /// issue its paired type-scoped fetches.
     let api: APIClientProtocol
     /// `internal` (not `private`) so the `+BulkDelete.swift` extension can
     /// enqueue its replay chunks (mirrors the `api` / `swr` seams).
@@ -39,14 +39,8 @@ public actor MeasurementsRepository {
     /// `internal` (not `private`) so the `+BloodPressure.swift` extension can
     /// route its paired fetch through the same cache ladder.
     let swr: SWRCoordinator?
-    /// v0.11 W2 — standalone read-union seam. `nil` (default) → the repo is the
-    /// existing server/SWR path verbatim (paired invariant). Non-nil + live
-    /// standalone mode → reads route to `HealthKitReadAdapter ∪ LocalRepository`
-    /// and **no `/api/*` request fires**. Injected by the composition-root.
-    /// `internal` (not `private`) so the `+Standalone.swift` extension can read it.
-    let standalone: StandaloneGate?
 
-    /// **AUD-3 D-3 — profile-TZ day-anchoring for `.dashboardSummary`
+    /// **Profile-TZ day-anchoring for `.dashboardSummary`
     /// invalidation.** `DashboardStore` / `MedicationsStore` key the
     /// `.dashboardSummary` cache row on the current calendar day in the
     /// SERVER-PROFILE timezone (`CacheKey.dashboardSummary` contract). The write
@@ -67,29 +61,18 @@ public actor MeasurementsRepository {
         api: APIClientProtocol,
         outbox: OutboxQueue,
         encoder: JSONEncoder = .hlDefault,
-        swr: SWRCoordinator? = nil,
-        standalone: StandaloneGate? = nil
+        swr: SWRCoordinator? = nil
     ) {
         self.api = api
         self.outbox = outbox
         self.encoder = encoder
         self.swr = swr
-        self.standalone = standalone
     }
 
     /// Wire the server-profile timezone provider from the composition root
     /// (`AppContainer`) so the `.dashboardSummary` invalidation day-key matches
-    /// the day-key `DashboardStore` reads (AUD-3 D-3).
+    /// the day-key `DashboardStore` reads.
     public func setProfileTimeZoneProvider(_ provider: @escaping @Sendable () -> TimeZone) {
         profileTimeZoneProvider = provider
-    }
-
-    /// True iff the standalone branch must be taken: a gate is wired AND the
-    /// live runtime mode reads standalone. Keeps the paired path the default at
-    /// every call site.
-    /// `internal` (not `private`) so the `+Reads.swift` / `+Writes.swift`
-    /// extensions can branch on it (same-module split — W-FILELEN).
-    var isStandalone: Bool {
-        standalone?.isActive == true
     }
 }

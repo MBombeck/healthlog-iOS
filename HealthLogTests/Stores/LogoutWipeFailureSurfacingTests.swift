@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit v0162 — logout PHI-wipe failures are surfaced, not swallowed.**
+/// **Logout PHI-wipe failures are surfaced, not swallowed.**
 ///
 /// The account-deletion / server-switch cascade wipes three at-rest PHI /
 /// secret surfaces: the local-only GLP-1 store, the standalone offline mirror,
@@ -33,13 +33,6 @@ struct LogoutWipeFailureSurfacingTests {
         let text = try logoutSource()
         #expect(!text.contains("try? await glp1LocalRepo.deleteAll()"))
         #expect(text.contains("try await glp1LocalRepo.deleteAll()"))
-    }
-
-    @Test("standalone-mirror wipe failure is logged, not swallowed")
-    func standaloneMirrorWipeIsObservable() throws {
-        let text = try logoutSource()
-        #expect(!text.contains("try? await localRepo.deleteAll()"))
-        #expect(text.contains("try await localRepo.deleteAll()"))
     }
 
     @Test("outbox cipher-key wipe failure is logged, not swallowed")

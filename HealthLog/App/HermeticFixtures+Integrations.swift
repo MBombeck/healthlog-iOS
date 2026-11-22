@@ -2,7 +2,7 @@
     import Foundation
 
     extension HermeticFixtures {
-        /// **1.4 B4 — the integration status routes answer like the server.**
+        /// **The integration status routes answer like the server.**
         /// The permissive `{}` default is not a valid status: the real
         /// `GET /api/withings/status` and `/api/whoop/status` always send
         /// `connected` (and `configured`), so `{}` failed to decode and the
@@ -31,14 +31,14 @@
             if path.hasPrefix("/api/user/ai-provider") {
                 return (200, Data(Self.noAIProviderJSON.utf8))
             }
-            // 1.4 B4 — the sync handshake. `{}` is no `ServerSyncStateDTO`
+            // The sync handshake. `{}` is no `ServerSyncStateDTO`
             // (`userId`, `serverNow`, `measurements` are required), so every
             // pull-to-refresh of a walk "failed" and each page after it wore
             // the sync footer's failure line. A reachable server answers this.
             if path.hasPrefix("/api/sync/state") {
                 return (200, Data(Self.syncStateJSON().utf8))
             }
-            // B4-z — the other routes the screenshot set caught answering
+            // The other routes the screenshot set caught answering
             // `{}` where the server sends a shape (see `emptyAccountAnswers`).
             if let body = Self.emptyAccountAnswers[path] {
                 return (200, Data(body.utf8))

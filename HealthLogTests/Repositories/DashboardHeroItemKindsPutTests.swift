@@ -21,7 +21,7 @@ import Testing
 ///    object the transport really produced and assert on key PRESENCE, not just
 ///    on the decoded value — `json["enabledHeroItemKinds"] == nil` alone would
 ///    also hold for an explicit null.
-/// 2. **The write is token-guarded (CU-20).** The same route grew
+/// 2. **The write is token-guarded.** The same route grew
 ///    `baseUpdatedAt` in CU-20, and a `null` token there is a hard `422`. The
 ///    hero-item write must therefore ride the existing guarded path: token
 ///    absent before the first GET, present afterwards, and a `409` re-reads and
@@ -177,7 +177,7 @@ struct DashboardHeroItemKindsPutTests {
         #expect(json["enabledHeroItemKinds"] as? [String] == ["dose_window", "milestone", "same_time_baseline"])
     }
 
-    // MARK: - CU-20: the write carries baseUpdatedAt
+    // MARK: - The write carries baseUpdatedAt
 
     @Test("wire: ohne Token wird baseUpdatedAt WEGGELASSEN (null wäre 422)")
     func wireWithoutTokenOmitsBaseUpdatedAt() async throws {

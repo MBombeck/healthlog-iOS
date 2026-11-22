@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B184 AS-1 — compliance window-label coherence.**
+/// **Compliance window-label coherence.**
 ///
 /// The recurring operator complaint ("compliance isn't computed right" /
 /// "90d looks like 365d") was a *labeling* problem: three different server
@@ -16,7 +16,7 @@ import Testing
 /// edit can't silently drop the window context (turning a compliance readout
 /// back into a bare, ambiguous number) without a red test.
 ///
-/// **08-13 — the two compact-row cases moved onto the card.** They pinned the
+/// **The two compact-row cases moved onto the card.** They pinned the
 /// dense alternate row's chip suffix and its VoiceOver label; 08-13 deleted
 /// that row along with the presentation branch that mounted it, and the two
 /// `med.table.*` keys went with it in the same commit. The claim the suite
@@ -50,7 +50,7 @@ struct ComplianceWindowLabelTests {
         #expect(label.count > window.count)
     }
 
-    /// #115 · 1.3 — the detail KPI is now the server's `compliance30` (taken
+    /// The detail KPI is now the server's `compliance30` (taken
     /// of expected), the same metric family as the card's rows, so the card
     /// names the window and "taken", never a client "on time" tally. 1.4 B2:
     /// the trailing "Taken in 30 days" repeated its header and is gone; the

@@ -32,7 +32,7 @@ struct ServerFeaturesTrackIntakeTests {
     @Test("features decodes beside the module map; a mistyped flag reads false and costs nothing")
     func decodes() throws {
         let me = try #require(try JSONDecoder.hlDefault.decode(APIEnvelope<AuthMeModules>.self, from: Data(Self.meJSON.utf8)).data)
-        // INT-Q — one reader: the X4 hourly flags of the same block land here too.
+        // One reader: the X4 hourly flags of the same block land here too.
         #expect(
             me.features == ServerFeatures(
                 trackIntake: true,

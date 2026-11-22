@@ -1,7 +1,7 @@
 import Foundation
 
 /// Reads the per-night reconstructed sleep object behind the hypnogram detail
-/// screen (#124).
+/// screen.
 ///
 /// - `GET /api/sleep/night?date=YYYY-MM-DD` — the main night + naps for the
 ///   given local date. Returns ``SleepNightDTO`` with `main == nil` when the
@@ -12,7 +12,7 @@ import Foundation
 /// are never queued). The `data` envelope is unwrapped server-side convention
 /// (`{ "data": { … } }`).
 ///
-/// **W-B180 — SWR cache per day-key.** The night-navigation arrows (←/→ in
+/// **SWR cache per day-key.** The night-navigation arrows (←/→ in
 /// ``SleepHypnogramScreen``) revisit dates within one session; an in-memory
 /// per-day-key cache lets the screen paint a previously seen night instantly
 /// (``cachedNight(forDayKey:)``) while ``night(forDayKey:)`` revalidates
@@ -33,7 +33,7 @@ public actor SleepNightRepository {
     /// Fetches the reconstructed sleep night for `date` — or the server's
     /// MOST-RECENT night when `date == nil` (the default hypnogram entry).
     ///
-    /// **v0.14.3 E1 — default omits the date.** The hypnogram screen used to
+    /// **Default omits the date.** The hypnogram screen used to
     /// pass `latestPoint.at` (a sleep SAMPLE instant in the device tz) as the
     /// day-key. The server keys nights on the local WAKE DAY computed with the
     /// server-resolved user timezone, so an evening segment (e.g. 23:30) or a
@@ -56,7 +56,7 @@ public actor SleepNightRepository {
     }
 
     /// Same contract as ``night(for:)``, addressed by a raw `YYYY-MM-DD`
-    /// day-key (`nil` = latest night). W-B180: the navigation arrows operate
+    /// day-key (`nil` = latest night). The navigation arrows operate
     /// in day-key space (UTC-anchored wake days) so a midnight-UTC `night`
     /// instant can never shift a day through the device timezone. Successful
     /// loads land in the SWR cache; the latest night is additionally cached
@@ -78,7 +78,7 @@ public actor SleepNightRepository {
             // Route absent / day-key rejected by the server's strict refine →
             // treat as "no night for this key", a calm empty state (not error).
             //
-            // v0.14.8 — the interim `500`-swallow (added in b157 for the known
+            // The interim `500`-swallow (added in b157 for the known
             // sleep-reconstruction fault) is REMOVED: server v1.13.2 fixed both
             // the doubled `asleepMinutes` and guarded the reconstruction so the
             // route returns a valid/empty night instead of 500. A genuine 500 is
@@ -106,7 +106,7 @@ public actor SleepNightRepository {
     }
 
     /// Formats `date` as the `YYYY-MM-DD` day-key the endpoint expects: the
-    /// wake day in the ACCOUNT zone (#115 1.5). The server keys nights on the
+    /// wake day in the ACCOUNT zone. The server keys nights on the
     /// wake day in the profile zone, so "today" here is the account's today —
     /// the device zone named a night the server has not reached (or already
     /// left) for anyone whose phone and account disagree. The old formatter

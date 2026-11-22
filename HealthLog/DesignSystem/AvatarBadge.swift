@@ -1,6 +1,6 @@
 import SwiftUI
 
-// v0.11 N4 — the `AvatarBadge` view + its dead `unreadBadge` affordance were
+// The `AvatarBadge` view + its dead `unreadBadge` affordance were
 // removed (the live avatar is `HLProfileAvatar`, which has no unread source).
 // The `avatarInitials` fallback chain below stays here because it is still
 // used live by `DashboardHeader` / `EditProfileScreen` (and the auth tests).

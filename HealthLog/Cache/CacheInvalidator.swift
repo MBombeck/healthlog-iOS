@@ -20,7 +20,7 @@ public enum MutationKind: Sendable, Hashable {
 public extension MutationKind {
     /// Keys that should be invalidated after this mutation succeeds.
     ///
-    /// **#115 1.5** — the day-anchored keys (`.dashboardSummary(day:)`,
+    /// The day-anchored keys (`.dashboardSummary(day:)`,
     /// `.medicationsTodayIntakes(day:)`) are cut in the ACCOUNT zone, the same
     /// zone `DashboardStore.dashboardSummaryKey` / `MedicationsStore
     /// .todayIntakesKey` read them in (``ProfileDay``, fed from `/me`). This
@@ -67,15 +67,15 @@ public extension MutationKind {
                 .moodEntries(days: 7),
                 .moodEntries(days: 30),
                 .moodEntries(days: 90),
-                // audit-v0162 M-2 — `MoodStore.load()` observes the 365-day
+                // `MoodStore.load()` observes the 365-day
                 // window (`MoodStore.swift`), yet this arm previously listed only
                 // 7/30/90 — so even once a caller existed the row the store reads
                 // was never dropped. Include 365 so a mood write actually
                 // invalidates the served slice. `MoodRepository` is now the live
-                // caller (M-2), so this arm is no longer dead.
+                // caller, so this arm is no longer dead.
                 .moodEntries(days: 365),
                 .moodInsights,
-                // INT-Q — every period row of the same route, or a write
+                // Every period row of the same route, or a write
                 // would leave a 30-day view on its pre-write patterns.
                 .moodInsightsWindow(days: 30),
                 .moodInsightsWindow(days: 90),

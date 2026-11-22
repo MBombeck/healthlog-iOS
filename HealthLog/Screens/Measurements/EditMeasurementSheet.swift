@@ -11,7 +11,6 @@ import SwiftUI
 struct EditMeasurementSheet: View {
     let measurement: Measurement
     let onSaved: (Measurement) -> Void
-    let onDismiss: () -> Void
 
     @Environment(\.appContainer) private var container
     /// Build 1 / item 1.3 — the operator's display-unit prefs (kg|lb / mmHg|kPa
@@ -28,13 +27,11 @@ struct EditMeasurementSheet: View {
     @State private var note: String = ""
     @State private var isSaving: Bool = false
     @State private var error: HLError?
-    /// T-2 — glucose-context picker. `nil` represents "Ohne Kontext"
+    /// Glucose-context picker. `nil` represents "Ohne Kontext"
     /// (server keeps the row context-less). Only meaningful when
     /// `measurement.kind == .glucose`; ignored otherwise.
     @State private var glucoseContext: GlucoseContext?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-1 — baseline captured at prefill so a swipe-down only guards when the
+    /// Baseline captured at prefill so a swipe-down only guards when the
     /// operator actually changed something.
     @State private var didPrefill = false
     @State private var initialScalar = ""
@@ -43,21 +40,25 @@ struct EditMeasurementSheet: View {
     @State private var initialNote = ""
     @State private var initialRecordedAt = Date.now
     @State private var initialGlucoseContext: GlucoseContext?
-    /// Item 1.3 — future bound for the timestamp picker. A measurement cannot be
+    /// Whether the server takes a changed context (1.48.0, read at prefill).
+    /// Against an older server the picker is not offered, so no choice is
+    /// made that the save would drop.
+    @State private var canEditGlucoseContext = false
+    /// Future bound for the timestamp picker. A measurement cannot be
     /// recorded in the future (the create path's server contract mirrors
     /// `validateEntryInstant`); the edit sheet previously had an unbounded
     /// `DatePicker`. Held in state so the range doesn't churn per render, and
     /// never below the row's existing timestamp so a legacy future-dated row
     /// can't violate its own picker's range.
     @State private var recordedAtBound = Date.now
-    /// FORM-2 (Audit v0162) — initial focus onto the primary value field.
+    /// Initial focus onto the primary value field.
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
         case scalar, systolic, diastolic, note
     }
 
-    /// FORM-1 — any field diverges from its prefilled baseline.
+    /// Any field diverges from its prefilled baseline.
     private var isDirty: Bool {
         guard didPrefill else { return false }
         return scalarText != initialScalar
@@ -69,28 +70,34 @@ struct EditMeasurementSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "Edit",
+            action: .save(isEnabled: isValid) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                Section(measurement.kind.displayName) {
+                // The same value input as the capture sheet, so editing a
+                // reading looks like logging it.
+                Section {
                     if case .bloodPressure = measurement.value {
-                        HStack {
-                            TextField("Systolic", text: $systolicText)
-                                .keyboardType(.decimalPad)
+                        HLAdaptiveStack { stacked in
+                            HLNumericField(title: String(localized: "Systolic"), placeholder: "120", value: $systolicText)
                                 .focused($focusedField, equals: .systolic)
-                            Text("/")
-                                .foregroundStyle(HLText.tertiary)
-                            TextField("Diastolic", text: $diastolicText)
-                                .keyboardType(.decimalPad)
-                                .focused($focusedField, equals: .diastolic)
-                            // Item 1.3 — the operator's BP unit (mmHg|kPa), not
-                            // the canonical one. The fields now carry the
-                            // converted value, so the suffix must match.
-                            Text(verbatim: units.bloodPressure.unitSuffix)
-                                .foregroundStyle(HLText.secondary)
+                            if !stacked {
+                                Text("/").foregroundStyle(HLText.secondary)
+                            }
+                            // The operator's BP unit (mmHg|kPa), not the
+                            // canonical one; the fields carry the converted value.
+                            HLNumericField(
+                                title: String(localized: "Diastolic"),
+                                placeholder: "80",
+                                unit: units.bloodPressure.unitSuffix,
+                                value: $diastolicText
+                            )
+                            .focused($focusedField, equals: .diastolic)
                         }
-                        // Item 1.3 — the same per-component inline range hint the
-                        // create sheet has had since v0.5.5.2. The edit path had
-                        // NO validation at all: a typo'd 1234 systolic saved.
+                        // The same per-component inline range hint as the
+                        // create sheet, so a typo'd 1234 systolic cannot save.
                         if let err = systolicErrorMessage {
                             inlineRangeError(err, identifier: "edit-measurement.systolic.error")
                         }
@@ -98,71 +105,72 @@ struct EditMeasurementSheet: View {
                             inlineRangeError(err, identifier: "edit-measurement.diastolic.error")
                         }
                     } else {
-                        HStack {
-                            TextField("measurement.form.value.placeholder", text: $scalarText)
-                                .keyboardType(.decimalPad)
-                                .focused($focusedField, equals: .scalar)
-                            Text(verbatim: MeasureEntryConversion.entrySuffix(kind: measurement.kind, units: units))
-                                .foregroundStyle(HLText.secondary)
-                        }
+                        HLNumericField(
+                            title: measurement.kind.displayName,
+                            placeholder: MeasureSheetView.placeholder(for: measurement.kind, units: units),
+                            unit: MeasureEntryConversion.entrySuffix(kind: measurement.kind, units: units),
+                            value: $scalarText
+                        )
+                        .focused($focusedField, equals: .scalar)
                         if let err = scalarErrorMessage {
                             inlineRangeError(err, identifier: "edit-measurement.scalar.error")
                         }
                     }
+                } header: {
+                    HLSectionHeader("Value")
                 }
-                if measurement.kind == .glucose {
-                    Section("Context") {
-                        Picker("Context", selection: $glucoseContext) {
+                .hlFormRowSurface()
+                if measurement.kind == .glucose, canEditGlucoseContext {
+                    Section {
+                        Picker(selection: $glucoseContext) {
                             Text("No context").tag(GlucoseContext?.none)
                             ForEach(GlucoseContext.allCases) { context in
                                 Text(context.displayResource).tag(GlucoseContext?.some(context))
                             }
+                        } label: {
+                            HLRowTitle("Context")
                         }
                         .pickerStyle(.menu)
                         .accessibilityIdentifier("edit-measurement.glucose-context.picker")
+                    } header: {
+                        HLSectionHeader("Context")
                     }
+                    .hlFormRowSurface()
                 }
-                Section("measurement.form.recordedAt.section") {
+                Section {
                     DatePicker(
-                        "measurement.form.recordedAt.label",
                         selection: $recordedAt,
                         in: ...recordedAtBound,
                         displayedComponents: [.date, .hourAndMinute]
-                    )
+                    ) {
+                        HLRowTitle("measurement.form.recordedAt.label")
+                    }
+                } header: {
+                    HLSectionHeader("measurement.form.recordedAt.section")
                 }
-                Section("Note") {
+                .hlFormRowSurface()
+                Section {
                     TextField("Optional", text: $note, axis: .vertical)
                         .lineLimit(2 ... 4)
                         .focused($focusedField, equals: .note)
+                } header: {
+                    HLSectionHeader("Note")
                 }
+                .hlFormRowSurface()
                 if let error {
                     Section {
-                        Text(error.localizedDescription)
-                            .foregroundStyle(HLColor.statusBad)
+                        HLFormErrorText(error.userFacingDescription)
                     }
+                    .hlFormRowSurface()
                 }
             }
-            // v0.5.x C-9 — iOS 26+ soft scroll-edge so the Form blurs into
-            // the sheet's Liquid Glass header instead of clipping cleanly.
-            // iOS 18-25: no-op (system stays flat-translucent).
+            .hlPageMargins()
+            // iOS 26+ soft scroll-edge so the Form blurs into
+            // the sheet's Liquid Glass header instead of
+            // clipping cleanly.
             .hlScrollEdgeSoft()
-            .navigationTitle("Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        if isDirty { showDiscardConfirm = true } else { onDismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await save() }
-                    }
-                    .disabled(isSaving || !isValid)
-                }
-            }
             .onAppear(perform: prefill)
-            // FORM-2 — seed focus onto the primary value field once settled.
+            // Seed focus onto the primary value field once settled.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 if case .bloodPressure = measurement.value {
@@ -172,34 +180,31 @@ struct EditMeasurementSheet: View {
                 }
             }
         }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits; keep the
-        // existing in-flight save lock.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            onDismiss()
-        }
     }
 
     private func prefill() {
         guard !didPrefill else { return }
-        // Item 1.3 — forward-convert the STORED canonical value into the unit the
+        // Forward-convert the STORED canonical value into the unit the
         // operator types in, so the field and its suffix agree and the save path
-        // can inverse-convert symmetrically. Identity for canonical-unit prefs.
+        // can inverse-convert symmetrically. #191 QoL: at the precision the
+        // row's label shows ("5,6 mmol/L" opens as "5,6"), never grouped, so
+        // the number edited is the number read. An untouched field keeps the
+        // stored value on save (below).
         switch measurement.value {
         case let .scalar(v):
-            scalarText = formatted(
-                MeasureEntryConversion.displayScalar(v, kind: measurement.kind, units: units)
-            )
+            scalarText = MeasureEditPrefill.text(v, kind: measurement.kind, units: units)
         case let .bloodPressure(s, d):
-            systolicText = formatted(units.convertBloodPressure(s))
-            diastolicText = formatted(units.convertBloodPressure(d))
+            systolicText = MeasureEditPrefill.bloodPressureText(s, units: units)
+            diastolicText = MeasureEditPrefill.bloodPressureText(d, units: units)
         }
         recordedAt = measurement.recordedAt
         recordedAtBound = max(.now, measurement.recordedAt)
         note = measurement.note ?? ""
-        // T-2 — seed the glucose-context picker from the measurement's
+        // Seed the glucose-context picker from the measurement's
         // existing context (nil for non-glucose rows).
         glucoseContext = measurement.glucoseContext
-        // FORM-1 — capture the prefilled baseline for the dirty check.
+        canEditGlucoseContext = GlucoseContextEdit.isSupported()
+        // Capture the prefilled baseline for the dirty check.
         initialScalar = scalarText
         initialSystolic = systolicText
         initialDiastolic = diastolicText
@@ -209,7 +214,7 @@ struct EditMeasurementSheet: View {
         didPrefill = true
     }
 
-    /// Item 1.3 — the submit gate now runs the SAME `MeasureEntryValidation`
+    /// The submit gate now runs the SAME `MeasureEntryValidation`
     /// chain as the create sheet: parse → inverse-convert to canonical → check
     /// against the canonical band in `MeasurementRanges`. Previously the edit
     /// path only checked "is this a number", so a -500 kg weight or a 1234
@@ -252,19 +257,18 @@ struct EditMeasurementSheet: View {
 
     /// Same inline affordance as `MeasureSheetView.inlineRangeError`.
     private func inlineRangeError(_ message: String, identifier: String) -> some View {
-        Text(message)
-            .font(.hlCaption)
-            .foregroundStyle(HLColor.statusBad)
+        HLFormErrorText(message)
+            .hlText(.rowStatus, status: HLColor.statusBad)
             .accessibilityIdentifier(identifier)
     }
 
-    private func save() async {
-        guard let container, !isSaving else { return }
+    private func save() async -> Bool {
+        guard let container, !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
         error = nil
 
-        // Item 1.3 — inverse-convert the typed value FROM the operator's display
+        // Inverse-convert the typed value FROM the operator's display
         // unit TO canonical before it goes on the wire, exactly as the create
         // path has done since audit v0162 H-5
         // (`MeasureSheetView.swift:445-450`). Identity for canonical prefs; for a
@@ -281,14 +285,14 @@ struct EditMeasurementSheet: View {
         let newValue: MeasurementValue
         switch measurement.value {
         case let .scalar(original):
-            guard isValid, let v = parsed(scalarText) else { return }
+            guard isValid, let v = parsed(scalarText) else { return false }
             newValue = .scalar(
                 scalarText == initialScalar
                     ? original
                     : MeasureEntryConversion.canonicalScalar(v, kind: measurement.kind, units: units)
             )
         case let .bloodPressure(originalSystolic, originalDiastolic):
-            guard isValid, let s = parsed(systolicText), let d = parsed(diastolicText) else { return }
+            guard isValid, let s = parsed(systolicText), let d = parsed(diastolicText) else { return false }
             newValue = .bloodPressure(
                 systolic: systolicText == initialSystolic
                     ? originalSystolic
@@ -299,20 +303,13 @@ struct EditMeasurementSheet: View {
             )
         }
         // T-1 BP-pair patch: carry BOTH systolic + diastolic so the repo
-        // can fan out a paired PATCH against both server rows. Pre-T-1
-        // `MeasurementPatch.value` only carried systolic — diastolic was
-        // silently dropped on every BP edit (AC10 finding).
-        let diastolicIntent: Double? = if case let .bloodPressure(_, d) = newValue { d } else { nil }
-        // T-2 — only set glucoseContext for glucose rows. The store is
-        // already kind-guarded, but be explicit here so the wire shape
-        // stays minimal for non-glucose kinds.
+        // can fan out a paired PATCH against both server rows (AC10). The
+        // glucose context goes on the wire only when it changed and the
+        // server takes it (1.48.0).
         let glucoseContextIntent: GlucoseContext? = measurement.kind == .glucose ? glucoseContext : nil
-        let patch = MeasurementPatch(
-            value: newValue.primaryComponent,
-            measuredAt: recordedAt,
-            notes: note.isEmpty ? nil : note,
-            diastolic: diastolicIntent,
-            glucoseContext: glucoseContextIntent
+        let patch = MeasurementPatch.edit(
+            measurement, to: newValue, at: recordedAt, notes: note.isEmpty ? nil : note, context: glucoseContext,
+            serverTakesContext: canEditGlucoseContext
         )
         do {
             let updated = try await container.measurementsRepo.update(
@@ -321,11 +318,9 @@ struct EditMeasurementSheet: View {
                 kind: measurement.kind,
                 diastolicId: measurement.bloodPressureDiastolicId
             )
-            // T-2 — server PATCH does not echo glucoseContext yet (SB-25),
-            // so paint the user's intent back onto the row before handing
-            // it back to the list. Once the server starts echoing the
-            // field this branch becomes a no-op (saved.glucoseContext will
-            // already match).
+            // A server before 1.48.0 echoes the stored context; paint the
+            // sheet's context back onto the row before handing it to the
+            // list. From 1.48.0 the echo already matches (no-op).
             let merged: Measurement = if measurement.kind == .glucose, updated.glucoseContext != glucoseContextIntent {
                 Measurement(
                     id: updated.id,
@@ -342,18 +337,16 @@ struct EditMeasurementSheet: View {
                 updated
             }
             onSaved(merged)
+            return true
         } catch let err as HLError {
             error = err
         } catch {
             self.error = .unknown(String(describing: error))
         }
+        return false
     }
 
     private func parsed(_ s: String) -> Double? {
         LocaleDecimalParser.parse(s)
-    }
-
-    private func formatted(_ v: Double) -> String {
-        v.formatted(.number.precision(.fractionLength(0 ... 2)).locale(.current))
     }
 }

@@ -27,7 +27,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
 
     // MARK: - Wave 4b
 
-    /// BP-TOD — "Nach Tageszeit" on the blood pressure page.
+    /// "Nach Tageszeit" on the blood pressure page.
     func test_bpTimeOfDay() {
         eachSize {
             boot(["-uitest-bp-tod", "-hl.healthkit.serverVersion", "1.47.0"])
@@ -37,7 +37,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// COACH-R — the thinking depth in Settings › Assistant › Erweitert.
+    /// The thinking depth in Settings › Assistant › Erweitert.
     func test_coachReasoningSettings() {
         eachSize {
             boot(["-uitest-coach-r", "-uitest-citations"])
@@ -51,7 +51,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// COACH-R — an answer with its plan proposal and the trail link.
+    /// An answer with its plan proposal and the trail link.
     func test_coachAnswerWithProposal() {
         eachSize {
             boot(["-uitest-coach-r", "-uitest-citations"])
@@ -99,8 +99,16 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         acceptAIConsent()
         let field = app.textFields.firstMatch
         guard field.waitForExistence(timeout: 15) else { return missing("coach input") }
-        // The note opens the transcript; an earlier conversation of the
-        // hermetic world may stand below it, so the walk goes up.
+        // The note stands only in a new conversation; the hermetic world
+        // keeps an earlier one, so a new one is started first.
+        for label in ["Coach options", "Coach-Optionen"] where app.buttons[label].exists {
+            app.buttons[label].tap()
+            break
+        }
+        for label in ["New conversation", "Neue Unterhaltung"] where app.buttons[label].waitForExistence(timeout: 3) {
+            app.buttons[label].tap()
+            break
+        }
         let note = element("coach.aiGeneratedNote")
         for _ in 0 ..< 12 where !inTheOpen(note) {
             app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
@@ -194,13 +202,13 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// LAB-OCR — the review list of a read that ran into limits.
+    /// The review list of a read that ran into limits.
     func test_labScanReview() {
         eachSize {
             boot(["-uitest-lab-ocr", "-uitest-lab-ocr-review"])
             guard openMoreRow("more.row.labs") else { return }
-            guard let add = probe("labs.toolbar.add") else { return missing("labs.toolbar.add") }
-            add.tap()
+            guard let more = probe("labs.toolbar.more") else { return missing("labs.toolbar.more") }
+            more.tap()
             settle(1)
             // A menu item: no drag, a drag closes the menu.
             let scan = element("labs.menu.scan")
@@ -214,7 +222,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
 
     // MARK: - Wave 4d
 
-    /// DOCS-TRASH — recently deleted documents.
+    /// Recently deleted documents.
     func test_recentlyDeletedDocuments() {
         eachSize {
             boot(["-uitest-docs-trash"])
@@ -246,7 +254,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// MED-PLUS — treatment courses on the medication page.
+    /// Treatment courses on the medication page.
     func test_treatmentCourses() {
         eachSize {
             boot(["-uitest-area-meds", "-uitest-med-plus"])
@@ -262,7 +270,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// MED-PLUS — "automatisch als genommen" in the edit sheet.
+    /// "automatisch als genommen" in the edit sheet.
     func test_autoMarkTakenSwitch() {
         eachSize {
             boot(["-uitest-area-meds", "-uitest-med-plus"])
@@ -293,7 +301,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// LAB-LINES — a lab marker as a line on the weight chart.
+    /// A lab marker as a line on the weight chart.
     func test_labLine() {
         eachSize {
             boot([
@@ -308,7 +316,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
 
     // MARK: - Wave 4e
 
-    /// SUPP-EDIT — the composition editor.
+    /// The composition editor.
     func test_compositionEditor() {
         eachSize {
             boot(["-uitest-area-meds", "-uitest-supp", "-uitest-supp-edit"])
@@ -345,7 +353,7 @@ final class NewSurfacesAccessibilityAuditTests: XCTestCase {
         }
     }
 
-    /// SYNC-TRIG — the sync diagnostics with the server freshness rows.
+    /// The sync diagnostics with the server freshness rows.
     func test_syncDiagnostics() {
         eachSize {
             boot(["-hl.healthkit.serverVersion", "1.47.1"])

@@ -42,7 +42,7 @@ struct ChartsAccessibilityTests {
         return MeasurementSeries(kind: .weight, points: pts, stats: stats)
     }
 
-    // MARK: - C3 — time-axis ticks must not be empty
+    // MARK: - Time-axis ticks must not be empty
 
     @Test("X-axis returns a non-empty localized date for every valid index")
     func timeAxisLabelsAreNotEmpty() throws {
@@ -69,7 +69,7 @@ struct ChartsAccessibilityTests {
         #expect(label.isEmpty)
     }
 
-    // MARK: - C4 — BP must expose BOTH systolic AND diastolic series
+    // MARK: - BP must expose BOTH systolic AND diastolic series
 
     @Test("Blood pressure exposes two accessible series (systolic + diastolic)")
     func bloodPressureHasTwoSeries() {

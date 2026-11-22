@@ -2,11 +2,11 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B5 — the nutrient screen's "today" is the account's day.**
+/// **The nutrient screen's "today" is the account's day.**
 ///
 /// A water quick-add without a `day` is keyed by the server in the account zone
 /// (`POST /api/nutrients/water`, `userDayKey(new Date(), user.timezone)` at
-/// v1.39.0), and the HealthKit day totals are keyed in it too (Audit B-7). The
+/// v1.39.0), and the HealthKit day totals are keyed in it too. The
 /// optimistic row the store paints while the write is in flight named the
 /// DEVICE day, so for a phone in another zone the first sip of the day showed
 /// up under a day the server never wrote.

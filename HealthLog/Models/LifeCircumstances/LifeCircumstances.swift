@@ -1,6 +1,6 @@
 import Foundation
 
-/// **LIFE (1.5.0, #132, Server #614)** — `GET /api/anamnesis/life-circumstances`
+/// `GET /api/anamnesis/life-circumstances`
 /// (server v1.43, only when `features.lifeCircumstances` is `true`).
 ///
 /// Six dated sections, each released to the AI on its own, plus what the

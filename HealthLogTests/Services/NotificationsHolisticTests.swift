@@ -7,7 +7,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// v0.5.4.3 HP5 — holistic notification-surface assertions.
+    /// Holistic notification-surface assertions.
     ///
     /// Pins five cross-cutting contracts that the operator's "denk
     /// ganzheitlich" feedback called out:
@@ -233,7 +233,7 @@ import Testing
             nonisolated(unsafe) var capturedPath: String?
             nonisolated(unsafe) var capturedBody: Data?
             MockURLProtocol.install { req in
-                // CU-07: the handler is process-global — record only OUR route so
+                // The handler is process-global — record only OUR route so
                 // a parallel suite's request cannot overwrite the capture.
                 if req.targets("/api/user/profile") {
                     capturedPath = req.url?.path
@@ -273,7 +273,7 @@ import Testing
 
             nonisolated(unsafe) var hits = 0
             MockURLProtocol.install { req in
-                // CU-07: `hits == 0` only means "the toggle skipped the PATCH" if
+                // `hits == 0` only means "the toggle skipped the PATCH" if
                 // a parallel suite's request cannot raise it.
                 // Path only, no method pin: a regression that reached the profile
                 // route with a different verb must still trip this.
@@ -294,7 +294,7 @@ import Testing
         @Test("NotificationEventLocalization knows MOOD_REMINDER")
         func moodEventLocalized() {
             #expect(NotificationEventLocalization.title(for: "MOOD_REMINDER") == "Stimmungs-Erinnerung")
-            // UI-Standard R3/R7 (U6) — die Unterzeile ist entfallen: sie nannte
+            // UI-Standard R3/R7 — die Unterzeile ist entfallen: sie nannte
             // eine harte „22:00", obwohl die Uhrzeit im DatePicker der
             // Stimmungs-Karte gesetzt wird, und die Karte ist die Heimat der
             // Aussage.
@@ -474,7 +474,7 @@ import Testing
         }
     }
 
-    /// T1 (1.4) — `setNotificationCategories` lands on UNUserNotificationCenter's
+    /// `setNotificationCategories` lands on UNUserNotificationCenter's
     /// own queue, as ONE call for every category, so one identifier being there
     /// means the whole set is. Awaited (bounded by time) instead of the former
     /// 50 ms sleep; the callers still assert what was registered.

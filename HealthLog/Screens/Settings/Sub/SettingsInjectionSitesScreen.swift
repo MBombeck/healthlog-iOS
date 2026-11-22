@@ -17,27 +17,23 @@ struct SettingsInjectionSitesScreen: View {
     @Environment(InjectionSitePrefsStore.self) private var store
 
     var body: some View {
-        HLSettingsPage(title: "Injection sites") {
+        HLPage {
             // UI-Standard R3 — dies ist nach dem U5-Umbau der einzige Ort, an
             // dem die Deny-Liste erklärt wird (Seiten-Subtitle und
             // Einstiegskarten-Subtitle sind gefallen). Der Footer ist deshalb
             // auf die eine Aussage gekürzt, die der Schalter nicht zeigt: die
             // Reichweite. Die frühere erste Hälfte („Schalte eine Stelle aus,
             // um sie global auszuschließen.") war eine Bedien-Nacherzählung.
-            // 1.4 B2-c — the reach is the subtitle, read before the long list
+            // The reach is the subtitle, read before the long list
             // instead of after it.
-            HLSettingsCard(
-                icon: "circle.grid.cross",
-                title: "Allowed sites",
+            HLCard(
+                "Allowed sites",
                 subtitle: "Sites turned off here are hidden for every injection medication."
             ) {
                 VStack(spacing: 0) {
                     let sites = InjectionSite.serverCases
-                    ForEach(Array(sites.enumerated()), id: \.element) { idx, site in
+                    ForEach(Array(sites.enumerated()), id: \.element) { _, site in
                         row(for: site)
-                        if idx < sites.count - 1 {
-                            Divider().opacity(0.6)
-                        }
                     }
                 }
             }
@@ -45,24 +41,17 @@ struct SettingsInjectionSitesScreen: View {
         .navigationTitle("Injection sites")
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.refresh() }
-        .alert(
-            String(localized: "Could not update injection-site preferences. Please try again."),
-            isPresented: Binding(
-                get: { store.error != nil },
-                set: { _ in }
-            )
-        ) {
-            Button(String(localized: "OK"), role: .cancel) {}
-        }
+        .hlAcknowledgeAlert(
+            "Could not update injection-site preferences. Please try again.",
+            isPresented: Binding(get: { store.error != nil }, set: { _ in })
+        )
     }
 
     private func row(for site: InjectionSite) -> some View {
         // "Allowed" = NOT excluded. The toggle reads as the positive
         // affordance so the deny-list never reads inverted.
         HStack(spacing: HLSpace.md) {
-            Text(site.localizedLabel)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+            HLRowTitle(Text(site.localizedLabel))
             Spacer(minLength: HLSpace.md)
             Toggle(
                 "",

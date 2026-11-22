@@ -4,16 +4,13 @@ extension SettingsHKSyncDiagnosticsScreen {
     /// Redacted direct-workout delivery snapshot. Counts and operational
     /// provenance only; never renders workout identifiers or health values.
     ///
-    /// K1 — the rows used to borrow the server card's labels („Server-Urteil",
+    /// The rows used to borrow the server card's labels („Server-Urteil",
     /// „Liefert selbstständig") for the local outcome and the history import,
     /// and printed the enum spellings as values. Both now say what they are.
     var workoutDeliveryCard: some View {
-        // 1.4 B2-c — no subtitle: the one it had described the background
+        // No subtitle: the one it had described the background
         // wakes on the support screen, not this card.
-        HLSettingsCard(
-            icon: "figure.run",
-            title: "Workout"
-        ) {
+        HLCard("Workout") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 statRow(
                     label: "settings.hkdiag.workout_observer",
@@ -23,7 +20,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                     label: "settings.hkdiag.summary_last_activity",
                     value: relativeOrNever(diagnostics.workout.lastAttemptedAt)
                 )
-                // U1 (#18) — fed by `lastCompletedUsefulAt`: the last batch the
+                // Fed by `lastCompletedUsefulAt`: the last batch the
                 // server accepted in full, duplicates included. „Zuletzt
                 // geliefert" read as "last new workout uploaded".
                 statRow(
@@ -42,11 +39,11 @@ extension SettingsHKSyncDiagnosticsScreen {
                     label: "settings.hkdiag.workout_outcome",
                     value: workoutOutcomeLabel
                 )
-                // #17 — the history-import row. Hidden while nothing reports.
+                // The history-import row. Hidden while nothing reports.
                 if let historyImport = workoutHistoryImportText {
                     statRow(label: "settings.hkdiag.workout_history_import", value: historyImport)
                 }
-                // U1 (#18) — this state is the heart-rate enrichment sweep
+                // This state is the heart-rate enrichment sweep
                 // (`WorkoutHRBackfillSweep`), not the workout import; the old
                 // „Verlaufsimport" label named the wrong thing.
                 statRow(

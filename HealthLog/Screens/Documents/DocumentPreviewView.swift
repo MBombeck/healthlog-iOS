@@ -11,6 +11,9 @@ import SwiftUI
 struct DocumentPreviewView: View {
     let store: DocumentsStore
     let document: InboundDocument
+    /// The preview takes the height it is offered (the pane beside the list)
+    /// instead of the fixed height of a card in a page.
+    var fillsHeight = false
 
     @State private var phase: Phase = .loading
 
@@ -29,8 +32,7 @@ struct DocumentPreviewView: View {
                 loadingBox
             case let .pdf(data):
                 #if canImport(PDFKit)
-                    PDFKitView(data: data)
-                        .frame(height: 420)
+                    pdfView(data)
                         .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
                 #else
                     attachmentBox
@@ -51,10 +53,21 @@ struct DocumentPreviewView: View {
     private var loadingBox: some View {
         RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
             .fill(HLSurface.secondary)
-            .frame(height: 200)
+            .frame(minHeight: 200, maxHeight: fillsHeight ? .infinity : 200)
             .overlay { ProgressView() }
             .accessibilityLabel(Text("documents.detail.previewLoading"))
     }
+
+    #if canImport(PDFKit)
+        @ViewBuilder
+        private func pdfView(_ data: Data) -> some View {
+            if fillsHeight {
+                PDFKitView(data: data).frame(minHeight: 160, maxHeight: .infinity)
+            } else {
+                PDFKitView(data: data).frame(height: 420)
+            }
+        }
+    #endif
 
     @ViewBuilder
     private func imageView(_ data: Data) -> some View {
@@ -63,7 +76,7 @@ struct DocumentPreviewView: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: 420)
+                    .frame(maxHeight: fillsHeight ? .infinity : 420)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
                     .accessibilityLabel(Text("documents.detail.previewImage"))
             } else {
@@ -74,47 +87,44 @@ struct DocumentPreviewView: View {
         #endif
     }
 
+    /// A file without an inline picture shows as one row of the app's
+    /// list form: the kind's symbol, the file name, and why there is no
+    /// preview with its size. A large empty plate looked like a fault.
     private var attachmentBox: some View {
-        VStack(spacing: HLSpace.sm) {
-            Image(systemName: DocumentKindMeta.icon(document.kind))
-                .font(.hlLargeTitle)
-                .foregroundStyle(HLText.secondary)
-            Text(document.filename ?? String(localized: "documents.card.untitled"))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-            Text(previewUnavailableLine)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(HLSpace.lg)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+        fileCard(reason: String(format: String(localized: "documents.detail.previewUnavailable"), DocumentFormat.bytes(document.byteSize)))
     }
 
     private var failedBox: some View {
-        VStack(spacing: HLSpace.xs) {
-            Image(systemName: "exclamationmark.triangle")
-                // Audit-01 C2 — same placeholder-glyph role as `attachmentBox`
-                // above, so same size (was a raw, smaller `.title2`).
-                .font(.hlLargeTitle)
-                .foregroundStyle(HLText.tertiary)
-            Text("documents.detail.previewFailed")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(HLSpace.lg)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+        fileCard(reason: HLRowDetail.joined([
+            String(localized: "documents.detail.previewFailed"),
+            DocumentFormat.bytes(document.byteSize)
+        ]) ?? "")
     }
 
-    private var previewUnavailableLine: String {
-        let template = String(localized: "documents.detail.previewUnavailable")
-        return String(format: template, DocumentFormat.bytes(document.byteSize))
+    private func fileCard(reason: String) -> some View {
+        HLCard(layout: .rows) {
+            HLRow(
+                title: Text(verbatim: document.filename ?? String(localized: "documents.card.untitled")),
+                detail: Text(verbatim: reason)
+            ) {
+                // The row stands for the file, not for its kind: a lab
+                // report's flask would repeat the lab row under it.
+                HLRowGlyph(symbol: "doc.text")
+            }
+        }
+        .accessibilityIdentifier("documents.detail.preview.none")
     }
 
     // MARK: - Load
+
+    /// A PDF with at least one page.
+    static func isReadablePDF(_ data: Data) -> Bool {
+        #if canImport(PDFKit)
+            (PDFDocument(data: data)?.pageCount ?? 0) > 0
+        #else
+            false
+        #endif
+    }
 
     private func load() async {
         // Attachment-class files are never rendered inline (serving posture).
@@ -126,7 +136,9 @@ struct DocumentPreviewView: View {
         do {
             let (data, _) = try await store.original(id: document.id)
             if document.mimeType == "application/pdf" || document.mimeType.hasSuffix("/pdf") {
-                phase = .pdf(data)
+                // Bytes that are no readable PDF would leave an empty grey
+                // plate; they get the file row instead.
+                phase = Self.isReadablePDF(data) ? .pdf(data) : .failed
             } else {
                 phase = .image(data)
             }

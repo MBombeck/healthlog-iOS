@@ -3,14 +3,11 @@ import SwiftUI
 /// Connect / manage surface for **Nightscout** — the self-hoster CGM bridge
 /// (server v1.17.0). Unlike the OAuth wearables, Nightscout is a URL-+-token
 /// paste flow: the user points HealthLog at their own instance, so the connect
-/// step is a real `POST` (no browser redirect). A pure backend (B) surface — in
-/// standalone we render the calm ``HLCloudDerivedPlaceholder``.
+/// step is a real `POST` (no browser redirect).
 ///
 /// The instance URL + optional API token are stored encrypted server-side and
 /// never on this iPhone (held only transiently in the form drafts below).
 struct NightscoutIntegrationScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(NightscoutIntegrationStore.self) private var store
 
     @State private var urlDraft: String = ""
@@ -19,30 +16,16 @@ struct NightscoutIntegrationScreen: View {
     @State private var refreshTick: Int = 0
 
     var body: some View {
-        if backend.hasServer {
-            liveBody
-        } else {
-            ScrollView {
-                HLCloudDerivedPlaceholder(
-                    variant: .hero,
-                    surfaceName: String(localized: "cloud_derived.surface.nightscout"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-                .padding(HLSpace.lg)
-            }
-            .background(HLColor.background)
-            .navigationTitle("Nightscout")
-            .navigationBarTitleDisplayMode(.inline)
-        }
+        liveBody
     }
 
-    /// **UI-Standard U2 (R12) — Gerüst C→A.** Bis U2 ein handgebautes
+    /// **UI-Standard U2 — Gerüst C→A.** Bis U2 ein handgebautes
     /// `ScrollView` + `HLCard` im `.elevated`-Stil (16 pt Innenabstand, 1 pt
     /// volle Kontur, handgebauter 17-pt-Kartenkopf, **kein** unterer
-    /// Seitenrand). Liegt jetzt auf `HLSettingsPage` + `HLSettingsCard`.
+    /// Seitenrand). Liegt jetzt auf `HLPage` + `HLCard`.
     private var liveBody: some View {
-        HLSettingsPage(title: "Nightscout") {
-            // 1.4 B2-c — no app sync footer; the card says when this
+        HLPage {
+            // No app sync footer; the card says when this
             // provider last synced.
             connectionCard
         }
@@ -66,9 +49,9 @@ struct NightscoutIntegrationScreen: View {
     /// `nightscout.connectHint` beschrieb den Knopf darunter; ebenfalls
     /// gefallen.
     private var connectionCard: some View {
-        HLSettingsCard(
-            icon: "drop.circle.fill",
-            title: "Nightscout",
+        HLCard(
+            // The page is named after the service; the card says its state.
+            "Status",
             footer: isConnected ? nil : "nightscout.formIntro",
             trailing: { statusPill },
             content: { connectionBody }
@@ -83,7 +66,7 @@ struct NightscoutIntegrationScreen: View {
     private var statusPill: some View {
         switch store.isConnected {
         case .some(true):
-            // #139 — the pill follows `health.state` when the server sends it.
+            // The pill follows `health.state` when the server sends it.
             if let health = store.status?.health {
                 HLStatusPill(ConnectionHealthPresentation(health: health).pill)
             } else {
@@ -92,7 +75,7 @@ struct NightscoutIntegrationScreen: View {
         case .some(false):
             HLStatusPill(.disconnected(label: String(localized: "Not connected")))
         case .none:
-            // 1.4 B4 — "Checking" only while it is, not after a failed read.
+            // "Checking" only while it is, not after a failed read.
             if store.error == nil {
                 HLStatusPill(.unknown(label: String(localized: "Checking")))
             }
@@ -102,7 +85,7 @@ struct NightscoutIntegrationScreen: View {
     @ViewBuilder
     private var connectionBody: some View {
         if isConnected {
-            // #139 — the reason in one sentence. No button: Nightscout has no
+            // The reason in one sentence. No button: Nightscout has no
             // connect flow to re-run and no resume route; the person changes
             // the URL or token by disconnecting and connecting again.
             if let health = store.status?.health {
@@ -112,7 +95,7 @@ struct NightscoutIntegrationScreen: View {
             // the recent SGV window now instead of waiting for the cron.
             HLButton(
                 "integration.sync.button",
-                icon: "arrow.triangle.2.circlepath",
+                systemImage: "arrow.triangle.2.circlepath",
                 variant: .secondary,
                 isLoading: store.isWorking
             ) {
@@ -122,7 +105,7 @@ struct NightscoutIntegrationScreen: View {
             ManualSyncStatusRow(state: store.syncState, providerName: "Nightscout")
             HLButton(
                 "integration.test.button",
-                icon: "checkmark.shield",
+                systemImage: "checkmark.shield",
                 variant: .secondary,
                 isLoading: store.isWorking
             ) {
@@ -139,7 +122,7 @@ struct NightscoutIntegrationScreen: View {
             connectForm
         }
         if let error = store.error {
-            // 1.4 B4 — a sentence for people, never the decoder's text; the
+            // A sentence for people, never the decoder's text; the
             // route and error id are in "Support-Info kopieren".
             Text(error.userFacingDescription)
                 .font(.hlCaption)
@@ -168,7 +151,7 @@ struct NightscoutIntegrationScreen: View {
                 accessibilityID: "settings.nightscout.allowPrivateHostToggle"
             )
 
-            HLButton(String(localized: "Connect"), variant: .primary, isLoading: store.isWorking) {
+            HLButton("Connect", variant: .primary, isLoading: store.isWorking) {
                 Task { await connect() }
             }
             .disabled(!canConnect || store.isWorking)
@@ -182,7 +165,7 @@ struct NightscoutIntegrationScreen: View {
                 .foregroundStyle(result.ok ? HLColor.statusOK : HLColor.statusBad)
             if result.ok, let latency = result.latencyMs {
                 Text(
-                    // W-I18N: interpolates a runtime latency number.
+                    // Interpolates a runtime latency number.
                     verbatim: String(
                         format: NSLocalizedString(
                             "integration.test.ok_latency",
@@ -191,12 +174,10 @@ struct NightscoutIntegrationScreen: View {
                         latency
                     )
                 )
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
             } else {
                 Text(result.ok ? "integration.test.ok" : "integration.test.failed")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
             }
         }
     }

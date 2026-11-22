@@ -63,15 +63,24 @@ import SwiftUI
 struct SettingsHealthAccessScreen: View {
     @Environment(\.appContainer) private var container
     @Environment(HKReadinessStore.self) private var readiness
+    @Environment(\.deviceProfile) private var deviceProfile
 
     var body: some View {
-        HLSettingsPage(title: "health.permissions.title") {
+        if HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).offersAuthorization {
+            phoneBody
+        } else {
+            AppleHealthPadNotice()
+        }
+    }
+
+    private var phoneBody: some View {
+        HLPage {
             readCard
             writeCard
             footerCard
         }
         // QoL-A2 (Glass H1) — scroll-edge glass now owned centrally by the
-        // `HLSettingsPage` inner ScrollView; no outer-layer patch here.
+        // `HLPage` inner ScrollView; no outer-layer patch here.
         .navigationTitle("health.permissions.title")
         .navigationBarTitleDisplayMode(.inline)
         // Die Schreib-Status kommen aus dem Store-Snapshot; ohne Refresh zeigte
@@ -81,15 +90,14 @@ struct SettingsHealthAccessScreen: View {
 
     // MARK: - Cards
 
-    /// 1.4 B2-c — the asymmetry is said **once**, where it applies: the read
+    /// The asymmetry is said **once**, where it applies: the read
     /// card's subtitle says Apple does not tell the app what reading is
     /// allowed. The text-only "Transparency" card that said it in four
     /// sentences is gone, and so are the "Read"/"Write" badges that repeated
     /// the card titles; the write card shows the granted state per row.
     private var readCard: some View {
-        HLSettingsCard(
-            icon: "arrow.down.heart.fill",
-            title: "health.permissions.read_title",
+        HLCard(
+            "health.permissions.read_title",
             subtitle: "health.permissions.read_subtitle"
         ) {
             typeList(rows: readTypeRows, emptyKey: "health.permissions.read_empty")
@@ -97,9 +105,8 @@ struct SettingsHealthAccessScreen: View {
     }
 
     private var writeCard: some View {
-        HLSettingsCard(
-            icon: "arrow.up.heart.fill",
-            title: "health.permissions.write_title",
+        HLCard(
+            "health.permissions.write_title",
             subtitle: "health.permissions.write_subtitle"
         ) {
             typeList(rows: writeTypeRows, emptyKey: "health.permissions.write_empty")
@@ -107,18 +114,16 @@ struct SettingsHealthAccessScreen: View {
     }
 
     /// R4 — der Satz „ändern kannst du das in Apple Health unter …“ war ein
-    /// Wegweiser mit einem Pfad, den Apple zwischenzeitlich umbenannt hat (R7).
+    /// Wegweiser mit einem Pfad, den Apple zwischenzeitlich umbenannt hat.
     /// An seiner Stelle steht die Zeile, die tatsächlich dorthin führt.
     private var footerCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield.fill",
-            title: "health.permissions.control_title",
+        HLCard(
+            "health.permissions.control_title",
             footer: "health.permissions.control_footer"
         ) {
-            // Abstände kommen vom Primitive (R12) — kein eigener VStack.
+            // Abstände kommen vom Primitive — kein eigener VStack.
             Text("health.permissions.control_body")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
             if let url = HKReadinessStore.healthAppDeepLink {
                 HLSettingsActionRow(
@@ -139,29 +144,12 @@ struct SettingsHealthAccessScreen: View {
     @ViewBuilder
     private func typeList(rows: [HealthAccessTypeRow], emptyKey: LocalizedStringKey) -> some View {
         if rows.isEmpty {
-            Text(emptyKey)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.tertiary)
+            HLEmptyNote(emptyKey)
         } else {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
-                    HStack(spacing: HLSpace.md) {
-                        Image(systemName: "circle.fill")
-                            // 5pt bullet dot — micro list-marker geometry, fixed
-                            // by design (a scaling bullet would dwarf the row).
-                            // swiftlint:disable:next dynamic_type_bypass
-                            .font(.system(size: 5))
-                            .foregroundStyle(HLText.tertiary)
-                        Text(row.name)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: HLSpace.sm)
-                        if row.showsStatus {
-                            statusLabel(for: row.status)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
+                    HLRow(title: Text(row.name), status: row.showsStatus ? statusLabel(for: row.status) : nil)
+                        .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -170,17 +158,9 @@ struct SettingsHealthAccessScreen: View {
     /// Der Zustand als Wort plus Zeichen. Bewusst **ohne Rot**: ein nicht
     /// erteilter Schreibtyp ist kein Fehler, sondern eine Entscheidung des
     /// Nutzers — der Empfang läuft davon unberührt weiter.
-    @ViewBuilder
-    private func statusLabel(for status: HKReadinessStore.AuthStatus?) -> some View {
+    private func statusLabel(for status: HKReadinessStore.AuthStatus?) -> HLRowStatus {
         let descriptor = Self.statusDescriptor(for: status)
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: descriptor.symbol)
-                .font(.hlCaption2.weight(.semibold))
-            Text(descriptor.title)
-                .font(.hlCaption)
-                .fontWeight(.semibold)
-        }
-        .foregroundStyle(descriptor.isGranted ? HLColor.statusOK : HLText.tertiary)
+        return HLRowStatus(descriptor.title, icon: descriptor.symbol, tone: descriptor.isGranted ? .success : .neutral)
     }
 
     /// Wort, Zeichen und Tinte pro Zustand. `internal` + `nonisolated`, damit
@@ -258,7 +238,10 @@ struct SettingsHealthAccessScreen: View {
     private var readTypeRows: [HealthAccessTypeRow] {
         #if canImport(HealthKit)
             Self.rows(
-                identifiers: Self.readTypeIdentifiers(cycleIdentifiers: cycleTypeIdentifiers),
+                identifiers: Self.readTypeIdentifiers(
+                    cycleIdentifiers: cycleTypeIdentifiers,
+                    laterIdentifiers: Self.ingestV2ReadIdentifiers()
+                ),
                 statuses: [:],
                 showsStatus: false
             )
@@ -291,8 +274,19 @@ struct SettingsHealthAccessScreen: View {
         /// test can assert rather than something a reader has to believe. E2's
         /// Auflage is that this page moves with the sets; a page that merely
         /// *renders* proves nothing about where its rows came from.
-        nonisolated static func readTypeIdentifiers(cycleIdentifiers: [String]) -> [String] {
-            HealthKitService.defaultReadTypes.map(\.identifier) + cycleIdentifiers
+        nonisolated static func readTypeIdentifiers(cycleIdentifiers: [String], laterIdentifiers: [String] = []) -> [String] {
+            let base = HealthKitService.defaultReadTypes.map(\.identifier) + cycleIdentifiers
+            return base + laterIdentifiers.filter { !base.contains($0) }
+        }
+
+        /// The ingest-v2 types the app may ask for now: on this system and
+        /// taken by the configured server. They join the list when they can be
+        /// asked, not before.
+        nonisolated static func ingestV2ReadIdentifiers(defaults: UserDefaults = .standard) -> [String] {
+            AppleHealthIngestTypes.allIdentifiers.filter {
+                AppleHealthIngestHKTypes.sampleType(for: $0) != nil
+                    && AppleHealthIngestTypes.serverAccepts($0, defaults: defaults)
+            }
         }
 
         nonisolated static func writeTypeIdentifiers(cycleIdentifiers: [String]) -> [String] {
@@ -360,6 +354,23 @@ struct HealthAccessStatusDescriptor: Equatable {
 /// trimmed raw identifier so a newly-added type is never silently dropped
 /// from the transparency surface.
 enum HealthAccessTypeNaming {
+    /// The names a sentence lists: every symptom type folds into one word, so
+    /// thirty-nine symptoms read as "Symptoms", in the place of the first.
+    static func groupedDisplayNames(for identifiers: [String]) -> [String] {
+        var names: [String] = []
+        var symptomsNamed = false
+        for identifier in identifiers {
+            if AppleHealthSymptomCatalog.code(for: identifier) != nil {
+                guard !symptomsNamed else { continue }
+                symptomsNamed = true
+                names.append(String(localized: "health.permissions.group.symptoms"))
+            } else {
+                names.append(displayName(for: identifier))
+            }
+        }
+        return names
+    }
+
     static func displayName(for identifier: String) -> String {
         if let key = localizationKey(for: identifier) {
             return String(localized: key)
@@ -388,7 +399,7 @@ enum HealthAccessTypeNaming {
     /// the authorization sets resolves to a mapped key — the raw-identifier
     /// fallback in `displayName(for:)` must never be reachable in production.
     static func localizationKey(for identifier: String) -> LocalizedStringResource? {
-        keyByIdentifier[identifier]
+        keyByIdentifier[identifier] ?? ingestV2KeyByIdentifier[identifier]
     }
 
     /// Single mapping table — raw `HKObjectType.identifier` → localization
@@ -406,11 +417,12 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierHeartRate": "health.permissions.type.heartRate",
         "HKQuantityTypeIdentifierRestingHeartRate": "health.permissions.type.restingHeartRate",
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": "health.permissions.type.hrv",
-        // 1.2 / V4 — on the list from iOS 27 on, where the read set holds it.
+        // On the list from iOS 27 on, where the read set holds it.
         "HKQuantityTypeIdentifierHeartRateVariabilityRMSSD": "health.permissions.type.hrvRmssd",
         "HKQuantityTypeIdentifierVO2Max": "health.permissions.type.vo2Max",
         "HKQuantityTypeIdentifierStepCount": "health.permissions.type.stepCount",
         "HKQuantityTypeIdentifierActiveEnergyBurned": "health.permissions.type.activeEnergy",
+        "HKQuantityTypeIdentifierBasalEnergyBurned": "health.permissions.type.basalEnergy",
         "HKQuantityTypeIdentifierFlightsClimbed": "health.permissions.type.flightsClimbed",
         "HKQuantityTypeIdentifierDistanceWalkingRunning": "health.permissions.type.distanceWalkingRunning",
         "HKQuantityTypeIdentifierWalkingSpeed": "health.permissions.type.walkingSpeed",
@@ -430,7 +442,7 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierAppleWalkingSteadiness": "health.permissions.type.walkingSteadiness",
         "HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": "health.permissions.type.doubleSupport",
         "HKWorkoutTypeIdentifier": "health.permissions.type.workouts",
-        // v0.14.8 W-HKREAD — nine quantity readers added to close the server
+        // Nine quantity readers added to close the server
         // READ-coverage gap (server v1.10.0 APPLE_HEALTH_TYPE_MAP). Each joins
         // the always-on transparency list, so each needs a localized name.
         "HKQuantityTypeIdentifierWalkingHeartRateAverage": "health.permissions.type.walkingHeartRateAverage",
@@ -442,15 +454,15 @@ enum HealthAccessTypeNaming {
         "HKQuantityTypeIdentifierStairAscentSpeed": "health.permissions.type.stairAscentSpeed",
         "HKQuantityTypeIdentifierStairDescentSpeed": "health.permissions.type.stairDescentSpeed",
         "HKQuantityTypeIdentifierNumberOfTimesFallen": "health.permissions.type.numberOfTimesFallen",
-        // B5 (1.4) — waist circumference joins the read set.
+        // Waist circumference joins the read set.
         "HKQuantityTypeIdentifierWaistCircumference": "health.permissions.type.waistCircumference",
-        // HK-NEW (1.5) — the server-v1.44 read types (State of Mind is below).
+        // The server-v1.44 read types (State of Mind is below).
         "HKQuantityTypeIdentifierAppleExerciseTime": "health.permissions.type.exerciseTime",
         "HKQuantityTypeIdentifierAppleStandTime": "health.permissions.type.standTime",
         "HKCategoryTypeIdentifierAppleStandHour": "health.permissions.type.standHour",
         "HKCategoryTypeIdentifierMindfulSession": "health.permissions.type.mindfulSession",
         "HKQuantityTypeIdentifierAtrialFibrillationBurden": "health.permissions.type.afibBurden",
-        // v0.14.8 W-HKREAD — seven categorical EVENT classes read by the
+        // Seven categorical EVENT classes read by the
         // `HeartHealthEventImporter`. Read-only (never written back), but they
         // join the always-on read transparency list and so need names too.
         "HKCategoryTypeIdentifierIrregularHeartRhythmEvent": "health.permissions.type.irregularHeartRhythm",
@@ -460,12 +472,12 @@ enum HealthAccessTypeNaming {
         "HKCategoryTypeIdentifierSleepApneaEvent": "health.permissions.type.sleepApnea",
         "HKCategoryTypeIdentifierAudioExposureEvent": "health.permissions.type.audioExposureEvent",
         "HKCategoryTypeIdentifierHeadphoneAudioExposureEvent": "health.permissions.type.headphoneAudioEvent",
-        // 16-03 / E2 — State of Mind is now a first-sheet type, read AND write:
+        // State of Mind is now a first-sheet type, read AND write:
         // the app mirrors recorded moods back into Apple Health. It was added
         // here in v0.14.8 W2 while it was still a settings-only opt-in; the name
         // is unchanged, only what puts it on the list.
         "HKDataTypeStateOfMind": "health.permissions.type.stateOfMind",
-        // 16-03 / E2 — likewise the electrocardiogram type, now in the first
+        // Likewise the electrocardiogram type, now in the first
         // sheet. READ only: the app never writes an ECG back into Apple Health,
         // which is also what keeps it structurally incapable of moving
         // `HKReadinessStore`'s write-derived connection state.

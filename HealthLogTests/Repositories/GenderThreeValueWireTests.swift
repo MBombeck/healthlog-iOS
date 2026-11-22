@@ -19,7 +19,7 @@ private func profilePayload(gender: String) -> Data {
     """.utf8)
 }
 
-/// CU-17 / GH #71 — pins the **three-valued** `gender` contract in both
+/// Pins the **three-valued** `gender` contract in both
 /// directions against the verified server source.
 ///
 /// The read side was already safe (every decode site holds `gender` as a plain

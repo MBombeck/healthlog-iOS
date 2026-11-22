@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "package": "C2",
+  "directories": [
+    "Medications",
+    "GLP1",
+    "Measure",
+    "Measurements",
+    "Capture",
+    "Notifications",
+    "Records",
+    "CustomMetrics"
+  ],
+  "counts": {
+    "delete_without_ladder": 0,
+    "hl_button_large_only_onboarding": 0,
+    "hl_card_surface_in_screens": 0,
+    "hl_date_via_helper": 1,
+    "hl_free_font": 44,
+    "hl_free_page_spacing": 0,
+    "hl_free_text_color": 48,
+    "hl_no_fixed_color_scheme": 0,
+    "hl_no_glass_in_content": 0,
+    "hl_no_handmade_card": 0,
+    "hl_no_literal_sheet_verbs": 0,
+    "hl_no_local_section_header": 0,
+    "hl_no_local_state_view": 2,
+    "hl_no_raw_icon_frame": 0,
+    "hl_no_raw_presentation": 0,
+    "hl_no_raw_segmented": 0,
+    "hl_no_raw_sheet_roles": 0,
+    "hl_no_rejected_button_variant": 0,
+    "hl_no_settingscard": 0,
+    "hl_no_uppercase_header": 0,
+    "hl_number_via_helper": 1,
+    "hl_page_margin": 0,
+    "hl_raw_spacing": 0,
+    "hl_single_retry_key": 0,
+    "hl_system_large_title": 0,
+    "page_without_scaffold": 0,
+    "sheet_without_scaffold": 0
+  },
+  "limits": {
+    "delete_stage3": 0
+  }
+}

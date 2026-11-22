@@ -4,7 +4,7 @@ import Testing
 
 private typealias Measurement = HealthLog.Measurement
 
-/// v0.14.3 E5 — pins the contract behind `MeasurementListScreen`'s NEW series
+/// Pins the contract behind `MeasurementListScreen`'s NEW series
 /// fallback ("Vital → alle Messungen anzeigen" showed "keine Einträge" though the
 /// chart had data).
 ///
@@ -44,7 +44,7 @@ struct MeasurementListSeriesFallbackTests {
         #expect(rows.isEmpty)
     }
 
-    // MARK: - D2 drill-down count scope (v0.14.4)
+    // MARK: - D2 drill-down count scope
 
     @Test("isOutsideRange is true only when data exists but falls outside the range")
     func dataStateOutsideRangeFlag() {

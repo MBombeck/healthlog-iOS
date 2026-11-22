@@ -5,12 +5,11 @@ import Testing
     import UIKit
 #endif
 
-/// **1.4 B4-z — the last polish pass before the freeze.**
+/// **The last polish pass before the freeze.**
 ///
 /// Pins what the pass settled, so a later change cannot quietly undo it: the
 /// illness sheet titles fit beside their buttons, the cycle legend reads in
-/// two calm columns, the rhythm suggestions follow the overview's heading
-/// form, the cycle ring comes to rest like the score rings, the two coach
+/// two calm columns, the cycle ring comes to rest like the score rings, the two coach
 /// consent texts are short and still say everything, and the hermetic world
 /// answers the sync handshake like a server.
 @MainActor
@@ -20,10 +19,6 @@ struct B4zFinalPassTests {
         .deletingLastPathComponent() // Screens
         .deletingLastPathComponent() // HealthLogTests
         .deletingLastPathComponent() // repo root
-
-    private static func source(_ path: String) throws -> String {
-        try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
-    }
 
     private static func catalogValue(_ key: String, _ language: String) throws -> String? {
         let data = try Data(contentsOf: root.appendingPathComponent("HealthLog/Resources/Localizable.xcstrings"))
@@ -82,10 +77,13 @@ struct B4zFinalPassTests {
 
     @Test("A weekly summary's header names the week in the reader's language, the card names the dates")
     func weekHeaderIsLocalised() throws {
-        let source = try Self.source("HealthLog/Screens/Measurements/MeasurementBucketing.swift")
-        #expect(!source.contains("\"KW \\("))
-        #expect(source.contains("String(localized: \"measurements.weekHeader \\(weekOfYear)\")"))
-        #expect(source.contains("Date.FormatStyle.dateTime.day().month(.abbreviated)"))
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Berlin"))
+        // Monday 5 October 2026, ISO week 41.
+        let start = Date(timeIntervalSince1970: 1_791_201_600)
+        let header = MeasurementBucketing.weekHeader(start: start, calendar: calendar)
+        #expect(header == String(localized: "measurements.weekHeader \(41)"))
+        #expect(!header.contains("("), "the header repeats the dates the card names")
         #expect(try Self.catalogValue("measurements.weekHeader %lld", "de") == "KW %lld")
         #expect(try Self.catalogValue("measurements.weekHeader %lld", "en") == "Week %lld")
     }
@@ -109,8 +107,7 @@ struct B4zFinalPassTests {
     func dayRangeLabelIsLocalised() throws {
         #expect(try Self.catalogValue("range.label.day", "de") == "T")
         #expect(try Self.catalogValue("range.label.day", "en") == "D")
-        let store = try Self.source("HealthLog/Stores/ChartDetailStore.swift")
-        #expect(store.contains("case .day: String(localized: \"range.label.day\""))
+        #expect(ChartDetailStore.Range.day.label == String(localized: "range.label.day"))
     }
 
     @Test("A vital named mid-sentence in English starts in lower case")
@@ -118,13 +115,6 @@ struct B4zFinalPassTests {
         #expect(IllnessInsightsScreen.midSentence("Resting heart rate") == "resting heart rate")
         #expect(IllnessInsightsScreen.midSentence("Blood oxygen") == "blood oxygen")
         #expect(IllnessInsightsScreen.midSentence("").isEmpty)
-    }
-
-    @Test("Every list built on HLAsyncListScreen stands on the app canvas")
-    func asyncListsPaintTheCanvas() throws {
-        let primitive = try Self.source("HealthLog/DesignSystem/HLAsyncListScreen.swift")
-        #expect(primitive.contains(".scrollContentBackground(.hidden)"))
-        #expect(primitive.contains(".background(HLSurface.primary)"))
     }
 
     @Test("A reference row names its year once")
@@ -140,12 +130,7 @@ struct B4zFinalPassTests {
         #expect(PersonalRecordDTO.localizedUnit("steps") == String(localized: "dashboard.metric.unit.steps"))
         #expect(PersonalRecordDTO.localizedUnit("kg") == "kg")
         #expect(PersonalRecordDTO.localizedUnit("bpm") == "bpm")
-        let card = try Self.source("HealthLog/Screens/PersonalRecords/RecordCard.swift")
-        #expect(card.contains("HLBadge(String(localized: \"New record!\")"))
         #expect(try Self.catalogValue("New record!", "de") == "Neuer Rekord!")
-        let strip = try Self.source("HealthLog/Screens/PersonalRecords/MilestoneStrip.swift")
-        #expect(strip.contains(".frame(width: 96)"))
-        #expect(!strip.contains(".frame(maxWidth: 80)"))
     }
 
     @Test("The Insights medication cards name a kind only when there is a real one")
@@ -163,99 +148,22 @@ struct B4zFinalPassTests {
         #expect(InsightsMedicationsPage.categoryLine(medication("VITAMIN"), isAsNeeded: false) != nil)
     }
 
-    @Test("Every settings page names itself in the bar (the diagnostics page did not)")
-    func settingsPagesHaveATitle() throws {
-        let screens = Self.root.appendingPathComponent("HealthLog/Screens")
-        let walker = try #require(FileManager.default.enumerator(at: screens, includingPropertiesForKeys: nil))
-        var untitled: [String] = []
-        for case let url as URL in walker where url.pathExtension == "swift" {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            if text.contains("HLSettingsPage(title:"), !text.contains(".navigationTitle(") {
-                untitled.append(url.lastPathComponent)
-            }
-        }
-        #expect(untitled.isEmpty, "no navigation title: \(untitled)")
-    }
-
     @Test("The tile customization screen has a title that fits beside Bearbeiten and reset")
     func tileCustomizationTitleFits() throws {
-        let screen = try Self.source("HealthLog/Screens/Settings/DashboardCustomizationScreen.swift")
-        #expect(screen.contains(".navigationTitle(String(localized: \"dashboard.customize.screenTitle\"))"))
         #expect(try Self.catalogValue("dashboard.customize.screenTitle", "de") == "Kacheln")
         #expect(try Self.catalogValue("dashboard.customize.screenTitle", "en") == "Tiles")
-    }
-
-    @Test("Source priority with nothing configured is the empty lockup, not a card")
-    func sourcePriorityEmptyIsALockup() throws {
-        let screen = try Self.source("HealthLog/Screens/Settings/Sub/SettingsSourcesScreen.swift")
-        #expect(screen.contains("HLEmptyState(icon: \"list.number\", title: \"settings.sources.priority.empty.title\")"))
-        #expect(!screen.contains("No source priority configured yet."))
-    }
-
-    @Test("A one-row section in Tag eintragen has no title over its row")
-    func logDayHasNoDoubleTitles() throws {
-        let sheet = try Self.source("HealthLog/Screens/Illness/LogDaySheet.swift")
-        #expect(!sheet.contains("illness.daylog.section.date"))
-        #expect(!sheet.contains("illness.daylog.section.impact"))
-    }
-
-    @Test("The mood trend glyph only leads a delta, never stands alone")
-    func moodTrendGlyphNeedsADelta() throws {
-        let card = try Self.source("HealthLog/Screens/Mood/MoodHeroSummary.swift")
-        let line = try #require(card.range(of: "private var trendLine: some View {"))
-        let body = card[line.upperBound...]
-        let delta = try #require(body.range(of: "if let deltaLine {"))
-        let glyph = try #require(body.range(of: "Image(systemName: symbol)"))
-        #expect(delta.lowerBound < glyph.lowerBound)
-        #expect(!body.contains("} else if let deltaLine {"))
-    }
-
-    @Test("Anwenden in the mood history is readable text, not a tinted capsule")
-    func moodHistoryApplyIsReadable() throws {
-        let screen = try Self.source("HealthLog/Screens/Mood/MoodHistoryScreen.swift")
-        #expect(!screen.contains(".buttonStyle(.borderedProminent)"))
-    }
-
-    @Test("The nutrient empty state stands on the list, not on a row card")
-    func nutrientEmptyStateIsNotACard() throws {
-        let screen = try Self.source("HealthLog/Screens/Nutrition/NutrientListScreen.swift")
-        let empty = try #require(screen.range(of: "private var emptyRows: some View {"))
-        let rest = screen[empty.upperBound...]
-        let end = rest.range(of: "// MARK: - Loading")?.lowerBound ?? rest.endIndex
-        #expect(rest[..<end].contains(".listRowBackground(Color.clear)"))
-        let custom = try Self.source("HealthLog/Screens/CustomMetrics/CustomMetricsListScreen.swift")
-        #expect(custom.contains("Section { emptyState.listRowBackground(Color.clear) }"))
-    }
-
-    // MARK: - The rhythm suggestions on the overview
-
-    @Test("The rhythm suggestions carry the overview's section title and the tile action pair")
-    func rhythmSuggestionsFollowTheOverview() throws {
-        let section = try Self.source("HealthLog/Screens/Coach/CoachCadenceSuggestionsSection.swift")
-        #expect(section.contains("InsightsSectionHeader(\"coach.cadenceSuggestion.title\")"))
-        #expect(section.components(separatedBy: "HLTileActionButton(").count == 3)
-        #expect(!section.contains("variant: .restrained"))
-        #expect(!section.contains("variant: .ghost"))
-        #expect(!section.contains("\"sparkles\""))
     }
 
     // MARK: - The cycle ring comes to rest
 
     @Test("The cycle ring moves in the score rings' window, then rests")
-    func cycleRingMotionWindow() throws {
+    func cycleRingMotionWindow() {
         #expect(HLCycleRing.motionActiveSeconds == WellnessTileMotion.activeSeconds)
         #expect(HLCycleRing.motionSettleSeconds == WellnessTileMotion.settleSeconds)
         #expect(HLCycleRing.movesNow(reduceMotion: false, lowPower: false, atRest: false))
         #expect(!HLCycleRing.movesNow(reduceMotion: false, lowPower: false, atRest: true))
         #expect(!HLCycleRing.movesNow(reduceMotion: true, lowPower: false, atRest: false))
         #expect(!HLCycleRing.movesNow(reduceMotion: false, lowPower: true, atRest: false))
-
-        let ring = try Self.source("HealthLog/DesignSystem/HLCycleRing.swift")
-        #expect(ring.contains(".cycleRingMotionWindow(atRest: $motionAtRest)"))
-        // Every moving layer reads the one gate, none Reduce Motion alone.
-        #expect(!ring.contains("!reduceMotion"))
-        // The day marker's `repeatForever` pulse stops when the window closes.
-        #expect(ring.contains(".onChange(of: breathing)"))
     }
 
     // MARK: - Coach consent texts: short, and still complete

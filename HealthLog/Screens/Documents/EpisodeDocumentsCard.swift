@@ -36,87 +36,65 @@ struct EpisodeDocumentsCard: View {
     }
 
     private var card: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                header
-                if isLoading {
-                    ProgressView().controlSize(.small)
-                } else {
-                    // 1.4 B4 — no "no documents linked yet" under the heading:
-                    // an empty card says it with its one action (upload),
-                    // like every empty state. Linking an existing document
-                    // stays on the document's own detail.
-                    ForEach(documents.prefix(Self.previewLimit)) { document in
-                        documentRow(document)
-                    }
+        VStack(spacing: HLSpace.xs) {
+            HLCard("documents.episodeCard.title") {
+                if !documents.isEmpty {
+                    Text(documents.count, format: .number)
+                        .font(.hlCaption.monospacedDigit())
+                        .foregroundStyle(HLText.secondary)
                 }
-                actions
+            } content: {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    if isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        // No "no documents linked yet" under the heading:
+                        // an empty card says it with its one action (upload),
+                        // like every empty state. Linking an existing document
+                        // stays on the document's own detail.
+                        VStack(spacing: 0) {
+                            ForEach(documents.prefix(Self.previewLimit)) { document in
+                                documentRow(document)
+                            }
+                        }
+                    }
+                    actions
+                }
+            }
+            if documents.count > Self.previewLimit {
+                HLLinkButton("documents.episodeCard.viewAll", destination: {
+                    DocumentsScreen(preselectedEpisodeId: episodeId)
+                })
             }
         }
     }
 
-    private var header: some View {
-        HStack {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "folder")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
-                HLSectionLabel("documents.episodeCard.title")
-            }
-            Spacer()
-            if !documents.isEmpty {
-                Text(verbatim: "\(documents.count)")
-                    .font(.hlCaption.monospacedDigit())
-                    .foregroundStyle(HLText.tertiary)
-            }
+    /// The same row as in the document list, so a document reads alike
+    /// wherever it appears; the whole row opens it, without a chevron.
+    @ViewBuilder
+    private func documentRow(_ document: InboundDocument) -> some View {
+        if let store = container?.documentsStore {
+            DocumentCardRow(document: document, selectionMode: false, isSelected: false, isHighlighted: false)
+                .hlRowLink {
+                    DocumentDetailScreen(store: store, documentId: document.id, initialDocument: document)
+                }
         }
     }
 
     @ViewBuilder
-    private func documentRow(_ document: InboundDocument) -> some View {
-        if let store = container?.documentsStore {
-            NavigationLink {
-                DocumentDetailScreen(store: store, documentId: document.id, initialDocument: document)
-            } label: {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: DocumentKindMeta.icon(document.kind))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .frame(width: 20)
-                    Text(document.resolvedTitle ?? String(localized: "documents.card.untitled"))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                        .lineLimit(1)
-                    Spacer()
-                    Text(DocumentFormat.mediumDate(document.displayDate))
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .padding(.vertical, HLSpace.xxs)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private var actions: some View {
-        HStack(spacing: HLSpace.sm) {
-            if !documents.isEmpty {
-                HLButton("documents.episodeCard.link", icon: "link", variant: .secondary, size: .compact) {
-                    showLinkPicker = true
-                }
-            }
-            HLButton("documents.episodeCard.upload", icon: "arrow.up.doc", variant: .secondary, size: .compact) {
+        if documents.isEmpty {
+            HLButton("documents.episodeCard.upload", systemImage: "arrow.up.doc", variant: .secondary) {
                 showUpload = true
             }
-            Spacer()
-            if documents.count > Self.previewLimit {
-                NavigationLink {
-                    DocumentsScreen(preselectedEpisodeId: episodeId)
-                } label: {
-                    Text("documents.episodeCard.viewAll")
-                        .font(.hlSubhead)
+        } else {
+            HLButtonPair {
+                HLButton("documents.episodeCard.upload", systemImage: "arrow.up.doc", variant: .secondary) {
+                    showUpload = true
+                }
+            } secondary: {
+                HLButton("documents.episodeCard.link", systemImage: "link", variant: .secondary) {
+                    showLinkPicker = true
                 }
             }
         }

@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// BRIEFING-LOAD-FIX (v0.14.8) — locks the on-appear load path that backs the
+/// Locks the on-appear load path that backs the
 /// Insights overview "Tagesbriefing" prose.
 ///
 /// **Why this exists.** `InsightsScreen.generalHealthReportText` falls back from

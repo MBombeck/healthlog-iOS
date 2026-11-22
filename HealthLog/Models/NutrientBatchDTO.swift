@@ -38,7 +38,21 @@ public enum NutrientCode: String, Codable, Sendable, CaseIterable, Equatable {
     /// the batch never sends them (``isSyncable``, `NutrientBatchRequestDTO`).
     case dha
     case epa
-    /// Audit B-4 — decode-only sentinel for a catalogue code this build cannot
+    /// Energy and macros (server 1.48.0, contract §5): day totals like the
+    /// micronutrients, sent only while the server reports `nutrientMacros`.
+    case energy
+    case protein
+    case carbohydrates
+    case fat
+    case saturatedFat = "saturated_fat"
+    case monounsaturatedFat = "monounsaturated_fat"
+    case polyunsaturatedFat = "polyunsaturated_fat"
+    case sugar
+    case fiber
+    case cholesterol
+    case sodium
+    case potassium
+    /// Decode-only sentinel for a catalogue code this build cannot
     /// name. The server catalogue grows (this list matched it exactly at the
     /// time of writing, which is a snapshot, not a guarantee); before the
     /// sentinel an added code cost the row it named, silently, through the
@@ -215,4 +229,35 @@ public enum NutrientCatalog {
         NutrientCatalogItem(code: .water, hkIdentifier: "HKQuantityTypeIdentifierDietaryWater", unit: "ml"),
         NutrientCatalogItem(code: .caffeine, hkIdentifier: "HKQuantityTypeIdentifierDietaryCaffeine", unit: "mg")
     ]
+
+    /// Energy and the macros, in the contract's order. Units exactly the
+    /// server's (`kcal`, `g`, `mg`); never kJ.
+    public static let macros: [NutrientCatalogItem] = [
+        NutrientCatalogItem(code: .energy, hkIdentifier: "HKQuantityTypeIdentifierDietaryEnergyConsumed", unit: "kcal"),
+        NutrientCatalogItem(code: .protein, hkIdentifier: "HKQuantityTypeIdentifierDietaryProtein", unit: "g"),
+        NutrientCatalogItem(code: .carbohydrates, hkIdentifier: "HKQuantityTypeIdentifierDietaryCarbohydrates", unit: "g"),
+        NutrientCatalogItem(code: .fat, hkIdentifier: "HKQuantityTypeIdentifierDietaryFatTotal", unit: "g"),
+        NutrientCatalogItem(code: .saturatedFat, hkIdentifier: "HKQuantityTypeIdentifierDietaryFatSaturated", unit: "g"),
+        NutrientCatalogItem(
+            code: .monounsaturatedFat,
+            hkIdentifier: "HKQuantityTypeIdentifierDietaryFatMonounsaturated",
+            unit: "g"
+        ),
+        NutrientCatalogItem(
+            code: .polyunsaturatedFat,
+            hkIdentifier: "HKQuantityTypeIdentifierDietaryFatPolyunsaturated",
+            unit: "g"
+        ),
+        NutrientCatalogItem(code: .sugar, hkIdentifier: "HKQuantityTypeIdentifierDietarySugar", unit: "g"),
+        NutrientCatalogItem(code: .fiber, hkIdentifier: "HKQuantityTypeIdentifierDietaryFiber", unit: "g"),
+        NutrientCatalogItem(code: .cholesterol, hkIdentifier: "HKQuantityTypeIdentifierDietaryCholesterol", unit: "mg"),
+        NutrientCatalogItem(code: .sodium, hkIdentifier: "HKQuantityTypeIdentifierDietarySodium", unit: "mg"),
+        NutrientCatalogItem(code: .potassium, hkIdentifier: "HKQuantityTypeIdentifierDietaryPotassium", unit: "mg")
+    ]
+
+    /// What the sync reads and posts: the micronutrients, plus the macros
+    /// while the server takes them.
+    public static func syncItems(includingMacros: Bool) -> [NutrientCatalogItem] {
+        includingMacros ? all + macros : all
+    }
 }

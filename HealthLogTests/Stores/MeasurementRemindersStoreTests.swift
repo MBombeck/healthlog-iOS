@@ -8,7 +8,7 @@ import Testing
 #endif
 
 /// W-REMINDERS (#23 v1.18.1) — pins the `MeasurementRemindersStore` mutation
-/// reconciliation, and (08-22) the optimistic `delete` rollback that is still
+/// reconciliation, and the optimistic `delete` rollback that is still
 /// the one optimistic path here. Uses the shared `StubAPIClient` (defined in
 /// `MeasurementsStoreTests.swift`) with `swr: nil` so the store loads directly
 /// (no cache) and the reconciliation is observable.
@@ -84,7 +84,7 @@ struct MeasurementRemindersStoreTests {
         let ok = await store.satisfy(id: "r1")
 
         #expect(!ok)
-        // 08-22: there is no stamp to roll back any more — the row was never
+        // There is no stamp to roll back any more — the row was never
         // touched, so it is still exactly what the last list said. The assertion
         // is unchanged; only this note is.
         #expect(store.reminders == before)

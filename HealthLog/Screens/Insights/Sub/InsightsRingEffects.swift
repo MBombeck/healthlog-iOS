@@ -34,7 +34,7 @@ struct InsightsRingEffectModifier: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.insightsRingMotionActive) private var motionActive
-    /// 1.4 B4 — moving effects run without Reduce Motion or Low Power and only while the overview's motion window is open.
+    /// Moving effects run without Reduce Motion or Low Power and only while the overview's motion window is open.
     private var animates: Bool {
         !reduceMotion && !ProcessInfo.processInfo.isLowPowerModeEnabled && motionActive
     }
@@ -83,7 +83,7 @@ struct InsightsRingEffectModifier: ViewModifier {
                 }
             }
         case .prismShaderGlow:
-            // P5b — P5's masked chromatic rim PLUS a specular glow on the filled
+            // P5's masked chromatic rim PLUS a specular glow on the filled
             // arc, hero-only; the grid tiles + reduce-motion / Low-Power degrade to
             // the jank-free P1 overlay (the live backdrop-sampling shader never runs
             // per scrolling tile). The glow honours reduce-motion with a hard cut.
@@ -97,7 +97,7 @@ struct InsightsRingEffectModifier: ViewModifier {
                 }
             }
         case .prismStatic:
-            // P6 — STATIC native MeshGradient prism masked to the ring rim. No
+            // STATIC native MeshGradient prism masked to the ring rim. No
             // driver / no animation, so there is NO reduce-motion or Low-Power
             // branch to take: the single rendered frame IS the still frame. The
             // soft thickness shadow sits BEHIND the ring, the prism + edge
@@ -114,7 +114,7 @@ struct InsightsRingEffectModifier: ViewModifier {
                         .accessibilityHidden(true)
                 }
         case .prismUniform:
-            // P9 (W-B190) — the SHIPPING default. A pure-SwiftUI prism masked to
+            // The SHIPPING default. A pure-SwiftUI prism masked to
             // the FILLED arc (0…fraction) PLUS a subtle steady glow on that arc.
             // Identical on EVERY tile (no `isHero` branch, no Metal), so it renders
             // on-device AND in the Simulator. The glow honours reduce-motion /
@@ -143,7 +143,7 @@ extension View {
 
 // MARK: - Filled-arc mask (the canonical 0…fraction trim, shared by P5 / P5b)
 
-/// **W-B186 — the SHARED filled-arc mask matching `HLScoreRing`'s fill arc EXACTLY.**
+/// **The SHARED filled-arc mask matching `HLScoreRing`'s fill arc EXACTLY.**
 ///
 /// `HLScoreRing` draws its fill as a Canvas arc from 12 o'clock, clockwise, over
 /// `0…fraction`, at the centreline radius `(side − stroke)/2`, stroke width
@@ -185,7 +185,7 @@ struct RingFilledArcMask: View {
 
 // MARK: - P5b · Prisma + Glanz — specular glow riding the filled arc
 
-/// **P5b (W-B186) — P5's chromatic prism PLUS a specular glow on the filled arc.**
+/// **P5's chromatic prism PLUS a specular glow on the filled arc.**
 ///
 /// The operator wanted a glow variant alongside P5: the genuine Metal chromatic
 /// rim (reserved for the hero ring) AND extra shine riding ALONG the progressed
@@ -194,7 +194,7 @@ struct RingFilledArcMask: View {
 /// masked to `0…fraction`) layered with a faint `HLBloomHalo` at the arc head — so
 /// it is the same light-language as P2/P3, confined to the filled arc only.
 ///
-/// **W-B187 — STEADY glow, strictly confined to the filled arc.** The operator
+/// **STEADY glow, strictly confined to the filled arc.** The operator
 /// liked the glow but it FLICKERED on the hero "Tagesform" ring (and only there):
 /// the hero ran the live Metal prism clock AND a SECOND, unsynchronised glow clock
 /// (this view's own `HLGlowDriver`), so the two redraw loops beat against each
@@ -228,7 +228,7 @@ struct PrismGlowArc: View {
     /// The bloom's fixed mean breath — the visual centre of the old oscillation, so
     /// the glow sits at a calm steady level instead of pulsing (the flicker source).
     ///
-    /// **W-B192 — lifted from 0.5 → 0.62.** The operator preferred the visibly
+    /// **Lifted from 0.5 → 0.62.** The operator preferred the visibly
     /// brighter "Glanz" of P5b. Nudging the steady breath up makes the arc-head
     /// bloom read with more presence (a stronger, edle shine) while staying STEADY
     /// — it is a fixed level, not an oscillation, so there is still no pulse / no
@@ -274,7 +274,7 @@ struct PrismGlowArc: View {
 
 // MARK: - P1 · Prism-Rand (Overlay) — the jank-free prism
 
-/// **P1 — `AngularGradient` spectrum stroked on the ring rim.**
+/// **`AngularGradient` spectrum stroked on the ring rim.**
 ///
 /// The shader-research "cheap approximation": a full-spectrum `AngularGradient`
 /// stroked as a thin rim, composited `.plusLighter` at ~0.35 so white-ish rim
@@ -286,6 +286,7 @@ struct PrismRimOverlay: View {
     let animated: Bool
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.insightsRingMotionOrigin) private var motionOrigin
 
     /// The spectrum, wrapping red→red so the angular sweep is seamless.
     private let spectrum: [Color] = [.red, .yellow, .green, .cyan, .blue, .purple, .red]
@@ -296,7 +297,7 @@ struct PrismRimOverlay: View {
             // Match the score ring's derived rim so the prism sits ON the stroke.
             let stroke = HLRing.derivedStroke(forSide: side)
             HLGlowDriver(active: animated) { t in
-                rim(side: side, stroke: stroke, hue: Self.hueDegrees(t))
+                rim(side: side, stroke: stroke, hue: Self.hueDegrees(t, origin: motionOrigin))
             }
         }
     }
@@ -304,6 +305,19 @@ struct PrismRimOverlay: View {
     /// Hue offset in degrees — a slow 12 s loop (ambient, not a transition).
     static func hueDegrees(_ t: Double) -> Double {
         (t / 12.0).truncatingRemainder(dividingBy: 1.0) * 360.0
+    }
+
+    /// The hue of the still frame: green at the top of the ring, blue on the
+    /// right, a warm rose at the bottom left. The overview was signed off
+    /// with these colours; the plain spectrum at zero put rose on top.
+    static let stillHueDegrees: Double = 240
+
+    /// The hue offset at clock time `t` for a motion that began at `origin`:
+    /// the still frame's hue when it begins and, one 12 s loop later, when it
+    /// comes to rest, so the rings open and rest on the same colours. A clock
+    /// before the origin (the still frame passes 0) counts as the still frame.
+    static func hueDegrees(_ t: Double, origin: TimeInterval) -> Double {
+        (stillHueDegrees + hueDegrees(max(0, t - origin))).truncatingRemainder(dividingBy: 360)
     }
 
     private func rim(side: CGFloat, stroke: CGFloat, hue: Double) -> some View {
@@ -328,7 +342,7 @@ struct PrismRimOverlay: View {
 
 // MARK: - P2 · Glanz-Schimmer (specular sweep) — reuse HLSpecularSweep language
 
-/// **P2 / P7 / P8 — a one-shot bright glint glides the fill arc when the value lands.**
+/// **A one-shot bright glint glides the fill arc when the value lands.**
 ///
 /// Reuses the cycle-ring `HLSpecularSweep` vocabulary (thin white `AngularGradient`
 /// band masked to an arc, additive blend) but as a SCORE-tile specular: it sweeps
@@ -348,7 +362,7 @@ struct RingSpecularGlint: View {
     let animated: Bool
     /// ~12 % tile-local brightness cut the operator asked for (P2/P7/P8).
     var dimmed: Bool = false
-    /// The metric's signal hue to bias the sheen toward (P8). `nil` → mono (P2/P7).
+    /// The metric's signal hue to bias the sheen toward. `nil` → mono (P2/P7).
     var tint: HLScoreRing.HLSignal?
 
     @Environment(\.colorScheme) private var scheme
@@ -372,7 +386,7 @@ struct RingSpecularGlint: View {
                     scheme: scheme
                 )
                 .frame(width: side, height: side)
-                // P8 — bias the white additive sheen toward the signal hue. A
+                // Bias the white additive sheen toward the signal hue. A
                 // mostly-white multiplier keeps the highlight bright while the hue
                 // rides in faintly, so it reads as "a green/amber/red sheen".
                 .colorMultiply(tintMultiplier)
@@ -383,7 +397,7 @@ struct RingSpecularGlint: View {
     }
 
     /// `.white` (a no-op multiplier → mono P2/P7) or white blended a low fraction
-    /// toward the signal hue (P8). Multiplying the additive white sweep by this
+    /// toward the signal hue. Multiplying the additive white sweep by this
     /// shifts the sheen toward the hue without darkening it into a band.
     private var tintMultiplier: Color {
         let base = Color(white: 1)
@@ -394,7 +408,7 @@ struct RingSpecularGlint: View {
 
 // MARK: - P3 · Score-Leuchten (bloom) — reuse HLBloomHalo, intensity ∝ score
 
-/// **P3 — a soft halo behind the arc head, intensity mapped to the score.**
+/// **A soft halo behind the arc head, intensity mapped to the score.**
 ///
 /// Reuses the cycle-ring `HLBloomHalo` verbatim, anchored at the fill-arc head
 /// (top-clockwise) and SCALED by the score so a 90 glows confidently and a 35
@@ -456,7 +470,7 @@ struct ScoreBloomHalo: View {
 
 // MARK: - P6 · Prisma (statisch) — STATIC native MeshGradient, no driver
 
-/// **P6 — a STATIC `MeshGradient` (iOS 18+) prism masked to the ring rim.**
+/// **A STATIC `MeshGradient` (iOS 18+) prism masked to the ring rim.**
 ///
 /// A clear (NOT milky/frosted) spectral layer: a `MeshGradient` of mostly clear
 /// stops with a restrained cyan / mint / pale-yellow / faint-violet wash biased
@@ -573,7 +587,7 @@ struct PrismStaticShadow: View {
 ///   trim `HLScoreRing` draws) → ZERO colour past the fill head. A slow hue-rotation
 ///   on the shared ≤20 fps clock keeps it alive; `t = 0` is the reduce-motion /
 ///   Low-Power still (the COLOUR is static, only the breath rests).
-/// - **Even white sheen + glide** (W-RINGGLOSS) — a soft, BRIGHT white sheen rides
+/// - **Even white sheen + glide** — a soft, BRIGHT white sheen rides
 ///   the whole filled arc (the operator's "noch weißer/heller") plus a gentle
 ///   ``HLSpecularSweep`` glint that sweeps the arc. The earlier point-anchored
 ///   arc-head bloom was dropped — on device it read as a bright "Ecke" at the fill
@@ -588,6 +602,7 @@ struct PrismUniformRim: View {
     let animated: Bool
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.insightsRingMotionOrigin) private var motionOrigin
 
     /// The full-spectrum prism, wrapping red→red so the angular sweep is seamless —
     /// the SAME saturated spectrum `PrismRimOverlay` (P5b's colour) uses.
@@ -634,7 +649,7 @@ struct PrismUniformRim: View {
                                     .strokeBorder(.white, lineWidth: stroke * 0.95)
                                     .frame(width: side, height: side)
                             }
-                            .hueRotation(.degrees(PrismRimOverlay.hueDegrees(t)))
+                            .hueRotation(.degrees(PrismRimOverlay.hueDegrees(t, origin: motionOrigin)))
                             // Diffuse the colour wide so it reads as a background glow,
                             // not a rim; no saturation boost — it stays a quiet tint.
                             .blur(radius: stroke * 0.45)
@@ -721,19 +736,18 @@ private struct RingEffectPreviewCase: Identifiable {
         .init(name: "P9 Prism uniform · 35", effect: .prismUniform, fraction: 0.35)
     ]
     return ScrollView {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: HLSpace.xl) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: HLLayout.cardGap) {
             ForEach(cases) { item in
                 VStack(spacing: HLSpace.sm) {
                     HLScoreRing(fraction: item.fraction, value: "\(HLNumberFormat.percentValue(ofFraction: item.fraction))", signal: .ok)
                         .frame(width: 120, height: 120)
                         .insightsRingEffect(item.effect, fraction: item.fraction, isHero: true)
                     Text(item.name)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                 }
             }
         }
-        .padding(HLSpace.xl)
+        .padding(HLLayout.cardInset)
     }
     .background(HLSurface.primary)
 }

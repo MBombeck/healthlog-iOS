@@ -13,29 +13,49 @@ import SwiftUI
 extension InsightsContainerScreen {
     /// The LIVE ordered tab list — the *source* the frozen `pager.pagerOrder` is
     /// reconciled from. It grows asynchronously as availability hydrates, which is
-    /// exactly why the pager must NOT read it directly (V0150).
+    /// exactly why the pager must NOT read it directly.
     var liveOrderedSelections: [InsightsTabSelection] {
         InsightsTabSelection.ordered(
             layout: layoutStore.layout,
             availableKinds: availableKinds,
-            availableSpecials: availableSpecials
+            availableSpecials: availableSpecials,
+            recoveryKinds: recoveryKinds
         )
     }
 
-    /// V0150 — the FROZEN ordered list the pager + strip render (anchor-stable).
+    /// The recovery family members with a current reading, as the server
+    /// summarised them (`RecoveryInsightsStore.layout`), joined with the ones
+    /// already seen this session so a refresh cannot pull a page from under
+    /// the pager. In the family's order; empty while the module is off.
+    var recoveryKinds: [MetricKind] {
+        if let gate = appContainer?.moduleGate {
+            _ = gate.modules // @Observable tracking
+            if !gate.isEnabled(.recovery) { return [] }
+        }
+        let live = Set(liveRecoveryKinds)
+        return RecoveryInsightsRepository.familyOrder.filter { live.contains($0) || pager.seenRecoveryKinds.contains($0) }
+    }
+
+    /// The recovery members the family reports right now.
+    var liveRecoveryKinds: [MetricKind] {
+        let layout = recoveryStore.layout
+        return (layout.trends + layout.rows).map(\.kind)
+    }
+
+    /// The FROZEN ordered list the pager + strip render (anchor-stable).
     /// Falls back to the live list before the first reconcile seeds `pager.pagerOrder`.
     var orderedSelections: [InsightsTabSelection] {
         pager.pagerOrder.isEmpty ? liveOrderedSelections : pager.pagerOrder
     }
 
-    /// V0151 — the FOLDED pager page list: one page per strip pill, each category
+    /// The FOLDED pager page list: one page per strip pill, each category
     /// collapsed to a single group page. Built from the same fold the strip uses
     /// (`InsightsStripEntry.strip(from:)`), so strip pill `i` ↔ pager page `i`.
     var pagerPages: [InsightsPagerPage] {
         InsightsPagerPage.pages(from: orderedSelections)
     }
 
-    /// V0151 — the pager page that hosts the current `selection`. `nil` when the
+    /// The pager page that hosts the current `selection`. `nil` when the
     /// selection's page isn't present (its metric left availability).
     var pageForSelection: InsightsPagerPage? {
         InsightsPagerPage.page(for: pager.selection, in: pagerPages)
@@ -44,14 +64,14 @@ extension InsightsContainerScreen {
     /// The LIVE (un-latched) availability snapshot — every kind the user has data
     /// for right now.
     ///
-    /// v0.13.1 IC — the UNION of two sources:
+    /// The UNION of two sources:
     /// 1. `measurementsStore.availableKinds` — the all-time per-kind has-data set
     ///    (web-parity); catches low-frequency kinds (BP / weight) outside the
     ///    last-400 `recent` window.
     /// 2. The kinds in the last-400 `recent` page — keeps a freshly captured kind
-    ///    lit INSTANTLY and keeps the standalone path correct.
+    ///    lit INSTANTLY.
     ///
-    /// 1.4 B4 — RMSSD has no page of its own; it is shown on the HRV page
+    /// RMSSD has no page of its own; it is shown on the HRV page
     /// (`RecoveryInsightsStore.displayKind(for:)`). An account whose wearable
     /// only reports RMSSD therefore lights the HRV page too, or it would reach
     /// its readings nowhere.
@@ -64,7 +84,7 @@ extension InsightsContainerScreen {
         kinds.contains(.hrvRMSSD) ? kinds.union([.hrv]) : kinds
     }
 
-    /// #34 — the latched availability set the strip gates metric pills on: the
+    /// The latched availability set the strip gates metric pills on: the
     /// union of every kind seen this session (monotonic). A kind enters the moment
     /// it first appears and never leaves during the session, so a single SWR
     /// revalidation cannot collapse `orderedSelections` and snap the operator's
@@ -73,13 +93,13 @@ extension InsightsContainerScreen {
         // Union with the live snapshot so the very first paint (before
         // `mergeSeenKinds` has run) is already correct — the latch only ever adds.
         let union = pager.seenKinds.union(liveAvailableKinds)
-        // #30 — drop metric kinds owned by a server-disabled module (sleep /
+        // Drop metric kinds owned by a server-disabled module (sleep /
         // glucose). Fail-open when the map is absent.
         let disabled = moduleDisabledMetricKinds
         return disabled.isEmpty ? union : union.subtracting(disabled)
     }
 
-    /// #30 — the union of `MetricKind`s owned by every server-disabled module that
+    /// The union of `MetricKind`s owned by every server-disabled module that
     /// has an Insights surface. Empty when no gate is wired / all on.
     var moduleDisabledMetricKinds: Set<MetricKind> {
         guard let gate = appContainer?.moduleGate else { return [] }
@@ -91,24 +111,16 @@ extension InsightsContainerScreen {
         return disabled
     }
 
-    /// W28c — the LIVE special-page availability: which of mood / medications /
-    /// workouts / recovery have ≥1 datum right now. Feeds the special latch.
+    /// The LIVE special-page availability: which of mood / medications /
+    /// workouts / ECG have ≥1 datum right now. Feeds the special latch.
     var liveAvailableSpecials: Set<InsightsSpecialPage> {
         var specials: Set<InsightsSpecialPage> = []
         if !moodStore.entries.isEmpty { specials.insert(.mood) }
         if !medicationsStore.medications.isEmpty { specials.insert(.medications) }
-        // W-B182 (AUDIT-WORKOUTS-RCA) — Workouts is ALWAYS visible, even when the
+        // Workouts is ALWAYS visible, even when the
         // list is empty (it ships its own calm empty-state + sync affordance).
         specials.insert(.workouts)
-        // Parity Build 4 / 4.4 — Recovery is UNGATED on data, like the web. The
-        // W-B189 `recoveryStore.hasContent` gate is dropped: the web pushes the
-        // Recovery pill unconditionally (only the `recovery` module toggle hides
-        // it) because the page has no single `summaries[METRIC].count` to gate on
-        // and data-gates every block internally, falling back to a calm empty
-        // note — the same shape as Workouts directly above. The module gate still
-        // applies downstream in `availableSpecials`.
-        specials.insert(.recovery)
-        // P8 (v0141 parity) — ECG is DATA-gated, deliberately unlike Recovery
+        // P8 (v0141 parity) — ECG is DATA-gated, deliberately unlike Workouts
         // directly above. The web gates its ECG pill on `hasEcgRecordings`
         // explicitly (`insights-tab-strip.tsx:588`) because ECG has no
         // `MeasurementType` to hang the availability model on, and an account
@@ -119,12 +131,12 @@ extension InsightsContainerScreen {
         return specials
     }
 
-    /// W28c — the latched special-page availability the strip + pager gate on. Same
+    /// The latched special-page availability the strip + pager gate on. Same
     /// monotonic-union latch as `availableKinds`.
     var availableSpecials: Set<InsightsSpecialPage> {
         let union = pager.seenSpecials.union(liveAvailableSpecials)
-        // #30 — drop special pages whose owning module is OFF (mood / workouts /
-        // recovery). Medications is core (`moduleKey == nil`) → never dropped.
+        // Drop special pages whose owning module is OFF (mood / workouts /
+        // medications).
         guard let gate = appContainer?.moduleGate else { return union }
         _ = gate.modules // @Observable tracking
         return union.filter { $0.isModuleEnabled(in: gate) }

@@ -1,24 +1,24 @@
 import SwiftUI
 
-/// **I-2 — the wellness-score tap-through detail**, a sheet from the overview's
-/// score rings and (1.4 B3) a pushed page from the recovery page's trend card.
+/// **The wellness-score tap-through detail**, a sheet from the overview's
+/// score rings and a pushed page from the recovery page's trend card.
 /// Top to bottom: the server's assessment, the ranked contributor rows (a tap
 /// deep-navigates to that contributor's metric page; STRAIN has no breakdown
 /// and shows provenance instead), then the "Was ist das?" explainer LAST, so
 /// the data comes first and the methodology second.
 ///
-/// HONEST-ONLY: every row is server-returned; the "insufficient" arm shows the
+/// Every row is server-returned; the "insufficient" arm shows the
 /// calm gate, not a fabricated score.
 struct WellnessScoreDetailSheet: View {
     let dto: DerivedMetricDTO
     /// Deep-nav into a contributor's metric page (overview push seam). The sheet
     /// dismisses first, then the parent pushes the metric screen.
     let onSelectMetric: ((MetricKind) -> Void)?
-    /// v0.14.3 F3 — deep-nav from the Stimmung contributor into the Mood special
+    /// Deep-nav from the Stimmung contributor into the Mood special
     /// Insights page (mood is not a chartable `MetricKind`, so it needs its own
     /// seam). The sheet dismisses first, then the parent routes to the Mood page.
     var onSelectMood: (() -> Void)?
-    /// 1.4 B3 — `false` when pushed onto a stack (the recovery page) instead of
+    /// `false` when pushed onto a stack (the recovery page) instead of
     /// presented as a sheet: the page then uses that stack's bar and back button.
     var embedsNavigationStack = true
 
@@ -49,10 +49,16 @@ struct WellnessScoreDetailSheet: View {
     }
 
     var body: some View {
-        // The sheet dismisses by drag (AP-007), the pushed page by its back button.
+        // The sheet dismisses by drag, the pushed page by its back button.
         Group {
             if embedsNavigationStack {
-                NavigationStack { page }
+                // A sheet that only shows something: the close button.
+                HLSheetScaffold(
+                    verbatim: InsightsDerivedCopy.title(for: dto.metric),
+                    size: .standard
+                ) {
+                    page
+                }
             } else {
                 page
             }
@@ -68,28 +74,22 @@ struct WellnessScoreDetailSheet: View {
     }
 
     private var page: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                assessmentSection
-                contributorsSection
-                provenanceSection
-                grundlageCard
-            }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.lg)
+        HLPage {
+            assessmentSection
+            contributorsSection
+            provenanceSection
+            grundlageCard
         }
-        .hlScreenBackground()
-        .hlScrollEdgeSoft()
         .navigationTitle(Text(InsightsDerivedCopy.title(for: dto.metric)))
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2: the score's citation pushes inside the surrounding stack,
+        // The score's citation pushes inside the surrounding stack,
         // whether that is the sheet's own or the page it was pushed onto.
         .hlSheetStack()
     }
 
     // MARK: - Assessment (D1 — the per-score "Einschätzung", FIRST)
 
-    /// D1 — the server's short "why is this score what it is" explanation, shown
+    /// The server's short "why is this score what it is" explanation, shown
     /// directly under the score heading and ABOVE "Was zählt rein". Rendered as
     /// grey flowing prose (the same `.hlBody` / `HLText.secondary` idiom as the
     /// per-metric Einschätzung in `AssessmentCard.AssessmentBody` and the general
@@ -123,13 +123,14 @@ struct WellnessScoreDetailSheet: View {
     private var contributorsSection: some View {
         let contributors = WellnessScorePresentation.rankedContributors(dto)
         if archetype == .scoreWithBreakdown, !contributors.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("What counts here")
-                VStack(spacing: HLSpace.sm) {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("What counts here", rank: .area)
+                // One card of rows, not a card per contributor.
+                HLCard(layout: .rows) {
                     // Cap the mounted rows (perf) — the breakdowns are ≤5 today.
                     ForEach(contributors.prefix(6)) { contributor in
                         ContributorRow(contributor: contributor, canNavigateMood: onSelectMood != nil) {
-                            // v0.14.3 F3 — mood is a SPECIAL page, not a chartable
+                            // Mood is a SPECIAL page, not a chartable
                             // `MetricKind`; route it via `onSelectMood`. All other
                             // contributors deep-nav into their metric chart page.
                             if contributor.key == "mood" {
@@ -145,6 +146,7 @@ struct WellnessScoreDetailSheet: View {
                     }
                 }
             }
+            .hlContainerGap(HLLayout.cardGap)
         }
     }
 
@@ -155,22 +157,19 @@ struct WellnessScoreDetailSheet: View {
         // STRAIN / RECOVERY / STRESS have no sub-decomposition → show the
         // provenance + reason instead of contributor rows.
         if archetype == .scoreProvenanceOnly {
-            HLCard {
+            HLCard("How this is measured") {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    InsightsSectionHeader("How this is measured", flush: true)
-                    // 1.4 B2 — one origin line: the window, and for recovery
+                    // One origin line: the window, and for recovery
                     // which source backs the number (W-B187 #29: the server
                     // resolves WHOOP-native vs the computed proxy, so the read
                     // is never misattributed).
                     Text(provenanceText)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("insights.scoreSheet.recoverySource")
                     if let reason = dto.reason, !reason.isEmpty {
                         Text(reason)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -193,27 +192,23 @@ struct WellnessScoreDetailSheet: View {
 
     // MARK: - "Was ist [Metrik]?" (explainer, LAST)
 
-    /// v0.14.1 §6 — replaces the boring "Server-computed from your own data …"
+    /// Replaces the boring "Server-computed from your own data …"
     /// provenance line with a plain-language "Was ist [Metrik]?" explainer of
     /// WHAT the metric IS. Falls back to the honesty caveat below. The heading
     /// names the metric ("Was ist Cardio-Fitness?").
     private var grundlageCard: some View {
-        HLCard(style: .ghost) {
+        // The title is already localized; as a key it finds no entry and
+        // stands as it is.
+        HLCard(LocalizedStringKey(InsightsDerivedCopy.whatIsTitle(for: dto.metric)), style: .outline) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(InsightsDerivedCopy.whatIsTitle(for: dto.metric))
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityAddTraits(.isHeader)
                 if let whatIs = InsightsDerivedCopy.whatIs(for: dto) {
                     Text(whatIs)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let caveat = InsightsDerivedCopy.caveat(for: dto) {
                     Text(caveat)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // 1.0.3 (App Review 1.4.1) — the guideline literature behind
@@ -228,7 +223,7 @@ struct WellnessScoreDetailSheet: View {
 
 private struct ContributorRow: View {
     let contributor: WellnessScorePresentation.Contributor
-    /// v0.14.3 F3 — true when the parent can route the Stimmung (mood) special
+    /// True when the parent can route the Stimmung (mood) special
     /// page, so the mood row reads tappable even though it has no `deepNavKind`.
     var canNavigateMood: Bool = false
     let onTap: () -> Void
@@ -238,70 +233,34 @@ private struct ContributorRow: View {
     }
 
     var body: some View {
-        let content = HLCard {
-            HStack(spacing: HLSpace.md) {
-                HLScoreRing(
-                    fraction: contributor.fraction ?? 0,
-                    signal: contributor.signal,
-                    compact: true
-                )
-                .frame(width: 26, height: 26)
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(contributor.label)
-                        .font(.hlSubhead.weight(.medium))
-                        .foregroundStyle(HLText.primary)
-                    Text(contributor.gapReason ?? weightCaption)
-                        .font(.hlCaption)
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.tertiary)
-                    if contributor.gapReason == nil { weightMicroBar }
-                }
-                Spacer(minLength: HLSpace.sm)
-                Text(contributor.valueText)
-                    .font(.hlMetric(.body))
-                    .monospacedDigit()
-                    .foregroundStyle(HLText.primary)
-                if isTappable {
-                    HLDisclosureChevron()
-                }
-            }
-            .contentShape(Rectangle())
+        // One data row: the ring in the symbol column, name and weight (or
+        // the reason a sub-score is withheld), the value on the right. A
+        // tappable row opens its page as a whole, without a chevron.
+        let row = HLRow(
+            title: Text(verbatim: contributor.label),
+            detail: Text(verbatim: contributor.gapReason ?? weightCaption),
+            value: Text(verbatim: contributor.valueText)
+        ) {
+            HLScoreRing(
+                fraction: contributor.fraction ?? 0,
+                signal: contributor.signal,
+                compact: true
+            )
+            .frame(width: 26, height: 26)
+            .accessibilityHidden(true)
         }
         if isTappable {
-            Button(action: onTap) { content }
-                .hlPressable() // QOL-AUDIT H1: press feedback
+            HLRowButton(action: onTap) { row }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(Text(accessibilityLabel))
                 .accessibilityHint(Text(String(localized: "Double-tap to open detail view")))
                 .accessibilityIdentifier("insights.scoreSheet.contributor.\(contributor.key)")
         } else {
-            content
+            row
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(Text(accessibilityLabel))
                 .accessibilityIdentifier("insights.scoreSheet.contributor.\(contributor.key)")
         }
-    }
-
-    /// M5 (delight) — a calm, OPACITY-ONLY weight micro-bar under the caption:
-    /// a hairline graphite track with a graphite fill scaled to the
-    /// contributor's effective weight. Monochrome (no colour, no tint — the bar
-    /// differentiates by `inkGraphite` opacity only, per the HLScoreRing
-    /// doctrine), Whoop-tier-but-restrained. Decorative: the weight is already
-    /// in the caption + a11y label, so the bar is `accessibilityHidden`.
-    private var weightMicroBar: some View {
-        Capsule(style: .continuous)
-            .fill(HLText.primary.opacity(0.10))
-            .frame(height: 3)
-            .overlay(alignment: .leading) {
-                GeometryReader { geo in
-                    Capsule(style: .continuous)
-                        .fill(HLText.primary.opacity(0.45))
-                        .frame(width: geo.size.width * max(0, min(1, contributor.weight)))
-                }
-            }
-            .frame(maxWidth: 96)
-            .accessibilityHidden(true)
     }
 
     /// "Weight · 25 %" — the effective share after null-redistribution.
@@ -311,7 +270,7 @@ private struct ContributorRow: View {
     }
 
     private var accessibilityLabel: String {
-        // #145 — a withheld sub-score reads its reason, not an empty value.
+        // A withheld sub-score reads its reason, not an empty value.
         if let reason = contributor.gapReason { return "\(contributor.label), \(reason)" }
         return "\(contributor.label), \(contributor.valueText), \(weightCaption)"
     }

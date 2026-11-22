@@ -1,11 +1,11 @@
 import Foundation
 
-/// **v0.7.1 W-COACH-FALLBACK** — server-backed Coach path for iPhones
+/// Server-backed Coach path for iPhones
 /// without Apple Intelligence / an on-device Foundation Model.
 ///
 /// The on-device `LocalLLMService` only serves iOS-26 + Apple-Intelligence
 /// eligible hardware. On every other device the AskCoach sheet used to
-/// show a kill-card (A-FEATURE-3). This service replaces that dead-end
+/// show a kill-card. This service replaces that dead-end
 /// with the same server Coach the web client already uses: the
 /// `POST /api/insights/chat` SSE endpoint that walks the user's
 /// server-configured AI provider chain.
@@ -73,7 +73,7 @@ public actor CoachServerService {
             body: body,
             encoder: encoder
         )
-        // **A360 H3 (v0156)** — progressive streaming. Consume the SSE body
+        // Progressive streaming. Consume the SSE body
         // line-by-line as bytes arrive (instead of buffering the whole body),
         // parsing each `token` frame the instant it lands and surfacing it through
         // `onToken` so the visible reply grows token-by-token like the on-device
@@ -105,24 +105,24 @@ public actor CoachServerService {
         public let text: String
         public let conversationId: String?
         /// Server id of the persisted assistant message (the `done` frame's
-        /// `messageId`). Carried so the feedback route
-        /// (`POST /api/insights/chat/messages/{id}/feedback`) can reference
-        /// the reply. `nil` on refusal turns (the server persists no
+        /// `messageId`). Carried so the trail route
+        /// (`GET /api/insights/chat/{conversation}/messages/{id}/trail`) can
+        /// reference the reply. `nil` on refusal turns (the server persists no
         /// assistant message there) and on older server builds.
         public let messageId: String?
-        /// v1.18.1 (§3) — the optional cadence suggestion the coach SSE stream
+        /// v1.18.1 — the optional cadence suggestion the coach SSE stream
         /// may emit (one `suggestion` frame before `done`). `nil` when the turn
         /// carried no suggestion or on older server builds. Render-only — the
         /// closed cadence catalog + module-gating live server-side.
         public let suggestion: CoachReminderSuggestion?
-        /// CO4 (v0154) — the provenance envelope the server emits as a dedicated
+        /// The provenance envelope the server emits as a dedicated
         /// `provenance` SSE frame (`metricSource`). Labels + windows + counts +
         /// load-bearing keyValues the coach drew on for this turn; render-only,
         /// surfaced as a collapsed "what I'm looking at" disclosure under the
         /// assistant bubble. `nil` when the turn emitted no provenance frame
         /// (older servers, refusal turns).
         public let provenance: CoachProvenance?
-        /// CO5 (v0154) — per-turn token usage carried on the `done` frame
+        /// Per-turn token usage carried on the `done` frame
         /// (`done.usage`, server v1.18.9+). `nil` on older servers / refusal
         /// turns. Render-only — the quiet token footer paints `totalTokens` +
         /// `model`, never a client recompute.
@@ -149,7 +149,7 @@ public actor CoachServerService {
         }
     }
 
-    /// CO4 (v0154) — the provenance envelope the server attaches to an assistant
+    /// The provenance envelope the server attaches to an assistant
     /// turn (web `CoachProvenance`, `src/lib/ai/coach/types.ts`). Labels only —
     /// metric topics + time windows + per-metric sample counts. The optional
     /// `keyValues` carry the load-bearing numbers the coach surfaced (already
@@ -212,7 +212,7 @@ public actor CoachServerService {
         }
     }
 
-    /// CO4 (v0154) — one entry inside the provenance evidence block (web
+    /// One entry inside the provenance evidence block (web
     /// `CoachKeyValue`). `label` + `value` are required; `unit` / `window` are
     /// optional tails. Render-only; never logged.
     public struct CoachKeyValue: Sendable, Equatable, Decodable, Identifiable {
@@ -235,7 +235,7 @@ public actor CoachServerService {
         }
     }
 
-    /// CO5 (v0154) — per-turn token usage (web `CoachUsage`, server v1.18.9+).
+    /// Per-turn token usage (web `CoachUsage`, server v1.18.9+).
     /// `totalTokens` is the headline count the quiet footer paints; `model` names
     /// the provider model. The prompt/completion split the server may also send
     /// is intentionally not decoded — the footer only shows the total.
@@ -254,7 +254,7 @@ public actor CoachServerService {
         }
     }
 
-    /// v1.18.1 (§3) — a coach-proposed measurement cadence (e.g. the ESH/AHA
+    /// v1.18.1 — a coach-proposed measurement cadence (e.g. the ESH/AHA
     /// 7-2-2 home-BP protocol). The client renders an actionable card and sends
     /// back ONLY the `cadenceId` + an action — it cannot widen a cadence.
     /// `label` is an i18n key the client resolves (with a generic fallback for an
@@ -284,7 +284,7 @@ public actor CoachServerService {
         case stop
     }
 
-    /// v1.18.1 (§3) — act on a coach cadence suggestion.
+    /// v1.18.1 — act on a coach cadence suggestion.
     /// `POST /api/coach/reminder-suggestions { cadenceId, action }`. The client
     /// sends only the id + action (never cadence parameters). On `accept` the
     /// server creates the reminder; it then surfaces in the native reminders list
@@ -328,25 +328,6 @@ public actor CoachServerService {
             // the POST body well-formed for the envelope decode path.
             body: CoachSeenBody(),
             maxRetries: 0
-        )
-        _ = try await api.send(request)
-    }
-
-    // MARK: - Message feedback (server v1.4.23 H7)
-
-    /// One-shot helpful/unhelpful rating for a server-persisted assistant
-    /// message. `POST /api/insights/chat/messages/{id}/feedback`, body
-    /// `{ rating: "helpful" | "unhelpful" }`. The server dedupes per
-    /// `(user, message)` — a second submission returns **409**
-    /// (`already_rated`); there is no un-rate, so the UI locks the row
-    /// after a successful submit. Coach-gated like the chat route
-    /// (`requireAssistantSurface("coach")` → 403 maps to
-    /// ``HLError/aiUnavailable(_:)`` in `APIClient`).
-    public func submitFeedback(messageID: String, rating: CoachFeedbackRating) async throws {
-        let request: APIRequest<CoachFeedbackAck> = try .post(
-            "/api/insights/chat/messages/\(messageID)/feedback",
-            body: CoachFeedbackBody(rating: rating.rawValue),
-            encoder: encoder
         )
         _ = try await api.send(request)
     }
@@ -409,18 +390,18 @@ public actor CoachServerService {
             case "done":
                 conversationId = frame.conversationId
                 messageId = frame.messageId
-                // CO5 (v0154) — the `done` frame carries the per-turn token usage
+                // The `done` frame carries the per-turn token usage
                 // (server v1.18.9+). Keep any decoded value; older servers omit it.
                 usage = frame.usage ?? usage
             case "error":
                 providerErrorCode = frame.code ?? frame.message ?? "coach.provider.unavailable"
             case "suggestion":
-                // v1.18.1 (§3) — additive cadence suggestion frame. Keep the last
+                // v1.18.1 — additive cadence suggestion frame. Keep the last
                 // valid one; a malformed payload decodes to nil and is ignored
                 // (the `?? suggestion` keeps any earlier valid value).
                 suggestion = frame.suggestion ?? suggestion
             case "provenance":
-                // CO4 (v0154) — the dedicated provenance frame (`metricSource`).
+                // The dedicated provenance frame (`metricSource`).
                 // Keep the last valid one; a malformed payload decodes to nil and
                 // is ignored (the `?? provenance` keeps any earlier valid value).
                 provenance = frame.metricSource ?? provenance
@@ -494,12 +475,12 @@ public actor CoachServerService {
         let messageId: String?
         let code: String?
         let message: String?
-        /// v1.18.1 (§3) — present only on a `suggestion` frame.
+        /// v1.18.1 — present only on a `suggestion` frame.
         let suggestion: CoachReminderSuggestion?
-        /// CO4 (v0154) — present only on a `provenance` frame (the server's
+        /// Present only on a `provenance` frame (the server's
         /// `metricSource` key).
         let metricSource: CoachProvenance?
-        /// CO5 (v0154) — present only on the `done` frame (server v1.18.9+).
+        /// Present only on the `done` frame (server v1.18.9+).
         let usage: CoachUsage?
         /// 1.5 COACH-R (v1.41) — `activity`, `memoryNote`, `planProposal`.
         /// A malformed payload reads as `nil` and never costs the frame.
@@ -523,7 +504,7 @@ struct CoachSuggestionActionAck: Decodable {
     init(from _: Decoder) throws {}
 }
 
-/// **v1.18.6 (CCH-03)** — server-authoritative unread signal for the Coach
+/// **v1.18.6** — server-authoritative unread signal for the Coach
 /// surfaces. Decoded from the unwrapped `data` of
 /// `GET /api/insights/coach/nudge-status` (the `APIClient` strips the
 /// `{ data, error }` envelope). `unread` drives the discreet dot on the Coach
@@ -569,26 +550,6 @@ struct CoachSeenAck: Decodable {
     init(from _: Decoder) throws {}
 }
 
-/// User rating for one assistant reply. Raw values are the server's
-/// `coachMessageFeedbackSchema` enum (`"helpful" | "unhelpful"`).
-public enum CoachFeedbackRating: String, Sendable, Equatable {
-    case helpful
-    case unhelpful
-}
-
-/// Request body for the feedback route. The optional `reason` field the
-/// server accepts is deliberately not surfaced — the iOS affordance is a
-/// one-tap thumb, not a form.
-struct CoachFeedbackBody: Encodable {
-    let rating: String
-}
-
-/// `201 { data: { id, createdAt } }` acknowledgement. Only `id` is read;
-/// `createdAt` is ignored (tolerant decode).
-struct CoachFeedbackAck: Decodable {
-    let id: String
-}
-
 /// Error surface for ``CoachServerService``.
 public enum CoachServerError: Error, Sendable, Equatable {
     /// SSE body could not be parsed (non-UTF8, no frames, malformed).
@@ -626,7 +587,7 @@ extension APIRequest where Response == Data {
             // hiccup; one shot, surface the error to the UI for an
             // explicit retry.
             maxRetries: 0,
-            // W-COACH-SSE — ride `APIClient`'s dedicated streaming session
+            // Ride `APIClient`'s dedicated streaming session
             // (idle-reset request timeout that resets on every received SSE
             // token + generous overall ceiling) instead of the patient
             // session's 20 s/60 s wall, which prematurely cut off a slow LLM

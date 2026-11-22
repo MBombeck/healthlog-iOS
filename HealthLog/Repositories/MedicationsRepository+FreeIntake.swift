@@ -13,13 +13,13 @@ import Foundation
 /// request header so the server's `withIdempotency` + the `intake_events`
 /// UNIQUE-key both dedup a retry / replay).
 ///
-/// **Issue #64 — NO `source` field.** The intake schema does not accept a
+/// **NO `source` field.** The intake schema does not accept a
 /// `source`; the server derives provenance from the request context. Sending one
 /// would 422 (unknown key stripped) at best and mis-signal intent at worst — the
 /// wire body (`MedicationIdIntakeBody`) deliberately carries no such field.
 ///
 /// Lives in its own extension so the actor body stays under the
-/// `type_body_length` budget (mirrors `+ReminderIntake` / `+Standalone`).
+/// `type_body_length` budget (mirrors `+ReminderIntake`).
 public extension MedicationsRepository {
     /// Log a free / back-dated intake against `POST /api/medications/{id}/intake`.
     ///
@@ -65,27 +65,17 @@ public extension MedicationsRepository {
             doseTaken: resolvedDose,
             forceSlotInstant: forceSlotInstant
         )
-        do {
-            return try await postIdIntake(
+        let payload = try encoder.encode(OutboxQueue.Payloads.LogMedicationIntake(
+            medicationId: medicationId,
+            body: body
+        ))
+        let op = OutboxQueue.Operation(kind: .logMedicationIntake, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
+            try await postIdIntake(
                 medicationId: medicationId,
                 body: body,
                 idempotencyKey: idempotencyKey
             )
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(OutboxQueue.Payloads.LogMedicationIntake(
-                medicationId: medicationId,
-                body: body
-            ))
-            do {
-                try await outbox.enqueue(.init(
-                    kind: .logMedicationIntake,
-                    payload: payload,
-                    idempotencyKey: idempotencyKey.raw
-                ))
-            } catch {
-                HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-            }
-            throw err
         }
     }
 
@@ -123,6 +113,9 @@ public extension MedicationsRepository {
             idempotencyKey: idempotencyKey
         )
         let wire = try await api.send(req)
+        // #191: a slot that already held a take answers 200 with the first
+        // take and `alreadyTaken: true`. Nothing was written; say so.
+        if let already = wire.alreadyTakenError { throw already }
         return wire.toDomain()
     }
 }

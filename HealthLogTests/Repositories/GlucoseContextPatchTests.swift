@@ -10,15 +10,17 @@ import Testing
 
 /// T-2 Glucose-context picker — Patch + Outbox-Payload-Schicht.
 ///
-/// Bis Server-SB-25 landet, ist `MeasurementPatch.glucoseContext` ein
-/// client-side Intent-Feld (analog T-1 `diastolic`): die Wire-JSON enthält
-/// es NICHT, das Outbox-Payload trägt es als first-class-Feld damit Replay
-/// nach App-Restart die Intent rekonstruieren kann.
+/// Ohne `sendsGlucoseContext` (ein Server vor 1.48.0 oder ein unveränderter
+/// Kontext) ist `MeasurementPatch.glucoseContext` ein client-side
+/// Intent-Feld (analog T-1 `diastolic`): die Wire-JSON enthält es NICHT, das
+/// Outbox-Payload trägt es als first-class-Feld damit Replay nach
+/// App-Restart die Intent rekonstruieren kann. Den gesendeten Fall deckt
+/// `GlucoseContextEditTests` ab.
 @Suite("Glucose-context patch + outbox payload (T-2)", .serialized)
 struct GlucoseContextPatchTests {
     // MARK: - 1. MeasurementPatch wire shape
 
-    @Test("MeasurementPatch with glucoseContext suppresses it from the wire JSON")
+    @Test("MeasurementPatch with glucoseContext but without sendsGlucoseContext keeps it off the wire")
     func patchSuppressesGlucoseContextFromWire() throws {
         let patch = MeasurementPatch(
             value: 110,
@@ -35,16 +37,14 @@ struct GlucoseContextPatchTests {
         )
     }
 
-    @Test("MeasurementPatch wire-decode leaves glucoseContext nil even if server sent it back")
-    func patchDecodeDropsGlucoseContext() throws {
-        // Imagine a future server returning glucoseContext on the PATCH
-        // response — our wire-shape decoder still ignores it because the
-        // field is client-only by contract.
-        let json = #"{"value":99,"glucoseContext":"FASTING"}"#
+    @Test("MeasurementPatch wire-decode without the key leaves glucoseContext nil and unsent")
+    func patchDecodeWithoutKey() throws {
+        let json = #"{"value":99}"#
         let data = Data(json.utf8)
         let decoded = try JSONDecoder.hlDefault.decode(MeasurementPatch.self, from: data)
         #expect(decoded.value == 99)
-        #expect(decoded.glucoseContext == nil, "Wire-decoder is intentionally lossy for client-only fields")
+        #expect(decoded.glucoseContext == nil)
+        #expect(!decoded.sendsGlucoseContext, "an absent key keeps the server's context")
     }
 
     @Test("MeasurementPatch retains glucoseContext client-side after init")

@@ -115,7 +115,7 @@ public final class MentalHealthStore {
     private var isReloading = false
     private var detailLoadID: UUID?
 
-    /// #39 — client-provenance value sent on every submit (`assessmentSourceEnum`
+    /// Client-provenance value sent on every submit (`assessmentSourceEnum`
     /// on the server; `"IOS"`, not `"iOS"`).
     static let clientSource = "IOS"
 
@@ -271,7 +271,7 @@ public final class MentalHealthStore {
         let shownWording = presentedWording
         MentalHealthSignpost.submitStarted()
 
-        // #39 — a STABLE per-administration id, minted once here. It is both the
+        // A STABLE per-administration id, minted once here. It is both the
         // body `externalId` (durable >24h server dedup) and, downstream, the
         // idempotency-key header — so an outbox replay after the 24h header window
         // still collapses to the same administration instead of double-submitting.
@@ -304,7 +304,7 @@ public final class MentalHealthStore {
             phase = .result
             lastError = nil
         } catch {
-            // SAFETY (C1): a positive item-9 MUST surface the crisis card on EVERY
+            // SAFETY: a positive item-9 MUST surface the crisis card on EVERY
             // terminal outcome — including a NON-retriable failure that bypasses the
             // outbox branch above: `.decoding` (a 201 the server persisted but whose
             // envelope shape drifted — the exact deploy-skew the fallback exists

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Local doctor-report builder
 
 public extension AppContainer {
-    /// T-7 — Lifted out of `init` to keep `AppContainer` under
+    /// Lifted out of `init` to keep `AppContainer` under
     /// `type_body_length` / `file_length` swiftlint ceilings. Builds the
     /// on-device, server-bypassing PDF report store from the four store
     /// dependencies it needs: measurements (vitals / charts), medications

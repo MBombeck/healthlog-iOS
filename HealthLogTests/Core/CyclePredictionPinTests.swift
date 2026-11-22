@@ -12,7 +12,7 @@ import Testing
 /// (``CyclePredictionProvenance``), and it **cannot silently drift** from the
 /// server's answer.
 ///
-/// **Z1 (#72) — what this suite still guards, and what it no longer does.** The
+/// **What this suite still guards, and what it no longer does.** The
 /// on-device engine now covers only the FORECAST half: `nextPeriodStart`, the
 /// band, the estimated length and SD, the confidence. The JUDGEMENT half —
 /// `state`, `phase`, `overdueDays` — moved to the server's `resolveCycleVerdict`

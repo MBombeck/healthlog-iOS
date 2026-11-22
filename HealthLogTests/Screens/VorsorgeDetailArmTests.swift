@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-VORSORGE-DETAIL (b244) — pure detail-arm routing + chart-point derivation.**
+/// **Pure detail-arm routing + chart-point derivation.**
 ///
 /// The detail sheet rests on these two decisions the way the card rests on
 /// `VorsorgeCard.primaryAction` / `.dueBucket`: which arm a reminder opens

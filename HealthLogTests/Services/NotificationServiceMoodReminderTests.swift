@@ -5,7 +5,7 @@ import Testing
     import UserNotifications
 #endif
 
-/// **v0.10.0 W-Mood-B** — pins the iOS-local evening mood reminder.
+/// Pins the iOS-local evening mood reminder.
 ///
 /// The reconcile orchestration (`reconcileMoodReminder`) talks to
 /// `UNUserNotificationCenter` (auth-gated, flaky in the host-app-less runner),
@@ -39,7 +39,7 @@ struct NotificationServiceMoodReminderTests {
 
         @Test("The reminder uses the .active interruption level (NOT time-sensitive)")
         func requestInterruptionLevelActive() {
-            // M-3 — a wellness nudge must not borrow the meds-only
+            // A wellness nudge must not borrow the meds-only
             // time-sensitive entitlement; it stays at the default `.active`.
             let req = NotificationService.buildMoodReminderRequest(hour: 22, now: morning)
             #expect(req.content.interruptionLevel == .active)
@@ -49,7 +49,7 @@ struct NotificationServiceMoodReminderTests {
         func requestIsRepeatingAtHour() throws {
             let req = NotificationService.buildMoodReminderRequest(hour: 20, now: morning)
             let trigger = try #require(req.trigger as? UNCalendarNotificationTrigger)
-            // H2: repeats indefinitely so a backgrounded / force-quit app never
+            // Repeats indefinitely so a backgrounded / force-quit app never
             // has to re-arm it — iOS re-fires it daily.
             #expect(trigger.repeats == true)
             #expect(trigger.dateComponents.hour == 20)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.13 W4 — informed-consent sheet for the **client-side BYO-key** AI path
+/// Informed-consent sheet for the **client-side BYO-key** AI path
 /// (Apple Guideline 5.1.2(i)). Mirrors ``AIConsentSheet`` but the data-flow copy
 /// is adapted for the device→provider-direct egress: the user's values go
 /// straight from this iPhone to *their own* provider, NOT through HealthLog's
@@ -11,24 +11,17 @@ struct BYOConsentSheet: View {
     let onAccept: () -> Void
     let onDecline: () -> Void
 
+    /// The same frame as ``AIConsentSheet``: the decision is the title, the X
+    /// declines like "Decline", and swiping down is locked.
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    Image(systemName: "key")
-                        .font(.hlLargeTitle.weight(.light))
-                        .foregroundStyle(HLText.primary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    Text(String(localized: "Use your own AI key"))
-                        .font(.hlLargeTitle)
-                        .foregroundStyle(HLText.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        HLSheetScaffold("Use your own AI key", onClose: onDecline) {
+            HLPage {
+                Text(consentCopy)
+                    .font(.hlBody)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    Text(consentCopy)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
+                HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         HLIconTextRow(
                             icon: "iphone.gen3",
@@ -53,40 +46,17 @@ struct BYOConsentSheet: View {
                             verbatim: String(localized: "You can remove your key at any time in Settings → Assistant.")
                         )
                     }
-                    .padding(HLSpace.md)
-                    .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md))
-
-                    Spacer(minLength: HLSpace.xl)
-                }
-                .padding(HLSpace.lg)
-            }
-            .hlScrollEdgeSoft()
-            .navigationTitle(String(localized: "Data flow"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Decline"), action: onDecline)
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: HLSpace.sm) {
-                    // v0.14.4 FW-COACH — see AIConsentSheet: pin the fill to the
-                    // monochrome `HLAccent.primary` token so it matches the
-                    // tint the button's WCAG label-clamp samples, preventing a
-                    // white-on-white CTA when the sheet's ambient `.tint`
-                    // resolves near-white in light mode.
-                    HLButton(
-                        String(localized: "Accept"),
-                        variant: .primary,
-                        size: .large,
-                        action: onAccept
-                    )
-                    .tint(HLAccent.primary)
-                    // 1.4 B2-c — no third "change it anytime" line: the
-                    // last bullet above already says how to take it back.
+            // Locked at both ends of the sheet's own discard guard (which
+            // unlocks while nothing is typed), so no swipe skips the answer.
+            .interactiveDismissDisabled(true)
+            .hlBottomBar {
+                HLButtonPair {
+                    HLButton("Accept", variant: .primary, action: onAccept)
+                } secondary: {
+                    HLButton("Decline", variant: .secondary, action: onDecline)
                 }
-                .padding(HLSpace.lg)
-                .background(HLMaterialBackground(.regularMaterial))
             }
         }
         .interactiveDismissDisabled(true)

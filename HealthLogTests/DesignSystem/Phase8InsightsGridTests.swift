@@ -8,7 +8,7 @@
     import SwiftUI
     import Testing
 
-    /// **08-11 — what the Insights tile grid claims at an accessibility size.**
+    /// **What the Insights tile grid claims at an accessibility size.**
     ///
     /// `Phase8AccessibilityPolicyTests.insightsUseOneColumnAtAccessibilitySizes`
     /// states the contract as source policy: a grid pinned to two columns must

@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// v0154 LR-REDO — the Insights-class biomarker detail page.
+/// The Insights-class biomarker detail page.
 ///
 /// Reached from the ``LabsScreen`` "by type" index (one row per analyte /
-/// biomarker). Modeled top-to-bottom on the Insights metric page
-/// (`InsightsMetricScreen`): a `InsightsPageHeader` with a gear that opens the
-/// `BiomarkerEditorSheet` (to edit the reference range + context), an explainer
-/// paragraph, a "Letzte Messung" card, on-device Durchschnitt / Max / Median
-/// stats, a value-over-time chart with a neutral reference band, and the full
-/// "Alle Messungen" list. A bottom-floating `HLFloatingPeriodControl`
-/// (Tag / Woche / Monat / Jahr / Alle) filters the series client-side from the
-/// already-loaded `LabsStore.labs` — no new server endpoint.
+/// biomarker). It keeps the section order of the reference metric pages
+/// (Ruhepuls, Blutdruck): last measurement on its reference range,
+/// assessment, statistics, chart, then the row to all readings. Pushed, the
+/// title is the system's, large at the top and moving into the bar on
+/// scroll; beside the labs table the page is a column of that screen, headed
+/// by ``HLColumnHeader``, its section headers one rank down. The (i) and the
+/// gear stand in the bar in both forms. The period bar at the bottom (the app's
+/// one period set) filters the series client-side from `LabsStore.labs`.
 ///
 /// **PHI / data.** Every reading is a pure filter of `store.labs`; the page never
 /// recomputes a range verdict. The page lives inside the same AccessGuard-gated
@@ -23,28 +23,42 @@ struct BiomarkerDetailScreen: View {
     /// The linked catalog biomarker, when this analyte resolves to one. Drives
     /// the editor gear (reference range + context) and the explainer fallback.
     let biomarker: BiomarkerDTO?
-    /// #130 — the marker's newest reading as the overview delivered it. The
+    /// The marker's newest reading as the overview delivered it. The
     /// readings below are filtered from the loaded `labs` page, which can end
     /// before a marker measured only long ago; then this one reading stands in
     /// so the page is never blank for a marker the list shows.
     var overviewLatest: LabResultDTO?
+    /// Every reading of the marker as the overview counts them, so the
+    /// column's head says what the table row says before the history loads.
+    var overviewCount: Int?
+    /// The page stands as the detail beside the labs table instead of being
+    /// pushed: it heads itself with the column header, and its actions stand
+    /// in the labs screen's bar. Everything below the head is the pushed page.
+    var isEmbedded = false
+    /// Where the editor, the spellings and the merge are presented. Beside the
+    /// table the screen owns them (a sheet on the pane would close with the
+    /// pane when the window narrows); pushed, the page keeps its own.
+    var externalSheet: Binding<BiomarkerSheet?>?
 
-    @State private var range: BiomarkerSeries.LabsRange = .month
+    @Environment(\.dismiss) private var dismiss
+
+    /// The period the reader chose; `nil` until then, so the page opens on
+    /// a period that holds the marker's values (`openingRange`).
+    @State private var chosenRange: BiomarkerSeries.LabsRange?
     /// One sheet slot for the marker's editor, its spellings and the merge
     /// (#130), so the page keeps a single presentation for all three.
-    @State private var markerSheet: MarkerSheet?
-    /// #130 — the marker's whole history when the page may end before it.
+    @State private var markerSheet: BiomarkerSheet?
+    /// The marker's whole history when the page may end before it.
     @State private var history: [LabResultDTO]?
-    @State private var editingResult: LabResultDTO?
 
-    /// #130 — the marker as it is now: the one it was merged into, else the
+    /// The marker as it is now: the one it was merged into, else the
     /// live catalog entry (an alias edit shows at once).
     private var marker: BiomarkerDTO? {
         biomarker.map(store.resolvedBiomarker)
     }
 
     /// All readings for this analyte (live re-derived so an edit / delete / undo
-    /// in the store repaints the page). Newest-first. #130: the marker's whole
+    /// in the store repaints the page). Newest-first. The marker's whole
     /// history wins when it holds more than the loaded page.
     private var allRows: [LabResultDTO] {
         let page = pageRows
@@ -63,9 +77,17 @@ struct BiomarkerDetailScreen: View {
         return BiomarkerSeries.rows(forAnalyte: analyte, in: store.labs)
     }
 
-    /// #130 — the page of rows can end before this marker's readings do.
+    /// The page of rows can end before this marker's readings do.
     private var pageMayBeTruncated: Bool {
         pageRows.isEmpty || store.labs.count >= LabsStore.historyLimit
+    }
+
+    private var range: BiomarkerSeries.LabsRange {
+        chosenRange ?? BiomarkerSeries.openingRange(for: allRows)
+    }
+
+    private var rangeSelection: Binding<BiomarkerSeries.LabsRange> {
+        Binding(get: { range }, set: { chosenRange = $0 })
     }
 
     /// Readings inside the selected range window — drives stats, chart, and list.
@@ -87,115 +109,106 @@ struct BiomarkerDetailScreen: View {
     /// Reference bounds — the linked biomarker's bounds win (the canonical,
     /// user-editable range); else the latest reading's server-resolved bounds.
     private var referenceLow: Double? {
-        marker?.lowerBound ?? latest?.referenceLow
+        LabRangeScale.bounds(marker: marker, latest: latest).low
     }
 
     private var referenceHigh: Double? {
-        marker?.upperBound ?? latest?.referenceHigh
-    }
-
-    private var explainer: String? {
-        BiomarkerExplainer.text(context: marker?.context, name: marker?.name ?? analyte)
+        LabRangeScale.bounds(marker: marker, latest: latest).high
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                header
-                lastMeasurementSection
-                statsSection
-                chartSection
-                allMeasurementsSection
-                HLSyncStatusFooter(screenLoading: store.isLoading)
-            }
-            .padding(HLSpace.lg)
-        }
-        .hlScreenBackground()
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            HLFloatingPeriodControl(selection: $range, accessibilityLabelText: "Time range")
-        }
-        .sheet(item: $markerSheet) { sheet in
-            if let marker {
-                switch sheet {
-                case .editor: BiomarkerEditorSheet(store: store, existing: marker)
-                case .aliases: BiomarkerAliasesSheet(store: store, marker: marker)
-                case .merge: BiomarkerMergeSheet(store: store, target: marker)
+        page
+            .modifier(BiomarkerPageChrome(isEmbedded: isEmbedded, title: displayName, actions: pageActions))
+            // Asks before the marker's delete in the more menu.
+            .hlDeleteConfirmation()
+            // The period bar of every chart page, floating at the bottom
+            // edge, only for a marker with a course: one value has no period
+            // to choose, it stands on its range in the card above.
+            .hlPeriodBar(selection: rangeSelection, label: "Time range", isShown: showsPeriodBar)
+            .sheet(item: ownSheet) { sheet in
+                if let marker {
+                    switch sheet {
+                    case .editor: BiomarkerEditorSheet(store: store, existing: marker)
+                    case .aliases: BiomarkerAliasesSheet(store: store, marker: marker)
+                    case .merge: BiomarkerMergeSheet(store: store, target: marker)
+                    }
                 }
             }
-        }
-        .sheet(item: $editingResult) { result in
-            EditLabResultSheet(store: store, result: result)
-        }
-        // #130 — a marker measured only long ago can lie beyond the page.
-        .task(id: marker?.id ?? analyte) {
-            if pageMayBeTruncated { history = await store.fetchHistory(biomarkerId: marker?.id, analyte: analyte) }
+            // A marker measured only long ago can lie beyond the page.
+            .task(id: marker?.id ?? analyte) {
+                if pageMayBeTruncated { history = await store.fetchHistory(biomarkerId: marker?.id, analyte: analyte) }
+            }
+    }
+
+    /// The marker page: the same blocks pushed and beside the table.
+    private var page: some View {
+        HLPage {
+            if isEmbedded {
+                HLColumnHeader(verbatim: displayName, subtitle: columnSubtitle, titleIdentifier: "biomarker.detail.columnHeader")
+            }
+            lastMeasurementSection
+            assessmentSection
+            statsSection
+            chartSection
+            // #191 QoL — the newest readings under the chart, with the row
+            // to all of them as the card's last row.
+            BiomarkerLatestValuesSection(store: store, rows: allRows, windowedRows: windowedRows, title: displayName)
+            HLSyncStatusFooter(screenLoading: store.isLoading)
         }
     }
 
     // MARK: - Sections
 
-    /// 1.4 B2-c — the header carries the page's one (i) (the explainer, the
-    /// other spellings, the references and the guide, which used to stand as
-    /// two loose blocks under the title) and the gear. Where the server can
-    /// edit spellings and merge markers, those two sit in the gear's menu
-    /// beside the range editor instead of as caption buttons on the page.
-    private var header: some View {
-        InsightsPageHeader(
-            LocalizedStringKey(displayName),
-            accessibilityIdentifierSuffix: "biomarker"
-        ) {
-            HLInfoButton(content: info, style: .circle, accessibilityIdentifier: "biomarker.detail.info")
-            if marker != nil {
-                if ServerFeatureMirror.shared.current?.biomarkerMerge == true {
-                    Menu {
-                        Button("biomarker.detail.editRange") { markerSheet = .editor }
-                        Button("labs.aliases.edit") { markerSheet = .aliases }
-                        Button("labs.merge.open") { markerSheet = .merge }
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .hlHeaderCircle()
-                    }
-                    .accessibilityLabel(Text("biomarker.detail.editRange"))
-                    .accessibilityIdentifier("biomarker.detail.gear")
-                } else {
-                    InsightsHeaderActionCircle(
-                        systemImage: "slider.horizontal.3",
-                        accessibilityLabelText: String(localized: "biomarker.detail.editRange"),
-                        accessibilityIdentifier: "biomarker.detail.gear"
-                    ) {
-                        markerSheet = .editor
-                    }
-                }
-            }
-        }
+    private var sheetBinding: Binding<BiomarkerSheet?> {
+        externalSheet ?? $markerSheet
     }
 
-    /// What the (i) explains. The citations of the explainer travel with it;
-    /// the reading's range verdict keeps its own visible link in the card.
-    private var info: HLInfoContent {
-        var sections: [HLInfoContent.Section] = []
-        if let aliases = marker?.aliases, !aliases.isEmpty {
-            sections.append(HLInfoContent.Section(
-                title: String(localized: "biomarker.detail.info.aliases"),
-                paragraphs: [String(localized: "labs.biomarker.aliases \(aliases.formatted(.list(type: .and)))")]
-            ))
-        }
-        return HLInfoContent(
-            title: displayName,
-            identifier: "biomarker.detail.info.sheet",
-            about: explainer,
-            topic: sourcesTopic,
-            sections: sections,
-            learnMoreConcept: "LAB_BIOMARKER"
-        )
+    /// The page's own sheet slot: unused while the screen presents for it.
+    private var ownSheet: Binding<BiomarkerSheet?> {
+        Binding(get: { externalSheet == nil ? markerSheet : nil }, set: { markerSheet = $0 })
+    }
+
+    /// Whether the period bar stands: only when the marker has two values
+    /// to draw, pushed and beside the table alike.
+    private var showsPeriodBar: Bool {
+        Self.hasCourse(allRows)
+    }
+
+    /// Whether the readings make a course: two numbers at least.
+    nonisolated static func hasCourse(_ rows: [LabResultDTO]) -> Bool {
+        BiomarkerSeries.valueBearing(rows).count >= 2
+    }
+
+    /// Whether the course card stands: with a course, and also for a single
+    /// value that has no place on a range (no range, or a qualitative
+    /// result), where its note says why no line is drawn. Only a value the
+    /// range bar can place leaves the card out.
+    nonisolated static func showsCourseCard(_ rows: [LabResultDTO], low: Double?, high: Double?) -> Bool {
+        hasCourse(rows) || LabRangeScale.placement(value: rows.first?.value, previous: [], low: low, high: high) == nil
+    }
+
+    /// The line under the column header: how many readings, and when the
+    /// newest was taken, as the row in the table says it.
+    private var columnSubtitle: String? {
+        HLRowDetail.joined([
+            BiomarkerIndexRow.countCaption(max(overviewCount ?? 0, allRows.count, 1)),
+            latest.map { LabsDateFormat.labDate($0.takenAt) }
+        ])
+    }
+
+    /// This page is pushed, so its (i) and its edit stand in the system bar
+    /// as one group. Beside the labs table the screen's bar carries the same
+    /// actions for the selected marker (``markerActions(marker:analyte:sheet:)``).
+    private var pageActions: HLTabHeaderActions {
+        HLTabHeaderActions(Self.markerActions(marker: marker, analyte: analyte, sheet: sheetBinding) { id in
+            if await store.deleteBiomarker(id: id) { dismiss() }
+        })
     }
 
     /// The biomarker title. A linked marker shows its catalog name; an unlinked
     /// analyte shows the analyte string verbatim.
     private var displayName: String {
-        if let name = marker?.name, !name.isEmpty { return name }
-        return analyte
+        Self.displayName(marker: marker, analyte: analyte)
     }
 
     /// The citation topic for this marker: the resolved catalogue slug when the
@@ -210,69 +223,228 @@ struct BiomarkerDetailScreen: View {
     @ViewBuilder
     private var lastMeasurementSection: some View {
         if let latest {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("biomarker.detail.lastMeasurement")
-                BiomarkerLastMeasurementCard(latest: latest, sourcesTopic: sourcesTopic)
+            HLSectionHeader("biomarker.detail.lastMeasurement", rank: .area)
+            BiomarkerLastMeasurementCard(
+                latest: latest,
+                previous: Self.earlierValues(allRows),
+                referenceLow: referenceLow,
+                referenceHigh: referenceHigh
+            )
+        }
+    }
+
+    /// The assessment: the reference range the verdicts are made against,
+    /// how many readings of the period fall inside it, and where the range
+    /// comes from with its sources. It counts the server's verdicts; nothing
+    /// is judged here.
+    @ViewBuilder
+    private var assessmentSection: some View {
+        let range = BiomarkerSeries.referenceText(low: referenceLow, high: referenceHigh, unit: unit)
+        let share = BiomarkerSeries.inRangeShare(windowedRows)
+        if range != nil || latest?.rangeStatus.rowStatus != nil {
+            HLSectionHeader("biomarker.detail.assessment", rank: .area)
+            HLCard {
+                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                    HLFactGroup {
+                        if let range {
+                            HLFactRow("labs.detail.reference", value: range)
+                        }
+                        if let share {
+                            HLFactRow(
+                                "labs.range.inRange",
+                                value: String(localized: "biomarker.detail.inRange.count \(share.inRange) \(share.judged)")
+                            )
+                        }
+                    }
+                    // A range verdict is a medical-shaped statement: it says
+                    // where the range comes from and offers the sources.
+                    LabReferenceSourceLine(topic: sourcesTopic)
+                }
             }
         }
     }
 
     @ViewBuilder
     private var statsSection: some View {
-        if let stats = BiomarkerSeries.stats(for: windowedRows) {
-            // No section header — `StatsRow` already labels each cell
-            // (Min / Ø / Max / Median); the real Insights metric page
-            // (`InsightsMetricScreen`) renders this strip bare too. A
-            // "Durchschnitt" header here would mislabel a 4-stat row as the mean.
-            StatsRow(
+        if let stats = BiomarkerSeries.pageStats(for: windowedRows) {
+            // The cells name themselves (Min, Ø, Max, Median), as on the
+            // reference metric page; the unity "1" (#160) is never printed.
+            HLStatGrid(cells: BiomarkerSeries.statCells(
                 stats: stats,
                 median: BiomarkerSeries.median(for: windowedRows),
-                // POLISH-A F-LAB-1 — the unity "1" (a ratio, #160) is
-                // never printed after a number.
                 unit: LabUnit.suffix(unit) ?? ""
-            )
+            ))
         }
     }
 
-    private var chartSection: some View {
-        BiomarkerChart(
-            rows: windowedRows,
-            unit: unit,
-            referenceLow: referenceLow,
-            referenceHigh: referenceHigh
-        )
-    }
-
+    /// The course. A single value has none: with a range it already stands
+    /// on it in the card above, without one the note says why no line is
+    /// drawn.
     @ViewBuilder
-    private var allMeasurementsSection: some View {
-        if !windowedRows.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("biomarker.detail.allMeasurements")
-                HLCard {
-                    VStack(spacing: 0) {
-                        ForEach(Array(windowedRows.enumerated()), id: \.element.id) { index, row in
-                            if index > 0 {
-                                Divider().overlay(HLColor.separator)
-                            }
-                            LabResultRow(row: row)
-                                .padding(.vertical, HLSpace.xs)
-                                .contentShape(Rectangle())
-                                .onTapGesture { editingResult = row }
-                        }
-                    }
-                }
-            }
+    private var chartSection: some View {
+        if Self.showsCourseCard(allRows, low: referenceLow, high: referenceHigh) {
+            BiomarkerChart(
+                rows: windowedRows,
+                unit: unit,
+                referenceLow: referenceLow,
+                referenceHigh: referenceHigh
+            )
         }
     }
 }
 
-/// #130 — what the marker page's single sheet shows.
-private enum MarkerSheet: String, Identifiable {
+/// The navigation chrome of the marker page: the system title and the bar
+/// actions when it is pushed, nothing when it stands beside the labs table.
+private struct BiomarkerPageChrome: ViewModifier {
+    let isEmbedded: Bool
+    let title: String
+    let actions: HLTabHeaderActions
+
+    func body(content: Content) -> some View {
+        if isEmbedded {
+            content
+        } else {
+            content
+                .navigationTitle(Text(verbatim: title))
+                .toolbarTitleDisplayMode(.inlineLarge)
+                .hlPageActions(actions)
+        }
+    }
+}
+
+/// One reading in a marker's history: the date, the printed value of a
+/// converted reading, the value and its range as quiet text. Tapping opens
+/// the reading's editor.
+struct LabHistoryRow: View {
+    let row: LabResultDTO
+    let onTap: () -> Void
+
+    var body: some View {
+        HLRowButton(action: onTap) {
+            HLHistoryRow(
+                date: Text(verbatim: LabsDateFormat.labDate(row.takenAt)),
+                detail: LabConversion(row).convertedLine.map { Text(verbatim: $0) },
+                value: Text(verbatim: row.displayValue),
+                status: row.rangeStatus.rowStatus
+            )
+        }
+    }
+}
+
+/// Every reading of the marker in the chosen period, one card of history
+/// rows. The rows are read live, so an edit shows at once.
+struct BiomarkerHistoryScreen: View {
+    let title: String
+    let store: LabsStore
+    let rows: () -> [LabResultDTO]
+
+    @State private var editingResult: LabResultDTO?
+
+    var body: some View {
+        HLPage {
+            HLCard(layout: .rows) {
+                ForEach(rows()) { row in
+                    LabHistoryRow(row: row) { editingResult = row }
+                }
+            }
+        }
+        .navigationTitle(Text(verbatim: title))
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editingResult) { result in
+            EditLabResultSheet(store: store, result: result)
+        }
+    }
+}
+
+/// What the marker page's single sheet shows.
+enum BiomarkerSheet: String, Identifiable {
     case editor
     case aliases
     case merge
 
     var id: String {
         rawValue
+    }
+}
+
+// MARK: - A marker's actions
+
+extension BiomarkerDetailScreen {
+    /// The (i) and the edit of a marker, for the pushed page's bar and for
+    /// the labs screen's bar beside the table. Where the server can also edit
+    /// spellings and merge markers, the three edits share the more menu;
+    /// otherwise the range editor is the pencil.
+    /// #191 QoL — Delete stands in the more menu, away from the thumb, and
+    /// asks first (the page needs ``View/hlDeleteConfirmation()``). The
+    /// server deletes the marker with every reading under it.
+    static func markerActions(
+        marker: BiomarkerDTO?,
+        analyte: String,
+        sheet: Binding<BiomarkerSheet?>,
+        onDelete: (@MainActor (String) async -> Void)? = nil
+    ) -> [HLTabHeaderAction] {
+        var items: [HLTabHeaderAction] = [.info(info(marker: marker, analyte: analyte), identifier: "biomarker.detail.info")]
+        guard let marker else { return items }
+        let merges = ServerFeatureMirror.shared.current?.biomarkerMerge == true
+        if merges || onDelete != nil {
+            items.append(.more(identifier: "biomarker.detail.gear") {
+                Button("biomarker.detail.editRange") { sheet.wrappedValue = .editor }
+                if merges {
+                    Button("labs.aliases.edit") { sheet.wrappedValue = .aliases }
+                    Button("labs.merge.open") { sheet.wrappedValue = .merge }
+                }
+                if let onDelete {
+                    Divider()
+                    HLDeleteMenuItem(.confirmed(
+                        title: "biomarker.delete.confirm.title",
+                        message: "biomarker.delete.removesReadings"
+                    ) {
+                        await onDelete(marker.id)
+                    })
+                    .accessibilityIdentifier("biomarker.detail.delete")
+                }
+            })
+        } else {
+            items.append(.edit(identifier: "biomarker.detail.gear") { sheet.wrappedValue = .editor })
+        }
+        return items
+    }
+
+    /// The values before the newest reading, oldest first, as faint points
+    /// beside it on the range.
+    nonisolated static func earlierValues(_ rows: [LabResultDTO]) -> [Double] {
+        // `rows` is newest first; the newest is the reading itself.
+        Array(rows.dropFirst().compactMap(\.value).reversed())
+    }
+
+    /// The biomarker title. A linked marker shows its catalog name; an
+    /// unlinked analyte shows the analyte string verbatim.
+    static func displayName(marker: BiomarkerDTO?, analyte: String) -> String {
+        if let name = marker?.name, !name.isEmpty { return name }
+        return analyte
+    }
+
+    /// What the (i) explains. The citations of the explainer travel with it;
+    /// the reading's range verdict keeps its own visible link in the card.
+    static func info(marker: BiomarkerDTO?, analyte: String) -> HLInfoContent {
+        var sections: [HLInfoContent.Section] = []
+        if let aliases = marker?.aliases, !aliases.isEmpty {
+            sections.append(HLInfoContent.Section(
+                title: String(localized: "biomarker.detail.info.aliases"),
+                paragraphs: [String(localized: "labs.biomarker.aliases \(aliases.formatted(.list(type: .and)))")]
+            ))
+        }
+        let name = marker?.name ?? analyte
+        // The citation topic: the catalogue slug when the name maps to one,
+        // else the shared lab reference-range topic.
+        let topic: MedicalSourceTopic = BiomarkerExplainer.slug(forName: name).map { .labBiomarker($0) } ?? .labReferenceRanges
+        return HLInfoContent(
+            title: displayName(marker: marker, analyte: analyte),
+            identifier: "biomarker.detail.info.sheet",
+            about: BiomarkerExplainer.text(context: marker?.context, name: name),
+            topic: topic,
+            sections: sections,
+            learnMoreConcept: "LAB_BIOMARKER"
+        )
     }
 }

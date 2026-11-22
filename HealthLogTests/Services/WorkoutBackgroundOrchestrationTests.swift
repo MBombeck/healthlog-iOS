@@ -230,7 +230,6 @@
         func attachUploader(_: MeasurementBatchUploader) async {}
         func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
         func setInitialBackfillCutoff(_: Date?) async {}
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     }
 
     private final class WorkoutOrchestrationGate: @unchecked Sendable {

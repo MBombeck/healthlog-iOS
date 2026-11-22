@@ -16,8 +16,8 @@ import Testing
 ///
 /// Diese Suite lockt den Round-Trip fest:
 ///
-/// - `GlucoseContext`-Enum hat vier wire-stabile Cases (FASTING,
-///   BEFORE_MEAL, AFTER_MEAL, BEDTIME) und ein lokalisierbares Display.
+/// - `GlucoseContext`-Enum hat die vier Server-Literale (FASTING,
+///   POSTPRANDIAL, RANDOM, BEDTIME) und ein lokalisierbares Display.
 /// - `MeasurementWireDTO.toDomain()` hydriert `glucoseContext` aufs
 ///   Domain-Model.
 /// - `Measurement.toCreateDTOs()` propagiert `glucoseContext` auf die
@@ -30,16 +30,34 @@ struct GlucoseContextRoundTripTests {
     @Test("GlucoseContext maps to the documented server wire values")
     func enumWireMapping() {
         #expect(GlucoseContext.fasting.rawValue == "FASTING")
-        #expect(GlucoseContext.beforeMeal.rawValue == "BEFORE_MEAL")
-        #expect(GlucoseContext.afterMeal.rawValue == "AFTER_MEAL")
+        #expect(GlucoseContext.afterMeal.rawValue == "POSTPRANDIAL")
+        #expect(GlucoseContext.random.rawValue == "RANDOM")
         #expect(GlucoseContext.bedtime.rawValue == "BEDTIME")
+    }
+
+    @Test("Literals an older build persisted still decode", arguments: [
+        ("AFTER_MEAL", GlucoseContext.afterMeal),
+        ("BEFORE_MEAL", GlucoseContext.random)
+    ])
+    func legacyLiteralsDecode(literal: String, expected: GlucoseContext) throws {
+        let decoded = try JSONDecoder.hlDefault.decode(GlucoseContext.self, from: Data("\"\(literal)\"".utf8))
+        #expect(decoded == expected)
+        let reencoded = try #require(String(data: JSONEncoder.hlDefault.encode(decoded), encoding: .utf8))
+        #expect(reencoded == "\"\(expected.rawValue)\"", "what goes out again is the server literal")
+    }
+
+    @Test("An unknown literal still refuses to decode as an enum")
+    func unknownLiteralThrows() {
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder.hlDefault.decode(GlucoseContext.self, from: Data(#""POST_WORKOUT""#.utf8))
+        }
     }
 
     @Test("GlucoseContext is CaseIterable so picker UIs can ForEach over it")
     func caseIterable() {
         let all = GlucoseContext.allCases
         #expect(all.count == 4)
-        #expect(Set(all) == Set([.fasting, .beforeMeal, .afterMeal, .bedtime]))
+        #expect(Set(all) == Set([.fasting, .afterMeal, .random, .bedtime]))
     }
 
     @Test("GlucoseContext.Identifiable matches rawValue")
@@ -131,8 +149,8 @@ struct GlucoseContextRoundTripTests {
         #expect(dto.glucoseContext == .afterMeal)
     }
 
-    @Test("CreateDTO without glucoseContext stays nil on the wire")
-    func createDTONilContextIsNilOnWire() throws {
+    @Test("CreateDTO without glucoseContext goes out as RANDOM")
+    func createDTONilContextIsRandomOnWire() throws {
         let measurement = Measurement(
             id: "local-2",
             kind: .glucose,
@@ -143,12 +161,12 @@ struct GlucoseContextRoundTripTests {
             glucoseContext: nil
         )
         let dto = try #require(measurement.toCreateDTOs().first)
-        #expect(dto.glucoseContext == nil)
-        // Verify the JSON omits the key when nil, so the server applies its
-        // own default + we keep the wire surface minimal.
+        #expect(dto.glucoseContext == .random)
+        // POST /api/measurements refuses a glucose row without a context
+        // (422), so the create body always names one.
         let json = try JSONEncoder.hlDefault.encode(dto)
         let str = try #require(String(data: json, encoding: .utf8))
-        #expect(!str.contains("glucoseContext"), "nil context should not emit a key — server default applies")
+        #expect(str.contains(#""glucoseContext":"RANDOM""#))
     }
 
     @Test("BP measurements never emit a glucoseContext key in their create DTOs")

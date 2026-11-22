@@ -1,5 +1,6 @@
 "NSHealthShareUsageDescription" = "HealthLog leest de gezondheidsgegevens uit Apple Health die je vrijgeeft (waaronder vitale waarden, activiteit, voeding, slaap, stemming, cyclusgegevens, ECG's, trainings- en hartslaggegevens en medicijnen) om ze te tonen, te synchroniseren en trends te berekenen.";
 "NSHealthUpdateUsageDescription" = "HealthLog bewaart metingen, stemmings- en cyclusregistraties die je zelf invoert, en metingen van apparaten of imports die je koppelt, in Apple Health als je HealthLog schrijftoegang geeft.";
+"NSHealthClinicalHealthRecordsShareUsageDescription" = "HealthLog leest labuitslagen uit je medische dossiers in Apple Health als je dat bij Labuitslagen inschakelt, en bewaart ze op je HealthLog-server zodat je ze daar samen met je andere labuitslagen ziet.";
 "NSFaceIDUsageDescription" = "HealthLog gebruikt Face ID om je gegevens te beschermen.";
 "NSUserNotificationsUsageDescription" = "HealthLog herinnert je aan medicijnen en metingen.";
 "NSAlarmKitUsageDescription" = "HealthLog geeft luide alarmen voor tijdkritische medicijnen die je daarvoor zelf inschakelt. Ze komen door de stille modus en Focus heen, zodat je geen belangrijke dosis mist.";

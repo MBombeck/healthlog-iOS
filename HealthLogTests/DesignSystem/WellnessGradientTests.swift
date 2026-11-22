@@ -2,7 +2,7 @@
 import SwiftUI
 import Testing
 
-/// **v0.14.4 FW-WELL** — locks the convergent wellness-gradient descriptor: each
+/// Locks the convergent wellness-gradient descriptor: each
 /// of the four wellness-score cards maps to its saturated hue + the INNER grid-
 /// centre corner that holds the SHARED light end, so "die hellen Werte laufen
 /// zueinander" (all four light corners meet at the grid centre). Exercised off
@@ -21,7 +21,7 @@ struct WellnessGradientTests {
         // v0.14.8 Item-2 — the two promoted warm scores.
         #expect(WellnessGradient.forMetricID("RECOVERY_SCORE") == .recovery)
         #expect(WellnessGradient.forMetricID("STRESS_SCORE") == .stress)
-        // v0.14.9 §2 — the two re-frames promoted to delta/band ring tiles.
+        // The two re-frames promoted to delta/band ring tiles.
         #expect(WellnessGradient.forMetricID("VASCULAR_AGE_DELTA") == .vascular)
         #expect(WellnessGradient.forMetricID("HRV_BALANCE") == .hrvBalance)
         #expect(WellnessGradient.forMetricID("COINCIDENT_DEVIATION") == nil)
@@ -74,7 +74,7 @@ struct WellnessGradientTests {
 
     @Test("the convergent end token is shared (identical) across all four cards")
     func sharedConvergentToken() {
-        // v0.14.10 §1 — the descriptor's convergent (inner-corner) end is the
+        // The descriptor's convergent (inner-corner) end is the
         // single shared near-black DARK base token, not a per-card colour — the
         // contract that makes the corners converge into one continuous dark field.
         let base = HLColor.wellnessGradientDark
@@ -96,7 +96,7 @@ struct WellnessGradientTests {
         #expect(WellnessGradient.stress.hue == HLColor.wellnessStressHue)
         // The two warm scores are the same family but pulled apart.
         #expect(WellnessGradient.recovery.hue != WellnessGradient.stress.hue)
-        // v0.14.9 §2 — the two promoted re-frames carry their own distinct hues.
+        // The two promoted re-frames carry their own distinct hues.
         #expect(WellnessGradient.vascular.hue == HLColor.wellnessVascularHue)
         #expect(WellnessGradient.hrvBalance.hue == HLColor.wellnessHrvBalanceHue)
         // Vascular (soft violet) is pulled apart from Belastung (purple).
@@ -107,7 +107,7 @@ struct WellnessGradientTests {
 
     // MARK: - v0.14.9 §3 recovery is no longer red + §4 gradient softening
 
-    /// §3 — the Erholung/Recovery hue moved AWAY from the reddish terracotta to a
+    /// The Erholung/Recovery hue moved AWAY from the reddish terracotta to a
     /// calm honey-yellow. Pins the new hue + that it differs clearly from the
     /// Schlaf-blue + Tagesform-green so the tile reads as "rest", not "alert".
     @Test("recovery hue is the calm honey-yellow, not the old red terracotta")
@@ -126,7 +126,7 @@ struct WellnessGradientTests {
         #expect(WellnessGradient.recovery.hue != WellnessGradient.tagesform.hue)
     }
 
-    /// v0.14.10 §1 — direction REVERSED. Every wellness gradient's outer corner is
+    /// Direction REVERSED. Every wellness gradient's outer corner is
     /// now pulled toward the near-black `wellnessGradientDark` card base by ≥60%
     /// (operator: the old light-blended tiles were "zu hell, sehr weiß und bold").
     /// Pins the darkening factor + that the darkened hue is measurably DARKER than
@@ -156,7 +156,7 @@ struct WellnessGradientTests {
         }
     }
 
-    /// v0.14.10 §1 — the dark base token is the shared near-black card tone the
+    /// The dark base token is the shared near-black card tone the
     /// gradients converge to. Pins it sits in the app's dark monochrome range.
     @Test("the wellness gradient dark base is a near-black card tone")
     func darkBaseIsNearBlack() {

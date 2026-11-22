@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v1.39.1 (#1033) — the editor, the writes and the adherence read.**
+/// **v1.39.1 — the editor, the writes and the adherence read.**
 ///
 /// The server keeps a record's stored schedule unless a write names
 /// `trackIntake` (`e5236d2e6`, "keep a record-only schedule unless the write

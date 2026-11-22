@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// W8-A1 — locks the foreground-refresh dedup: when both scenePhase observers
+/// Locks the foreground-refresh dedup: when both scenePhase observers
 /// fire on the same `.active` transition, the HK-stats sync runs ONCE, not
 /// twice; an explicit pull-to-refresh always runs.
 ///

@@ -18,7 +18,8 @@ public extension AppContainer {
         apiClient: APIClient,
         healthKit: AnyHealthKitWriter?,
         measurementsRepo: MeasurementsRepository,
-        keychain: KeychainStoring
+        keychain: KeychainStoring,
+        registersHealthKitTask: Bool = true
     ) -> (uploader: MeasurementBatchUploader, backgroundSync: BackgroundSyncCoordinator) {
         // HK-Batch-Uploader inkl. Sliding-Window-Throttle (60/min Server-Cap).
         let uploader = MeasurementBatchUploader(
@@ -43,12 +44,12 @@ public extension AppContainer {
         // BG-Sync-Coordinator + Handler sofort registrieren — `BGTaskScheduler.register`
         // muss VOR `applicationDidFinishLaunching` returnt aufgerufen werden, sonst
         // weckt das System uns nicht mehr auf.
-        let bgSync = BackgroundSyncCoordinator(healthKit: healthKit)
+        let bgSync = BackgroundSyncCoordinator(healthKit: healthKit, registersHealthKitTask: registersHealthKitTask)
         bgSync.registerBGTaskHandler()
         return (uploader, bgSync)
     }
 
-    /// **#10 — the one sink a delivered HealthKit measurement batch stamps
+    /// **The one sink a delivered HealthKit measurement batch stamps
     /// "Last synced" through.**
     ///
     /// Fenced twice, because the upload that reports success may have started
@@ -85,7 +86,7 @@ public extension AppContainer {
     /// - `RootView` beim Foreground-Bootstrap für User, die schon onboarded sind
     ///   (`coldActivation`).
     ///
-    /// **Phase 07 / plan 07-09 — der Trigger kommt vom Aufrufer.** Vorher fuhr
+    /// **Der Trigger kommt vom Aufrufer.** Vorher fuhr
     /// `activateHealthKitBackgroundDeliveries` selbst einen `.foreground`-Pass
     /// plus einen detached Aggregat-Sweep: ein Pass unter falschem Namen und ein
     /// zweites Fan-out daneben. Beide Aufrufer sind etwas anderes als ein
@@ -100,7 +101,7 @@ public extension AppContainer {
     /// naming the trigger is the whole point of the parameter.
     internal func activateHealthKitBackground(for trigger: HealthSyncTrigger) async {
         await backgroundSync.activateHealthKitBackgroundDeliveries()
-        // V1 — through the same coalescing runner as the foreground pass, so a
+        // Through the same coalescing runner as the foreground pass, so a
         // cold launch does not run its first pass and the first foreground pass
         // over the same cursors at once; the later one trails.
         await DetachedHealthSyncRunner.shared.request(trigger) { [weak self] trigger, isExpired in
@@ -116,7 +117,7 @@ public extension AppContainer {
     /// und der Server idempotiert per `externalId="stats:<id>:<YYYY-MM-DD>"`
     /// (POST → `duplicate`-no-op wenn der Wert unveraendert ist).
     ///
-    /// Behebt operator-reported Regression (v0.6.1.21): nach einem Walk
+    /// Behebt operator-reported Regression: nach einem Walk
     /// zeigt das Schritte-Tile nur die Schritte vom letzten BGTask-Wakeup
     /// (typischerweise Stunden alt), nicht den aktuellen Tagestotal. Der
     /// einzige Pfad der heute auf dem Server landet ist
@@ -136,7 +137,7 @@ public extension AppContainer {
     ///   pass `false` (default) so a foreground bounce runs the sync at most
     ///   once per `dailyStatsForegroundThrottle`, even though both observers
     ///   may call this on the same `.active` transition.
-    /// **Phase 07 / plan 07-09 — this is the `foreground` route, and it is one
+    /// **This is the `foreground` route, and it is one
     /// pass.**
     ///
     /// It used to be a hand-written fan-out: daily statistics, HR buckets,
@@ -152,13 +153,13 @@ public extension AppContainer {
     /// that feeds the Schritte tile's today number. That is a local UI read, not
     /// a sync capability, and it has no server leg at all.
     ///
-    /// **V1 (1.2)** — the pass runs in ``DetachedHealthSyncRunner``, not in the
+    /// The pass runs in ``DetachedHealthSyncRunner``, not in the
     /// caller's task. The foreground step returns as soon as it is queued, so
     /// the 250 ms deadline can no longer cancel the day totals, the pulse
     /// buckets or the sample collection (#66, HealthLog#1173). A forced call
     /// (pull to refresh) still waits for it, because the person is watching.
     func refreshHealthKitDailyStatsForToday(force: Bool = false) async {
-        // W8-A1 — coalesce the double foreground fan-out. A non-forced call
+        // Coalesce the double foreground fan-out. A non-forced call
         // inside the throttle window is suppressed; a forced run (pull-to-
         // refresh) always runs and re-arms the window.
         guard dailyStatsForegroundThrottle.shouldRun(force: force) else { return }
@@ -195,7 +196,7 @@ public extension AppContainer {
         _ trigger: HealthSyncTrigger,
         isExpired: @escaping @Sendable () -> Bool
     ) async {
-        // v0.6.2.x bug-c10-ios-direct — the HK-direct read is what actually feeds
+        // The HK-direct read is what actually feeds
         // the tile's today number; it runs concurrently with the pass, which
         // feeds the server rows every other consumer (insights, trends) reads.
         async let liveRefresh: Void = liveHealthKitTodayStore.refresh()
@@ -219,11 +220,11 @@ public extension AppContainer {
     func reloadEnvironment() async {
         let resolved = AppEnvironment.resolve(keychain: keychain)
         environment = resolved
-        // R1 — die beobachtbare Adressfrage mitziehen. Erst dadurch schließt
+        // Die beobachtbare Adressfrage mitziehen. Erst dadurch schließt
         // sich das Adress-Gate in `RootView`, sobald der Nutzer seine Adresse
         // eingetragen hat, und öffnet es sich wieder, wenn sie fehlt.
         backendAvailability.setHasServerAddress(resolved.isServerConfigured)
-        // audit-v0162 M-7 — the cached "server materialises dose slots" verdict
+        // The cached "server materialises dose slots" verdict
         // describes the PREVIOUS host and says nothing about this one. Drop it
         // so the next `/api/version` probe re-decides; until that answers, the
         // gate falls back to its unknown-state default (no synthesis).
@@ -231,6 +232,10 @@ public extension AppContainer {
         // V4 and V1: the last-known server version (RMSSD collection and
         // `syncTrigger: manual`) belonged to the previous host.
         HealthKitServerTypeGate.forget()
+        // The 1.49.0 medication capabilities (#191) were the previous
+        // host's; the next `/api/auth/me` load records this one's.
+        MedicationCapabilities.forget()
+        ServerFeatureKeys.forget()
         // APIClient is an actor; cross-actor hop required.
         if let apiClient = api as? APIClient {
             await apiClient.setEnvironment(resolved)

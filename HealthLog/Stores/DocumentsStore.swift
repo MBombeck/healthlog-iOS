@@ -18,7 +18,7 @@ import Observation
 /// via ``LogoutClearable`` so the next user never inherits the previous user's
 /// documents.
 ///
-/// **Latest-query-wins (Phase 08).** Every read and every write captures a
+/// **Latest-query-wins.** Every read and every write captures a
 /// ``DocumentQueryOwner`` before its first `await` and checks it again before it
 /// touches any published property. Nothing here relies on cancellation, on a
 /// debounce, or on a reentrancy latch: a reply that arrives late is not wrong,

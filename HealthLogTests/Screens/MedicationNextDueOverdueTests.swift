@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Locks the v1.16.4 `nextDueOverdue` additive contract (GH issue #15):
+/// Locks the v1.16.4 `nextDueOverdue` additive contract:
 /// when `true`, `nextDueAt` may carry a PAST instant that is still an OPEN,
 /// takeable slot (catch-up band open, unresolved). The client presents it as
 /// overdue-but-takeable — never hides it, never spins — and the treatment

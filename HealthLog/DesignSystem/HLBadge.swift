@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct HLBadge: View {
-    public enum Tone {
+    public enum Tone: Equatable, Sendable {
         case neutral
         case success
         case warning
@@ -10,48 +10,101 @@ public struct HLBadge: View {
         case purple
     }
 
+    /// How the status is drawn. The place decides, not the meaning: in a
+    /// row and next to a value a status is text, so it stays quieter than
+    /// the value; a capsule belongs to a card head, a detail head and to
+    /// tags.
+    public enum Form: Equatable, Sendable {
+        /// A tinted capsule: 12 pt semibold.
+        case capsule
+        /// Symbol and text without a capsule: symbol 11 pt semibold, text
+        /// 12 pt medium.
+        case text
+
+        public var titleFont: Font {
+            switch self {
+            case .capsule: .hlCaption.weight(.semibold)
+            case .text: .hlCaption.weight(.medium)
+            }
+        }
+
+        public var iconFont: Font {
+            .hlCaption2.weight(.semibold)
+        }
+    }
+
     private let title: String
     private let icon: String?
     private let tone: Tone
+    private let form: Form
 
-    public init(_ title: String, icon: String? = nil, tone: Tone = .neutral) {
+    public init(_ title: String, icon: String? = nil, tone: Tone = .neutral, form: Form = .capsule) {
         self.title = title
         self.icon = icon
         self.tone = tone
+        self.form = form
     }
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// POLISH-C (F-AX-CAPSULE) — the badge wraps between words, and at an
+    public var body: some View {
+        switch form {
+        case .capsule: capsule
+        case .text: plain
+        }
+    }
+
+    /// The badge wraps between words, and at an
     /// accessibility size the capsule becomes a rounded rectangle so two
     /// lines still read as one badge. It takes no layout priority over the
     /// text beside it: a large value next to it (a lab result) would be the
     /// one squeezed then. Where both cannot share a line, the caller stacks
     /// them at the accessibility sizes (lab card, episode header, assistant
     /// status).
-    public var body: some View {
-        HStack(spacing: HLSpace.xs) {
-            if let icon { Image(systemName: icon).font(.hlCaption2.weight(.semibold)) }
+    private var capsule: some View {
+        label
+            .foregroundStyle(foreground)
+            .padding(.horizontal, HLSpace.sm)
+            .padding(.vertical, HLSpace.xs)
+            .background(background.opacity(0.18))
+            .clipShape(
+                dynamicTypeSize.isAccessibilitySize
+                    ? AnyShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+                    : AnyShape(Capsule())
+            )
+            .accessibilityElement()
+            .accessibilityLabel(title)
+    }
+
+    /// The status as a line of text. Neutral reads in secondary ink; only
+    /// the status tones keep their colour.
+    private var plain: some View {
+        label
+            .foregroundStyle(textForeground)
+            .accessibilityElement()
+            .accessibilityLabel(title)
+    }
+
+    private var label: some View {
+        // A capsule centres its symbol; a status line keeps symbol and text
+        // on one baseline like the value above it.
+        HStack(alignment: form == .text ? .firstTextBaseline : .center, spacing: HLSpace.xs) {
+            if let icon { Image(systemName: icon).font(form.iconFont) }
             Text(title)
-                .font(.hlCaption)
-                .fontWeight(.semibold)
+                .font(form.titleFont)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, HLSpace.sm)
-        .padding(.vertical, HLSpace.xs)
-        .background(background.opacity(0.18))
-        .clipShape(
-            dynamicTypeSize.isAccessibilitySize
-                ? AnyShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                : AnyShape(Capsule())
-        )
-        .accessibilityElement()
-        .accessibilityLabel(title)
     }
 
-    /// Theme-2.0 (T2-2): status semantics keep their clinical colour
+    var textForeground: Color {
+        switch tone {
+        case .neutral, .info: HLText.secondary
+        case .success, .warning, .critical, .purple: foreground
+        }
+    }
+
+    /// Theme-2.0: status semantics keep their clinical colour
     /// (success/warning/critical) because a11y depends on the green/red/
     /// yellow signal — those are NOT decorative. The decorative `.info`
     /// (cyan) and `.neutral` tones route through the mono text scale.
@@ -95,8 +148,11 @@ public struct HLBadge: View {
     VStack(alignment: .leading, spacing: HLSpace.sm) {
         HLBadge("12 days", icon: "flame.fill", tone: .warning)
         HLBadge("In range", icon: "checkmark", tone: .success)
-        HLBadge("Kritisch", tone: .critical)
+        HLBadge("Critical", tone: .critical)
         HLBadge("New", tone: .purple)
+        HLBadge("Above range", icon: "arrow.up", tone: .warning, form: .text)
+        HLBadge("In range", icon: "checkmark", tone: .success, form: .text)
+        HLBadge("Not connected", icon: "circle.slash", form: .text)
     }
     .padding()
     .background(HLSurface.primary)

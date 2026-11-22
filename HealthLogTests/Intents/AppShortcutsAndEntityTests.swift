@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.15 W-SIRI** — coverage for the medication `AppEntity` disambiguation
+/// Coverage for the medication `AppEntity` disambiguation
 /// query and the `AppShortcutsProvider` exposure.
 ///
 /// Two layers:

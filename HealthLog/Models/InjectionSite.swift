@@ -4,7 +4,7 @@ import Foundation
 /// left/right, upper-arm left/right. Eight rotation slots match the standard
 /// rotation pattern the EMA EPAR §4.2 references.
 ///
-/// **v0.11 — moved out of `Screens/GLP1/GLP1LocalEntities.swift` into the
+/// **Moved out of `Screens/GLP1/GLP1LocalEntities.swift` into the
 /// plattform-free Models layer** so the medications repository + intake wire
 /// bodies (which live in the Core / widget-extension target closure) can
 /// thread an `injectionSite` through the v1.8.5 take-write paths. The
@@ -22,7 +22,7 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
     case thighRight = "thigh_right"
     case armLeft = "arm_left"
     case armRight = "arm_right"
-    /// **Audit B-4 — decode-only sentinel for a site this build cannot name.**
+    /// **Decode-only sentinel for a site this build cannot name.**
     ///
     /// The server's `InjectionSite` enum is its own taxonomy and can grow. A
     /// member added after this build used to be `compactMap`-ped out of
@@ -51,7 +51,7 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// Audit B-4 — every site the SERVER can actually name: `allCases` minus the
+    /// Every site the SERVER can actually name: `allCases` minus the
     /// decode-only ``unknown`` sentinel. The picker, the rotation hint and the
     /// effective-set computation all enumerate this.
     static var serverCases: [InjectionSite] {
@@ -87,7 +87,7 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
     /// `abdomenLeftUpper` ↔ `ABDOMEN_UPPER_LEFT`. Upper-arm maps to the
     /// server's `UPPER_ARM_*`.
     ///
-    /// **Audit B-4 — `nil` for ``unknown``, and that is the write gate.** Every
+    /// **`nil` for ``unknown``, and that is the write gate.** Every
     /// path that puts a site on the wire (the intake `POST`, the allowed-sites
     /// `PATCH`, the global deny-list `PUT`) reads this property, so an optional
     /// here is what makes the compiler refuse to invent a server enum member.
@@ -105,7 +105,7 @@ public enum InjectionSite: String, Codable, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// **Audit B-4 — the tolerant allow-list parser.**
+    /// **The tolerant allow-list parser.**
     ///
     /// ``parse(_:)`` answers `nil` for both "no site recorded" and "a site I
     /// cannot name", which is right where the value is one optional site on an
@@ -155,7 +155,7 @@ public enum InjectionSiteEffectiveSet {
         allowed: [InjectionSite],
         globalExcluded: [InjectionSite]
     ) -> [InjectionSite] {
-        // Audit B-4 — enumerate `serverCases`: the `.unknown` sentinel may sit in
+        // Enumerate `serverCases`: the `.unknown` sentinel may sit in
         // `allowed` (that is the restriction surviving), but it is never a site
         // a person can be offered, so it cannot come out of here.
         let base = allowed.isEmpty ? InjectionSite.serverCases : allowed

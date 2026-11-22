@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-3 — one-shot "open the capture flow" hand-off between the
+/// **One-shot "open the capture flow" hand-off between the
 /// Control Center / Action-Button "Erfassen" control and the app.**
 ///
 /// The `OpenCaptureIntent` runs with `openAppWhenRun = true`, so its
@@ -27,7 +27,7 @@ public struct CaptureRequestStore: Sendable {
 
     /// Which in-app surface a consumed marker should route to. The marker
     /// hand-off is generic — `OpenCaptureIntent` requests the full capture
-    /// picker, `LogMoodControl`'s intent (v0.10.0 W-Mood-B) requests the mood
+    /// picker, `LogMoodControl`'s intent requests the mood
     /// quick-entry sheet, and the Home-Screen Quick Actions (v0.14.x Q) request
     /// one of the three capture surfaces directly (measurement → picker,
     /// medication → quick-intake sheet, mood → quick-entry sheet). Defaults to

@@ -1,4 +1,4 @@
-// 15-03 (B4) — a PRN card says nothing about its past and invents a future.
+// A PRN card says nothing about its past and invents a future.
 //
 // The operator's B4 is "bei einem Bedarfsmedikament steht unter 'letzte
 // Einnahme' nichts — und die nächste Einnahme ist für ein Bedarfsmedikament
@@ -9,7 +9,7 @@
 //     `lastTakenAt` is nil (`ActiveMedicationRow.swift`, `lastValue`). For a
 //     medication that has a schedule that reads as "not yet"; for a PRN
 //     medication, whose whole history IS its last intake, it reads as nothing.
-//  2. The next-intake line renders unconditionally (v0.11 #24), so a PRN card
+//  2. The next-intake line renders unconditionally, so a PRN card
 //     claims a next intake it cannot have — the engine projects nothing for
 //     PRN, so the line falls back to `scheduleSummary`.
 //  3. `lastTakenAt` rides the medication row, i.e. the `.medicationsList` cache
@@ -109,7 +109,7 @@
             #expect(strip.last.label == String(localized: "med.card.schedule.daily.last.label"))
             #expect(
                 strip.last.value == String(localized: "med.card.schedule.last.none"),
-                "EXPECTED_RED: the PRN card shows a bare dash where nothing was ever recorded"
+                "the PRN card shows a bare dash where nothing was ever recorded"
             )
         }
 
@@ -130,7 +130,7 @@
 
             #expect(
                 strip.next == nil,
-                "EXPECTED_RED: the card claims a next intake an as-needed medication cannot have"
+                "the card claims a next intake an as-needed medication cannot have"
             )
         }
 
@@ -175,7 +175,7 @@
             let after: Cached<[Medication]>? = await cache.read(.medicationsList, as: [Medication].self)
             #expect(
                 after == nil,
-                "EXPECTED_RED: the session that just wrote an intake keeps reading its stale list"
+                "the session that just wrote an intake keeps reading its stale list"
             )
         }
 
@@ -196,7 +196,7 @@
         /// This plan differentiates PRN; it does not restyle anything. A
         /// scheduled medication keeps both lines, the same labels, the same
         /// relative value, the em-dash for an absent last intake, and
-        /// "Jetzt fällig" while its window is open.
+        /// "Fällig" (the #191 state word) while its window is open.
         @Test("Die Karte eines geplanten Medikaments ist unverändert")
         func scheduledCardIsUnchanged() {
             let medication = Self.scheduled(lastTakenAt: nil)
@@ -220,7 +220,7 @@
                 windowStatus: .inWindow,
                 scheduleSummary: "08:00"
             )
-            #expect(dueNow.next?.value == String(localized: "med.card.status.take_now"))
+            #expect(dueNow.next?.value == MedicationDosePhase.due.title)
 
             let noProjection = Self.strip(for: medication, lastTakenAt: nil, scheduleSummary: "08:00")
             #expect(noProjection.next?.value == "08:00", "the scheduleSummary fallback survives")

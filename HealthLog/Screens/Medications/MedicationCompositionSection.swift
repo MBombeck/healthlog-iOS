@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-/// SUPP (1.5.0, #131) — the composition of a medication, read from its
+/// The composition of a medication, read from its
 /// single read (`GET /api/medications/{id}`, which the "Related" section
 /// already makes; one read feeds both, see `MedicationDetailScreen+Related`).
 ///
@@ -20,7 +20,7 @@ final class MedicationCompositionModel {
     }
 
     private(set) var state: State = .idle
-    /// SUPP-EDIT — the single read carried `ingredients` (server v1.43), so
+    /// The single read carried `ingredients` (server v1.43), so
     /// the composition can be edited. An older server never gets the link.
     private(set) var serverKnowsComposition = false
 
@@ -71,12 +71,11 @@ struct MedicationCompositionSection: View {
     private var failedCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("medications.composition.title")
+                HLCardLabel("medications.composition.title")
                 Text("medications.composition.loadFailed")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                     .fixedSize(horizontal: false, vertical: true)
-                HLButton("Retry", variant: .secondary, size: .compact) {
+                HLButton(HLControlWord.retry.key, variant: .secondary) {
                     Task { await reload() }
                 }
                 .accessibilityIdentifier("medications.composition.retry")
@@ -90,39 +89,25 @@ struct MedicationCompositionSection: View {
 struct MedicationCompositionCard: View {
     let lines: [MedicationIngredient]
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     var body: some View {
-        HLCard {
+        HLCard("medications.composition.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("medications.composition.title")
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    row(line)
+                HLFactGroup {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        row(line)
+                    }
                 }
                 Text("medications.composition.perUnitNote")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityIdentifier("medications.composition")
     }
 
+    /// Ingredient and amount per unit as the shared fact pair (Z9).
     private func row(_ line: MedicationIngredient) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xxs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: HLSpace.sm))
-        return layout {
-            Text(verbatim: line.displayName)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(verbatim: line.amountText())
-                .font(.hlSubhead.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-        }
-        .padding(.vertical, HLSpace.xxs)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("medications.composition.row.\(line.nutrient)")
+        HLFactRow(label: Text(verbatim: line.displayName), value: Text(verbatim: line.amountText()))
+            .accessibilityIdentifier("medications.composition.row.\(line.nutrient)")
     }
 }

@@ -9,7 +9,7 @@ import SwiftUI
 //     metric counts every past-due scheduled intake; an event is
 //     "in-time" when the recorded `takenAt` lands within ±30 min of
 //     `scheduledFor`. Signal-colour thresholds route through the single
-//     `ComplianceBand` source of truth (v0.12 W4-1): ≥70% graphite,
+//     `ComplianceBand` source of truth: ≥70% graphite,
 //     40-69% warn, <40% bad — the monochrome doctrine shared verbatim
 //     with the Medikamente-tab card + the Insights medications page.
 //
@@ -32,12 +32,12 @@ import SwiftUI
 // MARK: - Compliance KPI
 
 struct ComplianceKPISection: View {
-    /// **W-COMPLIANCE-INV** — the tile renders a paint STATE, not a bare
+    /// The tile renders a paint STATE, not a bare
     /// summary: `.pending` paints an em-dash placeholder until the server
     /// round-trip settles (kills the 100→60→50 value-jump), `.server` paints
     /// the server's `compliance30` verbatim; `.unavailable` says the number is
     /// missing (#115 · 1.3 — no local estimate any more). `.notApplicable` and
-    /// `.notTracked` draw no section (1.4 B2).
+    /// `.notTracked` draw no section.
     let state: MedicationDetailStore.ComplianceKPIState
 
     /// v0.8.5 WFIX-COMPLIANCE fix 1 — when non-nil the tile becomes a
@@ -47,7 +47,7 @@ struct ComplianceKPISection: View {
     var isHistoryExpanded: Bool?
     var onToggleHistory: (() -> Void)?
 
-    /// 1.4 B4 — the tile opens the history behind its number only when there
+    /// The tile opens the history behind its number only when there
     /// is a number. While the figure loads or cannot be read there is nothing
     /// behind the dash, so no chevron promises a fold-out.
     private var isTappable: Bool {
@@ -59,7 +59,7 @@ struct ComplianceKPISection: View {
         return false
     }
 
-    /// 1.4 B2 — a medication kept as a record, or one without a HealthLog
+    /// A medication kept as a record, or one without a HealthLog
     /// schedule, has no adherence and no history to open. The section is then
     /// not there at all instead of a dash and a sentence saying why.
     static func hasContent(_ state: MedicationDetailStore.ComplianceKPIState) -> Bool {
@@ -71,8 +71,8 @@ struct ComplianceKPISection: View {
 
     var body: some View {
         if Self.hasContent(state) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("med.compliance.section.header")
+            Group {
+                HLSectionHeader("med.compliance.section.header", rank: .area)
                 HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.xs) {
                         if isTappable {
@@ -81,14 +81,14 @@ struct ComplianceKPISection: View {
                             } label: {
                                 kpiRow
                             }
-                            .buttonStyle(.plain)
+                            .hlPressable()
                             .accessibilityHint(Text(String(localized: "med.compliance.history_hint")))
                         } else {
                             kpiRow
                         }
                         // 1.0.3 (App Review 1.4.1) — the band that colours this
                         // number is a clinical convention, not a HealthLog
-                        // invention. 1.4 B2: at the card's foot, outside the
+                        // invention. At the card's foot, outside the
                         // disclosure Button so VoiceOver (and a tap) reach it as
                         // its own control.
                         HLSourcesLink(topic: .medicationCompliance)
@@ -104,14 +104,14 @@ struct ComplianceKPISection: View {
     private var kpiRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                // The section's lead value in the tile face (Z3).
                 Text(percentageLabel)
-                    .font(.hlMetric(.title))
+                    .font(HLValueSize.tile.numberFont)
                     .foregroundStyle(bandColor)
                     .monospacedDigit()
                     .accessibilityLabel(Text(accessibilityLabel))
                 Text(captionLabel)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .monospacedDigit()
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -137,7 +137,7 @@ struct ComplianceKPISection: View {
         return HLNumberFormat.percent(adherence.rate)
     }
 
-    /// #115 · 1.3 — "N of M taken" (the server's own denominator), or a
+    /// "N of M taken" (the server's own denominator), or a
     /// sentence saying why there is no number.
     private var captionLabel: String {
         switch state {
@@ -153,11 +153,11 @@ struct ComplianceKPISection: View {
         }
     }
 
-    /// v0.12 W4-1 — routed through the single `ComplianceBand` source of truth
+    /// Routed through the single `ComplianceBand` source of truth
     /// so the detail KPI agrees with the card + Insights bars at every boundary.
     /// The prior green-topped ramp (≥0.9 `statusOK` …) is retired: a med at 75 %
     /// no longer reads warn here while reading graphite elsewhere.
-    /// W-COMPLIANCE-INV — the pending placeholder paints tertiary (no band).
+    /// The pending placeholder paints tertiary (no band).
     /// W-B187 coherence — the band derives from the SAME displayed integer
     /// (`summary.percentage`), not a re-rounded ratio. The text rounds half-away
     /// (`.rounded()`) while `band(forRatio:)` truncated (`.towardZero`), so at an
@@ -196,7 +196,7 @@ struct VerlaufGlyphTrack: View {
     /// (`MedicationSchedule`) keeps card + detail consistent.
     var isWeeklyCadence: Bool = false
 
-    /// v0.7.0 W-API-RENDER — above this many days a single row of dots
+    /// Above this many days a single row of dots
     /// becomes an unreadable hairline at iPhone width, so we switch to a
     /// 7-column weekday calendar grid. Short tracks (≤ this) keep the
     /// original single-row strip the operator already knows.
@@ -256,6 +256,12 @@ struct VerlaufGlyphTrack: View {
         Self.canExpand(sourceGlyphs)
     }
 
+    /// The heading names the window that is shown: a daily track folded to
+    /// its last seven days does not say "90 days" over seven dots.
+    nonisolated static func headerKey(isExpanded: Bool, canExpand: Bool, isWeeklyCadence: Bool) -> LocalizedStringKey {
+        canExpand && !isExpanded && !isWeeklyCadence ? "Last 7 days" : "med.verlauf.section.header"
+    }
+
     /// Pure toggle-visibility seam, exposed for the unit-test suite.
     nonisolated static func canExpand(_ glyphs: [MedicationDetailStore.VerlaufGlyph]) -> Bool {
         glyphs.count > collapsedDays
@@ -263,8 +269,8 @@ struct VerlaufGlyphTrack: View {
 
     var body: some View {
         let shown = visibleGlyphs
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("med.verlauf.section.header")
+        Group {
+            HLSectionHeader(Self.headerKey(isExpanded: isExpanded, canExpand: canExpand, isWeeklyCadence: isWeeklyCadence), rank: .area)
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     if isWeeklyCadence {
@@ -275,8 +281,7 @@ struct VerlaufGlyphTrack: View {
                             format: String(localized: "med.verlauf.due_count"),
                             shown.count
                         ))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         singleRow(shown)
                     } else if shown.count > Self.calendarThreshold {
                         calendarGrid(shown)
@@ -285,15 +290,15 @@ struct VerlaufGlyphTrack: View {
                     }
 
                     legend
-
-                    if canExpand {
-                        expandToggle
-                    }
                 }
                 .accessibilityLabel(Text(String(
                     format: String(localized: "med.verlauf.a11y"),
                     shown.count
                 )))
+            }
+            // The unfolding link stands under the card, like "Advanced".
+            if canExpand {
+                expandToggle
             }
         }
     }
@@ -310,7 +315,7 @@ struct VerlaufGlyphTrack: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// v0.7.0 W-API-RENDER — 7-column weekday calendar for the full
+    /// 7-column weekday calendar for the full
     /// 90-day window. `glyphs` arrive oldest-first, so the grid fills
     /// left-to-right, top-to-bottom: each row is a week, the last row is
     /// the most recent days. Dots use a fixed compact size so a quarter
@@ -329,33 +334,17 @@ struct VerlaufGlyphTrack: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// v0.8.5 WFIX-COMPLIANCE fix 3 — the "Mehr"/"More" ⇄ "Weniger"/"Less"
-    /// toggle. Mono `HLText.primary` link styling matches the
-    /// IntakeHistorySection "Load more" affordance (D-026) so the two
-    /// surfaces read as the same primitive.
+    /// The "Mehr anzeigen" ⇄ "Weniger anzeigen" link: the centred text link
+    /// every unfolding list in the app uses.
     private var expandToggle: some View {
-        Button {
+        HLLinkButton(
+            isExpanded ? "med.verlauf.history.show_less" : "med.verlauf.history.show_more",
+            isExpanded: isExpanded
+        ) {
             withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
                 isExpanded.toggle()
             }
-        } label: {
-            HStack(spacing: HLSpace.xxs) {
-                Text(isExpanded
-                    ? String(localized: "med.verlauf.show_less")
-                    : String(localized: "med.verlauf.show_more"))
-                    .font(.hlSubhead)
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    // Quiet disclosure caret beside the link label —
-                    // matches the IntakeHistorySection affordance.
-                    .font(.hlIcon(HLIconSize.sm))
-            }
-            .foregroundStyle(HLText.primary)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(isExpanded
-                ? String(localized: "med.verlauf.show_less")
-                : String(localized: "med.verlauf.show_more")))
     }
 
     private var legend: some View {
@@ -417,7 +406,8 @@ private struct GlyphDot: View {
         switch glyph {
         case .onTime: "circle.fill"
         case .late: "circle.dashed"
-        case .missed: "circle"
+        // #188 (8): the same sign as the dashboard sheet's missed row.
+        case .missed: "xmark.circle.fill"
         case .noSchedule: "minus"
         }
     }
@@ -442,8 +432,7 @@ private struct LegendEntry: View {
                 .font(.hlIcon(HLIconSize.xs, weight: .regular))
                 .foregroundStyle(color)
             Text(label)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
         }
     }
 }

@@ -2,14 +2,14 @@ import Foundation
 
 /// Thin projection of the `GET /api/auth/me` payload — only the `modules` map
 /// (server brief #30, v1.18.0). Decoupled from `UserProfile` so an unrelated
-/// `/me` schema change can't break the module load, mirroring `AuthMeAvatar`.
+/// `/me` schema change can't break the module load.
 ///
 /// **Decode-tolerant:** a server that omits `modules` (prod ≤ v1.17.1, the #30
 /// deploy is "in flight") yields `nil` rather than a decode error. `nil` means
 /// "all modules on" downstream (``ModuleGate.isEnabled(_:)``).
 public struct AuthMeModules: Decodable, Sendable, Equatable {
     public let modules: [String: Bool]?
-    /// **CU-20 (#69) — optimistic-concurrency token.** Echoed as
+    /// **Optimistic-concurrency token.** Echoed as
     /// `baseUpdatedAt` on the next PATCH; a stale one yields
     /// `409 modules_conflict` and nothing is written. Guards the shared
     /// `User.updatedAt` (`api/auth/me/modules/route.ts:128`).
@@ -22,7 +22,7 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
     /// supported backward-compat arm (`optimistic-lock.ts:101-103`).
     public let updatedAt: String?
 
-    /// **Audit A-7 — why a module is off** (`moduleAccess`, server v1.38.15).
+    /// **Why a module is off** (`moduleAccess`, server v1.38.15).
     ///
     /// One ``ModuleAccessState`` per module key, resolved outside-in by the
     /// server (`unavailable` > `not_granted` > `disabled` > `enabled`). It
@@ -36,30 +36,37 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
     /// vocabulary word can never cost the whole map.
     public let moduleAccess: [String: ModuleAccessState]?
 
-    /// **#114 / #115 · 0.2 — the AI capability block** (server v1.39), resolved
+    /// **The AI capability block** (server v1.39), resolved
     /// for the same active record as `modules`. `nil` on an older server (the
     /// field is absent) — and, deliberately, when the block cannot be read at
     /// all, so a malformed `ai` can never cost the module map. Both mean the
     /// legacy AI behaviour (see ``AICapabilityGate``).
     public let ai: AIAccountBlock?
 
-    /// #126 P2 — `features` (server v1.42.0): what this server understands,
+    /// `features` (server v1.42.0): what this server understands,
     /// including the X4 hourly flags (v1.43, #138). `nil` on an older
     /// server or when unreadable; it never costs the map.
     public let features: ServerFeatures?
+    /// **#191 — the account's snooze span**, `notificationPrefs.medication
+    /// .snoozeMinutes` (the same block `GET /api/auth/me/notification-prefs`
+    /// serves). Applied only behind ``MedicationCapability/snoozeSetting``
+    /// (``MedicationSnooze``). `nil` on an older server.
+    public let medicationSnoozeMinutes: Int?
 
     public init(
         modules: [String: Bool]?,
         moduleAccess: [String: ModuleAccessState]? = nil,
         updatedAt: String? = nil,
         ai: AIAccountBlock? = nil,
-        features: ServerFeatures? = nil
+        features: ServerFeatures? = nil,
+        medicationSnoozeMinutes: Int? = nil
     ) {
         self.modules = modules
         self.moduleAccess = moduleAccess
         self.updatedAt = updatedAt
         self.ai = ai
         self.features = features
+        self.medicationSnoozeMinutes = medicationSnoozeMinutes
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,6 +76,8 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         ai = try? container.decodeIfPresent(AIAccountBlock.self, forKey: .ai)
         features = try? container.decodeIfPresent(ServerFeatures.self, forKey: .features)
+        let prefs = try? container.decodeIfPresent(SnoozePrefs.self, forKey: .notificationPrefs)
+        medicationSnoozeMinutes = prefs?.medication?.minutes
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -77,6 +86,34 @@ public struct AuthMeModules: Decodable, Sendable, Equatable {
         case updatedAt
         case ai
         case features
+        case notificationPrefs
+    }
+
+    /// `notificationPrefs.medication.snoozeMinutes`.
+    private struct SnoozePrefs: Decodable {
+        struct Medication: Decodable {
+            let minutes: Int?
+
+            private enum CodingKeys: String, CodingKey {
+                case snoozeMinutes
+            }
+
+            init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                minutes = try? c.decodeIfPresent(Int.self, forKey: .snoozeMinutes)
+            }
+        }
+
+        let medication: Medication?
+
+        private enum CodingKeys: String, CodingKey {
+            case medication
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            medication = try? c.decodeIfPresent(Medication.self, forKey: .medication)
+        }
     }
 }
 
@@ -132,7 +169,7 @@ public struct ModulesPatchDTO: Encodable, Sendable, Equatable {
 public actor ModuleGateRepository {
     private let api: APIClientProtocol
 
-    /// **CU-20 (#69)** — last `updatedAt` seen from the modules surface (the
+    /// Last `updatedAt` seen from the modules surface (the
     /// PATCH echo, or the dedicated `GET /api/auth/me/modules` re-read after a
     /// conflict). `nil` until the first of those lands, which makes a session's
     /// first PATCH unconditional — the permanently supported arm.
@@ -154,7 +191,7 @@ public actor ModuleGateRepository {
         try await fetchModuleGateState().modules
     }
 
-    /// **Audit A-7 — the booleans AND the reasons in one hop.**
+    /// **The booleans AND the reasons in one hop.**
     ///
     /// `GET /api/auth/me` carries both halves (`modules` + `moduleAccess`), so
     /// the gate reads them together: a boolean without its reason is exactly
@@ -193,7 +230,7 @@ public actor ModuleGateRepository {
         }
     }
 
-    /// **CU-20 (#69)** — re-read the token from `GET /api/auth/me/modules`
+    /// Re-read the token from `GET /api/auth/me/modules`
     /// after a conflict. Distinct from ``fetchModules()``, which reads the map
     /// off `GET /api/auth/me` (a route that carries no `updatedAt`).
     private func fetchModulesToken() async throws -> String? {

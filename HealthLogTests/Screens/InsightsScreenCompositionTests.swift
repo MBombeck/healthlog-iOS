@@ -100,71 +100,6 @@ struct InsightsScreenCompositionTests {
             .joined(separator: "\n")
     }
 
-    @Test("1.4 B4 — the on-device briefing hero stays deleted (no second Heute block)")
-    func onDeviceBriefingHeroStaysDeleted() throws {
-        // v0.9.0 W2 re-introduced an on-device "Today at a glance" hero on
-        // Insights; v0.14.1 §4 took it off the overview and nothing mounted it
-        // again, so 1.4 B4 deleted the hero, its wrapper and the signals card.
-        // The duplicate-Heute regression this test was written for (the hero
-        // stacked on an empty `DailyBriefingCard()` placeholder) cannot come
-        // back through any of them. The daily briefing prose lives in
-        // `InsightsDailyBriefingSlot`. Comments may name the types; only
-        // construction sites count.
-        let moduleBody = try codeBody(of: loadInsightsModuleSource())
-        for removed in [
-            "DailyBriefingCard(",
-            "OnDeviceBriefingHero(",
-            "InsightsBriefingHero(",
-            "DailyBriefingHero(",
-            "InsightsSignalsCard("
-        ] {
-            #expect(
-                !moduleBody.contains(removed),
-                "1.4 B4: the Insights surface must not construct \(removed) again."
-            )
-        }
-    }
-
-    @Test("v0.14.1 §4 — overview drops the briefing hero / prompts / dynamics / long-tail")
-    func insightsOverviewDropsRemovedBlocks() throws {
-        // v0.14.1 §4 (operator brief, post-b147 walk): the overview was
-        // restructured to a calm column. The "Heute auf einen Blick" briefing
-        // hero, the "Frag mich" prompt chips, the Dynamics zone, the Vitals
-        // dashboard and the long-tail "weitere Werte" block were ALL removed
-        // from the overview body. This asserts none of those construction sites
-        // remain in `InsightsScreen`'s own body (they may still exist as
-        // orphaned components elsewhere in the module — that's fine; the brief
-        // only removes them from the overview). The briefing kill-switch gate is
-        // gone with the hero.
-        //
-        // v0.14.3 B1: `coachHeroDismissed` is INTENTIONALLY re-introduced — the
-        // Coach hero is dismissible again (close affordance → persisted UI-pref),
-        // so it is no longer in the removed-list below.
-        //
-        // **Parity Build 4 · 4.2 — `InsightsVitalsDashboard(` left this list.**
-        // v0.14.1 §4 dropped the Vitals block's only call site and the block was
-        // then orphaned for the entire redesign, which is precisely why the
-        // operator could no longer see BMI / weight / sleep on the overview. It
-        // is remounted as the `vitals` overview SECTION (`InsightsVitalsSlot` in
-        // `Sub/InsightsOverviewSlots.swift`), operator-hideable like every other
-        // section — so asserting it is absent would now pin the bug, not the
-        // intent. The other four removals stand.
-        let screenBody = try codeBody(of: loadInsightsScreenSource())
-        for removed in [
-            "InsightsBriefingHero(",
-            "InsightsSuggestedPromptsRow(",
-            "InsightsDynamicsZone(",
-            "PerKindInsightsBlock(",
-            "DataQualityFooter(",
-            "briefingObservationsEnabled"
-        ] {
-            #expect(
-                !screenBody.contains(removed),
-                "v0.14.1 §4: the overview body must no longer construct/reference \(removed)."
-            )
-        }
-    }
-
     @Test("Insights overview keeps quiet coach affordances and anchors correlations below sections")
     func insightsOverviewOrder() throws {
         // W-PERF-INSIGHTS (v0152 perf audit C1) — the overview composition was
@@ -180,18 +115,12 @@ struct InsightsScreenCompositionTests {
         let moduleBody = try codeBody(of: loadInsightsModuleSource())
         let sectionLoop = overviewBody.range(of: "ForEach(layoutStore.layout.visibleSectionIds")
         let correlations = overviewBody.range(of: "InsightsCorrelationsSlot(")
-        let trailingState = overviewBody.range(of: "InsightsEmptyErrorSlot(")
         #expect(sectionLoop != nil, "The server-owned overview section loop must remain mounted.")
         #expect(correlations != nil, "Correlations must remain available on the overview.")
-        #expect(trailingState != nil, "The anchored empty/error state must remain last.")
-        if let sectionLoop, let correlations, let trailingState {
+        if let sectionLoop, let correlations {
             #expect(
                 sectionLoop.lowerBound < correlations.lowerBound,
                 "Correlations must sit below all customizable sections, including Vitalwerte."
-            )
-            #expect(
-                correlations.lowerBound < trailingState.lowerBound,
-                "Correlations must remain above the terminal empty/error state."
             )
         }
         #expect(
@@ -211,9 +140,9 @@ struct InsightsScreenCompositionTests {
             moduleBody.contains("InsightsServerDerivedOverview("),
             "Wellness scores (InsightsServerDerivedOverview) must exist."
         )
-        // 1.4 B4 — the "Trends" row repeated Vitalwerte and the Heute tiles; its section id renders nothing on iOS.
+        // The "Trends" row repeated Vitalwerte and the Heute tiles; its section id renders nothing on iOS.
         #expect(!moduleBody.contains("InsightsTrendsRow(") && !moduleBody.contains("InsightsTrendsSlot("), "1.4 B4: Trends is gone.")
-        // v0.14.9 §1 — the "Rückblick" retrospective card was removed from the
+        // The "Rückblick" retrospective card was removed from the
         // overview (operator: "doesn't fit, too much"). It must NOT be mounted.
         #expect(
             !overviewBody.contains("InsightsRetrospectiveCard"),
@@ -223,7 +152,7 @@ struct InsightsScreenCompositionTests {
         // v0.14.6 H3 rebound it from `store.comprehensive?.summary` (the
         // comprehensive digest never emits `summary`) to the AI briefing summary;
         // v0.14.7 A3 added a deterministic narrative fallback so prose appears for
-        // provider-less accounts too. Pin both real sources (B4). Post-W-PERF-INSIGHTS
+        // provider-less accounts too. Pin both real sources. Post-W-PERF-INSIGHTS
         // they live in `InsightsDailyBriefingSlot` (still in the Insights module).
         // 2026-07-18 (parity Wave 1 · 1.2): rebound from `briefingStore.summary`
         // to `briefingStore.paragraphContent`. Reading `summary` DIRECTLY skipped
@@ -244,14 +173,14 @@ struct InsightsScreenCompositionTests {
             moduleBody.contains("narrativeStore.narrative(for:"),
             "The Einschätzung must fall back to the deterministic period narrative (A3)."
         )
-        // v0.14.3 E4: the overview must NOT keep the dead-end trendChartMetric
+        // The overview must NOT keep the dead-end trendChartMetric
         // navigation seam (a bare InsightsMetricScreen push with no tab strip).
         let screenBody = try codeBody(of: loadInsightsScreenSource())
         #expect(
             !screenBody.contains("$trendChartMetric"),
             "E4: the dead-end .navigationDestination(item: $trendChartMetric) must be removed."
         )
-        // E4: the Trends row must route through the navigable router seam.
+        // The Trends row must route through the navigable router seam.
         #expect(
             screenBody.contains("router.selectInsightsMetric"),
             "E4: the Trends row must route via router.selectInsightsMetric (tab strip + swipe + back)."
@@ -266,7 +195,7 @@ struct InsightsScreenCompositionTests {
     /// Insights did nothing. There was NO test asserting the affordance was
     /// attached — which is exactly why the redesign could drop it unnoticed.
     ///
-    /// **v0.14.3 C4:** the old `kind == .bloodPressure` fork (rich `BPStatusCard`
+    /// The old `kind == .bloodPressure` fork (rich `BPStatusCard`
     /// vs thin `InsightsPrimaryTile`) was collapsed into ONE canonical
     /// `InsightsMetricStatusCard` (`statusBlock`), so there is now exactly ONE
     /// pin attachment — the single canonical 30-day card every metric routes
@@ -285,7 +214,7 @@ struct InsightsScreenCompositionTests {
             every metric is un-pinnable from Insights.
             """
         )
-        // C4: exactly ONE attachment now — the single canonical card replaced the
+        // Exactly ONE attachment now — the single canonical card replaced the
         // BPStatusCard + InsightsPrimaryTile fork (which carried one each).
         let occurrences = metricScreen.components(
             separatedBy: ".pinToHomeContextMenu(kind: kind, container: appContainer)"

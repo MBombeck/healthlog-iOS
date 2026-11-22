@@ -27,7 +27,7 @@ final class WorkoutRoutesSettingModel {
         case off
     }
 
-    /// POLISH-B B10 — the explicit pass for routes of older workouts.
+    /// The explicit pass for routes of older workouts.
     enum BackfillPhase: Equatable {
         case idle
         case running
@@ -159,7 +159,7 @@ extension AppleHealthIntegrationDetailScreen {
     /// a server of v1.44.0 or newer and the workouts module on.
     @ViewBuilder
     var workoutRoutesAdvanced: some View {
-        if let container, backend.hasServer,
+        if let container,
            WorkoutRouteOptIn.serverSupportsRoutes(),
            container.moduleGate.isEnabled(.workouts)
         {
@@ -185,7 +185,7 @@ extension AppleHealthIntegrationDetailScreen {
 }
 
 extension AppleHealthIntegrationDetailScreen {
-    /// POLISH-B B10 — the pass for older workouts, only on a server of
+    /// The pass for older workouts, only on a server of
     /// v1.47.1 or newer and for a signed-in account.
     static func routeBackfill(
         healthKit: HealthKitService?,
@@ -207,24 +207,10 @@ struct AppleHealthWorkoutRoutesAdvanced: View {
 
     var body: some View {
         VStack(spacing: HLSpace.sm) {
-            Button {
+            HLLinkButton("Advanced", isExpanded: expanded) {
                 withHLAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-            } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Text("Advanced")
-                        .font(.hlSubhead.weight(.semibold))
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .accessibilityHidden(true)
-                }
-                .foregroundStyle(HLText.secondary)
-                .frame(minHeight: 44)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("settings.applehealth.advanced")
-            .accessibilityValue(expanded ? Text("Expanded") : Text("Collapsed"))
             if expanded, let model {
                 WorkoutRoutesCard(model: model)
                     .transition(.opacity)
@@ -246,9 +232,8 @@ struct WorkoutRoutesCard: View {
     let model: WorkoutRoutesSettingModel
 
     var body: some View {
-        HLSettingsCard(
-            icon: "map",
-            title: "settings.applehealth.routes.title",
+        HLCard(
+            "settings.applehealth.routes.title",
             subtitle: "settings.applehealth.routes.subtitle"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
@@ -266,8 +251,7 @@ struct WorkoutRoutesCard: View {
                     failedContent
                 case .unavailable:
                     Text("settings.applehealth.routes.unavailable")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -303,15 +287,14 @@ struct WorkoutRoutesCard: View {
         }
     }
 
-    /// POLISH-B B10 — "Send routes of older workouts", after a tap only.
+    /// "Send routes of older workouts", after a tap only.
     @ViewBuilder
     private var backfillContent: some View {
         let running = model.backfillPhase == .running
         HLButton(
             "settings.applehealth.routes.backfill.action",
-            icon: "arrow.up.circle",
+            systemImage: "arrow.up.circle",
             variant: .secondary,
-            size: .regular,
             isLoading: running
         ) {
             Task { await model.runBackfill() }
@@ -349,7 +332,7 @@ struct WorkoutRoutesCard: View {
             .font(.hlCaption)
             .foregroundStyle(HLColor.statusBad)
             .fixedSize(horizontal: false, vertical: true)
-        HLButton(String(localized: "Try again"), icon: "arrow.clockwise", variant: .secondary, size: .regular) {
+        HLButton(HLControlWord.retry.key, systemImage: "arrow.clockwise", variant: .secondary) {
             Task { await model.load() }
         }
         .accessibilityIdentifier("settings.applehealth.routes.retry")

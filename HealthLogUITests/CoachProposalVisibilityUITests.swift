@@ -1,6 +1,6 @@
 import XCTest
 
-/// **1.5 COACH-R** — after sending, the keyboard stays open (as everywhere in
+/// After sending, the keyboard stays open (as everywhere in
 /// the Coach chat). A plan proposal and the trail link arrive after the answer;
 /// the transcript must bring them up above the keyboard, so both buttons and
 /// the link can be tapped without closing the keyboard first.
@@ -29,7 +29,7 @@ final class CoachProposalVisibilityUITests: XCTestCase {
     /// last option can be brought above the tab bar.
     func test_reasoningCardReachableAboveTabBar() {
         let app = launch(extra: [])
-        app.tabBars.buttons.containing(.image, identifier: "ellipsis").firstMatch.tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .more, in: app), "More tab missing")
         XCTAssertTrue(app.buttons["more.toolbar.gear"].waitForExistence(timeout: 10))
         app.buttons["more.toolbar.gear"].tap()
         let aiRow = app.descendants(matching: .any).matching(identifier: "settings.hub.ai").firstMatch
@@ -59,7 +59,7 @@ final class CoachProposalVisibilityUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 15), "Coach input missing")
         field.tap()
         field.typeText("Wie habe ich diese Woche geschlafen?")
-        // POLISH-B B1 — the composer sits above the open keyboard before the
+        // The composer sits above the open keyboard before the
         // first question. On iOS 26.5 at AX-XXL the welcome and the chips, a
         // fixed block above the transcript, pushed it under the keyboard; the
         // tap on "send" then hit a key and no question was ever sent.
@@ -106,7 +106,7 @@ final class CoachProposalVisibilityUITests: XCTestCase {
     private func scrollUntilAboveTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         for _ in 0 ..< 8 {
             if element.waitForExistence(timeout: 2), element.isHittable,
-               element.frame.maxY < app.tabBars.firstMatch.frame.minY
+               element.frame.maxY < ShellNavigator.bottomChromeMinY(in: app)
             {
                 return true
             }

@@ -21,7 +21,7 @@ import Testing
 ///   (`.../[jobId]/status/route.ts`, `ImportJobStatusResponse`)
 @Suite("AppleHealthImportService", .serialized)
 struct AppleHealthImportServiceTests {
-    /// The transport seam (issue #82 / Plan 09-11). Both halves come from the
+    /// The transport seam. Both halves come from the
     /// caller's retained session, so every request this client makes is answered
     /// by that session's handler or by nothing at all.
     ///
@@ -273,7 +273,7 @@ struct AppleHealthImportServiceTests {
         #expect(updates.value == 2)
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-11)
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     func aLaterInstallCannotAnswerThisSuite() async throws {
@@ -316,7 +316,7 @@ struct AppleHealthImportServiceTests {
 
         // A positive count is the whole point: a thrown transport error and a
         // server refusal are indistinguishable from the decoded envelope alone.
-        #expect(mine.value == 1, "EXPECTED_RED: AppleHealthImportServiceTests was not routed to its own session")
+        #expect(mine.value == 1, "AppleHealthImportServiceTests was not routed to its own session")
         #expect(theirs.value == 0)
         #expect(kickoff?.jobId == "ij-session")
     }
@@ -354,7 +354,7 @@ private final class Counter: Sendable {
 }
 
 /// Handler-side capture of one header value, owned by the session that installs
-/// the handler. Replaces an unsafely-nonisolated `var` (Plan 09-11).
+/// the handler. Replaces an unsafely-nonisolated `var`.
 private final class HeaderBox: Sendable {
     private let stored = Mutex<String?>(nil)
 

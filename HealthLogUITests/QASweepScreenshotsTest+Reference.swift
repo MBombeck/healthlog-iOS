@@ -10,7 +10,6 @@ import XCTest
 /// when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
     func test_13_infoPatternReference() {
-        guard !isXXL else { return }
         boot()
         shotToEnd("13-today")
         // Oxygen carries the longest German title of the sweep pages, the
@@ -40,6 +39,7 @@ extension QASweepScreenshotsTest {
     /// The screen from where it stands down to its end: one shot, then one per
     /// scroll until a scroll leaves the picture unchanged (at most ten).
     func shotToEnd(_ name: String) {
+        answerHealthAccess()
         shot("\(name)-top")
         var previous = XCUIScreen.main.screenshot().pngRepresentation
         for step in 1 ... 10 {

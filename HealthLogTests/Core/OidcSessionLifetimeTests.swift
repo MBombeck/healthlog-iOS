@@ -50,7 +50,7 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 
@@ -93,7 +93,7 @@
                 false
             }
             if first.cancelCount != 1 || !firstWasCanceled || !secondWasCurrent {
-                Issue.record("EXPECTED_RED: OIDC overlap completed wrong operation")
+                Issue.record("OIDC overlap completed wrong operation")
             }
         }
 

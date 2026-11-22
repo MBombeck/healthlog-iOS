@@ -1,5 +1,6 @@
 "NSHealthShareUsageDescription" = "HealthLog reads the health data you allow from Apple Health (including vital signs, activity, nutrition, sleep, mood, cycle data, ECGs, workout and heart-rate data, and medications) to display and sync it and calculate trends.";
 "NSHealthUpdateUsageDescription" = "HealthLog saves measurements, mood and cycle entries you create, and measurements from devices or imports you connect to Apple Health when you allow HealthLog to write.";
+"NSHealthClinicalHealthRecordsShareUsageDescription" = "HealthLog reads lab results from your health records in Apple Health when you turn this on in Lab results, and stores them on your HealthLog server so you can see them with your other lab results.";
 "NSFaceIDUsageDescription" = "HealthLog uses Face ID to protect your data.";
 "NSUserNotificationsUsageDescription" = "HealthLog reminds you about medications and measurements.";
 "NSAlarmKitUsageDescription" = "HealthLog provides loud alarms for time-critical medications that you explicitly enable. They can break through Silent mode and Focus so you do not miss an important dose.";

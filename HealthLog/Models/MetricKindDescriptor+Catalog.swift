@@ -18,7 +18,7 @@ public extension MetricKindDescriptor {
                 tint: HLSurface.secondary,
                 title: LocalizedStringResource("Weight", comment: "Metric title — weight"),
                 unitLabel: LocalizedStringResource("kg", comment: "Unit — kilograms"),
-                // #115 · 1.1 — no client verdict on weight. Which way is
+                // No client verdict on weight. Which way is
                 // progress depends on the person's own target and is the
                 // server's call (`tiles.weightTrend`); surfaces that have that
                 // verdict colour by it, every other surface stays neutral.
@@ -190,11 +190,12 @@ public extension MetricKindDescriptor {
                 )
             ),
 
-            // MARK: - v0.5.2 F2 HK-completeness additions
+            // MARK: - HK-completeness kinds
 
             .init(
                 kind: .restingHeartRate,
-                sfSymbol: "heart.text.square.fill",
+                // A heart, not the card symbol the condition journal uses.
+                sfSymbol: "heart.circle.fill",
                 tint: HLSurface.secondary,
                 title: LocalizedStringResource("Resting heart rate", comment: "Metric title — resting heart rate"),
                 unitLabel: LocalizedStringResource("bpm", comment: "Unit — beats per minute"),
@@ -312,7 +313,7 @@ public extension MetricKindDescriptor {
                 )
             ),
 
-            // MARK: - v0.7.0 HK adopt-and-stream additions
+            // MARK: - HK adopt-and-stream kinds
 
             .init(
                 kind: .walkingDoubleSupport,
@@ -337,7 +338,7 @@ public extension MetricKindDescriptor {
                 )
             ),
 
-            // W28d — walking steadiness (Apple fall-risk mobility classifier).
+            // Walking steadiness (Apple fall-risk mobility classifier).
             .init(
                 kind: .walkingSteadiness,
                 sfSymbol: "figure.walk.motion",
@@ -430,7 +431,7 @@ public extension MetricKindDescriptor {
                 )
             ),
 
-            // MARK: - v0.8.3 W-D — render-backlog activity aggregates
+            // MARK: - Render-backlog activity aggregates
 
             .init(
                 kind: .activeEnergy,
@@ -521,7 +522,7 @@ public extension MetricKindDescriptor {
                 )
             ),
 
-            // MARK: - v0.11 W21 — web-parity body-composition + cardio additions
+            // MARK: - Web-parity body-composition + cardio additions
 
             //
             // Server/Withings-sourced read-only kinds (see `MetricKind` v0.11
@@ -701,7 +702,7 @@ public extension MetricKindDescriptor {
                     comment: "Empty state — walking heart rate"
                 )
             ),
-            // v0.11 reconcile (F3) — 9th W21 type: Withings FAT_MASS (kg), the
+            // v0.11 reconcile — 9th W21 type: Withings FAT_MASS (kg), the
             // mass form of body-fat (pairs with fat-free mass to total weight).
             .init(
                 kind: .fatMass,
@@ -750,25 +751,27 @@ public extension MetricKindDescriptor {
                 )
             )
         ]
-            // v0.13.1 IC — the v1.10.0 additive descriptors live in
+            // The v1.10.0 additive descriptors live in
             // `MetricKindDescriptor+IC.swift` (keeps this file under the 1000-line
             // budget). Concatenated here so the catalog stays the single dict.
             + additiveV1100Descriptors
-            // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+            // v1.17.1 source-fixed render-only signals.
             + sourceFixedV1171Descriptors
-            // v0158 — v1.25 clinical measurement types (pain / grip / waist / WtH).
+            // v1.25 clinical measurement types (pain / grip / waist / WtH).
             + v125ClinicalDescriptors
             // Build 3 / item 3.3 — the 21 kinds added with the decoder catch-up
             // (screener sums, wearable scores, sleep sub-scores, categorical
             // events). See `MetricKindDescriptor+B3Decoder.swift`.
             + b3DecoderDescriptors
-            // Audit B-4 — the audio-exposure event and the generic `unknown`
+            // The audio-exposure event and the generic `unknown`
             // arm. See `MetricKindDescriptor+AuditB4.swift`.
             + auditB4Descriptors
-            // #162 — the four Garmin types (server v1.47.0).
+            // The four Garmin types (server v1.47.0).
             + garminDescriptors
-            // HK-NEW (1.5) — the six server-v1.44 Apple Health types.
+            // The six server-v1.44 Apple Health types.
             + server144Descriptors
+            // Blood ketones, resting energy and the room-climate readings.
+            + readOnlyTypeDescriptors
         var dict: [MetricKind: MetricKindDescriptor] = [:]
         for entry in entries {
             dict[entry.kind] = entry

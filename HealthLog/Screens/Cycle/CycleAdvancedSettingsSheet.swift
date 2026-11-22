@@ -4,7 +4,6 @@ import SwiftUI
 /// `enabled`, which remains owned by the later opt-in build.
 struct CycleAdvancedSettingsSheet: View {
     let store: CycleStore
-    let onDismiss: () -> Void
 
     @State private var goal: CycleGoal = .generalHealth
     @State private var predictionEnabled = true
@@ -15,92 +14,95 @@ struct CycleAdvancedSettingsSheet: View {
     @State private var secondarySymptom: CycleSecondarySymptom = .mucus
     @State private var sensitiveCategoryEncryption = false
     @State private var discreetNotifications = false
-    @State private var isSaving = false
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold("cycle.settings.title", action: .save { await save() }) {
             Form {
-                Section("cycle.settings.goal.header") {
-                    Picker("cycle.settings.goal.label", selection: $goal) {
-                        ForEach(CycleGoal.allCases, id: \.self) { value in
-                            Text(goalLabel(value)).tag(value)
+                Group {
+                    Section {
+                        HLFormPicker(
+                            "cycle.settings.goal.label",
+                            selection: $goal,
+                            options: CycleGoal.allCases
+                        ) { Text(goalLabel($0)) }
+                        Toggle(isOn: $predictionEnabled) {
+                            HLRowTitle("cycle.settings.prediction.label")
                         }
+                        Toggle(isOn: $rawChartMode) {
+                            HLRowTitle("cycle.settings.rawMode.label")
+                        }
+                    } header: {
+                        HLSectionHeader("cycle.settings.goal.header", rank: .group)
                     }
-                    Toggle("cycle.settings.prediction.label", isOn: $predictionEnabled)
-                    Toggle("cycle.settings.rawMode.label", isOn: $rawChartMode)
-                }
 
-                Section {
-                    numberField(
-                        "cycle.settings.typicalCycleLength.label",
-                        text: $typicalCycleLength,
-                        range: 15 ... 60
-                    )
-                    numberField(
-                        "cycle.settings.typicalPeriodLength.label",
-                        text: $typicalPeriodLength,
-                        range: 1 ... 15
-                    )
-                    numberField(
-                        "cycle.settings.lutealPhaseLength.label",
-                        text: $lutealPhaseLength,
-                        range: 10 ... 16
-                    )
-                } header: {
-                    Text("cycle.settings.priors.header")
-                }
-
-                Section {
-                    Picker("cycle.settings.secondarySymptom.label", selection: $secondarySymptom) {
-                        Text("cycle.settings.secondarySymptom.mucus").tag(CycleSecondarySymptom.mucus)
-                        Text("cycle.settings.secondarySymptom.cervix").tag(CycleSecondarySymptom.cervix)
+                    Section {
+                        numberField(
+                            "cycle.settings.typicalCycleLength.label",
+                            text: $typicalCycleLength,
+                            range: 15 ... 60
+                        )
+                        numberField(
+                            "cycle.settings.typicalPeriodLength.label",
+                            text: $typicalPeriodLength,
+                            range: 1 ... 15
+                        )
+                        numberField(
+                            "cycle.settings.lutealPhaseLength.label",
+                            text: $lutealPhaseLength,
+                            range: 10 ... 16
+                        )
+                    } header: {
+                        HLSectionHeader("cycle.settings.priors.header", rank: .group)
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("cycle.settings.secondarySymptom.header")
-                } footer: {
-                    Text("cycle.settings.secondarySymptom.footer")
-                }
 
-                Section("cycle.settings.privacy.header") {
-                    Toggle("cycle.settings.sensitiveEncryption.label", isOn: $sensitiveCategoryEncryption)
-                    Toggle("cycle.settings.discreetNotifications.label", isOn: $discreetNotifications)
-                }
-
-                // 1.4 B2 — the way to the Apple Health sync, which stood as a
-                // loose link under the last card of the cycle screen.
-                Section {
-                    NavigationLink {
-                        AppleHealthIntegrationDetailScreen()
-                    } label: {
-                        Label("Apple Health", systemImage: "heart.text.square")
+                    Section {
+                        HLAdaptiveSegmentedPicker(
+                            "cycle.settings.secondarySymptom.label",
+                            selection: $secondarySymptom,
+                            labels: ["cycle.settings.secondarySymptom.mucus", "cycle.settings.secondarySymptom.cervix"]
+                        ) {
+                            Text("cycle.settings.secondarySymptom.mucus").tag(CycleSecondarySymptom.mucus)
+                            Text("cycle.settings.secondarySymptom.cervix").tag(CycleSecondarySymptom.cervix)
+                        }
+                    } header: {
+                        HLSectionHeader("cycle.settings.secondarySymptom.header", rank: .group)
+                    } footer: {
+                        Text("cycle.settings.secondarySymptom.footer")
                     }
-                    .accessibilityIdentifier("cycle.settings.appleHealth")
-                }
 
-                if let error {
-                    Section { HLFormErrorText(error) }
+                    Section {
+                        Toggle(isOn: $sensitiveCategoryEncryption) {
+                            HLRowTitle("cycle.settings.sensitiveEncryption.label")
+                        }
+                        Toggle(isOn: $discreetNotifications) {
+                            HLRowTitle("cycle.settings.discreetNotifications.label")
+                        }
+                    } header: {
+                        HLSectionHeader("cycle.settings.privacy.header", rank: .group)
+                    }
+
+                    // The way to the Apple Health sync, which stood as a
+                    // loose link under the last card of the cycle screen.
+                    Section {
+                        HLSettingsActionRow(icon: "heart.text.square", title: "Apple Health", presents: .push) {
+                            AppleHealthIntegrationDetailScreen()
+                        }
+                        .accessibilityIdentifier("cycle.settings.appleHealth")
+                    }
+
+                    if let error {
+                        Section { HLFormErrorText(error) }
+                    }
                 }
+                .hlFormRowSurface()
             }
-            .disabled(isSaving)
-            .navigationTitle("cycle.settings.title")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(isSaving)
-                }
-            }
+            .hlPageMargins()
             .onAppear(perform: loadProfile)
         }
-        .interactiveDismissDisabled(isSaving)
     }
 
-    /// 1.4 B2 — label left, value right; an empty field reads "Automatisch",
+    /// Label left, value right; an empty field reads "Automatisch",
     /// which is what clearing a prior means (the footer that said so is gone).
     private func numberField(
         _ key: LocalizedStringKey,
@@ -108,7 +110,7 @@ struct CycleAdvancedSettingsSheet: View {
         range: ClosedRange<Int>
     ) -> some View {
         LabeledContent {
-            TextField(text: text, prompt: Text("cycle.settings.priors.automatic")) {
+            TextField(text: text, prompt: Text("cycle.settings.priors.automatic").foregroundStyle(HLText.tertiary)) {
                 Text(key)
             }
             .multilineTextAlignment(.trailing)
@@ -123,7 +125,7 @@ struct CycleAdvancedSettingsSheet: View {
                 String(format: String(localized: "cycle.settings.range.hint"), range.lowerBound, range.upperBound)
             ))
         } label: {
-            Text(key)
+            HLRowTitle(key)
         }
     }
 
@@ -140,17 +142,16 @@ struct CycleAdvancedSettingsSheet: View {
         discreetNotifications = profile.discreetNotifications
     }
 
-    private func save() async {
+    /// `true` when the sheet may close.
+    private func save() async -> Bool {
         guard let cycle = patchField(typicalCycleLength, range: 15 ... 60),
               let period = patchField(typicalPeriodLength, range: 1 ... 15),
               let luteal = patchField(lutealPhaseLength, range: 10 ... 16) else
         {
             error = String(localized: "cycle.settings.validation.error")
-            return
+            return false
         }
-        isSaving = true
         error = nil
-        defer { isSaving = false }
         let patch = CyclePrefsPatch(
             goal: goal,
             rawChartMode: rawChartMode,
@@ -162,11 +163,9 @@ struct CycleAdvancedSettingsSheet: View {
             sensitiveCategoryEncryption: sensitiveCategoryEncryption,
             secondarySymptom: secondarySymptom
         )
-        if await store.updatePreferences(patch) {
-            onDismiss()
-        } else {
-            error = store.lastError ?? String(localized: "cycle.settings.save.error")
-        }
+        if await store.updatePreferences(patch) { return true }
+        error = store.lastError ?? String(localized: "cycle.settings.save.error")
+        return false
     }
 
     private func patchField(_ text: String, range: ClosedRange<Int>) -> RecordPatchField<Int>? {

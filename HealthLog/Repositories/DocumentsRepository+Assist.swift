@@ -29,7 +29,7 @@ public extension DocumentsRepository {
     /// the request reaches the vision handler — sending an empty `{}` object would
     /// be mis-routed to TEXT and fail immediately. TEXT mode sends the JSON body.
     ///
-    /// POLISH-B B7: on a server of v1.40 or newer the read prefers a
+    /// On a server of v1.40 or newer the read prefers a
     /// background run (see ``assistPrefersRun(defaults:)``).
     func suggest(
         id: String,
@@ -100,7 +100,7 @@ public extension DocumentsRepository {
         return try await sendWithExternalAIConsent(req)
     }
 
-    // MARK: - Background run for suggest and summary (POLISH-B B7)
+    // MARK: - Background run for suggest and summary
 
     /// The first server release whose suggest and summary routes take
     /// `Prefer: respond-async` (SRV-REQ H).

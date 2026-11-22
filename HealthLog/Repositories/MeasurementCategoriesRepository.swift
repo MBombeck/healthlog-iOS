@@ -222,7 +222,7 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "WALKING_RUNNING_DISTANCE": "activity",
             "VO2_MAX": "activity",
             "WALKING_STEADINESS": "activity",
-            // v0.5.2 F2 — server enum NOT yet present, but ship the
+            // Server enum NOT yet present, but ship the
             // categorisation so once the server adds them, the Picker
             // groups them correctly without an iOS client update.
             "WALKING_SPEED": "activity",
@@ -237,11 +237,11 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "BODY_MASS_INDEX": "body",
             // sleep
             "SLEEP_DURATION": "sleep",
-            // v0.13.1 IC — breathing disturbances is an overnight sleep metric.
+            // Breathing disturbances is an overnight sleep metric.
             "BREATHING_DISTURBANCES": "sleep",
-            // v0.14.6 — WHOOP-native sleep-disturbance count joins the sleep cluster.
+            // WHOOP-native sleep-disturbance count joins the sleep cluster.
             "SLEEP_DISTURBANCE_COUNT": "sleep",
-            // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+            // v1.17.1 source-fixed render-only signals.
             // Server `categories.ts`: SLEEP_SCORE → sleep, ANS_CHARGE /
             // CARDIO_LOAD → scores, BODY_TEMPERATURE_DEVIATION → metabolic.
             "SLEEP_SCORE": "sleep",
@@ -260,22 +260,22 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "PULSE_WAVE_VELOCITY": "cardiovascular",
             "VASCULAR_AGE": "cardiovascular",
             "WALKING_HEART_RATE_AVERAGE": "cardiovascular",
-            // v0.13.1 IC — cardio recovery is a heart-rate-derived cardio metric.
+            // Cardio recovery is a heart-rate-derived cardio metric.
             "CARDIO_RECOVERY": "cardiovascular",
-            // v0.14.6 — WHOOP-native avg/max HR are heart-rate-derived → cardiovascular.
+            // WHOOP-native avg/max HR are heart-rate-derived → cardiovascular.
             "AVERAGE_HEART_RATE": "cardiovascular",
             "MAX_HEART_RATE": "cardiovascular",
             // metabolic
             "BLOOD_GLUCOSE": "metabolic",
             "SKIN_TEMPERATURE": "metabolic",
-            // v0.13.1 IC — overnight wrist temperature joins metabolic.
+            // Overnight wrist temperature joins metabolic.
             "WRIST_TEMPERATURE": "metabolic",
-            // v0.13.1 IC — v1.10.0 mobility/fitness signals join activity.
+            // v1.10.0 mobility/fitness signals join activity.
             "FALL_COUNT": "activity",
             "SIX_MINUTE_WALK_DISTANCE": "activity",
             "STAIR_ASCENT_SPEED": "activity",
             "STAIR_DESCENT_SPEED": "activity",
-            // v0158 — v1.25 clinical measurement types. Mirror the server
+            // v1.25 clinical measurement types. Mirror the server
             // `categories.ts`: PAIN_NRS → vitals, GRIP_STRENGTH → activity,
             // WAIST_CIRCUMFERENCE / WAIST_TO_HEIGHT → body. Keeps the offline
             // category fallback exhaustive over `ServerMeasurementType`.
@@ -283,7 +283,7 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "GRIP_STRENGTH": "activity",
             "WAIST_CIRCUMFERENCE": "body",
             "WAIST_TO_HEIGHT": "body",
-            // Build 3 / 3.3 — die 21 Typen, die mit dem Decoder-Nachzug dazukamen.
+            // Die 21 Typen, die mit dem Decoder-Nachzug dazukamen.
             // Zuordnung 1:1 aus dem Server (`src/lib/measurements/categories.ts`)
             // uebernommen, nicht selbst kategorisiert: ohne Eintrag liefert
             // `categoryId(forRawType:)` nil und der Wert landet im Picker nirgends.
@@ -308,13 +308,13 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "GAD7_SCORE": "scores",
             "WHO5_SCORE": "scores",
             "SCI_SCORE": "scores",
-            // #162 — Garmin (server v1.47.0 `categories.ts`): all four join
+            // Garmin (server v1.47.0 `categories.ts`): all four join
             // the device-native scores.
             "BODY_BATTERY": "scores",
             "STRESS_LEVEL": "scores",
             "TRAINING_READINESS": "scores",
             "ACUTE_TRAINING_LOAD": "scores",
-            // HK-NEW (1.5) — server v1.44 `categories.ts`: the rings and mindful
+            // Server v1.44 `categories.ts`: the rings and mindful
             // minutes join activity, the valence the scores, AFib burden the
             // cardiovascular cluster.
             "EXERCISE_MINUTES": "activity",
@@ -322,7 +322,14 @@ public struct CategoryAssignmentMap: Codable, Sendable, Equatable {
             "STAND_HOURS": "activity",
             "MINDFUL_MINUTES": "activity",
             "STATE_OF_MIND_VALENCE": "scores",
-            "AFIB_BURDEN": "cardiovascular"
+            "AFIB_BURDEN": "cardiovascular",
+            // Server `categories.ts`: ketones with glucose, resting energy with
+            // activity, room climate with daylight in the environment cluster.
+            "BLOOD_KETONES": "metabolic",
+            "BASAL_ENERGY_BURNED": "activity",
+            "INDOOR_CO2": "environment",
+            "INDOOR_TEMPERATURE": "environment",
+            "INDOOR_HUMIDITY": "environment"
         ]
     )
 }

@@ -4,7 +4,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **v0.6.2 W-SEC-A (M-4) — Outbox payload encryption.**
+/// **Outbox payload encryption.**
 ///
 /// Pins the at-rest encryption contract for the SwiftData
 /// `OutboxOperation.payload` blob:

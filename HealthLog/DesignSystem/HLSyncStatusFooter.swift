@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.8 W2-SYNCUX — the **one shared sync-status footer** every refreshable
+/// The **one shared sync-status footer** every refreshable
 /// screen mounts at the end of its scroll content. Wraps the canonical
 /// `SyncStatusCaption` (Dashboard/Insights v0.14.1, operator-approved: "nett,
 /// nicht überfrachtet") with its standard placement chrome so the rollout
@@ -36,14 +36,14 @@ import SwiftUI
 ///
 /// **Self-suppression** is inherited from `SyncStatusCaption`: until anything
 /// has synced (`SyncStateStore.lastSync == nil`) and nothing is in flight, the
-/// footer renders nothing — standalone installs and screens without server
-/// data therefore stay byte-identical.
+/// footer renders nothing — screens without server data therefore stay
+/// byte-identical.
 ///
-/// **U1 (#16):** the footer is the secondary line now. The live feedback is at
+/// The footer is the secondary line now. The live feedback is at
 /// the top of the Dashboard (`HLSyncActivityGlyph`, attention glyph, status
 /// panel); both read the same `SyncStateStore`.
 ///
-/// **b178 W-SYNCVIS:** visibility is now driven by `SyncStateStore.phase`
+/// Visibility is now driven by `SyncStateStore.phase`
 /// (`.syncing` held ≥ 600 ms, `.done` confirmation for 1.5 s — also on
 /// read-only pulls), so the footer is perceivable on fast networks too. The
 /// caption reads the phase from the environment store; call sites are

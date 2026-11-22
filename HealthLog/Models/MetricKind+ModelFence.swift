@@ -1,6 +1,6 @@
 import Foundation
 
-// HK-NEW (1.5) — the kinds no language model is handed.
+// The kinds no language model is handed.
 //
 // The server keeps mindful minutes, the State of Mind valence and AFib burden
 // off every AI-facing surface (`signals/registry.ts` v1.44, and
@@ -13,6 +13,8 @@ extension MetricKind {
     var isModelFenced: Bool {
         switch self {
         case .mindfulMinutes, .stateOfMindValence, .afibBurden: true
+        // Off the coach snapshot on the server as well (`coachSnapshot: false`).
+        case .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity: true
         default: false
         }
     }
@@ -33,6 +35,11 @@ extension MetricKind {
         case .mindfulMinutes: "mindful minutes"
         case .stateOfMindValence: "state of mind (valence)"
         case .afibBurden: "AFib burden"
+        case .bloodKetones: "blood ketones"
+        case .basalEnergy: "resting energy"
+        case .indoorCO2: "indoor CO2"
+        case .indoorTemperature: "indoor temperature"
+        case .indoorHumidity: "indoor humidity"
         default: rawValue
         }
     }

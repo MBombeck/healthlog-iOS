@@ -1,12 +1,12 @@
 import SwiftUI
 
-// MARK: - Resolved channel state (REG-12)
+// MARK: - Resolved channel state
 
 /// Pre-baked glyph / tint / copy for a single channel row.
 /// Centralising the rendering decision here keeps `channelRow`
 /// declarative and makes the state matrix unit-testable.
 ///
-/// Created for REG-12 (v0.5.6) when the Settings → Notifications row
+/// Created for REG-12 when the Settings → Notifications row
 /// grew status-awareness (active / auto-disabled / sending-paused /
 /// manually-disabled) on top of the existing `enabled` boolean. The
 /// previous inline ternary picked between "checkmark" and "empty
@@ -40,7 +40,7 @@ struct ResolvedChannelState {
     )
 }
 
-// MARK: - Failure-reason humanisation (REG-12)
+// MARK: - Failure-reason humanisation
 
 /// Maps the server's stable failure-reason codes (see
 /// `lib/notifications/retry-policy.ts`) to operator-friendly German /

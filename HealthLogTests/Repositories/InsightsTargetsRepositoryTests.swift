@@ -91,7 +91,7 @@ struct InsightsTargetsRepositoryTests {
         let repo = InsightsTargetsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — only OUR route counts.
+            // The handler is process-global — only OUR route counts.
             if req.targets("/api/insights/targets") { calls += 1 }
             let body = Data(#"""
             {"data":{
@@ -117,7 +117,7 @@ struct InsightsTargetsRepositoryTests {
         )
         nonisolated(unsafe) var phase = 0
         MockURLProtocol.install { req in
-            // CU-07: only OUR route advances the phase machine.
+            // Only OUR route advances the phase machine.
             if req.targets("/api/insights/targets") { phase += 1 }
             if phase == 1 {
                 let body = Data(#"""
@@ -150,12 +150,12 @@ struct InsightsTargetsRepositoryTests {
 
     @Test("invalidateCache — wipes the snapshot so next fetch hits the wire")
     func invalidateCacheWipesSnapshot() async throws {
-        // V0.5.2 R2 / H1: logout must reach the per-repo actor cache so
+        // Logout must reach the per-repo actor cache so
         // the next user never sees the previous user's targets payload.
         let repo = InsightsTargetsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — only OUR route counts.
+            // The handler is process-global — only OUR route counts.
             if req.targets("/api/insights/targets") { calls += 1 }
             let body = Data(#"""
             {"data":{

@@ -18,7 +18,6 @@ struct CustomMetricValuesScreen: View {
     let metricID: String
 
     @State private var editingEntry: CustomMetricEntryDTO?
-    @State private var pendingDelete: CustomMetricEntryDTO?
 
     private var metric: CustomMetricDTO? {
         store.metric(id: metricID)
@@ -33,47 +32,49 @@ struct CustomMetricValuesScreen: View {
             if let metric {
                 Section {
                     ForEach(entries) { entry in
-                        CustomMetricEntryRow(entry: entry, metric: metric)
-                            .contentShape(Rectangle())
-                            .onTapGesture { editingEntry = entry }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    pendingDelete = entry
-                                } label: {
-                                    Label("customMetric.action.delete", systemImage: "trash")
-                                }
-                                Button {
-                                    editingEntry = entry
-                                } label: {
-                                    Label("customMetric.action.edit", systemImage: "pencil")
-                                }
-                                .tint(HLAccent.userBrandTint)
+                        // The whole row edits the value, with press feedback.
+                        HLRowButton {
+                            editingEntry = entry
+                        } label: {
+                            CustomMetricEntryRow(entry: entry, metric: metric)
+                        }
+                        // The entry delete is permanent, so it asks first.
+                        .hlSwipeDelete(.confirmed(
+                            title: "customMetric.values.delete.confirm.title",
+                            message: "customMetric.values.delete.confirm.message"
+                        ) {
+                            _ = await store.deleteEntry(metricID: metricID, entryID: entry.id)
+                        }) {
+                            Button("customMetric.action.edit", systemImage: "pencil") {
+                                editingEntry = entry
                             }
+                            .tint(HLAccent.userBrandTint)
+                        }
                     }
                 } header: {
-                    Text("customMetric.values.count \(store.entryTotalByMetric[metricID] ?? entries.count)")
+                    HLSectionHeader("customMetric.values.count \(store.entryTotalByMetric[metricID] ?? entries.count)")
                 }
+                .hlFormRowSurface()
 
                 if store.hasMoreEntries(for: metricID) {
                     Section {
-                        Button {
+                        HLLoadMoreRow(hasMore: true, isLoading: store.isLoadingEntries) {
                             Task { await store.loadMoreEntries(metricID: metricID) }
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text("customMetric.values.loadMore")
-                                Spacer()
-                            }
                         }
-                        .disabled(store.isLoadingEntries)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                         .accessibilityIdentifier("customMetric.values.loadMore")
                     }
                 }
             }
 
-            if entries.isEmpty, !store.isLoadingEntries {
+            if CustomMetricsListScreen.showsLoadFailure(
+                isEmpty: entries.isEmpty, isLoading: store.isLoadingEntries, lastError: store.lastError
+            ) {
+                HLAsyncListErrorRow(retry: { await store.loadEntries(metricID: metricID) })
+            } else if entries.isEmpty, !store.isLoadingEntries {
                 Section {
-                    // 1.4 B2-c — the title only; a call to log without a
+                    // The title only; a call to log without a
                     // button on this screen was a dead end.
                     HLEmptyState(
                         icon: "list.bullet",
@@ -87,8 +88,7 @@ struct CustomMetricValuesScreen: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
+        .hlPageMargins()
         .hlScrollEdgeSoft()
         .navigationTitle(Text("customMetric.values.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -99,16 +99,5 @@ struct CustomMetricValuesScreen: View {
                 CustomMetricEntrySheet(store: store, metric: metric, existing: entry)
             }
         }
-        .hlConfirmDestructive(
-            Text("customMetric.values.delete.confirm.title"),
-            presenting: $pendingDelete,
-            // Honest copy: this one really is permanent.
-            message: { _ in Text("customMetric.values.delete.confirm.message") },
-            confirm: Text("customMetric.action.delete"),
-            cancel: Text("customMetric.action.cancel"),
-            action: { entry in
-                Task { await store.deleteEntry(metricID: metricID, entryID: entry.id) }
-            }
-        )
     }
 }

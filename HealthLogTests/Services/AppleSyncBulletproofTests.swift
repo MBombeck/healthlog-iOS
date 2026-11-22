@@ -4,12 +4,12 @@
     @testable import HealthLog
     import Testing
 
-    /// **W-B182 — Apple-Health-sync + workout bulletproofing.**
+    /// **Apple-Health-sync + workout bulletproofing.**
     ///
     /// Covers the three structural fixes the audits called out:
     ///  - PART A: the `start: .manual` collector → `triggerDataSourceCollection`
     ///    trigger wiring (via the diagnostics heartbeat) + the
-    ///    collector-set ↔ auth-set lockstep (FIX-4).
+    ///    collector-set ↔ auth-set lockstep.
     ///  - PART B: the empty-first-run anchor guard (the silent history mask),
     ///    the server-samples HR preference, and the WHOOP metadata decode.
     @Suite("W-B182 — Apple sync + workouts bulletproof")
@@ -38,7 +38,7 @@
             #expect(!WorkoutHealthKitImporter.shouldSkipAnchorSave(hadPersistedAnchor: true, fetchedCount: 5))
         }
 
-        // MARK: - PART A: collection-trigger heartbeat persistence (FIX-3)
+        // MARK: - PART A: collection-trigger heartbeat persistence
 
         @MainActor
         @Test("Collection-trigger heartbeat persists across a fresh diagnostics instance")
@@ -162,7 +162,7 @@
             #expect(!WorkoutDetailView.hasDisplayableMetadata(.init(whoopWorkoutStrain: 0)))
         }
 
-        // MARK: - FIX-4: collector-set ↔ auth-set lockstep
+        // MARK: - Collector-set ↔ auth-set lockstep
 
         @Test("Every diagnostics-mapped HK identifier is in defaultReadTypes")
         func diagnosticsIdentifiersAreInReadSet() {
@@ -181,7 +181,7 @@
         }
     }
 
-    // MARK: - W-B184: workout-read re-auth migration → forced full re-sweep
+    // MARK: - Workout-read re-auth migration → forced full re-sweep
 
     //
     // AUDIT-WORKOUTS-RCA fix #2 second sub-fix: the one-shot per-user migration
@@ -439,7 +439,6 @@
             func attachUploader(_: MeasurementBatchUploader) async {}
             func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
             func setInitialBackfillCutoff(_: Date?) async {}
-            func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
         }
     #endif
 #endif

@@ -26,7 +26,7 @@ public final class NotificationsStore {
     /// (SWR `.cached` arm). Drives the "showing cached" affordance.
     public private(set) var isShowingStaleCache: Bool = false
     /// Channel-IDs that currently have a `retry()` POST in flight.
-    /// REG-12 (v0.5.6): the screen uses this to disable the retry
+    /// The screen uses this to disable the retry
     /// button + show a `ProgressView` while the server clears the
     /// cooldown so the operator can't double-tap. Tracked as a Set
     /// rather than a single flag because the user may eventually own
@@ -40,29 +40,36 @@ public final class NotificationsStore {
     /// Cleared automatically ~3 s after the status refresh lands.
     public private(set) var lastRetrySucceededIds: Set<String> = []
 
-    /// **MED-4 / AUDIT-PARITY C3** — the configured low-supply runway threshold
+    /// The configured low-supply runway threshold
     /// in days (1–60), or `nil` when the alert is off. Initialised from the
     /// local mirror so the Settings card reflects the last-known value
     /// immediately, then refreshed from the server `medication` block on load.
     public private(set) var lowStockRunwayDays: Int? = LowStockRunwayPrefStore.days()
 
-    /// **W-B189 / #23** — whether the preventive-care (Vorsorge) push is
+    /// Whether the preventive-care (Vorsorge) push is
     /// **suppressed** (`notificationPrefs.measurementReminder.clientManaged`).
-    /// **CU-26: `true` means muted, not enrolled** — see the type docblock.
+    /// **`true` means muted, not enrolled** — see the type docblock.
     /// Initialised from the local mirror so the Settings toggle reflects the
     /// last-known value immediately, then refreshed from the server
     /// `measurementReminder` block on load. Default off (opt-in).
     public private(set) var measurementReminderClientManaged: Bool =
         MeasurementReminderPrefStore.clientManaged()
 
-    /// #126 3.3 — whether notifications may show figures (`content.detail`).
+    /// #191 — the account's snooze span in minutes, shown in the reminder
+    /// settings once the server publishes it
+    /// (``MedicationCapability/snoozeSetting``). Starts from the App Group
+    /// mirror; `nil` hides the setting.
+    public private(set) var snoozeMinutes: Int? = MedicationCapabilities.isOpen(.snoozeSetting)
+        ? MedicationSnooze.minutes : nil
+
+    /// Whether notifications may show figures (`content.detail`).
     /// `nil` until loaded and on a server without the block (setting hidden).
     public private(set) var notificationContentDetailed: Bool?
 
     private let repo: NotificationsRepository
     private let swr: SWRCoordinator?
 
-    /// Build 272 — announced right after the local hour mirror is written, so
+    /// Announced right after the local hour mirror is written, so
     /// the composition root can re-arm the iOS-local evening reminder at the
     /// new hour immediately. Wired in `AppContainer+Wiring`.
     public var onMoodReminderHourChanged: ((Int) -> Void)?
@@ -82,7 +89,7 @@ public final class NotificationsStore {
         _ = await (statusTask, prefsTask, moodHourTask)
     }
 
-    /// **AUDIT-G A1-B1 (v0.11)** — cold-read the server-canonical mood-reminder
+    /// Cold-read the server-canonical mood-reminder
     /// hour from `GET /api/auth/me/notification-prefs` (the source of truth —
     /// `/api/notifications/preferences` carries no `mood` block) and refresh the
     /// local mirror so the Settings picker shows the server value on a fresh
@@ -94,17 +101,20 @@ public final class NotificationsStore {
             if let hour = prefs.moodReminderHour {
                 MoodReminderPrefStore.setHour(hour)
             }
-            // MED-4 / C3 — cold-read the low-supply runway threshold from the
+            // Cold-read the low-supply runway threshold from the
             // same auth-prefs payload (the only endpoint that carries the
             // `medication` block) and mirror it so med screens render the runway
             // before this screen is opened. Only writes when the server actually
             // surfaced the `medication` block — a legacy/drifted server that
             // omits it leaves the local mirror untouched.
-            if prefs.medication != nil {
+            if let medication = prefs.medication {
                 lowStockRunwayDays = prefs.lowStockRunwayDays
                 LowStockRunwayPrefStore.setDays(prefs.lowStockRunwayDays)
+                // #191: the account's snooze span, for every "Later".
+                MedicationSnooze.record(serverMinutes: medication.snoozeMinutes)
+                snoozeMinutes = MedicationCapabilities.isOpen(.snoozeSetting) ? MedicationSnooze.minutes : nil
             }
-            // W-B189 / #23 — cold-read the preventive-care reminder opt-in from
+            // Cold-read the preventive-care reminder opt-in from
             // the same auth-prefs payload (the only endpoint that carries the
             // `measurementReminder` block) and mirror it. Only writes when the
             // server actually surfaced the block — a legacy/drifted server that
@@ -113,7 +123,7 @@ public final class NotificationsStore {
                 measurementReminderClientManaged = clientManaged
                 MeasurementReminderPrefStore.setClientManaged(clientManaged)
             }
-            // #126 3.3 — the content setting rides the same payload.
+            // The content setting rides the same payload.
             notificationContentDetailed = prefs.contentDetailed
         } catch {
             HLLog.notifications.warning(
@@ -123,7 +133,7 @@ public final class NotificationsStore {
     }
 
     private func loadPreferences() async {
-        // 14-06 — see `MedicationsStore.load`.
+        // See `MedicationsStore.load`.
         defer {
             if isLoading {
                 StoreEffectDiagnostics.recordRefusal(.loadInterrupted, store: .notifications)
@@ -187,7 +197,7 @@ public final class NotificationsStore {
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — mirror the server's
+    /// Mirror the server's
     /// `notificationPrefs.mood.reminderHour` into the local
     /// ``MoodReminderPrefStore`` whenever a payload lands, so the foreground
     /// reminder scheduler always reads the server-authoritative hour even
@@ -199,14 +209,14 @@ public final class NotificationsStore {
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — set the evening mood-reminder hour (0–23).
+    /// Set the evening mood-reminder hour (0–23).
     /// Optimistically mirrors locally (so the foreground scheduler + the
     /// Settings UI reflect it immediately), then PATCHes the server. On a
     /// server failure the local mirror stays (the iOS-local reminder is the
     /// load-bearing path); the error surfaces for a toast.
     public func setMoodReminderHour(_ hour: Int) async {
         MoodReminderPrefStore.setHour(hour)
-        // Build 272 — the local mirror is the load-bearing path for the iOS
+        // The local mirror is the load-bearing path for the iOS
         // repeating trigger, so re-arm right away (not on the next foreground).
         onMoodReminderHourChanged?(hour)
         do {
@@ -220,7 +230,7 @@ public final class NotificationsStore {
         }
     }
 
-    /// **MED-4 / AUDIT-PARITY C3** — set the low-supply runway threshold
+    /// Set the low-supply runway threshold
     /// (1–60 days, or `nil` to turn the alert off). Optimistically mirrors
     /// locally (so the medication card runway + the Settings UI reflect it
     /// immediately), then PATCHes the server. On a server failure the PATCH
@@ -241,7 +251,33 @@ public final class NotificationsStore {
         }
     }
 
-    /// **W-B189 / #23** — set the preventive-care (Vorsorge) reminder opt-in.
+    /// #191 — sets the snooze span. Mirrors it at once (every "Remind me
+    /// later" follows), then PATCHes; the server's echo wins. On a failure
+    /// the previous span comes back and the error surfaces.
+    public func setSnoozeMinutes(_ minutes: Int) async {
+        let previous = snoozeMinutes
+        let clamped = MedicationSnooze.clamped(minutes)
+        snoozeMinutes = clamped
+        MedicationSnooze.record(serverMinutes: clamped)
+        do {
+            let echoed = try await repo.setMedicationSnoozeMinutes(clamped)
+            if let echoed {
+                MedicationSnooze.record(serverMinutes: echoed)
+                snoozeMinutes = MedicationSnooze.allowedMinutes.contains(echoed) ? echoed : clamped
+            }
+            error = nil
+        } catch let err as HLError {
+            snoozeMinutes = previous
+            MedicationSnooze.record(serverMinutes: previous)
+            error = err
+        } catch {
+            snoozeMinutes = previous
+            MedicationSnooze.record(serverMinutes: previous)
+            self.error = .unknown(error.localizedDescription)
+        }
+    }
+
+    /// Set the preventive-care (Vorsorge) reminder opt-in.
     /// Optimistically mirrors locally (so the Settings toggle reflects it
     /// immediately), then PATCHes the server. On a server failure the PATCH
     /// rides the outbox (idempotency-keyed); the local mirror stays so the
@@ -262,7 +298,7 @@ public final class NotificationsStore {
         }
     }
 
-    /// #126 3.3 — switch figures in notifications on or off. Renders the
+    /// Switch figures in notifications on or off. Renders the
     /// server's answer; a failure puts the previous value back.
     public func setNotificationContentDetailed(_ detailed: Bool) async {
         let previous = notificationContentDetailed
@@ -363,7 +399,7 @@ public final class NotificationsStore {
 
     /// Re-enable an auto-disabled / paused channel from the Settings UI.
     ///
-    /// REG-12 (v0.5.6): the previous Notifications screen surfaced the
+    /// The previous Notifications screen surfaced the
     /// "channel paused" state purely as text — no affordance to clear
     /// the cooldown. Users hit "kann ich nicht manuell triggern" and
     /// had to wait for the dispatcher's next retry slot (≤ 2 h on the

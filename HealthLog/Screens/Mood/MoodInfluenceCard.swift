@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.1 — the **"Influence on mood"** card (the Daylio payoff) on the
+/// The **"Influence on mood"** card (the Daylio payoff) on the
 /// Insights → Mood page. Renders the server's `tagInfluence` rows
 /// (`GET /api/mood/insights`, server v1.11.5): per tag, the average daily mood
 /// on days the tag is PRESENT vs ABSENT, the `delta`, and a `confidence` band.
@@ -25,8 +25,7 @@ struct MoodInfluenceCard: View {
     let flatRows: [TagInfluenceRow]
     /// Resolves a structured tag's icon/label from the live catalog.
     @Environment(MoodTagCatalogStore.self) private var catalog
-    /// QoL-2 (A360-4) — gate the expand/collapse spring like the rest of the app.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Gate the expand/collapse spring like the rest of the app.
 
     @State private var expanded = false
 
@@ -47,21 +46,12 @@ struct MoodInfluenceCard: View {
         if allRows.isEmpty {
             EmptyView()
         } else {
-            HLCard {
+            // The subtitle says what the rows compare. "Associations, not
+            // causes" stands once on the page (the correlation panel) and in
+            // the method behind the Sources link below; the guide link
+            // belongs to the page's (i).
+            HLCard("Influence on your mood", subtitle: "mood.influence.caption") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    Text("Influence on your mood")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-
-                    // 1.4 B2 — one line saying what the rows compare. "Associations,
-                    // not causes" stands once on the page (the correlation panel)
-                    // and in the method behind the Sources link below; the guide
-                    // link belongs to the page's (i).
-                    Text("mood.influence.caption")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     VStack(spacing: HLSpace.sm) {
                         ForEach(visibleRows) { row in
                             MoodInfluenceRowView(
@@ -73,15 +63,8 @@ struct MoodInfluenceCard: View {
                     }
 
                     if allRows.count > Self.collapsedCap {
-                        Button {
-                            withAnimation(reduceMotion ? nil : HLMotion.spring) { expanded.toggle() }
-                        } label: {
-                            Text(expanded ? "Show fewer" : "Show more")
-                                .font(.hlSubhead.weight(.medium))
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("insights.mood.influence.toggle")
+                        MoodShowMoreLink(isExpanded: $expanded)
+                            .accessibilityIdentifier("insights.mood.influence.toggle")
                     }
 
                     // 1.0.3 (1.4.1) — the method behind the present-vs-absent
@@ -124,13 +107,11 @@ struct MoodInfluenceRowView: View {
     var body: some View {
         HStack(spacing: HLSpace.sm) {
             Image(systemName: resolvedSymbol)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .frame(width: 22, alignment: .center)
 
             Text(resolvedLabel)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .lineLimit(1)
 
             Spacer(minLength: HLSpace.sm)
@@ -155,15 +136,15 @@ struct MoodInfluenceRowView: View {
 
     /// `"+0.7"` / `"−0.4"` (proper minus), locale decimal separator.
     nonisolated static func deltaString(_ delta: Double) -> String {
-        let magnitude = abs(delta).formatted(.number.precision(.fractionLength(1)))
+        let magnitude = HLValueFormat.number(abs(delta), fractionDigits: 1 ... 1)
         return delta >= 0 ? "+\(magnitude)" : "−\(magnitude)"
     }
 
     /// VoiceOver value: direction + averages + signed delta + sample size +
     /// confidence — the full honest read, in words.
     nonisolated static func accessibilityValue(_ row: TagInfluenceRow, label: String) -> String {
-        let withAvg = row.withAvg.formatted(.number.precision(.fractionLength(1)))
-        let withoutAvg = row.withoutAvg.formatted(.number.precision(.fractionLength(1)))
+        let withAvg = HLValueFormat.number(row.withAvg, fractionDigits: 1 ... 1)
+        let withoutAvg = HLValueFormat.number(row.withoutAvg, fractionDigits: 1 ... 1)
         let signed = deltaString(row.delta)
         let confidence = MoodConfidencePill.label(for: row.confidence)
         return String(
@@ -173,33 +154,15 @@ struct MoodInfluenceRowView: View {
     }
 }
 
-/// A restrained Low/Med/High confidence pill. Monochrome — the band is encoded
-/// by the localized WORD + ink weight, never by colour, so it can never read as
-/// fake-precise statistical certainty.
+/// The Low/Med/High confidence band beside a row's value. A status in a row
+/// is text, never a capsule, so it stays quieter than the delta next to it;
+/// monochrome, so it never reads as fake-precise statistical certainty.
 struct MoodConfidencePill: View {
     let confidence: MoodConfidence
 
     var body: some View {
-        Text(Self.label(for: confidence))
-            .font(.hlCaption2.weight(.medium))
-            .foregroundStyle(Self.ink(for: confidence))
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.vertical, HLSpace.xxs)
-            .background(
-                HLSurface.tertiary,
-                in: Capsule(style: .continuous)
-            )
+        HLBadge(Self.label(for: confidence), form: .text)
             .accessibilityHidden(true)
-    }
-
-    /// Higher confidence reads in primary ink; lower steps back to tertiary —
-    /// weight, not hue, conveys the band.
-    private static func ink(for confidence: MoodConfidence) -> Color {
-        switch confidence {
-        case .high: HLText.primary
-        case .medium: HLText.secondary
-        case .low: HLText.tertiary
-        }
     }
 
     /// Localized band word.

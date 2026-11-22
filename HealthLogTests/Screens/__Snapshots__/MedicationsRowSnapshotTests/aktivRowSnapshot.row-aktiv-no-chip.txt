@@ -75,4 +75,5 @@
     - runwayDays: nil
     - courseStatus: nil
     - intakeActionable: nil
+    - note: nil
   - displayState: HealthLog.ActiveMedicationDisplayState.aktiv

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Locks for the WHOOP **connect-in-app** delta (FW5-B):
+/// Locks for the WHOOP **connect-in-app** delta:
 /// 1. `WhoopConnectOutcome` parses the server's web-redirect query
 ///    (`whoop=connected` / `whoop=error&reason=…`) and stays silent on cancel.
 /// 2. `SaveCredentialsBody` encodes the BYO-key body verbatim AND the

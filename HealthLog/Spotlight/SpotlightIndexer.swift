@@ -3,7 +3,7 @@ import Foundation
     import CoreSpotlight
 #endif
 
-/// **W-B187 QOL-2 — the CoreSpotlight index writer.**
+/// **The CoreSpotlight index writer.**
 ///
 /// An `actor` so the (potentially I/O-bound) index writes run **off the
 /// main actor** — the `@MainActor` stores hand it a plain `[SpotlightEntry]`
@@ -28,6 +28,12 @@ actor SpotlightIndexer {
         let kind: Kind
         let title: String
     }
+
+    /// The latest sign-out generation this indexer has cleared for. A
+    /// replace planned before it (a reindex still in flight when sign-out
+    /// tore the index down) indexes nothing: the actor is free while it
+    /// awaits the index, so the delete-all can land in between.
+    private var clearedGeneration = 0
 
     #if canImport(CoreSpotlight)
         /// Injectable index seam. Production uses `CSSearchableIndex.default()`;
@@ -54,9 +60,13 @@ actor SpotlightIndexer {
     /// enforces the PHI guard + deep-link allowlist), then atomically swaps
     /// the domain's contents. Entries that fail the builder (non-routable id,
     /// PHI-shaped title) are silently dropped — never indexed.
-    func replace(_ entries: [Entry], in domain: SpotlightItemBuilder.Domain) async {
+    ///
+    /// `generation` is the sign-out generation the caller planned under
+    /// (``SpotlightCoordinator``); `nil` means the current one.
+    func replace(_ entries: [Entry], in domain: SpotlightItemBuilder.Domain, generation: Int? = nil) async {
+        let planned = generation ?? clearedGeneration
         #if canImport(CoreSpotlight)
-            guard let index else { return }
+            guard let index, planned >= clearedGeneration else { return }
             let items: [CSSearchableItem] = entries.compactMap { entry in
                 switch entry.kind {
                 case let .medication(id):
@@ -70,6 +80,9 @@ actor SpotlightIndexer {
                 // doesn't linger, then index the fresh set. Both calls scope
                 // to the one sub-domain — the other class is untouched.
                 try await index.hlDeleteItems(inDomains: [domain.rawValue])
+                // A sign-out ran while the delete was awaited: the names
+                // belong to the account that left.
+                guard planned >= clearedGeneration else { return }
                 if items.isEmpty == false {
                     try await index.hlIndexItems(items)
                 }
@@ -82,12 +95,17 @@ actor SpotlightIndexer {
         #else
             _ = entries
             _ = domain
+            _ = planned
         #endif
     }
 
     /// Tear down the entire HealthLog Spotlight index — called on logout so
     /// no medication name survives into a signed-out device's system search.
-    func deleteAll() async {
+    ///
+    /// `generation` is the sign-out generation it clears for; `nil` starts
+    /// the next one. Every replace planned before it is dropped.
+    func deleteAll(generation: Int? = nil) async {
+        clearedGeneration = max(clearedGeneration, generation ?? clearedGeneration + 1)
         #if canImport(CoreSpotlight)
             guard let index else { return }
             do {

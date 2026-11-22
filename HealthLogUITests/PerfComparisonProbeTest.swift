@@ -160,7 +160,7 @@ final class PerfComparisonProbeTest: XCTestCase {
                 "sparkles",
                 "house.fill"
             ] {
-                let button = app.tabBars.buttons.containing(.image, identifier: symbol).firstMatch
+                let button = ShellNavigator.button(symbol: symbol, in: app)
                 if button.waitForExistence(timeout: 10) { button.tap() }
                 settle(1.5)
             }
@@ -223,7 +223,7 @@ final class PerfComparisonProbeTest: XCTestCase {
     }
 
     private func timeTab(_ symbol: String, until target: XCUIElement) -> TimeInterval {
-        let button = app.tabBars.buttons.containing(.image, identifier: symbol).firstMatch
+        let button = ShellNavigator.button(symbol: symbol, in: app)
         guard button.waitForExistence(timeout: 10) else { return -1 }
         let start = Date()
         button.tap()

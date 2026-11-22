@@ -6,7 +6,7 @@
 //  mapper. Split out of `LabsIllnessFHIRTests` to keep that file under the
 //  `file_length` budget.
 //
-//  M1: only genuinely UCUM-canonical units get a coded `Quantity.system` +
+//  Only genuinely UCUM-canonical units get a coded `Quantity.system` +
 //  `code`; free-text / unknown units ride as `Quantity.unit` (display) only.
 //
 
@@ -137,7 +137,7 @@ struct LabCanonicalUCUMTests {
         #expect(quantity.value?.value?.decimal == Decimal(7))
     }
 
-    // MARK: - AUD-4 M1 — non-finite value drops the Quantity
+    // MARK: - Non-finite value drops the Quantity
 
     @Test("Non-finite makeQuantity value returns nil (AUD-4 M1)")
     func nonFiniteQuantityIsNil() {

@@ -1,75 +1,88 @@
 import SwiftUI
 
-// v0.14.8 W3 — row-level subviews extracted from `MeasurementListScreen.swift`
+// Row-level subviews extracted from `MeasurementListScreen.swift`
 // so the screen file stays under the 600-line SwiftLint `file_length`
 // baseline once the multi-select bulk-delete affordances landed. Types are
 // unchanged (same module, module-internal access); only the file boundary
 // moves — the same mechanical split `MeasurementBucketing.swift` and
 // `MeasurementListFilters.swift` went through in v0.5.5.1.
 
-// MARK: - Section header
-
-struct MeasurementListSectionHeader: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.hlCaption.weight(.semibold))
-            .foregroundStyle(HLText.secondary)
-    }
-}
-
 // MARK: - Raw row (per-measurement)
 
+/// One reading as a history row: date and time as the title, source, sleep
+/// split and note in the one detail line, the value at the right. A locked
+/// (server-derived) reading carries a lock where an editable one has nothing;
+/// the reason is one tap away (`MeasurementSwipeRow`).
 struct MeasurementRow: View {
     let measurement: Measurement
-    /// A360-5 C-1 — render the value in the user's chosen unit (matches the
+    /// The date line when the card names the week: the day and the time
+    /// ("Heute, 07:30"). `nil` → the full date and time.
+    var title: String?
+    /// Render the value in the user's chosen unit (matches the
     /// dashboard tile / chrono feed), not the raw canonical value.
     @Environment(\.unitPreferences) private var units
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(formattedValue)
-                    .font(.hlMetric(.title3))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
-                // b215 — historical rows add the year when the measurement
-                // isn't from the current year (else the day+month is ambiguous).
-                Text(HLDateFormat.appendingYearIfNeeded(
-                    measurement.recordedAt,
-                    base: .dateTime.weekday(.abbreviated).day().month().hour().minute()
-                ))
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                // #146 — on a day with naps, the night and the naps beside
-                // the day's total (the headline), as the server sent them.
-                SleepSplitCaption(split: measurement.sleepSplit)
-                if let note = measurement.note, !note.isEmpty {
-                    Text(note)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .lineLimit(2)
-                }
-            }
-            Spacer()
-            // 1.4 B2 — a lock on the source badge marks a row that cannot be
-            // edited here; the reason is one tap away (`MeasurementSwipeRow`).
-            HLBadge(sourceLabel, icon: measurement.isServerDerivedReadOnly ? "lock" : nil, tone: sourceTone)
+        if measurement.isServerDerivedReadOnly {
+            HLRow(
+                title: dateLine,
+                detail: detail,
+                value: Text(verbatim: formattedValue),
+                accessory: .symbol("lock")
+            )
+        } else {
+            HLHistoryRow(date: dateLine, detail: detail, value: Text(verbatim: formattedValue))
         }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
     }
 
-    // v0.14.8 — value formatting now lives in the shared
+    private var dateLine: Text {
+        Text(verbatim: title ?? HLDateFormat.dateTime(measurement.recordedAt))
+    }
+
+    // Value formatting lives in the shared
     // `MeasurementChronoModel.formattedValue(_:)` so the chronological feed row
     // and this drill-down row never diverge on a value.
     private var formattedValue: String {
         MeasurementChronoModel.formattedValue(measurement, units: units)
     }
 
-    private var sourceLabel: String {
-        switch measurement.source {
+    private var detail: Text? {
+        Self.detailLine(for: measurement).map { Text(verbatim: $0) }
+    }
+
+    /// Source, the night-and-naps split of a sleep day, the reading's own
+    /// clock when it was taken in another zone, and the note, joined into the
+    /// row's single detail line.
+    static func detailLine(for measurement: Measurement, device: TimeZone = .current) -> String? {
+        HLRowDetail.joined([
+            measurement.source.measurementRowLabel,
+            measurement.sleepSplit?.breakdownLine,
+            zoneHint(for: measurement, device: device),
+            measurement.note
+        ])
+    }
+
+    /// #181 — "Ortszeit New York 08:12": the time the reading showed where it
+    /// was taken, when the server names a zone whose clock differs from the
+    /// device's at that instant. `nil` otherwise and on an older server.
+    static func zoneHint(
+        for measurement: Measurement,
+        device: TimeZone = .current,
+        defaults: UserDefaults = .standard
+    ) -> String? {
+        guard let zone = ReadingTimeZone.awayZone(measurement.timeZone, at: measurement.recordedAt, device: device) else {
+            return nil
+        }
+        let locale = HLTimeFormat.current(defaults: defaults).formattingLocale
+        let clock = HLTimeFormat.shortTime(measurement.recordedAt, locale: locale, timeZone: zone)
+        return String(localized: "measurement.row.readingZone \(ReadingTimeZone.placeName(zone)) \(clock)")
+    }
+}
+
+extension MeasurementSource {
+    /// The source as the history row's detail line names it.
+    var measurementRowLabel: String {
+        switch self {
         case .manual: String(localized: "Manual")
         case .appleHealth: "Apple Health"
         case .withings: "Withings"
@@ -90,19 +103,6 @@ struct MeasurementRow: View {
         case .unknown: String(localized: "measurement.source.unknown")
         }
     }
-
-    /// REG-3 (2026-05-21): per-source coloured backgrounds (green for Apple
-    /// Health, cyan for Withings, purple for Import) read as "wrong/loud"
-    /// against the otherwise tonal-mono drill-down — most visibly on the
-    /// BP rows where the operator flagged the issue. Aligns with the
-    /// Insights monochrome template (see
-    /// `.planning/v056-marathon/A3-monochrome-template.md`) which always
-    /// paints source-provenance pills with `.neutral` (graphite). The
-    /// source label itself still carries the provenance information — the
-    /// colour was decorative, not semantic.
-    private var sourceTone: HLBadge.Tone {
-        .neutral
-    }
 }
 
 // MARK: - Editable raw row (read-only-aware swipe actions)
@@ -117,33 +117,31 @@ struct MeasurementRow: View {
 struct MeasurementSwipeActions<Content: View>: View {
     let measurement: Measurement
     let onEdit: (Measurement) -> Void
-    let onDelete: (Measurement) -> Void
+    /// Deletes through the store, which offers the undo; no question first.
+    let onDelete: (Measurement) async -> Void
     @ViewBuilder let content: Content
 
     var body: some View {
-        content
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                if !measurement.isServerDerivedReadOnly {
-                    Button(role: .destructive) {
-                        onDelete(measurement)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    Button {
+        if measurement.isServerDerivedReadOnly {
+            content
+        } else {
+            content
+                .hlSwipeDelete(.undoable { await onDelete(measurement) }) {
+                    Button(HLControlWord.edit.key, systemImage: "pencil") {
                         onEdit(measurement)
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
                     }
                 }
-            }
+        }
     }
 }
 
 struct MeasurementSwipeRow: View {
     let measurement: Measurement
+    /// The row's date line (``MeasurementRow/title``).
+    var title: String?
     let onEdit: (Measurement) -> Void
-    let onDelete: (Measurement) -> Void
-    /// 1.4 B2 — the reason a row is locked, shown on tap instead of under
+    let onDelete: (Measurement) async -> Void
+    /// The reason a row is locked, shown on tap instead of under
     /// every locked row of the list.
     @State private var explainsLock = false
 
@@ -155,11 +153,10 @@ struct MeasurementSwipeRow: View {
         ) {
             if measurement.isServerDerivedReadOnly {
                 VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    MeasurementRow(measurement: measurement)
+                    MeasurementRow(measurement: measurement, title: title)
                     if explainsLock {
                         Text(lockReason)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("measurement.readOnly.explain")
                     }
@@ -168,12 +165,12 @@ struct MeasurementSwipeRow: View {
                 .onTapGesture { explainsLock.toggle() }
                 .accessibilityHint(Text(lockReason))
             } else {
-                MeasurementRow(measurement: measurement)
+                MeasurementRow(measurement: measurement, title: title)
             }
         }
     }
 
-    /// #115 R3 — an hourly/daily mean or a sleep night is a summary, not a
+    /// An hourly/daily mean or a sleep night is a summary, not a
     /// row from a connected source.
     private var lockReason: LocalizedStringKey {
         measurement.isSyntheticServerRow ? "measurement.readOnly.aggregate" : "measurement.readOnly.explain"
@@ -182,16 +179,17 @@ struct MeasurementSwipeRow: View {
 
 // MARK: - Summary row (Apple-Health-style aggregate)
 
-/// Apple-Health-style aggregate row — replaces a long list of raw rows with a
-/// single "Ø 84 kg · 12 Eintraege · Min 82.1 / Max 86.4" line plus a chevron
-/// to expand to the underlying rows. The card-row tap toggles expansion.
+/// Apple-Health-style aggregate row: the period as the title ("KW 45"), the
+/// count and the span of the values in the one detail line ("6 Einträge,
+/// 72,0 bis 73,0 kg"), the mean at the right. A tap opens the underlying rows
+/// below it, so the trailing sign is the expand chevron.
 struct MeasurementSummaryRow: View {
     let period: String
     let kind: MetricKind
     let items: [Measurement]
     let isExpanded: Bool
     let toggle: () -> Void
-    /// A360-5 C-1 — render aggregate stats in the user's chosen unit so the
+    /// Render aggregate stats in the user's chosen unit so the
     /// summary row agrees with the dashboard / per-reading rows.
     @Environment(\.unitPreferences) private var units
 
@@ -205,60 +203,38 @@ struct MeasurementSummaryRow: View {
     }
 
     var body: some View {
-        Button(action: toggle) {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(period)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    // Existing expandable summary affordance; it toggles in
-                    // place and intentionally does not push a destination.
-                    // swiftlint:disable:next hl_no_handmade_chevron
-                    HLDisclosureChevron(expanded: isExpanded)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                    // Audit B-4 — a bucket of unknown rows has no mean to show
-                    // and no unit to show it in; the count moves into the
-                    // headline slot and carries the row on its own.
-                    if let mean = stats.mean {
-                        Text(formatMean(mean, secondaryMean: stats.secondaryMean))
-                            .font(.hlMetric(.title3))
-                            .foregroundStyle(HLText.primary)
-                            .monospacedDigit()
-                        Text(unitSuffix)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                        Spacer()
-                    }
-                    Text("\(items.count) entries")
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
-                    // ...and with no mean ahead of it the count needs the
-                    // trailing spacer the mean's branch would have supplied.
-                    if stats.mean == nil { Spacer() }
-                }
-                if let rangeLine {
-                    Text(rangeLine)
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
-                }
-            }
-            .padding(.vertical, HLSpace.xs)
-            .contentShape(Rectangle())
+        HLRowButton(action: toggle) {
+            HLRow(
+                title: Text(verbatim: period),
+                detail: HLRowDetail.text([String(localized: "\(items.count) entries"), rangeLine]),
+                // A bucket of unknown rows has no mean to show and no unit
+                // to show it in; the count in the detail line carries it.
+                value: meanText,
+                accessory: .expand(isExpanded)
+            )
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
         .accessibilityHint(Text(isExpanded
                 ? String(localized: "Double-tap to hide the entries")
                 : String(localized: "Double-tap to show the entries")))
     }
 
-    /// Audit B-4 — `nil` when the bucket has no band to state (unknown rows).
+    private var meanText: Text? {
+        stats.mean.map { mean in
+            let unit = MetricDurationFormat.unit(unitSuffix, kind: kind)
+            let value = formatMean(mean, secondaryMean: stats.secondaryMean)
+            return Text(verbatim: unit.isEmpty ? value : "\(value) \(unit)")
+        }
+    }
+
+    /// "72,0 bis 73,0 kg": the two ends in the locale's range form, one unit.
+    static func span(_ low: String, _ high: String, unit: String) -> String {
+        let range = low == high ? low : HLNumberFormat.range(low, high)
+        return unit.isEmpty ? range : "\(range) \(unit)"
+    }
+
+    /// `nil` when the bucket has no band to state (unknown rows).
     private var rangeLine: String? {
         // A360-5 C-1/C-2 — BP min/max legs convert + round per the active unit
         // (kPa → 1 decimal); scalar stats convert per family. mmHg / default
@@ -267,12 +243,12 @@ struct MeasurementSummaryRow: View {
         if let secMin = stats.secondaryMin, let secMax = stats.secondaryMax {
             let minPair = MetricValueFormatter.formatBloodPressure(systolic: min, diastolic: secMin, units: units)
             let maxPair = MetricValueFormatter.formatBloodPressure(systolic: max, diastolic: secMax, units: units)
-            return "Min \(minPair), Max \(maxPair) \(unitSuffix)"
+            return Self.span(minPair, maxPair, unit: unitSuffix)
         }
-        return "Min \(format(min)) / Max \(format(max)) \(unitSuffix)"
+        return Self.span(format(min), format(max), unit: MetricDurationFormat.unit(unitSuffix, kind: kind))
     }
 
-    /// Audit B-4 — VoiceOver reads exactly what is on screen: for an unknown
+    /// VoiceOver reads exactly what is on screen: for an unknown
     /// bucket that is the period and the count, with no Ø / Min / Max spoken.
     /// The aggregate branch is the pre-existing label, unchanged.
     private var accessibilityLabel: Text {
@@ -293,78 +269,34 @@ struct MeasurementSummaryRow: View {
     }
 
     private func format(_ v: Double) -> String {
-        MetricValueFormatter.formatScalar(v, kind: kind, units: units)
+        MetricDurationFormat.text(v, kind: kind) ?? MetricValueFormatter.formatScalar(v, kind: kind, units: units)
     }
 }
 
-// MARK: - Empty state
-
-/// v0.7.0 — migrated to `ContentUnavailableView` (iOS 17+). The previous
-/// hand-rolled stack of glyph + caption is replaced by the system
-/// primitive, which carries the standard Dynamic-Type rhythm + VoiceOver
-/// grouping. The empty card lives inside the host `List`, so the
-/// `.listRow*` modifiers stay on the wrapper to keep the background
-/// transparent + suppress the row separator.
-struct MeasurementListEmptyState: View {
-    /// QoL-4 (A360-4) — optional next-step CTA. When the host wires it, the empty
-    /// state offers a "Log a measurement" button (prefilled to this kind) instead
-    /// of a dead-end caption. `nil` keeps the bare empty state (e.g. previews).
-    var onLog: (() -> Void)?
-
-    var body: some View {
-        // 1.4 B2 — the button names the next step; no sentence repeating it.
-        HLEmptyState(icon: "tray", title: "No measurements yet") {
-            if let onLog {
-                HLButton(
-                    String(localized: "Log a measurement"),
-                    icon: "plus",
-                    variant: .secondary,
-                    action: onLog
-                )
-                .accessibilityIdentifier("measurements.list.empty.log")
-            }
-        }
-        .accessibilityIdentifier("measurements.list.empty")
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-    }
-}
-
-// MARK: - First-paint skeleton (W-IMPL-SKELETON)
+// MARK: - First-paint skeleton
 
 /// Shape-aware placeholder painted while the initial `measurements`
-/// fetch is in flight. Mirrors the live `MeasurementRow` rhythm — a
-/// title capsule (value), a subtitle capsule (timestamp), an optional
-/// note capsule and a trailing source-chip pill — so the jump-cut
-/// from skeleton to content stays minimal.
+/// fetch is in flight. Mirrors the live history rows (date, detail line,
+/// value at the right) inside one card, so the jump-cut to content stays small.
 ///
-/// Mounted via `.overlay` because the host `List` is rendered as a
-/// `.listStyle(.insetGrouped)` and embedding the skeleton as a list
-/// section would force an empty-state row layout. The overlay sits
-/// above the empty `List` and disappears the moment `measurements`
-/// fills — the `isLoading && measurements.isEmpty` gate matches the
-/// pre-W-IMPL-SKELETON `ProgressView()` overlay it replaces.
+/// Mounted via `.overlay` because the host `List` would otherwise force an
+/// empty-state row layout; it disappears the moment `measurements` fills.
 struct MeasurementListSkeletonContent: View {
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
+        HLPage {
+            HLCard(layout: .rows) {
                 ForEach(0 ..< 8, id: \.self) { _ in
-                    HLCard {
-                        HStack(alignment: .top, spacing: HLSpace.sm) {
-                            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                                HLSkeleton(.capsule, width: 110, height: 20)
-                                HLSkeleton(.capsule, width: 160, height: 12)
-                                HLSkeleton(.capsule, width: 200, height: 10)
-                            }
-                            Spacer(minLength: 0)
-                            HLSkeleton(.capsule, width: 64, height: 18)
+                    HStack(spacing: HLSpace.sm) {
+                        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                            HLSkeleton(.capsule, width: 140, height: 14)
+                            HLSkeleton(.capsule, width: 90, height: 10)
                         }
+                        Spacer(minLength: 0)
+                        HLSkeleton(.capsule, width: 64, height: 14)
                     }
+                    .frame(minHeight: HLRowMetrics.minHeight)
                 }
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.md)
         }
-        .scrollContentBackground(.hidden)
     }
 }

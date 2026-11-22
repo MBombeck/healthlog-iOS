@@ -25,7 +25,7 @@ struct WatchAckMappingTests {
         #expect(MedicationsStore.WriteOutcome.failed(.offline).watchAckOutcome == .failed)
     }
 
-    // MARK: - F1: mood log under a transient-refresh 401 → queued, row kept
+    // MARK: - Mood log under a transient-refresh 401 → queued, row kept
 
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()

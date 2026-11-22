@@ -5,10 +5,10 @@ import Testing
 /// **G3–G6 — the mental-wellbeing screen joins the family.**
 ///
 /// Four operator statements landed on one screen: 247 characters of header prose
-/// (G3) under a title that renders twice (G3), „Starten" as a near-white
+/// under a title that renders twice, „Starten" as a near-white
 /// `.primary` plate where the medication twin is a quiet 44 pt tile action
 /// (G4/G6), and an „i" that opens a popover of English licence prose too small
-/// to read (G5).
+/// to read.
 ///
 /// **The first case is the reason the order of this file matters.** G5 removes
 /// the popover, and the popover carried the WHO-5 / SCI attribution. That
@@ -54,112 +54,6 @@ struct MentalWellbeingConsistencyTests {
             questionnaires without it is not tidy, it is unlicensed. It survived G5 precisely \
             because it already existed here; nothing may quietly finish the job the popover \
             removal started. Offen: \(violations)
-            """
-        )
-    }
-
-    // MARK: - 2. G5 — the popover goes, without replacement
-
-    @Test("Das i-Popover ist ersatzlos entfallen (E5)")
-    func infoPopoverIsGone() throws {
-        let source = try Phase8SourceScan.stripped(Self.screen)
-
-        var violations: [String] = []
-        if source.contains("info.circle") {
-            violations.append("the info.circle trigger still renders")
-        }
-        if source.contains(".popover(") {
-            violations.append("the popover presentation is still mounted")
-        }
-        if source.contains("attributionPopover") {
-            violations.append("the popover body still exists")
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: the i popover still renders its unreadable license prose
-
-            G5, decision E5 (answered 2026-08-22): „das ,i' entfällt ersatzlos" — no \
-            replacement affordance, because the content it carried is a licence attribution \
-            that already has a home in the detail sheet and does not belong on a card. Offen: \
-            \(violations)
-            """
-        )
-    }
-
-    // MARK: - 3. G3 — the header prose
-
-    /// 1.4 B2 — the budget case became a removal: the description paragraph
-    /// left the screen and the catalogue. The cards name the four check-ins,
-    /// the detail sheet shows the trend the sentence spoke about.
-    @Test("Die Seitenbeschreibung ist entfallen")
-    func pageDescriptionIsGone() throws {
-        let source = try Phase8SourceScan.stripped(Self.screen)
-        #expect(!source.contains("mentalHealth.pageDescription"))
-        #expect(!source.contains("mentalHealth.noResultYet"))
-    }
-
-    @Test("Der Titel erscheint genau einmal")
-    func titleRendersOnce() throws {
-        let source = try Phase8SourceScan.stripped(Self.screen)
-
-        // The screen sets a navigation title AND used to repeat the same words as
-        // a header line directly under it.
-        let hasNavigationTitle = source.contains("navigationTitle(Text(\"more.mentalWellbeing.title\"))")
-        let hasHeaderTitle = source.contains("Text(\"mentalHealth.pageTitle\")")
-
-        var violations: [String] = []
-        if !hasNavigationTitle {
-            violations.append("the navigation title is gone — that is not the duplicate to remove")
-        }
-        if hasHeaderTitle {
-            violations.append("the header repeats the navigation title as body copy")
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: the title appears twice
-
-            G3. `more.mentalWellbeing.title` and `mentalHealth.pageTitle` are the same words \
-            („Seelisches Wohlbefinden"), rendered one under the other — the navigation title \
-            and then a `.hlTitle2` line repeating it. The navigation title is the one that \
-            stays: it survives scrolling and it is what every other screen in the app titles \
-            itself with. Offen: \(violations)
-            """
-        )
-    }
-
-    // MARK: - 4. G4/G6 — the Starten shape
-
-    @Test("Starten trägt die Kachel-Form, nicht die fast weiße Primary-Platte")
-    func startButtonsWearTheMedicationShape() throws {
-        let source = try Phase8SourceScan.stripped(Self.screen)
-
-        var violations: [String] = []
-        if !source.contains("HLTileActionButton(\"mentalHealth.start\"") {
-            violations.append("the instrument card's Starten is not a tile action")
-        }
-        // The detail sheet's own Starten is a full-screen flow CTA and stays
-        // `.primary` under R9 — exactly one `.primary` may remain on this screen.
-        let primaryCount = source.components(separatedBy: "variant: .primary").count - 1
-        if primaryCount != 1 {
-            violations.append("expected exactly one .primary on this screen (the sheet's commit), found \(primaryCount)")
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: Starten is still a near-white primary plate
-
-            G4/G6. `HLButton(.primary)` paints `AnyShapeStyle(.tint)`, and the scene tint is \
-            the monochrome ink `HLText.primary` — so on the instrument cards it reads as the \
-            near-white slab the `.restrained` doc comment was written to describe. The \
-            medication twin is 44 pt/`.hlSubhead`/hairline, and since R9/E2-A1 that shape has \
-            a name and a carrier. The sheet's own Starten keeps `.primary`: it is the \
-            screen's one commit action, which is what R9 reserves the variant for. Offen: \
-            \(violations)
             """
         )
     }

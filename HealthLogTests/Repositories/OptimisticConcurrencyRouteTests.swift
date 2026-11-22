@@ -10,7 +10,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-20 (#69) — `baseUpdatedAt` on the eight guarded routes.**
+/// **`baseUpdatedAt` on the eight guarded routes.**
 ///
 /// One 409 integration test per route (conflict → re-read → the retry lands),
 /// plus the token-refresh assertion, the three GET special cases, and the
@@ -504,7 +504,7 @@ struct OptimisticConcurrencyRouteTests {
             writePath: "/api/medications/layout",
             code: OptimisticConflictCode.medicationLayout,
             readPath: "/api/medications/layout",
-            // 08-05: the write under test is an order change — the only
+            // The write under test is an order change — the only
             // medication-layout write the app performs now that presentation is
             // cards-only. The route contract (409 → re-read → retry, token
             // advances) is exactly the one this case always asserted.

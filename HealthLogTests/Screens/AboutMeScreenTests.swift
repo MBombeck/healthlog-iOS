@@ -44,7 +44,7 @@ struct AboutMeScreenTests {
         #expect(rows.map(\.accessibilityIdentifier) == ["more.row.allergies", "more.row.family_history"])
     }
 
-    /// **UI-Standard R4/R7 (U7) — der Archetyp-Wegweiser bleibt gestrichen.**
+    /// **UI-Standard R4/R7 — der Archetyp-Wegweiser bleibt gestrichen.**
     ///
     /// „Name und E-Mail änderst du in den Einstellungen unter Profil." war der
     /// Satz, an dem der Betreiber aufgefallen ist, dass die App zu viel redet —

@@ -146,7 +146,7 @@ enum VorsorgeCard {
     /// `measurementType` maps to a capturable kind gets `.measure`; everything
     /// else (free-text, or a scale-only type) gets `.markDone`.
     static func primaryAction(for row: MeasurementReminderRow) -> PrimaryAction {
-        // #42 — screening scores are server-derived, so they route to the
+        // Screening scores are server-derived, so they route to the
         // mental-health check-in, NOT a numeric entry form. Checked FIRST so a
         // future overlap with the capture map can't win.
         if MeasurementReminderType.isMentalHealthScreening(row.measurementType) {
@@ -158,7 +158,7 @@ enum VorsorgeCard {
         return .markDone
     }
 
-    // MARK: - Detail arm (W-VORSORGE-DETAIL, b244)
+    // MARK: - Detail arm
 
     /// Which detail experience the card's tap opens. Mirrors the same branch
     /// root as ``primaryAction(for:)`` — a screening reminder is checked FIRST,
@@ -182,10 +182,16 @@ enum VorsorgeCard {
         if let instrument = mentalHealthInstrument(forServerType: row.measurementType) {
             return .screening(instrument)
         }
-        if let kind = VorsorgeNextDue.prefillKind(forServerType: row.measurementType) {
+        if let kind = VorsorgeNextDue.prefillKind(forServerType: row.measurementType) ?? displayOnlyKind(row.measurementType) {
             return .metric(kind)
         }
         return .freeText
+    }
+
+    /// Kinds the app charts but cannot capture: the detail shows their history,
+    /// while the primary action stays mark-done because the capture sheet has no form.
+    private static func displayOnlyKind(_ raw: String?) -> MetricKind? {
+        raw == "BLOOD_KETONES" ? .bloodKetones : nil
     }
 
     /// Maps a screening reminder's server `measurementType` (`PHQ9_SCORE` …) onto
@@ -245,7 +251,7 @@ enum VorsorgeCard {
         reminders.isEmpty
     }
 
-    /// **1.4 B4 — sources belong to a statement.** The reminders state the
+    /// **Sources belong to a statement.** The reminders state the
     /// screening cadences, so the page cites them while it shows any. The empty
     /// state (and the first load) states nothing, and a lone "Quellen" under
     /// "Noch keine Erinnerungen" cited nothing (DESIGN-HINTS rule 3).
@@ -286,7 +292,7 @@ enum VorsorgeCard {
         if day == yesterday {
             return String(localized: "medications.yesterday")
         }
-        return last.formatted(.dateTime.day().month().year())
+        return HLDateFormat.date(last, style: .abbreviated)
     }
 
     /// Cadence chip text — "Every N days" or a "Custom" label for an RRULE.

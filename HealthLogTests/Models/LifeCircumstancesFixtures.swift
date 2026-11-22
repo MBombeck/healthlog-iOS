@@ -1,7 +1,7 @@
 import Foundation
 @testable import HealthLog
 
-/// **LIFE (1.5.0)** — wire fixtures of `GET /api/anamnesis/life-circumstances`
+/// Wire fixtures of `GET /api/anamnesis/life-circumstances`
 /// in the v1.47.0 shape. Invented values only.
 enum LifeCircumstancesFixtures {
     static let date = "2026-03-01T12:00:00.000Z"

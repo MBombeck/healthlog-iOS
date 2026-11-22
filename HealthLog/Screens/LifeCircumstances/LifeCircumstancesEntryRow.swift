@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// **LIFE (1.5.0)** — the door to "Life circumstances" under "About me".
+/// The door to "Life circumstances" under "About me".
 ///
 /// Shown only when the last `/api/auth/me` said the server has the routes
-/// (`features.lifeCircumstances`, v1.43). An older server, a standalone
-/// install or a `/me` that has not loaded yet shows no row at all. The push
+/// (`features.lifeCircumstances`, v1.43). An older server or a `/me` that has not loaded yet shows no row at all. The push
 /// is a value on the More stack (`MoreRoute`), so the page survives the
-/// privacy shield like every other page there (SET-ROUTE).
+/// privacy shield like every other page there.
 struct LifeCircumstancesEntryRow: View {
     @Environment(\.appContainer) private var container
 
@@ -30,7 +29,7 @@ struct LifeCircumstancesEntryRow: View {
 }
 
 /// The two pages of the "About me" branch on the More stack. One switch case
-/// in `MoreScreen.moreDestination(_:)` for both keeps that switch inside its
+/// in `MoreRouteDestination` for both keeps that switch inside its
 /// complexity budget.
 struct AboutMeRouteDestination: View {
     let route: MoreRoute

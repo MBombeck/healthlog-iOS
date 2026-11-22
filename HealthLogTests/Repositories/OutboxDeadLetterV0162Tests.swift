@@ -192,7 +192,7 @@ struct OutboxDeadLetterV0162Tests {
         #expect(resurrected?.attempts == 0)
     }
 
-    // MARK: - M2 — a dependent update is NOT dropped before its create lands
+    // MARK: - A dependent update is NOT dropped before its create lands
 
     @Test("M2: a retriable create failure skips (does not drop) the dependent update")
     func dependentUpdateNotDroppedOnRetriableCreateFailure() async throws {
@@ -223,7 +223,7 @@ struct OutboxDeadLetterV0162Tests {
         #expect(kinds.contains(.updateAllergy))
     }
 
-    // MARK: - H-4 — optimistic→server id remap keeps an offline edit
+    // MARK: - Optimistic→server id remap keeps an offline edit
 
     @Test("H-4: an offline edit of an offline-created record is remapped to the server id")
     func offlineEditRemappedToServerId() async throws {

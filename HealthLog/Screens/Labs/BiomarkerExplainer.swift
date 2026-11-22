@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0154 LR-REDO — auto-explainer lookup for the biomarker detail page.
+/// Auto-explainer lookup for the biomarker detail page.
 ///
 /// **What this is.** The walkthrough wants a short "what is this biomarker"
 /// paragraph (e.g. "GGT ist ein Leberenzym …") under the detail header — like
@@ -105,7 +105,7 @@ enum BiomarkerExplainer {
 
     /// The catalogue markers + their de/en/nl names + common aliases. Kept in one
     /// place so the explainer set stays in lockstep with the web catalogue
-    /// (`src/lib/labs/biomarker-catalog.ts`). v1.25 (GH iOS #38) added the
+    /// (`src/lib/labs/biomarker-catalog.ts`). v1.25 added the
     /// longevity-panel markers — ApoB, Lp(a), Omega-3 index, fasting insulin (all
     /// real server seeds) plus HOMA-IR (a server-DERIVED value, no catalog seed —
     /// matched here as a best-effort free-text alias so a hand-entered "HOMA-IR"

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **audit-v0162 M3** — pins the widget/watch staleness rule that decides
+/// Pins the widget/watch staleness rule that decides
 /// whether a snapshot's `nextDose` / today's-compliance may still be rendered
 /// (and, for the next-dose surface, whether the interactive "Genommen" button
 /// may fire). The bug: providers rendered the snapshot UNCONDITIONALLY, so when

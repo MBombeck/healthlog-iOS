@@ -23,14 +23,14 @@ import Foundation
 /// wrote ourselves (carrying `HKMetadataKeyExternalUUID`) before mapping
 /// — the standard PROJECT_GUIDE.md echo guard.
 ///
-/// **`samples` (GH #86).** The per-session HR curve rides along as the
+/// **`samples`.** The per-session HR curve rides along as the
 /// optional `samples` array — `[{ t, hr }]`, the shape
 /// `workoutHrSamplesSchema` locks. Until #86 we shipped only the typed
 /// HR aggregates, so the web had nothing to draw a session curve from
 /// (`workout_samples` stayed empty server-side) while the iOS detail
 /// screen read the full series HK-locally.
 ///
-/// **`route` (1.5 ROUTES, #149).** The GPS track rides along only after
+/// **`route`.** The GPS track rides along only after
 /// the person switched "Send routes" on (see ``WorkoutRouteOptIn``); without
 /// that the field is never built and the wire boundary strips it again.
 ///
@@ -56,7 +56,13 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
     public let maxHeartRate: Int?
     public let minHeartRate: Int?
     public let stepCount: Int?
+    /// Metres climbed (`HKMetadataKeyElevationAscended`); omitted when the
+    /// workout carries none.
     public let elevationM: Double?
+    /// Seconds the workout stood paused, from its pause and resume events.
+    /// Omitted when it has none; an outbox payload from before 1.7 lacks the
+    /// key and decodes to `nil`.
+    public let pauseDurationSec: Int?
     public let source: String
     public let externalId: String?
     /// Per-session HR curve. `nil` (omitted on the wire) when the workout
@@ -93,6 +99,7 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
         minHeartRate: Int? = nil,
         stepCount: Int? = nil,
         elevationM: Double? = nil,
+        pauseDurationSec: Int? = nil,
         source: String = "APPLE_HEALTH",
         externalId: String? = nil,
         samples: [Sample]? = nil,
@@ -108,6 +115,7 @@ public struct WorkoutIngestDTO: Codable, Sendable, Equatable {
         self.minHeartRate = minHeartRate
         self.stepCount = stepCount
         self.elevationM = elevationM
+        self.pauseDurationSec = pauseDurationSec
         self.source = source
         self.externalId = externalId
         self.samples = samples
@@ -134,7 +142,7 @@ public struct WorkoutBatchPayload: Encodable, Sendable, Equatable {
 /// coverage are rejected by ``WorkoutBatchAcceptance`` so a caller never
 /// checkpoints work the server did not durably accept.
 ///
-/// **GH #86 — the per-entry array.** The server has always emitted an
+/// **The per-entry array.** The server has always emitted an
 /// `entries` array alongside the sums; we used to throw it away. The HR
 /// backfill sweep needs it: only the per-entry status distinguishes "the
 /// server attached our series" (`enriched`) from "the server ignored it"
@@ -187,7 +195,7 @@ public struct WorkoutBatchResponseDTO: Decodable, Sendable, Equatable {
         public static let duplicate = Status(rawValue: "duplicate")
         /// The server refused to store the entry (carries a `reason`).
         public static let skipped = Status(rawValue: "skipped")
-        /// GH #86 — the entry attached its HR series to an existing workout
+        /// The entry attached its HR series to an existing workout
         /// that had none. The workout's own fields stayed untouched.
         public static let enriched = Status(rawValue: "enriched")
     }
@@ -301,7 +309,7 @@ public extension WorkoutIngestDTO {
     /// trips the 400 `workout.batch.too_large` gate.
     static let maxWorkoutsPerBatch = 100
 
-    /// **GH #86** — batch cap for entries that CARRY a series. The route's
+    /// Batch cap for entries that CARRY a series. The route's
     /// hard limit is a 5 MB request body: a worst-case session
     /// (``maxSamplesPerWorkout`` … in practice the HK fetch stops at 5 000
     /// points) serialises to roughly 200 KB of `{"t":…,"hr":…}` rows, so

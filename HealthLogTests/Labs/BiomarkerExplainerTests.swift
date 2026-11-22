@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 /// Locks the `BiomarkerExplainer` catalogue — especially the v1.25 longevity
-/// additions (GH iOS #38): ApoB, Lp(a), Omega-3 index, fasting insulin, and the
+/// additions: ApoB, Lp(a), Omega-3 index, fasting insulin, and the
 /// server-derived HOMA-IR. Each must (a) carry a non-empty, non-key explainer
 /// string and (b) resolve from its German + English names / common aliases.
 @Suite("BiomarkerExplainer — catalogue + v1.25 longevity slugs")

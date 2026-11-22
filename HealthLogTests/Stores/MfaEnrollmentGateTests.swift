@@ -1,4 +1,4 @@
-// Parity 2.3 — the forced second-factor enrolment gate.
+// The forced second-factor enrolment gate.
 //
 // Two contracts are pinned here, both fail-safety properties rather than
 // features:

@@ -1,6 +1,6 @@
 import Foundation
 
-// W-B187 COACH-3 — outbox payloads for the coach clarifying-question loop
+// Outbox payloads for the coach clarifying-question loop
 // (adopt / dismiss). Split out of `OutboxQueue.swift` (file_length +
 // type_body_length discipline). Both shapes are `Codable` (the
 // `Encodable`-only wire structs `CoachAboutMeAdoptWrite` /

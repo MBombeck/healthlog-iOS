@@ -260,34 +260,6 @@ struct BloodPressureReadingDeleteTests {
         #expect(h.recorder.writes.map(\.path) == ["/api/measurements/pulse-1"])
         #expect(Self.remainingIDs(h.store) == ["pulse-later", "sys-1", "pulse-watch", "pulse-hour"])
     }
-
-    @Test("standalone mode deletes both halves locally even when the last server was 1.46.2")
-    func standaloneNeverTrustsTheServerRule() throws {
-        let defaults = try #require(UserDefaults(suiteName: "hl.test.bp-delete.\(UUID().uuidString)"))
-        KnownServerVersion.record(ServerVersionInfo(version: "1.46.2"), defaults: defaults)
-        let api = APIClient(
-            environment: AppEnvironment(
-                baseURL: testBaseURL,
-                bundleID: "dev.healthlog.app",
-                appVersion: "1.5.0",
-                buildNumber: "1"
-            ),
-            keychain: InMemoryKeychain(),
-            sessionConfiguration: .mock()
-        )
-        let store = try MeasurementsStore(
-            repo: MeasurementsRepository(api: api, outbox: OutboxQueue(inMemory: true)),
-            isStandalone: { true },
-            serverVersionDefaults: defaults
-        )
-        store.recent = [Self.reading, Self.cuffPulse]
-
-        let plan = store.deletePlan(for: Self.reading)
-
-        #expect(plan.wire == .bulk(["sys-1", "dia-1"]))
-        #expect(plan.pulseRows.isEmpty)
-        #expect(!plan.serverTakesWholeReading)
-    }
 }
 
 // MARK: - Outbox replay

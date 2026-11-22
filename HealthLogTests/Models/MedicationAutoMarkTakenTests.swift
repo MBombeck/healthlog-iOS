@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **MED-PLUS (1.5.0, #126 3.11) — "record doses automatically" and
+/// **"record doses automatically" and
 /// `remindersActive`.**
 ///
 /// The switch reads and writes `autoMarkTaken` (server v1.42.2), is offered

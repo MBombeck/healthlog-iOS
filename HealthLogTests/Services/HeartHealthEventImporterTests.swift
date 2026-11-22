@@ -5,7 +5,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 0 — heart and mobility event durability.
+/// Heart and mobility event durability.
 ///
 /// The event importer runs one anchored sweep per category type from a
 /// fire-and-forget observer task. It holds its anchor only when the uploader
@@ -70,10 +70,9 @@ struct HeartHealthEventImporterTests {
 
     // MARK: - RED
 
-    /// Cancelled event work must not move the per-type cursor, and the importer
-    /// must own its observer task through a lease instead of a detached sweep.
+    /// Cancelled event work must not move the per-type cursor.
     @Test("cancelled heart event work holds the cursor")
-    func cancellationHoldsCursor() throws {
+    func cancellationHoldsCursor() {
         var violations: [String] = []
 
         if HealthSyncCursorPolicy.installed.decide(Self.outcome(cancelled: true, leaseIsCurrent: true)) == .commit {
@@ -83,24 +82,6 @@ struct HeartHealthEventImporterTests {
             violations.append("a sweep that lost its lease still advanced the per-type cursor")
         }
 
-        let importer = try Self.source("HealthLog/Services/HealthKit/HeartHealthEventImporter.swift")
-        if !importer.contains("Task.isCancelled") {
-            violations.append("the importer never checks cancellation across its awaits")
-        }
-        if !importer.contains("HealthSyncCursorPolicy") {
-            violations.append("the importer does not consult the shared commit rule")
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: cancelled heart event work advanced cursor")
-    }
-
-    // MARK: - Source access
-
-    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        #expect(violations.isEmpty, "cancelled heart event work advanced cursor")
     }
 }

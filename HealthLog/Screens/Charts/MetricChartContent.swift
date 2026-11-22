@@ -58,14 +58,14 @@ enum MetricChartContent {
     /// Insights detail charts (the only other caller) keep their thresholds
     /// unchanged; the tile path passes `false` to suppress every
     /// `ThresholdRule` + the weight baseline `RuleMark`.
-    /// **v0.14.3 §A1/§A2 (FW-HOME) — `showsPoints` + `seriesLineWidth`:**
+    /// **v0.14.3 §A1/§A2 — `showsPoints` + `seriesLineWidth`:**
     /// the Home-tile chart variant wants ONE calm, uniform line across every
     /// tile, matching the medication-compliance primitive's quiet graphite.
     /// Two tile-only knobs (same opt-in plumbing as `includeThresholds`):
-    /// - `showsPoints` (default `true`) — when `false`, the per-measurement
-    ///   dot symbols (BP systolic/diastolic `.symbol(.circle)`, the glucose
-    ///   `PointMark`s) are dropped so the tile renders the **series line only**
-    ///   (the operator found the dots "too intense" on the Home tiles).
+    /// - `showsPoints` (default `false`) — every chart draws the line alone,
+    ///   so blood pressure and glucose look like pulse and weight. `true`
+    ///   adds the per-measurement dots (BP `.symbol(.circle)`, glucose
+    ///   `PointMark`s) where a caller wants them.
     /// - `seriesLineWidth` (default `nil`) — when set, every primary/secondary
     ///   `LineMark` strokes at that fixed width so all tiles share ONE calm
     ///   line weight. `nil` keeps the Charts default (~2pt) for the Insights
@@ -76,10 +76,10 @@ enum MetricChartContent {
         points: [SeriesPoint],
         emphasisTint: Color? = nil,
         includeThresholds: Bool = true,
-        showsPoints: Bool = true,
+        showsPoints: Bool = false,
         seriesLineWidth: CGFloat? = nil
     ) -> some ChartContent {
-        // Audit B-4 — a kind this build cannot name gets NO marks. An axis
+        // A kind this build cannot name gets NO marks. An axis
         // implies a unit and a scale we do not have; the row stays visible in
         // the list, and that is the whole claim we can make about it. Emptied
         // here rather than in its own arm so the switch keeps one arm per
@@ -140,7 +140,7 @@ enum MetricChartContent {
             SingleSeriesMarks(points: points, tint: emphasisTint ?? HLChartTints.series, lineWidth: seriesLineWidth)
         case .steps:
             SingleSeriesMarks(points: points, tint: emphasisTint ?? HLChartTints.series, lineWidth: seriesLineWidth)
-        // v0.5.2 F2 — server-backed additions render as single-series scalar
+        // Server-backed additions render as single-series scalar
         // lines. RHR + HRV + VO₂ max each carry their own clinical thresholds
         // long-term (e.g. SpO₂-style normal-range bands); for now the
         // minimal-shape SingleSeriesMarks renderer matches the rest of the
@@ -150,24 +150,24 @@ enum MetricChartContent {
              .walkingSpeed, .walkingAsymmetry, .walkingStepLength, .walkingDoubleSupport,
              .walkingSteadiness,
              .respiratoryRate, .audioExposureEnvironment, .audioExposureHeadphone, .bmi,
-             // v0.8.3 W-D — render-backlog activity aggregates render as single-series lines.
+             // Render-backlog activity aggregates render as single-series lines.
              .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight,
-             // v0.11 W21 — web-parity body-composition + cardio additions render
+             // Web-parity body-composition + cardio additions render
              // as single-series scalar lines (tonal-mono, no per-kind threshold).
              .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
              .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
              .fatMass,
-             // v0.13.1 IC — v1.10.0 additive signals render as single-series
+             // v1.10.0 additive signals render as single-series
              // scalar lines (tonal-mono, no per-kind threshold).
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native types: single-series scalar lines.
+             // v1.12.8 WHOOP-native types: single-series scalar lines.
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
-             // v0.14.1 W-B189 — v1.17.1 source-fixed signals (#23): single-series
+             // v1.17.1 source-fixed signals: single-series
              // scalar lines (the signed body-temperature deviation charts around
              // zero like any scalar series).
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types render as single-series scalar lines
+             // v1.25 clinical types render as single-series scalar lines
              // (pain NRS 0–10, grip kg, waist cm, waist-to-height ratio).
              .painNRS, .gripStrength, .waistCircumference, .waistToHeight,
              // Build 3 / item 3.3 — the 21 decoder catch-up types render as
@@ -180,10 +180,11 @@ enum MetricChartContent {
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity,
              // Build 7 / item 7.3 — mood renders as a single-series scalar line
              // if a mood series ever reaches this surface (today the tile reads
              // the summary snapshot; there is no mood `/series` endpoint).
-             // Audit B-4 — the audio-exposure event plots its constant `1` at
+             // The audio-exposure event plots its constant `1` at
              // the occurrence timestamp, exactly like its five siblings, and
              // `.unknown` arrives here with `plottable` already emptied.
              .mood, .audioExposureEvent, .unknown:
@@ -191,7 +192,7 @@ enum MetricChartContent {
         }
     }
 
-    // MARK: - Clinical threshold rules (#115 · 1.3)
+    // MARK: - Clinical threshold rules
 
     /// One dashed rule on a chart, in the unit the plotted series is in.
     struct ChartThreshold: Identifiable {
@@ -231,7 +232,7 @@ enum MetricChartContent {
     /// longer painted — the absence of any threshold line in a region
     /// conveys "in normal range" without dominating the foreground.
     ///
-    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// The fixed clinical rules described above are no longer
     /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct BloodPressureMarks: ChartContent {
         static let kind: MetricKind = .bloodPressure
@@ -246,7 +247,7 @@ enum MetricChartContent {
 
         var body: some ChartContent {
             // Dashed threshold rules first so the lines paint on top.
-            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // No hard-coded clinical rule: the lines come from
             // `MetricChartContent.clinicalThresholds(for:)`, empty until the
             // server publishes a band in this series' unit.
             if includeThresholds {
@@ -255,6 +256,9 @@ enum MetricChartContent {
                 }
             }
 
+            // With its points the chart shows measured readings: straight
+            // segments between them, a circle for systolic and a diamond for
+            // diastolic, so the two differ by shape and not only by tone.
             ForEach(points) { point in
                 LineMark(
                     x: .value("Time", point.at),
@@ -262,7 +266,7 @@ enum MetricChartContent {
                     series: .value("series", "sys")
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(showsPoints ? .linear : .monotone)
                 .hlTileSymbol(showsPoints)
                 .hlSeriesLineWidth(lineWidth)
 
@@ -272,12 +276,12 @@ enum MetricChartContent {
                         y: .value("Diastolic", diastolic),
                         series: .value("series", "dia")
                     )
-                    // 1.4 B4 — the diastolic line is the light step of the
+                    // The diastolic line is the light step of the
                     // same ink (`seriesLow`, 40%). At `seriesMid` (70%) it read
                     // as the same colour as systolic; the palette keeps one hue.
                     .foregroundStyle(HLChartTints.seriesLow)
-                    .interpolationMethod(.catmullRom)
-                    .hlTileSymbol(showsPoints)
+                    .interpolationMethod(showsPoints ? .linear : .monotone)
+                    .hlTileSymbol(showsPoints, shape: .diamond)
                     .hlSeriesLineWidth(lineWidth)
                 }
             }
@@ -300,12 +304,12 @@ enum MetricChartContent {
                     y: .value("Weight", point.value)
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .hlSeriesLineWidth(lineWidth)
             }
             // Personal baseline: median of last 90 daily points (≥5 readings required),
             // mirrors web's `computePersonalBaseline` (12-design-system §5.3).
-            // T2-3: dashed pattern + width from `HLChartGrid` so it matches
+            // Dashed pattern + width from `HLChartGrid` so it matches
             // the clinical threshold rules; the baseline is informational
             // rather than out-of-range, so it stays on tertiary text rather
             // than the red/green threshold tints.
@@ -324,7 +328,7 @@ enum MetricChartContent {
     /// bradycardia (<60 bpm) as a dashed green `RuleMark` — both lower- and
     /// upper-bound clinical thresholds, no solid fill behind the series.
     ///
-    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// The fixed clinical rules described above are no longer
     /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct PulseMarks: ChartContent {
         static let kind: MetricKind = .pulse
@@ -334,7 +338,7 @@ enum MetricChartContent {
         var lineWidth: CGFloat?
 
         var body: some ChartContent {
-            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // No hard-coded clinical rule: the lines come from
             // `MetricChartContent.clinicalThresholds(for:)`, empty until the
             // server publishes a band in this series' unit.
             if includeThresholds {
@@ -349,7 +353,7 @@ enum MetricChartContent {
                     y: .value("Pulse", point.value)
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .hlSeriesLineWidth(lineWidth)
             }
         }
@@ -376,7 +380,7 @@ enum MetricChartContent {
     /// Apple-Health-style visualization: danger zones are signalled by
     /// thin dashed boundaries, not by recolouring every measurement point.
     ///
-    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// The fixed clinical rules described above are no longer
     /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct GlucoseMarks: ChartContent {
         static let kind: MetricKind = .glucose
@@ -391,7 +395,7 @@ enum MetricChartContent {
 
         var body: some ChartContent {
             // Dashed clinical-boundary rules first so lines + points paint on top.
-            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // No hard-coded clinical rule: the lines come from
             // `MetricChartContent.clinicalThresholds(for:)`, empty until the
             // server publishes a band in this series' unit.
             if includeThresholds {
@@ -406,7 +410,7 @@ enum MetricChartContent {
                     y: .value("Blood glucose", point.value)
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(showsPoints ? .linear : .monotone)
                 .hlSeriesLineWidth(lineWidth)
 
                 if showsPoints {
@@ -415,7 +419,7 @@ enum MetricChartContent {
                         y: .value("Blood glucose", point.value)
                     )
                     .foregroundStyle(primaryTint)
-                    .symbolSize(40)
+                    .symbolSize(20)
                 }
             }
         }
@@ -423,7 +427,7 @@ enum MetricChartContent {
 
     /// Temperature line + 37.5 °C fever threshold rule (dashed red).
     ///
-    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// The fixed clinical rules described above are no longer
     /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct BodyTemperatureMarks: ChartContent {
         static let kind: MetricKind = .bodyTemperature
@@ -439,13 +443,13 @@ enum MetricChartContent {
                     y: .value("Body temperature", point.value)
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .hlSeriesLineWidth(lineWidth)
             }
-            // T2-3: fever rule routes through `HLChartTints.thresholdHigh`
+            // Fever rule routes through `HLChartTints.thresholdHigh`
             // (dashed red) with `HLChartGrid` stroke style — consistent with
             // every other upper-bound clinical threshold across the app.
-            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // No hard-coded clinical rule: the lines come from
             // `MetricChartContent.clinicalThresholds(for:)`, empty until the
             // server publishes a band in this series' unit.
             if includeThresholds {
@@ -458,7 +462,7 @@ enum MetricChartContent {
 
     /// SpO2 line + 95 % hypoxemia threshold (dashed green — lower bound).
     ///
-    /// **#115 · 1.3:** the fixed clinical rules described above are no longer
+    /// The fixed clinical rules described above are no longer
     /// drawn; any rule comes from ``MetricChartContent/clinicalThresholds(for:)``.
     private struct SPO2Marks: ChartContent {
         static let kind: MetricKind = .spo2
@@ -474,13 +478,13 @@ enum MetricChartContent {
                     y: .value("SpO2", point.value)
                 )
                 .foregroundStyle(primaryTint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .hlSeriesLineWidth(lineWidth)
             }
-            // T2-3: SpO2 95% is a lower-bound clinical threshold — routes
+            // SpO2 95% is a lower-bound clinical threshold — routes
             // through `HLChartTints.thresholdLow` (dashed green) like every
             // other hard floor (BP diastolic 60, bradycardia 60, hypoglycemia 70).
-            // #115 · 1.3 — no hard-coded clinical rule: the lines come from
+            // No hard-coded clinical rule: the lines come from
             // `MetricChartContent.clinicalThresholds(for:)`, empty until the
             // server publishes a band in this series' unit.
             if includeThresholds {
@@ -524,14 +528,14 @@ enum MetricChartContent {
                     y: .value("Value", point.value)
                 )
                 .foregroundStyle(tint)
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .hlSeriesLineWidth(lineWidth)
             }
         }
     }
 }
 
-// MARK: - Tile-variant chart-content modifiers (v0.14.3 §A1/§A2, FW-HOME)
+// MARK: - Tile-variant chart-content modifiers
 
 private extension ChartContent {
     /// Conditionally attaches the per-measurement circle symbol.
@@ -543,9 +547,9 @@ private extension ChartContent {
     /// is `false` the symbol is omitted entirely. `@ChartContentBuilder`
     /// branches stay a single opaque return type.
     @ChartContentBuilder
-    func hlTileSymbol(_ shows: Bool) -> some ChartContent {
+    func hlTileSymbol(_ shows: Bool, shape: BasicChartSymbolShape = .circle) -> some ChartContent {
         if shows {
-            symbol(.circle).symbolSize(20)
+            symbol(shape).symbolSize(20)
         } else {
             self
         }

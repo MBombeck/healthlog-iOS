@@ -190,7 +190,7 @@ struct HKSyncDiagnosticsTests {
         #expect(reloaded.lastCollectionTriggerSource == "push")
     }
 
-    // MARK: - Phase 07 / plan 07-07 — orchestrated-pass and withheld-item counters
+    // MARK: - Orchestrated-pass and withheld-item counters
 
     @Test("an orchestrated pass counts dispositions, hold reasons and admission refusals")
     func healthSyncPassCountersAccumulate() throws {
@@ -283,7 +283,7 @@ struct HKSyncDiagnosticsTests {
         #expect(!HealthSyncBudget.required(for: .processing).incrementalOnly)
     }
 
-    // MARK: - Phase 1 / Plan 04 — privacy-safe workout delivery truth
+    // MARK: - Privacy-safe workout delivery truth
 
     @Test("failed workout attempt advances only lastAttemptedAt")
     func failedWorkoutAttemptDoesNotClaimUsefulCompletion() throws {
@@ -410,7 +410,7 @@ struct HKSyncDiagnosticsTests {
     /// direct HK quantity type (smart-scale-derived; flow over the wire as
     /// custom rows that don't pass through the observation path).
     ///
-    /// v0.11 W21 + F3 — the nine web-parity body-composition / arterial /
+    /// The nine web-parity body-composition / arterial /
     /// walking-HR additions are **server/Withings-sourced only**: they are NOT
     /// collected through the iOS HK observer path (not in
     /// `HealthLogSampleTypeRegistry`), so they have no reverse-map entry by
@@ -420,25 +420,25 @@ struct HKSyncDiagnosticsTests {
         let mappedKinds = Set(HKSyncDiagnostics.identifierToKind.values)
         let kindsWithoutHKType: Set<MetricKind> = [
             .bodyWater, .boneMass,
-            // v0.11 W21 + F3 — server/Withings-sourced, not on the HK observer path.
+            // Server/Withings-sourced, not on the HK observer path.
             .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
             .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
             .fatMass,
-            // v0.13.1 IC — v1.10.0 additive signals are display-only (server
+            // v1.10.0 additive signals are display-only (server
             // ingest, not collected via the iOS HK observer registry), so they
             // have no reverse-map entry by design — same exemption as above.
             .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
             .breathingDisturbances, .cardioRecovery, .wristTemperature,
-            // v0.14.6 — WHOOP-native aggregates are server-ingested read-only
+            // WHOOP-native aggregates are server-ingested read-only
             // (no iOS HK observer path), so they have no reverse-map entry by
             // design — same exemption as the v1.10.0 additive signals above.
             .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
-            // v0.14.1 W-REGFIX — v1.17.1 source-fixed render-only signals (#23)
+            // v1.17.1 source-fixed render-only signals
             // are server-computed, have no HK read-type, and are not on the iOS
             // HK observer registry, so they have no reverse-map entry by design
             // — same exemption as the WHOOP / v1.10.0 additive signals above.
             .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-            // v0158 — v1.25 clinical measurement types are MANUAL / server-side
+            // v1.25 clinical measurement types are MANUAL / server-side
             // (entered via the measure sheet, not collected through the iOS HK
             // observer registry), so they have no reverse-map entry by design —
             // same exemption as the WHOOP / v1.10.0 additive signals above.
@@ -455,14 +455,17 @@ struct HKSyncDiagnosticsTests {
             .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
             .walkingSteadinessEvent, .breathingDisturbanceEvent,
             .mood, // Build 7.3 — dashboard mood tile (server-sourced), not an HK sync type
-            // Audit B-4 — the audio-exposure EVENT is an HK CATEGORY sample, not
+            // The audio-exposure EVENT is an HK CATEGORY sample, not
             // a quantity type, so it is not on the iOS observer registry (its
             // five sibling category events are exempt here for the same reason);
             // `.unknown` is a decode sentinel with no HK counterpart at all.
             .audioExposureEvent, .unknown,
-            // #162 — Garmin types come from the server pull or a bridge,
+            // Garmin types come from the server pull or a bridge,
             // never from HealthKit, so they have no reverse-map entry.
-            .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad
+            .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+            // Shown from the server only: ketones are typed on the web, the room
+            // climate comes from a sensor, and resting energy is not collected.
+            .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity
         ]
         let expectedKinds = Set(MetricKind.allCases).subtracting(kindsWithoutHKType)
         // `mappedKinds` must be a SUPERSET of the expected kinds.

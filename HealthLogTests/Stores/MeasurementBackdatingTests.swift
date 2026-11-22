@@ -35,7 +35,7 @@
             }
             let outbox = try OutboxQueue(inMemory: true)
             let repo = MeasurementsRepository(api: api, outbox: outbox)
-            return MeasurementsStore(repo: repo, healthKit: nil, isStandalone: { false })
+            return MeasurementsStore(repo: repo, healthKit: nil)
         }
 
         @Test("A backdated capture stores the operator's instant, not .now")

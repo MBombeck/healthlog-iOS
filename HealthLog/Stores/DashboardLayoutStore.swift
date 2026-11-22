@@ -24,7 +24,7 @@ public final class DashboardLayoutStore {
     /// is in flight. UI can suppress optimistic actions during this window.
     public private(set) var isShowingStaleCache: Bool = false
 
-    /// v0.14 b147 — ids the user explicitly pinned this session via the
+    /// Ids the user explicitly pinned this session via the
     /// "Add to Home" long-press. These are EXEMPT from the empty-tile
     /// auto-hide: the operator asked for the tile, so it must render (with a
     /// skeleton / em-dash) even before its per-kind data fan-out resolves.
@@ -33,7 +33,7 @@ public final class DashboardLayoutStore {
     /// appears — the exact operator bug. Cleared again on explicit unpin.
     public private(set) var recentlyPinnedIds: Set<String> = []
 
-    /// W-B187 — memoized order/visibility lookup derived purely from
+    /// Memoized order/visibility lookup derived purely from
     /// `layout.widgets`. `DashboardScreen.orderedMetrics(_:)` rebuilt TWO
     /// `Dictionary(uniqueKeysWithValues:)` on every body eval (any of the
     /// dashboard's ~11 observed stores churning re-ran the build); these
@@ -108,7 +108,7 @@ public final class DashboardLayoutStore {
     ///    actually targeted** (``v041FlipIds``). Idempotent; already-flipped
     ///    rows pass through.
     ///
-    ///    GH #81 — until b249 this restriction lived in the comment and not
+    ///    Until b249 this restriction lived in the comment and not
     ///    in the code: the pass flipped ANY hidden row whose catalogue
     ///    default was visible. That is indistinguishable from "the user hid
     ///    this on purpose", so hiding e.g. `weight` on the web came back on
@@ -123,11 +123,11 @@ public final class DashboardLayoutStore {
     ///    could not have been a user decision at the time. Nothing may be
     ///    added to this list — a future default change needs its own,
     ///    separately keyed migration, not a re-widening of this one.
-    /// 2. **Append pass (v0.5.3 D-4):** any widget id in `.default` that's
+    /// 2. **Append pass:** any widget id in `.default` that's
     ///    missing from `existing.widgets` is appended at the end, with the
     ///    default flags and a continuation order (max(existing.order) + N).
     ///    Operator's manual hides on already-existing rows survive untouched.
-    /// **The closed set the v0.4.1 flip pass may touch (GH #81).**
+    /// **The closed set the v0.4.1 flip pass may touch.**
     ///
     /// These seven kinds shipped `tileVisible: false` before v0.4.1 and had
     /// their catalogue default flipped to `true` by that release. A `false`
@@ -177,7 +177,7 @@ public final class DashboardLayoutStore {
                 widgets: flipped,
                 selectedScoreRings: existing.selectedScoreRings,
                 heroRingOrder: existing.heroRingOrder,
-                // CU-34 — carried through for the same reason as the two ring
+                // Carried through for the same reason as the two ring
                 // fields: the migration's `merged != loaded` check must not
                 // register a difference just because an additive field was
                 // dropped, or every launch would fire a pointless PUT.
@@ -206,14 +206,6 @@ public final class DashboardLayoutStore {
             heroRingOrder: existing.heroRingOrder,
             enabledHeroItemKinds: existing.enabledHeroItemKinds
         )
-    }
-
-    /// Back-compat alias retained so external callers (tests, future
-    /// audits) can still address the v0.4.1 flip-only behaviour by name.
-    /// New code paths should consume `mergedWithDefaults` which also
-    /// appends missing widget ids.
-    static func mergedWithV041Defaults(_ existing: DashboardWidgetLayout) -> DashboardWidgetLayout {
-        mergedWithDefaults(existing)
     }
 
     /// Run the defaults-merge migration if it hasn't been applied for this
@@ -254,7 +246,7 @@ public final class DashboardLayoutStore {
     }
 
     public func load() async {
-        // 14-06 — see `MedicationsStore.load`.
+        // See `MedicationsStore.load`.
         defer {
             if isLoading {
                 StoreEffectDiagnostics.recordRefusal(.loadInterrupted, store: .dashboardLayout)
@@ -375,14 +367,6 @@ public final class DashboardLayoutStore {
         layout.resolvedScoreRingSelection
     }
 
-    /// **v1.27.7 — persist a new hero score-ring selection.** The ONLY path that
-    /// sends `selectedScoreRings` on the widgets PUT (every other save omits it
-    /// → server preserves). Optimistic + rolls back on error, identical
-    /// durability to `reorder` / `toggleTileVisible`.
-    public func setSelectedScoreRings(_ ids: [ScoreRingID]) async {
-        await setScoreRings(selected: ids, heroOrder: nil)
-    }
-
     /// **Parity Build 4 · 4.3/4.8 — true when the user has actually chosen a
     /// ring selection**, as opposed to the server handing back its default.
     ///
@@ -396,13 +380,13 @@ public final class DashboardLayoutStore {
         layout.selectedScoreRings?.isEmpty == false
     }
 
-    /// **Parity Build 4 · 4.8 — the hero ring order** (anchor + selection),
+    /// **The hero ring order** (anchor + selection),
     /// reconciled against the current selection. Pre-fills the order editor.
     public var heroRingOrder: [HeroRingID] {
         layout.resolvedHeroRingOrder
     }
 
-    /// **Parity Build 4 · 4.8 — persist selection + hero order in ONE PUT.**
+    /// **Persist selection + hero order in ONE PUT.**
     ///
     /// The server preserves either field when absent, so sending them together
     /// is safe and keeps the two from ever disagreeing mid-edit. Optimistic +
@@ -414,9 +398,9 @@ public final class DashboardLayoutStore {
         await persist(next, rollbackTo: previous)
     }
 
-    // MARK: - CU-34 — Today hero items
+    // MARK: - Today hero items
 
-    /// **CU-34 — the item kinds currently allowed in the Today hero rail.**
+    /// **The item kinds currently allowed in the Today hero rail.**
     /// Pre-selects the picker. Resolves a server that predates the field to the
     /// full catalogue (nothing is being filtered), and an explicit `[]` to an
     /// empty list (the user switched the rail off).
@@ -424,13 +408,13 @@ public final class DashboardLayoutStore {
         layout.resolvedEnabledHeroItemKinds
     }
 
-    /// **CU-34 — true when the layout carries an explicit choice** rather than
+    /// **True when the layout carries an explicit choice** rather than
     /// the "no such field" of an older server.
     public var hasExplicitHeroItemKindSelection: Bool {
         layout.hasExplicitHeroItemKindSelection
     }
 
-    /// **CU-34 — persist which kinds may appear in the Today hero rail.**
+    /// **Persist which kinds may appear in the Today hero rail.**
     ///
     /// The ONLY path that sends `enabledHeroItemKinds` on the widgets PUT
     /// (every other save omits it → the server preserves the stored set).
@@ -447,7 +431,7 @@ public final class DashboardLayoutStore {
         await persist(next, rollbackTo: previous)
     }
 
-    /// **Parity 1.2 — resets exactly the way the web does: `DELETE`.**
+    /// **Resets exactly the way the web does: `DELETE`.**
     ///
     /// The old implementation PUT the materialised `DashboardWidgetLayout
     /// .default`. That looked equivalent and was not: the local default is

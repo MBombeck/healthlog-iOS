@@ -24,23 +24,19 @@ struct MedicationSupplyEditorSheet: View {
     let onUpdate: (MedicationInventoryPatch) async -> Void
     /// Delete intent.
     let onDelete: () async -> Void
-    let onDismiss: () -> Void
 
     @State private var containerType: MedicationContainerType = .other
-    @State private var unitsText: String = ""
+    /// The unit count; `nil` while the field holds nothing usable.
+    @State private var units: Double?
+    @State private var unitsState: HLNumberEntry.State = .empty
     @State private var hasExpiry = false
     @State private var expiry: Date = .now
     @State private var isBusy = false
-    @State private var confirmingDelete = false
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial focus onto the units field.
-    @FocusState private var unitsFocused: Bool
 
-    /// FORM-1 — baselines captured at init so a swipe-down only guards on a real
+    /// Baselines captured at init so a swipe-down only guards on a real
     /// change (register: the create defaults; correct: the item's values).
     private let initialContainerType: MedicationContainerType
-    private let initialUnitsText: String
+    private let initialUnits: Double?
     private let initialHasExpiry: Bool
     private let initialExpiry: Date
 
@@ -48,10 +44,10 @@ struct MedicationSupplyEditorSheet: View {
         item != nil
     }
 
-    /// FORM-1 — any field diverges from its initial baseline.
+    /// Any field diverges from its initial baseline.
     private var isDirty: Bool {
         containerType != initialContainerType
-            || unitsText != initialUnitsText
+            || units != initialUnits
             || hasExpiry != initialHasExpiry
             || (hasExpiry && expiry != initialExpiry)
     }
@@ -61,104 +57,77 @@ struct MedicationSupplyEditorSheet: View {
         item: MedicationInventoryItemDTO?,
         onRegister: @escaping (MedicationInventoryCreate) async -> Void,
         onUpdate: @escaping (MedicationInventoryPatch) async -> Void,
-        onDelete: @escaping () async -> Void,
-        onDismiss: @escaping () -> Void
+        onDelete: @escaping () async -> Void
     ) {
         self.medication = medication
         self.item = item
         self.onRegister = onRegister
         self.onUpdate = onUpdate
         self.onDelete = onDelete
-        self.onDismiss = onDismiss
         if let item {
             let seededType = item.containerType ?? .other
-            let seededUnits = Self.unitString(item.unitsRemaining)
+            let seededUnits = item.unitsRemaining.flatMap(InventorySanity.validUnits)
             let seededHasExpiry = item.printedExpiry != nil
             let seededExpiry = item.printedExpiry ?? .now
             _containerType = State(initialValue: seededType)
-            _unitsText = State(initialValue: seededUnits)
+            _units = State(initialValue: seededUnits)
             _hasExpiry = State(initialValue: seededHasExpiry)
             _expiry = State(initialValue: seededExpiry)
             initialContainerType = seededType
-            initialUnitsText = seededUnits
+            initialUnits = seededUnits
             initialHasExpiry = seededHasExpiry
             initialExpiry = seededExpiry
         } else {
             // Register mode — the create defaults are the dirty baseline.
             initialContainerType = .other
-            initialUnitsText = ""
+            initialUnits = nil
             initialHasExpiry = false
             initialExpiry = .now
         }
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: HLSpace.lg) {
-                    summaryCard
-                    typeCard
-                    unitsCard
-                    expiryCard
-                    if isEditing { lifecycleCard }
-                    primaryButton
-                    if isEditing { deleteButton }
+        HLSheetScaffold(
+            isEditing ? "med.inventory.editor.title.edit" : "med.inventory.editor.title.add",
+            size: .standard,
+            action: isEditing
+                ? .save(isEnabled: Self.canSave(units: units) && !isBusy) { await commit() }
+                : .add(isEnabled: Self.canSave(units: units) && !isBusy) { await commit() },
+            isDirty: isDirty
+        ) {
+            HLPage {
+                summaryCard
+                typeCard
+                unitsCard
+                expiryCard
+                if isEditing {
+                    lifecycleCard
+                    // Deleting a container is not undoable: it asks first.
+                    HLDeleteButton(
+                        "med.inventory.editor.delete.cta",
+                        form: .page,
+                        action: .confirmed(title: "med.inventory.editor.delete.confirm.title") {
+                            isBusy = true
+                            await onDelete()
+                            isBusy = false
+                        }
+                    )
+                    .disabled(isBusy)
+                    .accessibilityIdentifier("med.inventory.editor.delete")
                 }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.lg)
-                .padding(.bottom, HLSpace.xl)
-            }
-            .hlScreenBackground()
-            .navigationTitle(Text(isEditing
-                    ? "med.inventory.editor.title.edit"
-                    : "med.inventory.editor.title.add"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "meds.quick.cancel")) {
-                        if isDirty { showDiscardConfirm = true } else { onDismiss() }
-                    }
-                }
-            }
-            // FORM-2 — seed focus onto the units field once the sheet settles.
-            .task {
-                try? await Task.sleep(for: HLSheet.focusDelay)
-                unitsFocused = true
             }
         }
-        .hlSheetPresentation(.standard)
-        .presentationBackground(HLColor.surface)
-        // FORM-1 — guard against a swipe-down discarding unsaved edits; keep the
-        // existing in-flight lock via `isBusy`.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isBusy, isPresented: $showDiscardConfirm) {
-            onDismiss()
-        }
-        .hlConfirmDestructive(
-            Text("med.inventory.editor.delete.confirm.title"),
-            isPresented: $confirmingDelete,
-            confirm: Text(String(localized: "med.inventory.editor.delete.confirm.cta")),
-            cancel: Text(String(localized: "meds.quick.cancel")),
-            action: {
-                Task {
-                    isBusy = true
-                    await onDelete()
-                    isBusy = false
-                }
-            }
-        )
     }
 
     private var summaryCard: some View {
         HStack(spacing: HLSpace.xs) {
             Image(systemName: "shippingbox")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .accessibilityHidden(true)
             Text(medication.dose.isEmpty
                 ? medication.name
                 : "\(medication.name), \(medication.dose)")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -167,20 +136,19 @@ struct MedicationSupplyEditorSheet: View {
     private var typeCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("med.inventory.editor.type.label")
+                HLCardLabel("med.inventory.editor.type.label")
                 if let unnameable = Self.unnameableTypeLabel(for: item?.containerType) {
                     Label(unnameable, systemImage: MedicationContainerType.unknown.glyph)
                         .font(.hlBody)
                         .foregroundStyle(HLText.secondary)
                         .accessibilityIdentifier("med.inventory.editor.type.unnameable")
                 } else {
-                    Picker(
-                        String(localized: "med.inventory.editor.type.label"),
-                        selection: $containerType
-                    ) {
+                    Picker(selection: $containerType) {
                         ForEach(MedicationContainerType.serverCases) { type in
                             Label(type.localizedLabel, systemImage: type.glyph).tag(type)
                         }
+                    } label: {
+                        HLRowTitle("med.inventory.editor.type.label")
                     }
                     .pickerStyle(.menu)
                     .tint(HLText.secondary)
@@ -211,24 +179,32 @@ struct MedicationSupplyEditorSheet: View {
         type == .unknown ? MedicationContainerType.unknown.localizedLabel : nil
     }
 
+    /// A new container holds at least one unit, a correction may reach
+    /// zero; neither goes past the cap. Outside the range the field says so
+    /// and saving waits.
+    nonisolated static func unitsRange(isEditing: Bool) -> ClosedRange<Double> {
+        (isEditing ? 0 : 1) ... Double(medicationInventoryUnitsCap)
+    }
+
+    /// Saving needs a unit count the field took.
+    nonisolated static func canSave(units: Double?) -> Bool {
+        units != nil
+    }
+
+    /// The count of units, never of doses. Saving waits for a valid number.
     private var unitsCard: some View {
         HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel(isEditing
+            HLNumberField(
+                isEditing
                     ? "med.inventory.editor.units.remaining.label"
-                    : "med.inventory.editor.units.total.label")
-                TextField(
-                    String(localized: "med.inventory.editor.units.placeholder"),
-                    text: $unitsText
-                )
-                .keyboardType(.decimalPad)
-                .focused($unitsFocused)
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-                .accessibilityIdentifier("med.inventory.editor.units")
-                // 1.4 B2 — "units, not doses" is in the placeholder now
-                // ("z. B. 30 Tabletten").
-            }
+                    : "med.inventory.editor.units.total.label",
+                value: $units,
+                state: $unitsState,
+                unit: .plain,
+                range: Self.unitsRange(isEditing: isEditing),
+                fractionDigits: 0 ... 2
+            )
+            .accessibilityIdentifier("med.inventory.editor.units")
         }
     }
 
@@ -236,29 +212,27 @@ struct MedicationSupplyEditorSheet: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 Toggle(isOn: $hasExpiry) {
-                    Text("med.inventory.editor.expiry.toggle")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
+                    HLRowTitle("med.inventory.editor.expiry.toggle")
                 }
                 .tint(HLText.secondary)
                 if hasExpiry {
                     DatePicker(
-                        String(localized: "med.inventory.editor.expiry.label"),
                         selection: $expiry,
                         displayedComponents: .date
-                    )
+                    ) {
+                        HLRowTitle("med.inventory.editor.expiry.label")
+                    }
                     .font(.hlSubhead)
                 }
                 // **B2 (server v1.33.0)** — state the rule that actually applies to
                 // THIS container form. Pen / ampoule run the 30-days-after-opening
                 // clock alongside the printed date. Copy only — the server
-                // computes `expiresAt`. 1.4 B2: every other form expires on the
+                // computes `expiresAt`. Every other form expires on the
                 // printed date alone, which the date picker already says, so the
                 // line appears only for the first-use clock.
                 if containerType.usesFirstUseExpiryClock {
                     Text(verbatim: containerType.localizedExpiryRule)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("med.inventory.editor.expiry.rule")
                 }
@@ -271,97 +245,51 @@ struct MedicationSupplyEditorSheet: View {
     private var lifecycleCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HLSectionLabel("med.inventory.editor.lifecycle.label")
+                HLCardLabel("med.inventory.editor.lifecycle.label")
                 if item?.firstUseAt == nil {
-                    Button {
-                        Task {
-                            isBusy = true
-                            await onUpdate(MedicationInventoryPatch(markAsFirstUseAt: .set(.now)))
-                            isBusy = false
-                        }
-                    } label: {
-                        Label("med.inventory.editor.firstuse.cta", systemImage: "play.circle")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                    HLLinkButton("med.inventory.editor.firstuse.cta", systemImage: "play.circle", alignment: .leading) {
+                        update(MedicationInventoryPatch(markAsFirstUseAt: .set(.now)))
                     }
-                    .buttonStyle(.plain)
                     .disabled(isBusy)
                 } else {
-                    // A7 — the server accepts an explicit `null` on
+                    // The server accepts an explicit `null` on
                     // `markAsFirstUseAt` to DELETE the first-use date, so a
                     // mis-tapped "als geöffnet markieren" is now undoable.
-                    Button {
-                        Task {
-                            isBusy = true
-                            await onUpdate(MedicationInventoryPatch(markAsFirstUseAt: .clear))
-                            isBusy = false
-                        }
-                    } label: {
-                        Label("med.inventory.editor.firstuse.clear.cta", systemImage: "arrow.uturn.backward.circle")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                    HLLinkButton(
+                        "med.inventory.editor.firstuse.clear.cta",
+                        systemImage: "arrow.uturn.backward.circle",
+                        alignment: .leading
+                    ) {
+                        update(MedicationInventoryPatch(markAsFirstUseAt: .clear))
                     }
-                    .buttonStyle(.plain)
                     .disabled(isBusy)
                     .accessibilityIdentifier("med.inventory.editor.firstuse.clear")
                 }
-                Button {
-                    Task {
-                        isBusy = true
-                        await onUpdate(MedicationInventoryPatch(markAsUsedUp: true))
-                        isBusy = false
-                    }
-                } label: {
-                    Label("med.inventory.editor.usedup.cta", systemImage: "checkmark.circle")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                HLLinkButton("med.inventory.editor.usedup.cta", systemImage: "checkmark.circle", alignment: .leading) {
+                    update(MedicationInventoryPatch(markAsUsedUp: true))
                 }
-                .buttonStyle(.plain)
                 .disabled(isBusy)
             }
         }
     }
 
-    private var primaryButton: some View {
-        HLButton(
-            String(localized: isEditing
-                ? "med.inventory.editor.save.cta"
-                : "med.inventory.editor.add.cta"),
-            icon: "checkmark.circle.fill",
-            variant: .restrained
-        ) {
-            Task { await commit() }
+    /// Runs one lifecycle patch with the sheet busy while it is out.
+    private func update(_ patch: MedicationInventoryPatch) {
+        Task {
+            isBusy = true
+            await onUpdate(patch)
+            isBusy = false
         }
-        .disabled(isBusy || parsedUnits == nil)
-        .accessibilityIdentifier("med.inventory.editor.commit")
     }
 
-    private var deleteButton: some View {
-        HLButton(
-            String(localized: "med.inventory.editor.delete.cta"),
-            variant: .destructive,
-            size: .regular
-        ) {
-            confirmingDelete = true
-        }
-        .disabled(isBusy)
-        .accessibilityIdentifier("med.inventory.editor.delete")
-    }
-
-    /// Parsed + clamped unit count, or nil when the field is empty / invalid.
-    private var parsedUnits: Double? {
-        guard let value = LocaleDecimalParser.parse(unitsText), value >= 0 else { return nil }
-        let upper = isEditing ? Double(medicationInventoryUnitsCap) : Double(medicationInventoryUnitsCap)
-        return min(value, upper)
-    }
-
-    private func commit() async {
-        guard let units = parsedUnits else { return }
+    /// Hands the input to the host; the sheet closes once it went out.
+    private func commit() async -> Bool {
+        guard let units else { return false }
         isBusy = true
         defer { isBusy = false }
         let expiryValue = hasExpiry ? expiry : nil
         if isEditing {
-            // M-1: when the user turns the expiry toggle OFF on a container that
+            // When the user turns the expiry toggle OFF on a container that
             // had one, send an explicit clear (JSON `null`) so the server actually
             // removes it. Omitting the key means "unchanged" and the old expiry
             // would survive — hence the tri-state `RecordPatchField`, not an
@@ -380,16 +308,17 @@ struct MedicationSupplyEditorSheet: View {
             ))
         } else {
             await onRegister(MedicationInventoryCreate(
-                unitsTotal: max(1, units),
+                unitsTotal: units,
                 containerType: containerType,
                 printedExpiry: expiryValue,
                 purchasedAt: nil,
                 notes: nil
             ))
         }
+        return true
     }
 
-    /// `Double?` overload — an UNKNOWN (`nil`) remaining count (#31) seeds an
+    /// `Double?` overload — an UNKNOWN (`nil`) remaining count seeds an
     /// EMPTY field, exactly like a corrupt one: the user types the real count
     /// rather than inheriting a fabricated `0`.
     nonisolated static func unitString(_ value: Double?) -> String {
@@ -398,7 +327,7 @@ struct MedicationSupplyEditorSheet: View {
     }
 
     nonisolated static func unitString(_ value: Double) -> String {
-        // **W-INVENTORY — editable-field pre-fill.** A corrupt remaining count
+        // **Editable-field pre-fill.** A corrupt remaining count
         // must never seed the field with a non-finite / negative / absurd value.
         // Unlike a read-only readout we cannot show "—" in a numeric field, so a
         // corrupt value seeds an EMPTY field (the user types the real count) —
@@ -407,6 +336,6 @@ struct MedicationSupplyEditorSheet: View {
         if safe.truncatingRemainder(dividingBy: 1) == 0 {
             return String(Int(safe))
         }
-        return safe.formatted(.number.precision(.fractionLength(0 ... 2)))
+        return HLValueFormat.number(safe, fractionDigits: 0 ... 2)
     }
 }

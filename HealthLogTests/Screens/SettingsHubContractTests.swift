@@ -11,7 +11,7 @@ import Testing
 ///   content end-to-end — placeholder-only screens are forbidden
 /// - each sub-screen MUST be a `View`
 ///
-/// v0.8.0 W7 — `SettingsServerScreen` joined the list when Server was
+/// `SettingsServerScreen` joined the list when Server was
 /// promoted out of About's card into its own "Server & sync" hub row.
 ///
 /// Pixel snapshots are deliberately avoided (per project convention;
@@ -24,8 +24,8 @@ struct SettingsHubContractTests {
     /// Canonical Settings hub route list. If you change this list, AC18 is
     /// at risk — make sure the new route ships working content and not
     /// another "Demnaechst verfuegbar" placeholder.
-    /// v0.14.1 (#134) — `SettingsExportScreen` moved out of the hub into the
-    /// "Mehr" tab (Daten & Geräte). v0.14.7 C1 — it moved BACK into the hub
+    /// `SettingsExportScreen` moved out of the hub into the
+    /// "Mehr" tab (Daten & Geräte). It moved BACK into the hub
     /// (generic backup/measurements export is a setting); the doctor-handover
     /// surfaces split into Mehr → "Mit dem Arzt teilen" (`UnifiedSharingScreen` since 18-03,
     /// C2). The hub is back to 10 rows.
@@ -63,34 +63,10 @@ struct SettingsHubContractTests {
         }
     }
 
-    @Test("HLSettingsCard renders header + body")
-    func hlSettingsCardBody() {
-        let card = HLSettingsCard(
-            icon: "person.crop.circle.fill",
-            title: "Profile",
-            subtitle: "Beispiel-Untertitel",
-            footer: "Beispiel-Footer"
-        ) {
-            Text("Body")
-        }
-        _ = card.body
-    }
-
-    @Test("HLSettingsCard trailing-slot initialiser composes")
-    func hlSettingsCardTrailing() {
-        let card = HLSettingsCard(
-            icon: "link.circle.fill",
-            title: "Withings",
-            trailing: { HLStatusPill(.connected(label: "Verbunden")) },
-            content: { Text("Body") }
-        )
-        _ = card.body
-    }
-
     @Test("HLSettingsPage wraps a ScrollView header + content")
     func hlSettingsPageBody() {
         let page = HLSettingsPage(title: "Account") {
-            HLSettingsCard(icon: "person.fill", title: "Profile") {
+            HLCard("Profile") {
                 Text("Body")
             }
         }

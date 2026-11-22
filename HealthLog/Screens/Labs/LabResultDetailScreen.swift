@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Detail for a single lab result. Loads the decrypted note via
-/// `GET /api/labs/{id}`; renders the value vs. its reference range using the
-/// shared neutral ``RangeBandRow`` rail (no recompute — the server-resolved
-/// `referenceLow`/`referenceHigh` + neutral `rangeStatus` drive the display).
+/// Detail for a single lab result, built like the reference metric page:
+/// the reading as the page's one figure, its assessment against the
+/// reference range, then the background. Loads the decrypted note via
+/// `GET /api/labs/{id}`. Nothing is recomputed: the server-resolved bounds
+/// and `rangeStatus` drive the display.
 struct LabResultDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let store: LabsStore
     let resultID: String
@@ -17,7 +17,6 @@ struct LabResultDetailScreen: View {
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var showEdit = false
-    @State private var showDeleteConfirm = false
 
     private var status: LabRangeStatus {
         detail?.rangeStatus ?? summary.rangeStatus
@@ -31,7 +30,7 @@ struct LabResultDetailScreen: View {
         detail?.unit ?? summary.unit
     }
 
-    /// Item 1.5 — optional. `detail?.value ?? summary.value` would have coalesced
+    /// Optional. `detail?.value ?? summary.value` would have coalesced
     /// a qualitative detail row's `nil` back onto the summary; prefer the detail
     /// row wholesale once it has loaded.
     private var value: Double? {
@@ -40,6 +39,11 @@ struct LabResultDetailScreen: View {
 
     private var valueText: String? {
         detail == nil ? summary.valueText : detail?.valueText
+    }
+
+    /// The figure the report printed, when the server converted the reading.
+    private var printedValue: Double? {
+        detail == nil ? summary.sourceValue : detail?.sourceValue
     }
 
     private var referenceLow: Double? {
@@ -63,184 +67,98 @@ struct LabResultDetailScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                headerCard
-                rangeCard
-                if let note = detail?.note, !note.isEmpty {
-                    noteCard(note)
-                }
-                metaCard
-                // #141 — the records this one relates to (e.g. the scanned report).
-                RelatedRecordsSection(links: detail?.related?.items ?? [])
-                HLSyncStatusFooter(screenLoading: isLoading)
-            }
-            .padding(HLSpace.lg)
+        // The order of the reference metric page: the figure, its
+        // assessment, then the background (panel, source, note, related).
+        HLPage {
+            HLSectionHeader("Measurement", rank: .area)
+            LabReadingHero(
+                reading: LabReadingHero.Reading(value: value, valueText: valueText, unit: unit, printed: printedValue),
+                status: status,
+                caption: LabsDateFormat.labDateTime(takenAt),
+                conversion: detail.map(LabConversion.init) ?? LabConversion(summary),
+                range: LabReadingHero.Range(low: referenceLow, high: referenceHigh)
+            )
+            assessmentSection
+            backgroundSection
+            // The records this one relates to (e.g. the scanned report).
+            RelatedRecordsSection(links: detail?.related?.items ?? [])
+            HLSyncStatusFooter(screenLoading: isLoading)
         }
-        .hlScreenBackground()
         .navigationTitle(Text(verbatim: analyte))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        showEdit = true
-                    } label: {
-                        Label("labs.edit.action", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        showDeleteConfirm = true
-                    } label: {
-                        Label("labs.delete.action", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+        .hlPageActions([
+            .more(identifier: "labs.detail.menu") {
+                Button("labs.edit.action", systemImage: "pencil") {
+                    showEdit = true
                 }
-                .accessibilityIdentifier("labs.detail.menu")
+                // The store keeps the way back: no question, the undo hint.
+                HLDeleteMenuItem(.undoable {
+                    await store.deleteLab(id: resultID, undoMessage: String(localized: "labs.delete.undo"))
+                    dismiss()
+                })
             }
-        }
+        ])
         .task { await loadDetail() }
         .sheet(isPresented: $showEdit) {
             EditLabResultSheet(store: store, result: summary)
         }
-        .hlConfirmDestructive(
-            Text("labs.delete.confirm.title"),
-            isPresented: $showDeleteConfirm,
-            confirm: Text("labs.delete.action"),
-            cancel: Text("labs.action.cancel"),
-            action: {
-                Task {
-                    await store.deleteLab(id: resultID, undoMessage: String(localized: "labs.delete.undo"))
-                    dismiss()
-                }
-            }
-        )
     }
 
-    private var headerValue: some View {
-        Text(valueLabel)
-            .font(.hlMetric(.largeTitle))
-            .monospacedDigit()
-            .foregroundStyle(HLText.primary)
-    }
-
-    private var headerCard: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // A11Y (1.5) — at the accessibility sizes the badge goes
-                // under the value instead of breaking into three lines
-                // beside it (POLISH-C, "bleibt").
-                if dynamicTypeSize.isAccessibilitySize {
-                    headerValue
-                    LabRangeBadge(status: status)
-                } else {
-                    HStack {
-                        headerValue
-                        Spacer()
-                        LabRangeBadge(status: status)
-                    }
-                }
-                // 1.4 B2-c — "linked to a catalog biomarker" was an
-                // implementation detail; the row is gone.
-                // #126 3.5 — converted from what was printed, and the printed range.
-                LabConversionNote(conversion: detail.map(LabConversion.init) ?? LabConversion(summary))
-            }
-        }
-    }
-
+    /// The range the verdict is made against, in the form of the marker
+    /// page's assessment. A reading without range and verdict has none.
     @ViewBuilder
-    private var rangeCard: some View {
-        // Item 1.5 — a reference rail needs a number to place on it. A
-        // qualitative (or absent) reading has none, so the whole card stands
-        // down rather than rendering a marker at 0.
-        if let band, let value {
+    private var assessmentSection: some View {
+        let range = BiomarkerSeries.referenceText(low: referenceLow, high: referenceHigh, unit: unit)
+        if range != nil || status.rowStatus != nil {
+            HLSectionHeader("biomarker.detail.assessment", rank: .area)
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("labs.detail.reference")
-                    LabReferenceRangeRow(
-                        value: value,
-                        unit: unit,
-                        lower: referenceLow,
-                        upper: referenceHigh,
-                        status: status
-                    )
-                    Text(band)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    // 1.0.3 / App Review 1.4.1 — a reference range plus a
-                    // verdict is a medical-shaped statement, so it says where
-                    // the range came from and offers the sources behind it.
-                    // Outside `LabReferenceRangeRow`'s combine group by
-                    // construction: that group lives in the row's own body.
-                    // 1.4 B2-c — where the range comes from and its sources
-                    // share one line (the caption wraps, the link stays right).
-                    HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                        Text("labs.detail.reference.caption")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: HLSpace.sm)
-                        HLSourcesLink(topic: .labReferenceRanges)
+                    if let range {
+                        HLFactGroup {
+                            HLFactRow("labs.detail.reference", value: range)
+                        }
                     }
+                    // 1.0.3 / App Review 1.4.1: a reference range plus a
+                    // verdict says where the range came from and offers the
+                    // sources behind it.
+                    LabReferenceSourceLine(topic: .labReferenceRanges)
                 }
             }
         }
     }
 
-    private func noteCard(_ note: String) -> some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.xs) {
-                HLSectionLabel("labs.detail.note")
-                Text(note)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-            }
-        }
-    }
-
-    private var metaCard: some View {
+    /// Panel, source and the note, under one head like the background
+    /// block of the reference page.
+    @ViewBuilder
+    private var backgroundSection: some View {
+        HLSectionHeader("labs.detail.background", rank: .area)
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                metaRow(label: String(localized: "labs.detail.takenAt"), value: LabsDateFormat.mediumDateTime(takenAt))
-                if let panel, !panel.isEmpty {
-                    metaRow(label: String(localized: "labs.detail.panel"), value: panel)
+                HLFactGroup {
+                    if let panel = LabPanelName.display(panel) {
+                        HLFactRow("labs.detail.panel", value: panel)
+                    }
+                    HLFactRow("labs.detail.source", value: LabUnit.sourceName(source))
                 }
-                metaRow(label: String(localized: "labs.detail.source"), value: LabUnit.sourceName(source))
                 if let loadError {
                     HLFormErrorText(loadError)
                 }
             }
         }
-    }
-
-    private func metaRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-            Spacer()
-            Text(value)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+        if let note = detail?.note, !note.isEmpty {
+            HLCard("labs.detail.note") {
+                Text(note)
+                    .hlText(.prose)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
-    private var valueLabel: String {
-        LabValueDisplay.text(value: value, valueText: valueText, unit: unit)
-    }
-
-    /// The "Reference 3.5–5.1 mmol/L" line — only when at least one bound
-    /// exists. Built from `String(format:)` over a single static localized
-    /// template so the xcstrings keys stay static.
-    private var band: String? {
-        Self.rangeText(low: referenceLow, high: referenceHigh, unit: unit)
-    }
-
     /// The range line for given bounds; the unit follows the numbers, never
-    /// the unity "1" (#160). `nil` without any bound.
+    /// the unity "1". `nil` without any bound.
     nonisolated static func rangeText(low referenceLow: Double?, high referenceHigh: Double?, unit: String) -> String? {
         func num(_ v: Double) -> String {
-            v.formatted(.number.precision(.fractionLength(0 ... 2)))
+            HLValueFormat.number(v, fractionDigits: 0 ... 2)
         }
         let unitSuffix = LabUnit.suffix(unit).map { " \($0)" } ?? ""
         switch (referenceLow, referenceHigh) {
@@ -269,67 +187,5 @@ struct LabResultDetailScreen: View {
             // non-fatal — surface a quiet inline note.
             loadError = String(localized: "labs.detail.loadFailed")
         }
-    }
-}
-
-/// Value-vs-reference display: the value, the bounds, and a neutral position
-/// rail. Reuses the calm rail aesthetic of ``RangeBandRow`` but drives the fill
-/// from the value's position inside `[lower, upper]` (NOT a recomputed verdict —
-/// the verdict is the server `status`; this is purely a position indicator).
-struct LabReferenceRangeRow: View {
-    let value: Double
-    let unit: String
-    let lower: Double?
-    let upper: Double?
-    let status: LabRangeStatus
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                Text(lowerLabel)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                Spacer()
-                Text(upperLabel)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: InsightsInTargetBar.cornerRadius)
-                        .fill(InsightsInTargetBar.trackTone)
-                        .frame(height: InsightsInTargetBar.railHeight)
-                    // Neutral position marker — the brand tint dot, never a
-                    // red/green alarm fill.
-                    Circle()
-                        .fill(HLAccent.userBrandTint)
-                        .frame(width: 12, height: 12)
-                        .offset(x: max(0, min(geo.size.width - 12, geo.size.width * fraction - 6)))
-                        .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: fraction)
-                }
-            }
-            .frame(height: InsightsInTargetBar.railHeight)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(status.localizedLabel))
-    }
-
-    /// Position 0…1 of `value` within `[lower, upper]`; clamps when only one
-    /// bound exists or when out of range. Pure presentation, no verdict.
-    private var fraction: CGFloat {
-        guard let lower, let upper, upper > lower else { return 0.5 }
-        return CGFloat(max(0, min(1, (value - lower) / (upper - lower))))
-    }
-
-    private var lowerLabel: String {
-        guard let lower else { return "—" }
-        return lower.formatted(.number.precision(.fractionLength(0 ... 2)))
-    }
-
-    private var upperLabel: String {
-        guard let upper else { return "—" }
-        return upper.formatted(.number.precision(.fractionLength(0 ... 2)))
     }
 }

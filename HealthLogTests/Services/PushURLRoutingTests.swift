@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// #141 / #126 3.2 — the push `url` (server `tap-target.ts`, v1.43) opens
+    /// The push `url` (server `tap-target.ts`, v1.43) opens
     /// the native screen; a path without one opens home.
     @Suite("Push url opens the native screen (#141)", .serialized, .mockURLSession)
     @MainActor
@@ -49,6 +49,8 @@ import Testing
             ("/mood?add=1", .mood),
             ("/mood", .dashboard),
             ("/medications", .medications),
+            ("/medications?highlight=med_1", .medicationDue(id: "med_1", slot: nil)),
+            ("/medications?highlight=..%2Fx", .medications),
             ("/medications/med_1", .medication(id: "med_1")),
             ("/medications/med_1/stock", .medication(id: "med_1")),
             ("/medications/..%2Fx", .medications),
@@ -60,7 +62,9 @@ import Testing
             ("/settings/unknown", .dashboard),
             ("/achievements", .dashboard),
             ("/measurements", .dashboard),
-            ("/insights/medications", .dashboard),
+            ("/insights", .insights(metric: nil)),
+            // Server 1.49.0: `/insights/<slug>` opens that Insights page.
+            ("/insights/medications", .insights(metric: "medications")),
             ("https://evil.example/settings/security", .dashboard),
             ("//evil.example/cycle", .dashboard),
             ("/cycle\\x", .dashboard),
@@ -132,7 +136,7 @@ import Testing
             #expect(router.morePath.count == 2)
         }
 
-        @Test("A medication reminder with its id still opens that medication")
+        @Test("A medication reminder with its id lands on its due dose on the list (#186)")
         func medicationIdStillWins() async {
             let router = AppRouter()
             let svc = makeService(appRouter: router)
@@ -141,7 +145,8 @@ import Testing
                 payload: payload(event: "MEDICATION_REMINDER", url: "/medications", medicationId: "med_9")
             )
             #expect(router.selectedTab == .meds)
-            #expect(router.medsPath.count == 1)
+            #expect(router.medsPath.isEmpty)
+            #expect(router.pendingMedicationLanding?.medicationId == "med_9")
         }
     }
 #endif

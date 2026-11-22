@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// AUDIT-G A1-B1 (v0.11) — decode contract for `GET /api/auth/me/notification-prefs`.
+/// Decode contract for `GET /api/auth/me/notification-prefs`.
 ///
 /// This is the ONLY endpoint that carries `mood.reminderHour` (the source of
 /// truth for the evening mood reminder); `/api/notifications/preferences`

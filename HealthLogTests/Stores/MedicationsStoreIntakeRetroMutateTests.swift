@@ -5,7 +5,7 @@ import Testing
 // swiftlint:disable force_unwrapping
 
 /// T-4 store-level retro-mutate orchestration. The store delegates to
-/// `MedicationsRepository.updateIntake/deleteIntake` (T-0) and surfaces
+/// `MedicationsRepository.updateIntake/deleteIntake` and surfaces
 /// the optimistic-write `WriteOutcome` contract that the IntakeHistoryRow
 /// swipe-actions consume. Mirrors the T-3 `MedicationsStoreCRUDTests`
 /// shape — `StubAPIClient` driver, `OutboxQueue(inMemory:)`, three arms

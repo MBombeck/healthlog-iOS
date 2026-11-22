@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.7.1 W-APPINTENTS** — "Mark medication as taken" Siri / Shortcuts
+/// "Mark medication as taken" Siri / Shortcuts
 /// intent.
 ///
 /// Records an intake against the **same** server path the
@@ -32,7 +32,7 @@ struct MarkMedicationTakenIntent: AppIntent {
     )
     var medication: MedicationEntity
 
-    /// **v0.10.0 W-Widget-2Tap** — optional override for the recorded slot
+    /// Optional override for the recorded slot
     /// instant, as a Unix epoch (seconds). The next-dose widget passes the
     /// due dose's canonical `scheduledAt` so the intake row keys on
     /// `(medicationId, scheduledFor)` and de-dupes onto the in-app card's
@@ -57,6 +57,26 @@ struct MarkMedicationTakenIntent: AppIntent {
         epoch.map { Date(timeIntervalSince1970: $0) } ?? now
     }
 
+    /// The spoken confirmation. This intent stays usable on a locked iPhone
+    /// (a write, like `MarkNextDoseTakenIntent`), so it names no medication
+    /// while the switch that hides names is on or the device is locked.
+    @MainActor
+    static func confirmation(
+        medicationName: String,
+        hidesName: Bool = IntentMedicationNamePrivacy.hidesNames()
+    ) -> LocalizedStringResource {
+        if hidesName {
+            return LocalizedStringResource(
+                "Marked the medication as taken.",
+                comment: "AppIntents — medication marked taken confirmation without the name (names hidden or device locked)"
+            )
+        }
+        return LocalizedStringResource(
+            "Marked \(medicationName) as taken.",
+            comment: "AppIntents — medication marked taken confirmation"
+        )
+    }
+
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let deps = IntentDependencies.resolve()
@@ -72,14 +92,10 @@ struct MarkMedicationTakenIntent: AppIntent {
                 scheduledFor: scheduledFor,
                 status: .taken
             )
-            return .result(
-                dialog: IntentDialog(
-                    LocalizedStringResource(
-                        "Marked \(medication.name) as taken.",
-                        comment: "AppIntents — medication marked taken confirmation"
-                    )
-                )
-            )
+            return .result(dialog: IntentDialog(Self.confirmation(medicationName: medication.name)))
+        } catch let already as MedicationAlreadyTaken {
+            // #189 (6): no second dose; say when the first one was taken.
+            return .result(dialog: IntentDialog(stringLiteral: already.message))
         } catch let error as HLError where error.shouldPersistToOutbox {
             // Durably enqueued (incl. a transient-refresh 401) — saved, not lost.
             return .result(dialog: IntentCopy.queued(after: error))
@@ -113,7 +129,11 @@ struct MedicationEntity: AppEntity {
 /// `MedicationsRepository.list()` so the picker stays in sync with the
 /// app. Returns an empty set when signed out (the intent's own gate
 /// surfaces the sign-in dialog).
-struct MedicationEntityQuery: EntityQuery {
+///
+/// On a locked iPhone it suggests nothing: Siri would read the whole list
+/// aloud to ask which one. It asks without a list instead, and the spoken
+/// name resolves through ``entities(matching:)``.
+struct MedicationEntityQuery: EntityStringQuery {
     @MainActor
     func entities(for identifiers: [String]) async throws -> [MedicationEntity] {
         let all = try await fetchAll()
@@ -122,18 +142,44 @@ struct MedicationEntityQuery: EntityQuery {
     }
 
     @MainActor
+    func entities(matching string: String) async throws -> [MedicationEntity] {
+        let wanted = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !wanted.isEmpty else { return [] }
+        return try await fetchAll().filter { $0.name.localizedStandardContains(wanted) }
+    }
+
+    @MainActor
     func suggestedEntities() async throws -> [MedicationEntity] {
-        try await fetchAll()
+        guard !IntentMedicationNamePrivacy.isDeviceLocked() else { return [] }
+        return try await fetchAll()
     }
 
     @MainActor
     private func fetchAll() async throws -> [MedicationEntity] {
         let deps = IntentDependencies.resolve()
         guard IntentDependencies.isSignedIn(deps) else { return [] }
-        // v1.39.1 (#1033) — Siri offers no intake for a medication kept as a
-        // record (intake tracking off); v1.39.4 (#1040) — nor for one the server
+        // v1.39.1 — Siri offers no intake for a medication kept as a
+        // record (intake tracking off); v1.39.4 — nor for one the server
         // calls not actionable today (an ended or not yet started course).
         let medications = try await deps.medicationsRepo.list().filter(\.offersIntakeActions)
         return medications.map { MedicationEntity(id: $0.id, name: $0.name) }
+    }
+}
+
+/// **Whether Siri may say a medication name.** Not while "hide medication
+/// names" is on, and not while the iPhone is locked: a write intent runs
+/// there by design, and whoever holds the locked phone hears the answer.
+@MainActor
+enum IntentMedicationNamePrivacy {
+    /// The lock state. The app sets it at launch from
+    /// `UIApplication.isProtectedDataAvailable`; an extension cannot ask, and
+    /// there only the switch counts.
+    static var isDeviceLocked: @MainActor () -> Bool = { false }
+
+    static func hidesNames(
+        switchOn: Bool = LockScreenPrivacy.hideMedicationName(),
+        locked: Bool? = nil
+    ) -> Bool {
+        switchOn || (locked ?? isDeviceLocked())
     }
 }

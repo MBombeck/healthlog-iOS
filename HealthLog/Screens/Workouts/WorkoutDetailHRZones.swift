@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - HR zones (W-B182)
+// MARK: - HR zones
 
 /// One HR-zone slice. `index` is the canonical zone number (0–5),
 /// `seconds` the time spent in that zone.

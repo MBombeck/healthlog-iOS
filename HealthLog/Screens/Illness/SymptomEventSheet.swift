@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **SYMPTOM (1.5.0, #144)** — one symptom occurrence, to log or to edit:
+/// One symptom occurrence, to log or to edit:
 /// the symptom (only when logging), the intensity out of ten, the time, the
 /// illness it belongs to, a note, and in the edit form "Eintrag löschen".
 ///
@@ -8,6 +8,10 @@ import SwiftUI
 /// sheet: the frozen privacy census of presentations admits no new presenter
 /// (`validate-phase06-presentation-inventory.sh`), and a pushed page needs
 /// none. The delete question is asked in place for the same reason.
+///
+/// Leaving with input asks first, as an editor sheet does: while the page
+/// holds unsaved input the system back button and its swipe give way to a
+/// back button that asks through ``View/hlDiscardGuard(isDirty:isSaving:isPresented:onDiscard:)``.
 ///
 /// The illness picker offers what the server admits at the chosen time
 /// (``SymptomEpisodeLink``): every running episode and every ended one whose
@@ -23,7 +27,9 @@ struct SymptomEventSheet: View {
     }
 
     let mode: Mode
-    let episode: IllnessEpisodeDTO
+    /// The episode the page was opened from; `nil` from Today's quick entry
+    /// (#186), where nothing is linked until the person picks an episode.
+    let episode: IllnessEpisodeDTO?
     let episodes: [IllnessEpisodeDTO]
     let repository: SymptomEventsRepository?
     let onDone: @MainActor () async -> Void
@@ -35,14 +41,40 @@ struct SymptomEventSheet: View {
     @State private var chosenEpisodeId: String?
     @State private var note: String
     @State private var isWorking = false
-    @State private var confirmingDelete = false
     @State private var errorText: String?
+    @State private var showDiscardConfirm = false
+    /// Each symptom's last intensity, read once when logging (#191 QoL).
+    @State private var lastIntensities: [String: Int] = [:]
+    /// The symptom whose last intensity the field holds; `nil` once the
+    /// person chose one themselves.
+    @State private var presetFor: String?
+    private let initialDraft: Draft
 
     static let noteLimit = 500
 
+    /// What the page holds that leaving would lose.
+    struct Draft: Equatable {
+        var definitionId: String?
+        var intensity: Int?
+        var occurredAt: Date
+        var episodeId: String?
+        var note: String
+    }
+
+    /// What a tap on back does: the same rule as the leading button of an
+    /// editor sheet.
+    nonisolated static func backStep(initial: Draft, current: Draft, isWorking: Bool) -> HLSheetBar.CloseStep {
+        HLSheetBar.closeStep(isDirty: initial != current, isBusy: isWorking)
+    }
+
+    /// Whether the system back button and its swipe give way to the asking one.
+    nonisolated static func holdsBack(initial: Draft, current: Draft, isWorking: Bool) -> Bool {
+        backStep(initial: initial, current: current, isWorking: isWorking) != .leaves
+    }
+
     init(
         mode: Mode,
-        episode: IllnessEpisodeDTO,
+        episode: IllnessEpisodeDTO?,
         episodes: [IllnessEpisodeDTO],
         repository: SymptomEventsRepository?,
         onDone: @escaping @MainActor () async -> Void
@@ -52,20 +84,38 @@ struct SymptomEventSheet: View {
         self.episodes = episodes
         self.repository = repository
         self.onDone = onDone
-        switch mode {
+        let draft = switch mode {
         case .create:
-            _definitionId = State(initialValue: nil)
-            _intensity = State(initialValue: nil)
-            _occurredAt = State(initialValue: Date.now)
-            _chosenEpisodeId = State(initialValue: episode.id)
-            _note = State(initialValue: "")
+            Draft(definitionId: nil, intensity: nil, occurredAt: Date.now, episodeId: episode?.id, note: "")
         case let .edit(event, _):
-            _definitionId = State(initialValue: event.definitionId)
-            _intensity = State(initialValue: event.intensity)
-            _occurredAt = State(initialValue: event.occurredDate ?? Date.now)
-            _chosenEpisodeId = State(initialValue: event.episodeId)
-            _note = State(initialValue: event.note ?? "")
+            Draft(
+                definitionId: event.definitionId,
+                intensity: event.intensity,
+                occurredAt: event.occurredDate ?? Date.now,
+                episodeId: event.episodeId,
+                note: event.note ?? ""
+            )
         }
+        initialDraft = draft
+        _definitionId = State(initialValue: draft.definitionId)
+        _intensity = State(initialValue: draft.intensity)
+        _occurredAt = State(initialValue: draft.occurredAt)
+        _chosenEpisodeId = State(initialValue: draft.episodeId)
+        _note = State(initialValue: draft.note)
+    }
+
+    private var currentDraft: Draft {
+        Draft(
+            definitionId: definitionId,
+            intensity: intensity,
+            occurredAt: occurredAt,
+            episodeId: chosenEpisodeId,
+            note: note
+        )
+    }
+
+    private var holdsBack: Bool {
+        Self.holdsBack(initial: initialDraft, current: currentDraft, isWorking: isWorking)
     }
 
     private var editedEvent: SymptomEvent? {
@@ -76,8 +126,18 @@ struct SymptomEventSheet: View {
     /// The episodes to pick from: the store's list, and this episode even
     /// when the list was not loaded (the page was opened from elsewhere).
     private var episodeOptions: [IllnessEpisodeDTO] {
-        let source = episodes.contains { $0.id == episode.id } ? episodes : [episode] + episodes
+        let source = Self.episodeSource(opening: episode, episodes: episodes)
         return SymptomEpisodeLink.options(from: source, at: occurredAt, keep: editedEvent?.episodeId)
+    }
+
+    /// The store's list, with the opening episode in front when the list
+    /// does not hold it.
+    nonisolated static func episodeSource(
+        opening episode: IllnessEpisodeDTO?,
+        episodes: [IllnessEpisodeDTO]
+    ) -> [IllnessEpisodeDTO] {
+        guard let episode, !episodes.contains(where: { $0.id == episode.id }) else { return episodes }
+        return [episode] + episodes
     }
 
     private var effectiveEpisodeId: String? {
@@ -91,50 +151,110 @@ struct SymptomEventSheet: View {
 
     var body: some View {
         Form {
-            Section {
-                symptomField.modifier(SymptomPickerStyle())
-                intensityPicker.modifier(SymptomPickerStyle())
-            } footer: {
-                Text("symptoms.intensity.scale")
-            }
-            Section {
-                DatePicker(
-                    "symptoms.field.when",
-                    selection: $occurredAt,
-                    in: ...Date.now,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .accessibilityIdentifier("symptoms.edit.when")
-                if !episodeOptions.isEmpty {
-                    episodePicker.modifier(SymptomPickerStyle())
+            // Rows on the app's surface and page margins, like every other
+            // form; without them the page stood on plain black.
+            Group {
+                Section {
+                    symptomField.modifier(SymptomPickerStyle())
+                    intensityPicker.modifier(SymptomPickerStyle())
+                } footer: {
+                    VStack(alignment: .leading, spacing: HLSpace.xs) {
+                        if presetFor != nil {
+                            Text("symptoms.intensity.preset")
+                                .accessibilityIdentifier("symptoms.edit.intensityPreset")
+                        }
+                        Text("symptoms.intensity.scale")
+                    }
+                }
+                Section {
+                    DatePicker(
+                        selection: $occurredAt,
+                        in: ...Date.now,
+                        displayedComponents: [.date, .hourAndMinute]
+                    ) {
+                        HLRowTitle("symptoms.field.when")
+                    }
+                    .accessibilityIdentifier("symptoms.edit.when")
+                    if !episodeOptions.isEmpty {
+                        episodePicker.modifier(SymptomPickerStyle())
+                    }
+                }
+                Section {
+                    TextField("symptoms.field.notePlaceholder", text: $note, axis: .vertical)
+                        .lineLimit(2 ... 5)
+                        .onChange(of: note) { _, newValue in
+                            if newValue.count > Self.noteLimit { note = String(newValue.prefix(Self.noteLimit)) }
+                        }
+                        .accessibilityIdentifier("symptoms.edit.note")
+                } header: {
+                    HLSectionHeader("symptoms.field.note", rank: .group)
+                }
+                if let errorText {
+                    Section { HLFormErrorText(errorText) }
+                }
+                if editedEvent != nil {
+                    deleteSection
                 }
             }
-            Section("symptoms.field.note") {
-                TextField("symptoms.field.notePlaceholder", text: $note, axis: .vertical)
-                    .lineLimit(2 ... 5)
-                    .onChange(of: note) { _, newValue in
-                        if newValue.count > Self.noteLimit { note = String(newValue.prefix(Self.noteLimit)) }
-                    }
-                    .accessibilityIdentifier("symptoms.edit.note")
-            }
-            if let errorText {
-                Section { HLFormErrorText(errorText) }
-            }
-            if editedEvent != nil {
-                deleteSection
-            }
+            .hlFormRowSurface()
         }
+        .hlPageMargins()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(holdsBack)
+        .hlDiscardGuard(
+            isDirty: initialDraft != currentDraft,
+            isSaving: isWorking,
+            isPresented: $showDiscardConfirm,
+            onDiscard: { dismiss() }
+        )
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("illness.action.save") {
-                    Task { await save() }
+            if holdsBack {
+                ToolbarItem(placement: .topBarLeading) {
+                    // The system back cannot ask first. While input is open the
+                    // page is left like a form, with the cross, which asks; it
+                    // is gone once there is nothing to lose.
+                    Button(HLControlWord.cancel.key, systemImage: "xmark", action: goBack)
+                        .disabled(isWorking)
+                        .accessibilityIdentifier("symptoms.edit.back")
                 }
-                .disabled(!canSave)
-                .accessibilityIdentifier("symptoms.edit.save")
             }
         }
+        // A pushed page has no sheet bar of its own: the check mark of every
+        // sheet stands at the trailing edge and the page goes back once saved.
+        .hlConfirmBar(Self.confirmAction(isEnabled: canSave) { await save() }, identifier: Self.saveIdentifier)
+        .onChange(of: definitionId) { _, picked in
+            let next = SymptomUsage.afterPick(picked, intensity: intensity, presetFor: presetFor, last: lastIntensities)
+            presetFor = next.presetFor
+            intensity = next.intensity
+        }
+        .onChange(of: intensity) { _, chosen in
+            // A value the person set is theirs, no longer the preset.
+            if let preset = presetFor, chosen != lastIntensities[preset] { presetFor = nil }
+        }
+        .task { await loadLastIntensities() }
+    }
+
+    /// Logging only: the last intensity of each symptom, the value a pick
+    /// starts on. An aid, so a failed read leaves the field empty as before.
+    private func loadLastIntensities() async {
+        guard editedEvent == nil, let repository else { return }
+        do {
+            lastIntensities = try await repository.latestIntensities()
+        } catch {
+            HLLog.ui.debug("Symptom last intensities unavailable")
+        }
+    }
+
+    /// The identifier of the check mark; UI tests find the save by it.
+    static let saveIdentifier = "symptoms.edit.save"
+
+    /// The confirm of the page: a save, enabled only with a complete entry.
+    static func confirmAction(
+        isEnabled: Bool,
+        perform: @escaping @MainActor () async -> Bool
+    ) -> HLSheetAction {
+        .save(isEnabled: isEnabled, perform: perform)
     }
 
     private var title: Text {
@@ -148,71 +268,70 @@ struct SymptomEventSheet: View {
     private var symptomField: some View {
         switch mode {
         case let .create(definitions):
-            Picker("symptoms.field.symptom", selection: $definitionId) {
-                Text("symptoms.field.choose").tag(nil as String?)
-                ForEach(definitions) { definition in
-                    Text(verbatim: SymptomEventFormat.label(definition.label)).tag(Optional(definition.id))
-                }
-            }
-            .accessibilityIdentifier("symptoms.edit.symptom")
+            // Chips, one tap each, as on the web; a filter from 13 on. The
+            // ones felt most lately come first (#191 QoL).
+            SymptomChipPicker(definitions: SymptomUsage.orderedByUse(definitions), selection: $definitionId)
         case let .edit(_, label):
             LabeledContent {
                 Text(verbatim: SymptomEventFormat.label(label))
             } label: {
-                Text("symptoms.field.symptom")
+                HLRowTitle("symptoms.field.symptom")
             }
         }
     }
 
     private var intensityPicker: some View {
-        Picker("symptoms.field.intensity", selection: $intensity) {
+        Picker(selection: $intensity) {
             if editedEvent == nil {
                 Text("symptoms.field.choose").tag(nil as Int?)
             }
             ForEach(Array(SymptomEvent.intensityRange), id: \.self) { value in
                 Text(value, format: .number).tag(Optional(value))
             }
+        } label: {
+            HLRowTitle("symptoms.field.intensity")
         }
         .accessibilityIdentifier("symptoms.edit.intensity")
     }
 
     private var episodePicker: some View {
-        Picker("symptoms.field.episode", selection: $chosenEpisodeId) {
+        Picker(selection: $chosenEpisodeId) {
             Text("symptoms.field.episodeNone").tag(nil as String?)
             ForEach(episodeOptions) { option in
                 Text(verbatim: option.label).tag(Optional(option.id))
             }
+        } label: {
+            HLRowTitle("symptoms.field.episode")
         }
         .accessibilityIdentifier("symptoms.edit.episode")
     }
 
     private var deleteSection: some View {
         Section {
-            if confirmingDelete {
-                Text("symptoms.delete.question")
-                    .foregroundStyle(HLText.secondary)
-                Button("symptoms.delete.confirm", role: .destructive) {
-                    Task { await delete() }
-                }
-                .disabled(isWorking)
-                .accessibilityIdentifier("symptoms.edit.delete.confirm")
-                Button("illness.action.cancel") {
-                    confirmingDelete = false
-                }
-            } else {
-                Button("symptoms.delete.action", role: .destructive) {
-                    confirmingDelete = true
-                }
-                .disabled(isWorking)
-                .accessibilityIdentifier("symptoms.edit.delete")
-            }
+            HLDeleteButton(
+                "symptoms.delete.action",
+                form: .row,
+                action: .confirmed(title: "symptoms.delete.question") { await delete() }
+            )
+            .disabled(isWorking)
+            .accessibilityIdentifier("symptoms.edit.delete")
+        }
+    }
+
+    private func goBack() {
+        switch Self.backStep(initial: initialDraft, current: currentDraft, isWorking: isWorking) {
+        case .locked: break
+        case .asksFirst: showDiscardConfirm = true
+        case .leaves: dismiss()
         }
     }
 
     // MARK: - Writes
 
-    private func save() async {
-        guard let repository, let definitionId, let intensity else { return }
+    /// `true` once the entry is kept and the list knows it; the confirm bar
+    /// then takes the page back.
+    private func save() async -> Bool {
+        guard let repository, let definitionId, let intensity else { return false }
         isWorking = true
         errorText = nil
         defer { isWorking = false }
@@ -237,9 +356,11 @@ struct SymptomEventSheet: View {
                     episodeId: effectiveEpisodeId
                 ))
             }
-            await finish()
+            await onDone()
+            return true
         } catch {
             errorText = Self.message(for: error)
+            return false
         }
     }
 
@@ -255,7 +376,6 @@ struct SymptomEventSheet: View {
             // Already gone: the list is what needs to change.
             await finish()
         } catch {
-            confirmingDelete = false
             errorText = Self.message(for: error)
         }
     }
@@ -289,7 +409,7 @@ struct SymptomEventSheet: View {
     }
 }
 
-/// POLISH-C (F-AX-SYMPTOM) — at an accessibility text size the menu picker's
+/// At an accessibility text size the menu picker's
 /// value is cut to "Nicht…setzt" beside its label; there the choice opens as
 /// its own list, where every value reads in full.
 private struct SymptomPickerStyle: ViewModifier {

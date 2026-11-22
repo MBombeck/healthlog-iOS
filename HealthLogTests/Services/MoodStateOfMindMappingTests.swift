@@ -5,7 +5,7 @@ import Testing
     import HealthKit
 #endif
 
-/// **v0.10.0 W-Mood-B** — pins the HealthLog ↔ `HKStateOfMind` mapping:
+/// Pins the HealthLog ↔ `HKStateOfMind` mapping:
 /// score↔valence anchors + bucketing, the tag→`Label`/`Association` best-effort
 /// table, and the documented round-trip stability for our own writes.
 @Suite("Mood — State of Mind mapping")
@@ -59,7 +59,6 @@ struct MoodStateOfMindMappingTests {
     // MARK: - tag → Label / Association (best-effort)
 
     #if canImport(HealthKit)
-        @available(iOS 18.0, *)
         @Test("German + English tags map to the expected emotion labels")
         func tagsToLabels() {
             #expect(MoodStateOfMindMapping.labels(forTags: ["gestresst"]) == [.stressed])
@@ -67,7 +66,6 @@ struct MoodStateOfMindMappingTests {
             #expect(MoodStateOfMindMapping.labels(forTags: ["anxious"]) == [.anxious])
         }
 
-        @available(iOS 18.0, *)
         @Test("German + English tags map to the expected context associations")
         func tagsToAssociations() {
             #expect(MoodStateOfMindMapping.associations(forTags: ["arbeit"]) == [.work])
@@ -75,7 +73,6 @@ struct MoodStateOfMindMappingTests {
             #expect(MoodStateOfMindMapping.associations(forTags: ["schlaf"]) == [.selfCare])
         }
 
-        @available(iOS 18.0, *)
         @Test("Dutch tags map like their German and English twins")
         func dutchTags() {
             #expect(MoodStateOfMindMapping.labels(forTags: ["Gestrest"]) == [.stressed])
@@ -84,14 +81,12 @@ struct MoodStateOfMindMappingTests {
             #expect(MoodStateOfMindMapping.associations(forTags: ["Gezin", "slaap"]) == [.family, .selfCare])
         }
 
-        @available(iOS 18.0, *)
         @Test("unmatched tags are dropped (not round-tripped)")
         func unmatchedTagsDropped() {
             #expect(MoodStateOfMindMapping.labels(forTags: ["xyzzy", "frei-text"]).isEmpty)
             #expect(MoodStateOfMindMapping.associations(forTags: ["xyzzy"]).isEmpty)
         }
 
-        @available(iOS 18.0, *)
         @Test("duplicate matched tags dedupe")
         func duplicateTagsDedupe() {
             #expect(MoodStateOfMindMapping.labels(forTags: ["stressed", "gestresst"]) == [.stressed])

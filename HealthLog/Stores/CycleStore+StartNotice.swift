@@ -8,7 +8,7 @@ import Foundation
 /// the edit path (a cleared flow on a start day can give a start back) and the
 /// dismissal.
 extension CycleStore {
-    /// ``CycleRepository/updateDayLog(id:patch:)`` that keeps the server's
+    /// ``CycleRepository/updateDayLogReportingStarts(id:patch:)`` that keeps the server's
     /// `restored` list as the calendar's notice.
     func updateDayLogNotingStarts(id: String, patch: CycleDayLogPatch) async throws -> CycleDayLogDTO {
         let result = try await repository.updateDayLogReportingStarts(id: id, patch: patch)

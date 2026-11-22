@@ -14,7 +14,7 @@ import Foundation
 /// (PROJECT_GUIDE.md / `15-insights-architecture.md`). This repo is a thin GET
 /// wrapper.
 ///
-/// **v0.5.0+ PB1-Reconcile (H1):** the per-metric `*-status` endpoints
+/// **v0.5.0+ PB1-Reconcile:** the per-metric `*-status` endpoints
 /// invoke a server-side LLM when the user has a provider configured —
 /// identical data-flow to `/api/insights/generate` (Apple Guideline
 /// 5.1.2(i)). Previously the chart-detail "Befunde" surface called
@@ -31,14 +31,14 @@ public actor MetricInsightsRepository {
     /// wires the production gate (same closure used by `InsightsStore`
     /// + `DailyBriefingStore`).
     private let consentGate: (@Sendable () async -> Bool)?
-    /// W3 (v0.11 #22) — optional daily SWR cache. When wired,
+    /// Optional daily SWR cache. When wired,
     /// ``fetch(metric:locale:)`` paints from the **Berlin-day-anchored**
     /// `CachedSnapshot` first (yesterday's good assessment on a today-miss)
     /// and revalidates in the background, so the per-metric "Einschätzung"
     /// block has cache-first content on first frame. `nil` (default) keeps
     /// the legacy direct-fetch ergonomics for unit tests.
     private let swr: SWRCoordinator?
-    /// **#114 / #115 · 0.2 — the `statusText` capability.** While it is
+    /// **The `statusText` capability.** While it is
     /// unavailable the server serves no model note (its fixed general line or
     /// `text: null`), so a note cached on this device while it WAS available
     /// must not be painted either: reads bypass the daily cache and nothing is
@@ -57,7 +57,7 @@ public actor MetricInsightsRepository {
         self.aiCapabilities = aiCapabilities
     }
 
-    /// **#115 B7.** A server that sends the `ai` block (v1.39+) resolves consent
+    /// A server that sends the `ai` block (v1.39+) resolves consent
     /// for the status family itself: `statusText` reads `consent_required` and
     /// the route answers `text: null` (`status-cache.ts` `statusTextServable`).
     /// The client consent gate would only duplicate that — and block the read
@@ -73,7 +73,7 @@ public actor MetricInsightsRepository {
         aiCapabilities?.isAvailable(.statusText) ?? true
     }
 
-    /// Task #50 — whether a ``read`` may touch the daily SWR cache.
+    /// Whether a ``read`` may touch the daily SWR cache.
     /// `.cacheReadyText` peeks the cache for paint-first prose and writes back
     /// only ready text; `.bypass` (the poll path) hits the network directly so a
     /// transient `preparing`/null-text body never poisons the Berlin-day key.
@@ -112,7 +112,7 @@ public actor MetricInsightsRepository {
         return try await read(metric: metric, locale: locale, cachePolicy: .cacheReadyText)
     }
 
-    /// v0.11 W46 — un-gated **read** of the per-metric assessment, used by the
+    /// Un-gated **read** of the per-metric assessment, used by the
     /// web-mirror `InsightsMetricScreen`.
     ///
     /// **Why a second entry point that skips the consent gate.** The
@@ -126,10 +126,9 @@ public actor MetricInsightsRepository {
     /// for the surfaces that can *trigger* generation (the Insights-tab generate
     /// POST, the DailyBriefing POST); gating the read here only produced an
     /// iOS-vs-web divergence (operator: "web shows the BP Einschätzung, iOS does
-    /// not"). The gating the operator does want — hide when standalone / no
-    /// provider, show when online + provider configured — is carried by the
-    /// server envelope itself (`hasProvider`) and `BackendAvailability.hasServer`
-    /// at the render layer, not by this client-side consent gate.
+    /// not"). The gating the operator does want — hide with no provider, show
+    /// when online + provider configured — is carried by the server envelope
+    /// itself (`hasProvider`) at the render layer, not by this client-side consent gate.
     ///
     /// Returns `nil` for the same structural no-surface cases as
     /// ``fetch(metric:locale:)`` (no dedicated route AND no generic-registry id,
@@ -143,7 +142,7 @@ public actor MetricInsightsRepository {
         return try await read(metric: metric, locale: locale, cachePolicy: .cacheReadyText)
     }
 
-    /// Task #50 — one un-cached poll of the per-metric assessment, used while
+    /// One un-cached poll of the per-metric assessment, used while
     /// the server is warming a cold/revalidating assessment.
     ///
     /// **Why a separate un-cached read.** The server serves the assessment
@@ -174,7 +173,7 @@ public actor MetricInsightsRepository {
     /// SWR cache is wired (unit-test ergonomics) or the DTO carries no ready
     /// text — the cache must never store a `preparing`/null-text body.
     ///
-    /// v0.14.10 W-INSIGHTSDATA — additionally requires `hasProvider`: the
+    /// Additionally requires `hasProvider`: the
     /// server's no-key fallback body carries `hasProvider:false` plus a
     /// NON-EMPTY localized hint, which satisfied `hasReadyText` and poisoned
     /// the Berlin-day key — the page then served the stale hint for the rest
@@ -202,11 +201,11 @@ public actor MetricInsightsRepository {
         @Sendable func networkFetch() async throws -> MetricStatusDTO {
             try await api.send(req)
         }
-        // W3 — route through the daily SWR cache when wired AND the policy allows
+        // Route through the daily SWR cache when wired AND the policy allows
         // it. The key is anchored to the Berlin calendar day, so a today-miss
         // serves yesterday's cached assessment (paint-first) and the key flips to
         // a structural cache-miss → refetch the moment the Berlin day rolls over
-        // (`BerlinDayKey`). Task #50: the poll path passes `.bypass` so a
+        // (`BerlinDayKey`). The poll path passes `.bypass` so a
         // transient `preparing`/null-text body is never written through the daily
         // key — only ready text reaches the cache (via `cacheReadyAssessment`).
         // The 404 "endpoint not deployed" arm is preserved on both paths and is
@@ -223,7 +222,7 @@ public actor MetricInsightsRepository {
                 // for a metric not yet warmed today) returns instantly without a
                 // round-trip. `cacheReadyAssessment` only ever stores ready text,
                 // so the cache can never hand back a `preparing`/null-text body.
-                // v0.14.10 W-INSIGHTSDATA — `hasProvider` is required too, so a
+                // `hasProvider` is required too, so a
                 // no-key hint row poisoned by the pre-fix write-through (or by
                 // an older build) self-heals: it falls through to the network
                 // instead of masquerading as the day's prose.
@@ -253,7 +252,7 @@ public actor MetricInsightsRepository {
         }
     }
 
-    /// v0.7.0 W-API-RENDER — pulls the per-metric ``MetricSummary`` (slopes +
+    /// Pulls the per-metric ``MetricSummary`` (slopes +
     /// last-year average) out of `/api/insights/comprehensive`.
     ///
     /// The comprehensive digest already computes a 7/30/90-day regression
@@ -278,7 +277,7 @@ public actor MetricInsightsRepository {
         } catch let HLError.server(status, _, _) where status == 404 {
             return nil
         } catch {
-            // v0.7.1 H-1 — genuinely best-effort, per the doc above. Any
+            // Genuinely best-effort, per the doc above. Any
             // request failure (500 / network / decode) means "no trend
             // decoration", never a thrown error that could surface a
             // user-facing chart error on a decorative-only fetch. We trace
@@ -290,6 +289,53 @@ public actor MetricInsightsRepository {
                 )
             return nil
         }
+    }
+
+    // MARK: - Range trend (#176, server v1.48)
+
+    /// `GET /api/analytics/range?type=<T>&range=<r>` — this window's mean
+    /// against the previous window and the server's direction for it, the
+    /// comparison behind the dashboard card's arrow (`trendWindowDays: 30`).
+    ///
+    /// Best-effort like ``summary(metric:)``: `nil` for a kind or range the
+    /// route does not take (``rangeQuery(for:windowDays:)``), on an older server
+    /// and on any failure. The caller then shows the series' own change.
+    public func rangeTrend(metric: MetricKind, windowDays: Int) async -> AnalyticsRangeTrend? {
+        guard let query = Self.rangeQuery(for: metric, windowDays: windowDays) else { return nil }
+        do {
+            let req: APIRequest<AnalyticsRangeTrend> = .get(
+                "/api/analytics/range",
+                query: [("type", query.type), ("range", query.range)]
+            )
+            return try await api.send(req)
+        } catch {
+            // The kind is an enum case and the error is redacted: operator-grade.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.api.info(
+                "MetricInsights.rangeTrend best-effort drop for \(metric.rawValue, privacy: .public): \(LogSanitizer.redact(String(describing: error)))"
+            )
+            return nil
+        }
+    }
+
+    /// The route's `type` and `range` for a page's window in days, or `nil`
+    /// where the page keeps its own change: a window the route has none for
+    /// (the day, six months, all data) and a kind without a stored series of
+    /// its own. Glucose is asked too since server 1.49.0 answers in the
+    /// account's unit; an older answer without `unit` is set aside for glucose
+    /// by ``ChartDetailStore/usableRangeTrend(_:kind:)``.
+    nonisolated static func rangeQuery(
+        for metric: MetricKind,
+        windowDays: Int
+    ) -> (type: String, range: String)? {
+        guard let type = summariesKeyTable[metric] else { return nil }
+        let window: String? = switch windowDays {
+        case 7: "7d"
+        case 30: "30d"
+        case 365: "1y"
+        default: nil
+        }
+        return window.map { (type, $0) }
     }
 
     // MARK: - Helpers
@@ -328,7 +374,7 @@ public actor MetricInsightsRepository {
     /// Resolves the status request for a metric, or `nil` when the metric has
     /// no assessment surface at all.
     ///
-    /// Two-tier resolution (v0.11 W28a):
+    /// Two-tier resolution:
     /// 1. **Dedicated route** — the four kinds with a bespoke server generator
     ///    (`blood-pressure` / `weight` / `pulse` / `bmi`) keep their own
     ///    `*-status` path, queried by `locale` only.
@@ -365,11 +411,11 @@ public actor MetricInsightsRepository {
         .bloodPressure: "/api/insights/blood-pressure-status",
         .weight: "/api/insights/weight-status",
         .pulse: "/api/insights/pulse-status",
-        // v0.11 W5 — `bmi-status` route confirmed deployed server-side.
+        // `bmi-status` route confirmed deployed server-side.
         .bmi: "/api/insights/bmi-status"
     ]
 
-    /// v0.11 W28a — `MetricKind` → generic `metric-status` `metric=` id.
+    /// `MetricKind` → generic `metric-status` `metric=` id.
     ///
     /// Every id here is VERIFIED present in the server's closed
     /// `METRIC_STATUS_IDS` registry (`src/lib/insights/metric-status-registry.ts`,
@@ -414,7 +460,7 @@ public actor MetricInsightsRepository {
         .sleep: "SLEEP_DURATION",
         .vo2Max: "VO2_MAX",
         .steps: "STEPS",
-        // v0141 W-DATAPARITY (P2) — twelve registry-accepted ids the stale
+        // Twelve registry-accepted ids the stale
         // table missed, so their "Einschätzung / KI-Befund" block
         // self-suppressed on the metric page even though the operator has the
         // data (STAIR_ASCENT 5645, STAIR_DESCENT 4385, SIX_MINUTE_WALK 109,
@@ -459,7 +505,7 @@ public struct MetricStatusDTO: Codable, Sendable, Equatable {
     public let text: String?
     public let cached: Bool
     public let updatedAt: Date?
-    /// Task #50 — the server's read-only stale-while-revalidate signals.
+    /// The server's read-only stale-while-revalidate signals.
     ///
     /// On a cold cache the route returns `{ hasProvider:true, text:null,
     /// preparing:true }` and warms the assessment OUT OF BAND; on an open-card
@@ -501,7 +547,7 @@ public struct MetricStatusDTO: Codable, Sendable, Equatable {
         case hasProvider, text, cached, updatedAt, preparing, revalidating, insufficient
     }
 
-    /// b177 W-ASSESS2 — **tolerant-first decode.** This fetch must NEVER die
+    /// **Tolerant-first decode.** This fetch must NEVER die
     /// on an additive/missing/drifted field: the server ships faster than the
     /// app (production v1.16.x enriched the status family), and
     /// `APIClient.decodePayload` masks any inner envelope-decode failure as a

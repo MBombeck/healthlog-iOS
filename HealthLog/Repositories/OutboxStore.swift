@@ -7,7 +7,7 @@ import SwiftData
 /// `OutboxOperation` PersistentModel instances stay pinned to this actor's
 /// `ModelContext`. See ADR-011 + the swift-concurrency skill for the rationale.
 ///
-/// ## v0.6.2 W-SEC-A — at-rest encryption (M-4)
+/// ## v0.6.2 W-SEC-A — at-rest encryption
 ///
 /// The on-disk `payload` blob is now AES-GCM-encrypted. The store
 /// encrypts on `enqueue(...)` and decrypts on `snapshot()` — the
@@ -24,6 +24,10 @@ public actor OutboxStore {
     /// `@ModelActor`-generated initializer stays untouched.
     private var cipher: OutboxPayloadCipher = .init()
 
+    /// Rows deleted unread, kept until the replay has reported them
+    /// (``takeUnreadableDiscards(ownedBy:)``).
+    var unreadableDiscards: [OutboxUnreadableDiscard] = []
+
     /// Override the cipher used by this store. Used by unit tests to
     /// thread a deterministic / fault-injection cipher; production
     /// callers leave the default in place.
@@ -34,7 +38,7 @@ public actor OutboxStore {
     /// Hydrate the entire queue, ordered oldest-first. The replay loop calls this
     /// once per pass. Legacy plaintext rows are migrated to ciphertext in-place.
     ///
-    /// **v0.6.2.3 F3-SEC (A-CODE M-1):** decrypt failures (corrupt blob,
+    /// Decrypt failures (corrupt blob,
     /// missing key after a logout-wipe, tag-check mismatch, …) used to
     /// surface the raw ciphertext as the snapshot `payload`. The
     /// dispatcher then JSON-decoded the cipher bytes, hit a `DecodingError`
@@ -67,9 +71,22 @@ public actor OutboxStore {
             // snapshot pass is uniform. `payload` on the returned snapshot
             // is always the plaintext the dispatcher expects.
             if OutboxPayloadCipher.isCiphertext(row.payload) {
-                if let plain = try? cipher.decrypt(row.payload) {
+                do {
+                    let plain = try cipher.decrypt(row.payload)
                     snapshots.append(OutboxOperationSnapshot(from: row, overridePayload: plain))
                     continue
+                } catch let OutboxPayloadCipher.CipherError.keyUnavailable(status) {
+                    // The keychain did not answer, which says nothing about
+                    // the rows: leave every one of them as it is and let the
+                    // next read try again.
+                    modelContext.rollback()
+                    // An OSStatus is operator-grade and carries no user data.
+                    // swiftlint:disable:next hllog_public_privacy_interpolation
+                    HLLog.outbox.error("Outbox key unavailable (status \(status, privacy: .public)), rows left untouched")
+                    throw OutboxPayloadCipher.CipherError.keyUnavailable(status)
+                } catch {
+                    // Falls through to the delete below: this row can never
+                    // be opened again.
                 }
                 // Decrypt failure → delete the row in-place + collect the
                 // id for an out-of-actor log emission. We deliberately do
@@ -93,9 +110,7 @@ public actor OutboxStore {
             }
         }
         if !rowsToDelete.isEmpty {
-            for row in rowsToDelete {
-                modelContext.delete(row)
-            }
+            discardUnreadable(rowsToDelete)
             migrationNeedsSave = true
         }
         if migrationNeedsSave {
@@ -128,7 +143,8 @@ public actor OutboxStore {
         createdAt: Date,
         attempts: Int = 0,
         ownerUserID: String? = nil,
-        clientEntityId: String? = nil
+        clientEntityId: String? = nil,
+        lastError: String? = nil
     ) throws {
         let ciphertext = try cipher.encrypt(payload)
         let op = OutboxOperation(
@@ -138,6 +154,7 @@ public actor OutboxStore {
             idempotencyKey: idempotencyKey,
             createdAt: createdAt,
             attempts: attempts,
+            lastError: lastError,
             ownerUserID: ownerUserID,
             clientEntityId: clientEntityId
         )
@@ -186,7 +203,7 @@ public actor OutboxStore {
         try modelContext.save()
     }
 
-    /// **audit-v0162 H-4 — remap an optimistic id to the server id in place.**
+    /// **Remap an optimistic id to the server id in place.**
     /// After a queued `create` replays and the server assigns a real id, every
     /// sibling row whose `clientEntityId` still carries the `optimistic-<uuid>`
     /// is rewritten to the server id so its dependent `update`/`delete` addresses
@@ -308,7 +325,7 @@ public actor OutboxStore {
 /// Sendable mirror of an `OutboxOperation` row. `OutboxStore` returns these
 /// instead of raw PersistentModel pointers so callers stay isolation-safe.
 ///
-/// **v0.6.2 W-SEC-A:** The `payload` field on this snapshot is always
+/// The `payload` field on this snapshot is always
 /// plaintext, even though the underlying SwiftData row stores ciphertext.
 /// `OutboxStore` performs the decrypt at the actor boundary so the
 /// dispatch path (and tests) keep their existing contract.
@@ -321,14 +338,14 @@ public struct OutboxOperationSnapshot: Sendable {
     public let attempts: Int
     public let lastAttemptAt: Date?
     public let lastError: String?
-    /// v0.13 WS — owning user-id stamped at enqueue (`nil` for legacy rows).
+    /// Owning user-id stamped at enqueue (`nil` for legacy rows).
     public let ownerUserID: String?
-    /// audit-v0162 H1 — persisted dead-letter flag (recoverable, non-replaying).
+    /// Persisted dead-letter flag (recoverable, non-replaying).
     public let deadLettered: Bool
-    /// Audit B-2 — the server already took this write; only the local delete is
+    /// The server already took this write; only the local delete is
     /// still owed. A row carrying it is never dispatched again (see model).
     public let delivered: Bool
-    /// audit-v0162 H-4 — optimistic→server entity-id remap key (see model).
+    /// Optimistic→server entity-id remap key (see model).
     public let clientEntityId: String?
 
     init(from model: OutboxOperation) {
@@ -448,7 +465,7 @@ public extension OutboxStore {
     /// lock-step with `WidgetAppGroup.identifier`.
     static let appGroupIdentifier = "group.dev.healthlog.app"
 
-    /// **audit-v0162 H2 — outbox lives in the SHARED App Group container.**
+    /// **Outbox lives in the SHARED App Group container.**
     /// `<app-group>/HealthLog/Outbox/outbox.sqlite`, created on demand. Public
     /// so the recovery path in `OutboxQueue` can wipe/move-aside the store if it
     /// becomes unreadable.
@@ -530,7 +547,7 @@ public extension OutboxStore {
         return dir
     }
 
-    /// **audit-v0162 H2 — one-time best-effort migration of a pre-App-Group
+    /// **One-time best-effort migration of a pre-App-Group
     /// outbox.** Before this fix the app wrote `outbox.sqlite` into its
     /// process-local `Application Support`. On the upgrade that flips the store
     /// into the shared container, move any existing legacy store (SQLite +

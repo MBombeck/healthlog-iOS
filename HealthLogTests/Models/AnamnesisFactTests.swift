@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-32 — Modell + Katalog der Anamnese-Fläche.**
+/// **Modell + Katalog der Anamnese-Fläche.**
 ///
 /// Zwei Dinge werden hier festgenagelt: die Wertemengen der diskriminierten
 /// Union (damit ein Tippfehler nicht erst als 422 auf dem Gerät auffällt) und

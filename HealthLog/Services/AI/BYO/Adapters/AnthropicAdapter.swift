@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — Anthropic Messages adapter
+/// Anthropic Messages adapter
 /// (`POST https://api.anthropic.com/v1/messages`).
 ///
 /// Auth via the `x-api-key: <key>` header plus the required

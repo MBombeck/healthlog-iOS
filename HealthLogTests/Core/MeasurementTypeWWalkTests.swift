@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.8.4 W-WALK — un-gates the two operator-requested gait metrics
+/// Un-gates the two operator-requested gait metrics
 /// (`walkingSpeed`, `walkingStepLength`) that the app has collected + uploaded
 /// over the HK `hkIdentifier` batch path since v0.5.2 but the server used to
 /// reject as `unmappable_identifier`. The server (v1.6.0) now maps

@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #110 — the outbox replay against the v1.39.0 rate limits.
+/// The outbox replay against the v1.39.0 rate limits.
 ///
 /// The per-record creates share one per-account bucket (300 per 60 s) and are
 /// refused as 429 with `meta.errorCode == "record_write.rate_limited"`; the batch

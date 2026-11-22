@@ -98,7 +98,7 @@ struct CoachConversationHistoryStoreTests {
         #expect(store.deleteError == nil)
     }
 
-    /// **v0152 W-COACH-CLEANUP (C3.2) — prior conversation history loads for the
+    /// **Prior conversation history loads for the
     /// external arm.** The operator expects his OLD conversations available when he
     /// opens the coach. History is server-backed (arm-agnostic) and reached via
     /// `GET /api/insights/chat`; the b198 DELETE work must NOT have gated LOAD off.

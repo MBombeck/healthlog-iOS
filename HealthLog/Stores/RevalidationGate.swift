@@ -1,6 +1,6 @@
 import Foundation
 
-/// A2-M4 — appear-revalidation freshness gate for list stores.
+/// Appear-revalidation freshness gate for list stores.
 ///
 /// The list screens (Workouts / Achievements / Mood / PersonalRecords /
 /// MeasurementList) historically guarded their `.task` reload on

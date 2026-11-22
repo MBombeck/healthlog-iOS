@@ -1,4 +1,4 @@
-// R2 / #115 A7 — "sign out everywhere" on server v1.39.3+.
+// "sign out everywhere" on server v1.39.3+.
 //
 // Server contract at tag v1.39.6 (`src/app/api/auth/me/sessions/route.ts`):
 // `DELETE /api/auth/me/sessions[?keepShareLinks=1]` also revokes AI-assistant

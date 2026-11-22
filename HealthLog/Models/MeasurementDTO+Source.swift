@@ -12,7 +12,7 @@ import Foundation
 // also wirft ein unbekannter Rohwert im Element und der tolerante
 // List-Decoder verwirft die ganze Zeile — still. Der Mess-Zähler weicht dann
 // vom Server ab, ohne dass irgendwo ein Fehler auftaucht. Das ist bisher bei
-// WHOOP, GOOGLE_HEALTH, COMPUTED (#42) und STRAVA/OURA/POLAR/NIGHTSCOUT (#46)
+// WHOOP, GOOGLE_HEALTH, COMPUTED und STRAVA/OURA/POLAR/NIGHTSCOUT
 // passiert. `MeasurementSourceWireTests` nagelt jeden Fall fest.
 
 public enum ServerMeasurementSource: String, Codable, Sendable, CaseIterable {
@@ -94,7 +94,7 @@ public enum ServerMeasurementSource: String, Codable, Sendable, CaseIterable {
     /// Read-only here, never mirrored into Apple Health.
     case garmin = "GARMIN"
     case import_ = "IMPORT"
-    /// Audit B-4 — a `MeasurementSource` this build does not know.
+    /// A `MeasurementSource` this build does not know.
     ///
     /// The raw value is a token the server's SCREAMING_SNAKE vocabulary cannot
     /// produce; only the tolerant `init(from:)` in
@@ -127,7 +127,7 @@ public extension ServerMeasurementSource {
         case .mcp: .mcp
         case .external: .external
         case .import_: .import_
-        // Audit B-4 — a source this build does not know.
+        // A source this build does not know.
         case .unknown: .unknown
         }
     }

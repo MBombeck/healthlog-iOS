@@ -68,7 +68,7 @@ private struct SourceChip: View {
     let isActive: Bool
     let onTap: (() -> Void)?
 
-    /// A2-3 (v0.11) — monochrome accent. The accent picker was retired in
+    /// Monochrome accent. The accent picker was retired in
     /// v0.6.1 (monochrome freeze) and nothing writes `preferredTint` anymore, so
     /// the former `settingsStore.preferredTint.color` read always resolved to
     /// the brand-purple default — a rogue colour on an otherwise monochrome

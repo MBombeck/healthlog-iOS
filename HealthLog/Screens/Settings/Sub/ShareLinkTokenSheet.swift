@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 /// single moment the user can copy or share it. After dismissal it is dropped
 /// (`store.clearFreshToken()`); it is unrecoverable.
 ///
-/// **18-02 — the content moved, the promise did not.** Everything below the
+/// **The content moved, the promise did not.** Everything below the
 /// navigation chrome is ``ShareLinkTokenPanel``, because the unified sharing
 /// surface reveals the same token **in place** and two copies of a Class-D
 /// surface would eventually say two different things. This file keeps the sheet
@@ -22,25 +22,15 @@ import UniformTypeIdentifiers
 struct ShareLinkTokenSheet: View {
     let store: ShareLinkStore
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.appContainer) private var container
 
     var body: some View {
-        NavigationStack {
-            // GH #8 Path 2 — the raw `hls_…` token URL is shown exactly once;
-            // guard the reveal behind Face ID (SpeziAccessGuard). The sheet's
-            // Done button + swipe-down stay reachable while locked, so the
-            // guard never traps the user (no UX regression).
+        // GH #8 Path 2 — the raw `hls_…` token URL is shown exactly once;
+        // guard the reveal behind Face ID (SpeziAccessGuard). The sheet's
+        // Done button + swipe-down stay reachable while locked, so the
+        // guard never traps the user (no UX regression).
+        HLSheetScaffold("Share link ready", action: .done()) {
             guardedContent
-                .scrollContentBackground(.hidden)
-                .background(HLSurface.primary)
-                .navigationTitle("Share link ready")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
         }
     }
 
@@ -55,9 +45,8 @@ struct ShareLinkTokenSheet: View {
     }
 
     private var sheetContent: some View {
-        ScrollView {
+        HLPage {
             ShareLinkTokenPanel(store: store, baseURL: container?.environment.baseURL)
-                .padding(HLSpace.lg)
         }
     }
 

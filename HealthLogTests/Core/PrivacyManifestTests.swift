@@ -78,7 +78,7 @@
             }
         }
 
-        /// Build 273 — every purpose must be one Apple's manifest vocabulary
+        /// Every purpose must be one Apple's manifest vocabulary
         /// defines. `PurposeAccountManagement` is an App Store Connect label
         /// answer, not a manifest purpose; a manifest carrying it declares no
         /// valid purpose for that type. The credentialed types use
@@ -119,10 +119,14 @@
             // UserDefaults wird tatsächlich genutzt (SettingsStore + HK-Anchors).
             #expect(categories.contains("NSPrivacyAccessedAPICategoryUserDefaults"))
 
-            // SystemBootTime bleibt entfernt — wir nutzen kein `mach_absolute_time`.
-            #expect(!categories.contains("NSPrivacyAccessedAPICategorySystemBootTime"))
+            // SystemBootTime: `ProcessInfo.systemUptime` misst Laufzeit-Budgets
+            // innerhalb eines Prozesses (Hourly-Stats, Workout-Catch-up,
+            // Live-History-Split) → 35F9.1.
+            let bootTime = entries
+                .first { $0["NSPrivacyAccessedAPIType"] as? String == "NSPrivacyAccessedAPICategorySystemBootTime" }
+            #expect(bootTime?["NSPrivacyAccessedAPITypeReasons"] as? [String] == ["35F9.1"])
 
-            // FileTimestamp ist seit v0.6.2.3 (C617.1) deklariert: die Outbox-
+            // FileTimestamp ist seit v0.6.2.3 deklariert: die Outbox-
             // Replay-/Diagnose-Surfaces zeigen Datei- + SwiftData-Timestamps
             // direkt an den User. v0.7.0 ergaenzt DDA9.1 fuer die zweite reale
             // Verwendung (Outbox-Inspector / Sync-Diagnostik). Apple verlangt
@@ -137,6 +141,8 @@
                 .first { $0["NSPrivacyAccessedAPIType"] as? String == "NSPrivacyAccessedAPICategoryUserDefaults" }
             let reasons = userDefaultsEntry?["NSPrivacyAccessedAPITypeReasons"] as? [String] ?? []
             #expect(reasons.contains("CA92.1"))
+            // Die App-Group-Suite, die Widgets und NSE lesen → 1C8F.1.
+            #expect(reasons.contains("1C8F.1"))
 
             // FileTimestamp muss BEIDE Reasons fuehren: C617.1 (display file
             // timestamps to the user) + DDA9.1 (display SwiftData timestamps in

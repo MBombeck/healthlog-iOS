@@ -1,6 +1,6 @@
 import Foundation
 
-/// **R1 — what the medication editor sends, as a value.**
+/// **What the medication editor sends, as a value.**
 ///
 /// The edit sheet's `save()` used to assemble its `MedicationPatch` inline from
 /// two dozen `@State` values, so the one question that matters for a server
@@ -23,6 +23,9 @@ import Foundation
 struct MedicationEditDraft: Equatable {
     var name: String
     var dose: String
+    /// #174 — the note as edited, and as it opened. Sent only when changed.
+    var note: String
+    var noteBaseline: String
     var times: [TimeOfDay]
     /// `nil` = the stored category is one this build has no row for.
     var category: MedicationCategoryOption?
@@ -58,6 +61,8 @@ struct MedicationEditDraft: Equatable {
     init(prefill state: EditMedicationFormState) {
         name = state.name
         dose = state.dose
+        note = state.note
+        noteBaseline = state.note
         times = state.times
         category = state.category
         categoryBaseline = state.category
@@ -164,6 +169,7 @@ struct MedicationEditDraft: Equatable {
             trackIntake: MedicationTrackIntakeWrite.value(intake, scheduleChanged: scheduleChanged)
         )
         patch.autoMarkTaken = autoMarkTaken.write
+        patch.note = MedicationNoteWrite.value(edited: note, baseline: noteBaseline)
         return patch
     }
 }

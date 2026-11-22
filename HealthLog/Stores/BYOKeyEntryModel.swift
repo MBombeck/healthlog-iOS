@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// v0.13 W4 — the testable, View-free engine behind ``BYOKeyEntryCard``.
+/// The testable, View-free engine behind ``BYOKeyEntryCard``.
 ///
 /// Owns the BYO key-entry draft state + the **validate → save → grant** flow so
 /// the non-trivial logic (which provider, which field is required, what a
@@ -43,7 +43,7 @@ public final class BYOKeyEntryModel {
         didSet {
             guard provider != oldValue else { return }
             phase = .editing
-            // v0.13 WR — re-sync the override drafts to the newly-selected
+            // Re-sync the override drafts to the newly-selected
             // provider: clear the prior provider's model/baseURL drafts (the
             // secret key draft is never carried) and re-hydrate from THIS
             // provider's saved config so the fields show its persisted
@@ -107,7 +107,7 @@ public final class BYOKeyEntryModel {
     private var parsedBaseURL: URL? {
         let trimmed = baseURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return nil }
-        // https-only (D9): reject anything that isn't an https URL up front so
+        // https-only: reject anything that isn't an https URL up front so
         // the user gets an honest inline error before any request.
         guard url.scheme?.lowercased() == "https" else { return nil }
         return url

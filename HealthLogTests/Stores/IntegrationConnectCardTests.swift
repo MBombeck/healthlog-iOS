@@ -89,7 +89,7 @@ struct IntegrationConnectCardTests {
     @Test("OAuthIntegrationStatus decodes the connected Oura/Polar shape")
     func oauthStatusDecodeConnected() throws {
         // v1.42.4 shape: legacy `state` / `lastError` still on the wire (until
-        // v1.44), `health` beside them. The app reads `health` only (#139).
+        // v1.44), `health` beside them. The app reads `health` only.
         let json = Data(#"""
         {
             "connected": true,

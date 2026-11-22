@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **N2 — der Nährstoff-Leerzustand muss sagen, was tatsächlich zutrifft.**
+/// **Der Nährstoff-Leerzustand muss sagen, was tatsächlich zutrifft.**
 ///
 /// Die Fläche hatte für „keine Zeilen" genau einen Satz: „Sobald Apple Health
 /// Vitamin-, Mineralstoff- oder Wasserdaten liefert, erscheinen hier die

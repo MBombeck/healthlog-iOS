@@ -1,38 +1,28 @@
 import SwiftUI
 
-/// v0.4.1 redesigned onboarding driver. Branches based on the user's
-/// `ModeSelectionStep` choice — server-paired or local-only standalone.
-/// Per `M2-A11 §1` the linear v0.4.0 flow had three
-/// structural gaps: no mode choice, dead server-URL control, and a
-/// pre-login Passkey-enrolment step that always 401'd. All three are
-/// addressed here.
+/// Onboarding driver: Welcome, ServerURL, Auth, HealthKit, Notifications,
+/// AI source, Anamnesis, Baseline profile, Done. There is no separate
+/// `.backfill` step; the HealthKit backfill window is chosen inline on the
+/// HealthKit step.
 ///
-/// Flow shapes (Task #53 — the AI-source step is the final gate on EVERY
-/// branch; there is no separate `.backfill` step — the HealthKit backfill
-/// window is chosen inline on the HealthKit step):
-/// - Server: Welcome → Mode → ServerURL → Auth → HealthKit → Notif → aiSource → Done
-/// - Standalone: Welcome → Mode → HealthKit → Notif → aiSource → Done
-///
-/// Auth happens BEFORE HealthKit in the server branch so the Bearer token
-/// is in Keychain when `HealthKitService.activateBackground` schedules
-/// the first upload-on-wakeup. Standalone skips auth + notifications-on-server
-/// but keeps APNs local-only path (local notifications via
-/// `UserNotifications` still work in standalone mode).
+/// Auth happens BEFORE HealthKit so the Bearer token is in Keychain when
+/// `HealthKitService.activateBackground` schedules the first upload-on-wakeup.
 struct OnboardingFlow: View {
     @Environment(AuthStore.self) private var authStore
-    @Environment(SyncModeStore.self) private var syncModeStore
-    /// R1 — beantwortet die Frage vor allen anderen: kennt diese Installation
+    /// Beantwortet die Frage vor allen anderen: kennt diese Installation
     /// überhaupt eine Serveradresse? Ohne sie darf kein Anmeldeschritt kommen.
     @Environment(BackendAvailability.self) private var backend
     @Environment(AppRouter.self) private var router
     @Environment(\.appContainer) private var container
-    /// A11Y (audit-v0162 §5) — gates the imperative step-transition animations
+    /// Device logic only: the iPad walks no HealthKit step.
+    @Environment(\.deviceProfile) private var deviceProfile
+    /// A11Y — gates the imperative step-transition animations
     /// below so they cross-dissolve instead of sliding when Reduce Motion is on.
     /// The container `.hlAnimation(value: step)` already honours it; the explicit
     /// `withAnimation(...) { step = … }` callsites did not until now.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// **#153** — the flow's state (step, mode, scope, probe answers,
+    /// The flow's state (step, scope, probe answers,
     /// invite token, completion lookup) lives in the container's in-memory
     /// `OnboardingDraftStore`, not in `@State`: the privacy shield rebuilds the
     /// window whenever the scene goes inactive, and the user must come back to
@@ -52,19 +42,10 @@ struct OnboardingFlow: View {
             // jolts the progress bar's vertical position.
             HStack {
                 if canGoBack {
-                    Button { goBack() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.hlTitle3)
-                            .foregroundStyle(HLText.primary)
-                            // 08-10 — the region, not the glyph. The literal is
-                            // `HLHitTarget.minimum` spelled out because this is
-                            // a call site that states its own frame, and the
-                            // policy that measures it reads the number.
-                            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(Text("onboarding.back"))
-                    .accessibilityIdentifier("onboarding.backButton")
+                    // The steps are one view, not a navigation stack, so there
+                    // is no system back to lean on; this is its stand-in.
+                    HLIconButton(systemImage: "chevron.left", label: "onboarding.back") { goBack() }
+                        .accessibilityIdentifier("onboarding.backButton")
                 }
                 Spacer(minLength: 0)
             }
@@ -86,8 +67,6 @@ struct OnboardingFlow: View {
                 switch resolvedStep {
                 case .welcome:
                     WelcomeStep(onNext: { advanceFromWelcome() })
-                case .mode:
-                    ModeSelectionStep(onChoose: handleModeChoice(_:))
                 case .serverURL:
                     ServerURLStep(onContinue: handleServerURLContinue)
                 case .auth:
@@ -96,10 +75,10 @@ struct OnboardingFlow: View {
                         oidcStatus: oidcStatus,
                         webLoginAvailability: webLoginAvailability,
                         prefilledInviteToken: inviteToken,
-                        // R1 — der immer verfügbare Ausgang zur Adressfrage.
+                        // Der immer verfügbare Ausgang zur Adressfrage.
                         onChangeServer: { goToServerURL() }
                     )
-                    // 13-04 — the auth step asks for the answer it needs
+                    // The auth step asks for the answer it needs
                     // instead of depending on whoever routed here having asked
                     // for it. In production `handleServerURLContinue` has
                     // already run and `AuthService` caches per host, so this
@@ -114,7 +93,19 @@ struct OnboardingFlow: View {
                 case .checkingCompletion:
                     CompletionLookupStep()
                 case .completionUnavailable:
-                    CompletionUnavailableStep(onRetry: { resolvePostAuthenticationRoute() })
+                    // The app cannot tell whether setup is finished, so it
+                    // says that and offers the one honest action.
+                    HLEmptyState(
+                        icon: "arrow.clockwise.circle",
+                        title: "onboarding.route.unavailable.title",
+                        message: "onboarding.route.unavailable.body"
+                    ) {
+                        HLButton(HLControlWord.retry.key, variant: .secondary) {
+                            resolvePostAuthenticationRoute()
+                        }
+                        .accessibilityIdentifier("onboarding.route.retry")
+                    }
+                    .padding(.horizontal, HLSpace.xl)
                 case .healthKit:
                     HealthKitPermissionStep(
                         onNext: { advanceFromHealthKit() },
@@ -153,16 +144,9 @@ struct OnboardingFlow: View {
                 removal: .move(edge: .leading)
             ))
         }
-        // v0.11 W5 — adopt-on-pair indicator (`adoptUploadState`, `.idle` unless
-        // standalone→paired). KONTO (#151): above it, once, a deletion receipt.
+        // Once, a deletion receipt.
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: HLSpace.sm) {
-                AccountDeletionReceiptNote()
-                AdoptUploadIndicator(
-                    state: authStore.adoptUploadState,
-                    onRetry: { authStore.retryAdoptUpload() }
-                )
-            }
+            AccountDeletionReceiptNote()
         }
         .background(HLColor.background.ignoresSafeArea())
         // v0.5.5.1 perceptual budget (PROJECT_GUIDE.md Marathon discipline →
@@ -177,12 +161,12 @@ struct OnboardingFlow: View {
         .onChange(of: authStore.phase) { _, newPhase in
             handlePhase(newPhase)
         }
-        // b182 W-B182-INVITE (GH #16) — pick up an invite token that was parked
+        // Pick up an invite token that was parked
         // before the flow appeared (cold launch via the web invite link). Runs
         // once on appear AND when the parked token changes (warm launch / link
         // tapped while the welcome step is on screen).
         //
-        // D-24-01-A — and, before that, the session question. An invite is an
+        // And, before that, the session question. An invite is an
         // offer to sign in; a session that has already been accepted has moved
         // past it, so the resume is asked first.
         .onAppear {
@@ -195,26 +179,25 @@ struct OnboardingFlow: View {
         }
     }
 
-    // MARK: - Invite deep link (b182 W-B182-INVITE)
+    // MARK: - Invite deep link
 
     /// One-shot consume of `AppRouter.pendingInviteToken` → drive the flow into
     /// the server-branch auth step with the token prefilled. An invite always
     /// implies server mode against the managed host (the bundled default base
     /// URL already resolves there, so no URL override is needed). Only fires
-    /// when the user hasn't already committed to a different mode mid-flow.
+    /// while the user has not started the server setup themselves.
     private func consumeInviteTokenIfPresent() {
-        guard inviteToken == nil, chosenMode == nil,
+        guard inviteToken == nil, !hasStartedServerSetup,
               let token = router.consumePendingInviteToken() else { return }
         inviteToken = token
-        chosenMode = .server
-        authStore.markOnboardingMode(.server)
+        hasStartedServerSetup = true
         // Probe registration-status so the auth step renders correctly; the
         // invite still works on a closed instance (the token is the door key).
         Task { registrationEnabled = await authStore.isRegistrationEnabled() }
-        // parity 2.9 — and the OIDC status, so an `OIDC_ONLY` instance does not
+        // And the OIDC status, so an `OIDC_ONLY` instance does not
         // offer the invited user a password form the server will refuse.
         Task { oidcStatus = await authStore.fetchOidcStatus() }
-        // #65 — and the web-handoff availability, so a self-hosted instance on
+        // And the web-handoff availability, so a self-hosted instance on
         // the frozen contract offers the web-login CTA (fail-closed otherwise).
         Task { webLoginAvailability = await authStore.webLoginAvailability() }
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .auth }
@@ -223,27 +206,11 @@ struct OnboardingFlow: View {
     // MARK: - Branching
 
     private func advanceFromWelcome() {
-        // v0.11 W5 — the Release standalone door. The mode-selection step
-        // offers "Connect a server" OR "Use without an account" (local-only
-        // standalone).
-        //
-        // v0.15 — server-connect is now MANDATORY: when
-        // `FeatureFlags.standaloneModeAvailable == false` we skip the
-        // mode-selection fork entirely and go straight to the server-connect
-        // path (Welcome → ServerURL → Auth), so no standalone affordance is
-        // ever visible. The standalone runtime stays in place; only this
-        // entry point is gated. Flip the flag to restore the W5 fork.
-        let next = Self.stepAfterWelcome(standaloneModeAvailable: FeatureFlags.standaloneModeAvailable)
-        if next == .serverURL {
-            // Mirror the side effect that `handleModeChoice(.server)` does so
-            // the server branch is fully committed without the fork screen.
-            chosenMode = .server
-            authStore.markOnboardingMode(.server)
-        }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = next }
+        hasStartedServerSetup = true
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .serverURL }
     }
 
-    // MARK: - Adressfrage vor Anmeldefrage (R1)
+    // MARK: - Adressfrage vor Anmeldefrage
 
     /// Der tatsächlich gezeigte Schritt. Weicht von ``step`` nur in einem Fall
     /// ab: der Flow steht auf `.auth`, es ist aber keine Serveradresse
@@ -255,15 +222,14 @@ struct OnboardingFlow: View {
     private var resolvedStep: Step {
         Self.resolveStep(
             step,
-            chosenMode: chosenMode,
             hasServerAddress: backend.hasServerAddress,
-            // D-24-01-A — and the session question, which outranks both. See
-            // ``OnboardingFlow/resolveStep(_:chosenMode:hasServerAddress:phase:)``.
+            // And the session question, which outranks both. See
+            // ``OnboardingFlow/resolveStep(_:hasServerAddress:phase:)``.
             phase: authStore.phase
         )
     }
 
-    /// Der Ausgang von der Anmeldefläche zurück zur Adressfrage (R1). Eigener
+    /// Der Ausgang von der Anmeldefläche zurück zur Adressfrage. Eigener
     /// Weg statt `goBack()`, weil er auch dann führen muss, wenn `previousStep`
     /// den Schritt gar nicht als Vorgänger kennt (zum Beispiel Einladungslink).
     private func goToServerURL() {
@@ -273,38 +239,20 @@ struct OnboardingFlow: View {
     }
 
     private var canGoBack: Bool {
-        Self.previousStep(
-            from: resolvedStep,
-            chosenMode: chosenMode,
-            standaloneModeAvailable: FeatureFlags.standaloneModeAvailable,
-            setupScope: setupScope
-        ) != nil
+        Self.previousStep(from: resolvedStep, setupScope: setupScope, includesHealthKit: includesHealthKit) != nil
+    }
+
+    /// Whether this device walks the HealthKit step at all.
+    private var includesHealthKit: Bool {
+        HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).onboardingIncludesHealthKitStep
     }
 
     private func goBack() {
         guard let prev = Self.previousStep(
-            from: resolvedStep,
-            chosenMode: chosenMode,
-            standaloneModeAvailable: FeatureFlags.standaloneModeAvailable,
-            setupScope: setupScope
+            from: resolvedStep, setupScope: setupScope, includesHealthKit: includesHealthKit
         ) else { return }
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
             step = prev
-        }
-    }
-
-    private func handleModeChoice(_ choice: ModeSelectionStep.Choice) {
-        switch choice {
-        case .server:
-            chosenMode = .server
-            authStore.markOnboardingMode(.server)
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .serverURL }
-        case .standalone:
-            chosenMode = .standalone
-            // Standalone path: skip ServerURL + Auth, go straight to HK.
-            // `enterStandaloneMode` flips both SyncMode + AuthStore.phase
-            // AFTER the local steps complete — see `advanceFromNotifications`.
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .healthKit }
         }
     }
 
@@ -315,12 +263,12 @@ struct OnboardingFlow: View {
         Task {
             registrationEnabled = await authStore.isRegistrationEnabled()
         }
-        // parity 2.9 — probe the freshly-configured server's OIDC status on the
+        // Probe the freshly-configured server's OIDC status on the
         // same beat, so the auth step shows only the doors it actually opens.
         Task {
             oidcStatus = await authStore.fetchOidcStatus()
         }
-        // #65 — probe web-handoff availability against the now-active base URL,
+        // Probe web-handoff availability against the now-active base URL,
         // so a self-hosted instance on the frozen contract gets the web-login
         // CTA and a pre-contract / offline server keeps the native form.
         Task {
@@ -334,7 +282,7 @@ struct OnboardingFlow: View {
     /// every sign-in door — password, passkey, OIDC, web handoff, both MFA legs
     /// — arrives here through that one assignment.
     ///
-    /// **D-24-01-A (24-02) — an assignment, not a transition.** This was
+    /// **An assignment, not a transition.** This was
     /// `handlePhaseChange` and it ran only from `.onChange(of: authStore.phase)`.
     /// Two things followed from that, and together they locked the operator out
     /// of his own account: a flow unmounted by the privacy shield across the
@@ -344,7 +292,7 @@ struct OnboardingFlow: View {
     /// asked with whatever phase is current — from the change, and from every
     /// appearance (``resumePostAuthenticationRouteIfNeeded()``).
     ///
-    /// **Phase 08 Wave 1.** It used to bounce straight to `.healthKit`, which
+    /// It used to bounce straight to `.healthKit`, which
     /// meant the server-owned completion flag this app already fetched was read
     /// by nobody: a user who finished setup on another device, or on this device
     /// before a reinstall, walked the optional permission / AI / anamnesis /
@@ -359,7 +307,7 @@ struct OnboardingFlow: View {
             routeResolution = nil
             return
         }
-        // D-24-01-A — the admissible steps moved into a pure decision, and grew
+        // The admissible steps moved into a pure decision, and grew
         // by the ones a REMOUNTED flow is re-created on. The guarantee the old
         // `step == .auth || .completionUnavailable` inline guard carried is
         // unchanged and is now stated where it can be tested: a lookup already
@@ -368,7 +316,7 @@ struct OnboardingFlow: View {
         resolvePostAuthenticationRoute()
     }
 
-    /// **D-24-01-A (24-02) — the level trigger, and the whole of the fix's
+    /// **The level trigger, and the whole of the fix's
     /// effect half.**
     ///
     /// Asked on every appearance, so a flow that was unmounted across the moment
@@ -410,7 +358,7 @@ struct OnboardingFlow: View {
             // store at this point means the answer was discarded, not that it
             // said "incomplete".
             guard store.hasLoaded else { return }
-            apply(PostAuthenticationRouteResolver.resolve(
+            await apply(PostAuthenticationRouteResolver.resolve(
                 server: store.resolution ?? .unavailable,
                 cache: store.evidence
             ))
@@ -421,16 +369,16 @@ struct OnboardingFlow: View {
     /// the optional tail, and ambiguity gets its own surface rather than being
     /// rounded to whichever neighbour is cheaper to render.
     ///
-    /// **16-01 (K10)** — `authenticatedShell` is no longer the same thing as
+    /// `authenticatedShell` is no longer the same thing as
     /// "nothing left to do". It is the answer to an ACCOUNT question, and the
     /// device still gets asked its own: a handset that has never shown the
     /// HealthKit sheet walks the device-local head before the shell, and only
     /// that. The account-level tail stays skipped for exactly the users 08-08
     /// skipped it for.
-    private func apply(_ route: PostAuthenticationRoute) {
+    private func apply(_ route: PostAuthenticationRoute) async {
         switch route {
         case .authenticatedShell:
-            enter(PostAuthenticationRouteResolver.setupScope(
+            await enter(PostAuthenticationRouteResolver.setupScope(
                 accountSetupComplete: true,
                 deviceLocalSetup: deviceLocalSetupState()
             ))
@@ -451,7 +399,7 @@ struct OnboardingFlow: View {
             advance(to: .done)
             authStore.completeOnboarding()
         case .deviceLocalOnly, .full:
-            advance(to: .healthKit)
+            advance(to: Self.firstPostAuthenticationStep(includesHealthKit: includesHealthKit))
         }
     }
 
@@ -467,9 +415,15 @@ struct OnboardingFlow: View {
     ///
     /// No composed container is `unknown`, never `outstanding`: a run that
     /// cannot ask must not invent setup work for a returning user.
-    private func deviceLocalSetupState() -> DeviceLocalSetupState {
-        guard let readiness = container?.hkReadinessStore else { return .unknown }
-        return readiness.hasEverRequestedAuthorization ? .complete : .outstanding
+    private func deviceLocalSetupState() async -> DeviceLocalSetupState {
+        // A device without HealthKit (the iPad) owes only the notification
+        // ask, and the system knows whether it was answered.
+        let notificationsOpen = includesHealthKit ? nil : await Self.notificationPermissionIsOpen()
+        return Self.deviceLocalSetupState(
+            includesHealthKit: includesHealthKit,
+            healthKitRequested: container?.hkReadinessStore.hasEverRequestedAuthorization,
+            notificationPermissionOpen: notificationsOpen
+        )
     }
 
     private func advance(to next: Step) {
@@ -481,7 +435,7 @@ struct OnboardingFlow: View {
     }
 
     private func advanceFromNotifications() {
-        // 16-01 (K10) — the end of a device-local-only run. The account-level
+        // The end of a device-local-only run. The account-level
         // tail was answered on whatever device (or web session) finished it,
         // and replaying it here is precisely what 08-08 stopped doing. The
         // handoff mirrors the `.authenticatedShell` arm exactly: no stamp, the
@@ -491,31 +445,19 @@ struct OnboardingFlow: View {
             authStore.completeOnboarding()
             return
         }
-        // Task #53 — the AI-source choice is now the final onboarding step for
+        // The AI-source choice is now the final onboarding step for
         // every branch. The terminal phase-flip moved to `advanceFromAISource`.
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .aiSource }
     }
 
     private func advanceFromAISource() {
-        if Self.stepAfterAISource(isStandalone: chosenMode == .standalone) == .done {
-            // Standalone has no server, so the about-me anamnesis step is not
-            // reachable — finish immediately. This is the moment we flip
-            // AuthStore.phase → `.standalone`, which makes `RootView` swap to
-            // AuthenticatedShell. Doing it AFTER HK + Notif keeps the
-            // onboarding bar visible through the local-permission prompts.
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .done }
-            authStore.enterStandaloneMode()
-            stampOnboardingComplete()
-            return
-        }
-        // G2/G3 — the server branch now routes into the optional anamnesis
-        // step before the terminal handoff. The phase-flip moved to
-        // `finishOnboarding`.
+        // G2/G3 — the optional anamnesis step comes before the terminal
+        // handoff. The phase-flip lives in `finishOnboarding`.
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .anamnesis }
     }
 
     /// Routes from the optional anamnesis step into the optional baseline-profile
-    /// step (G4). Both are server-only and skippable; the phase-flip stays at
+    /// step. Both are server-only and skippable; the phase-flip stays at
     /// `finishOnboarding`, reached from the baseline-profile step's Continue/Later.
     private func advanceFromAnamnesis() {
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { step = .baselineProfile }
@@ -532,17 +474,16 @@ struct OnboardingFlow: View {
         stampOnboardingComplete()
     }
 
-    /// #32 — record the onboarding setup wizard as finished server-side so the
+    /// Record the onboarding setup wizard as finished server-side so the
     /// completion state survives reinstall, syncs across devices, and is shared
     /// with the web onboarding tour. Optimistic + fire-and-forget: the store
     /// flips its local cache immediately (so routing is correct offline) and
     /// best-effort posts `completed:true` to `POST /api/onboarding/tour`. A
     /// failed/absent endpoint leaves the local cache set; a later `refresh()`
-    /// reconciles. No-op when already completed (re-mount-safe). Standalone has
-    /// no server, so the POST simply no-ops there — the local cache still routes.
+    /// reconciles. No-op when already completed (re-mount-safe).
     private func stampOnboardingComplete() {
         guard let store = container?.onboardingTourStore else { return }
-        // 08-08 — nothing to stamp for a user the server already calls complete.
+        // Nothing to stamp for a user the server already calls complete.
         // `markCompleted` is a no-op in that case anyway; saying so here is what
         // keeps the write bound to the event that justifies it (this user walked
         // this wizard) rather than to arriving at the end of the flow.
@@ -551,20 +492,14 @@ struct OnboardingFlow: View {
     }
 
     private var routeProgress: RouteProgress {
-        Self.progress(
-            for: resolvedStep,
-            chosenMode: chosenMode,
-            standaloneModeAvailable: FeatureFlags.standaloneModeAvailable,
-            setupScope: setupScope
-        )
+        Self.progress(for: resolvedStep, setupScope: setupScope, includesHealthKit: includesHealthKit)
     }
 }
 
 /// Continuous progress bar replacing the v0.4.0 `ProgressDots`. Discrete
-/// dots no longer fit because the branched flow has variable lengths
-/// (6 / 5 / 5 steps depending on mode); a continuous indicator avoids
-/// jumpy redraws when the user changes mode.
-/// 08-10 — every one of the three values is now supplied by
+/// dots no longer fit because the route length depends on the setup scope;
+/// a continuous indicator avoids jumpy redraws.
+/// Every one of the three values is now supplied by
 /// ``OnboardingFlow/RouteProgress``, and none is composed here. The spoken value
 /// used to be `"\(Int(progress * 100)) percent"`: an English literal that no
 /// catalogue entry covered, built from a fraction nobody could name, telling a
@@ -592,59 +527,6 @@ private struct ProgressIndicator: View {
         .accessibilityIdentifier("onboarding.progress")
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityValue(Text(accessibilityValue))
-    }
-}
-
-/// v0.11 W5 — calm inline "moving your data over…" banner for the
-/// standalone→paired adopt-on-pair upload. Reads `AuthStore.adoptUploadState`;
-/// renders nothing for `.idle` (every paired-from-start login). Monochrome,
-/// glass-free, pinned above the bottom safe area. Reduce-motion-gated entrance.
-///
-/// v0.14.8 W2-SYNCUX — the banner chrome itself was extracted into the shared
-/// `HLSyncBanner` (DesignSystem) so the first-login sync indicator in
-/// `AuthenticatedShell` speaks the identical visual language. This view keeps
-/// only the adopt-state → banner-content mapping.
-private struct AdoptUploadIndicator: View {
-    let state: AuthStore.AdoptUploadState
-    /// v0.13 WR — invoked when the user taps the retry affordance on the
-    /// `.failed` banner. Re-runs the (idempotent) adopt-on-pair upload.
-    var onRetry: () -> Void = {}
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Group {
-            switch state {
-            case .idle:
-                EmptyView()
-            case let .uploading(progress):
-                HLSyncBanner(
-                    text: progress.total > 0
-                        ? String(
-                            format: String(localized: "onboarding.adopt.uploading.progress"),
-                            progress.completed, progress.total
-                        )
-                        : String(localized: "onboarding.adopt.uploading"),
-                    showsSpinner: true
-                )
-            case .done:
-                HLSyncBanner(
-                    text: String(localized: "onboarding.adopt.done"),
-                    symbol: "checkmark.circle.fill"
-                )
-            case .failed:
-                // v0.13 WR — the glyph is now a real retry action, not a passive
-                // label. The upload is idempotent, so re-running is safe.
-                HLSyncBanner(
-                    text: String(localized: "onboarding.adopt.failed"),
-                    symbol: "arrow.clockwise",
-                    actionLabel: String(localized: "onboarding.adopt.retry"),
-                    action: onRetry,
-                    actionAccessibilityIdentifier: "onboarding.adopt.retry"
-                )
-            }
-        }
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9), value: state)
     }
 }
 

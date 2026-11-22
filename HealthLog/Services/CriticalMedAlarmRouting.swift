@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// **v0.9.0 W2 — pure routing + schedule-mapping for critical med alarms.**
+/// **Pure routing + schedule-mapping for critical med alarms.**
 ///
 /// AlarmKit is iOS 26-only and needs a live OS surface, which makes the
 /// `CriticalMedAlarmService` hard to unit-test. This enum holds the **pure**
@@ -38,7 +38,7 @@ enum CriticalMedAlarmRouting {
         let weekdays: [Weekday]
     }
 
-    /// **v0.10 R1 §3.5 — a planned alarm slot, either a recurring weekly slot
+    /// **A planned alarm slot, either a recurring weekly slot
     /// or a single-shot fixed alarm at a concrete next occurrence.**
     ///
     /// Daily / weekday / weekly(interval==1) cadences map to a recurring
@@ -55,12 +55,12 @@ enum CriticalMedAlarmRouting {
     /// channel, given the per-med opt-in + runtime gates.
     ///
     /// Eligibility requires ALL of:
-    /// - `osAvailable` (iOS ≥ 26) and `authorized` (AlarmKit granted),
+    /// - `authorized` (AlarmKit granted),
     /// - the medication is `active` + has `notificationsEnabled`,
     /// - the per-med `criticalAlarm` opt-in is ON,
     /// - the schedule has at least one entry with a time-of-day.
     ///
-    /// **v0.10 R1 §3.5 — generalised from the old "weekly only
+    /// **Generalised from the old "weekly only
     /// (`intervalWeeks == 1`)" gate.** Any cadence the engine can produce a
     /// concrete next occurrence for is now eligible: rolling / monthly /
     /// yearly / biweekly GLP-1 schedule a single-shot `.fixed` alarm at the
@@ -69,15 +69,14 @@ enum CriticalMedAlarmRouting {
     static func isAlarmEligible(
         medication: Medication,
         alarmEnabled: (String) -> Bool,
-        authorized: Bool,
-        osAvailable: Bool
+        authorized: Bool
     ) -> Bool {
-        guard osAvailable, authorized else { return false }
+        guard authorized else { return false }
         guard medication.active, medication.notificationsEnabled else { return false }
         // v1.42.2 — the server's reminder decision (`remindersActive`) wins: an
         // auto-recorded supplement or an ended course never alarms either.
         guard medication.remindersActive != false else { return false }
-        // v1.39.1 (#1033) — a medication kept as a record never alarms; leaving
+        // v1.39.1 — a medication kept as a record never alarms; leaving
         // it out of the alarm set cancels any alarm armed before the switch.
         guard medication.tracksIntake else { return false }
         guard !medication.schedule.entries.isEmpty else { return false }
@@ -93,8 +92,7 @@ enum CriticalMedAlarmRouting {
     static func route(
         medications: [Medication],
         alarmEnabled: (String) -> Bool,
-        authorized: Bool,
-        osAvailable: Bool
+        authorized: Bool
     ) -> (alarmMeds: [Medication], unMeds: [Medication]) {
         var alarmMeds: [Medication] = []
         var unMeds: [Medication] = []
@@ -102,8 +100,7 @@ enum CriticalMedAlarmRouting {
             if isAlarmEligible(
                 medication: medication,
                 alarmEnabled: alarmEnabled,
-                authorized: authorized,
-                osAvailable: osAvailable
+                authorized: authorized
             ) {
                 alarmMeds.append(medication)
             } else {
@@ -127,7 +124,7 @@ enum CriticalMedAlarmRouting {
         }
     }
 
-    /// **v0.10 R1 §3.5 — generalised alarm planner.** Map each `ScheduleEntry`
+    /// **Generalised alarm planner.** Map each `ScheduleEntry`
     /// onto the AlarmKit slots it needs:
     /// - `daily` → one recurring `.weekly(everyDay)` slot per time-of-day.
     /// - `weekdays` → one recurring weekly slot per time, carrying the weekday
@@ -138,30 +135,103 @@ enum CriticalMedAlarmRouting {
     ///   engine's next occurrence (re-armed on reconcile / intake).
     /// - `legacy` → weekly slot when a weekday set is present and
     ///   `intervalWeeks == 1`; otherwise a `.fixed` next-occurrence alarm.
+    ///
+    /// **#188 (5) — today's occurrence of a resolved dose stays silent.**
+    /// `resolvedSlots` are today's taken or skipped slots (the server's today
+    /// list). A weekly slot whose occurrence later today is one of them leaves
+    /// today's weekday out of its recurrence, so the alarm still fires every
+    /// other day without the app being opened; a slot whose only weekday is
+    /// today becomes a single alarm a week later. A single `.fixed` alarm on a
+    /// resolved occurrence moves to the one after it. The next reconcile after
+    /// that time restores the full recurrence. Matching is the reminder
+    /// completion's rule (``MedicationReminderCompletion/occurrenceIsResolved``)
+    /// until the server publishes the resolved slot itself (#188 (4)).
+    ///
+    /// `timeZone` is the account zone (the recurrence engine's day); weekly
+    /// alarms fire on the device's wall clock (`deviceTimeZone`), the way
+    /// AlarmKit's relative schedules do.
     static func plannedAlarms(
         for medication: Medication,
         now: Date = .now,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
+        resolvedSlots: [MedicationReminderCompletion.ResolvedSlot] = [],
+        deviceTimeZone: TimeZone = .current
     ) -> [PlannedAlarm] {
+        let resolved = resolvedSlots.filter { $0.medicationId == medication.id }
+        let isResolved: (Date) -> Bool = { start in
+            !resolved.isEmpty && MedicationReminderCompletion.occurrenceIsResolved(
+                medicationId: medication.id,
+                start: start,
+                slots: resolved,
+                deviceTimeZone: deviceTimeZone,
+                accountTimeZone: timeZone
+            )
+        }
         let context = MedicationRecurrenceEngine.Context(
             medication: medication,
             timeZone: timeZone,
             now: now
         )
         var planned: [PlannedAlarm] = []
-        // R1 — a weekly-recurring alarm has no first or last day; a course that
+        // A weekly-recurring alarm has no first or last day; a course that
         // has not started yet, or ends soon, arms its next occurrence instead.
         let repeats = MedicationRecurrenceEngine.repeatingRuleFits(
             context: context, now: now, endHorizon: repeatingAlarmEndHorizon
         )
         for entry in medication.schedule.entries {
             if !repeats, entry.cadence.armsWeeklyAlarm {
-                appendFixed(entry: entry, context: context, now: now, into: &planned)
+                appendFixed(entry: entry, context: context, now: now, isResolved: isResolved, into: &planned)
             } else {
-                appendPlanned(entry: entry, context: context, now: now, into: &planned)
+                appendPlanned(entry: entry, context: context, now: now, isResolved: isResolved, into: &planned)
             }
         }
-        return planned
+        guard !resolved.isEmpty else { return planned }
+        return planned.flatMap { plan -> [PlannedAlarm] in
+            guard case let .weekly(slot) = plan else { return [plan] }
+            return suspendingResolved(slot, now: now, deviceTimeZone: deviceTimeZone, isResolved: isResolved)
+        }
+    }
+
+    /// A weekly slot with every weekday left out whose next occurrence (within
+    /// the coming week) is already resolved, plus a single `.fixed` alarm one
+    /// week after each such occurrence.
+    ///
+    /// **D3 #8.** AlarmKit cannot skip one occurrence of a weekly alarm, so the
+    /// resolved weekday leaves the recurrence. Before, nothing put it back
+    /// until the app reconciled again: someone who then only used the alarm's
+    /// own buttons lost that weekday for good, and a once-a-week dose (GLP-1)
+    /// rang once more and then never again. The `.fixed` alarm keeps the
+    /// following week's dose armed without any app run; the alarm intents
+    /// reconcile after every action, which turns it back into the weekly slot.
+    ///
+    /// **D3 #4.** Not only today: a dose taken on Saturday that the server binds
+    /// to Sunday's slot resolves Sunday's occurrence too.
+    static func suspendingResolved(
+        _ slot: AlarmSlot,
+        now: Date,
+        deviceTimeZone: TimeZone,
+        isResolved: (Date) -> Bool
+    ) -> [PlannedAlarm] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = deviceTimeZone
+        let allDays = (0 ... 6).compactMap(Weekday.init(rawValue:))
+        var remaining = slot.weekdays.isEmpty ? allDays : slot.weekdays
+        var nextWeek: [PlannedAlarm] = []
+        for offset in 0 ... 6 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: now),
+                  let occurrence = calendar.date(bySettingHour: slot.hour, minute: slot.minute, second: 0, of: day),
+                  occurrence > now,
+                  let weekday = Weekday(rawValue: calendar.component(.weekday, from: occurrence) - 1),
+                  remaining.contains(weekday),
+                  isResolved(occurrence) else { continue }
+            remaining.removeAll { $0 == weekday }
+            nextWeek.append(.fixed(at: calendar.date(byAdding: .day, value: 7, to: occurrence) ?? occurrence))
+        }
+        guard !nextWeek.isEmpty else { return [.weekly(slot)] }
+        guard remaining.isEmpty else {
+            return [.weekly(AlarmSlot(hour: slot.hour, minute: slot.minute, weekdays: remaining))] + nextWeek
+        }
+        return nextWeek
     }
 
     /// One entry's alarms when the course allows a weekly-recurring slot (the
@@ -170,6 +240,7 @@ enum CriticalMedAlarmRouting {
         entry: ScheduleEntry,
         context: MedicationRecurrenceEngine.Context,
         now: Date,
+        isResolved: (Date) -> Bool,
         into planned: inout [PlannedAlarm]
     ) {
         switch entry.cadence {
@@ -183,7 +254,7 @@ enum CriticalMedAlarmRouting {
             if interval <= 1 {
                 appendWeeklySlots(entry: entry, days: days, into: &planned)
             } else {
-                appendFixed(entry: entry, context: context, now: now, into: &planned)
+                appendFixed(entry: entry, context: context, now: now, isResolved: isResolved, into: &planned)
             }
         case let .legacy(days, intervalWeeks):
             if let days, !days.isEmpty, intervalWeeks <= 1 {
@@ -193,13 +264,13 @@ enum CriticalMedAlarmRouting {
                     planned.append(.weekly(AlarmSlot(hour: time.hour, minute: time.minute, weekdays: [])))
                 }
             } else {
-                appendFixed(entry: entry, context: context, now: now, into: &planned)
+                appendFixed(entry: entry, context: context, now: now, isResolved: isResolved, into: &planned)
             }
         case .monthly, .everyNMonths, .yearly, .rolling, .oneShot, .cyclic:
             // Cyclic on/off-weeks has no clean AlarmKit Recurrence → arm a
             // single `.fixed` alarm at the next on-week occurrence,
             // re-armed on reconcile / intake. Off-weeks yield no alarm.
-            appendFixed(entry: entry, context: context, now: now, into: &planned)
+            appendFixed(entry: entry, context: context, now: now, isResolved: isResolved, into: &planned)
         case .asNeeded:
             // PRN / as-needed — never arms a critical alarm.
             break
@@ -221,18 +292,29 @@ enum CriticalMedAlarmRouting {
         }
     }
 
+    /// One `.fixed` alarm at the entry's next occurrence. A resolved
+    /// occurrence (#188 (5)) is passed over for the one after it; bounded, a
+    /// cadence cannot have more resolved occurrences ahead than today's few.
     private static func appendFixed(
         entry: ScheduleEntry,
         context: MedicationRecurrenceEngine.Context,
         now: Date,
+        isResolved: (Date) -> Bool,
         into planned: inout [PlannedAlarm]
     ) {
-        guard let next = MedicationRecurrenceEngine.nextOccurrence(
-            after: now,
-            entry: entry,
-            context: context
-        ) else { return }
-        planned.append(.fixed(at: next.at))
+        var after = now
+        for _ in 0 ..< 4 {
+            guard let next = MedicationRecurrenceEngine.nextOccurrence(
+                after: after,
+                entry: entry,
+                context: context
+            ) else { return }
+            guard isResolved(next.at) else {
+                planned.append(.fixed(at: next.at))
+                return
+            }
+            after = next.at
+        }
     }
 
     /// Deterministic, stable UUID for a med's alarm slot so reconcile is a
@@ -251,7 +333,7 @@ enum CriticalMedAlarmRouting {
     }
 
     /// Decide which existing AlarmKit alarm ids to purge on a routine
-    /// reconcile (HIGH-1). An alarm is orphaned — and so cancelled — only when
+    /// reconcile. An alarm is orphaned — and so cancelled — only when
     /// it is neither a currently-desired scheduled slot NOR a snooze alarm of
     /// a med that is still alarm-owned. This protects a *pending snooze*
     /// (slot ``snoozeSlotIndex``) of an active med from being silently
@@ -266,16 +348,118 @@ enum CriticalMedAlarmRouting {
     ///   - activeMedIDs: the ids of the meds the AlarmKit channel still owns —
     ///     used to protect each one's pending snooze id.
     /// - Returns: the subset of `existing` that should be cancelled.
+    ///   - resolvedSnoozeMedIDs: **D3 #1** — meds whose snoozed dose is
+    ///     resolved by now (``resolvedSnoozes(_:resolvedSlots:deviceTimeZone:accountTimeZone:)``);
+    ///     their snooze is no longer protected and is cancelled.
     static func orphanIDs(
         existing: [UUID],
         desiredScheduledIDs: Set<UUID>,
-        activeMedIDs: [String]
+        activeMedIDs: [String],
+        resolvedSnoozeMedIDs: Set<String> = []
     ) -> [UUID] {
         var protectedIDs = desiredScheduledIDs
-        for medID in activeMedIDs {
+        for medID in activeMedIDs where !resolvedSnoozeMedIDs.contains(medID) {
             protectedIDs.insert(snoozeAlarmID(medicationID: medID))
         }
         return existing.filter { !protectedIDs.contains($0) }
+    }
+
+    // MARK: - Snoozed doses (D3 #1)
+
+    /// The dose a snooze defers, kept until its alarm is gone or the dose is
+    /// resolved.
+    struct SnoozedDose: Codable, Equatable, Sendable {
+        let medicationId: String
+        /// The occurrence the alarm fired for, an instant on the device clock.
+        let occurrence: Date
+    }
+
+    /// The occurrence an alarm action stands for: the latest instant at or
+    /// before `now` with the wall-clock time of the alarm's `scheduledFor`.
+    ///
+    /// A weekly alarm's `scheduledFor` is the next fire instant at the time it
+    /// was armed, so its date may be days old; its time of day is the slot's.
+    /// A fixed alarm's `scheduledFor` is its fire instant, and a snooze alarm
+    /// carries the snoozed alarm's, so both resolve to the dose that rang.
+    static func occurrence(of scheduledFor: Date, now: Date, deviceTimeZone: TimeZone = .current) -> Date {
+        if scheduledFor <= now, now.timeIntervalSince(scheduledFor) < 24 * 60 * 60 { return scheduledFor }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = deviceTimeZone
+        let clock = calendar.dateComponents([.hour, .minute], from: scheduledFor)
+        for offset in [0, -1] {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: now),
+                  let candidate = calendar.date(
+                      bySettingHour: clock.hour ?? 0,
+                      minute: clock.minute ?? 0,
+                      second: 0,
+                      of: day
+                  ) else { continue }
+            if candidate <= now { return candidate }
+        }
+        return scheduledFor
+    }
+
+    /// The meds whose snoozed dose is now taken or skipped, by the reminder
+    /// completion's rule (same wall clock across zones, or ±5 minutes).
+    static func resolvedSnoozes(
+        _ snoozes: [SnoozedDose],
+        resolvedSlots: [MedicationReminderCompletion.ResolvedSlot],
+        deviceTimeZone: TimeZone,
+        accountTimeZone: TimeZone
+    ) -> Set<String> {
+        Set(snoozes.filter { snooze in
+            MedicationReminderCompletion.occurrenceIsResolved(
+                medicationId: snooze.medicationId,
+                start: snooze.occurrence,
+                slots: resolvedSlots,
+                deviceTimeZone: deviceTimeZone,
+                accountTimeZone: accountTimeZone
+            )
+        }.map(\.medicationId))
+    }
+}
+
+/// **D3 #1 — which dose each pending snooze alarm defers.**
+///
+/// The snooze alarm is protected from the routine reconcile so a load does
+/// not drop it, and nothing cancelled it when its dose was then taken in the
+/// app, on the web or by the pill box: it rang half an hour later, loud and
+/// through Focus, for a dose already taken. The snooze intent notes the dose
+/// here; the reconcile cancels the snooze once that dose is resolved.
+/// One record per medication, as there is one snooze alarm per medication.
+struct CriticalAlarmSnoozeLedger {
+    static let defaultsKey = "hl.criticalAlarm.snoozedDoses"
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func read() -> [CriticalMedAlarmRouting.SnoozedDose] {
+        guard let data = defaults.data(forKey: Self.defaultsKey),
+              let doses = try? JSONDecoder().decode([CriticalMedAlarmRouting.SnoozedDose].self, from: data) else { return [] }
+        return doses
+    }
+
+    func note(_ dose: CriticalMedAlarmRouting.SnoozedDose) {
+        write(read().filter { $0.medicationId != dose.medicationId } + [dose])
+    }
+
+    /// Keeps only the records of `medicationIDs`.
+    func keep(_ medicationIDs: Set<String>) {
+        let current = read()
+        let kept = current.filter { medicationIDs.contains($0.medicationId) }
+        if kept != current { write(kept) }
+    }
+
+    func clear() {
+        defaults.removeObject(forKey: Self.defaultsKey)
+    }
+
+    private func write(_ doses: [CriticalMedAlarmRouting.SnoozedDose]) {
+        guard let data = try? JSONEncoder().encode(doses) else { return }
+        defaults.set(data, forKey: Self.defaultsKey)
     }
 }
 

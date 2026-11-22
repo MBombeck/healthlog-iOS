@@ -1,0 +1,30 @@
+# The layout-critical subset of the screenshot sweep, one test per line as
+# <class>/<method>. run-sweep-subset.sh turns each line into an -only-testing
+# selector and refuses a name that does not exist in HealthLogUITests, because
+# a wrong selector would run empty without failing.
+#
+# Coverage: Home, Insights overview and metric pages, Labs, Documents,
+# Medications, Settings, More, the measurement, mood and capture sheets, and
+# onboarding (the server step, which writes real pictures: a test that only
+# asserts would pass without photographing anything).
+QASweepScreenshotsTest/test_00_mainTabs
+QASweepScreenshotsTest/test_01_dashboardAndLog
+QASweepScreenshotsTest/test_02_medications
+QASweepScreenshotsTest/test_03_insightsPages
+QASweepScreenshotsTest/test_04_metricPages
+QASweepScreenshotsTest/test_05_moreSections
+QASweepScreenshotsTest/test_06_settings
+QASweepScreenshotsTest/test_07_share
+QASweepScreenshotsTest/test_14_areaTodayMeasurementsInsights
+QASweepScreenshotsTest/test_16a_areaMedications
+QASweepScreenshotsTest/test_16b_areaMoodAndMentalHealth
+QASweepScreenshotsTest/test_17a_settingsArea
+QASweepScreenshotsTest/test_17b_recordsArea
+QASweepScreenshotsTest/test_24a_metricPageEverything
+QASweepScreenshotsTest/test_24b_labDoc
+QASweepScreenshotsTest/test_24c_labReadingAndAdd
+QASweepScreenshotsTest/test_24d_documentIncomplete
+QASweepScreenshotsTest/test_25b_polishLabs
+QASweepScreenshotsTest/test_27_todayHero
+QASweepScreenshotsTest/test_33_insightsStructure
+OnboardingDraftUITest/testServerStepShots

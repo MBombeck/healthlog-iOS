@@ -6,15 +6,15 @@ import Foundation
 /// `cycle.disabled` (403) surface so a non-enabled account renders the disabled
 /// state instead of a hard error.
 ///
-/// Everything here stays dormant behind `FeatureFlag.cycleTracking` (the store +
-/// gate above it never call into the repo while the flag is off). No UI yet.
+/// The store and gate above it call into the repo only for a user
+/// ``CycleGate/isCycleTrackingAvailable`` admits.
 public actor CycleRepository {
     /// Module-internal so the split-out `CycleRepository+StartChanges` can send.
     let api: APIClientProtocol
     private let outbox: OutboxQueue
     private let encoder: JSONEncoder
     private let swr: SWRCoordinator?
-    /// #115 B6 — told when a queued period boundary reached the server, so the
+    /// Told when a queued period boundary reached the server, so the
     /// cycle screen refetches (the boundary can move, absorb or restore a start).
     private var onBoundaryReplayed: (@Sendable () async -> Void)?
     /// A boundary replayed before the sink was attached (a background drain
@@ -158,7 +158,7 @@ public actor CycleRepository {
     @discardableResult
     public func logDayLog(_ write: CycleDayLogWrite) async throws -> CycleDayLogDTO {
         let idempotencyKey = IdempotencyKey()
-        do {
+        return try await writeAhead(.logCycleDayLog, OutboxQueue.Payloads.LogCycleDayLog(write: write), idempotencyKey) { [self] in
             let req: APIRequest<CycleDayLogDTO> = try .post(
                 "/api/cycle/day-logs",
                 body: write,
@@ -167,68 +167,30 @@ public actor CycleRepository {
             let result = try await api.send(req)
             await invalidateTimeline()
             return result
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.logCycleDayLog, OutboxQueue.Payloads.LogCycleDayLog(write: write), idempotencyKey)
-            throw err
         }
     }
 
     /// Tri-state edit path. PATCH accepts explicit nulls while POST does not.
     /// Retriable failures preserve that exact PATCH shape in the Outbox.
-    @discardableResult
-    public func updateDayLog(id: String, patch: CycleDayLogPatch) async throws -> CycleDayLogDTO {
-        try await updateDayLogReportingStarts(id: id, patch: patch).dayLog
-    }
-
-    /// ``updateDayLog(id:patch:)`` with what the server reports beyond the row
-    /// (#137, v1.43): the cycle starts the edit gave back (`restored`).
+    /// Returns the row with what the server reports beyond it (#137, v1.43):
+    /// the cycle starts the edit gave back (`restored`).
     public func updateDayLogReportingStarts(id: String, patch: CycleDayLogPatch) async throws -> CycleDayLogPatchResult {
         let idempotencyKey = IdempotencyKey()
-        do {
-            return try await patchDayLog(id: id, patch: patch, idempotencyKey: idempotencyKey)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .updateCycleDayLog,
-                OutboxQueue.Payloads.UpdateCycleDayLog(id: id, patch: patch),
-                idempotencyKey
-            )
-            throw err
+        return try await writeAhead(
+            .updateCycleDayLog,
+            OutboxQueue.Payloads.UpdateCycleDayLog(id: id, patch: patch),
+            idempotencyKey
+        ) { [self] in
+            try await patchDayLog(id: id, patch: patch, idempotencyKey: idempotencyKey)
         }
-    }
-
-    /// `DELETE /api/cycle/day-logs/{id}` (soft). On retriable failure enqueue.
-    /// #137 — returns what the delete changed (v1.43); ``CycleDeleteOutcome/unchanged``
-    /// on an older server's 204.
-    @discardableResult
-    public func deleteDayLog(id: String) async throws -> CycleDeleteOutcome {
-        let idempotencyKey = IdempotencyKey()
-        do {
-            let outcome = try await deleteDayLogRequest(id: id, idempotencyKey: idempotencyKey)
-            await invalidateTimeline()
-            return outcome
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.deleteCycleDayLog, OutboxQueue.Payloads.DeleteCycleDayLog(id: id), idempotencyKey)
-            throw err
-        }
-    }
-
-    /// `DELETE /api/cycle/cycles/{id}` (soft). 204 with no body, also for a
-    /// cycle that is already deleted (v1.39). #137 — asks for the outcome with
-    /// `Prefer: return=representation` (v1.43 answers 200 with the starts the
-    /// delete gave back); 200 and 204 are both a successful delete.
-    @discardableResult
-    public func deleteCycle(id: String) async throws -> CycleDeleteOutcome {
-        let outcome = try await deleteReportingStarts("/api/cycle/cycles/\(id)", idempotencyKey: IdempotencyKey())
-        await invalidateTimeline()
-        return outcome
     }
 
     /// One-tap `POST /api/cycle/period`. On retriable failure enqueue.
-    /// #137 — returns the answer's `absorbed` start (v1.43; `nil` before).
+    /// Returns the answer's `absorbed` start (v1.43; `nil` before).
     @discardableResult
     public func period(_ request: CyclePeriodRequest) async throws -> CyclePeriodOutcome {
         let idempotencyKey = IdempotencyKey()
-        do {
+        return try await writeAhead(.cyclePeriod, OutboxQueue.Payloads.CyclePeriod(request: request), idempotencyKey) { [self] in
             let req: APIRequest<CyclePeriodOutcome> = try .post(
                 "/api/cycle/period",
                 body: request,
@@ -237,9 +199,6 @@ public actor CycleRepository {
             let outcome = try await api.send(req)
             await invalidateTimeline()
             return outcome
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.cyclePeriod, OutboxQueue.Payloads.CyclePeriod(request: request), idempotencyKey)
-            throw err
         }
     }
 
@@ -292,7 +251,7 @@ public actor CycleRepository {
         await swr?.invalidate([.cycleInsights])
     }
 
-    // MARK: - The stored verdict (Z1 / #72)
+    // MARK: - The stored verdict
 
     /// Persist the last server-resolved verdict so an offline start can show the
     /// last known assessment WITH its date instead of computing a fresh one on a
@@ -355,7 +314,7 @@ public actor CycleRepository {
         // Drain through the bulk endpoint (single entry) — the externalId UPSERT
         // makes a doubly-delivered replay idempotent server-side.
         let response = try await bulk([write], idempotencyKey: IdempotencyKey(raw: idempotencyKey))
-        // #115 / 0.3 — HTTP 200 is not storage. The route answers a failed
+        // HTTP 200 is not storage. The route answers a failed
         // write with `skipped` + `upsert_failed` | `constraint` (day-logs/bulk
         // at v1.39.0); draining the row then lost a day whose HealthKit anchor
         // had already moved. Only a stored row, or the one verdict a retry can
@@ -388,7 +347,7 @@ public actor CycleRepository {
             idempotencyKey: IdempotencyKey(raw: idempotencyKey)
         )
         _ = try await api.send(req)
-        // #115 B6 — the live path refreshes the calendar after a boundary; the
+        // The live path refreshes the calendar after a boundary; the
         // replay did not, so an offline start or end stayed invisible (or the
         // optimistic guess stayed on screen) until the next manual refresh.
         await invalidateTimeline()
@@ -448,10 +407,10 @@ public actor CycleRepository {
         return outcome
     }
 
-    /// **Phase 07 / plan 07-06 — the durable landing place for an imported
+    /// **The durable landing place for an imported
     /// day-log the server did not terminally accept.**
     ///
-    /// Two things separate it from the private `enqueue` above, and both are the
+    /// Two things separate it from the private `writeAhead` helper below, and both are the
     /// point. It is **owner-bound**: the row is stamped with, and validated
     /// against, the account the importer was admitted for, so a write captured
     /// under A can never be replayed under B. And it **throws when the durable
@@ -475,12 +434,18 @@ public actor CycleRepository {
         )
     }
 
-    private func enqueue(_ kind: OutboxQueue.Operation.Kind, _ payload: some Encodable & Sendable, _ key: IdempotencyKey) async throws {
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
+        _ kind: OutboxQueue.Operation.Kind,
+        _ payload: some Encodable & Sendable,
+        _ key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
         let data = try encoder.encode(payload)
-        do {
-            try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
-        } catch {
-            HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-        }
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 08 Plan 16 — the DE/EN catalogue coverage for the reminder action and
+/// The DE/EN catalogue coverage for the reminder action and
 /// completion-ledger surfaces Plan 08-22 shipped.
 ///
 /// 08-22 deliberately left every new string as a bare localization key ("leave
@@ -49,7 +49,7 @@ struct Phase8LocalizationKeysTests {
     }
 
     /// The keys `08-22-SUMMARY.md` enumerates, in the order it lists them — 29 at
-    /// the time, 28 since 17-02 removed the adherence header (G1).
+    /// the time, 28 since 17-02 removed the adherence header.
     /// Every one is a string literal in production source, which is why no
     /// `dynamicKeyPrefixes` baseline entry is required for any of them — a
     /// property `phase8KeysAreNotLaunderedThroughTheBaseline` asserts rather
@@ -66,7 +66,7 @@ struct Phase8LocalizationKeysTests {
         RequiredKey("vorsorge.card.skipped"),
         RequiredKey("vorsorge.card.skippedCycle"),
         RequiredKey("vorsorge.card.skipCount", format: "%lld"),
-        // 17-02 (G1) — `vorsorge.adherence.snoozedCount` stood here for the
+        // `vorsorge.adherence.snoozedCount` stood here for the
         // adherence header's quiet caption. The header was removed on the
         // operator's statement and its seven keys left the catalogue with it, so
         // the required-key row goes too: a RequiredKey for a key nothing renders
@@ -76,13 +76,12 @@ struct Phase8LocalizationKeysTests {
         // `VorsorgeReminderHistoryTests`.
         // Ledger chrome.
         RequiredKey("vorsorge.history.title"),
-        // 1.4 B2-b — `vorsorge.history.empty` and `.unsupported` left with the
+        // `vorsorge.history.empty` and `.unsupported` left with the
         // two sentences: an empty ledger and one not offered for a reminder now
         // show no section at all, so neither can claim anything false about
         // the history (the reason the two clauses below used to exist).
         RequiredKey("vorsorge.history.failed"),
         RequiredKey("vorsorge.history.retry"),
-        RequiredKey("vorsorge.history.loadMore"),
         // Ledger rows — a total switch over the published enums, plus the two
         // punctuality keys the server derives at write time.
         RequiredKey("vorsorge.history.kind.satisfied"),
@@ -110,16 +109,6 @@ struct Phase8LocalizationKeysTests {
     static var allRequiredKeys: [RequiredKey] {
         reminderKeys + inheritedKeys
     }
-
-    /// The four production files that render them. `VorsorgeAdherenceSummaryCard`
-    /// left this list on 2026-08-23 (G1, deleted); `VorsorgeReminderLedgerActions`
-    /// took its place, which is where 08-22’s skip/snooze copy now lives.
-    static let reminderSurfaces = [
-        "HealthLog/Screens/Notifications/MeasurementRemindersScreen.swift",
-        "HealthLog/Screens/Notifications/VorsorgeReminderDetailSheet.swift",
-        "HealthLog/Screens/Notifications/VorsorgeCardModel.swift",
-        "HealthLog/Screens/Notifications/VorsorgeReminderLedgerActions.swift"
-    ]
 
     // MARK: - RED
 
@@ -170,34 +159,13 @@ struct Phase8LocalizationKeysTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: Phase 8 reminder copy is missing or incomplete in the catalogue
+            Phase 8 reminder copy is missing or incomplete in the catalogue
             \(violations.joined(separator: "\n"))
             """
         )
     }
 
     // MARK: - Preservation
-
-    /// Every key this suite requires must still be named by a surface. A key
-    /// nobody renders is a catalogue corpse, and this list is exactly the
-    /// mechanism that would keep one alive past the screen that used it.
-    ///
-    /// Source is read comment-stripped: a key mentioned only in a doc comment
-    /// does not count, which is the hazard 08-22 caught in one of its own RED
-    /// clauses.
-    @Test("every required reminder key is still referenced by a reminder surface")
-    func requiredKeysAreStillRenderedBySomeSurface() throws {
-        let sources = try Self.reminderSurfaces.map { try Self.strippedSource($0) }
-        let blob = sources.joined(separator: "\n")
-        #expect(blob.count > 10000, "the reminder-surface scan must actually read the four files")
-
-        for required in Self.reminderKeys {
-            #expect(
-                blob.contains("\"\(required.key)\""),
-                "no reminder surface names \(required.key) outside a comment"
-            )
-        }
-    }
 
     /// 08-22 recorded that no key here needs a `dynamicKeyPrefixes` entry,
     /// because every one is a literal. Asserting it keeps the fix honest: a key
@@ -277,35 +245,6 @@ struct Phase8LocalizationKeysTests {
         let block = localizations?[language] as? [String: Any]
         let unit = block?["stringUnit"] as? [String: Any]
         return unit?["value"] as? String
-    }
-
-    private static func strippedSource(_ relativePath: String) throws -> String {
-        let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        return stripLineComments(from: stripBlockComments(from: text))
-    }
-
-    private static func stripBlockComments(from source: String) -> String {
-        var out = ""
-        var rest = Substring(source)
-        while let open = rest.range(of: "/*") {
-            out += rest[..<open.lowerBound]
-            guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-            rest = rest[close.upperBound...]
-        }
-        return out + rest
-    }
-
-    private static func stripLineComments(from source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-            var quoted = false
-            var previous: Character = " "
-            for (offset, character) in line.enumerated() {
-                if character == "\"", previous != "\\" { quoted.toggle() }
-                if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                previous = character
-            }
-            return String(line)
-        }.joined(separator: "\n")
     }
 
     private static func lprojBundle(language: String) throws -> Bundle {

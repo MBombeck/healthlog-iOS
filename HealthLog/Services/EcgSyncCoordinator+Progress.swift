@@ -1,6 +1,6 @@
 import Foundation
 
-// S2 (#115) — the ECG sweep's upload loop: newest first, confirmed recordings
+// The ECG sweep's upload loop: newest first, confirmed recordings
 // skipped, 429 waits sat out inside the sweep's pause budget. Split out of
 // `EcgSyncCoordinator.swift` under the `PROJECT_GUIDE.md` file budget; the
 // pieces it uses live in `EcgSyncProgress.swift`.

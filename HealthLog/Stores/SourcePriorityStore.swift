@@ -1,16 +1,16 @@
 import Foundation
 import Observation
 
-/// v0.5.3-F3 — `@Observable` wrapper über `SourcePriorityRepository`.
+/// `@Observable` wrapper über `SourcePriorityRepository`.
 ///
 /// Treibt die Read-Only-Anzeige der per-User-Source-Priority-Leiter unter
 /// `SettingsSourcesScreen` **plus** den vollen Editor unter
-/// `SourcePriorityEditorScreen` (v0.5.4-SP4).
+/// `SourcePriorityEditorScreen`.
 ///
 /// **Cache-Verhalten:** Repo-seitig 5min TTL, nach `update(_:)` wird der
 /// Server-Echo zurückgespielt. Für die Read-Only-Variante reicht `load()`.
 ///
-/// **Write-Pfad (v0.5.4-SP4):**
+/// **Write-Pfad:**
 ///   - `updateLadder(forMetric:to:)` mutiert die nested `metricPriority`-Map
 ///     plus den flachen W5e-Alias optimistisch, schiebt den PUT raus, rollt
 ///     bei Server-Fehler auf den vorigen Snapshot zurück.
@@ -55,7 +55,7 @@ public final class SourcePriorityStore {
         isSaving = false
     }
 
-    // MARK: - Editor write path (v0.5.4-SP4)
+    // MARK: - Editor write path
 
     /// Optimistisch eine einzelne Metric-Ladder ersetzen. Rollback bei
     /// Server-Fehler. Returns `true` bei Erfolg — Caller kann das nutzen,
@@ -152,8 +152,8 @@ public final class SourcePriorityStore {
         "skinTemperature",
         "vo2Max",
         "recovery",
-        // Build 2 / 2.6 — the last two web keys iOS never picked up (web had
-        // 19, iOS 17). `stress` landed server-side in v1.18.10 (I-5),
+        // The last two web keys iOS never picked up (web had
+        // 19, iOS 17). `stress` landed server-side in v1.18.10,
         // `sleepDebt` in v1.25.0; both are native-vs-computed ladders.
         "stress",
         "sleepDebt"
@@ -161,7 +161,7 @@ public final class SourcePriorityStore {
 
     /// Maps a wire metric-key (`steps`, `weight`, …) to its String-Catalog
     /// key; the screen renders it through `LocalizedStringKey`. Single source
-    /// of truth for the read-only view + snapshot tests. L1 — six entries were
+    /// of truth for the read-only view + snapshot tests. Six entries were
     /// German words, which are no catalog keys and rendered German in the
     /// English UI. Dictionary-driven so SwiftLint's cyclomatic-
     /// complexity ceiling stays out of the picture as the list grows.
@@ -253,7 +253,7 @@ public final class SourcePriorityStore {
     /// v1.47.0). An older one refuses a saved ladder that names it.
     static let garminLadderMinimumServerVersion = "1.47.0"
 
-    /// POLISH-C (C5) — the tokens the editor offers: the canonical set, plus
+    /// The tokens the editor offers: the canonical set, plus
     /// `GARMIN` after `POLAR` on a server known to be at least
     /// ``garminLadderMinimumServerVersion`` (unknown counts as older).
     public static func offeredSourceTokens(defaults: UserDefaults = .standard) -> [String] {

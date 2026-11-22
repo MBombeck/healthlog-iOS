@@ -25,7 +25,7 @@ struct DailyBriefingStoreTests {
     @MainActor
     func directFetchHappyPath() async {
         let (api, _) = makeAPIClient()
-        // CU-07: the handler is process-global, so an in-handler `#expect` fires
+        // The handler is process-global, so an in-handler `#expect` fires
         // on a PARALLEL suite's request too. Record OUR namespace and assert
         // afterwards instead — same claim, no dependence on the schedule.
         nonisolated(unsafe) var insightsPaths: [String] = []
@@ -56,7 +56,7 @@ struct DailyBriefingStoreTests {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var capturedBody: Data?
         MockURLProtocol.install { request in
-            // CU-07: record only OUR route — the handler is process-global.
+            // Record only OUR route — the handler is process-global.
             if request.targets("/api/insights/generate") { capturedBody = request.bodyBytes() }
             return (Self.ok(request), Self.wrap(Self.successJSON))
         }
@@ -74,7 +74,7 @@ struct DailyBriefingStoreTests {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var callCount = 0
         MockURLProtocol.install { request in
-            // CU-07: only OUR route advances the phase machine.
+            // Only OUR route advances the phase machine.
             if request.targets("/api/insights/generate") { callCount += 1 }
             if callCount == 1 {
                 return (Self.ok(request), Self.wrap(Self.successJSON))
@@ -142,7 +142,7 @@ struct DailyBriefingStoreTests {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
         MockURLProtocol.install { request in
-            // CU-07: `requestCount == 0` is only an assertion about the consent
+            // `requestCount == 0` is only an assertion about the consent
             // gate if a parallel suite's request cannot raise it.
             if request.targets(prefixedBy: "/api/insights") { requestCount += 1 }
             return (Self.ok(request), Self.wrap(Self.successJSON))
@@ -170,7 +170,7 @@ struct DailyBriefingStoreTests {
         let (api, _) = makeAPIClient()
         nonisolated(unsafe) var requestCount = 0
         MockURLProtocol.install { request in
-            // CU-07: `requestCount == 0` is only an assertion about the consent
+            // `requestCount == 0` is only an assertion about the consent
             // gate if a parallel suite's request cannot raise it.
             if request.targets(prefixedBy: "/api/insights") { requestCount += 1 }
             return (Self.ok(request), Self.wrap(Self.successJSON))
@@ -184,7 +184,7 @@ struct DailyBriefingStoreTests {
         #expect(requestCount == 0)
     }
 
-    // MARK: - v1.16.x snapshot briefing slot (GH issue #15)
+    // MARK: - v1.16.x snapshot briefing slot
 
     @Test("Stale snapshot slot feeds briefing + staleBriefingAsOf even when gated")
     @MainActor

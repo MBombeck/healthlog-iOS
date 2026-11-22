@@ -181,7 +181,7 @@ struct MedicationInventoryGenericTests {
         #expect(seeded.isEmpty)
     }
 
-    // MARK: - W-INVENTORY — corrupt supply renders "—", never a fake 0 / number
+    // MARK: - Corrupt supply renders "—", never a fake 0 / number
 
     // Supersedes the W-B187 clamp-to-0 doctrine: the operator brief forbids
     // silently guessing 0. A corrupt value is preserved through decode (only a

@@ -123,7 +123,8 @@ final class MarketingScreenshotsTest: XCTestCase {
         // after the Share screen was scrolled to its end sends SwiftUI into a
         // layout loop (main thread at 100 %, UI queries time out). An app bug,
         // reported with the v3 shots; the capture order simply avoids it.
-        let insightsTab = app.buttons["Insights"]
+        // Tab labels are localized (Insights / Inzichten).
+        let insightsTab = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Insights", "Inzichten")).firstMatch
         if insightsTab.waitForExistence(timeout: 10) {
             insightsTab.tap()
             _ = app.staticTexts["insights.page.header.title.overview"].waitForExistence(timeout: 20)
@@ -151,7 +152,7 @@ final class MarketingScreenshotsTest: XCTestCase {
     /// note) when the screen cannot be reached.
     private func openUnifiedSharing(app: XCUIApplication) -> Bool {
         dismissSystemHealthSheet()
-        let moreTab = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "More", "Mehr")).firstMatch
+        let moreTab = app.buttons.matching(NSPredicate(format: "label IN %@", ["More", "Mehr", "Meer", "Más"])).firstMatch
         guard moreTab.waitForExistence(timeout: 10) else {
             logSkip("More tab not reachable — unified sharing not captured")
             return false
@@ -247,11 +248,11 @@ final class MarketingScreenshotsTest: XCTestCase {
 
     // MARK: - Boot
 
-    /// W-HERMETIC-E2E (v0152) — network-free hermetic boot with deterministic
+    /// Network-free hermetic boot with deterministic
     /// English locale for the marketing captures. Fixture data (greeting +
     /// tiles) renders the hero surfaces without the live demo tenant.
     ///
-    /// D-12-12-B — the "Connect Apple Health" banner cannot be dismissed by
+    /// The "Connect Apple Health" banner cannot be dismissed by
     /// identifier: `.accessibilityElement(children: .combine)` merges the
     /// banner's two buttons into one node, so the old
     /// `healthkitConnectBanner.dismissButton` tap silently no-oped and the
@@ -291,7 +292,7 @@ final class MarketingScreenshotsTest: XCTestCase {
     ///
     /// Marketing shots ship in DARK mode (operator spec, second pass): the
     /// app is dark-first — `SettingsStore` defaults to `.dark` and re-asserts
-    /// dark once per install (v0.14.7) — so the captures let the app be what
+    /// dark once per install — so the captures let the app be what
     /// it is and set no appearance override at all.
     func bootMarketingApp(extraArguments overlays: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
@@ -301,7 +302,7 @@ final class MarketingScreenshotsTest: XCTestCase {
             "-hl.healthkit.requestedAt.hermetic-user", "true",
             "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
         ] + overlays
-        // 1.4 B4-z — `TEST_RUNNER_HL_MARKETING_APPEARANCE=light` for the light
+        // `TEST_RUNNER_HL_MARKETING_APPEARANCE=light` for the light
         // review set; the App Store motifs keep the app's dark default.
         if ProcessInfo.processInfo.environment["HL_MARKETING_APPEARANCE"] == "light" {
             extraArguments += HermeticAppearance.lightArguments
@@ -327,7 +328,7 @@ final class MarketingScreenshotsTest: XCTestCase {
         )
         dismissDisclaimerAck(app: app)
         dismissAIConsentSheet(app: app)
-        // D-12-12-B — verify the launch-argument suppression actually held.
+        // Verify the launch-argument suppression actually held.
         // The banner is ONE merged accessibility node whose identifier is
         // `…connectButton-…dismissButton`-shaped, so match on the shared prefix
         // (the same robust query 12-12's audit precondition uses). Soft by

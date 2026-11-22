@@ -1,15 +1,15 @@
 import Foundation
 import Observation
 
-/// **v0.10.0 W-Mood-B — owns the "Mit Apple Health synchronisieren" toggle.**
+/// **Owns the "Mit Apple Health synchronisieren" toggle.**
 ///
 /// **16-03 / decision E2 (operator, 2026-08-22): "EKG und Stimmung wandern in
 /// das erste HealthKit-Sheet."** The State-of-Mind type is now a member of
 /// `defaultReadTypes` and `defaultWriteTypes`, so a completed onboarding grant
 /// switches this on through ``adoptFirstSheetGrant()`` — no second system sheet,
 /// and no trip to the Einstellungen → Apple Health drawer the operator called
-/// unauffindbar (J1). Mood sync is device-local end to end, so unlike the ECG
-/// upload it is activated on every install, standalone included.
+/// unauffindbar. Mood sync is device-local end to end, so unlike the ECG
+/// upload it is activated on every install.
 ///
 /// ``setEnabled(_:)`` keeps its old shape and is now the recovery path: a user
 /// who declined the first sheet and later flips the toggle gets the dedicated
@@ -116,7 +116,7 @@ public final class MoodHealthSyncStore {
 
     /// Reset Apple-Health mood sync on logout / user-change.
     ///
-    /// **v0.10.0 W10 M2 — force the toggle OFF + reset the per-user import
+    /// **Force the toggle OFF + reset the per-user import
     /// anchor.** Previously this only stopped the importer and left the
     /// device-local pref `true`, so a *different* user signing in on the same
     /// device re-activated the importer against a `nil` (per-user) anchor — and

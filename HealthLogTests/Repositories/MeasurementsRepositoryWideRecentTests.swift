@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.14.4 D2 — pins the data source the broadened `MeasurementListScreen`
+/// Pins the data source the broadened `MeasurementListScreen`
 /// fallback relies on. For a NON-series kind (`kindSupportsSeries == false`,
 /// e.g. `.fatMass`/`.activeEnergy`/`.bmi`) the `/series` synthesis can't help —
 /// the list now retries a WIDE `recent(kind:limit:)` so a long-dormant or

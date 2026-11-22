@@ -11,10 +11,9 @@ import Testing
 /// "Primitive #2 — HLRing". Die Funktion ist als pure `static` extrahiert,
 /// damit hier ohne SwiftUI-Host getestet werden kann.
 ///
-/// Cross-screen consistency: jeder Ring app-wide (`HealthScoreTile` 92 pt,
-/// `ComplianceRingCard` 92 pt, hypothetische 60 pt Activity-Mini-Rings, 140 pt
-/// Hero-Variante) bezieht seine Linienstärke aus dieser einen Quelle — bricht
-/// dieser Test, bricht das Rhythm-Gefühl auf allen Surfaces gleichzeitig.
+/// Cross-screen consistency: jeder Ring app-wide (`ComplianceRingCard` 92 pt,
+/// hypothetische 60 pt Activity-Mini-Rings, 140 pt Hero-Variante) bezieht
+/// seine Linienstärke aus dieser einen Quelle — bricht dieser Test, bricht das Rhythm-Gefühl auf allen Surfaces gleichzeitig.
 @Suite("HLRing stroke derivation contract")
 struct HLRingStrokeTests {
     @Test("60 pt ring clamps to 6 pt floor (rohwert 5.1 → floor)")
@@ -28,8 +27,8 @@ struct HLRingStrokeTests {
 
     @Test("92 pt ring → ~7.82 pt stroke (HealthScore + Compliance)")
     func tileRing() {
-        // Beide produktiven Callsites (`HealthScoreLoaded`, `ComplianceRingCard`)
-        // setzen `.frame(width: 92, height: 92)` — dieser Test sichert genau
+        // Der produktive Callsite (`ComplianceRingCard`) setzt
+        // `.frame(width: 92, height: 92)` — dieser Test sichert genau
         // den Wert, den der Operator auf seinem iPhone sieht.
         let stroke = HLRing.derivedStroke(forSide: 92)
         #expect(abs(stroke - 7.82) < 0.01)

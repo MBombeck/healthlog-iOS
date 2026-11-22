@@ -26,17 +26,16 @@ struct NtfyChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        // 1.4 B2 — the fields name what to enter; no footer repeats them.
-        HLSettingsCard(icon: "server.rack", title: "notifications.ntfy.title") {
-            Toggle(isOn: $enabled) {
-                Text("notifications.ntfy.enable")
-                    .font(.hlSubhead.weight(.semibold))
-            }
-            .accessibilityIdentifier("notifications.ntfy.enableToggle")
+        // The fields name what to enter; no footer repeats them.
+        HLCard("notifications.ntfy.title") {
+            HLSettingsToggleRow(
+                title: "notifications.ntfy.enable",
+                description: nil,
+                isOn: $enabled,
+                accessibilityID: "notifications.ntfy.enableToggle"
+            )
 
             if enabled {
-                Divider().opacity(0.5)
-
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     Text("notifications.ntfy.server")
                         .font(.hlCaption)
@@ -70,37 +69,34 @@ struct NtfyChannelCard: View {
 
                 if let invalid = validationMessage {
                     Text(invalid)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLColor.statusBad)
+                        .hlText(.rowStatus, status: HLColor.statusBad)
                         .accessibilityIdentifier("notifications.ntfy.validation")
                 }
             }
 
-            HLButton(
-                String(localized: "notifications.channel.save"),
-                variant: .secondary,
-                isLoading: store.ntfyWorking
-            ) {
-                Task { await save() }
-            }
-            .disabled(store.ntfyWorking || validationMessage != nil)
-            .accessibilityIdentifier("notifications.ntfy.saveButton")
-
+            // Save and test belong together: one pair, save as the main
+            // action; without a channel to test, save stands alone.
             if enabled {
-                HLButton(
-                    String(localized: "notifications.channel.test"),
-                    icon: "paperplane",
-                    // UI-Standard R9 (U6) — „Verbindung testen" ist überall
-                    // `.secondary`; „Speichern" darüber ebenso, weil auf
-                    // „Benachrichtigungen" mehrere Kanal-Karten nebeneinander
-                    // stehen und höchstens ein `.primary` pro Screen erlaubt ist.
-                    variant: .secondary,
-                    isLoading: store.ntfyWorking
-                ) {
-                    Task { await test() }
+                HLButtonPair {
+                    saveButton
+                } secondary: {
+                    HLButton(
+                        "notifications.channel.test",
+                        systemImage: "paperplane",
+                        // UI-Standard R9 — „Verbindung testen" ist überall
+                        // `.secondary`; „Speichern" darüber ebenso, weil auf
+                        // „Benachrichtigungen" mehrere Kanal-Karten nebeneinander
+                        // stehen und höchstens ein `.primary` pro Screen erlaubt ist.
+                        variant: .secondary,
+                        isLoading: store.ntfyWorking
+                    ) {
+                        Task { await test() }
+                    }
+                    .disabled(store.ntfyWorking)
+                    .accessibilityIdentifier("notifications.ntfy.testButton")
                 }
-                .disabled(store.ntfyWorking)
-                .accessibilityIdentifier("notifications.ntfy.testButton")
+            } else {
+                saveButton
             }
 
             if store.ntfyTestSucceeded {
@@ -112,10 +108,9 @@ struct NtfyChannelCard: View {
             }
 
             if let error = store.ntfyError {
-                // v0.14.1 #3 — generic copy for 5xx; never raw server text.
+                // Generic copy for 5xx; never raw server text.
                 Text(error.userFacingDescription)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLColor.statusBad)
+                    .hlText(.rowStatus, status: HLColor.statusBad)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("notifications.ntfy.error")
             }
@@ -123,6 +118,18 @@ struct NtfyChannelCard: View {
         .onAppear { hydrate() }
         .onChange(of: store.ntfy) { _, _ in hydrate() }
         .sensoryFeedback(.success, trigger: testTick)
+    }
+
+    private var saveButton: some View {
+        HLButton(
+            "notifications.channel.save",
+            variant: .secondary,
+            isLoading: store.ntfyWorking
+        ) {
+            Task { await save() }
+        }
+        .disabled(store.ntfyWorking || validationMessage != nil)
+        .accessibilityIdentifier("notifications.ntfy.saveButton")
     }
 
     // MARK: - Derived
@@ -152,8 +159,7 @@ struct NtfyChannelCard: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.primary)
             Text("notifications.channel.test.sent")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowStatus)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)

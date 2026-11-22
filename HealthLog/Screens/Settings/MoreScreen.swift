@@ -20,21 +20,22 @@ import SwiftUI
 ///   provides the navigation container per tab.
 struct MoreScreen: View {
     @Environment(AppRouter.self) private var router
-    /// v0.14.8 C5 — read the cycle gate so the women-only "Cycle" content row is
-    /// only ever built when `CycleGate.isCycleTrackingAvailable` (hard-gated
-    /// behind `FeatureFlag.cycleTracking`). An ineligible / opted-out user never
+    /// Read the cycle gate so the women-only "Cycle" content row is
+    /// only ever built when `CycleGate.isCycleTrackingAvailable`. An ineligible / opted-out user never
     /// sees the row, so `CycleScreen` is unreachable for them by construction.
     /// 1.0.3 (Task 4b) — widened from `private` to internal: `clinicalSectionRows`
     /// in `MoreScreen+ClinicalSection.swift` reads this from a sibling file.
     @Environment(\.appContainer) var container
+    /// The server version the last probe recorded: the timeline row needs 1.42.
+    @AppStorage(KnownServerVersion.defaultsKey) private var serverVersion: String?
 
-    // v0.5.5 / v0.14.8 — the gear and the share glyph in `MoreHeader` are plain
+    // The gear and the share glyph in the tab header are plain
     // `Button`s (no `NavigationLink`, no chevron). #153 follow-up
     // (SET-ROUTE): they append a value to `router.morePath` instead of flipping
     // local `@State`, so the pushed page survives the privacy shield, which
     // rebuilds the window whenever the scene goes inactive.
 
-    // v0.6.1.10 Y9-C — Sicherheit section relocated to SettingsScreen
+    // Sicherheit section relocated to SettingsScreen
     // per operator walkthrough on 2026-05-23: "Abmelden und Konto
     // löschen gehört unter Einstellungen, nicht unter Mehr." The Y5
     // grouping intent (single section, two rows) is preserved; only
@@ -42,200 +43,126 @@ struct MoreScreen: View {
     // confirmation sheet — SettingsScreen does.
 
     var body: some View {
-        // v0.11 IA — the orphan `MoreRoute.mood` typed-route destination was
+        // The orphan `MoreRoute.mood` typed-route destination was
         // removed (no UI row reached it; the live mood deep-link routes to
         // quick-entry). Mood logging lives on Erfassen; mood analysis/history
         // moved to Insights, so the former More→Stimmung row was dropped.
         @Bindable var router = router
         return NavigationStack(path: $router.morePath) {
             content
-                // #153 follow-up (SET-ROUTE) — the Settings hub rows push
-                // their `HubRow` as a value, so the stack in the container's
-                // router remembers them across the privacy shield.
-                .navigationDestination(for: HubRow.self) { row in
-                    row.destination
-                }
-                // The rows of this list and the header share glyph, as values
-                // for the same reason (`MoreRoute`).
-                .navigationDestination(for: MoreRoute.self) { route in
-                    moreDestination(route)
-                }
-                // v0.12 W0-1 — typed deep-link destinations on the Mehr stack.
-                // The router appends these to `morePath` for
-                // `healthlog://personal-records/<id>` and
-                // `healthlog://settings/notifications`; before this they
-                // dead-ended because no `navigationDestination` consumed them.
-                .navigationDestination(for: PersonalRecordRoute.self) { _ in
-                    // No per-record detail screen exists — personal records
-                    // live in the `PersonalRecordsScreen` list (hero + grid +
-                    // streak rail). Land the operator there; the id is
-                    // preserved on the route for a future record-detail surface.
-                    PersonalRecordsScreen()
-                }
-                // #42 (v1.27.6) — typed destination for the mental-health
-                // check-in. The router appends `MentalWellbeingRoute` to
-                // `morePath` when a screening reminder (PHQ9/GAD7/WHO5) is
-                // actioned, so a derived screening score routes to the self-check
-                // surface instead of a numeric capture form. Same stack the More
-                // NavigationLink to `MentalWellbeingScreen` uses.
-                .navigationDestination(for: MentalWellbeingRoute.self) { _ in
-                    MentalWellbeingScreen()
-                }
-                // Parity 1.10 — the dead-tap safety net's landing surface. A
-                // dashboard tile whose `MetricKind` has no Insights slug used to
-                // do nothing at all when tapped; `AppRouter.selectInsightsMetric`
-                // now pushes `MeasurementListRoute` here instead, which is the
-                // very same values table the Messwerte row below reaches.
-                .navigationDestination(for: MeasurementListRoute.self) { route in
-                    MeasurementListScreen(kind: route.kind)
-                }
-                .navigationDestination(for: SettingsRoute.self) { route in
-                    switch route {
-                    case .root:
-                        SettingsScreen()
-                    case .notifications:
-                        // Same destination the Settings hub row pushes
-                        // (`HubRow.notifications`). The router pushes
-                        // `.root` THEN `.notifications` so the back stack is
-                        // Mehr → Settings → Notifications.
-                        SettingsNotificationsScreen()
-                    case .assistant:
-                        // v0.14.1 — Settings → Assistant hub. The router pushes
-                        // `.root` THEN `.assistant` (`requestSettingsAssistant()`)
-                        // so the Coach's "External AI needs a server provider"
-                        // CTA lands the operator where the provider/BYO key is
-                        // configured. Same screen the Settings hub `.ai` row pushes.
-                        SettingsAIScreen()
-                    case .integrations:
-                        // Web-parity `TodayHero` — Settings → Integrations. The
-                        // router pushes `.root` THEN `.integrations`
-                        // (`requestSettingsIntegrations()`) so the daily-digest
-                        // rail's `sync.reconnect` action lands where a broken
-                        // integration is reconnected. Same screen the Settings hub
-                        // integrations row pushes.
-                        SettingsIntegrationsScreen()
-                    case .appleHealthImport:
-                        // CU-37 — Settings → Integrationen → Apple-Health-Import.
-                        // The router pushes `.root` THEN `.integrations` THEN
-                        // this (`requestAppleHealthImport()`), so the ECG empty
-                        // state's "archive import" affordance lands on the one
-                        // surface that can actually get an ECG into HealthLog,
-                        // with the real IA behind the back button. Same screen
-                        // the Apple-Health integration detail row pushes.
-                        SettingsAppleHealthImportScreen()
-                    case .appleHealthDetail:
-                        // GH #74 — Settings → Integrationen → Apple Health. The
-                        // router pushes `.root` THEN `.integrations` THEN this
-                        // (`requestAppleHealthSettings()`), so the ECG empty
-                        // state's "turn the upload on" affordance lands on the
-                        // switch itself, with the real IA behind the back
-                        // button. Same screen the Integrations list row pushes.
-                        AppleHealthIntegrationDetailScreen()
-                    case .security:
-                        // #141 — a security alert's push lands here, the same
-                        // screen Account pushes. POLISH-C (C2) — on the More
-                        // stack its rows push values.
-                        SettingsSecurityScreen(routesByValue: true)
-                    case .checkups:
-                        // #141 — the push path `/checkups`: Vorsorge, the
-                        // same screen the clinical-spine row links to.
-                        MeasurementRemindersScreen()
-                    case .cycle:
-                        // #141 — the push path `/cycle`, the same screen the
-                        // cycle row links to.
-                        CycleScreen()
-                    case .serverAccessHeaders:
-                        // #153 follow-up — Settings › Server › Access
-                        // headers, pushed as a value by `SettingsServerScreen`.
-                        ServerAccessHeadersScreen()
-                    case .sessions:
-                        SessionsScreen()
-                    case .passkeys:
-                        PasskeyManagementScreen()
-                    case .twoFactor:
-                        TwoFactorManagementScreen()
-                    case let .integration(provider):
-                        IntegrationRouteDestination(route: provider)
-                    }
-                }
+                // The screens behind every More value live in
+                // `hlMoreDestinations()`, shared with the sidebar section stacks.
+                .hlMoreDestinations()
         }
     }
 
-    /// #153 follow-up (SET-ROUTE) — the screen behind each `MoreRoute`
-    /// value. The rows push values instead of views so the page they open comes
-    /// back after the privacy shield rebuilt the window.
-    @ViewBuilder
-    func moreDestination(_ route: MoreRoute) -> some View {
-        switch route {
-        case .shareWithDoctor: UnifiedSharingScreen()
-        case .aboutMe, .lifeCircumstances: AboutMeRouteDestination(route: route)
-        case .labs: LabsScreen()
-        case .illness: IllnessJournalScreen()
-        case .documents: DocumentsScreen()
-        case .nutrients: NutrientListScreen()
-        case .environment: EnvironmentScreen()
-        case .medicalSources: MedicalSourcesScreen()
-        case .personalRecords: PersonalRecordsScreen()
-        case .achievements: AchievementsScreen()
-        case .workouts: WorkoutsScreen()
-        case .measurements: MeasurementsPickerScreen()
+    /// Whether the list carries the row for `destination`. On a regular-width
+    /// window a destination with its own sidebar tab is reached there, so More
+    /// lists only what stays here. Compact lists every row, as always.
+    func listsRow(for destination: SidebarDestination) -> Bool {
+        Self.listsRow(for: destination, in: router.shellLayout)
+    }
+
+    /// The rule behind ``listsRow(for:)``: a row stays in More unless its
+    /// destination is a sidebar tab in `layout`. The row's own module gate is
+    /// checked where the row is built.
+    static func listsRow(for destination: SidebarDestination, in layout: ShellLayout) -> Bool {
+        !layout.visibleSections.contains(destination)
+    }
+
+    /// The share glyph (when the doctor report module is on) and the gear.
+    private var barActions: HLTabHeaderActions {
+        var items: [HLTabHeaderAction] = []
+        if container?.moduleGate.isEnabled(.doctorReport) != false {
+            items.append(HLTabHeaderAction(
+                role: .share,
+                systemImage: "square.and.arrow.up",
+                label: LocalizedStringKey(Layout.shareToolbarAccessibilityLabel),
+                identifier: Layout.shareToolbarAccessibilityIdentifier,
+                isSelected: false,
+                kind: .button { router.morePath.append(MoreRoute.shareWithDoctor) }
+            ))
         }
+        items.append(HLTabHeaderAction(
+            role: .more,
+            systemImage: "gearshape",
+            label: LocalizedStringKey(Layout.gearToolbarAccessibilityLabel),
+            identifier: Layout.gearToolbarAccessibilityIdentifier,
+            isSelected: false,
+            kind: .button { router.morePath.append(SettingsRoute.root) }
+        ))
+        return HLTabHeaderActions(items)
     }
 
     private var content: some View {
         List {
-            // v0.5.5 — gear-icon moved back to the trailing edge per
+            // Gear-icon moved back to the trailing edge per
             // operator real-device walkthrough. The HP4 attempt at a
             // leading-edge gear (mirroring the Dashboard-avatar rhythm)
             // felt off in hand because the operator's mental model maps
             // "settings = top-right" across iOS — Apple's Health,
             // Fitness, and the system Settings app all park their
             // gear/profile shortcut on the trailing edge of the header.
-            // The MoreHeader now reads `[Mehr title] [Spacer] [Gear]`,
+            // The tab header now reads `[Mehr title] [Spacer] [Gear]`,
             // chevron-free (still a plain `Button` flipping
             // `openSettings`, no `NavigationLink`). The accessibility
             // identifier (`more.toolbar.gear`) stays stable — pinned by
             // `MoreScreenLayoutTests` and the XCUI assertion in
             // `WalkthroughDashboardTest.test_mehr_header_gear_is_right_of_title`.
-            MoreHeader(
-                openSettings: { router.morePath.append(SettingsRoute.root) },
-                openShareWithDoctor: { router.morePath.append(MoreRoute.shareWithDoctor) },
-                showsShareWithDoctor: container?.moduleGate.isEnabled(.doctorReport) != false
+            // The share glyph and the gear stand beside the title on a phone
+            // and in the system bar in a regular width, as on every tab.
+            HLTabHeader(
+                LocalizedStringResource(String.LocalizationValue(Layout.navigationTitle)),
+                actions: barActions
             )
-            .listRowInsets(EdgeInsets(top: HLSpace.md, leading: HLSpace.lg, bottom: HLSpace.md, trailing: HLSpace.lg))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            // v0.5.1-F5 — merged "Mentale Gesundheit" + "Vitalwerte & Verlauf"
+            .hlTabHeaderListRow()
+            // Merged "Mentale Gesundheit" + "Vitalwerte & Verlauf"
             // into a single section per operator feedback.
-            // v0.11 IA — the Trends row (→ `ChartsScreen`) was cut: it was a
+            // The Trends row (→ `ChartsScreen`) was cut: it was a
             // duplicate per-metric list. Insights is now the single metric hub
             // (tile → `ChartDetailScreen`), with the Dashboard tile as the one
             // shortcut. Stimmung + Erfolge remain as the cohesive surface.
-            // v0.11 IA — Stimmung row removed. Mood analysis/history now lives
+            // Stimmung row removed. Mood analysis/history now lives
             // in Insights (the single metric hub); a duplicate More→Stimmung
             // entry pointing at `MoodAnalysisScreen` was redundant. The section
             // now holds only Achievements, so its heading was retitled to match.
             // The legacy `.mood` typed-route deep-link (older notifications) is
             // still consumed elsewhere — only the visible row was dropped.
-            // v0.14.1 (#134) — combined section: Persönliche Rekorde + Erfolge
+            // Combined section: Persönliche Rekorde + Erfolge
             // grouped together (the operator reads "my best results + my
             // milestones" as one achievement story), followed by Workouts.
-            // v0.14.8 C5 — the women-only cycle home (mirror of web `/cycle`):
+            // The women-only cycle home (mirror of web `/cycle`):
             // hero ring + phase explainer + calendar + prediction/stats. The
-            // CycleGate hides this row for ineligible / opted-out users, and it
-            // is hard-gated behind `FeatureFlag.cycleTracking` (default OFF), so
-            // nothing surfaces until the feature ships.
-            // v0.15 W-FRONTDOORS — the clinical-spine section, mirroring the web
+            // CycleGate hides this row for ineligible / opted-out users.
+            // The clinical-spine section, mirroring the web
             // nav-model's grouping (Vorsorge · Labs · Illness as peers, Coach as
             // the labeled nav home). These are the four features the web promotes
             // to top-level front doors that iOS previously buried under the gear
             // (Vorsorge) or in the generic "Records & achievements" drawer
             // (Labs/Illness) / had no nav home at all (Coach). Cycle (women-only,
             // gated) joins this clinical group when eligible.
-            Section(LocalizedStringKey(Layout.clinicalSectionTitle)) {
+            Section {
                 clinicalSectionRows
+            } header: {
+                HLSectionHeader(LocalizedStringKey(Layout.clinicalSectionTitle))
             }
-            Section(LocalizedStringKey(Layout.recordsSectionTitle)) {
+            .hlFormRowSurface()
+            Section {
+                if TimelineRepository.isTimelineAvailable(serverVersion: serverVersion), listsRow(for: .timeline) {
+                    NavigationLink(value: MoreRoute.timeline) {
+                        HLSettingsRow(
+                            icon: Layout.timelineRow.icon,
+                            title: LocalizedStringKey(Layout.timelineRow.title),
+                            subtitle: Layout.timelineRow.subtitle.map { LocalizedStringKey($0) }
+                        )
+                    }
+                    .accessibilityIdentifier(Layout.timelineRow.accessibilityIdentifier)
+                    // The person's opening, which turns a phone across, is
+                    // noted by the router when this value lands on the stack
+                    // (`AppRouter.morePath`). A second tap gesture here fought
+                    // the row's own tap on a device: it opened only after
+                    // several taps.
+                }
                 NavigationLink(value: MoreRoute.personalRecords) {
                     HLSettingsRow(
                         icon: Layout.personalRecordsRow.icon,
@@ -244,7 +171,7 @@ struct MoreScreen: View {
                     )
                 }
                 .accessibilityIdentifier(Layout.personalRecordsRow.accessibilityIdentifier)
-                // #30 — gated behind the `achievements` server module.
+                // Gated behind the `achievements` server module.
                 if container?.moduleGate.isEnabled(.achievements) != false {
                     NavigationLink(value: MoreRoute.achievements) {
                         HLSettingsRow(
@@ -255,8 +182,8 @@ struct MoreScreen: View {
                     }
                     .accessibilityIdentifier(Layout.achievementsRow.accessibilityIdentifier)
                 }
-                // #30 — gated behind the `workouts` server module.
-                if container?.moduleGate.isEnabled(.workouts) != false {
+                // Gated behind the `workouts` server module.
+                if container?.moduleGate.isEnabled(.workouts) != false, listsRow(for: .workouts) {
                     NavigationLink(value: MoreRoute.workouts) {
                         HLSettingsRow(
                             icon: Layout.workoutsRow.icon,
@@ -266,169 +193,40 @@ struct MoreScreen: View {
                     }
                     .accessibilityIdentifier(Layout.workoutsRow.accessibilityIdentifier)
                 }
-                // v0.14.2 (#136) — Messwerte: a metric-type picker that pushes
-                // the EXISTING `MeasurementListScreen(kind:)` values table (the
-                // Apple-Health-style bucketed list previously only reachable via
-                // the chart drill-down). v0.14.8 W2 (Audit §3.c) — folded into
-                // this section: after Geräte (v0.14.10 §3) and Export (v0.14.7
-                // C1) moved back to the Settings hub, the "Data & devices"
-                // section held only this row under a heading that promised
-                // devices it no longer had. Browsing one's own results is the
-                // same content navigation as records/workouts, so it lives
-                // here and the stale section was dropped.
-                NavigationLink(value: MoreRoute.measurements) {
-                    HLSettingsRow(
-                        icon: Layout.measurementsRow.icon,
-                        title: LocalizedStringKey(Layout.measurementsRow.title),
-                        subtitle: Layout.measurementsRow.subtitle.map { LocalizedStringKey($0) }
-                    )
+                // Messwerte: a metric-type picker that pushes the
+                // `MeasurementListScreen(kind:)` values table. Browsing one's
+                // own results is the same content navigation as records and
+                // workouts, so it lives in this section.
+                if listsRow(for: .measurements) {
+                    NavigationLink(value: MoreRoute.measurements) {
+                        HLSettingsRow(
+                            icon: Layout.measurementsRow.icon,
+                            title: LocalizedStringKey(Layout.measurementsRow.title),
+                            subtitle: Layout.measurementsRow.subtitle.map { LocalizedStringKey($0) }
+                        )
+                    }
+                    .accessibilityIdentifier(Layout.measurementsRow.accessibilityIdentifier)
                 }
-                .accessibilityIdentifier(Layout.measurementsRow.accessibilityIdentifier)
-                // v0.15 W-FRONTDOORS — Labs + Illness rows were PROMOTED out of
-                // this generic "Records & achievements" drawer into the dedicated
-                // clinical-spine section above (web parity — they are clinical
-                // features, not records footnotes). See `clinicalSectionTitle`.
+                // Labs and Illness live in the clinical section above: they are
+                // clinical features, not records footnotes.
+            } header: {
+                HLSectionHeader(LocalizedStringKey(Layout.recordsSectionTitle))
             }
-            // v0.14.8 W2 (Audit §3.c) — the "Data & devices" section was
-            // removed: Geräte (v0.14.10 §3) and Export (v0.14.7 C1) moved back
-            // to the Settings hub, leaving a one-row section whose title
-            // promised devices that lived elsewhere. Its remaining Messwerte
-            // row folded into "Records & achievements" above.
-            // v0.14.8 (Task D) — the "Mit dem Arzt teilen" LIST section was
-            // removed per operator directive: "Ich hätte gerne, dass man das
-            // 'Mehr — kann ich mit dem Arzt teilen?' komplett weg hat." The
-            // doctor-handover path stays — it is now
-            // reached via the share glyph in the `MoreHeader` (left of the gear),
-            // mirroring the gear's push mechanism (`showShareWithDoctor` binding
-            // + sibling `.navigationDestination(isPresented:)` at the stack root).
-            // v0.6.1.5 Y5 — the clinical section (LOINC review row) moved out
-            // of MoreScreen into Erweiterte Einstellungen per operator
-            // walkthrough on 2026-05-23. 08-06 then removed the feature
-            // outright at both ends: the entry row, the destination screen and
-            // the registry that backed it are gone, because a name typed on
-            // this device never was clinical review. Nothing replaced it here;
-            // the pending-review truth lives in `MetricFHIRMapper` and the FHIR
-            // export disclaimer, neither of which any local surface can flip.
-            //
-            // v0.5.4.1 — "App → Einstellungen" row removed. The gear-icon
-            // toolbar trailing item (NF-2) is the canonical entry point to
-            // SettingsScreen now. Operator quote on walkthrough: "unter
-            // Mehr gibt's jetzt oben rechts. Die Einstellung finde ich
-            // super dann brauchen wir die unten nicht mehr." v0.8.0 W7 G3
-            // dropped the now-dead `appRows` / `settingsRow` /
-            // `clinicalSectionTitle` / `appSectionTitle` descriptors.
-
-            // v0.6.1.10 Y9-C — Sicherheit section moved to SettingsScreen.
-            // Pre-Y9 lived here at the bottom of MoreScreen (per Y5);
-            // operator walkthrough on 2026-05-23 asked us to host the
-            // two destructive rows under Einstellungen instead so the
-            // Mehr tab stays focussed on content navigation. The row
-            // descriptors (`Layout.signOutRow`, `Layout.deleteAccountRow`)
-            // stay in `Layout` so `SettingsAccountScreen` reads from a single
-            // source of truth. v0.17 settings-hygiene — the dead
-            // `Layout.sicherheitSectionTitle` + `Layout.sicherheitRows` array
-            // (test-only, no production reader) were removed.
+            .hlFormRowSurface()
+            // The Mehr tab is content navigation only. The doctor handover is
+            // the share glyph in the tab header (left of the gear), pushed through
+            // `showShareWithDoctor` from the stack root; settings and the two
+            // destructive account rows sit behind the gear. Their descriptors
+            // (`Layout.signOutRow`, `Layout.deleteAccountRow`) stay in `Layout`
+            // so `SettingsAccountScreen` reads from a single source of truth.
         }
-        // v0152 W-COACH-CLEANUP (C2) — the Coach-row unread dot was removed
-        // alongside the More Coach row, so the on-appear nudge refresh that drove
-        // it is gone too. The proactive nudge signal still refreshes app-wide via
-        // `AppContainer.scenePhase` foreground (server-authoritative) and will
-        // drive the dot on the Insights inline coach entry (later update).
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
-        // v0.5.x C-9 — iOS 26+ soft scroll-edge so List content blurs into
-        // the navigation Liquid Glass instead of clipping cleanly.
-        // iOS 18-25: no-op (system stays flat-translucent).
-        .hlScrollEdgeSoft()
-        // v0.5.4.2 — large-title slot replaced by the inline MoreHeader
-        // at the top of the List (mirrors DashboardHeader rhythm; the
-        // dashboard root also intentionally omits `.navigationTitle`).
-        // Pushed children (AchievementsScreen, WorkoutsScreen, ...) still inherit
-        // the navigation bar and own their own titles.
-    }
-}
-
-/// v0.6.1.5 Y5 — inline title row for the Mehr-tab.
-///
-/// **Layout:** `[Mehr title] [Spacer] [GearButton]`. The gear glyph sits
-/// on the trailing edge so the operator's "settings = top-right" mental
-/// model carries through — Apple's Health, Fitness, and system Settings
-/// app all park their gear/profile shortcut on the trailing edge of the
-/// header.
-///
-/// **Y5 visual update (handbook §3.1 Flavour B):** the round
-/// `HLSurface.secondary` backplate + hairline border was removed. The
-/// gear now renders as a bare 22pt `HLText.primary` glyph sized to read
-/// at the same visual weight as the `Mehr` title next to it — mirroring
-/// the `MedicationsHeader` `+` affordance introduced in v0.6.1.3 Y4.1.
-/// The 44pt tap target is preserved via `.frame(minWidth/minHeight:)`
-/// on the button label.
-///
-/// **Push mechanism:** plain `Button` calling the parent's `openSettings`,
-/// which appends `SettingsRoute.root` to the More stack (until SET-ROUTE a
-/// binding with a sibling `.navigationDestination(isPresented:)`).
-/// Same affordance the Dashboard-avatar uses (see
-/// `DashboardProfileToolbar.swift`) — no NavigationLink, no chevron, no
-/// chevron-via-list-row-style inheritance.
-///
-/// The accessibility identifier (`more.toolbar.gear`) stays stable so
-/// `MoreScreenLayoutTests` and the XCUI walkthrough still resolve it.
-private struct MoreHeader: View {
-    /// Pushes Settings (`SettingsRoute.root`) onto the More stack.
-    let openSettings: () -> Void
-    /// v0.14.8 (Task D) — the header share glyph lands on
-    /// `UnifiedSharingScreen` (`MoreRoute.shareWithDoctor`).
-    let openShareWithDoctor: () -> Void
-    /// #30 — when the `doctorReport` server module is OFF, the header share
-    /// glyph (the sole entry to the doctor-handover / FHIR-export hub) is hidden.
-    var showsShareWithDoctor: Bool = true
-
-    /// Tap-target footprint — matches the `MedicationsHeader` `+` button
-    /// so the two inline-title affordances feel identical in hand. HIG
-    /// ≥ 44pt is satisfied without an explicit chrome surface.
-    private static let buttonSize: CGFloat = 44
-
-    var body: some View {
-        HStack(alignment: .center, spacing: HLSpace.md) {
-            Text(LocalizedStringKey(MoreScreen.Layout.navigationTitle))
-                .font(.hlLargeTitle)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer(minLength: 0)
-
-            // v0.14.8 (Task D) — share affordance, sitting immediately LEFT of
-            // the gear so the trailing cluster reads `[share] [gear]`. Same bare
-            // treatment as the gear (glyph only, .hlTitle2, HLText.primary, 44pt
-            // tap target) so the two header affordances feel identical in hand.
-            if showsShareWithDoctor {
-                Button(action: openShareWithDoctor) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.hlTitle2)
-                        .foregroundStyle(HLText.primary)
-                        .frame(width: Self.buttonSize, height: Self.buttonSize)
-                        .contentShape(Rectangle())
-                        .accessibilityLabel(Text(LocalizedStringKey(MoreScreen.Layout.shareToolbarAccessibilityLabel)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(MoreScreen.Layout.shareToolbarAccessibilityIdentifier)
-            }
-
-            Button(action: openSettings) {
-                // Y8 M-3: lift the gear glyph off the raw 22pt literal
-                // onto .hlTitle2 (22pt @L) so it scales with the
-                // .hlLargeTitle title beside it under accessibility
-                // text-size pref instead of locking small.
-                Image(systemName: "gearshape")
-                    .font(.hlTitle2)
-                    .foregroundStyle(HLText.primary)
-                    .frame(width: Self.buttonSize, height: Self.buttonSize)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel(Text(LocalizedStringKey(MoreScreen.Layout.gearToolbarAccessibilityLabel)))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(MoreScreen.Layout.gearToolbarAccessibilityIdentifier)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .hlPageMargins()
+        // In a regular width the tab's actions stand in the system bar: the
+        // doctor handover, then the gear at the trailing edge. Both push onto
+        // the More stack.
+        .hlTabRootBarActions(barActions)
+        // The inline tab header at the top of the List takes the large-title
+        // slot (as DashboardHeader does; the dashboard root also omits
+        // `.navigationTitle`). Pushed children still own their titles.
     }
 }

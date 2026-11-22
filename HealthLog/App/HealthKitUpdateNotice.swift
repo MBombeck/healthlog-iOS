@@ -62,7 +62,7 @@ enum HealthKitUpdateNotice {
         case newTypes
     }
 
-    /// **25-02 (E-2026-08-29 #5) — what the system answered about the
+    /// **What the system answered about the
     /// authorization sheet** for the set the candidate variant would request:
     /// `HKHealthStore.getRequestStatusForAuthorization(toShare:read:)`, the
     /// ONE API that speaks for read types too. It never reveals what was
@@ -194,7 +194,7 @@ enum HealthKitUpdateNotice {
     /// `requestedAt` latch for this card's own display is the point, and the
     /// banner's rule stays untouched beside it.
     /// `sheetStatus` is the system's own answer for the candidate variant's
-    /// request set (25-02, E-2026-08-29 #5): once it says ``SheetStatus/answered``,
+    /// request set: once it says ``SheetStatus/answered``,
     /// the card is done — detection, not memory. This is what the shipped
     /// `.fullyGranted`-only predicate could never do: Apple's sheet never
     /// re-asks a decided write type and never reports a read grant, so on the
@@ -203,7 +203,7 @@ enum HealthKitUpdateNotice {
     /// rule (25-01's exact behaviour) — the status only ever suppresses when
     /// the system affirmatively answers, it never invents a card.
     ///
-    /// 1.4 B2 — `bannerAsksToConnect`: when the dashboard's connect banner owns
+    /// `bannerAsksToConnect`: when the dashboard's connect banner owns
     /// the same request (its rule holds, shown or snoozed), the `.connect`
     /// card stays away, so Today never asks twice in two cards stacked on top
     /// of each other. The card keeps its own job where the banner refuses

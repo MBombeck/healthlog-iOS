@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 09 / plan 09-02 — the launch sweep for Apple-Health import residue.**
+/// **The launch sweep for Apple-Health import residue.**
 ///
 /// Two unlike witnesses, because either one alone is satisfiable by the wrong
 /// implementation:
@@ -48,7 +48,7 @@ struct AppContainerAppleHealthTempSweepTests {
         #expect(FileManager.default.fileExists(atPath: fresh.path))
         #expect(
             removed.map(\.lastPathComponent) == [stale.lastPathComponent],
-            "EXPECTED_RED: app launch did not sweep stale Apple Health import temps"
+            "app launch did not sweep stale Apple Health import temps"
         )
     }
 

@@ -60,7 +60,7 @@ struct MeasurementsRepositorySeriesTests {
         #expect(capturedKind?.contains("_") == false)
     }
 
-    // MARK: - W-SERVER-SYNC — `.all` range carries the full span (cap raised to 3650)
+    // MARK: - `.all` range carries the full span (cap raised to 3650)
 
     /// Server v1.5.5 raised its `days` cap from 365 to 3650, so the iOS `.all`
     /// range (`days=3650`) now reaches the wire unchanged — true all-time is
@@ -97,7 +97,7 @@ struct MeasurementsRepositorySeriesTests {
     }
 }
 
-/// W-SERVER-SYNC — pure `clampDays` boundary contract. Pins the days-cap math
+/// Pure `clampDays` boundary contract. Pins the days-cap math
 /// without spinning up the actor / network. The server v1.5.5 cap is 3650, so
 /// `.all` passes through unchanged; the clamp stays as a defensive ceiling.
 @Suite("MeasurementsRepository.clampDays — server days-cap boundary", .mockURLSession)

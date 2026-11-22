@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Account-unit display transform (#115 P2)
+// MARK: - Account-unit display transform
 
 //
 // The ONE place that knows how a canonical SI value (kg, mmHg, mg/dL, °C, cm,
@@ -22,7 +22,7 @@ import Foundation
 // km/h; this app has always shown m and m/s there, and that stays as it was —
 // this change is about imperial accounts reading their own unit.
 //
-// **1.4 B4 — two exceptions, on purpose.** Energy expenditure (kJ on the wire)
+// **Two exceptions, on purpose.** Energy expenditure (kJ on the wire)
 // reads in kcal on every account, and day/workout strain carry "von 21" as
 // their label. Neither is an account choice; they are here so every surface
 // that reads the account unit agrees.
@@ -128,7 +128,7 @@ public extension UnitPreferences {
                 fractionDigits: 0
             )
         case .strainScale:
-            // 1.4 B4 — the value stays as sent; the label names the scale
+            // The value stays as sent; the label names the scale
             // ("12,4 von 21"), as the recovery page does.
             return UnitDisplayTransform(factor: 1, suffix: String(localized: "metric.strain.ofTwentyOne"), fractionDigits: nil)
         }
@@ -165,7 +165,7 @@ public extension UnitPreferences {
 // MARK: - Body height (profile column, not a measurement)
 
 public extension UnitPreferences {
-    /// **#115 P2** — `User.heightCm` in whole feet + inches, the way a person
+    /// `User.heightCm` in whole feet + inches, the way a person
     /// states a height (server `src/lib/profile/height-unit-display.ts`,
     /// v1.39.5: `cmToTotalInches = round(cm / 2.54)`). 180 cm → 5 ft 11 in.
     static func feetAndInches(fromCentimetres cm: Double) -> (feet: Int, inches: Int)? {

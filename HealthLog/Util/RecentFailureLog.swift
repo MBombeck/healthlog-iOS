@@ -42,7 +42,7 @@ public struct RecentFailure: Equatable, Sendable {
     }
 }
 
-/// **#134 — the last few failures of this session, in memory only.**
+/// **The last few failures of this session, in memory only.**
 ///
 /// `APIClient` records every failure the server answered (a non-2xx status or
 /// an unreadable 2xx), with or without an id, so the newest entry always
@@ -59,7 +59,7 @@ public final class RecentFailureLog: @unchecked Sendable {
     /// The process-wide log `APIClient` writes to.
     public static let shared = RecentFailureLog()
 
-    /// "Keep the last 5 IDs of the session" (#134).
+    /// "Keep the last 5 IDs of the session".
     public static let defaultCapacity = 5
 
     /// How long a banner may name an entry's id. A banner that is still up

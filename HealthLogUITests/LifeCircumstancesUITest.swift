@@ -1,10 +1,10 @@
 import XCTest
 
-/// **LIFE (1.5.0, #132, Server #1334)** — "When you stopped" is picked as
+/// "When you stopped" is picked as
 /// a month and year, saved, and still there after leaving the screen.
 ///
 /// On the web the field was a text box that swallowed every keystroke short of
-/// a whole `YYYY-MM` (Server #1334). In the app there is nothing to type: the
+/// a whole `YYYY-MM`. In the app there is nothing to type: the
 /// row unfolds the system month-and-year wheel. The fixture server
 /// (`-uitest-life`) keeps the written answers, so reopening the screen reads
 /// them back from the read route.

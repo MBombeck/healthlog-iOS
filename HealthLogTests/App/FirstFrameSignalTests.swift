@@ -7,7 +7,7 @@
     import SwiftUI
     import Testing
 
-    /// **Phase 09 / plan 09-05 — the first frame, and the proof that it is one.**
+    /// **The first frame, and the proof that it is one.**
     ///
     /// 09-05 moves the persistent outbox open off the launch-critical path by
     /// making ordinary foreground bootstrap wait for the app to draw. That claim
@@ -120,7 +120,7 @@
                 "HealthLog/App/HealthLogApp.swift",
                 containing: "var rootView"
             )
-            let appliesToRootView = Self.occurrences(of: "RootView()", in: root) == 1
+            let appliesToRootView = Self.occurrences(of: "RootView(", in: root) == 1
                 && Self.occurrences(of: "hlEmitFirstFrame(", in: root) == 1
             let usesTheSharedSignal = Self.occurrences(of: "FirstFrameSignal.shared", in: root) == 1
             let emitters = try Self.productionFiles(naming: "hlEmitFirstFrame(")
@@ -130,7 +130,7 @@
             ]
             let rootEmitsTheFirstFrameSignal =
                 appliesToRootView && usesTheSharedSignal && oneEmitterBesideItsDefinition
-            #expect(rootEmitsTheFirstFrameSignal, "EXPECTED_RED: RootView did not emit the first-frame signal")
+            #expect(rootEmitsTheFirstFrameSignal, "RootView did not emit the first-frame signal")
         }
 
         @MainActor

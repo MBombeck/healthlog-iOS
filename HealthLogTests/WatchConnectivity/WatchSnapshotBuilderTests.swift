@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.12 P2 — phone-side snapshot builder.** Deterministic map from the
+/// **Phone-side snapshot builder.** Deterministic map from the
 /// app's medication universe + derived intakes + latest mood onto the thin
 /// watch snapshot. Mirrors the `WidgetSnapshotMapping` test discipline (pure,
 /// no store / network).

@@ -28,7 +28,7 @@ public final class WhoopIntegrationStore {
         case needsConnect
         /// Linked but the OAuth token expired — sync is dead until the user
         /// re-connects. Surfaced as its own stage so the top-line status pill
-        /// stops claiming "Connected" while nothing is flowing (A4 MEDIUM #1).
+        /// stops claiming "Connected" while nothing is flowing.
         case tokenExpired
         /// Fully linked (`connected == true`).
         case connected
@@ -45,7 +45,7 @@ public final class WhoopIntegrationStore {
     private let connector: WhoopConnecting?
     /// Resolves the live server base URL for the connect start URL. Injected so
     /// the store stays testable without an `AppContainer`. `nil` ⇒ no live env
-    /// (standalone / tests that don't exercise connect).
+    /// (tests that don't exercise connect).
     private let baseURLProvider: @MainActor () -> URL?
     private let authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry?
     private let userIDProvider: @MainActor () -> String?
@@ -89,7 +89,7 @@ public final class WhoopIntegrationStore {
             // A token-expired connection is technically `connected == true`
             // but is no longer syncing — downgrade so the status pill reflects
             // the dead-sync reality and the re-connect affordance shows.
-            // #139 — read from `health` (`action_required` + `reconnect`); the
+            // Read from `health` (`action_required` + `reconnect`); the
             // legacy `tokenExpired` only answers for a server without it.
             return status.needsReconnect ? .tokenExpired : .connected
         }
@@ -191,7 +191,7 @@ public final class WhoopIntegrationStore {
     /// `true` once a `test`/`resume` probe reported the connection is parked by
     /// WHOOP's rate limiter. Drives the "Resume sync" affordance.
     ///
-    /// #139 — a server with `health` says it directly (`action: resume`); the
+    /// A server with `health` says it directly (`action: resume`); the
     /// last probe's error code stays the signal for a server without it.
     public var isRateLimitParked: Bool {
         if status?.health?.canResume == true { return true }
@@ -274,7 +274,7 @@ public final class WhoopIntegrationStore {
     /// Runs the WHOOP OAuth connect leg in an in-app auth session, then re-reads
     /// status as the authoritative connected signal (`configured && connected`).
     ///
-    /// **Mechanism (B5).** The session is opened against `…/api/whoop/connect`
+    /// **Mechanism.** The session is opened against `…/api/whoop/connect`
     /// itself (NOT a pre-fetched WHOOP URL) so the server's httpOnly nonce cookie
     /// round-trips. The final server redirect is a web URL (`…/settings/
     /// integrations?whoop=connected|error`) — we parse it when the session
@@ -284,8 +284,7 @@ public final class WhoopIntegrationStore {
     /// the mapped reason; `.canceled` (real dismissal OR the un-catchable web
     /// redirect) stays quiet and lets the status re-read decide.
     ///
-    /// Requires both a `connector` and a resolvable base URL; absent either (e.g.
-    /// standalone) it no-ops.
+    /// Requires both a `connector` and a resolvable base URL; absent either it no-ops.
     public func connect() async {
         guard let lease = captureEffectLease() else { return }
         guard let connector, let baseURL = baseURLProvider() else { return }

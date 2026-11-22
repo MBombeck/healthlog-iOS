@@ -13,18 +13,11 @@ import Testing
 struct OnboardingAnamnesisStepTests {
     // MARK: - Routing
 
-    @Test("server branch routes into the optional anamnesis step")
-    func serverRoutesToAnamnesis() {
-        let next = OnboardingFlow.stepAfterAISource(isStandalone: false)
-        #expect(next == .anamnesis)
-        #expect(next != .done)
-    }
-
-    @Test("standalone skips anamnesis (server-only) and finishes")
-    func standaloneSkipsAnamnesis() {
-        let next = OnboardingFlow.stepAfterAISource(isStandalone: true)
-        #expect(next == .done)
-        #expect(next != .anamnesis)
+    @Test("the optional anamnesis step follows the AI-source step")
+    func aiSourceLeadsToAnamnesis() throws {
+        let route = OnboardingFlow.activeRoute()
+        let aiSource = try #require(route.firstIndex(of: .aiSource))
+        #expect(route[aiSource + 1] == .anamnesis)
     }
 
     // MARK: - Localized copy resolves
@@ -87,7 +80,7 @@ struct OnboardingAnamnesisStepTests {
         #expect(parsed[0].count == 160)
     }
 
-    // MARK: - 08-10: an optional field is not an unchecked field
+    // MARK: - An optional field is not an unchecked field
 
     @Test("a blank height is legitimate and may advance")
     func blankHeightIsSkippable() {
@@ -117,7 +110,7 @@ struct OnboardingAnamnesisStepTests {
         }
     }
 
-    // MARK: - 08-10: a partial save is its own answer
+    // MARK: - A partial save is its own answer
 
     @Test("nothing refused is a complete save")
     func noRefusalIsComplete() {

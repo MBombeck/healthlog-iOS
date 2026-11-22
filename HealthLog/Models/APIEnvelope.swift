@@ -6,7 +6,7 @@ import Foundation
 /// iOS-Annahme, es sei ein Objekt, war falsch und hat Decoding sabotiert
 /// (siehe Audit-Senior-Dev-2).
 ///
-/// **CU-32 — die eine dokumentierte Ausnahme.** Der Idempotenz-Wrapper
+/// **Die eine dokumentierte Ausnahme.** Der Idempotenz-Wrapper
 /// (`src/lib/idempotency.ts`) bricht diesen Vertrag: sein 409 „a request with
 /// this Idempotency-Key is already in progress" sendet
 /// `error: { message: "…" }` als **Objekt**. Er liegt u. a. auf
@@ -22,7 +22,7 @@ import Foundation
 /// every code in `meta.errorCode` (with `meta.capability`, `meta.reason`,
 /// `meta.module`); `APIClient` reads `meta` first and falls back to this field
 /// only for an older server. An AI refusal surfaces as
-/// ``HLError/aiUnavailable(_:)`` (#114 / #115 · 0.2).
+/// ``HLError/aiUnavailable(_:)``.
 public struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
     public let data: T?
     public let error: String?
@@ -75,8 +75,8 @@ public struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
 }
 
 /// `meta` block on a server envelope. Carries the module-gate
-/// rejection shape (#30): `{ errorCode: "module.disabled", module: "<key>" }`
-/// **and** the v1.23.0 two-factor login challenge shape (GH iOS #37):
+/// rejection shape: `{ errorCode: "module.disabled", module: "<key>" }`
+/// **and** the v1.23.0 two-factor login challenge shape:
 /// `{ mfaRequired: true, mfaTicket: "<opaque>", methods: ["totp" | "recovery"
 /// | "webauthn"] }`. Decode-tolerant — every field is optional so unrelated
 /// `meta` shapes (and the `{ requestId }` shape on success envelopes) don't
@@ -88,28 +88,28 @@ public struct APIEnvelopeMeta: Decodable, Sendable, Equatable {
     /// was accepted but a second factor is still required. The paired
     /// ``mfaTicket`` + ``methods`` describe how to complete the challenge.
     public let mfaRequired: Bool?
-    /// #37 — opaque, single-use, ~5-minute ticket to present to
+    /// Opaque, single-use, ~5-minute ticket to present to
     /// `/api/auth/mfa/verify` (or the webauthn-verify legs). **Sensitive** —
     /// must never be logged.
     public let mfaTicket: String?
-    /// #37 — second factors the account can complete the challenge with
+    /// Second factors the account can complete the challenge with
     /// (`"totp"`, `"recovery"`, `"webauthn"`). Decoded leniently; unknown
     /// strings are dropped by the caller.
     public let methods: [String]?
-    /// v1.35.0 (GH #83) — the machine-readable *why* beside an `errorCode`,
+    /// v1.35.0 — the machine-readable *why* beside an `errorCode`,
     /// for refusals where "not acceptable" is not specific enough to put in
     /// front of a person (`health_score_config.too_narrow` names which breadth
     /// rule the selection missed). A raw string here on purpose: the transport
     /// carries the pair, the domain maps it to a sentence.
     public let reason: String?
-    /// #114 / #115 · 0.2 — on an AI refusal (server v1.39): the capability that
+    /// On an AI refusal (server v1.39): the capability that
     /// is unavailable, one of the `AiCapabilities` keys. Kept raw here; the
     /// transport maps it through ``AIRefusal``.
     public let capability: String?
-    /// #110 — `PUT /api/auth/me/report-selection` names the leaf ids this
+    /// `PUT /api/auth/me/report-selection` names the leaf ids this
     /// server build does not know beside `report-selection.leaves.unknown`.
     public let unknownLeaves: [String]?
-    /// #112 — a failed notification-channel test (`502`) says what the relay
+    /// A failed notification-channel test (`502`) says what the relay
     /// answered: its HTTP status, the SMTP reply code, and at most 200
     /// characters of the relay's own error text (never secret-shaped).
     public let upstreamStatus: Int?

@@ -66,7 +66,7 @@ protocol WorkoutHRBackfillSourcing: Sendable {
     func page(before: WorkoutHRBackfillCursor, limit: Int) async -> WorkoutHRBackfillPageOutcome
 }
 
-/// **GH #86 — the catch-up pass for workouts that are already on the server
+/// **The catch-up pass for workouts that are already on the server
 /// without their HR curve.**
 ///
 /// Since #34 we upload heart rate as daily folds only, so every workout
@@ -157,7 +157,7 @@ actor WorkoutHRBackfillSweep {
         self.defaultsProvider = defaultsProvider
     }
 
-    // 09-08 — the sweep's progression table. Every branch is one transition of
+    // The sweep's progression table. Every branch is one transition of
     // one state machine over the persisted backfill cursor; extracting a page
     // of them into helpers would put the transitions in two places and make the
     // "did this pass advance the cursor exactly once" question unanswerable by

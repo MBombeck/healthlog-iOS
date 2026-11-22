@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B6 — a section word this build does not know is ignored.**
+/// **A section word this build does not know is ignored.**
 ///
 /// `sections` is a server vocabulary (`measurements`, `labs`, …) that grows
 /// with the server. In 279 one unknown word made the whole grant

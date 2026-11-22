@@ -23,13 +23,14 @@ struct CycleCapturePeriodSection: View {
     var body: some View {
         let context = context
         Section {
-            DatePicker("cycle.capture.date", selection: $date, displayedComponents: [.date])
+            DatePicker(selection: $date, displayedComponents: [.date]) {
+                HLRowTitle("cycle.capture.date")
+            }
             if let cycleDay = context.cycleDay {
                 Text(String(format: String(localized: "cycle.home.center.cycleDay"), cycleDay))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
             }
-            // K1 — segmented while every label fits its segment, a menu
+            // Segmented while every label fits its segment, a menu
             // otherwise („Keine Änderu…" / „Periode gesta…" on the SE).
             HLAdaptiveSegmentedPicker(
                 "cycle.capture.period.header",
@@ -45,7 +46,7 @@ struct CycleCapturePeriodSection: View {
             }
             .disabled(isSaving)
         } header: {
-            Text("cycle.capture.period.header")
+            HLSectionHeader("cycle.capture.period.header", rank: .group)
         }
         // A grid that arrives (or reloads) after "ended" was picked can take the
         // option away; never keep a choice the picker no longer shows.

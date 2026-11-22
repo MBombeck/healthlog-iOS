@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// v0.11 W-B — contextual, single-metric target-band editor.
+/// Contextual, single-metric target-band editor.
 ///
-/// Replaces the retired multi-metric `TargetEditorSheet` (W-A). The editor
+/// Replaces the retired multi-metric `TargetEditorSheet`. The editor
 /// now opens from the metric it belongs to — the header gear on
 /// `InsightsMetricScreen` — mirroring the web, where the `/targets` page was
 /// dropped and `MetricTargetSummary` mounts a per-metric `TargetEditSheet`
@@ -22,68 +22,58 @@ struct InsightsTargetBandEditorSheet: View {
     /// The editable threshold metrics this sheet drives. One entry for most
     /// metrics; two for blood pressure (systolic + diastolic).
     let metrics: [ThresholdMetric]
-    /// #51 — the LOCALIZED metric title for the sheet heading. Hosts pass
+    /// The LOCALIZED metric title for the sheet heading. Hosts pass
     /// `kind.displayName` (localized, `Measurement.swift:240`), NOT the server
     /// `TargetItem.label` (an English wire string, `InsightsTargetsDTO.swift:46`)
     /// the sheet used to render — the operator saw "Blood Pressure" on a German
     /// device. Rendered as the large in-content heading (`metricHeader` style),
     /// replacing the truncating inline `.navigationTitle`.
     let titleText: String
-    /// #32 — the metric's CURRENT measured reference value(s), keyed by
+    /// The metric's CURRENT measured reference value(s), keyed by
     /// `metric.rawValue` (typically the 30-day average). Rendered as a faint
     /// greyed hint beneath the fields so the operator sees where their values
     /// currently sit — NOT pre-filled into the inputs. Empty hides the hint.
     var currentValues: [String: Double] = [:]
 
     @Environment(UserThresholdsStore.self) private var store
-    /// #115 P2 — the account's display units. Fields, hints and bounds read in
+    /// The account's display units. Fields, hints and bounds read in
     /// them; the save inverts to canonical (``ThresholdUnitAdapter``).
     @Environment(\.unitPreferences) private var unitPreferences
-    @Environment(\.dismiss) private var dismiss
 
     @State private var drafts: [String: Draft] = [:]
-    /// FORM-1 (Audit v0162) — the seeded draft snapshot; `drafts != seededDrafts`
+    /// The seeded draft snapshot; `drafts != seededDrafts`
     /// means the operator typed a band they haven't persisted via the per-metric
     /// Save button yet.
     @State private var seededDrafts: [String: Draft] = [:]
-    @State private var showDiscardConfirm = false
     @State private var saveTick: Int = 0
-    /// FORM-2 (Audit v0162) — initial focus onto the first metric's Min field
+    /// Initial focus onto the first metric's Min field
     /// (keyed by the field's accessibility identifier).
     @FocusState private var focusedField: String?
 
-    /// FORM-1 — any editable draft diverges from what was seeded from the store.
+    /// Any editable draft diverges from what was seeded from the store.
     private var isDirty: Bool {
         drafts != seededDrafts
     }
 
+    /// The metric whose save is running; its save row shows the progress.
+    @State private var savingMetric: ThresholdMetric?
+
+    /// Closing asks first while a typed band is unsaved and while a save is
+    /// still running, so neither a swipe nor the close button drops a write.
+    nonisolated static func closeAsksFirst(hasUnsavedDraft: Bool, isSaving: Bool) -> Bool {
+        hasUnsavedDraft || isSaving
+    }
+
     var body: some View {
-        NavigationStack {
-            // 1.4 B2 — the sheet opens only from a gear that exists when a
-            // metric has an editable band, so the "no editable targets yet"
-            // state could never show and is gone.
+        // Each metric keeps its own save in the form; the bar only closes,
+        // and asks first while a typed band is not saved yet.
+        HLSheetScaffold(
+            verbatim: titleText,
+            isDirty: Self.closeAsksFirst(hasUnsavedDraft: isDirty, isSaving: store.isSaving)
+        ) {
             form
-                .hlScrollEdgeSoft()
-                // #51 — the metric title renders in an in-content header block
-                // (`headerBlock`, `metricHeader` style) inside the Form, NOT as
-                // an inline `.navigationTitle`.
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "Done")) {
-                            if isDirty { showDiscardConfirm = true } else { dismiss() }
-                        }
-                    }
-                    ToolbarItem(placement: .topBarLeading) {
-                        if store.isSaving {
-                            ProgressView()
-                                .controlSize(.small)
-                                .accessibilityLabel(Text("Saving"))
-                        }
-                    }
-                }
-                // K1 — the banner below still presents as this overlay; this
-                // reserves its height at the top so it covers nothing (H2).
+                // The banner below still presents as this overlay; this
+                // reserves its height at the top so it covers nothing.
                 .hlReserveErrorBannerSpace(store.error)
                 .overlay(alignment: .top) {
                     ErrorBanner(error: store.error) {
@@ -97,17 +87,12 @@ struct InsightsTargetBandEditorSheet: View {
                 .task {
                     if store.lastLoadedAt == nil { await store.load() }
                     seedDrafts()
-                    // FORM-2 — focus the first metric's Min field once seeded.
+                    // Focus the first metric's Min field once seeded.
                     try? await Task.sleep(for: HLSheet.focusDelay)
                     if let first = metrics.first {
                         focusedField = "target-editor.\(first.rawValue).min"
                     }
                 }
-        }
-        // FORM-1 — guard against a swipe-down (or Done) discarding an unsaved
-        // draft band; keep the existing in-flight save lock.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: store.isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
         }
     }
 
@@ -115,30 +100,12 @@ struct InsightsTargetBandEditorSheet: View {
 
     private var form: some View {
         Form {
-            // #51 — the heading lives in a borderless Section at the top of
-            // the Form (no row chrome), mirroring the metric page's header.
-            Section {
-                EmptyView()
-            } header: {
-                headerBlock
-            }
             ForEach(metrics, id: \.rawValue) { metric in
                 metricSection(metric)
+                    .hlFormRowSurface()
             }
         }
-    }
-
-    /// #51 — in-content header mirroring the metric page (`metricHeader`):
-    /// the large localized title. 1.4 B2 — no description under it: the fields
-    /// and their "Speichern" say what the sheet does.
-    private var headerBlock: some View {
-        Text(verbatim: titleText)
-            .font(.hlLargeTitle)
-            .foregroundStyle(HLText.primary)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("target-editor.title")
-            .textCase(nil)
-            .padding(.bottom, HLSpace.sm)
+        .hlPageMargins()
     }
 
     private func metricSection(_ metric: ThresholdMetric) -> some View {
@@ -160,13 +127,12 @@ struct InsightsTargetBandEditorSheet: View {
                     accessibilityID: "target-editor.\(metric.rawValue).max"
                 )
                 Text(adapter.unit)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .frame(minWidth: 44, alignment: .leading)
             }
             saveRow(metric: metric, draft: draft)
         } header: {
-            // 1.4 B2 — where the value stands now sits with the fields it
+            // Where the value stands now sits with the fields it
             // helps to fill, not in a faint footer under them.
             HStack(alignment: .firstTextBaseline) {
                 Text(LocalizedStringKey(metric.displayNameKey))
@@ -188,7 +154,7 @@ struct InsightsTargetBandEditorSheet: View {
         }
     }
 
-    /// #32 — a faint greyed reference to where the metric's measured value
+    /// A faint greyed reference to where the metric's measured value
     /// currently sits ("Currently: 72.8 mg/dL"), so the operator can place
     /// their target band against the real series. `nil` when no current value
     /// was supplied (hides the hint).
@@ -209,8 +175,7 @@ struct InsightsTargetBandEditorSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(titleKey)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
             TextField(titleKey, text: text)
                 .keyboardType(.decimalPad)
                 .monospacedDigit()
@@ -232,12 +197,22 @@ struct InsightsTargetBandEditorSheet: View {
         Button {
             guard let band = parsed else { return }
             Task {
+                savingMetric = metric
+                defer { savingMetric = nil }
                 let ok = await store.updateThreshold(metric, to: band)
                 if ok { saveTick &+= 1 }
             }
         } label: {
-            Text("Save")
-                .frame(maxWidth: .infinity, alignment: .center)
+            // The progress stands where the save was tapped.
+            Group {
+                if savingMetric == metric {
+                    ProgressView()
+                        .accessibilityLabel(Text("Saving"))
+                } else {
+                    Text("Save")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .disabled(!isValid || !isDirty || store.isSaving)
         .accessibilityIdentifier("target-editor.\(metric.rawValue).save")
@@ -261,7 +236,7 @@ struct InsightsTargetBandEditorSheet: View {
             )
         }
         drafts = seeded
-        // FORM-1 — remember the seeded baseline so we can detect unsaved edits.
+        // Remember the seeded baseline so we can detect unsaved edits.
         seededDrafts = seeded
     }
 
@@ -313,13 +288,13 @@ struct InsightsTargetBandEditorSheet: View {
 
     /// Locale-aware decimal parse — accepts both `,` and `.` as the decimal
     /// separator so a DE keyboard ("72,5") and an EN one ("72.5") both work, and
-    /// grouped input ("1.234,5") parses correctly (A360-5 H-4).
+    /// grouped input ("1.234,5") parses correctly.
     private static func parse(_ s: String) -> Double? {
         LocaleDecimalParser.parse(s)
     }
 
     private static func format(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0 ... 2)).locale(.current))
+        HLValueFormat.number(value, fractionDigits: 0 ... 2)
     }
 }
 

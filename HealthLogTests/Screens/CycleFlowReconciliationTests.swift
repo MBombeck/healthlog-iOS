@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-25 (#72) — flow without an active period asks EXACTLY once.**
+/// **Flow without an active period asks EXACTLY once.**
 ///
 /// Logging flow and marking a period start are two different acts. A cycle span
 /// is created only by `POST /api/cycle/period`; a day log is attached to the

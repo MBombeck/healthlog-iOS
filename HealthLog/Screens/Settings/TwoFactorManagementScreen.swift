@@ -7,9 +7,9 @@ import SwiftUI
 /// removal) never offer the password arm, because a password elevation would be
 /// rejected server-side *after* being spent.
 ///
-/// **UI-Standard U3.** Gerüst B→A (`HLSettingsPage` statt handgebautem
+/// **UI-Standard U3.** Gerüst B→A (`HLPage` statt handgebautem
 /// `ScrollView` mit rundum-16-Rändern, R12), jede Aktion in einer Karte ist
-/// eine `HLSettingsActionRow` (R8) — auch die beiden Sicherheitsschlüssel-Verben,
+/// eine `HLSettingsActionRow` — auch die beiden Sicherheitsschlüssel-Verben,
 /// die vorher hinter einem `ellipsis.circle`-`Menu` versteckt waren. Der eine
 /// verbleibende `HLButton(variant: .primary)` ist „Zwei-Faktor einrichten": der
 /// Standard nennt ihn in R9 namentlich als legitimes `.primary` — solange 2FA
@@ -27,7 +27,7 @@ struct TwoFactorManagementScreen: View {
     @State private var deleteTarget: MfaStatus.SecurityKey?
 
     var body: some View {
-        HLSettingsPage(title: "settings.security.twoFactor.title") {
+        HLPage {
             content
         }
         .navigationTitle("settings.security.twoFactor.title")
@@ -46,21 +46,21 @@ struct TwoFactorManagementScreen: View {
         case .idle, .loading:
             ProgressView()
                 .frame(maxWidth: .infinity)
-                .padding(.top, HLSpace.xl)
+                .padding(.top, HLLayout.sectionGapBefore)
         case .unavailable:
-            HLSettingsCard(icon: "lock.shield", title: "settings.security.twoFactor.title") {
+            HLCard("settings.security.twoFactor.title") {
                 // R4 — derselbe Katalogschlüssel stand wortgleich auf dem
                 // Sicherheits-Hub und hier. Statt ihn zweimal zu erklären,
                 // steht an beiden Stellen jetzt der Absprung.
                 webSecurityRow
             }
         case let .failed(message):
-            HLSettingsCard(icon: "exclamationmark.triangle", title: "settings.security.twoFactor.title") {
+            HLCard("settings.security.twoFactor.title") {
                 Text(verbatim: message)
                     .font(.hlSubhead)
                     .foregroundStyle(HLColor.statusBad)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                HLButton(String(localized: "settings.security.twoFactor.retry"), variant: .secondary) {
+                HLButton("settings.security.twoFactor.retry", variant: .secondary) {
                     Task { await store.loadTwoFactor() }
                 }
             }
@@ -76,19 +76,17 @@ struct TwoFactorManagementScreen: View {
         }
     }
 
-    /// R8 — die beiden Verwaltungsverben sind Zeilen, kein `.secondary`/
+    /// Die beiden Verwaltungsverben sind Zeilen, kein `.secondary`/
     /// `.destructive`-Knopfpaar mehr. `.primary` bleibt genau einer und genau
-    /// im Zustand „2FA ist aus" (R9).
+    /// im Zustand „2FA ist aus".
     private func totpCard(_ status: MfaStatus) -> some View {
-        HLSettingsCard(
-            icon: status.totp.enabled ? "checkmark.shield.fill" : "lock.shield",
-            title: "settings.security.twoFactor.totp.title",
+        HLCard(
+            "settings.security.twoFactor.totp.title",
             subtitle: "settings.security.twoFactor.totp.subtitle"
         ) {
             if status.totp.enabled {
                 Text("settings.security.twoFactor.recoveryRemaining \(status.recoveryCodesRemaining)")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HLSettingsActionRow(
                     title: "settings.security.twoFactor.recovery.regenerate",
@@ -106,9 +104,9 @@ struct TwoFactorManagementScreen: View {
                 }
                 .accessibilityIdentifier("settings.security.twoFactor.disableRow")
             } else {
-                // R9 — namentlich als `.primary` sanktioniert: solange 2FA aus
+                // Namentlich als `.primary` sanktioniert: solange 2FA aus
                 // ist, will dieser Screen genau diese eine Sache.
-                HLButton(String(localized: "settings.security.twoFactor.enable"), variant: .primary) {
+                HLButton("settings.security.twoFactor.enable", variant: .primary) {
                     showEnable = true
                 }
             }
@@ -116,15 +114,13 @@ struct TwoFactorManagementScreen: View {
     }
 
     private func securityKeysCard(_ status: MfaStatus) -> some View {
-        HLSettingsCard(
-            icon: "key.horizontal.fill",
-            title: "settings.security.twoFactor.securityKeys.title",
+        HLCard(
+            "settings.security.twoFactor.securityKeys.title",
             subtitle: "settings.security.twoFactor.securityKeys.subtitle"
         ) {
             if status.webauthn.isEmpty {
                 Text("settings.security.twoFactor.securityKeys.none")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(status.webauthn) { key in
@@ -161,8 +157,7 @@ struct TwoFactorManagementScreen: View {
             trailing: {
                 if let added = SecurityKeyDateFormat.shortDate(key.createdAt) {
                     Text("settings.security.twoFactor.securityKeys.added \(added)")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                 }
             },
             action: { renameTarget = key }
@@ -220,7 +215,7 @@ struct StepUpArmPicker: View {
         self.init(requiresFresh: operation.requiresFreshFactor, hasTotp: hasTotp, proofMethods: nil, onElevation: onElevation)
     }
 
-    /// R2 / #115 A3 — for a gate whose strength depends on the account rather
+    /// For a gate whose strength depends on the account rather
     /// than on the route alone: adding a factor on an account that has one
     /// (`freshFactorIfEnrolled`), and the record actions (`requireRecentProof`),
     /// where an account with a second factor must prove that factor or a passkey.
@@ -261,7 +256,7 @@ struct StepUpArmPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            // 1.4 B2-c — no "Confirm your identity" line: every button below
+            // No "Confirm your identity" line: every button below
             // says "Confirm with …", and the sheets around the picker carry
             // their own title or lead.
 
@@ -269,17 +264,16 @@ struct StepUpArmPicker: View {
             // (no passkey on the account) is the honest discovery path and
             // points the user at another arm. With it, only when it works.
             if arms.nothingInApp {
-                // POLISH-C (C1) — with a second factor the only proof left is
+                // With a second factor the only proof left is
                 // a security key, which the app cannot ask for; say that
                 // instead of the SSO sentence.
                 Text(requiresFresh ? "stepUp.record.securityKeyOnly" : "stepUp.record.noProofInApp")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
                 webSecurityRow
             }
             if arms.passkey {
-                HLButton(String(localized: "settings.security.twoFactor.stepUp.passkey"), variant: .primary, isLoading: busy) {
+                HLButton("settings.security.twoFactor.stepUp.passkey", variant: .primary, isLoading: busy) {
                     Task { await mintPasskey() }
                 }
                 .disabled(busy)
@@ -287,7 +281,7 @@ struct StepUpArmPicker: View {
 
             if arms.totp {
                 codeField("settings.security.twoFactor.stepUp.totpLabel", text: $totpCode)
-                HLButton(String(localized: "settings.security.twoFactor.stepUp.totpSubmit"), variant: .secondary, isLoading: busy) {
+                HLButton("settings.security.twoFactor.stepUp.totpSubmit", variant: .secondary, isLoading: busy) {
                     Task { await mint { try await store.mint(totp: totpCode) } }
                 }
                 .disabled(busy || totpCode.isEmpty)
@@ -299,14 +293,13 @@ struct StepUpArmPicker: View {
                 // R4 (privacy-review): die Aussage bleibt, der Weg dorthin ist
                 // jetzt die Zeile statt einer Ortsangabe im Fliesstext.
                 Text("settings.security.twoFactor.stepUp.freshOnWeb")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                 webSecurityRow
             }
 
             if arms.password {
                 secureField("settings.security.twoFactor.stepUp.passwordLabel", text: $password)
-                HLButton(String(localized: "settings.security.twoFactor.stepUp.passwordSubmit"), variant: .secondary, isLoading: busy) {
+                HLButton("settings.security.twoFactor.stepUp.passwordSubmit", variant: .secondary, isLoading: busy) {
                     Task { await mint { try await store.mint(password: password) } }
                 }
                 .disabled(busy || password.isEmpty)
@@ -380,7 +373,7 @@ struct StepUpArmPicker: View {
                 .textContentType(.oneTimeCode)
                 .font(.hlBody)
                 .padding(HLSpace.md)
-                .background(HLColor.surface)
+                .background(HLTextField.plate)
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
         }
     }
@@ -397,7 +390,7 @@ struct StepUpArmPicker: View {
                 .autocorrectionDisabled()
                 .font(.hlBody)
                 .padding(HLSpace.md)
-                .background(HLColor.surface)
+                .background(HLTextField.plate)
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
         }
     }

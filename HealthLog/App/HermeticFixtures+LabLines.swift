@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **1.5 LAB-LINES — a 1.47 server with the timeline module on.** Under
+    /// **A 1.47 server with the timeline module on.** Under
     /// `-uitest-lab-lines` the fixture server reports version 1.47.0, switches
     /// the opt-in `timeline` module on in `/api/auth/me`, answers
     /// `/api/timeline` with four lab markers and the HbA1c readings of the
@@ -93,6 +93,14 @@
         }
 
         private static func coachReadJSON(metric: String) -> String {
+            // In the sweep the page charts the sweep's readings, whose latest
+            // is today's; a band from other numbers contradicted the page
+            // (78.4 to 80.2 kg over a chart of 72 kg).
+            if HermeticUITestSupport.isSweepOverlayActive, let range = SweepFixtures.usualRange(serverType: metric) {
+                return #"{"data":{"baseline":{"low":\#(range.low),"high":\#(range.high),"latest":\#(range.latest),"#
+                    + #""latestDate":"\#(day(0))","latestIsToday":true,"placement":"within","sampleDays":30},"#
+                    + #""learning":false,"driver":null},"error":null}"#
+            }
             let band: [Double] = switch metric {
             case "WEIGHT": [78.4, 80.2, 79.6]
             case "BLOOD_PRESSURE_SYS": [124, 136, 131]

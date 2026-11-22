@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.4 B3 — what the Insights recovery page shows**, decided purely from the
+/// **What the Insights recovery page shows**, decided purely from the
 /// built family so the rule is testable without a view.
 ///
 /// Two trend cards and one calm list instead of a card per number: the

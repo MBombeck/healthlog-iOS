@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    // A5 (1.4, R3 S4) — the deletions an anchored page reports.
+    // The deletions an anchored page reports.
     //
     // Since Phase 07 the app owns the anchored query, and until 1.4 it only
     // counted `deletedObjects`: the anchor moved past them, so a reading the
@@ -18,7 +18,7 @@
     // the live leg reads without a predicate once it has caught up, so it sees
     // every deletion from then on.
     //
-    // A6 (1.4) — a deleted HealthLog copy (its sync identifier names a server
+    // A deleted HealthLog copy (its sync identifier names a server
     // row) is not forwarded: it was never uploaded. Its server id becomes a
     // tombstone instead, so the server mirror does not write the reading back.
 

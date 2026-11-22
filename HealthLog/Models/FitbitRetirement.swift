@@ -49,6 +49,11 @@ public struct FitbitRetirement: Decodable, Sendable, Equatable {
     /// `meta.errorCode` of a refused connect, sync or test after the turndown.
     public static let providerRetiredCode = "provider_retired"
 
+    /// `meta.errorCode` of the 410 tombstones from server 1.48.0 on, when the
+    /// Fitbit routes were removed (`/api/fitbit/credentials`, `/disconnect`,
+    /// `/sync`, `/api/integrations/fitbit/resume`, `/test`). Permanent.
+    public static let routeRetiredCode = "route.retired"
+
     /// The successor the app can point at.
     public static let googleHealthSuccessor = "google-health"
 
@@ -92,16 +97,40 @@ public struct FitbitRetirement: Decodable, Sendable, Equatable {
         successor == nil || successor == Self.googleHealthSuccessor
     }
 
-    /// Whether a refusal is the turndown's `410 provider_retired`.
+    /// Whether a refusal is the turndown: `410 provider_retired`, or from
+    /// server 1.48.0 the removed route's `410 route.retired`.
     public static func isRetiredRefusal(_ error: Error) -> Bool {
         guard case let .server(status, code, _) = error as? HLError else { return false }
-        return code == providerRetiredCode || (status == 410 && code == nil)
+        return code == providerRetiredCode
+            || (status == 410 && (code == nil || code == routeRetiredCode))
+    }
+}
+
+/// What the consolidated `GET /api/integrations/status` says about Fitbit.
+///
+/// Server 1.48.0 removed Fitbit: the entry is gone from `integrations[]`, and
+/// the top-level `fitbitRemovalNotice` is `true` while an account that held a
+/// Fitbit connection has not dismissed the note. An older server lists the
+/// entry (with `retirement` from 1.43.11) and sends no notice.
+public struct FitbitConsolidatedState: Sendable, Equatable {
+    /// The server still lists a Fitbit entry (a server before 1.48.0).
+    public let listed: Bool
+    /// The entry's `retirement`, when listed and sent.
+    public let retirement: FitbitRetirement?
+    /// `fitbitRemovalNotice`; `nil` on a server that does not send it.
+    public let removalNotice: Bool?
+
+    public init(listed: Bool, retirement: FitbitRetirement?, removalNotice: Bool?) {
+        self.listed = listed
+        self.retirement = retirement
+        self.removalNotice = removalNotice
     }
 }
 
 /// The slice of `GET /api/integrations/status` this build reads: the Fitbit
-/// entry's `retirement`. Everything else in the envelope is ignored, and an
-/// entry that does not decode is skipped rather than failing the read.
+/// entry's `retirement` and the top-level `fitbitRemovalNotice`. Everything
+/// else in the envelope is ignored, and an entry that does not decode is
+/// skipped rather than failing the read.
 struct IntegrationsRetirementPayload: Decodable, Sendable {
     struct Entry: Decodable, Sendable {
         let integration: String?
@@ -119,17 +148,27 @@ struct IntegrationsRetirementPayload: Decodable, Sendable {
     }
 
     let integrations: [Entry]
+    let fitbitRemovalNotice: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case integrations
+        case integrations, fitbitRemovalNotice
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         integrations = (try? c.decodeIfPresent([Entry].self, forKey: .integrations)) ?? []
+        fitbitRemovalNotice = try? c.decodeIfPresent(Bool.self, forKey: .fitbitRemovalNotice)
     }
 
     var fitbit: FitbitRetirement? {
         integrations.first { $0.integration == "fitbit" }?.retirement
+    }
+
+    var fitbitState: FitbitConsolidatedState {
+        FitbitConsolidatedState(
+            listed: integrations.contains { $0.integration == "fitbit" },
+            retirement: fitbit,
+            removalNotice: fitbitRemovalNotice
+        )
     }
 }

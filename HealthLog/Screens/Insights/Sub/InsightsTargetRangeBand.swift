@@ -6,14 +6,14 @@ import Foundation
 /// had no caller and was deleted in 1.4 B4.
 ///
 /// It used to live on `InsightsTargetTileGrid`, which was never mounted and is
-/// gone (#115 B7); this helper was the only part of it in use.
+/// gone; this helper was the only part of it in use.
 enum InsightsTargetRangeBand {
     /// Returns `nil` when no range is configured, the window is insufficient,
     /// or nothing was logged in it — no in-band claim is possible then. The
     /// percentage is the server's own `daysInRange30d / daysLogged30d` tally,
     /// clamped so a malformed payload can never exceed 100 %.
     ///
-    /// **#115 P2** — the bounds are canonical on the wire (kg, mg/dL) and are
+    /// The bounds are canonical on the wire (kg, mg/dL) and are
     /// converted here into the account's unit (``TargetUnitDisplay``), so the
     /// band reads "Target 136.5–183.6 lb" under a "162.1 lb" headline instead
     /// of the kilograms the tester saw.
@@ -39,7 +39,7 @@ enum InsightsTargetRangeBand {
     }
 }
 
-/// **#115 P2 — the target payload in the account's unit.**
+/// **The target payload in the account's unit.**
 ///
 /// `GET /api/insights/targets` is canonical on the wire (server
 /// `src/lib/targets/target-unit-display.ts`, v1.39.5: "Storage never changes …
@@ -103,6 +103,6 @@ struct TargetUnitDisplay: Equatable {
     func bound(_ canonical: Double) -> String {
         let displayed = value(canonical)
         guard displayed.isFinite else { return Double.emDashPlaceholder }
-        return displayed.formatted(.number.precision(.fractionLength(0 ... decimals)))
+        return HLValueFormat.number(displayed, fractionDigits: 0 ... decimals)
     }
 }

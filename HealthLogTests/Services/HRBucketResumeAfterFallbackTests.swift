@@ -3,7 +3,7 @@
     @testable import HealthLog
     import Testing
 
-    /// SYNC-HR (1.5) — server #586, promise 2 (lutzkind, mbreitkreuz): after a
+    /// Server #586, promise 2 (lutzkind, mbreitkreuz): after a
     /// day that fell back to single readings, the 10-minute heart rate comes
     /// back on the next UTC day.
     ///

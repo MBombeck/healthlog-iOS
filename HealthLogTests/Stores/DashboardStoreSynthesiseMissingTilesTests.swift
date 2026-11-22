@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// DASHBOARD-TILE-COMPLETENESS — pin the synthesis pass that closes the
+/// Pin the synthesis pass that closes the
 /// "großes Nichts" gap between the server `/api/dashboard/summary`
 /// fast-path (which omits BP / Puls / Schlaf for many users) and the
 /// chart-detail's `/api/measurements/series` source of truth.

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A360-1 M2 — locks the Learn-links registry mirror of the server's
+/// Locks the Learn-links registry mirror of the server's
 /// `LEARN_LINKS` / `LEARN_GUIDES` (`src/lib/learn-links.ts`). Every mapped slug
 /// MUST resolve to a guide in the catalog (no dead/404 link), and the catalog
 /// must match the 19 published server guides.

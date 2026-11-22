@@ -1,6 +1,6 @@
 import Foundation
 
-// Parity Build 4 · Item 4.5 — the `sections` SLICE of the Insights layout.
+// The `sections` SLICE of the Insights layout.
 //
 // `InsightsLayoutSection` (the row shape) has existed since v1.15.11, but only
 // as a byte-faithful ECHO: iOS round-tripped whatever the server sent and never
@@ -158,10 +158,10 @@ public extension InsightsLayout {
     }
 }
 
-// MARK: - P8 — the ECG sub-page slug
+// MARK: - The ECG sub-page slug
 
 public extension InsightsLayoutTileId {
-    /// v0141 W-PARITY (P8) — the ECG recording surface slug (web
+    /// The ECG recording surface slug (web
     /// `/insights/ecg`, server v1.28.50). A composite special page: ECG carries
     /// no `MeasurementType` at all, so it has no chartable `MetricKind`.
     ///

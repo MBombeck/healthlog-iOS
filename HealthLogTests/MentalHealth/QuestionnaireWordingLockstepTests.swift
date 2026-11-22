@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **The questionnaire text is the server's, byte for byte (L10N-MH).**
+/// **The questionnaire text is the server's, byte for byte.**
 ///
 /// `scripts/l10n/sync-questionnaire-wording.py --server-ref v1.46.6` copies the
 /// PHQ-9, GAD-7, WHO-5 and SCI wording from the server modules into one file
@@ -16,7 +16,9 @@ struct QuestionnaireWordingLockstepTests {
     static let pinnedSHA256: [AppLanguage: String] = [
         .de: "1900e03bf14d7a890c23bdc06c70f41cecccf4694a553d55099f9e38fa81828d",
         .en: "42bac75d75fcb57ed0276666a27740e1dcaa471f640654586765807bfef405c2",
-        .nl: "06bf378da96d1b1cd442e55a05e3aad70edf60ae42415c243c9e3ed26051e5c6"
+        .nl: "06bf378da96d1b1cd442e55a05e3aad70edf60ae42415c243c9e3ed26051e5c6",
+        .ko: "90f7ecaa8553ea1b3d2fc547174df1c330505c6546c078dbca3b5b2ecd980ae3",
+        .es: "7999954117678524abe33209fc98ee77977a11efc42345428370de6d8904bdc1"
     ]
 
     @Test("Every interface language has a pinned file, and the file is what the generator wrote", arguments: AppLanguage.allCases)
@@ -92,7 +94,7 @@ struct QuestionnaireWordingLockstepTests {
         }
     }
 
-    /// R2 3.4: the printed em dash before "of" reads as a comma; the gate gets
+    /// The printed em dash before "of" reads as a comma; the gate gets
     /// no exception. The generator records the change in the file.
     @Test("PHQ-9 item 6 in Dutch carries the comma from the punctuation table")
     func dutchItemSixPunctuation() throws {

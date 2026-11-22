@@ -128,7 +128,7 @@ import Foundation
     actor WorkoutHealthKitImporter {
         private let lifecycleStore: any WorkoutHealthKitStore
         private let anchoredQuerySource: any WorkoutAnchoredQueryFetching
-        /// #17 — newest-first window; `nil` disables it (synthetic tests).
+        /// Newest-first window; `nil` disables it (synthetic tests).
         private let recentWindowSource: (any WorkoutRecentWindowFetching)?
         private let clock: WorkoutCatchUpClock
         private let repo: any WorkoutBatchUploading
@@ -136,7 +136,7 @@ import Foundation
         /// generation alone cannot detect a keychain account change that occurs
         /// while a query, HR-series mapping, or upload is suspended.
         private let lease: WorkoutImportLease
-        /// GH #86 — per-session HR series source. Costs one extra
+        /// Per-session HR series source. Costs one extra
         /// `HKSampleQuery` per workout, spent only on the incremental path
         /// (see ``shouldAttachSeries(workoutCount:)``).
         let series: any WorkoutHeartRateSeriesSyncServicing
@@ -272,9 +272,10 @@ import Foundation
             pendingActivationGeneration = generation
             guard activationIsCurrent(generation) else { return .notRun }
             await lifecycleStore.executeWorkoutObserver { [weak self] in
-                // The lifecycle adapter acknowledges HealthKit before this hook,
-                // so the network sweep never holds the observer callback open.
-                Task { [weak self] in await self?.observerDidUpdate() }
+                // Awaited: the adapter acknowledges HealthKit when this returns
+                // (or at the receipt's deadline), so the sweep runs while iOS
+                // still keeps the process awake for it.
+                await self?.observerDidUpdate()
             }
 
             guard activationIsCurrent(generation) else {
@@ -439,7 +440,7 @@ import Foundation
 
         // MARK: - Sweep
 
-        /// One anchored batch, serialized through the sweep gate (N5.3).
+        /// One anchored batch, serialized through the sweep gate.
         private func observerDidUpdate() async {
             guard lifecycleState == .active else { return }
             await MainActor.run {
@@ -449,7 +450,7 @@ import Foundation
                 generation: lifecycleGeneration,
                 source: .observer,
                 mode: .incrementalOnly,
-                waitForCompletion: false
+                waitForCompletion: true
             )
         }
 
@@ -553,7 +554,7 @@ import Foundation
             var ingested = false
         }
 
-        /// #17 — one pass: the recent window first when the history is behind,
+        /// One pass: the recent window first when the history is behind,
         /// then anchored pages. Short wakes (`.incrementalOnly`) keep one page
         /// of 10 — or the recent window instead of it, never both. Processing
         /// passes keep paging while pages come back full, within
@@ -707,10 +708,16 @@ import Foundation
                     generation: generation
                 )
                 guard sweepMayProceed(generation) else { return .notRun }
+                // Deletions in Apple Health go out before the anchor may pass
+                // them; a failure throws into the transient branch below.
+                try await forwardDeletedWorkouts(result.deletedIDs)
                 // HealthKit returns an empty page without an error when workout
                 // read access is denied. Retain the prior anchor for every empty
                 // page so a later regrant can replay from the last proven point.
-                if !Self.shouldSkipAnchorSave(hadPersistedAnchor: anchor != nil, fetchedCount: result.fetchedCount) {
+                if !Self.shouldSkipAnchorSave(
+                    hadPersistedAnchor: anchor != nil,
+                    fetchedCount: result.fetchedCount + result.deletedIDs.count
+                ) {
                     saveAnchor(result.newAnchor)
                 } else {
                     HLLog.healthKit.debug(
@@ -797,18 +804,30 @@ import Foundation
             return (omittedCount, true)
         }
 
-        /// Counts what is still behind the anchor once per behind pass. Costs
-        /// one unlimited anchored read, which only happens while a long
-        /// history is still being imported; later pages decrement the count.
+        /// Counts what is still behind the anchor once per behind pass, which
+        /// only happens while a long history is still being imported; later
+        /// pages decrement the count.
+        ///
+        /// Counted page by page from a local copy of the anchor (the persisted
+        /// one never moves here), so at most one page of `HKWorkout` objects is
+        /// alive at a time (D5 #6): the unlimited read this replaced held the
+        /// whole remainder, years of workouts, in a background wake.
         private func refreshRemainingEstimate(generation: UInt64) async {
-            guard let anchor = loadAnchor(), sweepMayProceed(generation) else { return }
-            guard let rest = try? await anchoredQuerySource.fetch(anchor: anchor, limit: HKObjectQueryNoLimit),
-                  sweepMayProceed(generation) else { return }
+            guard var cursor = loadAnchor(), sweepMayProceed(generation) else { return }
+            let ahead = Set(loadBacklog().deliveredAhead)
+            var remaining = 0
+            for _ in 0 ..< WorkoutCatchUpPolicy.maxCountPages {
+                guard let page = try? await anchoredQuerySource.fetch(
+                    anchor: cursor,
+                    limit: WorkoutCatchUpPolicy.countPageLimit
+                ), sweepMayProceed(generation) else { return }
+                remaining += page.fetchedCount - page.workouts.count(where: { ahead.contains($0.uuid.uuidString) })
+                guard page.fetchedCount >= WorkoutCatchUpPolicy.countPageLimit, let next = page.newAnchor else { break }
+                cursor = next
+            }
             var backlog = loadBacklog()
             guard backlog.isBehind == true else { return }
-            let ahead = Set(backlog.deliveredAhead)
-            let aheadInRest = rest.workouts.count(where: { ahead.contains($0.uuid.uuidString) })
-            backlog.remainingEstimate = max(0, rest.fetchedCount - aheadInRest)
+            backlog.remainingEstimate = max(0, remaining)
             saveBacklog(backlog)
             await publishHistoryImport(backlog)
         }
@@ -829,7 +848,7 @@ import Foundation
         /// server's 100-workout cap. The Idempotency-Key (per chunk) + the
         /// externalId upsert make a re-delivered chunk a no-op.
         private func drain(_ dtos: [WorkoutIngestDTO], generation: UInt64) async throws {
-            // GH #86 — a batch carrying HR series chunks far smaller: 100
+            // A batch carrying HR series chunks far smaller: 100
             // series-bearing workouts would push the body past the route's
             // 5 MB ceiling (413). Series-free batches keep the 100-cap; 1.5
             // ROUTES also closes a chunk at the route point budget.
@@ -885,8 +904,24 @@ import Foundation
         // MARK: - Anchor persistence (UserDefaults, per PROJECT_GUIDE.md battery rationale)
 
         private func loadAnchor() -> HKQueryAnchor? {
-            // W-HK-RELIABILITY H-2 — surface decode failures + controlled reset.
+            // Surface decode failures + controlled reset.
             defaultsBox.loadAnchor(forKey: anchorKey, label: "workout")
+        }
+
+        /// Sends this page's deleted workouts once the server has the route.
+        /// A refusal the server would repeat is dropped; anything else throws.
+        private func forwardDeletedWorkouts(_ ids: [String]) async throws {
+            let owner = lease.ownerUserID
+            // While the route is closed the deletions wait in their own list,
+            // so the anchor may move without losing them.
+            let all = defaultsBox.workoutDeletionsToSend(ids, ownerID: owner)
+            guard !all.isEmpty else { return }
+            do {
+                try await repo.deleteAppleHealthWorkouts(all, ownerUserID: owner)
+            } catch where AppleHealthDeleteRefusal.isFinal(error) {
+                HLLog.healthKit.error("workout deletions refused by the server — not retried")
+            }
+            defaultsBox.clearWorkoutDeletions(ownerID: owner)
         }
 
         private func saveAnchor(_ anchor: HKQueryAnchor?) {

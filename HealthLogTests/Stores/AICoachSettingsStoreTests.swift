@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Build 6 / Item 6.6 — Coach/AI privacy toggle persistence.**
+/// **Coach/AI privacy toggle persistence.**
 ///
 /// Exercises `AICoachSettingsStore` over the **real** `APIClient` with a stubbed
 /// `URLSession` (`MockURLProtocol`) — never a mock server (PROJECT_GUIDE.md). Pins the

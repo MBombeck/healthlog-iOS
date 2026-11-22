@@ -1,6 +1,6 @@
 import XCTest
 
-/// W5a (v0.12) — captures the Insights **overview** (de-duped Vitals + Targets,
+/// Captures the Insights **overview** (de-duped Vitals + Targets,
 /// no MoodSummary/BMI duplication) and a **per-metric page** (inline editorial
 /// assessment + period-over-period delta) on the live demo tenant, so the
 /// operator can SEE the entry-page polish without walking the app. Screenshots
@@ -17,7 +17,7 @@ final class InsightsW5aWalkthroughTest: XCTestCase {
 
     func test_capture_insights_overview_and_metric_page() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot.
+        // Network-free hermetic boot.
         _ = app.launchHermeticAndWaitForDashboard(timeout: 60)
         Thread.sleep(forTimeInterval: 2)
 

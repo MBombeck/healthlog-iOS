@@ -18,10 +18,6 @@ struct OnDeviceLanguageGateSimulatorTests {
     @Test("supportsLocale answers yes for every interface language, every time")
     func modelSupportsEveryInterfaceLanguage() {
         #if canImport(FoundationModels)
-            guard #available(iOS 26.0, *) else {
-                Issue.record("FoundationModels needs iOS 26; the rule 16 evidence runs on the iOS 27.2 simulator")
-                return
-            }
             let model = SystemLanguageModel.default
             for language in AppLanguage.allCases {
                 let locale = OnDeviceLanguageGate.modelLocale(for: language)

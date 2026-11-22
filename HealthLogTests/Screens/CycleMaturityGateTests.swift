@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **C1 — fertility-prediction maturity gate.**
+/// **Fertility-prediction maturity gate.**
 ///
 /// Pins the trust + App Store §1.4.1 / EU-MDR contract: a still-learning user
 /// (`< CycleMaturity.minCyclesForFertility` confirmed cycles, OR a prediction

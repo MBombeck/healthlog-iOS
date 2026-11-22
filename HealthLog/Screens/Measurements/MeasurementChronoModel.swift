@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.8 — pure, view-free model for the **chronological** cross-category
+/// Pure, view-free model for the **chronological** cross-category
 /// measurement feed (`MeasurementsChronoFeed`, mounted as the "Chronologisch"
 /// mode of `MeasurementsPickerScreen`).
 ///
@@ -255,13 +255,17 @@ enum MeasurementChronoModel {
     /// shared by the per-kind drill-down row (`MeasurementListScreen`) and the
     /// chronological feed row, so the two surfaces never disagree on a value.
     ///
-    /// **A360-5 C-1.** Routes through `MetricValueFormatter` so the value is
+    /// Routes through `MetricValueFormatter` so the value is
     /// rendered in the user's chosen unit (kg→lb, mmHg→kPa, mg/dL→mmol/L),
     /// exactly like the dashboard tile — not the raw canonical value. List rows
     /// come from the list endpoint, which is canonical for ALL kinds (including
     /// glucose), so `glucose: .canonical`. Default-unit users see the same
     /// numbers as before.
     static func formattedValue(_ measurement: Measurement, units: UnitPreferences) -> String {
+        // Sleep reads in hours and minutes, as on the start page.
+        if let duration = MetricDurationFormat.text(measurement.primaryValue, kind: measurement.kind) {
+            return duration
+        }
         let value = MetricValueFormatter.formattedValue(measurement, units: units)
         let suffix = MetricValueFormatter.unitSuffix(for: measurement.kind, units: units)
         return suffix.isEmpty ? value : "\(value) \(suffix)"

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// v0.14.8 W3-MEDCONTRACT — server-ledger Verlauf.
+// Server-ledger Verlauf.
 //
 // Renders the medication-detail history from the server's unified
 // dose-history ledger (`GET …/dose-history`) instead of the raw intake
@@ -14,7 +14,7 @@ import SwiftUI
 //
 // Mounted by `MedicationDetailScreen` only when the ledger loaded; the
 // legacy `IntakeHistorySection` stays as the verbatim fallback for
-// ≤ v1.15.17 servers / standalone mode. Filter + collapse affordances
+// ≤ v1.15.17 servers. Filter + collapse affordances
 // mirror the legacy section so the swap is invisible in muscle memory.
 
 /// Filter mirroring `VerlaufFilter` on the legacy section.
@@ -25,7 +25,7 @@ private enum LedgerFilter: Hashable {
 
 struct LedgerHistorySection: View {
     let rows: [MedicationDoseHistoryRow]
-    /// **H6** — the medication's configured dose, used to decide whether a
+    /// The medication's configured dose, used to decide whether a
     /// row's recorded `doseTaken` is a deviation worth surfacing as a quiet
     /// badge. Empty / nil = no configured dose to compare against.
     var scheduledDose: String = ""
@@ -45,86 +45,92 @@ struct LedgerHistorySection: View {
     let onUnpin: (MedicationDoseHistoryRow) -> Void
 
     @State private var filter: LedgerFilter = .alle
-    /// D9 parity — collapsed to the 7 most-recent entries by default.
-    @State private var isExpanded = false
+    /// On the detail page the history shows its newest entries and a row
+    /// to the full list; the full list is its own page with the filter.
+    var mode: Mode = .preview
 
-    private static let collapsedCount = 7
+    enum Mode {
+        case preview
+        case full
+    }
+
+    /// Entries the detail page shows before the row to the full list.
+    static let previewCount = 5
+
+    /// The newest entries the detail page shows inline.
+    nonisolated static func previewRows(_ rows: [MedicationDoseHistoryRow]) -> [MedicationDoseHistoryRow] {
+        Array(rows.sorted { $0.at > $1.at }.prefix(previewCount))
+    }
+
+    /// Whether the detail page shows the row to the full list: whenever there
+    /// is a history at all, like every detail page's history (Z16 §8).
+    nonisolated static func showsFullListRow(_ rows: [MedicationDoseHistoryRow]) -> Bool {
+        !rows.isEmpty
+    }
 
     private var visibleRows: [MedicationDoseHistoryRow] {
         let sorted = rows.sorted { $0.at > $1.at }
-        let windowed = isExpanded ? sorted : Array(sorted.prefix(Self.collapsedCount))
-        switch filter {
-        case .alle:
-            return windowed
-        case .nichtGenommen:
-            // Server-graded equivalents of the legacy "Nicht genommen"
-            // read: deliberate skips + true misses. Upcoming rows are
-            // dropped (they have not had a chance yet).
-            return windowed.filter { $0.status == .missed || $0.status == .skipped }
+        switch mode {
+        case .preview:
+            return Self.previewRows(rows)
+        case .full:
+            switch filter {
+            case .alle:
+                return sorted
+            case .nichtGenommen:
+                // Server-graded equivalents of the legacy "Nicht genommen"
+                // read: deliberate skips + true misses. Upcoming rows are
+                // dropped (they have not had a chance yet).
+                return sorted.filter { $0.status == .missed || $0.status == .skipped }
+            }
         }
     }
 
     var body: some View {
         let shown = visibleRows
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                HLSectionLabel("History")
-                Spacer()
-                filterMenu
-            }
-            HLCard {
-                if shown.isEmpty {
-                    Text(emptyLabel)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(shown.enumerated()), id: \.element.id) { idx, row in
-                            LedgerHistoryRow(
-                                row: row,
-                                scheduledDose: scheduledDose,
-                                now: now,
-                                site: row.intake?.id.flatMap(siteFor),
-                                onMarkTaken: { onMarkTaken(row) },
-                                onMarkSkipped: { onMarkSkipped(row) },
-                                onDelete: { onDelete(row) },
-                                onPin: { onPin(row) },
-                                onUnpin: { onUnpin(row) }
-                            )
-                            if idx < shown.count - 1 {
-                                Divider().background(HLColor.separator)
-                            }
-                        }
-                        expandToggle
+        Group {
+            HLSectionHeader("History", rank: .area)
+            if shown.isEmpty {
+                HLCard { HLEmptyNote(Text(emptyLabel)) }
+            } else {
+                HLCard(layout: .rows) {
+                    ForEach(shown) { row in
+                        LedgerHistoryRow(
+                            row: row,
+                            scheduledDose: scheduledDose,
+                            now: now,
+                            site: row.intake?.id.flatMap(siteFor),
+                            onMarkTaken: { onMarkTaken(row) },
+                            onMarkSkipped: { onMarkSkipped(row) },
+                            onDelete: { onDelete(row) },
+                            onPin: { onPin(row) },
+                            onUnpin: { onUnpin(row) }
+                        )
+                    }
+                    if mode == .preview, Self.showsFullListRow(rows) {
+                        HLDrillRow("med.history.show_all", count: rows.count)
+                            .hlRowLink { fullPage }
+                            .accessibilityIdentifier("med.history.showAll")
                     }
                 }
             }
         }
+        // The filter belongs to the full list's bar, not to its content.
+        .hlPageActions(mode == .full ? HLTabHeaderActions([filterAction]) : .none)
     }
 
-    @ViewBuilder
-    private var expandToggle: some View {
-        if filter == .alle, rows.count > Self.collapsedCount {
-            Button {
-                isExpanded.toggle()
-            } label: {
-                HStack {
-                    Spacer()
-                    Text(isExpanded
-                        ? String(localized: "med.verlauf.history.show_less")
-                        : String(localized: "med.verlauf.history.show_more"))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                }
-                .padding(.top, HLSpace.md)
-            }
-            .buttonStyle(.plain)
-        }
+    /// The whole history on a page of its own, with the filter.
+    private var fullPage: some View {
+        var full = self
+        full.mode = .full
+        return HLPage { full }
+            .navigationTitle(Text("History"))
+            .navigationBarTitleDisplayMode(.inline)
+            .hlDeleteConfirmation()
     }
 
-    private var filterMenu: some View {
-        Menu {
+    private var filterAction: HLTabHeaderAction {
+        .filter(label: "Filter history", isSelected: filter != .alle) {
             Picker(
                 selection: $filter,
                 label: Text(String(localized: "Filter history"))
@@ -132,26 +138,6 @@ struct LedgerHistorySection: View {
                 Text(String(localized: "All")).tag(LedgerFilter.alle)
                 Text(String(localized: "Not taken")).tag(LedgerFilter.nichtGenommen)
             }
-        } label: {
-            HStack(spacing: HLSpace.xxs) {
-                Text(filterLabel)
-                    .font(.hlCaption.weight(.semibold))
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.hlIcon(HLIconSize.rowAction, weight: .regular))
-            }
-            .foregroundStyle(HLText.secondary)
-            .contentShape(Rectangle())
-            .accessibilityLabel(Text(String(localized: "Filter history")))
-            .accessibilityValue(Text(filterLabel))
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-    }
-
-    private var filterLabel: String {
-        switch filter {
-        case .alle: String(localized: "All")
-        case .nichtGenommen: String(localized: "Not taken")
         }
     }
 
@@ -170,7 +156,7 @@ struct LedgerHistorySection: View {
 /// so the ledger swap reads as the same primitive.
 struct LedgerHistoryRow: View {
     let row: MedicationDoseHistoryRow
-    /// **H6** — the medication's configured dose for the deviation comparison.
+    /// The medication's configured dose for the deviation comparison.
     var scheduledDose: String = ""
     var now: Date = .now
     /// Injection-site raw value resolved by the parent (ledger rows don't
@@ -182,82 +168,80 @@ struct LedgerHistoryRow: View {
     let onPin: () -> Void
     let onUnpin: () -> Void
 
+    /// One ledger entry as a history row (Z22): date and time as the title,
+    /// the side facts (context, site, source, pin) joined on one detail line,
+    /// the dose taken on the right with the server's grade as its status
+    /// text. The actions live in the row's context menu (Z18, Z21).
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(timestamp)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(1)
-                if let caption = contextCaption {
-                    Text(caption)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .lineLimit(1)
-                }
-                if let site {
-                    Text(siteLabel(site))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .lineLimit(1)
-                }
-                // H6 — quiet deviation badge: the dose actually taken when it
-                // differs from the configured dose (e.g. a half tablet / a
-                // titration step). Surfaced as a calm caption, not an alarm.
-                if let deviation = doseDeviation {
-                    Label {
-                        Text(String(
-                            format: String(localized: "med.ledger.dose_deviation"),
-                            deviation
-                        ))
-                    } icon: {
-                        Image(systemName: "pills")
-                    }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLColor.statusWarn)
-                    .lineLimit(1)
-                    .accessibilityLabel(Text(String(
-                        format: String(localized: "med.ledger.dose_deviation.a11y"),
-                        deviation
-                    )))
-                }
-                // Build 6.3 (#64) — provenance chip: renders ONLY when the
-                // server stamps a `source` we can label (WEB / API / REMINDER /
-                // IMPORT / APPLE_HEALTH). Since server v1.32.8 the ledger
-                // stamps it on every new intake row (CU-18), so this chip is
-                // live; a pre-migration row carries `null` and an unmodelled
-                // future literal maps to nil — both render no chip rather than
-                // a guess.
-                if let provenance = row.provenance {
-                    Label {
-                        Text(provenance.labelResource)
-                    } icon: {
-                        Image(systemName: provenance.systemImage)
-                    }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .lineLimit(1)
-                    .accessibilityLabel(Text(String(
-                        format: String(localized: "med.ledger.provenance.a11y"),
-                        String(localized: provenance.labelResource)
-                    )))
-                }
-            }
-            Spacer()
-            if row.pinned == true, !row.isAdHoc {
-                // "Zugeordnet" — slot served by a deliberate user pin.
-                Text(String(localized: "med.ledger.pinned_badge"))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-            }
-            statusIcon
-            if hasAnyAction {
-                actionMenuButton
+        Group {
+            if let dose = Self.shownDose(row: row, scheduledDose: scheduledDose) {
+                HLHistoryRow(date: Text(timestamp), detail: detail, value: Text(verbatim: dose), status: status)
+            } else {
+                HLRow(title: Text(timestamp), detail: detail, status: status)
             }
         }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
-        .contentShape(Rectangle())
+        .modifier(LedgerActionsMenu(isEnabled: hasAnyAction) { actionMenuItems })
+    }
+
+    private var detail: Text? {
+        HLRowDetail.text([
+            contextCaption,
+            site.map(siteLabel),
+            row.provenance.map { String(localized: $0.labelResource) },
+            row.pinned == true && !row.isAdHoc ? String(localized: "med.ledger.pinned_badge") : nil
+        ])
+    }
+
+    /// The dose a taken row reports: the one recorded for this take, else the
+    /// medication's configured dose. A skip, a miss or a planned slot took
+    /// nothing and shows no dose.
+    nonisolated static func shownDose(row: MedicationDoseHistoryRow, scheduledDose: String) -> String? {
+        switch row.status {
+        case .takenOnTime, .takenLate, .adHoc:
+            let recorded = row.intake?.doseTaken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let configured = scheduledDose.trimmingCharacters(in: .whitespacesAndNewlines)
+            let dose = recorded.isEmpty ? configured : recorded
+            return dose.isEmpty ? nil : dose
+        default:
+            return nil
+        }
+    }
+
+    /// The server's grade as text under the value. Only what asks for a
+    /// look carries a colour: a late take, a missed dose.
+    /// Words follow the term list (#191): Genommen, Verspätet genommen,
+    /// Übersprungen, Verpasst, Ausstehend.
+    nonisolated static func statusLine(_ status: MedicationDoseHistoryStatus?) -> HLRowStatus? {
+        switch status {
+        case .takenOnTime: HLRowStatus(MedicationDosePhase.taken.title)
+        case .adHoc: HLRowStatus(String(localized: "med.ledger.status.adhoc"))
+        case .takenLate: HLRowStatus(MedicationDosePhase.takenLate.title, tone: .warning)
+        case .skipped: HLRowStatus(MedicationDosePhase.skipped.title)
+        case .missed: HLRowStatus(MedicationDosePhase.missed.title, tone: .critical)
+        case .upcoming: HLRowStatus(MedicationDosePhase.pending.title)
+        case nil: nil
+        }
+    }
+
+    private var status: HLRowStatus? {
+        Self.statusLine(row: row)
+    }
+
+    /// #191 — the row's resolved `state` (with `takenLate`) when the server
+    /// sent one, so the ledger says "Overdue" or "Due" for today's open
+    /// slots instead of a flat "Pending"; otherwise the older `status`.
+    nonisolated static func statusLine(row: MedicationDoseHistoryRow) -> HLRowStatus? {
+        guard !row.isAdHoc,
+              let phase = MedicationDosePhase(wire: row.stateRaw, takenLate: row.takenLate == true) else
+        {
+            return statusLine(row.status)
+        }
+        let look = MedicationDoseLook(phase: phase)
+        switch look.tone {
+        case .warning, .late: return HLRowStatus(look.title, tone: .warning)
+        case .critical: return HLRowStatus(look.title, tone: .critical)
+        case .quiet, .due, .success, .muted: return HLRowStatus(look.title)
+        }
     }
 
     // MARK: - Action gating
@@ -292,88 +276,42 @@ struct LedgerHistoryRow: View {
         row.status == .takenOnTime || row.status == .takenLate || row.status == .adHoc
     }
 
-    /// **H6** — the recorded actual dose iff it deviates from the medication's
-    /// configured dose. `nil` when the row carries no `doseTaken`, or when it
-    /// matches the configured dose (case/whitespace-insensitively — no badge
-    /// for a take that merely re-documents the same dose). The string returned
-    /// is the trimmed `doseTaken` for display.
-    private var doseDeviation: String? {
-        guard let raw = row.intake?.doseTaken else { return nil }
-        let taken = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !taken.isEmpty else { return nil }
-        let configured = scheduledDose.trimmingCharacters(in: .whitespacesAndNewlines)
-        if taken.compare(configured, options: .caseInsensitive) == .orderedSame {
-            return nil
-        }
-        return taken
-    }
-
-    private var actionMenuButton: some View {
-        Menu {
-            if canRetroMark {
-                if !currentlyTaken {
-                    Button {
-                        onMarkTaken()
-                    } label: {
-                        Label(String(localized: "Mark as taken"), systemImage: "checkmark.circle")
-                    }
-                }
-                if row.status != .skipped {
-                    Button {
-                        onMarkSkipped()
-                    } label: {
-                        Label(String(localized: "Mark as skipped"), systemImage: "xmark.circle")
-                    }
-                }
+    @ViewBuilder
+    private var actionMenuItems: some View {
+        if canRetroMark {
+            if !currentlyTaken {
+                Button("Mark as taken", systemImage: "checkmark.circle", action: onMarkTaken)
             }
-            if canPin, let slot = row.nearestSlot {
-                Button {
-                    onPin()
-                } label: {
-                    Label(
-                        String(localized: "med.ledger.action.pin"),
-                        systemImage: "pin"
-                    )
-                }
+            if row.status != .skipped {
+                Button("Mark as skipped", systemImage: "forward.end", action: onMarkSkipped)
+            }
+        }
+        if canPin, let slot = row.nearestSlot {
+            Button("med.ledger.action.pin", systemImage: "pin", action: onPin)
                 .accessibilityHint(Text(String(
                     format: String(localized: "med.ledger.due_context"),
-                    slot.timeOfDay
+                    ClockTimeText.wire(slot.timeOfDay)
                 )))
-            }
-            if canUnpin {
-                Button {
-                    onUnpin()
-                } label: {
-                    Label(String(localized: "med.ledger.action.unpin"), systemImage: "pin.slash")
-                }
-            }
-            if canDelete {
-                Divider()
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label(String(localized: "Delete entry"), systemImage: "trash")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.hlIcon(HLIconSize.lg, weight: .regular))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
-                .accessibilityLabel(Text(String(localized: "Edit or delete entry")))
         }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
+        if canUnpin {
+            Button("med.ledger.action.unpin", systemImage: "pin.slash", action: onUnpin)
+        }
+        if canDelete {
+            Divider()
+            // #188 (7): deleted at once, undone from the toast.
+            HLDeleteMenuItem(.undoable {
+                onDelete()
+            })
+        }
     }
 
     // MARK: - Presentation
 
     private var timestamp: String {
         let date = row.intake?.takenAt ?? row.at
-        // M3 — date part keeps the locale order; the clock part honours the
+        // Date part keeps the locale order; the clock part honours the
         // user's time-format preference via the central `HLTimeFormat` helper.
-        let datePart = date.formatted(.dateTime.day().month(.abbreviated))
+        let datePart = HLDateFormat.dayMonth(date)
         return "\(datePart), \(HLTimeFormat.time(date))"
     }
 
@@ -384,61 +322,36 @@ struct LedgerHistoryRow: View {
             return String(localized: "med.history.auto_recorded")
         }
         if row.status == .takenLate {
-            let planned = row.timeOfDay
+            // #191: "Geplant" is gone; the late take names its dose, in the
+            // person's hour cycle.
+            let planned = row.timeOfDay.map { ClockTimeText.wire($0) }
                 ?? HLTimeFormat.time(row.at)
-            return String(format: String(localized: "med.ledger.planned_time"), planned)
+            return String(format: String(localized: "med.ledger.for_dose", defaultValue: "For the %@ dose"), planned)
         }
-        if row.isAdHoc {
-            if let slot = row.nearestSlot {
-                return String(format: String(localized: "med.ledger.due_context"), slot.timeOfDay)
-            }
-            return String(localized: "med.ledger.status.adhoc")
+        // An ad-hoc take says so in its status; the detail names the slot
+        // it could have served.
+        if row.isAdHoc, let slot = row.nearestSlot {
+            return String(format: String(localized: "med.ledger.due_context"), ClockTimeText.wire(slot.timeOfDay))
         }
         return nil
     }
 
-    /// Server-graded status glyph. Same shape language as the legacy row
-    /// (filled check = taken, x = skipped, hollow = missed, clock =
-    /// upcoming) with the Verlauf track's green/yellow/red status tints so
-    /// every compliance surface tells one story.
-    @ViewBuilder
-    private var statusIcon: some View {
-        switch row.status {
-        case .takenOnTime, .adHoc:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLColor.statusOK)
-                .accessibilityLabel(String(localized: "med.ledger.status.on_time"))
-        case .takenLate:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLColor.statusWarn)
-                .accessibilityLabel(String(localized: "med.ledger.status.late"))
-        case .skipped:
-            Image(systemName: "xmark.circle.fill")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityLabel(String(localized: "med.ledger.status.skipped"))
-        case .missed:
-            Image(systemName: "circle")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLColor.statusBad)
-                .accessibilityLabel(String(localized: "med.ledger.status.missed"))
-        case .upcoming:
-            Image(systemName: "clock")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityLabel(String(localized: "med.ledger.status.upcoming"))
-        case nil:
-            // Unknown future status literal — inert neutral dot.
-            Image(systemName: "circle.dotted")
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.tertiary)
-        }
-    }
-
     private func siteLabel(_ site: String) -> String {
-        let cleaned = site.replacingOccurrences(of: "_", with: " ")
-        return cleaned.prefix(1).uppercased() + cleaned.dropFirst()
+        IntakeHistoryRow.injectionSiteLabel(site)
+    }
+}
+
+/// The ledger row's actions as its context menu; a row without any action
+/// gets no menu, so a long press does not open an empty one.
+private struct LedgerActionsMenu<Items: View>: ViewModifier {
+    let isEnabled: Bool
+    @ViewBuilder let items: () -> Items
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.contextMenu { items() }
+        } else {
+            content
+        }
     }
 }

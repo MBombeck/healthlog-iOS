@@ -2,7 +2,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// #141 / #126 3.2 — where a plain tap on a push lands when no earlier
+    /// Where a plain tap on a push lands when no earlier
     /// branch of `dispatchAction` claimed it (mood reminder, preventive-care
     /// reminder, a medication with its id).
     ///
@@ -20,8 +20,29 @@ import Foundation
             if let path = payload.url {
                 return .route(DeepLinkRoute.fromPushPath(path))
             }
-            return payload.deepLink.map(BodyTapTarget.link)
+            if let link = payload.deepLink {
+                return .link(link)
+            }
+            // Server 1.49.0: a notable value opens its metric's page. A sealed
+            // relay envelope has no `url` and names the type in `d.metric`;
+            // without one it opens Insights.
+            if payload.eventType == measurementAnomalyEvent {
+                return .route(.insights(metric: insightsSlug(forMeasurementType: payload.metric)))
+            }
+            return nil
         }
+
+        /// The Insights slug of a server `MeasurementType` (`RESTING_HEART_RATE`
+        /// opens `resting-pulse`); `nil` for an unknown type or one without a
+        /// page of its own, which opens the overview.
+        nonisolated static func insightsSlug(forMeasurementType raw: String?) -> String? {
+            guard let raw, let kind = ServerMeasurementType(rawValue: raw)?.metricKind else { return nil }
+            return InsightsLayoutTileId.slug(forKind: kind)
+        }
+
+        /// The push type of a sustained level shift in a vital (server 1.49.0,
+        /// opt-in, off by default).
+        nonisolated static let measurementAnomalyEvent = "MEASUREMENT_ANOMALY"
 
         @MainActor
         func routeBodyTap(_ payload: APNsPayload) {

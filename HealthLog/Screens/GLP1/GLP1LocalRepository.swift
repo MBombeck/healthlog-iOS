@@ -41,8 +41,13 @@ public actor GLP1LocalRepository {
     /// doesn't pollute the ladder display.
     public static let maxDoseMg: Double = 100
 
-    public init(store: GLP1LocalStore) {
+    /// #169 — the server seam for titration steps and the site of a
+    /// recorded dose. `nil` (tests, previews) keeps the journals local.
+    public nonisolated let doseChangeServer: Glp1DoseChangeRepository?
+
+    public init(store: GLP1LocalStore, doseChangeServer: Glp1DoseChangeRepository? = nil) {
         storeState = .resolved(store)
+        self.doseChangeServer = doseChangeServer
     }
 
     /// Production init — defers `GLP1LocalStore` resolution until the first
@@ -50,8 +55,9 @@ public actor GLP1LocalRepository {
     /// detached task via `makeWithRecoveryTask()`; we await it lazily on first
     /// use so app launch no longer pays for the SwiftData open on the
     /// cold-launch tick (audit P-1).
-    public init(storeTask: Task<GLP1LocalStore, Never>) {
+    public init(storeTask: Task<GLP1LocalStore, Never>, doseChangeServer: Glp1DoseChangeRepository? = nil) {
         storeState = .pending(storeTask)
+        self.doseChangeServer = doseChangeServer
     }
 
     /// Single-flight resolve of the deferred store. First caller awaits the
@@ -84,11 +90,11 @@ public actor GLP1LocalRepository {
     /// (audit P-1). Consumed by `init(storeTask:)`, resolved lazily on first
     /// use. Unlike the Outbox (whose `BGTaskScheduler.register` must run in
     /// `applicationDidFinishLaunching`), this store has no launch-tick coupling.
-    public static func makeWithRecoveryTask() -> GLP1LocalRepository {
+    public static func makeWithRecoveryTask(doseChangeServer: Glp1DoseChangeRepository? = nil) -> GLP1LocalRepository {
         let task = Task.detached(priority: .userInitiated) {
             makeStoreWithRecovery()
         }
-        return GLP1LocalRepository(storeTask: task)
+        return GLP1LocalRepository(storeTask: task, doseChangeServer: doseChangeServer)
     }
 
     /// Shared store-open recovery ladder used by both the sync + deferred
@@ -160,6 +166,17 @@ public actor GLP1LocalRepository {
         try await store().deleteTitrationStep(id: id)
     }
 
+    /// #169 — marks a step as uploaded: the server holds it from now on and
+    /// it is never sent again.
+    public func markTitrationStepUploaded(localID: String, serverID: String) async throws {
+        try await store().setTitrationServerID(localID: localID, serverID: serverID)
+    }
+
+    /// #169 — drops the local copies of a server step (after it was deleted).
+    public func deleteTitrationSteps(serverID: String) async throws {
+        try await store().deleteTitrationSteps(serverID: serverID)
+    }
+
     // MARK: - Side-effects
 
     public func sideEffects(
@@ -205,7 +222,7 @@ public actor GLP1LocalRepository {
         try await store().deleteSideEffect(id: id)
     }
 
-    /// v0.12 SP3 — server-id mapping helpers for the side-effect round-trip.
+    /// Server-id mapping helpers for the side-effect round-trip.
     public func setSideEffectServerID(localID: String, serverID: String) async throws {
         try await store().setSideEffectServerID(localID: localID, serverID: serverID)
     }
@@ -263,7 +280,7 @@ public actor GLP1LocalRepository {
         try await store().deletePen(id: id)
     }
 
-    /// v0.12 SP4 — server-id mapping helpers for the inventory round-trip.
+    /// Server-id mapping helpers for the inventory round-trip.
     public func setPenServerID(localID: String, serverID: String) async throws {
         try await store().setPenServerID(localID: localID, serverID: serverID)
     }
@@ -272,7 +289,7 @@ public actor GLP1LocalRepository {
         try await store().penServerID(localID: localID)
     }
 
-    /// #52 — replay one server inventory row into the local pen list (insert or
+    /// Replay one server inventory row into the local pen list (insert or
     /// update, keyed on `serverID`). See `GLP1LocalStore.upsertPenFromServer`.
     public func upsertPenFromServer(
         serverID: String,
@@ -383,7 +400,7 @@ public enum InjectionSiteRotation {
         recent: [InjectionSite],
         window: Int = defaultWindow
     ) -> InjectionSite? {
-        // Audit B-4 — the rotation plan reasons about body regions, and a site
+        // The rotation plan reasons about body regions, and a site
         // this build cannot name has none. It is dropped from the history rather
         // than counted as a region it might not be.
         let recent = recent.filter { $0 != .unknown }
@@ -425,7 +442,7 @@ public enum InjectionSiteRotation {
     enum Region { case abdomen, thigh, arm }
     enum Side { case left, right }
 
-    /// Audit B-4 — `nil` for the ``InjectionSite/unknown`` sentinel: this build
+    /// `nil` for the ``InjectionSite/unknown`` sentinel: this build
     /// knows the server sent a site, not where on the body it is.
     static func region(_ site: InjectionSite) -> Region? {
         switch site {
@@ -440,7 +457,7 @@ public enum InjectionSiteRotation {
         }
     }
 
-    /// Audit B-4 — see ``region(_:)``.
+    /// See ``region(_:)``.
     static func side(_ site: InjectionSite) -> Side? {
         switch site {
         case .abdomenLeftUpper, .abdomenLeftLower, .thighLeft, .armLeft:

@@ -65,14 +65,14 @@ public struct HealthKitConnectBanner: View {
     }
 
     private var icon: some View {
-        // v0.5.5.2 (W-IMPL-UI-COLOR-MOOD): operator real-device feedback
+        // Operator real-device feedback
         // v0.5.5.1 — der HK-Connect-Prompt las sich als Error-Banner
         // ("rote Felder"), war aber als Opt-in-Einladung gedacht. Wir
         // tönen das Heart-Glyph + die Chip-Fläche jetzt im User-Accent
         // (`.tint`-Env am Scene-Root), damit die Einladung semantisch
         // als positive Affordance liest.
         Image(systemName: "heart.fill")
-            // Audit-01 M1 — off-scale 18pt pulled onto `HLIconSize.lg` (20pt).
+            // Off-scale 18pt pulled onto `HLIconSize.lg` (20pt).
             .font(.hlIcon(HLIconSize.lg, weight: .bold))
             .foregroundStyle(.tint)
             .frame(width: 36, height: 36)
@@ -102,7 +102,7 @@ public struct HealthKitConnectBanner: View {
     }
 
     private var connectButton: some View {
-        // v0.5.2-A8: `.foregroundStyle(.tint)` reads the inherited `.tint(...)`
+        // `.foregroundStyle(.tint)` reads the inherited `.tint(...)`
         // bound at the scene root in `HealthLogApp.body`, so the connect
         // affordance picks up the user's HLTint pick instead of staying
         // pinned to brand Dracula-Purple regardless of the accent picker.

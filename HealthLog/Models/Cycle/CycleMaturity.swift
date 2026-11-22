@@ -13,7 +13,7 @@ import Foundation
 /// "still learning" caption and the disclaimer stay (those are honest).
 ///
 /// This is **not** an availability gate — that is ``CycleGate`` /
-/// `CycleGateResolver` (gender / feature-flag). This is purely a maturity
+/// `CycleGateResolver` (gender / opt-in). This is purely a maturity
 /// predicate keyed off the observed-cycle count, kept pure + `Sendable` so it is
 /// unit-testable without a SwiftUI host and shared by the calendar, the
 /// prediction summary and the hero ring.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — Google Gemini adapter
+/// Google Gemini adapter
 /// (`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`).
 ///
 /// **Key in the header, NOT the query.** Gemini accepts the key either as a

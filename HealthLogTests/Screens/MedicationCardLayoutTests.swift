@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// **v0.6.1.2 Y4 — MedicationCard contract tests.**
+/// **MedicationCard contract tests.**
 ///
 /// SwiftUI bodies are opaque to introspection; this suite anchors on
 /// the pure presentation projections the card reads from its inputs —
@@ -253,7 +253,7 @@ struct MedicationCardLayoutTests {
 
     // MARK: - Schedule value tint (state→colour, type-independent)
 
-    /// **v0.14.1 FW-MEDCARD.** The "next dose" value colour must be driven by
+    /// The "next dose" value colour must be driven by
     /// the window *state*, never by the med *type* (weekly injectable like
     /// Trulicity vs daily oral like Lisinopril). Equivalent states therefore must
     /// resolve to the identical colour on both cards.
@@ -281,9 +281,9 @@ struct MedicationCardLayoutTests {
         }
     }
 
-    // MARK: - MED-11 — structural identity (labels + compliance slot)
+    // MARK: - Structural identity (labels + compliance slot)
 
-    /// **MED-11.** The schedule strip labels must be ONE label set regardless of
+    /// The schedule strip labels must be ONE label set regardless of
     /// cadence — a weekly injectable (Trulicity) and a daily oral (Lisinopril) both
     /// read "Letzte Einnahme" / "Nächste Einnahme", never the old
     /// "Termin"/"Einnahme" divergence the operator flagged. The card resolves
@@ -299,7 +299,7 @@ struct MedicationCardLayoutTests {
         #expect(!String(localized: "med.card.schedule.daily.next.label").contains("Termin"))
     }
 
-    /// **MED-11.** A PRN / as-needed medication has no schedule → no compliance
+    /// A PRN / as-needed medication has no schedule → no compliance
     /// rate, so `displayRows` is empty. The card therefore needs a dedicated
     /// "as needed" slot (`ComplianceSlotNote`) to stay structurally identical
     /// to a scheduled card (which paints two bars). This pins the empty-rows
@@ -314,7 +314,7 @@ struct MedicationCardLayoutTests {
         #expect(String(localized: "med.card.compliance.as_needed") == "Nach Bedarf")
     }
 
-    /// **#115 B7.** A scheduled medication without a server answer paints NO
+    /// A scheduled medication without a server answer paints NO
     /// bars: the same slot says "adherence unknown" instead of a rate the
     /// device worked out from the intakes it happens to hold.
     @Test("Scheduled medication without a server answer reads unknown — same slot, no bars")

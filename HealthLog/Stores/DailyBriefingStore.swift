@@ -3,7 +3,7 @@ import Observation
 
 /// SWR-backed store for the Daily Briefing surface.
 ///
-/// **Background (A8 §5):** Until v0.4.0 the Insights screen bound `DailyBriefingHero`
+/// **Background:** Until v0.4.0 the Insights screen bound `DailyBriefingHero`
 /// to `InsightsStore.briefing → comprehensive.dailyBriefing`. The production
 /// `/api/insights/comprehensive` route does **not** emit `dailyBriefing` —
 /// it ships on `/api/insights/generate` only. The hero strip therefore never
@@ -40,13 +40,13 @@ public final class DailyBriefingStore {
     /// entirely — that hole is closed in v0.5.0+.
     public var consentGate: (@MainActor () -> Bool)?
 
-    /// **#114 / #115 · 0.2 — the `briefing` capability** (`/api/auth/me` `ai`).
+    /// **The `briefing` capability** (`/api/auth/me` `ai`).
     /// While it is unavailable the server refuses `insights/generate`, so the
     /// store asks for nothing and drops any briefing it still holds (a cached
     /// one included). `nil` (unit tests) reads as available.
     public var briefingAvailable: (@MainActor () -> Bool)?
 
-    /// **v1.16.x (GH issue #15)** — best-effort fetch of the briefing slot on
+    /// **v1.16.x** — best-effort fetch of the briefing slot on
     /// `GET /api/dashboard/snapshot`. Injected as a closure (AppContainer
     /// wires `DashboardRepository.snapshotBriefing`) so the store stays
     /// decoupled from the dashboard repo and unit tests can stub it. NOT
@@ -88,7 +88,7 @@ public final class DailyBriefingStore {
         return consentGate()
     }
 
-    /// #115 · 0.2 — `false` → the briefing capability is off: clear what is
+    /// `false` → the briefing capability is off: clear what is
     /// shown and skip the generate call.
     private func admitsBriefing() -> Bool {
         guard briefingAvailable?() ?? true else {
@@ -121,7 +121,7 @@ public final class DailyBriefingStore {
         // The snapshot read is independent of the AI-consent gate (read-only,
         // no LLM server-side) — fetch it even when the generate-call is gated
         // so the stale/no-provider render branches stay honest.
-        // 14-06 — see `MedicationsStore.load`. Declared before the first
+        // See `MedicationsStore.load`. Declared before the first
         // suspension point: `.empty` raises `isLoading` and only a terminal
         // emission lowered it, so a cancelled stream stranded it for the life of
         // the process. The consent-gated and direct-fetch returns below settle
@@ -237,7 +237,7 @@ public final class DailyBriefingStore {
 public extension DailyBriefingStore {
     /// Daily briefing block — `nil` when the server has no briefing yet.
     ///
-    /// **v1.16.x (GH issue #15):** falls back to the snapshot-delivered
+    /// **v1.16.x:** falls back to the snapshot-delivered
     /// briefing (fresh `ready` OR `briefingStale: true` last-good text) when
     /// the generate-path response carries none, so the hero paints the last
     /// generated prose instead of a preparing/empty state.

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 P2 — every convertible quantity reads in the account's unit.**
+/// **Every convertible quantity reads in the account's unit.**
 ///
 /// TestFlight 1.1.0 (284), en-US, imperial account: the dashboard weight tile
 /// said "162.1 lb" and, under it, "Target 61.9–83.3 kg". The target payload is

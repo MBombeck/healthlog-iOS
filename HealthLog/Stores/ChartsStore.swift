@@ -46,7 +46,7 @@ public final class ChartsStore {
     }
 
     private func runLoad(kind: MetricKind, days: Int) async {
-        // 14-06 — `load` cancels the previous inflight task on every picker
+        // `load` cancels the previous inflight task on every picker
         // change, and the `Task.isCancelled` fence below is a bare `return`
         // sitting ahead of every arm that would lower the flag. The last load
         // before the screen goes away therefore stranded it.
@@ -116,7 +116,7 @@ public final class ChartsStore {
     /// the raw upstream shape; that's intentional because users flip
     /// `.days` more often than they revisit the same window.
     private func applySeries(_ result: MeasurementSeries, days: Int) async {
-        // v0.12 W8-6 — the group-by downsample over ~1.5k points runs off the
+        // The group-by downsample over ~1.5k points runs off the
         // main actor so it can't stutter a range flip. `SeriesDownsampler` is a
         // pure enum over value types and `MeasurementSeries`/`SeriesPoint` are
         // `Sendable`, so the inputs + result hop safely.
@@ -124,7 +124,7 @@ public final class ChartsStore {
         let downsampled = await Task.detached(priority: .userInitiated) {
             SeriesDownsampler.downsampleIfNeeded(points, rangeDays: days)
         }.value
-        // Stats stay the server's; W-B187 (#29) unit and #135 verdict and
+        // Stats stay the server's; W-B187 unit and #135 verdict and
         // reference lines ride along.
         series = result.replacing(points: downsampled)
     }

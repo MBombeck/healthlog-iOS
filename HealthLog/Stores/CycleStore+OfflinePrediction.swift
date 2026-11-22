@@ -13,7 +13,7 @@ import Foundation
 /// came from. `CyclePredictionPinTests` holds the engine against a fixture
 /// recorded from the server's own engine, so the two cannot drift apart quietly.
 ///
-/// **Z1 (#72) — this path FORECASTS, it does not JUDGE.** Dates, bands and the
+/// **This path FORECASTS, it does not JUDGE.** Dates, bands and the
 /// expected next start are fair game on the device. `state`, `phase` and
 /// `overdueDays` are not, and never reach this file: they come from the server
 /// or from the last thing the server said (`CycleStore+Verdict.swift`). The
@@ -24,7 +24,7 @@ extension CycleStore {
     /// Compute the on-device prediction from the cached cycle history. Pure +
     /// deterministic — the 1:1 offline mirror of the server engine.
     ///
-    /// CU-25 (#72): the result is now bridged into ``CycleStore/prediction`` and
+    /// The result is now bridged into ``CycleStore/prediction`` and
     /// labelled. Before that this method wrote only `offlinePrediction`, which
     /// no surface read — the documented offline fallback existed in name only
     /// and the screen silently fell back to "still learning".

@@ -1,6 +1,6 @@
 import XCTest
 
-/// **G1 — leaving the scrolled Share screen must not freeze the app.**
+/// **Leaving the scrolled Share screen must not freeze the app.**
 ///
 /// The App Store screenshot run found it: in English, Share (Mehr → header
 /// share glyph) scrolled down, then the Insights tab — the main thread spun at
@@ -25,12 +25,12 @@ final class ShareScreenLeaveHangUITest: XCTestCase {
     func test_switching_to_insights_after_scrolling_share_keeps_the_app_responsive() {
         let app = openScrolledShareScreen()
 
-        app.tabBars.buttons["Insights"].tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .insights, in: app), "Insights tab not found")
         XCTAssertTrue(
             app.staticTexts["insights.page.header.title.overview"].waitForExistence(timeout: 20),
             "Insights never appeared after leaving the scrolled Share screen — main thread hung?"
         )
-        app.tabBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .home, in: app), "Home tab not found")
         XCTAssertTrue(
             app.staticTexts["dashboard.greeting"].waitForExistence(timeout: 20),
             "The app stopped answering after the tab switch"
@@ -61,9 +61,7 @@ final class ShareScreenLeaveHangUITest: XCTestCase {
         // Share cards have their final heights when the scroll stops.
         Thread.sleep(forTimeInterval: 12)
 
-        let moreTab = app.tabBars.buttons.element(boundBy: max(0, app.tabBars.buttons.count - 1))
-        XCTAssertTrue(moreTab.waitForExistence(timeout: 15), "More tab missing")
-        moreTab.tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .more, in: app, timeout: 15), "More tab missing")
         let shareGlyph = app.buttons["more.toolbar.share"]
         XCTAssertTrue(shareGlyph.waitForExistence(timeout: 15), "Header share glyph missing")
         shareGlyph.tap()

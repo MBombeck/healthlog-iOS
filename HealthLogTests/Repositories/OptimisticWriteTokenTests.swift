@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-20 (#69) — the shared `baseUpdatedAt` helper.**
+/// **The shared `baseUpdatedAt` helper.**
 ///
 /// Two server behaviours make this mechanism easy to get subtly wrong, and both
 /// are pinned here rather than left to the eight call sites:

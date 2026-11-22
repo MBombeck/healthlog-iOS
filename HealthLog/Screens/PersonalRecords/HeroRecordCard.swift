@@ -1,45 +1,40 @@
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — Hero Record card.
+/// Hero Record card.
 ///
 /// Apple-Fitness-Award-styled card that anchors the top of the
 /// `PersonalRecordsScreen`. Picks the user's most impressive record
 /// (`PersonalRecordsStore.heroRecord`) and renders it as a 280pt diagonal
-/// gradient hero with a 60pt kind glyph (`.bounce` on appear), a
-/// 56pt-bold value, "Bestleistung · seit \(date)" caption, and a
-/// trailing share button that opens the system share sheet with an
-/// `ImageRenderer`-rendered share image.
+/// gradient hero with a 60pt kind glyph (`.bounce` on appear), the value
+/// in the page's one hero size and a "Bestleistung seit \(date)" caption.
+/// Sharing lives in the screen's navigation bar, not on the card: glass
+/// belongs to the navigation layer, never to content.
 ///
 /// **Visual language** — diagonal gradient: kind tint at top-leading →
 /// kind tint at 35% in the middle → near-black at 85% bottom-trailing.
 /// Reduces to a single tint on Reduce Transparency.
-///
-/// **Liquid Glass** — on iOS 26+ the share button's background lifts
-/// through `.hlGlassEffect` so the affordance reads as a glass pill on
-/// the gradient. On iOS 18-25 it falls back to a translucent overlay.
 struct HeroRecordCard: View {
     let record: PersonalRecord
-    let onShare: (PersonalRecord) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// #115 P2 — the account's display units.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The account's display units.
     @Environment(\.unitPreferences) private var unitPreferences
     @State private var hasAppeared = false
-
-    /// Audit-01 H3 — the hero value keeps its 56pt visual weight at the
-    /// default setting but now scales with Dynamic Type (the pixel-locked
-    /// `hlMetric(56)` ignored accessibility text sizes entirely).
-    @ScaledMetric(relativeTo: .largeTitle) private var heroValueSize: CGFloat = 56
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             backgroundGradient
             trophyWatermark
             content
-            shareButton
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 280)
+        // At least the hero height; at the large text sizes the card grows
+        // with its words instead of cutting them at its edge.
+        .frame(minHeight: 280)
+        // The record hero is a brand surface (kind gradient, trophy
+        // watermark), not a content card: it keeps its own shape.
+        // swiftlint:disable:next hl_no_handmade_card
         .clipShape(RoundedRectangle(cornerRadius: HLRadius.xl, style: .continuous))
         .hlShadow(HLShadow.card)
         .accessibilityElement(children: .combine)
@@ -74,7 +69,7 @@ struct HeroRecordCard: View {
         )
     }
 
-    /// v0.14.1 (#139) — a subtle monochrome trophy/Pokal watermark so the big
+    /// A subtle monochrome trophy/Pokal watermark so the big
     /// hero card no longer reads as empty. Rendered in graphite/silver (white
     /// at very low opacity over the dark bottom-trailing of the gradient — NOT
     /// a loud accent colour, doctrine-safe), oversized and bled off the
@@ -111,27 +106,34 @@ struct HeroRecordCard: View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             kindGlyph
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                // The hero size of `HLValueText`; the value is drawn here
+                // because it stands in the gradient's ink, not in text primary.
                 Text(formattedValue)
-                    // Design-system rounded-bold metric token, Dynamic-Type-
-                    // scaled via `heroValueSize` (audit-01 H3).
-                    .font(.hlMetric(heroValueSize))
+                    .font(HLValueSize.hero.numberFont)
                     .foregroundStyle(HLColor.recordHeroInk)
                     .monospacedDigit()
                     .lineLimit(1)
-                    // v0.8.0 W6 — 0.6 → 0.75: hero record value held above the
+                    // 0.6 → 0.75: hero record value held above the
                     // legibility floor at large Dynamic Type.
                     .minimumScaleFactor(0.75)
                     .contentTransition(.numericText(value: record.base.value))
                 Text(unitLabel)
-                    .font(.hlSubhead.weight(.semibold))
+                    .font(HLValueSize.hero.unitFont)
                     .foregroundStyle(HLColor.recordHeroInk.opacity(0.8))
             }
             Spacer(minLength: 0)
-            HStack(spacing: HLSpace.sm) {
-                if let slot = record.base.metricSlot, !slot.isEmpty {
-                    Text(slot)
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLColor.recordHeroInk.opacity(0.9))
+            // Side by side up to XXXL; at the accessibility sizes the slot and
+            // the date stand under each other so neither breaks inside a word.
+            let footer = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+                : AnyLayout(HStackLayout(spacing: HLSpace.sm))
+            footer {
+                if let slot = Self.badgeText(slot: record.base.metricSlot) {
+                    // In the gradient's ink on a tint of it: the neutral badge
+                    // put dark words on the dark end of the gradient.
+                    Text(verbatim: slot)
+                        .foregroundStyle(HLColor.recordHeroInk)
+                        .hlText(.tileLabel)
                         .padding(.horizontal, HLSpace.sm)
                         .padding(.vertical, HLSpace.xxs)
                         .background(HLColor.recordHeroInk.opacity(0.18), in: Capsule())
@@ -155,23 +157,6 @@ struct HeroRecordCard: View {
             .accessibilityHidden(true)
     }
 
-    private var shareButton: some View {
-        Button {
-            onShare(record)
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-                // Audit-01 M1 — share-button glyph on the canonical scale
-                // (was an unannotated fixed 17pt).
-                .font(.hlIcon(HLIconSize.lg))
-                .foregroundStyle(HLColor.recordHeroInk)
-                .frame(width: 44, height: 44)
-                .hlGlassEffect(in: Circle(), fallback: HLColor.recordHeroScrim.opacity(0.25))
-        }
-        .padding(HLSpace.md)
-        .accessibilityLabel(Text("Share record"))
-        .accessibilityHint(Text("Opens the share sheet for this record."))
-    }
-
     // MARK: - Derived
 
     private var glyphName: String {
@@ -179,7 +164,7 @@ struct HeroRecordCard: View {
         return MetricKindDescriptor.descriptor(for: kind).sfSymbol
     }
 
-    /// #115 P2 — the record in the account's unit (the row is canonical).
+    /// The record in the account's unit (the row is canonical).
     private var formattedValue: String {
         let value = record.base.displayValue(unitPreferences)
         return Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
@@ -190,12 +175,43 @@ struct HeroRecordCard: View {
     }
 
     private var achievedAtLabel: String {
-        String(localized: "records.hero.since \(Self.dateFormatter.string(from: record.base.achievedAt))")
+        // Day and short month ("7. Nov."): the long date broke inside itself
+        // beside the badge.
+        String(localized: "records.hero.since \(HLDateFormat.dayMonth(Self.sinceDate(of: record.base)))")
+    }
+
+    /// The slot on the hero's badge. A streak's slot ends in its length in
+    /// brackets ("… (12 Tage)"), which the hero already shows in large type
+    /// above it; the badge keeps the rest.
+    nonisolated static func badgeText(slot: String?) -> String? {
+        guard var text = slot?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        if text.hasSuffix(")"), let open = text.lastIndex(of: "("), open > text.startIndex {
+            text = String(text[..<open]).trimmingCharacters(in: .whitespaces)
+        }
+        return text.isEmpty ? nil : text
+    }
+
+    /// Since when the record holds. A streak holds since its first day (the
+    /// day it reached is today while it runs); any other record since the day
+    /// it was reached.
+    nonisolated static func sinceDate(of record: PersonalRecordDTO) -> Date {
+        streakStart(record.externalId) ?? record.achievedAt
+    }
+
+    /// The first day of a streak from its key "streak:2026-11-03..2026-11-14".
+    nonisolated static func streakStart(_ key: String?) -> Date? {
+        guard let key, key.hasPrefix("streak:"),
+              let range = key.dropFirst("streak:".count).components(separatedBy: "..").first else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let parts = range.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
     private var accessibilityLabel: Text {
         let metric = MetricTypeLocalisation.label(forType: record.base.metricType)
-        let date = Self.dateFormatter.string(from: record.base.achievedAt)
+        let date = HLDateFormat.date(record.base.achievedAt, style: .long)
         return Text("records.hero.a11y \(metric) \(formattedValue) \(unitLabel) \(date)")
     }
 
@@ -205,13 +221,6 @@ struct HeroRecordCard: View {
         f.numberStyle = .decimal
         f.maximumFractionDigits = 1
         f.minimumFractionDigits = 0
-        return f
-    }()
-
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateStyle = .long
         return f
     }()
 }
@@ -241,7 +250,7 @@ struct HeroRecordCard: View {
         bucket: .month,
         impressiveness: 0.95
     )
-    return HeroRecordCard(record: record, onShare: { _ in })
+    return HeroRecordCard(record: record)
         .padding()
         .background(HLSurface.primary)
 }

@@ -1,20 +1,20 @@
 import SwiftUI
 
-/// **v1.18.6 (DISC-02) — one-time medical-disclaimer acknowledgment.**
+/// **v1.18.6 — one-time medical-disclaimer acknowledgment.**
 ///
 /// Replaces the scattered per-screen / per-chart "this is not medical advice"
 /// banners app-wide. The user confirms ONCE, and this sheet blocks the app
 /// until they do — jede Fläche dahinter ist also nur nach der Bestätigung
 /// erreichbar.
 ///
-/// **UI-Standard R15 (U1):** daraus folgt die eigentliche Vereinfachung. Der
+/// **UI-Standard R15:** daraus folgt die eigentliche Vereinfachung. Der
 /// Pauschaltext hat genau ZWEI Orte — dieses Sheet und die Disclaimer-Karte
 /// unter Einstellungen → Über diese App (Apple 1.4.1). Auf keiner anderen
 /// Fläche steht er. Der Zwischenschritt von v1.18.6, die verstreuten Hinweise
 /// an einen `\.medicalDisclaimerAcknowledged`-Schalter zu hängen, ist damit
 /// erledigt: `briefing.disclaimer` und die beiden Illness-Rückblick-Fußzeilen
 /// sind ersatzlos gefallen, `correlations.disclaimer` und
-/// `insights.bp.derived.caveat` sind auf ihre Zuschreibung gekürzt (R17) — und
+/// `insights.bp.derived.caveat` sind auf ihre Zuschreibung gekürzt — und
 /// der Schalter selbst ist mit ihnen verschwunden.
 ///
 /// Der Fertilitäts-Vorbehalt (`cycle.prediction.disclaimer.local`) war nie an
@@ -72,7 +72,7 @@ struct MedicalDisclaimerAckSheet: View {
             .navigationTitle(Text("disclaimer.ack.nav.title"))
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(true)
-            .safeAreaInset(edge: .bottom) {
+            .hlBottomBar {
                 HLButton(
                     String(localized: "disclaimer.ack.cta"),
                     icon: "checkmark.circle.fill",
@@ -82,8 +82,6 @@ struct MedicalDisclaimerAckSheet: View {
                 ) {
                     Task { await onAcknowledge() }
                 }
-                .padding()
-                .background(.bar)
                 .accessibilityIdentifier("disclaimer.ack.confirm")
             }
         }
@@ -111,29 +109,20 @@ struct MedicalDisclaimerAckSheet: View {
 
     /// 1.0.3 (App Review 1.4.1) — the reviewer's first screen points at the hub.
     private var sourcesPointer: some View {
-        HLCard(style: .ghost) {
+        HLCard("disclaimer.ack.sources.title", style: .ghost) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("disclaimer.ack.sources.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
                 Text("disclaimer.ack.sources.body")
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                NavigationLink {
-                    MedicalSourcesScreen()
-                } label: {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: "text.book.closed").accessibilityHidden(true)
-                        Text("disclaimer.ack.sources.cta")
-                        Image(systemName: "chevron.right").font(.hlCaption2).accessibilityHidden(true)
-                    }
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                // The sources are a page of their own: a menu row with its
+                // chevron, the whole row the link.
+                HLRow("disclaimer.ack.sources.cta", accessory: .chevron) {
+                    HLRowGlyph(symbol: "text.book.closed")
                 }
-                .buttonStyle(.plain)
+                .hlRowLink {
+                    MedicalSourcesScreen()
+                }
                 .accessibilityIdentifier("disclaimer.ack.sourcesLink")
             }
         }

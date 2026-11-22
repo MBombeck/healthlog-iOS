@@ -5,8 +5,8 @@ import Observation
 /// Server-owned onboarding-tour / setup-completion state (#32, server v1.18.6).
 ///
 /// **What moved to the server.** Whether the user has finished onboarding was
-/// previously inferred locally (Keychain token + `SyncModeStore` flag). That
-/// flag is per-install: it does not survive a reinstall and does not sync across
+/// previously inferred locally (Keychain token + a sync-mode flag). That
+/// flag was per-install: it does not survive a reinstall and does not sync across
 /// devices, so a returning user could be dropped back into the setup wizard on a
 /// fresh device even though they had already completed it elsewhere. This store
 /// reconciles the local signal against the server-owned setup state off
@@ -14,13 +14,13 @@ import Observation
 /// (`POST /api/onboarding/tour`). Progress now survives reinstall, syncs
 /// across devices, and is shared with the web.
 ///
-/// **25-03 (GH #1) — what "completed" is derived from.** The tour marker
+/// **What "completed" is derived from.** The tour marker
 /// alone answered wrongly for accounts set up in the web UI (the web setup
 /// wizard writes `onboardingCompletedAt`, not the tour marker), so the
 /// classification now derives completion from what exists on the account —
 /// see ``classifySetupCompletion(_:)``.
 ///
-/// **Phase 08 Wave 1 — what changed, and why.** Two properties collapsed three
+/// **What changed, and why.** Two properties collapsed three
 /// different worlds into one. `refresh()` answered a network failure with the
 /// cached value and left `hasLoaded == false`, which is also the state before
 /// any lookup starts and the state while one is in flight: a failed lookup was
@@ -114,7 +114,7 @@ public final class OnboardingTourStore {
     }
 
     /// Stamp the onboarding setup wizard as finished — called from the
-    /// `OnboardingFlow` terminal handoff (server / demo / standalone).
+    /// `OnboardingFlow` terminal handoff.
     /// Optimistic: flips the flag + this owner's cache immediately so routing is
     /// correct even if the server write is deferred, then best-effort posts
     /// `completed:true` (`POST /api/onboarding/tour`). A failed POST leaves the
@@ -135,7 +135,7 @@ public final class OnboardingTourStore {
             // signal for this install; the next reachable `markCompleted` /
             // `refresh` reconciles to the server. Fail-soft — log the error
             // shape only (type, no payload) so a persistent failure is
-            // diagnosable. (audit-v0162 L-E1)
+            // diagnosable.
             HLLog.ui.debug(
                 "Onboarding tour completion deferred: \(String(describing: type(of: error)), privacy: .public)"
             )
@@ -179,7 +179,7 @@ public final class OnboardingTourStore {
         }
     }
 
-    /// **25-03 (GH #1) — completeness derived from what exists on the
+    /// **Completeness derived from what exists on the
     /// account, with the marker as a fast path and never the sole source.**
     ///
     /// The tour marker is stamped by this app's wizard and by the web's

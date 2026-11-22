@@ -97,7 +97,7 @@ struct ModuleKeyRegistryDriftTests {
         // so no Set. Pairwise comparison over ~18 modules is free and still
         // catches the real risk: a copy-pasted row that kept its neighbour's copy.
         //
-        // UI-Standard R2/R6 (U5): `displaySubtitle` is now optional — a row
+        // UI-Standard R2/R6: `displaySubtitle` is now optional — a row
         // whose title already carries the whole statement has none. `nil` is
         // therefore not a duplicate; only two rows sharing the SAME copy are.
         var titles: [LocalizedStringKey] = []

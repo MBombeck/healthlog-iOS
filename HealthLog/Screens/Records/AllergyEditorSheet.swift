@@ -5,8 +5,6 @@ import SwiftUI
 /// PATCH — only changed fields, with an explicit clear for a field emptied back
 /// to nothing). `substance` is required.
 struct AllergyEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: AllergiesStore
     /// `nil` → add mode; non-nil → edit mode (prefilled).
     let record: AllergyDTO?
@@ -23,12 +21,10 @@ struct AllergyEditorSheet: View {
     @State private var note: String
     @State private var isSaving = false
     @State private var saveError: String?
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial-focus + submit-chain across the text fields.
+    /// Initial-focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
-    /// FORM-1 — onset baseline captured at init (the `@State` defaults are also
+    /// Onset baseline captured at init (the `@State` defaults are also
     /// seeded from these, so an untouched onset never reads as dirty).
     private let initialHasOnset: Bool
     private let initialOnsetAt: Date
@@ -63,7 +59,7 @@ struct AllergyEditorSheet: View {
         !substance.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving
     }
 
-    /// FORM-1 — any field diverges from the initial (create-default or prefilled)
+    /// Any field diverges from the initial (create-default or prefilled)
     /// value.
     private var isDirty: Bool {
         substance != (record?.substance ?? "")
@@ -78,24 +74,32 @@ struct AllergyEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "allergies.edit.title" : "allergies.add.sheetTitle",
+            action: isEditing ? .save(isEnabled: canSave) { await save() } : .add(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
-                Section("allergies.add.section.about") {
+                Section {
                     TextField("allergies.field.substance", text: $substance)
                         .focused($focusedField, equals: .substance)
                         .submitLabel(.next)
                         .onSubmit { focusedField = .reaction }
-                    Picker("allergies.field.category", selection: $category) {
+                    Picker(selection: $category) {
                         ForEach(AllergyCategory.allCases) { c in
                             Text(c.localizedLabel).tag(c)
                         }
+                    } label: {
+                        HLRowTitle("allergies.field.category")
                     }
-                    Picker("allergies.field.type", selection: $type) {
+                    Picker(selection: $type) {
                         ForEach(AllergyType.allCases) { t in
                             Text(t.localizedLabel).tag(t)
                         }
+                    } label: {
+                        HLRowTitle("allergies.field.type")
                     }
-                    Picker("allergies.field.severity", selection: $severity) {
+                    Picker(selection: $severity) {
                         Text("allergies.field.severity.none").tag(AllergySeverity?.none)
                         ForEach(AllergySeverity.allCases) { s in
                             Text(s.localizedLabel).tag(AllergySeverity?.some(s))
@@ -106,78 +110,80 @@ struct AllergyEditorSheet: View {
                         if record?.severity == .unknown {
                             Text(AllergySeverity.unknown.localizedLabel).tag(AllergySeverity?.some(.unknown))
                         }
+                    } label: {
+                        HLRowTitle("allergies.field.severity")
                     }
-                    Picker("allergies.field.status", selection: $status) {
+                    Picker(selection: $status) {
                         ForEach(AllergyStatus.allCases) { s in
                             Text(s.localizedLabel).tag(s)
                         }
                         if record?.status == .unknown {
                             Text(AllergyStatus.unknown.localizedLabel).tag(AllergyStatus.unknown)
                         }
+                    } label: {
+                        HLRowTitle("allergies.field.status")
                     }
+                } header: {
+                    HLSectionHeader("allergies.add.section.about")
                 }
-                Section("allergies.add.section.onset") {
-                    Toggle("allergies.field.onsetToggle", isOn: $hasOnset.animation())
+                .hlFormRowSurface()
+                Section {
+                    Toggle(isOn: $hasOnset.animation()) {
+                        HLRowTitle("allergies.field.onsetToggle")
+                    }
                     if hasOnset {
                         DatePicker(
-                            "allergies.field.onset",
                             selection: $onsetAt,
                             in: RecordsDateFormat.onsetRange,
                             displayedComponents: [.date]
-                        )
+                        ) {
+                            HLRowTitle("allergies.field.onset")
+                        }
                     }
+                } header: {
+                    HLSectionHeader("allergies.add.section.onset")
                 }
-                Section("allergies.add.section.reaction") {
+                .hlFormRowSurface()
+                Section {
                     TextField("allergies.field.reaction", text: $reaction, axis: .vertical)
                         .lineLimit(1 ... 4)
                         .focused($focusedField, equals: .reaction)
+                } header: {
+                    HLSectionHeader("allergies.add.section.reaction")
                 }
-                Section("allergies.add.section.note") {
+                .hlFormRowSurface()
+                Section {
                     TextField("allergies.field.note", text: $note, axis: .vertical)
                         .lineLimit(2 ... 5)
                         .focused($focusedField, equals: .note)
+                } header: {
+                    HLSectionHeader("allergies.add.section.note")
                 }
+                .hlFormRowSurface()
                 if let saveError {
                     Section { HLFormErrorText(saveError) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(Text(isEditing ? "allergies.edit.title" : "allergies.add.sheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("records.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("records.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave)
-                }
-            }
-            // FORM-2 — seed focus onto the substance field once the sheet settles.
+            .hlPageMargins()
+            // Seed focus onto the substance field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = .substance
             }
         }
-        // FORM-1 — guard against a swipe-down discarding unsaved edits.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
     }
 
-    private func save() async {
+    /// `true` when the record went out and the sheet may close.
+    private func save() async -> Bool {
         isSaving = true
         saveError = nil
         defer { isSaving = false }
         let succeeded = isEditing ? await saveEdit() : await saveCreate()
-        if succeeded {
-            dismiss()
-        } else {
+        if !succeeded {
             saveError = store.lastError ?? String(localized: "allergies.save.failed")
         }
+        return succeeded
     }
 
     private func saveCreate() async -> Bool {
@@ -217,7 +223,7 @@ struct AllergyEditorSheet: View {
         if !hasOnset {
             return record.onsetAt == nil ? .unchanged : .clear
         }
-        // M1 — only emit `.set` when the picked day actually differs from the
+        // Only emit `.set` when the picked day actually differs from the
         // stored one (avoids re-writing an untouched onset on every edit), and
         // encode it day-anchored (noon UTC) so the stored date can't smear.
         if let existing = record.onsetAt,

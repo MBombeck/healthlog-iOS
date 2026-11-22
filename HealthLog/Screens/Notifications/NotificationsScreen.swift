@@ -36,25 +36,25 @@ struct NotificationsScreen: View {
     /// on reduce-motion (app-wide "ALWAYS reduce-motion-gated" doctrine).
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State var store: NotificationsStore?
-    /// v0.14.2 FW7 — per-user notification-channel settings (ntfy + Telegram).
+    /// Per-user notification-channel settings (ntfy + Telegram).
     /// Server-first, gated by `/api/settings/global-services`. Built lazily in
     /// `initializeStore` off the same `container.api` as the APNs store.
     @State var servicesStore: NotificationServicesStore?
     @State var systemAuthorizationStatus: NotificationsSystemStatus = .unknown
-    /// v0.5.4.3 HP5 — tracks the in-flight mood-reminder toggle PATCH so
+    /// Tracks the in-flight mood-reminder toggle PATCH so
     /// the UI can show a subtle progress glyph while the server confirms.
     @State var moodReminderInFlight: Bool = false
-    /// MED-4 / C3 — in-flight guard while a low-supply threshold PATCH is in
+    /// In-flight guard while a low-supply threshold PATCH is in
     /// flight, so a rapid re-toggle / re-step can't fire overlapping writes.
     @State var lowStockInFlight: Bool = false
-    /// W-B189 (#23) — in-flight guard while the preventive-care reminder opt-in
+    /// In-flight guard while the preventive-care reminder opt-in
     /// PATCH is in flight, so a rapid re-toggle can't fire overlapping writes.
     @State var measurementReminderInFlight: Bool = false
-    /// MED-4 / C3 — the stepper's working value while the alert is on. Seeded
+    /// The stepper's working value while the alert is on. Seeded
     /// from the store's threshold (or the server default 7) on appear, so a
     /// flip-on lands a sensible starting value the user can then tune.
     @State var lowStockDaysSelection: Int = medicationLowStockRunwayDefault
-    /// v0.10.0 W-Mood-B — locally-selected evening reminder hour (0–23). `nil`
+    /// Locally-selected evening reminder hour (0–23). `nil`
     /// until the user picks a time; the picker then falls back to the
     /// store's server-mirrored hour.
     @State var moodReminderHourSelection: Int?
@@ -74,63 +74,53 @@ struct NotificationsScreen: View {
     /// W-B188 (AUDIT-SEC-b187 High) — device-local "hide medication name on
     /// lock screen" opt-out. Seeded from `LockScreenPrivacy` on appear; the
     /// toggle persists via the same helper. Default OFF (real name shown).
-    @State var hideMedicationNameOnLockScreen: Bool = LockScreenPrivacy.hideMedicationName()
-    /// **W-THRESHOLD-NUDGE** — device-local opt-in for the MDR-safe out-of-range
+    @State var hideMedicationNameOnLockScreen: Bool = LockScreenPrivacy.hideMedicationNameSetting()
+    @State var hideNotificationContent: Bool = NotificationContentPrivacy.isOn()
+    /// Device-local opt-in for the MDR-safe out-of-range
     /// nudge. Seeded from `ThresholdNudgePrefStore` on appear; the toggle
     /// persists via the same helper. Default OFF (opt-in).
     @State var outOfRangeNudgeEnabled: Bool = ThresholdNudgePrefStore.isEnabled()
 
     var body: some View {
-        // W1-5 / R5 #2 — converted from a multi-section `List` to the
-        // `HLSettingsPage + HLSettingsCard` rhythm so the Notifications
-        // sub-screen reads identical to every other Settings sub-screen
-        // (Konto, Integrationen etc.). Every preserved row + toggle +
-        // button stays — the envelope changes from `Section{} header{}
-        // footer{}` to `HLSettingsCard(icon:title:footer:)`.
-        HLSettingsPage(title: "Notifications") {
+        // A page of cards like every other settings page.
+        HLPage {
             systemPermissionCard
+            padReminderCard
             channelsCard
             serviceChannelCards
             moodReminderCard
+            snoozeCard
             lowStockCard
             measurementReminderCard
             outOfRangeNudgeCard
             preferencesCards
             lockScreenPrivacyCard
+            PushRelaySettingsCard()
             notificationContentCard
             testPushCard
             systemSettingsCard
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
+            // Canonical sync-status footer (same
             // primitive as Dashboard/Insights, self-suppressing).
             HLSyncStatusFooter(screenLoading: store?.isLoading == true)
         }
         .navigationTitle("Notifications")
-        // SET-V2-C (C-5) — pushed from the Settings hub; sub-screen canon is `.inline`.
+        // Pushed from the Settings hub; sub-screen canon is `.inline`.
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2 — the one (i): the Focus filter (a card of text before) and
+        // The one (i): the Focus filter (a card of text before) and
         // the webhook body formats.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: info, accessibilityIdentifier: "notifications.info")
-            }
-        }
+        .hlPageActions([.info(info, identifier: "notifications.info")])
         .task { await initializeStore() }
+        .task { await container?.reminderPlanning.refresh(force: true) }
         .refreshable {
             await store?.load()
             await servicesStore?.load()
         }
         .sensoryFeedback(.success, trigger: testTapCount)
-        .alert(
+        .hlAcknowledgeAlert(
             "Error",
-            isPresented: Binding(
-                get: { store?.error != nil },
-                set: { if !$0 { store?.error = nil } }
-            ),
-            presenting: store?.error
-        ) { _ in
-            Button("OK") { store?.error = nil }
-        } message: { err in
-            // v0.14.1 #3 — never leak raw server text (e.g. a JS TypeError
+            item: Binding(get: { store?.error }, set: { if $0 == nil { store?.error = nil } })
+        ) { err in
+            // Never leak raw server text (e.g. a JS TypeError
             // "x.map is not a function") into the alert. `userFacingDescription`
             // returns a generic "Server error…" for 5xx and only surfaces the
             // server message for 4xx envelopes.
@@ -189,7 +179,7 @@ enum NotificationsSystemStatus: Equatable {
         }
     }
 
-    /// 1.4 B2 — `nil` when the title says it all ("Push aktiv").
+    /// `nil` when the title says it all ("Push aktiv").
     var subtitle: String? {
         switch self {
         case .authorized: nil
@@ -236,7 +226,7 @@ enum NotificationEventLocalization {
         "ACHIEVEMENT_UNLOCKED": "New achievement",
         "MOOD_REMINDER": "Mood reminder",
         "MEASUREMENT_REMINDER": "measurement.reminder.title",
-        // v0153 INV-D L3 — newer server categories (coach + cycle). Without an
+        // Newer server categories (coach + cycle). Without an
         // explicit entry these fell through to the old `default`, which
         // English-title-cased the raw SCREAMING_SNAKE code → "Coach Nudge",
         // "Cycle Period Confirm" leaked into the German build.
@@ -256,7 +246,7 @@ enum NotificationEventLocalization {
     /// Server event-code → localized toggle hint (subtitle). Optional: codes
     /// absent here render with no hint.
     ///
-    /// **UI-Standard R1/R2 (U6) — hier steht genau noch ein Hint.** Die Liste
+    /// **UI-Standard R1/R2 — hier steht genau noch ein Hint.** Die Liste
     /// trug 17 Unterzeilen; 13 davon buchstabierten nur ihren eigenen
     /// Zeilentitel nach („Neuer Insight" → „Wenn ein neuer Insight bereit
     /// ist.", „Eisprung" → „Rund um deinen geschätzten Eisprung-Tag.") und
@@ -267,12 +257,14 @@ enum NotificationEventLocalization {
     /// eine harte Uhrzeit („Abends 22:00"), die seit v0.10.0 W-Mood-B nur noch
     /// der Fallback-Default ist — die Uhrzeit stellt der Nutzer im DatePicker
     /// der Stimmungs-Karte ein (R7, Wahrheitspflicht); die Karte dort ist
-    /// zugleich die Heimat der Aussage (R3).
+    /// zugleich die Heimat der Aussage.
     ///
     /// `DAILY_BRIEFING` bleibt, weil „Tägliches Briefing" weder Takt noch
     /// Tageszeit nennt — der Hint trägt Information, die der Titel nicht hat.
     private static let hintByEvent: [String: LocalizedStringResource] = [
         "DAILY_BRIEFING": "1 morning banner with your day.",
+        // The title names the kind, not how often: at most once a week.
+        "MEASUREMENT_ANOMALY": "notifications.event.measurementAnomaly.hint",
         "BACKUP_HEALTH": "notifications.event.backupHealth.hint"
     ]
 
@@ -292,7 +284,7 @@ enum NotificationEventLocalization {
     }
 }
 
-// MARK: - Test-push variants (B3 §3)
+// MARK: - Test-push variants
 
 /// Three test-push shapes the user can fire from the Diagnose menu. Each
 /// variant ships a different copy + `categoryIdentifier` so the user can

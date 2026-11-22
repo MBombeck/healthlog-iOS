@@ -53,7 +53,7 @@ public actor AllergiesRepository {
     /// `includeInactive == false` returns only `status=ACTIVE`; the default
     /// (param omitted / `true`) returns all non-deleted.
     ///
-    /// **QOL-OFF-2:** the canonical all-non-deleted read (`includeInactive != false`,
+    /// The canonical all-non-deleted read (`includeInactive != false`,
     /// the store's default) routes through `swr.fetchCachingFirst(.allergies)` so
     /// the list is offline-readable. The `includeInactive == false` (active-only)
     /// variant stays network-direct.
@@ -92,7 +92,7 @@ public actor AllergiesRepository {
 
     /// `POST /api/allergies`. Returns the created record. Outbox-backed.
     ///
-    /// `clientEntityId` (audit-v0162 H-4) — the `optimistic-<uuid>` id the store
+    /// `clientEntityId` — the `optimistic-<uuid>` id the store
     /// minted for its in-memory placeholder. Stamped on the queued create so that
     /// when this replays and the server assigns a real id, `OutboxReplayService`
     /// can remap any queued offline edit/delete of the same record to the server
@@ -100,17 +100,14 @@ public actor AllergiesRepository {
     @discardableResult
     public func create(_ body: AllergyCreate, clientEntityId: String? = nil) async throws -> AllergyDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createAllergy, payload: OutboxQueue.Payloads.CreateAllergy(body: body),
+            key: key, clientEntityId: clientEntityId
+        ) { [self] in
             let req: APIRequest<AllergyDTO> = try .post("/api/allergies", body: body, idempotencyKey: key)
             let created = try await api.send(req)
             await invalidate([.allergies])
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .createAllergy, payload: OutboxQueue.Payloads.CreateAllergy(body: body),
-                key: key, clientEntityId: clientEntityId
-            )
-            throw err
         }
     }
 
@@ -119,7 +116,7 @@ public actor AllergiesRepository {
         _ = try await replayCreateReturningServerId(body, idempotencyKey: idempotencyKey)
     }
 
-    /// audit-v0162 H-4 — replay drain that returns the server-assigned id so the
+    /// Replay drain that returns the server-assigned id so the
     /// replay service can remap dependent update/delete ops off the optimistic id.
     @discardableResult
     public func replayCreateReturningServerId(_ body: AllergyCreate, idempotencyKey: String) async throws -> String {
@@ -133,17 +130,14 @@ public actor AllergiesRepository {
     @discardableResult
     public func update(id: String, _ patch: AllergyPatch) async throws -> AllergyDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateAllergy, payload: OutboxQueue.Payloads.UpdateAllergy(id: id, patch: patch),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<AllergyDTO> = try .patch("/api/allergies/\(id)", body: patch, idempotencyKey: key)
             let updated = try await api.send(req)
             await invalidate([.allergies])
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .updateAllergy, payload: OutboxQueue.Payloads.UpdateAllergy(id: id, patch: patch),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -160,17 +154,14 @@ public actor AllergiesRepository {
     @discardableResult
     public func delete(id: String) async throws -> Bool {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .deleteAllergy, payload: OutboxQueue.Payloads.DeleteAllergy(id: id),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<DeleteRecordResult> = .delete("/api/allergies/\(id)", idempotencyKey: key)
             let deleted = try await api.send(req).deleted
             await invalidate([.allergies])
             return deleted
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .deleteAllergy, payload: OutboxQueue.Payloads.DeleteAllergy(id: id),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -182,7 +173,7 @@ public actor AllergiesRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - Cache invalidation (QOL-OFF-2)
+    // MARK: - Cache invalidation
 
     /// Drop the cached list snapshot after a successful write so a mutation is
     /// never masked by a fresh-enough cached row. No-op without a coordinator.
@@ -190,34 +181,23 @@ public actor AllergiesRepository {
         await swr?.invalidate(keys)
     }
 
-    // MARK: - Outbox enqueue helper
+    // MARK: - Outbox write-ahead helper
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
-        clientEntityId: String? = nil
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(
-                kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
-            ))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Allergy outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        clientEntityId: String? = nil,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(
+            kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
+        )
+        return try await outbox.writeAhead(op, send: send)
     }
 }

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Native illness / condition-journal surface (v1.18.1 `W-B`; default-on since
 /// v1.18.3). The default destination: it lists episodes (newest-first by onset),
-/// filterable active / resolved, with neutral type + lifecycle badges. When a
+/// filterable active / resolved, each as a two-line row with its course as
+/// status text. When a
 /// user has DISABLED the module (`ModuleGate.isEnabled(.illness) == false`) it
 /// self-gates to ``IllnessOptInScreen`` as a graceful re-enable path.
 ///
@@ -21,8 +22,6 @@ struct IllnessJournalScreen: View {
     @State private var showInsights = false
     @State private var editingEpisode: IllnessEpisodeDTO?
     @State private var includeResolved = true
-    @State private var deleteConfirmation = IllnessDeleteConfirmation()
-    @State private var showDeleteConfirmation = false
     /// Re-evaluated each appear so an opt-in flip flips us from the opt-in
     /// screen to the list without a manual reload.
     @State private var isEnabled = true
@@ -58,18 +57,26 @@ struct IllnessJournalScreen: View {
                 HLAsyncListScreen(
                     phase: phase,
                     refresh: { await reload() },
-                    loading: { HLAsyncListSkeletonRows() },
-                    empty: { emptyRows },
-                    content: { if let store { loadedRows(store: store) } }
+                    loading: {
+                        SectionRootHeader("illness.journal.title", inList: true)
+                        HLAsyncListSkeletonRows()
+                    },
+                    empty: {
+                        SectionRootHeader("illness.journal.title", inList: true)
+                        emptyRows
+                    },
+                    content: {
+                        SectionRootHeader("illness.journal.title", inList: true)
+                        if let store { loadedRows(store: store) }
+                    }
                 )
+                .hlPageMargins()
             }
         }
-        .navigationTitle(Text("illness.journal.title"))
-        // V1 — `.inline` (not `.large`). See LabsScreen: a `.large` title +
-        // trailing toolbar on the titleless More root re-resolves a nav-bar
-        // inset on pop and shifts the More list down. `.inline` removes it.
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { if isEnabled { toolbar } }
+        // Inline when pushed; as a sidebar tab the journal heads itself. The
+        // short name keeps the inline title centred beside the two actions.
+        .hlSectionRootTitle(Text("illness.journal.navTitle"), headsItself: headsItself)
+        .hlPageActions(isEnabled ? pageActions : .none)
         .task { await onAppear() }
         .sheet(isPresented: $showAddSheet) {
             if let store {
@@ -86,42 +93,26 @@ struct IllnessJournalScreen: View {
                 IllnessInsightsScreen(store: store)
             }
         }
-        .hlConfirmDestructive(
-            Text("illness.delete.confirm.title"),
-            isPresented: $showDeleteConfirmation,
-            confirm: Text("illness.delete.action"),
-            cancel: Text("illness.action.cancel"),
-            onCancel: { deleteConfirmation.cancel() },
-            action: {
-                guard let candidate = deleteConfirmation.confirm(), let store else { return }
-                Task { await deleteRow(candidate, store: store) }
-            }
-        )
-        .onChange(of: showDeleteConfirmation) { _, isPresented in
-            if !isPresented {
-                deleteConfirmation.cancel()
-            }
-        }
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showInsights = true
-            } label: {
-                Label("illness.insights.title", systemImage: "chart.bar.xaxis")
-            }
-            .accessibilityIdentifier("illness.toolbar.insights")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showAddSheet = true
-            } label: {
-                Label("illness.add.title", systemImage: "plus")
-            }
-            .accessibilityIdentifier("illness.toolbar.add")
-        }
+    /// Whether the list with its own header stands: not the opt-in, not the
+    /// server's reason, not a failed load.
+    private var headsItself: Bool {
+        moduleOffReason == nil && isEnabled && store?.isDisabled != true && !phase.isError
+    }
+
+    /// One group: the insights wait in the more menu, adding stands
+    /// outermost.
+    private var pageActions: HLTabHeaderActions {
+        [
+            .more(identifier: "illness.toolbar.more") {
+                Button("illness.insights.title", systemImage: "chart.bar.xaxis") {
+                    showInsights = true
+                }
+                .accessibilityIdentifier("illness.toolbar.insights")
+            },
+            .add(label: "illness.add.title", identifier: "illness.toolbar.add") { showAddSheet = true }
+        ]
     }
 
     /// Maps store state to the stable-root render phase. `nil` store and the first
@@ -131,7 +122,7 @@ struct IllnessJournalScreen: View {
         guard let store else { return .loading }
         if store.episodes.isEmpty {
             if store.isLoading { return .loading }
-            // AUD-5 H1 — a failed fetch with no cached episodes is an ERROR, not
+            // A failed fetch with no cached episodes is an ERROR, not
             // an empty journal. Offer Retry instead of "Add your first…".
             if store.lastError != nil {
                 return .error(retry: { await reload() })
@@ -158,18 +149,22 @@ struct IllnessJournalScreen: View {
         let activeGroups = groups.filter(\.parent.isActive)
         let resolvedGroups = groups.filter { !$0.parent.isActive }
         Section {
-            Toggle("illness.journal.showResolved", isOn: $includeResolved)
-                .accessibilityIdentifier("illness.journal.showResolvedToggle")
+            Toggle(isOn: $includeResolved) {
+                HLRowTitle("illness.journal.showResolved")
+            }
+            .accessibilityIdentifier("illness.journal.showResolvedToggle")
         }
+        .hlFormRowSurface()
         Section {
             ForEach(activeGroups) { group in
                 episodeGroup(group, store: store)
             }
         } header: {
             if !activeGroups.isEmpty {
-                Text("illness.journal.section.active")
+                HLSectionHeader("illness.journal.section.active")
             }
         }
+        .hlFormRowSurface()
         Section {
             if includeResolved {
                 ForEach(resolvedGroups) { group in
@@ -178,9 +173,10 @@ struct IllnessJournalScreen: View {
             }
         } header: {
             if includeResolved, !resolvedGroups.isEmpty {
-                Text("illness.journal.section.resolved")
+                HLSectionHeader("illness.journal.section.resolved")
             }
         }
+        .hlFormRowSurface()
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
@@ -190,8 +186,10 @@ struct IllnessJournalScreen: View {
     private func episodeGroup(_ group: IllnessEpisodeGroup, store: IllnessStore) -> some View {
         episodeRow(group.parent, childCount: group.children.count, store: store)
         ForEach(group.children) { child in
+            // A child episode steps in by one card inset so it reads as part
+            // of the parent above it.
             episodeRow(child, store: store)
-                .padding(.leading, HLSpace.lg)
+                .padding(.leading, HLLayout.cardInset)
         }
     }
 
@@ -200,44 +198,36 @@ struct IllnessJournalScreen: View {
         childCount: Int = 0,
         store: IllnessStore
     ) -> some View {
-        NavigationLink {
-            IllnessEpisodeDetailScreen(store: store, episode: episode)
-        } label: {
-            IllnessEpisodeRow(episode: episode, childCount: childCount)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                deleteConfirmation.request(episode)
-                showDeleteConfirmation = true
-            } label: {
-                Label("illness.delete.action", systemImage: "trash")
+        IllnessEpisodeRow(episode: episode, childCount: childCount)
+            .hlRowLink(inList: true) {
+                IllnessEpisodeDetailScreen(store: store, episode: episode)
             }
-            Button {
-                editingEpisode = episode
-            } label: {
-                Label("illness.edit.action", systemImage: "pencil")
+            .hlSwipeDelete(.confirmed(title: "illness.delete.confirm.title") {
+                await deleteRow(episode, store: store)
+            }) {
+                Button("illness.edit.action", systemImage: "pencil") {
+                    editingEpisode = episode
+                }
+                .tint(HLAccent.userBrandTint)
             }
-            .tint(HLAccent.userBrandTint)
-        }
     }
 
     /// Empty-phase rows, rendered INSIDE the stable `List` root (not a sibling
     /// `ScrollView`).
     private var emptyRows: some View {
         Section {
-            // 1.4 B2 — the title names what goes in the journal; the
-            // sentence that listed it again under the title is gone.
-            HLEmptyState(icon: "heart.text.square", title: "illness.empty.title") {
-                HLButton("illness.add.title", icon: "plus", variant: .primary) {
-                    showAddSheet = true
-                }
+            // The title names what goes in the journal; the one action
+            // starts the first episode where the eye already is (the plus in
+            // the bar stays).
+            HLEmptyState(icon: "heart.text.square", title: "illness.empty.title", message: "illness.empty.message") {
+                HLButton("illness.add.title", systemImage: "plus", variant: .secondary) { showAddSheet = true }
+                    .accessibilityIdentifier("illness.empty.add")
             }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+            .hlFreeAreaListRow()
         }
     }
 
-    /// **Audit A-7 — the server's sentence when the module is off for a reason
+    /// **The server's sentence when the module is off for a reason
     /// that is not the viewer's own switch**, `nil` when the opt-in CTA still
     /// applies (module on, `disabled`, or no verdict from the server at all).
     ///
@@ -272,55 +262,22 @@ struct IllnessJournalScreen: View {
     }
 }
 
-/// Single episode list row: label + type/lifecycle badges + onset (and resolved
-/// caption when resolved). Neutral badges only.
+/// One episode in the journal: name, one line of side facts, the course as
+/// status text, the type as the leading symbol. The whole row opens the
+/// episode, so it carries no chevron.
 struct IllnessEpisodeRow: View {
     let episode: IllnessEpisodeDTO
     var childCount = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(spacing: HLSpace.xs) {
-                Text(episode.label)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if episode.note?.isEmpty == false {
-                    Image(systemName: "note.text")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-            HStack(spacing: HLSpace.xs) {
-                IllnessNeutralBadge(title: episode.type.localizedLabel, icon: episode.type.icon)
-                IllnessNeutralBadge(title: episode.lifecycle.localizedLabel, tone: .info)
-            }
-            if childCount > 0 {
-                let template = String(localized: "illness.journal.children.count")
-                Label(String(format: template, childCount), systemImage: "arrow.turn.down.right")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-            Text(onsetCaption)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+        let content = IllnessEpisodeRowContent(episode: episode, childCount: childCount)
+        HLRow(
+            title: Text(verbatim: content.title),
+            detail: content.detail.map { Text(verbatim: $0) },
+            status: HLRowStatus(content.status)
+        ) {
+            HLRowGlyph(symbol: content.symbol)
         }
-        .padding(.vertical, HLSpace.xxs)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var onsetCaption: String {
-        if let resolvedAt = episode.resolvedAt, !resolvedAt.isEmpty {
-            let template = String(localized: "illness.journal.onsetResolved")
-            return String(format: template, IllnessDateFormat.mediumDate(episode.onsetAt), IllnessDateFormat.mediumDate(resolvedAt))
-        }
-        let template = String(localized: "illness.journal.onsetActive")
-        return String(format: template, IllnessDateFormat.mediumDate(episode.onsetAt))
-    }
-
-    private var accessibilityText: String {
-        let template = String(localized: "illness.row.a11y")
-        return String(format: template, episode.label, episode.type.localizedLabel, onsetCaption)
+        .accessibilityLabel(content.spoken)
     }
 }

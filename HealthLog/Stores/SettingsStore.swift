@@ -22,46 +22,46 @@ public final class SettingsStore {
         didSet {
             mirrorTimeFormatPreference()
             mirrorDateFormatPreference()
-            // AUD-3 D-3 — push the resolved server-profile timezone to any
+            // Push the resolved server-profile timezone to any
             // observer (e.g. the `MeasurementsRepository` day-anchoring box) so
             // off-main-actor consumers track profile-TZ changes race-free.
             onProfileTimeZoneChange?(resolvedProfileTimeZone)
         }
     }
 
-    /// **AUD-3 D-3** — fired (on the main actor) whenever the profile timezone
+    /// Fired (on the main actor) whenever the profile timezone
     /// could change, with the freshly resolved zone. The composition root wires
     /// this to push into the `MeasurementsRepository` profile-TZ box so its
     /// `.dashboardSummary` invalidation day-key matches what `DashboardStore`
     /// reads. `@Sendable` so it can hand the value off to an actor.
     public var onProfileTimeZoneChange: (@Sendable (TimeZone) -> Void)?
 
-    /// Build 272 — announced after `updateMoodReminderEnabled` settles (the
+    /// Announced after `updateMoodReminderEnabled` settles (the
     /// value the profile now carries), so the composition root can re-arm or
     /// cancel the iOS-local evening reminder immediately instead of on the next
     /// foreground pass. Wired in `AppContainer+Wiring`.
     public var onMoodReminderEnabledChanged: ((Bool) -> Void)?
 
-    /// #115 B5 — fired after every glucose-unit change (adoption, pick, logout):
+    /// Fired after every glucose-unit change (adoption, pick, logout):
     /// the App-Group mirror and the watch snapshot follow the account's unit.
     public var onGlucoseUnitChange: ((GlucoseUnit) -> Void)?
-    /// #115 P2 — fired after the unit system or the weight unit changes: Siri
+    /// Fired after the unit system or the weight unit changes: Siri
     /// in the extension takes weight and temperature in the account's unit.
     public var onAccountUnitsChange: ((UnitPreferences) -> Void)?
 
-    /// **N1** — fired after each `/api/auth/me` hydration with the account's
+    /// Fired after each `/api/auth/me` hydration with the account's
     /// medication-reminder delivery state (`nil` on a server that does not
     /// report it) and the lease the read ran under. The composition root hands
     /// it to ``MedicationReminderDeliveryCoordinator``.
     var onMedicationReminderServerDelivery: ((MedicationReminderServerDelivery?, AuthenticatedSessionLease) -> Void)?
 
-    /// #115 1.5 — the `/api/auth/me` zone (see `resolvedProfileTimeZone`).
+    /// The `/api/auth/me` zone (see `resolvedProfileTimeZone`).
     public internal(set) var accountTimeZoneIdentifier: String?
 
     public private(set) var hkConfig: HealthKitSyncConfig?
     public private(set) var isLoading: Bool = false
     public internal(set) var error: HLError?
-    /// #97 — fields the last profile save skipped (200 + `rejectedFields`).
+    /// Fields the last profile save skipped (200 + `rejectedFields`).
     public private(set) var rejectedProfileFields: [ProfileRejectedField] = []
     /// Set when either of the two visible payloads was served from cache
     /// (SWR `.cached` arm). Drives a future "showing cached" affordance
@@ -81,7 +81,7 @@ public final class SettingsStore {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
 
-    /// Display-unit prefs (v0.4.1 / M2-A6). Persisted locally only — server-
+    /// Display-unit prefs. Persisted locally only — server-
     /// side cross-device sync is the v0.4.2 follow-up. UserDefaults usage is
     /// inside the "UI-prefs" allowlist per PROJECT_GUIDE.md (no Health-data, no
     /// tokens — purely display).
@@ -119,7 +119,7 @@ public final class SettingsStore {
         didSet { defaults.set(bloodPressureUnit.rawValue, forKey: Keys.bpUnit) }
     }
 
-    /// #108 — the account's unit: adopted from `/me`, written via `setGlucoseUnit`.
+    /// The account's unit: adopted from `/me`, written via `setGlucoseUnit`.
     public internal(set) var glucoseUnit: GlucoseUnit {
         didSet { glucoseUnitDidChange() }
     }
@@ -136,7 +136,7 @@ public final class SettingsStore {
         )
     }
 
-    /// **v0.5.5.7 COACH-COIN** — operator-dismissible Hero-card flag.
+    /// Operator-dismissible Hero-card flag.
     /// When `true`, `InsightsScreen` hides `AskCoachHeroCard` and surfaces
     /// the collapsed coin in the navigation-bar trailing slot instead.
     /// UI-pref only (no Health-data, no tokens) — UserDefaults is the
@@ -170,7 +170,7 @@ public final class SettingsStore {
     /// so the `SettingsStore+ServerPrefs` extension adopts it.
     public internal(set) var cycleTrackingServerEnabled: Bool?
 
-    /// **#13 — compliance-heatmap window length.** Operator-facing pick from
+    /// **Compliance-heatmap window length.** Operator-facing pick from
     /// Settings → Erscheinungsbild (4 / 8 / 12 / 26 weeks; 12 = the REG-4
     /// default footprint). `ComplianceHeatmapSection` reads it live through
     /// the `@Observable` environment, so the grid re-lays out on the spot.
@@ -186,9 +186,6 @@ public final class SettingsStore {
     /// **9.3** — cycle write-leg (`PATCH /api/auth/me/cycle-prefs`) for the toggle
     /// + migration. Internal so the `+ServerPrefs` extension reaches it.
     let cycleRepo: CycleRepository?
-    /// **9.3** — server-vs-standalone gate for the explicit cycle toggle (`nil` →
-    /// treated as server-backed). Internal for the extension.
-    let backend: BackendAvailability?
     private var authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry?
     private var userIDProvider: (@Sendable () -> String?)?
 
@@ -196,14 +193,12 @@ public final class SettingsStore {
         repo: SettingsRepository,
         defaults: UserDefaults = .standard,
         swr: SWRCoordinator? = nil,
-        cycleRepo: CycleRepository? = nil,
-        backend: BackendAvailability? = nil
+        cycleRepo: CycleRepository? = nil
     ) {
         self.repo = repo
         self.defaults = defaults
         self.swr = swr
         self.cycleRepo = cycleRepo
-        self.backend = backend
         // Biometric-Lock default ON (Spec §7) — `bool(forKey:)` returns false for unset keys,
         // wir müssen also explizit prüfen, ob der User schon eine Wahl getroffen hat.
         if defaults.object(forKey: Keys.biometric) == nil {
@@ -214,16 +209,16 @@ public final class SettingsStore {
         }
         dashboardLayout = DashboardLayout(rawValue: defaults.string(forKey: Keys.dashLayout) ?? "") ?? .cards
         appearance = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .dark
-        // Build 9 — `weightUnit` became a derived detail. An already-set
+        // `weightUnit` became a derived detail. An already-set
         // `hl.settings.weightUnit` stays an explicit per-device override; unset =
         // follow the server binary (`unitPreference.defaultWeightUnit`).
         weightUnitOverride = defaults.string(forKey: Keys.weightUnit).flatMap { WeightUnit(rawValue: $0) }
-        // Build 9 — server-resolved unit system, read from the mirror (default
+        // Server-resolved unit system, read from the mirror (default
         // `.metric`); adopted from `/api/auth/me` on the first hydration.
         unitPreference = HLUnitPreference.current(defaults: defaults)
         bloodPressureUnit = BloodPressureUnit(rawValue: defaults.string(forKey: Keys.bpUnit) ?? "") ?? .mmHg
         glucoseUnit = GlucoseUnit(rawValue: defaults.string(forKey: Keys.glucoseUnit) ?? "") ?? .mgdL
-        // COACH-COIN (v0.5.5.7): defaults to `false` — fresh installs see
+        // Defaults to `false` — fresh installs see
         // the Hero card. UserDefaults `bool(forKey:)` returns false for
         // unset keys, which is the intended initial state.
         coachHeroDismissed = defaults.bool(forKey: Keys.coachHeroDismissed)
@@ -231,12 +226,12 @@ public final class SettingsStore {
         // invisible until a gender match or an explicit opt-in). `bool(forKey:)`
         // returns false for unset keys, which is the intended initial state.
         cycleTrackingOptIn = defaults.bool(forKey: Keys.cycleTrackingOptIn)
-        // #13 — heatmap window length. `integer(forKey:)` returns 0 for unset
+        // Heatmap window length. `integer(forKey:)` returns 0 for unset
         // keys, which no case matches → the 12-week REG-4 default applies.
         complianceHeatmapWeeks = ComplianceHeatmapWeeks(
             rawValue: defaults.integer(forKey: Keys.complianceHeatmapWeeks)
         ) ?? .twelve
-        // v0.14.7 — "dark-first" default. Dark mode is the canonical, more
+        // "dark-first" default. Dark mode is the canonical, more
         // beautiful look, so the app should land on it out of the box. Unset
         // installs already read `.dark` above; this re-asserts dark ONCE for any
         // device that picked / inherited a non-dark appearance during earlier
@@ -261,11 +256,10 @@ public final class SettingsStore {
         defaults: UserDefaults = .standard,
         swr: SWRCoordinator? = nil,
         cycleRepo: CycleRepository? = nil,
-        backend: BackendAvailability? = nil,
         authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry,
         userIDProvider: @escaping @Sendable () -> String?
     ) {
-        self.init(repo: repo, defaults: defaults, swr: swr, cycleRepo: cycleRepo, backend: backend)
+        self.init(repo: repo, defaults: defaults, swr: swr, cycleRepo: cycleRepo)
         self.authenticatedSessionRegistry = authenticatedSessionRegistry
         self.userIDProvider = userIDProvider
     }
@@ -289,7 +283,7 @@ public final class SettingsStore {
 
     public func load() async {
         guard let sessionLease = captureAuthenticatedSessionLease() else {
-            // 20-02 — R1's residual: this exit sits ABOVE the covering defer, so
+            // R1's residual: this exit sits ABOVE the covering defer, so
             // it counted the refusal and still returned with `isLoading` as it
             // found it. On a warm install whose session was revoked mid-load
             // that flag is RAISED and nothing lowers it again for the life of
@@ -301,7 +295,7 @@ public final class SettingsStore {
             isLoading = false
             return
         }
-        // 14-06 — the same strand as `MedicationsStore`, and the reason the
+        // The same strand as `MedicationsStore`, and the reason the
         // operator's avatar is invisible as well as slow: `AppContainer+Avatar`
         // awaits `settings.load()` before it can even read `profile.avatarUrl`,
         // and this method waits for BOTH the profile and the `hkSyncConfig`
@@ -350,7 +344,7 @@ public final class SettingsStore {
     private func loadDirect(sessionLease: AuthenticatedSessionLease) async {
         isLoading = true
         error = nil
-        // 14-06 — see `MedicationsStore.loadDirect`: the old condition folded in
+        // See `MedicationsStore.loadDirect`: the old condition folded in
         // cancellation and so skipped the one exit that needed it.
         defer {
             if sessionLease.ownsRegistryGeneration { isLoading = false }
@@ -436,7 +430,7 @@ public final class SettingsStore {
     /// Returns `true` on success so the caller can dismiss the edit-sheet only
     /// when the write committed. Errors land in `self.error` for the banner.
     ///
-    /// #97 — a 200 with `rejectedFields` is a PARTIAL save: the written
+    /// A 200 with `rejectedFields` is a PARTIAL save: the written
     /// fields are applied, the skipped ones land in ``rejectedProfileFields``
     /// and the call returns `false` so the form stays open.
     /// Added v0.4.1 / M2-A6 to back `EditProfileScreen.save()`.
@@ -473,7 +467,7 @@ public final class SettingsStore {
         }
     }
 
-    /// v0.5.4.3 HP5 — toggle the mood-reminder opt-in flag on the
+    /// Toggle the mood-reminder opt-in flag on the
     /// server. Optimistic local update first so the toggle in
     /// `SettingsNotificationsScreen` feels instant; on a non-retriable
     /// error we revert to the previous value + surface the banner.
@@ -523,7 +517,7 @@ public final class SettingsStore {
         return ok
     }
 
-    // MARK: - Time + date format display preferences (M3 / A360-1 H1)
+    // MARK: - Time + date format display preferences
 
     /// Effective time-format preference (server `User.timeFormat`), `.auto`
     /// until the profile loads. Settings binds to ``setTimeFormat(_:)``.
@@ -557,7 +551,7 @@ public final class SettingsStore {
         return ok
     }
 
-    /// A360-1 H1 — change the date-format preference; mirrors
+    /// Change the date-format preference; mirrors
     /// ``setTimeFormat(_:)`` (optimistic + mirror + PATCH + revert).
     @discardableResult
     public func setDateFormat(_ format: HLDateFormat) async -> Bool {
@@ -585,13 +579,13 @@ public final class SettingsStore {
         let updated = entry.withEnabled(!entry.enabled)
         var entries = config.entries
         entries[i] = updated
-        // #10 — the optimistic value keeps every read field of the GET, not
+        // The optimistic value keeps every read field of the GET, not
         // only `lastSyncedAt`; the PATCH body still encodes just the two it knows.
         config = HealthKitSyncConfig(entries: entries, lastSyncedAt: nil).keepingReadFields(of: config)
         hkConfig = config
         do {
             try sessionLease.requireCurrent()
-            // #10 — the echo carries no read fields; keep the GET's.
+            // The echo carries no read fields; keep the GET's.
             let saved = try await repo.updateHealthKit(config: config).keepingReadFields(of: config)
             try sessionLease.requireCurrent()
             hkConfig = saved
@@ -615,12 +609,12 @@ public final class SettingsStore {
         hkConfig = nil
         error = nil
         rejectedProfileFields = []
-        // 14-06 — this line was missing, the same omission 13-03 found in
+        // This line was missing, the same omission 13-03 found in
         // `DashboardStore`. A logout during an in-flight load handed the next
         // account a profile that was already, permanently, loading.
         isLoading = false
         isShowingStaleCache = false
-        // COACH-COIN (v0.5.5.7) — Hero-dismiss is per-user UX state. On
+        // Hero-dismiss is per-user UX state. On
         // logout the next signed-in user should see the Hero card again
         // (so the Coach affordance is discoverable). UserDefaults removal
         // keeps the storage consistent with the in-memory reset.
@@ -641,7 +635,7 @@ public final class SettingsStore {
         cycleTrackingServerEnabled = nil
         defaults.removeObject(forKey: Self.cycleServerEnabledKey)
         defaults.removeObject(forKey: Self.cycleOptInMigratedKey)
-        clearAccountUnitAndZone() // #108 / #115 1.5 — the account's unit + zone
+        clearAccountUnitAndZone() // The account's unit + zone
     }
 
     private enum Keys {
@@ -658,7 +652,7 @@ public final class SettingsStore {
     }
 }
 
-/// **#13 — selectable compliance-heatmap window.** Raw value = week count so
+/// **Selectable compliance-heatmap window.** Raw value = week count so
 /// the UserDefaults round-trip stays human-readable and the grid math can use
 /// `rawValue` directly. 12 stays the default (REG-4 operator spec); 26 mirrors
 /// the GitHub half-year footprint for long-tenure users; 4/8 give recently
@@ -674,7 +668,7 @@ public enum ComplianceHeatmapWeeks: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
-// MARK: - Environment plumbing (v0.11 N1)
+// MARK: - Environment plumbing
 
 //
 // The `UnitPreferences` value type + the three unit enums live in

@@ -32,6 +32,18 @@ public enum HLNumberFormat {
         )
     }
 
+    /// Locale-aware decimal with at most `maximumFractionDigits` digits after
+    /// the separator and no trailing zeros: 88,1 and 88, never 88,10.
+    public static func decimal(
+        _ value: Double,
+        maximumFractionDigits: Int,
+        locale: Locale = .current
+    ) -> String {
+        value.formatted(
+            .number.precision(.fractionLength(0 ... max(0, maximumFractionDigits))).locale(locale)
+        )
+    }
+
     /// The DIN-5008 / Web-style gap between a number and the percent sign: a
     /// NARROW NO-BREAK SPACE (U+202F). It keeps "83 %" on one line and reads
     /// tighter than a normal space — this is what the web client renders for
@@ -110,7 +122,7 @@ public enum HLNumberFormat {
 
     /// A closed range spelled out in words: "120 bis 129" / "120 to 129".
     ///
-    /// U5 (1.1.1) — ranges no longer join their bounds with an en dash ("–"),
+    /// Ranges no longer join their bounds with an en dash ("–"),
     /// which read as machine-written. The bounds arrive already formatted
     /// (number, date, time, with or without unit); this only joins them. The
     /// catalog key is the English text itself, so a process without the app's

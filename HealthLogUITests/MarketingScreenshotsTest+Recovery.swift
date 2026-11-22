@@ -1,9 +1,9 @@
 import XCTest
 
-/// 1.4 B3 — the recovery page, the details behind its cards and the HRV page,
-/// on a WHOOP-shaped account (`-uitest-recovery`, see `RecoveryFixtures`).
-/// Raw frames for the before-and-after review, not App Store motifs. Soft like
-/// the rest of this capture run: a missing surface logs and skips.
+/// The Recovery category, its pages and the HRV page, on a WHOOP-shaped
+/// account (`-uitest-recovery`, see `RecoveryFixtures`). Raw frames for the
+/// before-and-after review, not App Store motifs. Soft like the rest of this
+/// capture run: a missing surface logs and skips.
 ///
 /// ```sh
 /// TEST_RUNNER_HL_MARKETING_LANG=de TEST_RUNNER_HL_MARKETING_TAG=b3-after \
@@ -25,30 +25,35 @@ extension MarketingScreenshotsTest {
         _ = app.staticTexts["insights.page.header.title.overview"].waitForExistence(timeout: 20)
         settle(3)
 
+        // The old recovery address opens the first page of the category.
         openDeepLink("healthlog://insights/recovery")
         settle(6)
-        alignInsightsPage(app: app, identifier: "insights.page.recovery")
+        alignInsightsPage(app: app, identifier: "insights.page.recoveryScore")
         capture(name: "recovery")
         app.swipeUp()
         settle(2)
         capture(name: "recovery-end")
         app.swipeDown()
         settle(1)
-        // 1.4 B4 — the page's (i), where the guide and the references went.
-        captureInfoSheet(app: app, identifier: "insights.recovery.info", shot: "recovery-info")
+        captureInfoSheet(app: app, identifier: "insights.metric.info.recoveryScore", shot: "recovery-info")
 
-        // The details behind the cards; only the rebuilt page has them. 1.4 B4
-        // photographs them to their charts (date axis, 30-day card, units)
-        // and adds the longest title on the page.
-        captureRecoveryDetail(app: app, identifier: "insights.recovery.trend.recoveryScore", shot: "recovery-score-detail")
-        captureRecoveryDetail(app: app, identifier: "insights.recovery.trend.dayStrain", shot: "recovery-strain-detail", toEnd: true)
-        captureRecoveryDetail(app: app, identifier: "insights.recovery.row.averageHeartRate", shot: "recovery-avghr-detail")
-        captureRecoveryDetail(
-            app: app,
-            identifier: "insights.recovery.row.energyExpenditureKJ",
-            shot: "recovery-energy-detail",
-            toEnd: true
-        )
+        // The rest of the category, one swipe each, every page to its end.
+        for (kind, shot) in [
+            ("dayStrain", "recovery-strain"),
+            ("averageHeartRate", "recovery-avghr"),
+            ("energyExpenditureKJ", "recovery-energy")
+        ] {
+            guard swipeToInsightsPage(app: app, identifier: "insights.page.\(kind)") else {
+                logSkip("insights.page.\(kind) not reached, \(shot) not captured")
+                continue
+            }
+            capture(name: shot)
+            app.swipeUp()
+            settle(2)
+            capture(name: "\(shot)-end")
+            app.swipeDown()
+            settle(1)
+        }
 
         openDeepLink("healthlog://insights/hrv")
         settle(6)
@@ -83,31 +88,19 @@ extension MarketingScreenshotsTest {
         settle(2)
     }
 
-    /// Taps a recovery card or row, captures what it opened, and goes back the
-    /// way a person would: the navigation bar's back button. Its absence is
-    /// recorded, because a pushed page without one is a dead end.
-    private func captureRecoveryDetail(app: XCUIApplication, identifier: String, shot: String, toEnd: Bool = false) {
-        let target = app.descendants(matching: .any)[identifier]
-        guard target.waitForExistence(timeout: 4), target.isHittable else {
-            logSkip("\(identifier) not on screen, \(shot) not captured")
-            return
-        }
-        target.tap()
-        settle(4)
-        capture(name: shot)
-        if toEnd {
-            app.swipeUp()
+    /// Pages forward over the title until the page `identifier` stands, at
+    /// most eight pages. A drag over the title never meets a chart.
+    func swipeToInsightsPage(app: XCUIApplication, identifier: String) -> Bool {
+        let window = app.windows.firstMatch
+        let right = window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1))
+        let left = window.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1))
+        for _ in 0 ..< 8 {
+            let page = app.scrollViews.matching(identifier: identifier).firstMatch
+            if page.exists, abs(page.frame.minX) < 50 { return true }
+            right.press(forDuration: 0.05, thenDragTo: left)
             settle(2)
-            capture(name: "\(shot)-end")
         }
-        let back = app.navigationBars.buttons.firstMatch
-        if back.waitForExistence(timeout: 2), back.isHittable {
-            back.tap()
-        } else {
-            logSkip("\(shot): no back button in the navigation bar")
-            let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
-            edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
-        }
-        settle(2)
+        let page = app.scrollViews.matching(identifier: identifier).firstMatch
+        return page.exists && abs(page.frame.minX) < 50
     }
 }

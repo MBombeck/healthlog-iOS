@@ -6,7 +6,7 @@
     import Testing
     import UIKit
 
-    /// **U1 (#16) — eine Quelle für „zuletzt synchronisiert".**
+    /// **Eine Quelle für „zuletzt synchronisiert".**
     ///
     /// Vorher schrieb nur der Pull-to-Refresh-Handshake `lastHandshakeAt`. Was
     /// Apple Health im Hintergrund hochlud (Beobachter, Tagesstatistik,
@@ -196,7 +196,7 @@
         }
     }
 
-    /// **U1 (#16) — wann ein Zustand Aufmerksamkeit braucht.** Nur für Zustände, die
+    /// **Wann ein Zustand Aufmerksamkeit braucht.** Nur für Zustände, die
     /// Aufmerksamkeit brauchen; ein gesundes Konto zeigt nichts.
     @Suite("U1 — SyncAttention.resolve")
     struct SyncAttentionResolveTests {
@@ -262,7 +262,7 @@
         }
     }
 
-    /// **INT-L (1.1.1) — ein Platz neben dem Avatar.** Kein Badge mehr auf
+    /// **Ein Platz neben dem Avatar.** Kein Badge mehr auf
     /// dem Avatar: Was Aufmerksamkeit braucht, steht als ruhiges Symbol im
     /// selben Platz wie der Sync-Glyph. Ein laufender Sync und sein Häkchen
     /// gehen vor; danach bleibt das Zustandssymbol, bis der Zustand weg ist.
@@ -312,7 +312,7 @@
         }
     }
 
-    /// **U1 (#16) — die Phasen des Glyphs oben.** Es liest dieselbe
+    /// **Die Phasen des Glyphs oben.** Es liest dieselbe
     /// Phasenmaschine wie Fußzeile und Pull-to-Refresh-Häkchen.
     @Suite("U1 — SyncIndicatorGlyph.resolve")
     struct SyncIndicatorGlyphTests {

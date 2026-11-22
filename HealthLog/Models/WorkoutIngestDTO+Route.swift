@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Workout route on the wire (1.5 ROUTES, #149, server v1.44.0)
+// MARK: - Workout route on the wire (server v1.44.0)
 
 /// The GPS track of one workout as `POST /api/workouts/batch` takes it
 /// (`createBatchWorkoutSchema.route`, OpenAPI v1.47.0): a GeoJSON LineString of
@@ -69,6 +69,7 @@ public extension WorkoutIngestDTO {
             minHeartRate: minHeartRate,
             stepCount: stepCount,
             elevationM: elevationM,
+            pauseDurationSec: pauseDurationSec,
             source: source,
             externalId: externalId,
             samples: samples,

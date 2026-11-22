@@ -1,7 +1,7 @@
 import Foundation
 import ModelsR4
 
-/// **v0.14.2 (FW5-C) — server FHIR `$everything` fetcher (server B3).**
+/// **Server FHIR `$everything` fetcher (server B3).**
 ///
 /// Pulls the server-canonical `GET /api/fhir/Patient/$everything` searchset
 /// Bundle and flattens its pages into one combined Bundle. This is the **server
@@ -19,7 +19,7 @@ import ModelsR4
 /// entry count instead of only the bytes — an empty Bundle is a state the caller
 /// has to name to the user, not a silent zero-resource export.
 ///
-/// **Contract (B3):**
+/// **Contract:**
 /// - Bearer with `fhir:read` / `*` (the `APIClient` attaches the session token;
 ///   the server accepts a wildcard scope too). `Accept: application/fhir+json`.
 /// - Paged via `_count` (default 50, hard-clamped ≤ 200) + `_offset`. The
@@ -124,7 +124,7 @@ public actor ServerFHIREverythingService {
     private func fetchPage(query: [(String, String)]) async throws -> ModelsR4.Bundle {
         let request = APIRequest<Data>(
             method: .get,
-            // CU-13: type-level operation since server v1.34.2. The bare
+            // Type-level operation since server v1.34.2. The bare
             // `/api/fhir/$everything` is deleted and 404s.
             path: "/api/fhir/Patient/$everything",
             query: query,

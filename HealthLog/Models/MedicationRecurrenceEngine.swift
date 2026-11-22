@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.10 R1 §3.2 — pure Swift mirror of the server's canonical recurrence
+/// **Pure Swift mirror of the server's canonical recurrence
 /// engine (`src/lib/medications/scheduling/recurrence.ts`).**
 ///
 /// Single source of truth on iOS for "what dose slots does this schedule emit
@@ -409,7 +409,7 @@ public enum MedicationRecurrenceEngine {
     ) -> Bool {
         switch cadence {
         case let .monthly(targetDay):
-            // R1 — no clamping: rrule.js SKIPS a month without that day
+            // No clamping: rrule.js SKIPS a month without that day
             // (`BYMONTHDAY=31` → 31 July, 31 August, nothing in September), so
             // a clamp to the 30th reminded on a day the server does not list.
             return calendar.component(.day, from: day) == targetDay

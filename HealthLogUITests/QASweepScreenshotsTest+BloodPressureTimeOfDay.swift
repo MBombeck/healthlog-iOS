@@ -1,6 +1,6 @@
 import XCTest
 
-/// 1.5 BP-TOD — "Nach Tageszeit" on the blood pressure page against a 1.47
+/// "Nach Tageszeit" on the blood pressure page against a 1.47
 /// server (`-uitest-bp-tod`, `BloodPressureTimeOfDayFixtures`): 30 days with a
 /// difference, a week with parts below the floor, six months with a zero
 /// difference, one day without readings. Without the argument (the sweep's
@@ -27,7 +27,6 @@ extension QASweepScreenshotsTest {
     /// The same page against a 1.46 server: no section (the
     /// "before" picture and the older-server case of Regel 10).
     func test_19t_bpTimeOfDayOlderServer() {
-        guard !isXXL else { return }
         boot(extra: ["-hl.healthkit.serverVersion", "1.46.6"])
         openDeepLink("healthlog://insights/blood-pressure")
         settle(6)

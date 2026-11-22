@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// W5-3 (v0.12 W5a) — the **period-over-period delta caption** on the web-mirror
+/// The **period-over-period delta caption** on the web-mirror
 /// per-metric Insights page, the iOS twin of the web `MetricRangeDelta`
 /// (`src/components/insights/metric-range-delta.tsx`). Web pairs the range pills
 /// with a "+3% vs prior 30d" caption carrying metric-aware sentiment colour; iOS
-/// had the range control (`HLFloatingPeriodControl`) but no delta.
+/// had the range control (`HLPeriodPicker`) but no delta.
 ///
 /// **Data source — client-side, NO new server contract (STANDARDS §3):** the
 /// delta is computed from the SAME `[SeriesPoint]` the chart already loaded for
@@ -37,6 +37,10 @@ struct MetricRangeDelta: View {
         /// A server before v1.43: the chart's loaded points for the selected
         /// range (chronological or not, the resolver sorts by date).
         case ownComparison([SeriesPoint])
+        /// #176 (v1.48): the server's comparison with the previous window of
+        /// the same length (`/api/analytics/range`), already in the account's
+        /// unit, with the server's direction.
+        case priorWindow(delta: Double, unit: String, trend: TrendIndicator)
     }
 
     let source: Source
@@ -80,12 +84,12 @@ struct MetricRangeDelta: View {
     }
 
     nonisolated static func suffix(for result: Result, range: ChartDetailStore.Range, bundle: Bundle = .main) -> String {
-        result.percent == nil
-            ? String(localized: "insights.metric.rangeDelta.sinceFirstDay", bundle: bundle)
-            : priorLabel(for: range, bundle: bundle)
+        result.comparesPriorWindow
+            ? priorLabel(for: range, bundle: bundle)
+            : String(localized: "insights.metric.rangeDelta.sinceFirstDay", bundle: bundle)
     }
 
-    /// One catalog phrase per range (H2, 1.1.0). The suffix used to lowercase
+    /// One catalog phrase per range. The suffix used to lowercase
     /// the range's display name into a shared template, which German cannot
     /// do: nouns keep their capital, and "ggü. Monat davor" is not how the
     /// language says it — "ggü. Vormonat" is.
@@ -100,7 +104,7 @@ struct MetricRangeDelta: View {
         }
     }
 
-    /// #135 — VoiceOver hears the verdict the tint shows ("a good direction
+    /// VoiceOver hears the verdict the tint shows ("a good direction
     /// for you"), not only the number. Neutral adds nothing.
     nonisolated static func accessibilityText(_ result: Result, priorLabel: String) -> String {
         let spoken: TrendSentiment = switch result.sentiment {
@@ -129,12 +133,16 @@ struct MetricRangeDelta: View {
         let percent: Double?
         /// Sentiment classification (for tests).
         let sentiment: Sentiment
+        /// `true` when the figure compares against the previous window ("vs.
+        /// prior month"), `false` for the first-to-last-day change.
+        var comparesPriorWindow: Bool = false
 
         nonisolated static func == (lhs: Result, rhs: Result) -> Bool {
             lhs.deltaText == rhs.deltaText
                 && lhs.symbol == rhs.symbol
                 && lhs.percent == rhs.percent
                 && lhs.sentiment == rhs.sentiment
+                && lhs.comparesPriorWindow == rhs.comparesPriorWindow
         }
     }
 
@@ -150,7 +158,28 @@ struct MetricRangeDelta: View {
             resolve(serverDelta: delta, unit: unit, sentiment: sentiment)
         case let .ownComparison(points):
             resolve(points: points)
+        case let .priorWindow(delta, unit, trend):
+            resolve(priorWindowDelta: delta, unit: unit, trend: trend)
         }
+    }
+
+    /// The server's window-over-window change: signed, in the metric's unit,
+    /// with the server's direction for the arrow (`flat` is a dash even for a
+    /// small non-zero delta). Grey like every caption; `nil` for a figure
+    /// that is not finite or a direction the server did not know.
+    nonisolated static func resolve(priorWindowDelta delta: Double, unit: String, trend: TrendIndicator) -> Result? {
+        guard delta.isFinite, trend != .unknown else { return nil }
+        let rounded = (delta * 10).rounded() / 10
+        let magnitude = HLValueFormat.number(abs(rounded), fractionDigits: 0 ... 1)
+        let number = trend == .flat || rounded == 0 ? "±" + magnitude : (rounded > 0 ? "+" : "−") + magnitude
+        return Result(
+            deltaText: unit.isEmpty ? number : "\(number) \(unit)",
+            symbol: RangeChange(delta: delta, sentiment: nil, basis: .priorWindow, trend: trend).symbol,
+            tint: tint(for: .neutral),
+            percent: nil,
+            sentiment: .neutral,
+            comparesPriorWindow: true
+        )
     }
 
     /// The server's change as sent: signed, in the metric's unit, coloured by
@@ -158,7 +187,7 @@ struct MetricRangeDelta: View {
     nonisolated static func resolve(serverDelta delta: Double, unit: String, sentiment verdict: TrendSentiment) -> Result? {
         guard delta.isFinite else { return nil }
         let rounded = (delta * 10).rounded() / 10
-        let magnitude = abs(rounded).formatted(.number.precision(.fractionLength(0 ... 1)))
+        let magnitude = HLValueFormat.number(abs(rounded), fractionDigits: 0 ... 1)
         let number = rounded == 0 ? "±" + magnitude : (rounded > 0 ? "+" : "−") + magnitude
         let sentiment: Sentiment = switch verdict {
         case .positive: .favourable
@@ -207,7 +236,8 @@ struct MetricRangeDelta: View {
             symbol: symbol(for: rounded),
             tint: tint(for: .neutral),
             percent: rounded,
-            sentiment: .neutral
+            sentiment: .neutral,
+            comparesPriorWindow: true
         )
     }
 
@@ -217,8 +247,8 @@ struct MetricRangeDelta: View {
         }
         let sign = percent > 0 ? "+" : "−"
         let magnitude = abs(percent)
-        let number = magnitude.formatted(.number.precision(.fractionLength(0 ... 1)))
-        // F1 — the locale places the sign: "+4,2 %" in German, "+4.2%" in English.
+        let number = HLValueFormat.number(magnitude, fractionDigits: 0 ... 1)
+        // The locale places the sign: "+4,2 %" in German, "+4.2%" in English.
         return sign + HLNumberFormat.percent(formattedNumber: number)
     }
 
@@ -227,13 +257,9 @@ struct MetricRangeDelta: View {
         return percent > 0 ? "arrow.up" : "arrow.down"
     }
 
-    nonisolated static func tint(for sentiment: Sentiment) -> Color {
-        // 1.5 VERDICTS — the same colours as the hero chip and the tiles: the
-        // server's verdict paints, nothing else does.
-        switch sentiment {
-        case .adverse: HLColor.statusBad
-        case .favourable: HLColor.statusOK
-        case .neutral: HLText.secondary
-        }
+    /// The line under the chart is grey whatever the verdict, in one form
+    /// with the hero's delta; VoiceOver still speaks the verdict.
+    nonisolated static func tint(for _: Sentiment) -> Color {
+        HLText.secondary
     }
 }

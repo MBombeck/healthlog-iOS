@@ -1,6 +1,6 @@
 import XCTest
 
-/// W-SLEEP (v0.14.8) — walks the live demo tenant to the sleep hypnogram
+/// Walks the live demo tenant to the sleep hypnogram
 /// (#124): Insights → Schlaf metric page → "Schlafphasen" entry row →
 /// `SleepHypnogramScreen`, and captures screenshots as `XCTAttachment`s.
 ///
@@ -21,7 +21,7 @@ final class SleepHypnogramWalkthroughTest: XCTestCase {
 
     func test_capture_sleep_hypnogram_from_metric_page() throws {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot. NOTE: a full
+        // Network-free hermetic boot. NOTE: a full
         // hypnogram requires a per-night sleep-segment fixture the hermetic seed
         // intentionally does NOT synthesize (frozen stage-band geometry would
         // couple the test to server chart math). This test is therefore a

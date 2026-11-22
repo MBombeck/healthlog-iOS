@@ -1,62 +1,24 @@
 import SwiftUI
 
-// MARK: - Coach provenance + token-usage surfaces (CO4 / CO5 — v0154)
+// MARK: - Coach provenance + token-usage surfaces
 
-// Split out of `AskCoachSheet+Transcript.swift` (v0154) to keep that file under
+// Split out of `AskCoachSheet+Transcript.swift` to keep that file under
 // the SwiftLint 600-line ceiling after the provenance disclosure + token footer
 // landed. These were `private` to the transcript file; moving them to their own
 // file in the same module they become module-internal — `CoachTranscriptView`
 // still mounts them, so they cannot be `private` across files.
 
 #if canImport(SpeziChat)
-    /// **CO4 (v0154)** — the "what I'm looking at" toggle under a server-arm
-    /// assistant reply, mirroring the web coach's `<details>` evidence block.
-    /// Collapsed by default (privacy doctrine — never auto-expand the raw
-    /// keyValues). 1.4 B2-c: the toggle sits in the reply's one action row
-    /// (`CoachReplyActions`) and the body opens below that row.
-    struct CoachProvenanceToggle: View {
-        @Binding var expanded: Bool
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        var body: some View {
-            Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                    expanded.toggle()
-                }
-            } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(HLText.secondary)
-                    Text(String(localized: "insights.coach.evidenceLabel"))
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                    HLDisclosureChevron()
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "insights.coach.evidenceLabel"))
-            .accessibilityValue(
-                expanded
-                    ? String(localized: "coach.evidence.expanded")
-                    : String(localized: "coach.evidence.collapsed")
-            )
-            .accessibilityAddTraits(.isButton)
-        }
-    }
-
-    /// **CO4** — the expanded evidence: metric/window/`n=count` chips
+    /// The expanded evidence: metric/window/`n=count` chips
     /// (monochrome capsules, SF-symbol shape not colour) + the load-bearing
     /// keyValues rows (value + unit, window as a parenthetical tail).
     struct CoachProvenanceBody: View {
         let provenance: CoachServerService.CoachProvenance
 
-        /// Is there anything to show once the toggle is tapped? Drives whether
-        /// the toggle renders at all (M1, fix round 1: a windows-only envelope
-        /// used to offer a chevron that expanded into blank space).
+        /// Is there anything to show once the disclosure opens? Together with
+        /// the trail it decides whether the disclosure renders at all (M1, fix
+        /// round 1: a windows-only envelope used to offer a chevron that
+        /// expanded into blank space).
         static func hasContent(_ provenance: CoachServerService.CoachProvenance) -> Bool {
             !chips(for: provenance).isEmpty || !(provenance.keyValues?.isEmpty ?? true)
         }
@@ -115,17 +77,13 @@ import SwiftUI
 
         private func keyValueRow(_ keyValue: CoachServerService.CoachKeyValue) -> some View {
             // Lead with the value (web parity), window in a parenthetical tail.
-            (
-                Text(keyValue.label + ": ")
-                    .foregroundStyle(HLText.secondary)
-                    + Text(valueText(keyValue))
-                    .foregroundStyle(HLText.primary)
-                    + Text(windowTail(keyValue))
-                    .foregroundStyle(HLText.secondary)
-            )
-            .font(.hlFootnote)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
+            let label = Text(keyValue.label + ": ").foregroundStyle(HLText.secondary)
+            let value = Text(valueText(keyValue)).foregroundStyle(HLText.primary)
+            let window = Text(windowTail(keyValue)).foregroundStyle(HLText.secondary)
+            return Text("\(label)\(value)\(window)")
+                .font(.hlFootnote)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
         }
 
         private func valueText(_ keyValue: CoachServerService.CoachKeyValue) -> String {
@@ -142,7 +100,7 @@ import SwiftUI
         }
     }
 
-    /// **CO4** — render-data for one provenance chip. A plain `Sendable` value
+    /// Render-data for one provenance chip. A plain `Sendable` value
     /// (not a `View`), so its `Identifiable` conformance stays off the MainActor
     /// — the `ProvenanceChip` view consumes it inside a `ForEach`.
     struct ProvenanceChipModel: Identifiable {
@@ -155,53 +113,32 @@ import SwiftUI
         }
     }
 
-    /// **CO4** — one monochrome provenance chip: metric label + optional window +
-    /// optional `n=count`. Capsule on `HLSurface.secondary`, `.hlCaption` ink —
-    /// matches the app's neutral chip recipe (shape, not colour).
+    /// One monochrome provenance chip: metric label + optional window +
+    /// optional `n=count`, as the neutral tag capsule (`HLBadge`).
     struct ProvenanceChip: View {
         let model: ProvenanceChipModel
 
         var body: some View {
-            HStack(spacing: HLSpace.xxs) {
-                // M1 — a window-only chip carries no metric token; it renders as
-                // the window alone rather than with a stray leading separator.
-                // U5 (1.1.1) — the parts are joined by a trailing comma on the
-                // preceding part, never by a middle dot.
-                if !model.metricToken.isEmpty {
-                    Text(Self.joined(
-                        CoachProvenanceLabels.metric(model.metricToken),
-                        followed: model.windowToken != nil || model.count != nil
-                    ))
-                    .foregroundStyle(HLText.secondary)
-                }
-                if let windowToken = model.windowToken {
-                    Text(Self.joined(CoachProvenanceLabels.window(windowToken), followed: model.count != nil))
-                        .foregroundStyle(HLText.tertiary)
-                }
-                if let count = model.count {
-                    Text(verbatim: "n=\(count)")
-                        .foregroundStyle(HLText.tertiary)
-                        .monospacedDigit()
-                }
-            }
-            .font(.hlCaption)
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.vertical, HLSpace.xxs)
-            .background(HLSurface.secondary, in: Capsule())
-            .accessibilityElement(children: .combine)
+            HLBadge(Self.title(model))
         }
 
-        private static func joined(_ part: String, followed: Bool) -> String {
-            followed ? part + "," : part
+        /// A window-only chip carries no metric token; it reads as the window
+        /// alone rather than with a stray leading separator. The parts are
+        /// joined by a comma, never by a middle dot.
+        static func title(_ model: ProvenanceChipModel) -> String {
+            let metric = model.metricToken.isEmpty ? nil : CoachProvenanceLabels.metric(model.metricToken)
+            let window = model.windowToken.map(CoachProvenanceLabels.window)
+            let count = model.count.map { "n=\($0)" }
+            return [metric, window, count].compactMap { $0 }.joined(separator: ", ")
         }
     }
 
-    // 1.4 B2-c — the per-turn token footer (CO5) is gone: a token count is
+    // The per-turn token footer is gone: a token count is
     // developer information, not something the reader of an answer needs.
 
-    // MARK: - Provenance label resolver (CO4)
+    // MARK: - Provenance label resolver
 
-    /// **CO4** — resolves provenance metric / window tokens to their localized
+    /// Resolves provenance metric / window tokens to their localized
     /// labels via the `insights.coach.metric.*` / `insights.coach.window.*` keys
     /// (ported from the web messages). Falls back to the raw token when a key is
     /// missing, matching the web resolver.

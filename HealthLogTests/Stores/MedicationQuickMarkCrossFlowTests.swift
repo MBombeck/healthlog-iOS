@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping line_length
 
-/// MEDS-QUICK-MARK-TAKEN — cross-flow integration: mark a pending intake
+/// Cross-flow integration: mark a pending intake
 /// via the list-row quick-mark surface on `MedicationsScreen`, then load
 /// the same medication's detail screen and verify the just-marked event
 /// surfaces with `takenAt != nil && !skipped` in the paginated intake

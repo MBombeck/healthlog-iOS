@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 4 — one capability-complete, lease-aware entry point for every
+// One capability-complete, lease-aware entry point for every
 // HealthKit lifecycle trigger.
 //
 // The problem this file exists for is omission, not failure. Before it, "sync

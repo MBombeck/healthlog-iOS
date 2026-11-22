@@ -57,12 +57,12 @@ public struct MoodTagCatalog: Codable, Sendable, Equatable {
     /// picker's set; every entry resolves in ``MoodTagSFSymbol``. Default is
     /// `Tag`. Kept in server order so the picker reads predictably.
     ///
-    /// v0.14.x (#21) — expanded from the original 22 to the **full** server
+    /// Expanded from the original 22 to the **full** server
     /// catalog (`src/lib/mood/icon-catalog.ts`, 74 Lucide names, grouped
     /// emotions → activities → health → food → weather → places → misc). A web
     /// tag could already store any of these; the picker now offers them all and
     /// each maps to an SF Symbol via ``MoodTagSFSymbol``. Reconciled name-by-name
-    /// against the server's published catalog (#21) — the list is exactly the
+    /// against the server's published catalog — the list is exactly the
     /// 74 canonical names, no extras (`Gamepad2` was a client-only addition the
     /// server never validates against and was removed to match the catalog).
     public static let customIconAllowList: [String] = [
@@ -98,7 +98,7 @@ public struct MoodTagCatalog: Codable, Sendable, Equatable {
     // curated hide layer; the management screen's `?include=hidden` read + the
     // `PUT .../hidden` write are the single source of truth.
 
-    /// v0.14.7 B3 — canonical xcstrings label key per RATED factor `key`. Used
+    /// Canonical xcstrings label key per RATED factor `key`. Used
     /// as a defensive fallback by ``MoodTagDTO/localizedLabel`` so a factor still
     /// renders its proper localized word (e.g. `factor_sadness` → "Traurigkeit")
     /// even when the server's `labelKey` for that factor doesn't match a ported
@@ -314,7 +314,7 @@ public struct MoodTagDTO: Codable, Sendable, Equatable, Identifiable {
 
     /// Resolved short tile label.
     ///
-    /// v0.14.7 B3 — RATED factor keys carry a per-KEY canonical label fallback
+    /// RATED factor keys carry a per-KEY canonical label fallback
     /// so a proper localized word renders even if the server's `labelKey` for a
     /// factor doesn't match a ported xcstrings key (the `factor_sadness`
     /// regression: a non-matching key humanized to "Factor sadness" instead of
@@ -391,12 +391,12 @@ enum MoodTagSFSymbol {
     /// Lucide name (as the server stores it) → SF Symbol. Case-insensitive
     /// lookup so a future server casing change (`heart` vs `Heart`) still hits.
     ///
-    /// v0.14.x (#21) — covers the **full** server icon catalog
+    /// Covers the **full** server icon catalog
     /// (`src/lib/mood/icon-catalog.ts`, 74 Lucide names across emotions /
     /// activities / health / food / weather / places / misc). Before this the
     /// table only held the original ~22 names, so a web-created custom tag using
     /// any newer icon rendered blank on iOS. Reconciled name-by-name against the
-    /// server's published catalog (#21): every one of the 74 names resolves to a
+    /// server's published catalog: every one of the 74 names resolves to a
     /// REAL system symbol — the earlier `face.frowning` / `face.angry` entries
     /// were invalid SF Symbol names (only face.smiling / face.dashed /
     /// face.smiling.inverse exist) and rendered blank; they now map to

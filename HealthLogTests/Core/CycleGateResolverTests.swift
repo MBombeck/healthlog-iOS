@@ -90,7 +90,7 @@ struct CycleGateResolverTests {
         )))
     }
 
-    // MARK: - CU-17 / GH #71 — the third gender value is decided, not dropped
+    // MARK: - The third gender value is decided, not dropped
 
     /// The server's canonical spelling is uppercase (`profileSchema` in
     /// `src/lib/validations/auth.ts`, verified 2026-07-30). The gate must read

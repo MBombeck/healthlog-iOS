@@ -105,7 +105,7 @@ struct NutrientReadRepositoryTests {
         let body = try #require(recorder.decodeLastWaterBody())
         #expect(body.amountMl == 300)
         #expect(body.mode == .add)
-        // #115 B6 — the tap's profile day travels with the write.
+        // The tap's profile day travels with the write.
         #expect(body.day == ProfileDay.key())
         #expect(row.source == "MANUAL")
     }

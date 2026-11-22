@@ -93,7 +93,7 @@ struct GarminContractTests {
     }
 }
 
-/// #162 — the typed half: what the app does with Garmin once it can name it.
+/// The typed half: what the app does with Garmin once it can name it.
 @Suite("Garmin source and types, typed (server v1.47, #162)")
 struct GarminTypedTests {
     static let garminKinds: [MetricKind] = [.bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad]

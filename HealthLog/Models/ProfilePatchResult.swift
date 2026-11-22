@@ -1,6 +1,6 @@
 import Foundation
 
-// #97 / #115 · 0.4 — the partial-save half of the profile write answer.
+// The partial-save half of the profile write answer.
 
 /// One field the server skipped on a partial profile save — an element of
 /// `rejectedFields` in the `PATCH /api/user/profile` / `PUT /api/auth/profile`

@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 
 /// Why the heart-rate bucket path did — or did not — upload, named after the
-/// gate that decided it (#12).
+/// gate that decided it.
 ///
 /// The raw values are the words a tester reads in Sync Diagnostics and greps
 /// for in Console (`HR-BUCKET … gate=<rawValue>`). They are fixed enum cases,
@@ -12,12 +12,8 @@ enum HRBucketGate: String, Codable, Sendable, CaseIterable {
     case uploaded
     /// The sweep ran and every bucket it found was already accepted.
     case upToDate
-    /// Offline mode: there is no server to upload to.
-    case standalone
     /// No bearer token in the Keychain (signed out).
     case noAuthToken
-    /// `healthkit.enableHRBuckets` is off; heart rate stays per sample.
-    case flagOff
     /// The bucket regime starts at the next UTC midnight; nothing is due yet.
     case cutoverPending
     /// HealthKit refused the statistics query because the device is locked.
@@ -41,10 +37,29 @@ enum HRBucketGate: String, Codable, Sendable, CaseIterable {
     var isSuccess: Bool {
         self == .uploaded || self == .upToDate || self == .cutoverPending
     }
+
+    /// Reads a stored ledger event. Offline-mode builds recorded `standalone`,
+    /// which meant a device without a server account. Any other unknown gate
+    /// throws, and ``HRBucketSyncLedger/init(from:)`` drops that one event.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        if raw == "standalone" {
+            self = .noAuthToken
+            return
+        }
+        guard let gate = HRBucketGate(rawValue: raw) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown heart-rate bucket gate \(raw)"
+            )
+        }
+        self = gate
+    }
 }
 
 /// Per-account, device-local record of what the heart-rate bucket path has
-/// proven to the server, one UTC day at a time (#12).
+/// proven to the server, one UTC day at a time.
 ///
 /// **Why a ledger and not a cursor.** Until 1.1.0 (289) the sweep kept one
 /// cursor — the newest uploaded bucket — and re-read HealthKit from just before
@@ -170,6 +185,26 @@ struct HRBucketSyncLedger: Codable, Equatable, Sendable {
     }
 }
 
+extension HRBucketSyncLedger {
+    /// Reads a stored ledger field by field. An event whose gate this build no
+    /// longer knows is dropped on its own, so a removed gate never costs the
+    /// recorded bucket, raw and settled days.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bucketDays = try container.decodeIfPresent(Set<Int>.self, forKey: .bucketDays) ?? []
+        rawDays = try container.decodeIfPresent(Set<Int>.self, forKey: .rawDays) ?? []
+        settledDays = try container.decodeIfPresent(Set<Int>.self, forKey: .settledDays) ?? []
+        dirtyDays = try container.decodeIfPresent(Set<Int>.self, forKey: .dirtyDays) ?? []
+        accepted = try container.decodeIfPresent([Int: [Int: String]].self, forKey: .accepted) ?? [:]
+        lastAcceptedBucket = try container.decodeIfPresent(Date.self, forKey: .lastAcceptedBucket)
+        lastSuccessAt = try container.decodeIfPresent(Date.self, forKey: .lastSuccessAt)
+        lastFailureAt = try container.decodeIfPresent(Date.self, forKey: .lastFailureAt)
+        owedSince = try container.decodeIfPresent(Date.self, forKey: .owedSince)
+        lastEvent = try? container.decodeIfPresent(Event.self, forKey: .lastEvent)
+        lastSuppression = try? container.decodeIfPresent(Event.self, forKey: .lastSuppression)
+    }
+}
+
 /// Load / mutate / clear for ``HRBucketSyncLedger``.
 ///
 /// Every mutation is one read-modify-write under a process-wide lock: the
@@ -220,7 +255,7 @@ enum HRBucketSyncLedgerStore {
 }
 
 /// The per-sample half of the hand-off: may this heart-rate sample be dropped
-/// because the bucket sweep owns its day? (#12)
+/// because the bucket sweep owns its day?
 ///
 /// Until 1.1.0 (289) the answer was "yes, whenever the day uploads as buckets",
 /// whether or not a bucket ever reached the server. Now a sample is dropped

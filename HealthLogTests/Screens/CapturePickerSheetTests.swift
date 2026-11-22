@@ -2,7 +2,7 @@
 import SwiftUI
 import Testing
 
-/// v0.5.1-F3 / v0.5.2-A4 — CapturePickerSheet contract tests.
+/// CapturePickerSheet contract tests.
 ///
 /// The picker is presented from the central "Erfassen" tab slot and offers
 /// three capture surfaces. These tests pin the public `CaptureAction`
@@ -12,13 +12,13 @@ import Testing
 /// performance-budgeted init-snap test below.
 @Suite("CapturePickerSheet — capture-action contract")
 struct CapturePickerSheetTests {
-    @Test("CaptureAction exposes the four cases in stable order")
+    @Test("CaptureAction exposes the five cases in stable order")
     func captureActionCases() {
         let cases = CapturePickerSheet.CaptureAction.allCases
-        #expect(cases.count == 4)
-        // v0.14.8 C4 — `.cycle` is appended last; it is GATED (only rendered
-        // when `showsCycleRow` is true), never offered to ineligible users.
-        #expect(cases == [.measurement, .medication, .mood, .cycle])
+        #expect(cases.count == 5)
+        // `.symptom` follows mood as on the web; `.cycle` is appended last.
+        // Both are GATED, never offered where they cannot be used.
+        #expect(cases == [.measurement, .medication, .mood, .symptom, .cycle])
     }
 
     @Test("CaptureAction raw values are stable string ids")
@@ -26,6 +26,7 @@ struct CapturePickerSheetTests {
         #expect(CapturePickerSheet.CaptureAction.measurement.rawValue == "measurement")
         #expect(CapturePickerSheet.CaptureAction.medication.rawValue == "medication")
         #expect(CapturePickerSheet.CaptureAction.mood.rawValue == "mood")
+        #expect(CapturePickerSheet.CaptureAction.symptom.rawValue == "symptom")
         #expect(CapturePickerSheet.CaptureAction.cycle.rawValue == "cycle")
     }
 
@@ -38,13 +39,29 @@ struct CapturePickerSheetTests {
 
     @Test("CaptureAction system images match the operator-approved glyphs")
     func captureActionSystemImages() {
-        #expect(CapturePickerSheet.CaptureAction.measurement.systemImage == "plus.circle.fill")
+        #expect(CapturePickerSheet.CaptureAction.measurement.systemImage == "list.bullet.rectangle")
         #expect(CapturePickerSheet.CaptureAction.medication.systemImage == "pills.fill")
         #expect(CapturePickerSheet.CaptureAction.mood.systemImage == "face.smiling")
+        #expect(CapturePickerSheet.CaptureAction.symptom.systemImage == "heart.text.square")
         #expect(CapturePickerSheet.CaptureAction.cycle.systemImage == "drop.fill")
     }
 
-    // MARK: - v0.14.8 C4 — gated cycle row
+    /// #191 QoL — "Symptom" stands in the picker where Today offers it, after
+    /// mood and before the cycle, and nowhere else.
+    @Test("Symptom row shown only when showsSymptomRow is set, after mood")
+    @MainActor
+    func symptomRowVisibilityGate() {
+        let hidden = CapturePickerSheet(onSelect: { _ in }, onCancel: {})
+        #expect(!hidden.visibleActionsForTesting.contains(.symptom))
+
+        let shown = CapturePickerSheet(showsSymptomRow: true, onSelect: { _ in }, onCancel: {})
+        #expect(shown.visibleActionsForTesting == [.measurement, .medication, .mood, .symptom])
+
+        let both = CapturePickerSheet.visibleActions(showsCycleRow: true, showsSymptomRow: true)
+        #expect(both == [.measurement, .medication, .mood, .symptom, .cycle])
+    }
+
+    // MARK: - Gated cycle row
 
     /// The gated `.cycle` row is rendered ONLY when the parent passes
     /// `showsCycleRow` (resolved from `CycleGate.isCycleTrackingAvailable`).
@@ -75,7 +92,7 @@ struct CapturePickerSheetTests {
         }
     }
 
-    // MARK: - v0.14.1 W-CAPTURE-GAP — content-fitted sheet height
+    // MARK: - Content-fitted sheet height
 
     /// The operator saw "empty space below the items": the picker inherited a
     /// fixed `.medium` detent that reserved ~half the screen regardless of row
@@ -104,7 +121,7 @@ struct CapturePickerSheetTests {
     /// shortened DE value so a regression resurfaces the felt-bug as a failure.
     @Test("All capture-row subtitles resolve to short single-line copy")
     func subtitleCopyIsShort() {
-        // CU-24 (GH iOS #73): "Dosis" → "Einnahme" — the row title already said
+        // "Dosis" → "Einnahme" — the row title already said
         // "Einnahme erfassen", so the subtitle was the odd term out. Same length
         // class, still one line.
         #expect(String(localized: "capture.picker.medication.subtitle") == "Heutige Einnahme abhaken")

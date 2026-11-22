@@ -2,7 +2,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// **v0.8.4 WWIDGET-3 — iOS 18 Controls (Control Center / Lock Screen /
+/// **iOS 18 Controls (Control Center / Lock Screen /
 /// Action Button).**
 ///
 /// Two `ControlWidget`s registered in ``HealthLogWidgetsBundle``, both riding
@@ -56,7 +56,7 @@ struct MarkNextDoseControl: ControlWidget {
     }
 }
 
-/// **v0.10.0 W-Mood-B** — the "Stimmung erfassen" control: tap → opens the
+/// The "Stimmung erfassen" control: tap → opens the
 /// app's mood quick-entry sheet (``LogMoodControlIntent``, opensApp). One
 /// neutral, monochrome tile that reaches the mood picker from Control Center /
 /// Lock Screen / the hardware Action Button — exactly one mood control (no

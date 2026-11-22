@@ -16,6 +16,9 @@ struct BiomarkerMergeSheet: View {
 
     @State private var selected: Set<String> = []
     @State private var preview: BiomarkerMergeResult?
+    /// The answer of the real merge: the sheet stays to say what happened
+    /// (moved readings, the panel the marker took over) until "Done".
+    @State private var merged: BiomarkerMergeResult?
     @State private var isWorking = false
     @State private var inlineError: String?
 
@@ -24,32 +27,16 @@ struct BiomarkerMergeSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold("labs.merge.title", isDirty: merged == nil && !selected.isEmpty) {
             Form {
-                Section {
-                    ForEach(candidates) { marker in
-                        candidateRow(marker)
-                    }
-                } header: {
-                    Text(verbatim: String(localized: "labs.merge.into \(target.name)"))
-                } footer: {
-                    Text("labs.merge.pick.footer")
-                }
-                if let preview {
-                    previewSection(preview)
-                }
-                if let inlineError {
-                    Section { HLFormErrorText(inlineError) }
-                }
-                actionSection
-            }
-            .navigationTitle(Text("labs.merge.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("labs.action.cancel") { dismiss() }
+                if let merged {
+                    doneSection(merged)
+                        .hlFormRowSurface()
+                } else {
+                    pickerForm
                 }
             }
+            .hlPageMargins()
             .onChange(of: selected) { _, _ in
                 preview = nil
                 inlineError = nil
@@ -57,30 +44,59 @@ struct BiomarkerMergeSheet: View {
         }
     }
 
+    /// After the merge: what the server did, then the one way out.
+    private func doneSection(_ result: BiomarkerMergeResult) -> some View {
+        Section {
+            ForEach(BiomarkerMergeCopy.doneLines(result), id: \.self) { line in
+                Text(verbatim: line)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HLSettingsActionRow(icon: "checkmark", title: "labs.merge.done.close", presents: .confirm) {
+                dismiss()
+            }
+            .accessibilityIdentifier("labs.merge.done.close")
+        } header: {
+            Text("labs.merge.done.header")
+        }
+        .accessibilityIdentifier("labs.merge.done")
+    }
+
+    private var pickerForm: some View {
+        Group {
+            Section {
+                ForEach(candidates) { marker in
+                    candidateRow(marker)
+                }
+            } header: {
+                Text(verbatim: String(localized: "labs.merge.into \(target.name)"))
+            } footer: {
+                Text("labs.merge.pick.footer")
+            }
+            if let preview {
+                previewSection(preview)
+            }
+            if let inlineError {
+                Section { HLFormErrorText(inlineError) }
+            }
+            actionSection
+        }
+        .hlFormRowSurface()
+    }
+
+    /// Several markers can move here at once: the circles of a multiple choice.
     private func candidateRow(_ marker: BiomarkerDTO) -> some View {
-        Button {
+        HLChoiceRow(
+            title: Text(verbatim: marker.name),
+            detail: LabUnit.standalone(marker.unit).map { Text(verbatim: $0) },
+            isSelected: selected.contains(marker.id),
+            mode: .multiple
+        ) {
             if selected.contains(marker.id) {
                 selected.remove(marker.id)
             } else if selected.count < BiomarkerMergeRequest.maxSources {
                 selected.insert(marker.id)
             }
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: marker.name).foregroundStyle(HLText.primary)
-                    if let unitLabel = LabUnit.standalone(marker.unit) {
-                        Text(verbatim: unitLabel).font(.hlCaption).foregroundStyle(HLText.secondary)
-                    }
-                }
-                Spacer()
-                if selected.contains(marker.id) {
-                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                }
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected.contains(marker.id) ? .isSelected : [])
         .accessibilityIdentifier("labs.merge.candidate.\(marker.id)")
     }
 
@@ -92,8 +108,7 @@ struct BiomarkerMergeSheet: View {
             }
             ForEach(BiomarkerMergeCopy.summaryLines(preview), id: \.self) { line in
                 Text(verbatim: line)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
@@ -105,17 +120,27 @@ struct BiomarkerMergeSheet: View {
     private var actionSection: some View {
         Section {
             if let preview, !preview.hasRefusal {
-                Button(role: .destructive) {
-                    Task { await confirm() }
-                } label: {
-                    Text("labs.merge.confirm")
-                }
+                // A merge cannot be undone: the red row asks once more.
+                HLDeleteButton(
+                    "labs.merge.confirm",
+                    form: .row,
+                    action: .confirmed(
+                        title: "labs.merge.title",
+                        message: "labs.merge.noUndo",
+                        word: "labs.merge.confirm",
+                        symbol: "arrow.triangle.merge"
+                    ) {
+                        await confirm()
+                    }
+                )
                 .disabled(isWorking)
                 .accessibilityIdentifier("labs.merge.confirm")
             } else {
-                Button("labs.merge.check") { Task { await check() } }
-                    .disabled(selected.isEmpty || isWorking)
-                    .accessibilityIdentifier("labs.merge.check")
+                HLSettingsActionRow(icon: "magnifyingglass", title: "labs.merge.check", presents: .confirm) {
+                    Task { await check() }
+                }
+                .disabled(selected.isEmpty || isWorking)
+                .accessibilityIdentifier("labs.merge.check")
             }
         } footer: {
             if let preview, !preview.hasRefusal {
@@ -138,8 +163,8 @@ struct BiomarkerMergeSheet: View {
         isWorking = true
         inlineError = nil
         defer { isWorking = false }
-        if await store.merge(into: target.id, sources: Array(selected)) != nil {
-            dismiss()
+        if let result = await store.merge(into: target.id, sources: Array(selected)) {
+            merged = result
         } else {
             inlineError = store.lastError ?? String(localized: "labs.save.failed")
         }
@@ -170,6 +195,30 @@ enum BiomarkerMergeCopy {
         var lines = [String(localized: "labs.merge.moves \(preview.movedReadings) \(preview.convertedReadings)")]
         if !preview.aliasesAdded.isEmpty {
             lines.append(String(localized: "labs.merge.aliases \(preview.aliasesAdded.formatted(.list(type: .and)))"))
+        }
+        if let panel = adoptedPanelLine(preview) {
+            lines.append(panel)
+        }
+        return lines
+    }
+
+    /// The panel the kept marker takes over, in the reader's words for a
+    /// known key; `nil` when the server adopts none.
+    static func adoptedPanelLine(_ result: BiomarkerMergeResult) -> String? {
+        guard let raw = result.adoptedPanel, let panel = LabPanelName.display(raw) else { return nil }
+        return result.dryRun
+            ? String(localized: "labs.merge.adoptsPanel \(panel)")
+            : String(localized: "labs.merge.adoptedPanel \(panel)")
+    }
+
+    /// What the sheet says once the merge went through.
+    static func doneLines(_ result: BiomarkerMergeResult) -> [String] {
+        var lines = [String(localized: "labs.merge.done.moved \(result.movedReadings) \(result.convertedReadings)")]
+        if !result.aliasesAdded.isEmpty {
+            lines.append(String(localized: "labs.merge.aliases \(result.aliasesAdded.formatted(.list(type: .and)))"))
+        }
+        if let panel = adoptedPanelLine(result) {
+            lines.append(panel)
         }
         return lines
     }

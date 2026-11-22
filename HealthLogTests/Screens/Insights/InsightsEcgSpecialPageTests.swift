@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// P8 — the ECG special page's place in the strip + pager.
+/// The ECG special page's place in the strip + pager.
 ///
 /// ECG is the one special that is DATA-gated (not module-only like Recovery):
 /// with no recordings there must be no pill and no page, because the surface

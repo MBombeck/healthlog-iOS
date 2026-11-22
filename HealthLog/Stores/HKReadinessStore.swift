@@ -40,7 +40,7 @@ public final class HKReadinessStore {
     /// angezeigt in Settings. Wird vom `MeasurementBatchUploader` (und vom
     /// Outbox-Replay eines HealthKit-Batches) nach jeder angenommenen Antwort via
     /// `noteSuccessfulSync(at:ownerUserID:)` aktualisiert; verdrahtet in
-    /// `AppContainer.configureRuntimeWiring` (#10).
+    /// `AppContainer.configureRuntimeWiring`.
     public private(set) var lastSyncedAt: Date?
 
     /// Wird gesetzt während `requestAuthorization()` läuft, damit die UI
@@ -92,7 +92,7 @@ public final class HKReadinessStore {
     private let keychain: KeychainStoring
     let defaults: UserDefaults
     private let clock: @Sendable () -> Date
-    /// **Phase 07 / plan 07-09** — the one orchestrated route, for the two
+    /// The one orchestrated route, for the two
     /// `HealthSyncTrigger`s this store owns: `manual` ("Jetzt syncen") and
     /// `postAuthentication` (the Settings re-authorization). It replaces the
     /// split manual hook, which reached a different set of importers than the
@@ -263,9 +263,7 @@ public final class HKReadinessStore {
             // 100%-iger Sicherheit, dass der Sheet schon einmal lief — markieren
             // wir das nachträglich, damit unsere `notRequested`-Heuristik nicht
             // bei jedem User-mit-Partial-Authorisierung Falsch-Positive feuert.
-            if statuses.values.contains(.sharingAuthorized), !hasEverRequestedAuthorization {
-                markAuthorizationRequested()
-            }
+            migrateRequestedMarker(from: statuses)
             let requested = hasEverRequestedAuthorization
 
             state = Self.computeState(
@@ -361,7 +359,7 @@ public final class HKReadinessStore {
                     write: service.defaultWriteTypes()
                 )
                 markAuthorizationRequested()
-                // F8 hotfix v0.4.1.1: nach erneutem Authorize muessen vorher
+                // Nach erneutem Authorize muessen vorher
                 // disable-gelistete Types wieder versucht werden — sonst
                 // bleiben Observer fuer abgelehnte-und-dann-erlaubte Types
                 // bis zum naechsten Cold-Start aus.
@@ -369,7 +367,7 @@ public final class HKReadinessStore {
                 // Background-Deliveries scharf schalten + Banner zurücksetzen,
                 // damit ein erneutes Antippen direkt Resync triggert.
                 await backgroundSync.activateHealthKitBackgroundDeliveries()
-                // **Phase 07 / plan 07-09** — dies ist der `postAuthentication`
+                // Dies ist der `postAuthentication`
                 // Trigger, und er heißt jetzt so. Vorher fuhr
                 // `activateHealthKitBackgroundDeliveries` selbst einen
                 // `.foreground`-Pass plus einen detached Aggregat-Sweep, also
@@ -406,7 +404,7 @@ public final class HKReadinessStore {
         #endif
     }
 
-    /// **25-02 (E-2026-08-29 #5) — die Sheet-Status-Frage.** Ob Apples
+    /// **Die Sheet-Status-Frage.** Ob Apples
     /// Authorization-Sheet für die gegebenen Identifier-Teilmengen der
     /// Default-Sets BEANTWORTET ist —
     /// `HKHealthStore.getRequestStatusForAuthorization(toShare:read:)` hinter
@@ -440,7 +438,7 @@ public final class HKReadinessStore {
 
     /// Öffnet die Health-App. **Nicht mehr und nicht weniger.**
     ///
-    /// **H1 — was hier vorher behauptet wurde und nicht stimmt (R7).** Der alte
+    /// **Was hier vorher behauptet wurde und nicht stimmt.** Der alte
     /// Kommentar versprach, `x-apple-health://` lande auf der Quellen-Detailseite
     /// von HealthLog, sobald die Bundle-ID als Quelle registriert ist. Das ist
     /// falsch und auf iOS 26 nachprüfbar: das URL-Routing der Health-App
@@ -494,7 +492,7 @@ public final class HKReadinessStore {
     /// idempotent) und fährt danach **genau einen** benannten Pass. Tippt der
     /// User das ohne erteilte HK-Permission, ist's ein No-Op — kein Schaden.
     ///
-    /// **Phase 07 / plan 07-09.** Vorher liefen hier zwei Dinge hintereinander:
+    /// Vorher liefen hier zwei Dinge hintereinander:
     /// ein `.manual` Collection-Trigger (der seinerseits den orchestrierten Pass
     /// startete) **und** der alte Split-Hook, der Workouts, Aggregate, ECG, Mood
     /// und Medikamente noch einmal einzeln anstieß. Beides zusammen war ein
@@ -520,7 +518,7 @@ public final class HKReadinessStore {
         defaults.set(timestamp.timeIntervalSince1970, forKey: Self.lastSyncedKey(for: currentUserID))
     }
 
-    /// #10 — der Stempel eines angenommenen Batch-Uploads, **an das Konto
+    /// Der Stempel eines angenommenen Batch-Uploads, **an das Konto
     /// gebunden, das ihn hochgeladen hat**. Der Uploader meldet den Lease-
     /// Eigentümer mit; ein Upload des vorigen Kontos, der erst nach Abmelden
     /// oder Kontowechsel zurückkommt, darf weder die angezeigte Zeit des neuen
@@ -700,7 +698,7 @@ public final class HKReadinessStore {
     public nonisolated static let lastSyncedKeyPrefix = "hl.healthkit.lastSyncedAt."
     public nonisolated static let requestedKeyPrefix = "hl.healthkit.requestedAt."
     public nonisolated static let bannerDismissedKeyPrefix = "hl.healthkit.bannerDismissedAt."
-    /// W-B182 — one-shot per-user flag: has the workout-read re-auth migration run?
+    /// One-shot per-user flag: has the workout-read re-auth migration run?
     public nonisolated static let workoutReadMigratedKeyPrefix = "hl.healthkit.workoutReadMigrated."
     public nonisolated static let workoutReadRearmPendingKeyPrefix = "hl.healthkit.workoutReadRearmPending."
 
@@ -778,6 +776,31 @@ public final class HKReadinessStore {
         let sanitized = String(String.UnicodeScalarView(filtered))
         guard !sanitized.isEmpty else { return "_anonymous" }
         return String(sanitized.prefix(64))
+    }
+}
+
+// MARK: - Marker-Migration älterer Installationen
+
+extension HKReadinessStore {
+    /// Die Marker-Migration aus ``refresh()`` allein, synchron: Der Start
+    /// ohne Szene fragt den Marker, bevor irgendeine Ansicht `refresh()`
+    /// aufgerufen hat. Eine Altinstallation mit erteilten Schreibrechten, aber
+    /// ohne Marker, wird so auch im Hintergrund beobachtet. Liefert den Marker
+    /// danach.
+    @discardableResult
+    public func migrateRequestedMarkerFromGrants() -> Bool {
+        #if canImport(HealthKit)
+            if !hasEverRequestedAuthorization, let service = healthKit as? any HealthKitServiceProtocol {
+                migrateRequestedMarker(from: service.authorizationStatuses(for: service.defaultWriteTypes()))
+            }
+        #endif
+        return hasEverRequestedAuthorization
+    }
+
+    private func migrateRequestedMarker(from statuses: [String: AuthStatus]) {
+        if statuses.values.contains(.sharingAuthorized), !hasEverRequestedAuthorization {
+            markAuthorizationRequested()
+        }
     }
 }
 

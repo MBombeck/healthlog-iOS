@@ -68,7 +68,7 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 

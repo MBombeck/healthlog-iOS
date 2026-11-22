@@ -77,15 +77,24 @@ struct DocumentsTrashTests {
     }
 
     @Test("Each row shows when it was deleted and when it goes for good")
-    func rowDateLines() {
+    func rowDateLines() throws {
         let row = DeletedDocument(
             id: "d1", deletedAt: "2026-11-01T10:00:00.000Z", purgeAt: "2026-12-01T10:00:00.000Z"
         )
-        let lines = DeletedDocumentRowDates.lines(for: row)
+        let now = try #require(DocumentFormat.instant("2026-11-15T10:00:00.000Z"))
+        let lines = DeletedDocumentRowDates.lines(for: row, now: now)
         #expect(lines.count == 2)
-        #expect(lines[0].contains(DocumentFormat.mediumDate("2026-11-01T10:00:00.000Z")))
-        #expect(lines[1].contains(DocumentFormat.mediumDate("2026-12-01T10:00:00.000Z")))
+        let deleted = try #require(DocumentFormat.instant("2026-11-01T10:00:00.000Z"))
+        let purge = try #require(DocumentFormat.instant("2026-12-01T10:00:00.000Z"))
+        #expect(lines[0].contains(HLDateFormat.dayMonth(deleted, relativeTo: now)))
+        #expect(lines[1].contains(HLDateFormat.dayMonth(purge, relativeTo: now)))
         #expect(lines.allSatisfy { !$0.contains("%@") })
+        // Parts of one sentence: no full stop, the second one continues it.
+        // (The abbreviated month may end in a dot itself; the templates add none.)
+        #expect(!String(localized: "documents.trash.deletedOn.part").hasSuffix("."))
+        #expect(!String(localized: "documents.trash.removesOn.part").hasSuffix("."))
+        #expect(lines.allSatisfy { !$0.contains("..") })
+        #expect(lines[1].first?.isLowercase == true)
         #expect(DeletedDocumentRowDates.lines(for: DeletedDocument(id: "d2", deletedAt: "garbage")).isEmpty)
     }
 

@@ -4,11 +4,11 @@ import Foundation
     import SpeziChat
 #endif
 
-/// v0.13 W4 — the persistence + transcript-append helpers, split out of
+/// The persistence + transcript-append helpers, split out of
 /// `CoachConversationStore.swift` to keep that file under the SwiftLint
 /// 600-line ceiling. All `@MainActor`-isolated instance methods that only touch
 /// the public `chat` array + the injected `persistence` / `userIDProvider`.
-/// **A360 H3 (v0156)** — accumulates the server-arm SSE token stream so the
+/// Accumulates the server-arm SSE token stream so the
 /// turn runner can render it progressively. `@MainActor` because every mutation
 /// happens inside the store's MainActor-isolated `onToken` callback (and the
 /// `upsertStreamingAssistant` render it drives is MainActor too). Tracks whether
@@ -37,7 +37,7 @@ final class ServerStreamRender {
         didAppend = true
     }
 
-    /// 1.5 COACH-R — set once the MDR filter trips on the text so far; no
+    /// Set once the MDR filter trips on the text so far; no
     /// further token is painted (the final verdict decides what settles).
     private(set) var isHeld = false
 
@@ -47,9 +47,9 @@ final class ServerStreamRender {
 }
 
 extension CoachConversationStore {
-    // MARK: - Cadence-suggestion bridge (#30)
+    // MARK: - Cadence-suggestion bridge
 
-    /// **#30** — bridge the app-side inline
+    /// Bridge the app-side inline
     /// ``CoachServerService/CoachReminderSuggestion`` (SSE-frame twin) to the
     /// render-surface ``CoachCadenceSuggestion`` value model the proactive
     /// Insights card consumes. The inline frame carries no distinct row id, so the
@@ -123,12 +123,12 @@ extension CoachConversationStore {
     /// **Internal** so tests can pin the composition path without
     /// going through `send(_:)`.
     ///
-    /// **Deterministic clock (v0.6.0.7 B2-M3):** `now` is passed
+    /// **Deterministic clock:** `now` is passed
     /// explicitly so the composer is a pure function of its inputs.
     /// Production sites pass `.now`; tests pin a fixture date through
     /// the optional `nowProvider`-equivalent if needed in future.
     ///
-    /// **Locale (1.0.3, R11):** the composer now picks its guardrail language
+    /// **Locale:** the composer now picks its guardrail language
     /// from the session locale, so the parameter is explicit here rather than
     /// defaulted deep inside the builder — and a test can pin a language
     /// instead of inheriting the runner's. The default is the interface
@@ -198,7 +198,7 @@ extension CoachConversationStore {
 
     /// Id of the most recently appended transcript entity — used by the
     /// server arm to map the freshly appended assistant turn onto the server
-    /// message id from the `done` frame (feedback registration). `nil` on the
+    /// message id from the `done` frame (message index). `nil` on the
     /// SpeziChat-less fallback configuration (plain strings carry no id).
     func lastEntityID() -> UUID? {
         #if canImport(SpeziChat)
@@ -228,7 +228,7 @@ extension CoachConversationStore {
         #endif
     }
 
-    /// **v0.12 W8-1 — streaming render seam.** Appends a new assistant turn on
+    /// **Streaming render seam.** Appends a new assistant turn on
     /// the first partial, then replaces that same trailing turn in place on each
     /// later partial so the insight grows (headline → body → actions) instead of
     /// stacking fragments. Only the trailing stream-authored turn is replaced.
@@ -249,7 +249,7 @@ extension CoachConversationStore {
         #endif
     }
 
-    /// **22-02 (D-14-04-A) — what a turn that rendered nothing must say.**
+    /// **What a turn that rendered nothing must say.**
     ///
     /// The on-device arm streams partials and appends them in place. When the
     /// stream completes having rendered nothing at all, the turn used to end

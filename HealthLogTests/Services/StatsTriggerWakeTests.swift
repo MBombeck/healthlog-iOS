@@ -5,7 +5,7 @@ import Testing
 #if canImport(HealthKit) && canImport(SpeziHealthKit)
     import HealthKit
 
-    /// **V1 (1.2)** — each way the app is woken or opened reaches the `stats:`
+    /// Each way the app is woken or opened reaches the `stats:`
     /// sweep: the foreground pass (despite its 250 ms deadline), a HealthKit
     /// delivery (before its completion handler), AppRefresh, silent push,
     /// BGProcessing and the manual "Sync all", each with its own wire word.
@@ -179,7 +179,6 @@ import Testing
             let stats = harness.coordinator
             await standard.attachUploader(
                 MeasurementBatchUploader(api: StatsRecordingAPI(), throttle: BatchSyncThrottle()),
-                featureFlags: AlwaysOnFeatureFlags(),
                 dailyStatsKick: { trigger in await stats.requestRecentDailyStatsSweep(trigger: trigger) }
             )
             let steps = HKQuantitySample(

@@ -10,7 +10,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **Phase 25 Plan 01 — decision E-2026-08-28: the update-notice card.**
+    /// **Decision E-2026-08-28: the update-notice card.**
     ///
     /// The operator's wife updated to the newest build on a device that had
     /// HealthLog before. Apple Health was not connected at all, and nothing in
@@ -18,7 +18,7 @@
     /// request ever made writes `hl.healthkit.requestedAt.<token>`,
     /// `isConnected` answers `true` for every non-`.denied` state, and
     /// `shouldShowDashboardBanner` refuses on that FIRST — permanently. The
-    /// banner's rule is deliberate (K10) and pinned by 12-12; it does not move
+    /// banner's rule is deliberate and pinned by 12-12; it does not move
     /// here. What this suite demands is a card with its OWN rule.
     ///
     /// **Every starting state below is a realistic pre-existing installation**
@@ -71,7 +71,7 @@
                 )
                 #expect(
                     variant == .connect,
-                    "EXPECTED_RED: 25-01 state one — requestedAt latched, nothing granted, and the dashboard offers no way in"
+                    "state one — requestedAt latched, nothing granted, and the dashboard offers no way in"
                 )
             }
 
@@ -102,7 +102,7 @@
                 )
                 #expect(
                     variant == .connect,
-                    "EXPECTED_RED: 25-01 state two — never asked, and the update announcement never appears"
+                    "state two — never asked, and the update announcement never appears"
                 )
             }
 
@@ -146,7 +146,7 @@
                 )
                 #expect(
                     variant == .newTypes,
-                    "EXPECTED_RED: 25-01 state three — partially connected, and the new-types card never appears"
+                    "state three — partially connected, and the new-types card never appears"
                 )
             }
 
@@ -159,7 +159,7 @@
                 let callSites = source.components(separatedBy: "HealthKitUpdateNoticeCard(").count - 1
                 #expect(
                     callSites == 1,
-                    "EXPECTED_RED: 25-01 the dashboard carries no update-notice card"
+                    "the dashboard carries no update-notice card"
                 )
             }
 
@@ -478,7 +478,6 @@
             func attachUploader(_: MeasurementBatchUploader) async {}
             func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
             func setInitialBackfillCutoff(_: Date?) async {}
-            func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
         }
 
     #endif

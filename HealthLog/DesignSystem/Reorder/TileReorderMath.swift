@@ -56,7 +56,7 @@ public enum TileReorderMath {
     }
 }
 
-// MARK: - Span-aware flow packing (v0.8.1 WB)
+// MARK: - Span-aware flow packing
 
 /// The visual width a tile occupies in the span-aware grid. `full` consumes
 /// the whole row (the grid's full column count); `half` consumes one column.

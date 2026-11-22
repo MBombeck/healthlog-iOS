@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **W-B187 (#29) — server unit-at-source for `GET /api/measurements/series`.**
+/// **Server unit-at-source for `GET /api/measurements/series`.**
 ///
 /// Since server v1.16.16 the series payload carries an explicit `unit` token
 /// (glucose `"mg/dL"` | `"mmol/L"`, per the user's preference) and the

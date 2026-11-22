@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.7.1 W-APPINTENTS** — perform-logic coverage for the three Siri /
+/// Perform-logic coverage for the three Siri /
 /// Shortcuts intents.
 ///
 /// The intents resolve dependencies via `IntentDependencies.resolve()`,
@@ -293,7 +293,7 @@ struct HealthLogIntentsTests {
         #expect(await outbox.snapshot.isEmpty)
     }
 
-    // MARK: - Log mood (v0.10.0 W-Mood-B)
+    // MARK: - Log mood
 
     @Test("MoodLevelAppEnum maps each case onto the domain ServerMoodLevel score 1…5")
     func moodEnumMapsToScore() {
@@ -347,7 +347,7 @@ struct HealthLogIntentsTests {
         #expect(await outbox.snapshot.isEmpty)
     }
 
-    // MARK: - Mark dose from Live Activity (v0.10 W-LiveActivity-POLISH)
+    // MARK: - Mark dose from Live Activity
 
     #if canImport(ActivityKit)
         /// The Live-Activity "Genommen" intent carries the SCHEDULED instant

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.4 B2 — the info pattern.** `HLInfoContent` is what a screen's one (i)
+/// **The info pattern.** `HLInfoContent` is what a screen's one (i)
 /// explains; the 1.0.3 "Sources & method" sheet is the same content with one
 /// method section. The metric page is the reference migration.
 @Suite("Info pattern — HLInfoContent and the metric page's (i)")
@@ -72,7 +72,7 @@ struct HLInfoContentTests {
 
     @Test("blood pressure: the explainer, pulse pressure with its values explained, the classification, the guide")
     func bloodPressureInfo() throws {
-        let content = InsightsMetricInfo.content(for: .bloodPressure, canShowCloudInsights: true, showsCorrelation: false)
+        let content = InsightsMetricInfo.content(for: .bloodPressure, showsCorrelation: false)
         #expect(content.identifier == "insights.metric.info.sheet.bloodPressure")
         #expect(content.title == MetricKind.bloodPressure.displayName)
         #expect(content.about == InsightsExplainer.resolve(for: .bloodPressure)?.body)
@@ -80,7 +80,7 @@ struct HLInfoContentTests {
             String(localized: "sources.methodTitle.pulsePressureMAP"),
             String(localized: "sources.methodTitle.bpClassification")
         ])
-        // 1.4 B2 — one paragraph: what both are, how they are derived, their
+        // One paragraph: what both are, how they are derived, their
         // typical values (the lead that repeated it is gone).
         let pulsePressure = try #require(content.sections.first)
         #expect(pulsePressure.paragraphs == [String(localized: "sources.method.pulsePressureMAP")])
@@ -90,31 +90,26 @@ struct HLInfoContentTests {
         #expect(content.learnMoreConcept == "bloodPressure")
     }
 
-    @Test("sleep explains the debt and chronotype cards only where the server can show them")
+    @Test("sleep explains the debt and chronotype cards")
     func sleepInfoFollowsTheCards() {
-        let cloud = InsightsMetricInfo.content(for: .sleep, canShowCloudInsights: true, showsCorrelation: false)
-        #expect(cloud.sections.map(\.title).contains(String(localized: "sleep.debt.title")))
-        #expect(cloud.sections.map(\.title).contains(String(localized: "sleep.chronotype.title")))
-        #expect(cloud.referenceTopics.contains(.sleepRhythm))
+        let sleep = InsightsMetricInfo.content(for: .sleep, showsCorrelation: false)
+        #expect(sleep.sections.map(\.title).contains(String(localized: "sleep.debt.title")))
+        #expect(sleep.sections.map(\.title).contains(String(localized: "sleep.chronotype.title")))
+        #expect(sleep.referenceTopics.contains(.sleepRhythm))
         // App Review 1.4.1, audit row 17: the "own estimate" sentence stays with
         // the references that back it.
-        #expect(cloud.sections.contains { $0.paragraphs.contains(String(localized: "sleep.debt.computedInfo")) })
-        let standalone = InsightsMetricInfo.content(for: .sleep, canShowCloudInsights: false, showsCorrelation: false)
-        #expect(standalone.sections.isEmpty)
-        #expect(standalone.about != nil)
+        #expect(sleep.sections.contains { $0.paragraphs.contains(String(localized: "sleep.debt.computedInfo")) })
     }
 
     @Test("the same-time comparison and the correlation card get a section only when they can be on the page")
     func cardDependentSections() {
         let title = String(localized: "insights.sameTimeBaseline.title")
-        #expect(InsightsMetricInfo.content(for: .steps, canShowCloudInsights: true, showsCorrelation: false)
-            .sections.map(\.title).contains(title))
-        #expect(!InsightsMetricInfo.content(for: .steps, canShowCloudInsights: false, showsCorrelation: false)
+        #expect(InsightsMetricInfo.content(for: .steps, showsCorrelation: false)
             .sections.map(\.title).contains(title))
         let correlation = String(localized: "sources.methodTitle.correlations")
-        #expect(InsightsMetricInfo.content(for: .weight, canShowCloudInsights: true, showsCorrelation: true)
+        #expect(InsightsMetricInfo.content(for: .weight, showsCorrelation: true)
             .sections.map(\.title).contains(correlation))
-        #expect(!InsightsMetricInfo.content(for: .weight, canShowCloudInsights: true, showsCorrelation: false)
+        #expect(!InsightsMetricInfo.content(for: .weight, showsCorrelation: false)
             .sections.map(\.title).contains(correlation))
     }
 
@@ -128,59 +123,10 @@ struct HLInfoContentTests {
 
     @Test("1.4 B4: the RMSSD page explains RMSSD, cites HRV and reads the HRV guide")
     func rmssdHasItsOwnInfo() {
-        let info = InsightsMetricInfo.content(for: .hrvRMSSD, canShowCloudInsights: true, showsCorrelation: false)
+        let info = InsightsMetricInfo.content(for: .hrvRMSSD, showsCorrelation: false)
         #expect(info.about != nil)
         #expect(info.about != InsightsMetricInfo.about(for: .hrv), "RMSSD is not described as SDNN")
         #expect(info.learnMoreConcept == MetricKind.hrv.rawValue)
         #expect(!info.references.isEmpty)
-    }
-
-    @Test("1.4 B4: the recovery page's guide and references sit behind its (i), not under its title")
-    func recoveryPageInfo() throws {
-        let info = InsightsSpecialPageInfo.recovery()
-        #expect(info.about != nil)
-        #expect(info.learnMoreConcept == "RESILIENCE")
-        #expect(info.referenceTopics.contains(.derivedScore("RECOVERY_SCORE")))
-        let page = try source("HealthLog/Screens/Insights/Sub/InsightsRecoveryPage.swift")
-        #expect(page.components(separatedBy: "HLInfoButton(").count == 2, "exactly one (i)")
-        #expect(!page.contains("HLLearnMoreLink("))
-        #expect(!page.contains("HLSourcesLink("))
-    }
-
-    // MARK: - Source contracts
-
-    private static let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent() // DesignSystem
-        .deletingLastPathComponent() // HealthLogTests
-        .deletingLastPathComponent() // repo root
-
-    private func source(_ path: String) throws -> String {
-        try String(contentsOf: Self.root.appendingPathComponent(path), encoding: .utf8)
-    }
-
-    @Test("the metric page carries one (i) and no loose explainer, link row or BP sentences")
-    func metricPageIsMigrated() throws {
-        let page = try source("HealthLog/Screens/Insights/InsightsMetricScreen.swift")
-            + source("HealthLog/Screens/Insights/InsightsMetricScreen+Sections.swift")
-        #expect(page.components(separatedBy: "HLInfoButton(").count == 2, "exactly one (i)")
-        #expect(page.contains("accessibilityIdentifier: \"insights.metric.info.\\(kind.rawValue)\""))
-        for retired in ["descriptionSlot", "bpDerivedBlock", "rangeDeltaSlot", "HLLearnMoreLink(", "insights.bp.derived.caveat"] {
-            #expect(!page.contains(retired), "\(retired) is back on the metric page")
-        }
-    }
-
-    @Test("a Sources link or (i) inside the three sheets pushes instead of stacking a sheet")
-    func sheetsPushInPlace() throws {
-        for path in [
-            "HealthLog/Screens/Insights/Sub/WellnessScoreDetailSheet.swift",
-            "HealthLog/Screens/Coach/AskCoachSheet.swift",
-            "HealthLog/Screens/Labs/BiomarkerEditorSheet.swift"
-        ] {
-            #expect(try source(path).contains(".hlSheetStack()"), "\(path) must mark its stack")
-        }
-        let link = try source("HealthLog/DesignSystem/Sources/HLSourcesLink.swift")
-        #expect(link.contains("if insideSheetStack {"))
-        let button = try source("HealthLog/DesignSystem/Sources/HLInfoButton.swift")
-        #expect(button.contains("if insideSheetStack {"))
     }
 }

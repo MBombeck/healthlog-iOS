@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **L1 (1.1.0) — Personal Records for the QA sweep.**
+    /// **Personal Records for the QA sweep.**
     ///
     /// The hermetic world answers no `GET /api/personal-records`, so a sweep of
     /// the records screen photographed an empty state — and the English-copy
@@ -16,6 +16,11 @@
             if path == "/api/personal-records" {
                 return (200, Data(recordsJSON.utf8))
             }
+            // About me: two allergies and two family-history entries, the
+            // server's `{ data: [...] }` list. The shared table had no answer
+            // for either route, so both screens showed their load error.
+            if path == "/api/allergies" { return (200, Data(allergiesJSON.utf8)) }
+            if path == "/api/family-history" { return (200, Data(familyHistoryJSON.utf8)) }
             if path == "/api/measurements/series", query.first(where: { $0.name == "kind" })?.value == "steps" {
                 return (200, Data(stepsSeriesJSON.utf8))
             }
@@ -62,6 +67,35 @@
                 """
             }
             return "{\"data\":[\(rows.joined(separator: ","))],\"error\":null}"
+        }
+
+        /// The rows `toAllergyDTO` writes on the server, newest first.
+        private static var allergiesJSON: String {
+            let created = iso(day(400))
+            let recent = iso(day(30))
+            return """
+            {"data":[\
+            {"id":"sweep-allergy-1","substance":"Penicillin","category":"MEDICATION","type":"ALLERGY",\
+            "severity":"MODERATE","status":"ACTIVE","onsetAt":"\(created)","reaction":null,"note":null,\
+            "createdAt":"\(recent)","updatedAt":"\(recent)"},\
+            {"id":"sweep-allergy-2","substance":"Laktose","category":"FOOD","type":"INTOLERANCE",\
+            "severity":"MILD","status":"ACTIVE","onsetAt":null,"reaction":null,"note":null,\
+            "createdAt":"\(created)","updatedAt":"\(created)"}\
+            ],"error":null}
+            """
+        }
+
+        /// The rows `toFamilyHistoryEntryDTO` writes on the server, newest first.
+        private static var familyHistoryJSON: String {
+            let created = iso(day(200))
+            return """
+            {"data":[\
+            {"id":"sweep-family-1","relationship":"FATHER","condition":"Bluthochdruck","ageAtOnset":52,\
+            "note":null,"createdAt":"\(created)","updatedAt":"\(created)"},\
+            {"id":"sweep-family-2","relationship":"GRANDMOTHER_MATERNAL","condition":"Diabetes Typ 2",\
+            "ageAtOnset":61,"note":null,"createdAt":"\(created)","updatedAt":"\(created)"}\
+            ],"error":null}
+            """
         }
 
         /// Thirty daily step totals; the last twelve days clear 10,000 (a streak).

@@ -19,7 +19,7 @@ import Foundation
 // invent a server `MoodLevel`.
 
 public extension ServerMoodLevel {
-    /// Audit B-4 — decodes an unrecognised server level onto ``unknown``
+    /// Decodes an unrecognised server level onto ``unknown``
     /// instead of throwing.
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -33,14 +33,14 @@ public extension ServerMoodLevel {
         self = known
     }
 
-    /// Audit B-4 — every level the SERVER can actually send: `allCases` minus
+    /// Every level the SERVER can actually send: `allCases` minus
     /// the decode-only ``unknown`` sentinel. The mood picker, the history
     /// filter and any round-trip lock read this.
     static var serverCases: [ServerMoodLevel] {
         allCases.filter { $0 != .unknown }
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire.
+    /// Refuses to put ``unknown`` back on the wire.
     ///
     /// `__UNKNOWN__` is not a server `MoodLevel`. Mood writes are composed from
     /// the picker (``serverCases``) and from `MoodEntryPatch`, so this throw is
@@ -63,7 +63,7 @@ public extension ServerMoodLevel {
 }
 
 public extension MoodEntry {
-    /// Audit B-4 — the entries that carry a nameable level, in input order.
+    /// The entries that carry a nameable level, in input order.
     ///
     /// The ONE place the exclusion rule lives, so a future surface cannot fold
     /// the sentinel into an aggregate by writing `map(\.score)` somewhere and
@@ -90,7 +90,7 @@ public extension MoodEntry {
         scored(entries).max(by: { $0.entry.recordedAt < $1.entry.recordedAt })
     }
 
-    /// Audit B-4 — the arithmetic mean of the nameable levels, or `nil` when
+    /// The arithmetic mean of the nameable levels, or `nil` when
     /// none of the entries carries one.
     ///
     /// `nil` is not `0` and not `3`: a window in which the app can name no level

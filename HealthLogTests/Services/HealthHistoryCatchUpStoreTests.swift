@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 
-/// 1.3 (public #25) — "Sync everything now" on the settings surface, and the
+/// "Sync everything now" on the settings surface, and the
 /// state rules the split runs on.
 @Suite("History catch-up store and split state")
 @MainActor

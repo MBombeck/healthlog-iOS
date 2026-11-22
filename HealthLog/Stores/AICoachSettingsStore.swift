@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **Build 6 / Item 6.6** — drives the two Coach/AI privacy controls on
+/// Drives the two Coach/AI privacy controls on
 /// ``SettingsCoachScreen``: the "read documents with AI" auto-switch
 /// (`documentsAutoAiRead`) and the Insights data-detail picker
 /// (`insightsPrivacyMode`).
@@ -49,17 +49,17 @@ public final class AICoachSettingsStore {
     public private(set) var isReminderWriteInFlight: Bool = false
     /// Last non-retriable error surfaced by a load or write, for a banner.
     public private(set) var error: HLError?
-    /// #126 P2 — how far back the Coach reads (`coach-prefs.defaultWindow`).
+    /// How far back the Coach reads (`coach-prefs.defaultWindow`).
     /// `nil` until loaded, or for a word this build does not know.
     public private(set) var coachDefaultWindow: CoachDefaultWindow?
     public private(set) var isWindowWriteInFlight: Bool = false
 
-    /// #126 P2 — read the window (the Coach settings screen asks on appear).
+    /// Read the window (the Coach settings screen asks on appear).
     public func loadCoachDefaultWindow() async {
         if let window = try? await repo.fetchCoachDefaultWindow() { coachDefaultWindow = window }
     }
 
-    /// #126 P2 — write the window; a failure puts the previous one back.
+    /// Write the window; a failure puts the previous one back.
     public func setCoachDefaultWindow(_ window: CoachDefaultWindow) async {
         guard coachDefaultWindow != window else { return }
         let previous = coachDefaultWindow
@@ -117,7 +117,7 @@ public final class AICoachSettingsStore {
         } catch {
             self.error = .unknown(String(describing: error))
         }
-        // Build 9 (9.2) — fail-soft + NO network write. On error the mirror
+        // Fail-soft + NO network write. On error the mirror
         // property stays `nil` so the UI hides the toggle rather than adopting a
         // wrong default; on success it hydrates the property + the UserDefaults
         // mirror. A `nil`/absent server value is adopted, never written back
@@ -268,7 +268,7 @@ public final class AICoachSettingsStore {
         isDocumentsWriteInFlight = false
         isInsightsWriteInFlight = false
         error = nil
-        // Build 9 (9.2) — server coach flags are per-user; the next signed-in user
+        // Server coach flags are per-user; the next signed-in user
         // hydrates fresh. Drop the properties + the two mirror keys.
         coachDisabled = nil
         reminderSuggestionsEnabled = nil
@@ -279,7 +279,7 @@ public final class AICoachSettingsStore {
     }
 
     private enum Keys {
-        /// Build 9 (9.2) — mirror of `disableCoach`. The reminder-suggestions
+        /// Mirror of `disableCoach`. The reminder-suggestions
         /// mirror lives in `CoachCadenceSuggestionsDefaultsKeys.serverMirrorEnabled`
         /// (shared with the pure cadence reader).
         static let coachDisabled = "hl.settings.coach.disabled"

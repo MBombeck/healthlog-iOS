@@ -12,7 +12,7 @@ import SwiftUI
 /// faint white bottom hairline lifts it off dark backgrounds without a full
 /// surround border. It sizes to its content (a centered pill), not a
 /// full-width speech-bubble, and stays horizontally centered + bottom-
-/// anchored across every host so Undo is a same-finger tap (W30).
+/// anchored across every host so Undo is a same-finger tap.
 ///
 /// **Adoption surface.** `AuthenticatedShell` hosts a single toast slot
 /// driven by `UndoCoordinator.current`. Stores enqueue actions on their

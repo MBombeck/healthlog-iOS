@@ -131,6 +131,7 @@ import Foundation
         ///
         /// The earliest of the per-type dates is the person's chosen window: a
         /// type whose own data begins later reports that later date.
+        @concurrent
         nonisolated func limitedHistoryStart() async -> Date? {
             let types = defaultReadTypes().filter { $0 is HKSampleType }
             let dates = await HealthKitAuthorizedHistory(store: store).earliestAuthorizedSampleDates(for: types)

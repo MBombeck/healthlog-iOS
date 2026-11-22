@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.13 W2 — ``BYOKeyStore`` per-provider round-trip + teardown coverage. The
+/// ``BYOKeyStore`` per-provider round-trip + teardown coverage. The
 /// secret key bytes must round-trip per provider and be fully wiped by
 /// ``BYOKeyStore/wipeAll()`` (the logout / delete-account hook).
 @Suite("BYOKeyStore")

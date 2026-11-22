@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// A2 (1.4) — the update path from 1.3.0, on the exact bytes a 1.3.0 phone
+    /// The update path from 1.3.0, on the exact bytes a 1.3.0 phone
     /// keeps for a partition halfway through its history walk.
     ///
     /// The operator's phone is the case: "Sync everything now" pressed once
@@ -63,6 +63,9 @@
             let reached = HistoryWalkA2Fixture.historyDay(400)
             let consumer = FoldingServerConsumer(foldedBefore: HistoryWalkA2Fixture.historyDay(150))
             let collector = HistoryWalkA2Fixture.collector(install.cursors, query: install.store, consumer: consumer)
+            // #10 — the server names its oldest reading of the type.
+            let oldest = try #require(install.store.allRows.map(\.start).min())
+            _ = await install.cursors.updateSplit(for: install.key, requiring: install.lease) { $0.serverOldestReading = oldest }
 
             let result = await collector.collect(
                 typeIdentifiers: [type],
@@ -76,7 +79,8 @@
             let starts = consumer.rows.compactMap { anchor in install.store.allRows.first { $0.anchor == anchor }?.start }
             #expect(!starts.isEmpty)
             #expect(starts.allSatisfy { $0 <= reached }, "nothing newer than the walk's date goes out again")
-            #expect(install.store.historyQueries.count == HealthSampleSplitPolicy.foldedPagesBeforeStop)
+            // The folded run, then one read below the server's oldest reading.
+            #expect(install.store.historyQueries.count == HealthSampleSplitPolicy.foldedPagesBeforeStop + 1)
             #expect(result?.history?.isFinished == true)
             let state = try #require(await install.cursors.splitState(for: install.key))
             #expect(state.isHistoryComplete(cutoff: .distantPast))

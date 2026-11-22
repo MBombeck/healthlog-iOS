@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 08 Plan 10 — a permission request has three ends, and only one of
+/// **A permission request has three ends, and only one of
 /// them may move the flow on.**
 ///
 /// Both onboarding permission steps used to answer every end the same way:
@@ -13,7 +13,7 @@ import Testing
 /// sheet is presented out of process and iOS raises it once per install, so a
 /// UI test can never drive all three ends.
 ///
-/// The shape follows `LogoutConfirmationState` (08-09): the guarantees live in
+/// The shape follows `LogoutConfirmationState`: the guarantees live in
 /// the value, so they are provable by construction rather than by tapping.
 @Suite("Onboarding — permission outcomes")
 struct OnboardingPermissionOutcomeTests {

@@ -16,7 +16,7 @@ import Foundation
 // the server's already-finished signals verbatim — it never re-derives a band,
 // a shift, a trend, or a delta on-device. Each card self-suppresses when its
 // payload is absent / not present, exactly like the other conditional insight
-// cards (HONEST-ONLY).
+// cards.
 //
 // **Tolerant decode.** Every field is `decodeIfPresent` with a safe default so
 // a partial / future-extended payload never rejects the whole read; an unknown
@@ -76,7 +76,7 @@ public struct InsightsHealthStatusDTO: Codable, Sendable, Equatable {
         /// #126 P2 (v1.40.3) — what `low`/`high` describe: the usual whole day
         /// (`day`) or the usual range for this time of day (`sameHours`, a day
         /// still in progress). Raw text so a new word never drops the row;
-        /// `nil` from a server before v1.40.3. Decoded now, worded later (X3).
+        /// `nil` from a server before v1.40.3. Decoded now, worded later.
         public let basis: String?
 
         public var id: String {

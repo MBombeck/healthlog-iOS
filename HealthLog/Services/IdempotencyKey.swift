@@ -36,7 +36,7 @@ public extension IdempotencyKey {
     ///
     /// The server's replay cache is keyed on `(user, key, method, path)` and
     /// not on the body, so two such POSTs under one key collapse into the
-    /// first one's response (T3 / public #15). Part 0 is the key itself, so a
+    /// first one's response. Part 0 is the key itself, so a
     /// single-request write and an already-queued outbox entry are sent exactly
     /// as before; every later part derives a key from it that is just as stable
     /// across retries. `:` is in the server's key alphabet

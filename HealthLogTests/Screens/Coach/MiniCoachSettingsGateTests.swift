@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Tests around the Settings capability gate for the Mini-Coach (C6).
+/// Tests around the Settings capability gate for the Mini-Coach.
 ///
 /// The Settings view itself isn't rendered — we lock the underlying
 /// invariants the view consumes (#115 · 0.2: the server's `coach` capability
@@ -46,7 +46,7 @@ struct MiniCoachSettingsGateTests {
         }
         defaults.removePersistentDomain(forName: suite)
         // `@AppStorage` reads via UserDefaults — mirror the default-OFF
-        // operator-decision (Q-MC-4) at the defaults level.
+        // operator-decision at the defaults level.
         #expect(!defaults.bool(forKey: MiniCoachDefaultsKeys.enabled))
     }
 

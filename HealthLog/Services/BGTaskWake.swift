@@ -1,6 +1,6 @@
 import Foundation
 
-/// **R-A1 (1.4) — one background wake's completion contract, armed first.**
+/// **One background wake's completion contract, armed first.**
 ///
 /// iOS calls a `BGTask`'s expiration handler when the grant runs out, and it
 /// expects the task to be completed from there. The two BGTask cores in

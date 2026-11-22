@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 07 / plan 07-05 — what actually happened to one mood write.**
+/// **What actually happened to one mood write.**
 ///
 /// Four outcomes, because three of them used to be one. `queued` and
 /// `enqueueLost` both reach the user as "offline, we could not save that right
@@ -15,7 +15,7 @@ enum MoodWriteOutcome: Sendable, Equatable {
     case queued(MoodEntry, transport: HLError)
     /// The wire call failed retriably and the durable write did **not** happen.
     /// Non-terminal: nothing may advance past this entry. The payload is the
-    /// project's existing `HLError.notPersisted` (W-INTEGRITY-WRITEPATH G-2) —
+    /// project's existing `HLError.notPersisted` —
     /// the honest "couldn't save", not the retriable transport error that would
     /// let a caller keep an optimistic "queued".
     case enqueueLost(HLError)
@@ -35,18 +35,14 @@ public actor MoodRepository {
     private let api: APIClientProtocol
     private let outbox: OutboxQueue
     private let encoder: JSONEncoder
-    /// v0.11 W2 — standalone read-union seam. `nil` (default) → existing server
-    /// path verbatim (paired invariant). Non-nil + live standalone → reads/writes
-    /// route to the local mirror; no `/api/*` fires.
-    private let standalone: StandaloneGate?
-    /// v0.14.3 E3 — SWR cache coordinator. When wired, `recent(days:)` routes
+    /// SWR cache coordinator. When wired, `recent(days:)` routes
     /// through the `.moodEntries(days:)` row (cache-first on disk, 60s TTL,
     /// single-flighted revalidation) so the Stimmung card paints from disk on a
     /// warm foreground bounce + revalidates in the background — the same SWR
     /// posture as `MoodRelationsRepository`. Writes invalidate the row via
     /// `CacheInvalidator` (already wired). `nil` in unit tests → direct fetch.
     private let swr: SWRCoordinator?
-    /// #115 1.5 — the zone the `from`/`to` day keys are cut in: the account's
+    /// The zone the `from`/`to` day keys are cut in: the account's
     /// (``ProfileDay``), never the device's. Injectable for tests.
     private let profileTimeZone: @Sendable () -> TimeZone
 
@@ -54,20 +50,14 @@ public actor MoodRepository {
         api: APIClientProtocol,
         outbox: OutboxQueue,
         encoder: JSONEncoder = .hlDefault,
-        standalone: StandaloneGate? = nil,
         swr: SWRCoordinator? = nil,
         profileTimeZone: @escaping @Sendable () -> TimeZone = { ProfileDay.timeZone }
     ) {
         self.api = api
         self.outbox = outbox
         self.encoder = encoder
-        self.standalone = standalone
         self.profileTimeZone = profileTimeZone
         self.swr = swr
-    }
-
-    private var isStandalone: Bool {
-        standalone?.isActive == true
     }
 
     /// Page size per request — the server schema caps `limit` at 500
@@ -79,7 +69,7 @@ public actor MoodRepository {
 
     /// Lädt die vollständige Mood-Historie der letzten `days` Tage.
     ///
-    /// B16 (v0.10.0): Der alte Code schickte nur `days=…`, einen Param den der
+    /// Der alte Code schickte nur `days=…`, einen Param den der
     /// Server **nicht** kennt (`listMoodEntriesSchema.safeParse` verwirft
     /// unbekannte Keys still) — und **kein** `limit`. Resultat: der Server gab
     /// seine Default-Page (100 neueste Einträge) zurück, Monate an Historie
@@ -88,7 +78,7 @@ public actor MoodRepository {
     /// Fix: echte vom Server honorierte Params (`from`/`to` als `YYYY-MM-DD`,
     /// `limit`, `offset`) + Offset-Pagination bis `meta.total` gedrained ist
     /// (oder eine Page < `pageSize` zurückkommt). Cancellation-safe via `async`.
-    /// #115 1.5 — the `from`/`to` pair for the last `days` days, as the
+    /// The `from`/`to` pair for the last `days` days, as the
     /// account sees them: today is the account's today, and both keys are cut
     /// in `timeZone`. The server (`listMoodEntriesSchema`) reads the pair as
     /// days in the same zone, so a device-zone pair shifted the whole window
@@ -99,17 +89,9 @@ public actor MoodRepository {
     }
 
     public func recent(days: Int = 365) async throws -> [MoodEntry] {
-        if isStandalone, let standalone {
-            // Standalone: read the local mirror, newest-first. Mood *analytics*
-            // (heatmap/stability/correlations) are already client-computed from
-            // these entries (`MoodInsights.compute`), so the whole surface is
-            // offline once the entries come from here.
-            let snaps = try await standalone.local.standaloneMoods(days: days)
-            return snaps.map { $0.toDomainMood() }
-        }
         // Server-Endpoint heißt `/api/mood-entries` (siehe API-Audit). The
         // paginated network fetch is captured as a sendable closure so it can be
-        // routed through the SWR cache (v0.14.3 E3) when a coordinator is wired.
+        // routed through the SWR cache when a coordinator is wired.
         let api = api
         let window = Self.dayWindow(days: days, now: .now, timeZone: profileTimeZone())
         @Sendable func networkFetch() async throws -> [MoodEntry] {
@@ -138,7 +120,7 @@ public actor MoodRepository {
             }
             return all
         }
-        // v0.14.3 E3 — SWR: serve the `.moodEntries(days:)` row cache-first (60s
+        // SWR: serve the `.moodEntries(days:)` row cache-first (60s
         // TTL) so a foreground bounce paints the card from disk without a cold
         // round-trip, and revalidate in the background. The key carries `days`
         // so the 365-day store window + a narrower drill-down never collide.
@@ -152,14 +134,12 @@ public actor MoodRepository {
         return try await networkFetch()
     }
 
-    /// #115 · 1.3 — the server's daily mood series (`GET /api/mood/analytics`),
-    /// profile-zone day means plus summary slopes. `nil` in standalone (no
-    /// server; the analysis buckets the local entries itself). Routed through
+    /// The server's daily mood series (`GET /api/mood/analytics`),
+    /// profile-zone day means plus summary slopes. Routed through
     /// the `.moodDailySeries` SWR row so a warm bounce and an offline launch
     /// paint the last server series; a mood write drops the row
     /// (`MutationKind.moodEntryChange`).
     func dailySeries(forceRevalidate: Bool = false) async throws -> MoodAnalyticsEnrichment? {
-        if isStandalone { return nil }
         let api = api
         @Sendable func networkFetch() async throws -> MoodAnalyticsEnrichment {
             let req: APIRequest<MoodAnalyticsEnrichment> = .get("/api/mood/analytics")
@@ -179,34 +159,6 @@ public actor MoodRepository {
     /// Dedicated history read. Unlike `recent(days:)`, this preserves the
     /// server's page metadata and never participates in the analytics SWR row.
     public func history(query: MoodHistoryQuery) async throws -> MoodListResponse {
-        if isStandalone, let standalone {
-            let snapshots = try await standalone.local.standaloneMoods(days: nil)
-            let matching = snapshots
-                .map {
-                    MoodEntry(
-                        id: $0.externalId,
-                        mood: ServerMoodLevel(score: $0.score),
-                        tags: $0.tags,
-                        tagKeys: $0.tagKeys,
-                        moodLoggedAt: $0.recordedAt,
-                        source: $0.source.uppercased(),
-                        note: $0.note
-                    )
-                }
-                .filter { query.matches($0) }
-                .sorted { $0.recordedAt > $1.recordedAt }
-            let start = min(query.offset, matching.count)
-            let end = min(start + query.limit, matching.count)
-            return MoodListResponse(
-                entries: Array(matching[start ..< end]),
-                meta: MeasurementListResponse.ListMeta(
-                    total: matching.count,
-                    limit: query.limit,
-                    offset: query.offset
-                )
-            )
-        }
-
         let req: APIRequest<MoodListResponse> = .get(
             "/api/mood-entries",
             query: query.queryItems
@@ -216,7 +168,7 @@ public actor MoodRepository {
 
     /// Log a mood entry, throwing on anything that is not a server acceptance.
     ///
-    /// **Phase 07 / plan 07-05.** Now a thin projection of
+    /// Now a thin projection of
     /// ``logDurable(score:tags:tagKeys:note:recordedAt:retryIdentity:)``, which is
     /// where the difference between *queued* and *lost* lives. A queued write
     /// still throws the retriable transport error, exactly as before; a **lost**
@@ -265,20 +217,11 @@ public actor MoodRepository {
         tagKeys: [String] = [],
         note: String?,
         recordedAt: Date? = nil,
-        retryIdentity: HealthSyncRetryEnvelope?
+        retryIdentity: HealthSyncRetryEnvelope?,
+        appleHealthSampleID: String? = nil
     ) async -> MoodWriteOutcome {
         let stamp = recordedAt ?? .now
-        if isStandalone, let standalone {
-            do {
-                let snap = try await standalone.local.standaloneAddMood(
-                    score: score, tags: tags, tagKeys: tagKeys, note: note, recordedAt: stamp
-                )
-                return .accepted(snap.toDomainMood())
-            } catch {
-                return .rejected(HLError.unknown(String(describing: error)))
-            }
-        }
-        let entry = MoodEntry(
+        var entry = MoodEntry(
             id: Self.localIdentifier(for: retryIdentity),
             recordedAt: stamp,
             score: score,
@@ -286,13 +229,32 @@ public actor MoodRepository {
             tagKeys: tagKeys,
             note: note
         )
-        let idempotencyKey = retryIdentity.map { IdempotencyKey(raw: $0.idempotencyKey) } ?? IdempotencyKey()
+        // An Apple Health import carries its source pair, so a deletion in
+        // Apple Health can reach it later (contract §3).
+        if let appleHealthSampleID {
+            entry = MoodEntry(
+                id: entry.id,
+                mood: entry.mood,
+                tags: entry.tags,
+                tagKeys: entry.tagKeys,
+                moodLoggedAt: stamp,
+                source: "APPLE_HEALTH",
+                note: entry.note
+            )
+            entry.externalId = appleHealthSampleID
+        }
+        guard let retryIdentity else {
+            return await logManual(entry, idempotencyKey: IdempotencyKey())
+        }
+        // The importer keeps its anchor until the sample is accepted or
+        // queued and re-reads it otherwise, so its send stays ahead of the
+        // queue: a stored row per attempt would only pile up under one key.
+        let idempotencyKey = IdempotencyKey(raw: retryIdentity.idempotencyKey)
         do {
             return try await .accepted(postEntry(entry, idempotencyKey: idempotencyKey))
-        } catch HLError.network(.writeCancelled) where retryIdentity != nil {
-            // C4 / E1 — for the importer a cut-off request holds the anchor (the
-            // sample is re-read next sweep). A manual entry has no such second
-            // chance and falls through to the outbox below.
+        } catch HLError.network(.writeCancelled) {
+            // For the importer a cut-off request holds the anchor (the
+            // sample is re-read next sweep).
             return .rejected(.canceled)
         } catch let err as HLError where err.shouldPersistToOutbox {
             guard let payload = try? encoder.encode(entry) else {
@@ -310,7 +272,27 @@ public actor MoodRepository {
         } catch let err as HLError {
             return .rejected(err)
         } catch is CancellationError {
-            // C4 — stopped, not refused; the importer holds its anchor on it.
+            // Stopped, not refused; the importer holds its anchor on it.
+            return .rejected(.canceled)
+        } catch {
+            return .rejected(HLError.unknown(String(describing: error)))
+        }
+    }
+
+    /// A manual entry has no second source to re-read it from, so it is
+    /// stored before it is sent and removed once it has landed.
+    private func logManual(_ entry: MoodEntry, idempotencyKey: IdempotencyKey) async -> MoodWriteOutcome {
+        do {
+            let payload = try encoder.encode(entry)
+            let op = OutboxQueue.Operation(kind: .logMood, payload: payload, idempotencyKey: idempotencyKey.raw)
+            let saved = try await outbox.writeAhead(op) { [self] in
+                try await postEntry(entry, idempotencyKey: idempotencyKey)
+            }
+            return .accepted(saved)
+        } catch let err as HLError {
+            if case .notPersisted = err { return .enqueueLost(err) }
+            return err.shouldPersistToOutbox ? .queued(entry, transport: err) : .rejected(err)
+        } catch is CancellationError {
             return .rejected(.canceled)
         } catch {
             return .rejected(HLError.unknown(String(describing: error)))
@@ -358,22 +340,11 @@ public actor MoodRepository {
     /// Server route: `DELETE /api/mood-entries/[id]` → 204 No Content.
     /// On retriable network failure, enqueues `deleteMood` on the outbox.
     public func delete(id: String) async throws {
-        if isStandalone, let standalone {
-            try await standalone.local.standaloneDeleteMood(externalId: id)
-            return
-        }
         let idempotencyKey = IdempotencyKey()
-        do {
+        let payload = try encoder.encode(OutboxQueue.Payloads.DeleteMood(id: id))
+        let op = OutboxQueue.Operation(kind: .deleteMood, payload: payload, idempotencyKey: idempotencyKey.raw)
+        try await outbox.writeAhead(op) { [self] in
             try await deleteRequest(id: id, idempotencyKey: idempotencyKey)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(OutboxQueue.Payloads.DeleteMood(id: id))
-            guard await enqueueDurably(kind: .deleteMood, payload: payload, idempotencyKey: idempotencyKey.raw) else {
-                // G-2: the send failed AND the durable write failed. Surfacing
-                // the retriable error would leave the caller believing a delete
-                // is queued that no longer exists anywhere.
-                throw HLError.notPersisted(String(describing: err))
-            }
-            throw err
         }
     }
 
@@ -388,31 +359,11 @@ public actor MoodRepository {
     /// already PUT-valid (partial fields).
     /// On retriable network failure, enqueues `updateMood` on the outbox.
     public func update(id: String, patch: MoodEntryPatch) async throws -> MoodEntry {
-        if isStandalone, let standalone {
-            // Read the current row to fill any field the patch leaves nil
-            // (the local store's update is a full replace).
-            let current = try await standalone.local.standaloneMoods(days: nil)
-                .first { $0.externalId == id }
-            let score = patch.mood?.score ?? current?.score ?? 3
-            let tags = patch.tags ?? current?.tags ?? []
-            let tagKeys = patch.tagKeys ?? current?.tagKeys ?? []
-            let note = patch.note ?? current?.note
-            let recordedAt = patch.moodLoggedAt ?? current?.recordedAt ?? .now
-            try await standalone.local.standaloneUpdateMood(
-                externalId: id, score: score, tags: tags, tagKeys: tagKeys, note: note, recordedAt: recordedAt
-            )
-            return MoodEntry(id: id, recordedAt: recordedAt, score: score, tags: tags, tagKeys: tagKeys, note: note)
-        }
         let idempotencyKey = IdempotencyKey()
-        do {
-            return try await patchRequest(id: id, patch: patch, idempotencyKey: idempotencyKey)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(OutboxQueue.Payloads.UpdateMood(id: id, patch: patch))
-            guard await enqueueDurably(kind: .updateMood, payload: payload, idempotencyKey: idempotencyKey.raw) else {
-                // G-2, as above.
-                throw HLError.notPersisted(String(describing: err))
-            }
-            throw err
+        let payload = try encoder.encode(OutboxQueue.Payloads.UpdateMood(id: id, patch: patch))
+        let op = OutboxQueue.Operation(kind: .updateMood, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
+            try await patchRequest(id: id, patch: patch, idempotencyKey: idempotencyKey)
         }
     }
 
@@ -421,7 +372,7 @@ public actor MoodRepository {
         try await patchRequest(id: id, patch: patch, idempotencyKey: IdempotencyKey(raw: idempotencyKey))
     }
 
-    /// **audit-v0162 M-2 — drop the SWR mood slices after a committed write.**
+    /// **Drop the SWR mood slices after a committed write.**
     /// `recent(days:)` routes reads through the `.moodEntries(days:)` row
     /// (cache-first, 60s TTL); before this, the doc CLAIMED "writes invalidate
     /// the row" but nothing did — a log/delete/update followed by a relaunch
@@ -430,7 +381,7 @@ public actor MoodRepository {
     /// `MutationKind.moodEntryChange` matrix (which the audit flagged as DEAD —
     /// zero callers — and which now includes the 365-day window the store reads)
     /// makes the arm live and keeps the mood surfaces honest. No-op when no SWR
-    /// coordinator is wired (unit tests / standalone).
+    /// coordinator is wired (unit tests).
     private func invalidateMoodCaches() async {
         await swr?.invalidate(MutationKind.moodEntryChange.affectedKeys)
     }
@@ -458,6 +409,18 @@ public actor MoodRepository {
         let saved = try await api.send(req)
         await invalidateMoodCaches()
         return saved
+    }
+
+    /// Sends State of Mind samples deleted in Apple Health to the mood delete
+    /// route; only entries imported with their source pair are touched.
+    func deleteAppleHealthEntries(_ externalIDs: [String]) async throws {
+        guard !externalIDs.isEmpty else { return }
+        let req: APIRequest<EmptyResponse> = try .delete(
+            AppleHealthDeleteDomain.mood.path,
+            body: ExternalIDBatch(externalIds: externalIDs)
+        )
+        _ = try await api.send(req)
+        await invalidateMoodCaches()
     }
 
     private func postEntry(_ entry: MoodEntry, idempotencyKey: IdempotencyKey) async throws -> MoodEntry {

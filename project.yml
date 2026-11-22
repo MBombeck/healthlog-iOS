@@ -2,7 +2,7 @@ name: HealthLog
 options:
   bundleIdPrefix: dev.healthlog
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "26.0"
   developmentLanguage: en
   groupSortPosition: top
   generateEmptyDirectories: true
@@ -17,7 +17,7 @@ settings:
     # 2026-08-21 three of them hardcoded "0.19.0" instead — the same split as
     # the build number below, and it would have shipped a stale marketing
     # version on the first release that changed one.
-    MARKETING_VERSION: "1.5.0"
+    MARKETING_VERSION: "1.7.0"
     # 11-03 THE SINGLE FROZEN BUILD-NUMBER ALLOCATION POINT.
     #
     # This is the ONLY `CURRENT_PROJECT_VERSION:` assignment in this file, and
@@ -275,7 +275,7 @@ targets:
   HealthLog:
     type: application
     platform: iOS
-    deploymentTarget: "18.0"
+    deploymentTarget: "26.0"
     sources:
       - path: HealthLog
         excludes:
@@ -323,13 +323,28 @@ targets:
     info:
       path: HealthLog/Resources/Info.plist
       properties:
+        # #190 — the push relay keychain group, resolved at build time.
+        HLPushKeychainGroup: $(AppIdentifierPrefix)dev.healthlog.app.push
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: "HealthLog"
         UILaunchScreen:
           UIColorName: Background
+        # iPhone stays portrait; only the full-screen chart turns, through the
+        # scene on iOS 27. The iPad takes every orientation, as resizable
+        # windows require.
+        # The phone may turn at all only so the timeline's full screen and the
+        # full-screen chart can; OrientationPolicy keeps every other screen
+        # upright (scene delegate on iOS 27, app delegate on iOS 26).
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIRequiredDeviceCapabilities:
           - arm64
         ITSAppUsesNonExemptEncryption: false
@@ -402,12 +417,11 @@ targets:
               - healthlog
         NSHealthShareUsageDescription: "HealthLog liest die von dir freigegebenen Gesundheitsdaten aus Apple Health (darunter Vitalwerte, Aktivität, Ernährung, Schlaf, Stimmung, Zyklusdaten, EKGs, Trainings- und Pulsdaten sowie Medikamente), um sie anzuzeigen, zu synchronisieren und Trends zu berechnen."
         NSHealthUpdateUsageDescription: "HealthLog speichert von dir erfasste Messungen, Stimmungs- und Zykluseinträge sowie Messungen aus von dir verbundenen Geräten oder Importen in Apple Health, wenn du HealthLog Schreibzugriff erlaubst."
-        # v0.7.0 W-APPSTORE — NSHealthClinicalHealthRecordsShareUsageDescription
-        # entfernt. Per R-HK-research liest kein Code-Pfad `HKClinicalType` aus
-        # Apple Health (FHIR-Funktionalitaet ist Out-Bound Export, kein In-Bound
-        # Read). Apple-App-Review flagt Privacy-Strings ohne tatsaechliche
-        # API-Verwendung als Over-Declaration. Eintrag kehrt zurueck mit v0.7.1+
-        # falls FHIR-In-Bound-Read realisiert wird.
+        # 1.7 (#180) — lab results from Health Records. Asked for on its own
+        # from the Labs screen, never in the onboarding sheet; the reader is
+        # `ClinicalLabRecordReader` (lab results only). Goes with the
+        # `com.apple.developer.healthkit.access` entitlement below.
+        NSHealthClinicalHealthRecordsShareUsageDescription: "HealthLog liest Laborbefunde aus deinen Gesundheitsakten in Apple Health, wenn du das bei den Laborwerten einschaltest, und speichert sie auf deinem HealthLog-Server, damit du sie dort zusammen mit deinen übrigen Laborwerten siehst."
         NSFaceIDUsageDescription: "HealthLog nutzt Face ID, um deine Daten zu schützen."
         NSUserNotificationsUsageDescription: "HealthLog erinnert dich an Medikamente und Messungen."
         # v0.9.0 — AlarmKit critical-med alarms (iOS 26+). Required for
@@ -461,6 +475,8 @@ targets:
           - de
           - en
           - nl
+          - ko
+          - es
         # No server identity is compiled into the distributed app. HTTPS uses
         # system trust and the user enters a server during onboarding.
     settings:
@@ -469,7 +485,8 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         SWIFT_OBJC_BRIDGING_HEADER: ""
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
@@ -496,6 +513,12 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.background-delivery: true
+        # 1.7 (#180) — Health Records (clinical lab results). The App ID's
+        # HealthKit capability already carries it: both the development and
+        # the App Store profile of dev.healthlog.app list
+        # `com.apple.developer.healthkit.access = [health-records]`.
+        com.apple.developer.healthkit.access:
+          - health-records
         # v0.6.0.7 — Time Sensitive Notifications. SpeziScheduler sets
         # `interruptionLevel = .timeSensitive` on every non-allDay event;
         # without this entitlement iOS silently downgrades the level to
@@ -517,8 +540,12 @@ targets:
         # effect for a host an operator's own build lists via the overlay.
         # Regression-tested in `AppReviewConfigurationTests` and
         # `SecUniversalLinkTests`.
+        # The first group stays the default for every existing item. The
+        # second (#190) holds only the push relay keys and is the one group
+        # the Notification Service Extension shares with the app.
         keychain-access-groups:
           - $(AppIdentifierPrefix)dev.healthlog.app
+          - $(AppIdentifierPrefix)dev.healthlog.app.push
         # v0.8.4 WWIDGET-1 — App Group shared between the app and the
         # `dev.healthlog.app.widgets` extension. Lets the widget / Live
         # Activity process read a cached snapshot (next dose, today's
@@ -532,7 +559,7 @@ targets:
   HealthLogTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "18.0"
+    deploymentTarget: "26.0"
     sources:
       - HealthLogTests
     dependencies:
@@ -548,7 +575,7 @@ targets:
   HealthLogUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "18.0"
+    deploymentTarget: "26.0"
     sources:
       - HealthLogUITests
     dependencies:
@@ -584,7 +611,7 @@ targets:
   HealthLogWidgets:
     type: app-extension
     platform: iOS
-    deploymentTarget: "18.0"
+    deploymentTarget: "26.0"
     sources:
       # Extension-owned UI + bundle + Localizable.xcstrings (auto-detected
       # as a resource). Info.plist + entitlements are driven by the
@@ -596,6 +623,8 @@ targets:
           - "HealthLogWidgets.entitlements"
       # Shared Live Activity attributes (compiled into both targets).
       - path: HealthLog/LiveActivity/MedicationActivityAttributes.swift
+      # #190 — the Activity the push relay starts (attributes {"v":1}).
+      - path: HealthLog/LiveActivity/HealthLogDoseAttributes.swift
       # v0.8.4 WWIDGET-2 — shared widget snapshot model + App Group I/O +
       # the pure medications→snapshot mapper + the widget `kind` ids. The
       # app writes the snapshot (`WidgetSnapshotWriter`, app-only); the
@@ -681,6 +710,8 @@ targets:
       # upload requirement. Without it this target would silently fall back
       # to the protocol's throwing default and diverge from the app.
       - path: HealthLog/Services/APIClient+FileUpload.swift
+      # D5 #2 — `send` reads `/api/auth/me` through the shared snapshot.
+      - path: HealthLog/Services/APIClient+AuthMeSnapshot.swift
       # B5 (1.4) — which 401s surface instead of signing out; APIClient.swift
       # calls it from its 401 branch.
       - path: HealthLog/Services/APIClient+CredentialCheck.swift
@@ -700,6 +731,8 @@ targets:
       # 1.5 KONTO — the deletion path moved out of `AuthService.swift` (file
       # length); `invalidateAndWipeDeletedAccountCredentials()` calls into it.
       - path: HealthLog/Services/AuthService+Account.swift
+      # D3 #2 — `AuthService.logout()` deletes this device's row first.
+      - path: HealthLog/Services/AuthService+DeviceRow.swift
       - path: HealthLog/Services/OidcStatus.swift
       - path: HealthLog/Services/AvatarCache.swift
       - path: HealthLog/Services/BatchSyncThrottle.swift
@@ -711,7 +744,6 @@ targets:
       - path: HealthLog/Services/CoachStreamTimeoutPolicy.swift
       - path: HealthLog/Services/DoctorReportService.swift
       - path: HealthLog/Services/DoctorReportTmpSweeper.swift
-      - path: HealthLog/Services/FeatureFlagsService.swift
       - path: HealthLog/Services/HealthIngestRoute.swift
       - path: HealthLog/Services/IdempotencyKey.swift
       - path: HealthLog/Services/KeychainStore.swift
@@ -758,6 +790,8 @@ targets:
           - de
           - en
           - nl
+          - ko
+          - es
         # The extension follows the same operator-neutral system-trust posture
         # as the host app and carries no compiled server identity.
         # WidgetKit extension point — without this the extension never
@@ -780,7 +814,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.widgets
         CODE_SIGN_STYLE: Automatic
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
         # The extension reuses the app's plattform-free Core source set;
         # it links no Spezi / HealthKit, so no extra frameworks beyond
@@ -805,11 +839,34 @@ targets:
   HealthLogNotificationService:
     type: app-extension
     platform: iOS
-    deploymentTarget: "18.0"
+    deploymentTarget: "26.0"
     sources:
       - path: NotificationServiceExtension/NotificationService.swift
+      # #190 — the relay envelope: opening, replay store, keyring, verified
+      # list and the rebuild of every remote notification.
+      - path: NotificationServiceExtension/RelayNotificationHandling.swift
+      - path: HealthLog/PushRelay/RelayEnvelope.swift
+      - path: HealthLog/PushRelay/RelayReplayStore.swift
+      - path: HealthLog/PushRelay/RelayKeyring.swift
+      - path: HealthLog/PushRelay/RelayOpenedLedger.swift
+      - path: HealthLog/PushRelay/RelayNotificationRebuilder.swift
+      - path: HealthLog/PushRelay/RelayStatements.swift
+      - path: HealthLog/PushRelay/RelayPushTemplates.swift
+      - path: HealthLog/Models/DeviceRegistrationPushFields.swift
+      - path: HealthLog/Services/KeychainStore.swift
       - path: HealthLog/Services/LockScreenPrivacy.swift
       - path: HealthLog/Services/MedicationReminderRedactor.swift
+      # "Hide content in notifications" and the push diagnostics counters.
+      - path: HealthLog/Services/NotificationContentPrivacy.swift
+      - path: HealthLog/PushRelay/PushDeliveryCounters.swift
+      # #189 — the confirmation push of a dose recorded elsewhere: the
+      # Foundation-only ledger, push parser and reminder plan, and the App
+      # Group identifier they share with the app and the widget.
+      - path: HealthLog/WidgetShared/ResolvedDoseLedger.swift
+      - path: HealthLog/WidgetShared/WidgetAppGroup.swift
+      # #191 — the capability flags the extension gates on, kept in the
+      # App Group by the app.
+      - path: HealthLog/WidgetShared/MedicationServerContract.swift
       - path: NotificationServiceExtension/Resources/Localizable.xcstrings
         buildPhase: resources
       - path: NotificationServiceExtension/Resources/PrivacyInfo.xcprivacy
@@ -826,6 +883,9 @@ targets:
           - de
           - en
           - nl
+          - ko
+          - es
+        HLPushKeychainGroup: $(AppIdentifierPrefix)dev.healthlog.app.push
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -835,12 +895,16 @@ targets:
         # Reads the same device-local lock-screen privacy preference as the app.
         com.apple.security.application-groups:
           - group.dev.healthlog.app
+        # #190 — only the push relay group, never the app's own group that
+        # holds the auth and refresh tokens.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)dev.healthlog.app.push
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.notification-service
         CODE_SIGN_STYLE: Automatic
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
 
   # v0.12 P2 — watchOS companion. A THIN remote: it renders the glanceable
@@ -866,6 +930,9 @@ targets:
       # `Tokens.swift` / `LiveActivityTokens.swift` use UIKit APIs unavailable
       # on watchOS, so they are deliberately NOT compiled here.
       - path: HealthLog/WatchConnectivity/WatchPayload.swift
+      - path: HealthLog/WatchConnectivity/WatchSnapshot+Today.swift
+      # #191 — the dose term list and glyph rule, shared with the phone.
+      - path: HealthLog/WidgetShared/MedicationDoseVocabulary.swift
       # Shared PHI backup policy. The phone, widgets, watch app, and watch
       # complication all apply the same no-iCloud-backup contract.
       - path: HealthLog/Util/SensitiveDataBackupExclusion.swift
@@ -894,6 +961,8 @@ targets:
           - de
           - en
           - nl
+          - ko
+          - es
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.healthlog.app.watchkitapp
@@ -939,6 +1008,13 @@ targets:
       # signal palette) so the score-ring complication colours its band signal
       # from the SAME Tonal-Mono palette as the watch app + phone widgets.
       - path: HealthLogWatch/DesignSystem/WatchTokens.swift
+      # The phone widgets' tint, relevance, and spacing rules, so a complication
+      # tints, ranks, and spaces like its iPhone counterpart (tested in
+      # `HealthLogTests`).
+      - path: HealthLog/WidgetShared/WidgetTintPolicy.swift
+      - path: HealthLog/WidgetShared/WidgetTint+View.swift
+      - path: HealthLog/WidgetShared/NextDoseRelevance.swift
+      - path: HealthLog/WidgetShared/WidgetMetrics.swift
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
@@ -955,6 +1031,8 @@ targets:
           - de
           - en
           - nl
+          - ko
+          - es
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

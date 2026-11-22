@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **#115 B5 — a server cycle day is written to Health on the account's day.**
+    /// **A server cycle day is written to Health on the account's day.**
     ///
     /// The writer parsed `dayLog.date` as midnight of the DEVICE zone (a
     /// formatter that froze `.current` at first use). A day the server cut in the

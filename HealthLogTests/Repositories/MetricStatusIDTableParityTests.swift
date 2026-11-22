@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0141 W-DATAPARITY (P2) — locks the twelve registry ids the stale
+/// Locks the twelve registry ids the stale
 /// `metricStatusIDTable` was missing, so the "Einschätzung / KI-Befund" block
 /// self-suppressed on those metric pages even though the operator has the data.
 /// Every id is VERIFIED present in the server `METRIC_STATUS_IDS` registry

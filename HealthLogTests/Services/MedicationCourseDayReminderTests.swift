@@ -6,9 +6,9 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// **R1 — local reminders land on the server's days (server 1.39.3, A1).**
+    /// **Local reminders land on the server's days (server 1.39.3, A1).**
     ///
-    /// With `clientManaged` on (N1) the app is the only reminder source, so a
+    /// With `clientManaged` on the app is the only reminder source, so a
     /// local reminder on a day the server lists no dose is a wrong reminder, and
     /// a missing one is a missed dose. These pin the projections the Spezi
     /// reconcile and the AlarmKit planner arm for a course in New York, where

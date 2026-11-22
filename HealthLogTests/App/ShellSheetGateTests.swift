@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.1 T1 — the ordering rules behind the 286 "+"-crash fix.
+/// The ordering rules behind the 286 "+"-crash fix.
 ///
 /// TestFlight 1.1.0 (286) aborted in `SheetBridge.present(…isPreempting:)`: a
 /// shell sheet was raised while another presentation was still on the window's

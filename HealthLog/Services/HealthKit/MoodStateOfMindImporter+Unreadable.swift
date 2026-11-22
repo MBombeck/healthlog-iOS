@@ -3,14 +3,14 @@ import Foundation
     import HealthKit
 #endif
 
-/// E1 — a State of Mind write whose answer the app could not read.
+/// A State of Mind write whose answer the app could not read.
 ///
 /// `POST /api/mood-entries` answering with a body this build cannot decode
 /// (`HLError.decoding`: a captive portal's HTML 200, a proxy page) says nothing
 /// about the mood. Most often the write landed; behind a portal it did not.
 /// Until C4 the importer called it a final refusal and moved the anchor past a
 /// mood that may exist nowhere. Now it holds, like a heart-event page held on an
-/// unexplained 4xx (INT-A): the same sample goes out again under its derived
+/// unexplained 4xx: the same sample goes out again under its derived
 /// idempotency key on the next sweep, which the server answers from its cache
 /// if the first write landed. After ``maxHeldSweeps`` consecutive unreadable
 /// answers for the same sample it goes into the skip register with ``reason``
@@ -42,7 +42,6 @@ enum MoodStateOfMindUnreadable {
         /// sample is registered and reported `.rejected(.unknown)` — terminal,
         /// its copy is in the register. A register write that fails keeps it
         /// held. Any other answer for the counted sample ends its run.
-        @available(iOS 18.0, *)
         func settleUnreadable(
             _ outcome: MoodWriteOutcome,
             sample: HKStateOfMind,

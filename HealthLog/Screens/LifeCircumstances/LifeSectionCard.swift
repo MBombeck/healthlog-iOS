@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// **LIFE (1.5.0)** — one section of the life circumstances as one card.
+/// One section of the life circumstances as one row of the page's card.
 ///
-/// Closed, the card is a single row: the section's name and when it was last
+/// Closed, the section is a single row: the section's name and when it was last
 /// answered or confirmed. Open, it holds the quiet yearly "still true?" (only
 /// when the server says the answers are a year old), the questions, when the
 /// answers hold from, the section's own save, and under the centred text link
-/// "Advanced" the AI switch of the section. One card per section; nothing
-/// inside it is a card.
+/// "Advanced" the AI switch of the section. All six sections share one card;
+/// nothing inside a section is a card.
 struct LifeSectionCard: View {
     let section: LifeSection
     let payload: LifeCircumstances
@@ -20,12 +20,15 @@ struct LifeSectionCard: View {
     @State private var auditCModel = AuditCModel()
 
     var body: some View {
-        HLSettingsCard {
+        VStack(alignment: .leading, spacing: HLSpace.md) {
             header
             if isExpanded {
                 expandedBody
+                    .padding(.bottom, HLSpace.md)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("life.section.\(section.key.rawValue)")
     }
 
@@ -35,28 +38,16 @@ struct LifeSectionCard: View {
         Button {
             withHLAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
         } label: {
-            HStack(spacing: HLSpace.md) {
+            // The app's row with the turning chevron of every expander.
+            HLRow(
+                title: Text(verbatim: LifeCopy.title(section.key)),
+                detail: Text(verbatim: statusLine),
+                accessory: .expand(isExpanded)
+            ) {
                 HLSettingsIconChip(symbol: LifeCopy.symbol(section.key), tint: HLAccent.userBrandTint)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(verbatim: LifeCopy.title(section.key))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(verbatim: statusLine)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: HLSpace.sm)
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
             }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hlRow)
         .accessibilityElement(children: .combine)
         .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
         .accessibilityIdentifier("life.section.\(section.key.rawValue).header")
@@ -107,16 +98,9 @@ struct LifeSectionCard: View {
     private var reviewRow: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             LifeDerivedLine(text: String(localized: "life.review.question"))
-            Button {
+            HLLinkButton("life.review.confirm", alignment: .leading) {
                 Task { await store.confirm(section.key) }
-            } label: {
-                Text("life.review.confirm")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLAccent.userBrandTint)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .disabled(store.isUpdatingSettings || !canSave)
             .accessibilityIdentifier("life.section.\(section.key.rawValue).confirm")
         }
@@ -129,9 +113,7 @@ struct LifeSectionCard: View {
     private var validityRows: some View {
         if let since = section.validSince {
             LifeAdaptiveRow(label: String(localized: "life.validSince")) {
-                Text(verbatim: HLDateFormat.date(since, style: .long))
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
+                HLRowValue(HLDateFormat.date(since, style: .long), emphasis: .setting)
                     .fixedSize()
             }
             .accessibilityElement(children: .combine)
@@ -173,23 +155,9 @@ struct LifeSectionCard: View {
     // MARK: - Advanced: AI switches
 
     private var advancedToggle: some View {
-        Button {
+        HLLinkButton("Advanced", isExpanded: showsAdvanced) {
             withHLAnimation(.easeInOut(duration: 0.25)) { showsAdvanced.toggle() }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text("Advanced")
-                    .font(.hlSubhead.weight(.semibold))
-                Image(systemName: showsAdvanced ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityValue(showsAdvanced ? Text("Expanded") : Text("Collapsed"))
         .accessibilityIdentifier("life.section.\(section.key.rawValue).advanced")
     }
 

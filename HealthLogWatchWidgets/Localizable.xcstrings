@@ -20,6 +20,18 @@
             "state": "translated",
             "value": "Alles gedaan"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 완료"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo hecho"
+          }
         }
       }
     },
@@ -41,6 +53,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gezondheidsscore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강 점수"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puntuación de salud"
           }
         }
       }
@@ -64,6 +88,18 @@
             "state": "translated",
             "value": "Laatste meting"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 측정"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última medición"
+          }
         }
       }
     },
@@ -85,6 +121,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volgende dosis"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próxima dosis"
           }
         }
       }
@@ -108,6 +156,18 @@
             "state": "translated",
             "value": "Nog geen metingen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 측정값이 없어요"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay mediciones"
+          }
         }
       }
     },
@@ -129,6 +189,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open iPhone-app"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone 앱 열기"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la app del iPhone"
           }
         }
       }
@@ -152,6 +224,18 @@
             "state": "translated",
             "value": "Je laatste persoonlijke gezondheidsscore."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 개인 건강 점수예요."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu puntuación de salud personal más reciente."
+          }
         }
       }
     },
@@ -174,6 +258,18 @@
             "state": "translated",
             "value": "Je meest recente meting."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가장 최근 측정값이에요."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu medición más reciente."
+          }
         }
       }
     },
@@ -195,6 +291,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Je volgende medicijndosis en je therapietrouw van vandaag."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 복용 예정 약과 오늘의 복약 순응도예요."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu próxima dosis de medicación y la adherencia de hoy."
           }
         }
       }

@@ -49,7 +49,7 @@ struct MDRSafetyFilterExemptionsTests {
         }
     }
 
-    /// **R23.** A citation is not a free pass either. "Die Leitlinien empfehlen,
+    /// A citation is not a free pass either. "Die Leitlinien empfehlen,
     /// deine Dosis zu erhöhen" is a guideline quoted as a reason to act, and a
     /// reader cannot tell that apart from the assistant advising it. The
     /// citation exemption is blocked by the same concrete-intervention guard the
@@ -183,7 +183,7 @@ struct MDRSafetyFilterExemptionsTests {
 
     // MARK: - (3) R21 — the bare prescriptive forms the matrix never had
 
-    /// **R21.** Fix round 1 surfaced a hole: "You should reduce your salt" and
+    /// Fix round 1 surfaced a hole: "You should reduce your salt" and
     /// "I recommend taking it in the evening" passed the filter untouched. The
     /// row-8 regex had no bare English "recommend" at all, and caught "you
     /// should" only inside the compounds "maybe you should" / "you should now
@@ -307,7 +307,10 @@ struct MDRSafetyFilterExemptionsTests {
 
     @Test("the matrix neither grew nor shrank")
     func matrixSizeUnchanged() {
-        #expect(MDRSafetyFilter.patternCount == 44, "22 before 1.0.3 + 2 (R21) + 1 (R23) + 19 Dutch twins (nl)")
+        #expect(
+            MDRSafetyFilter.patternCount == 91,
+            "22 + 2 (R21) + 1 (R23) + 19 Dutch twins (nl) + 19 Korean twins + 5 Korean red-team rows (ko) + 19 Spanish twins + 4 Spanish rows (es)"
+        )
     }
 
     @Test("the untouched rows still refuse")

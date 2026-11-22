@@ -7,9 +7,8 @@ import Foundation
 
 // Moved out of `AuthStore.swift` (file_length-Disziplin, PROJECT_GUIDE.md) so the
 // #65 web-handoff store leg can grow the main file without tipping the
-// SwiftLint `file_length` error at 1000 lines. Both types are self-contained
-// (no private-member access), so this is a pure move — call sites keep using
-// `AuthStore.Phase` / `AuthStore.AdoptUploadState` unchanged.
+// SwiftLint `file_length` error at 1000 lines. The type is self-contained
+// (no private-member access), so call sites keep using `AuthStore.Phase`.
 
 public extension AuthStore {
     enum Phase: Equatable {
@@ -25,56 +24,30 @@ public extension AuthStore {
         /// Fixes iOS issue #10 (B): pre-v0.6.0.9 the server branch flipped
         /// straight to `.authenticated`, which made `RootView` swap the
         /// onboarding view for `AuthenticatedShell` before SwiftUI could
-        /// reconcile the HealthKit / Notifications steps. The standalone
-        /// branch was always correct because `enterStandaloneMode()` only
-        /// fires AFTER the permission steps; `.authenticating` brings the
-        /// server branch into structural parity with that lifecycle.
+        /// reconcile the HealthKit / Notifications steps.
         case authenticating(User)
         case authenticated(User)
-        /// Local-only standalone mode — the user has chosen `OnboardingMode.standalone`
-        /// and there is no server account / token. `AuthenticatedShell` renders the
-        /// main UI gated on `syncMode.isStandalone`. v0.4.1.
-        case standalone
 
-        /// True iff the app is "inside" the main shell (paired-auth or standalone).
-        /// Used by biometric-lock gate so local-only users also get re-auth
-        /// after Background → Foreground transitions. `.authenticating` is
+        /// True iff the app is "inside" the main shell. Used by the
+        /// biometric-lock gate for re-auth after Background → Foreground
+        /// transitions. `.authenticating` is
         /// explicitly **not** unlock-eligible — the user is still inside the
         /// onboarding flow and `AuthenticatedShell` has not mounted yet.
         public var isUnlockEligible: Bool {
             switch self {
-            case .authenticated, .standalone: true
+            case .authenticated: true
             case .unknown, .unauthenticated, .authenticating: false
             }
         }
     }
-
-    // Phase 08 Wave 1 — the owner a post-authentication decision belongs to.
-    //
-    // See `AuthStore.authenticatedRouteOwner` below; it lives outside this
-    // `public extension` because the admission epoch it reads is internal.
-
-    /// v0.11 W4 — calm, observable state of the adopt-on-pair upload. The UI
-    /// (onboarding/W5) shows a quiet "moving your data over…" indicator from
-    /// this; it stays `.idle` for every normal paired login (the upload only
-    /// runs on a standalone→paired transition). See `adoptUploadHook`.
-    enum AdoptUploadState: Equatable, Sendable {
-        case idle
-        case uploading(AdoptUploadProgress)
-        case done(AdoptUploadProgress)
-        /// Recoverable — the local mirror is intact and an idempotent retry
-        /// re-runs safely. The associated progress is how far the move got.
-        case failed(AdoptUploadProgress)
-    }
 }
 
 extension AuthStore {
-    /// **Phase 08 Wave 1** — the authenticated owner a post-authentication route
+    /// The authenticated owner a post-authentication route
     /// decision belongs to, in the Wave-0 vocabulary.
     ///
-    /// `nil` whenever no server account is admitted: `.unknown`,
-    /// `.unauthenticated` and `.standalone` have no owner, and standalone in
-    /// particular has no server to ask, so there is no completion to look up.
+    /// `nil` whenever no server account is admitted: `.unknown` and
+    /// `.unauthenticated` have no owner, so there is no completion to look up.
     ///
     /// The generation is what makes a decision **perishable**. It is the
     /// admission epoch `phase`'s own `didSet` already maintains, so a result
@@ -89,7 +62,7 @@ extension AuthStore {
     }
 }
 
-// MARK: - One authentication transition (Phase 09 / plan 09-07)
+// MARK: - One authentication transition
 
 extension AuthStore {
     /// **A perishable authentication attempt.**
@@ -113,15 +86,14 @@ extension AuthStore {
     ///   lifetime.
     /// * ``entryPhase`` together with ``admissionGeneration`` — the account
     ///   situation the attempt began in. A generation alone cannot catch a
-    ///   same-generation account change: `enterStandaloneMode()`,
-    ///   `beginServerPairing()`, `handleUnauthorized()` and the web-deletion
-    ///   reconciliation's terminal publication each decide the account
-    ///   *without* taking the authentication boundary, and none of them moves
+    ///   same-generation account change: `handleUnauthorized()` and the
+    ///   web-deletion reconciliation's terminal publication each decide the
+    ///   account *without* taking the authentication boundary, and none of them moves
     ///   the attempt epoch. The phase alone is not enough either — a sign-out
     ///   followed by a same-owner sign-in returns the phase to an equal value
     ///   while moving the admission epoch — so both halves are kept.
     ///
-    /// The shape is `ForegroundSession`'s (09-06) at a different boundary, and
+    /// The shape is `ForegroundSession`'s at a different boundary, and
     /// the re-read is the one `reconcilePendingWebDeletion()` already performs
     /// around its own probe.
     struct AuthAttempt {
@@ -162,14 +134,14 @@ extension AuthStore {
         // A session supersedes any challenge that raised it (the TOTP and
         // security-key paths already did this; the other five now do too).
         clearMfaState()
-        // 13-02 — and it supersedes any fallback a previous dead end opened:
+        // And it supersedes any fallback a previous dead end opened:
         // a signed-in user has no fallback left to take.
         clearPasswordFallback()
         admitAuthenticating(session.user)
         return true
     }
 
-    /// **13-02.** The web leg's way back, published so the auth step can show
+    /// The web leg's way back, published so the auth step can show
     /// the password form to a user who has just been returned from a browser
     /// that led nowhere.
     ///

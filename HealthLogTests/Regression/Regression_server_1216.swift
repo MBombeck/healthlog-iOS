@@ -56,8 +56,8 @@ struct Regression_server_1216 {
     @MainActor
     @Test("the digest's Rest Mode line appears only when the server sends the field")
     func digestLineFollowsTheField() {
-        #expect(TodayHeroFacts.statusLines(Self.digest(restMode: nil)).isEmpty)
-        #expect(TodayHeroFacts.statusLines(Self.digest(restMode: .init(day: 0))).isEmpty)
-        #expect(TodayHeroFacts.statusLines(Self.digest(restMode: .init(day: 3))).count == 1)
+        #expect(TodayHeroFacts.footnotes(Self.digest(restMode: nil)).isEmpty)
+        #expect(TodayHeroFacts.footnotes(Self.digest(restMode: .init(day: 0))).isEmpty)
+        #expect(TodayHeroFacts.footnotes(Self.digest(restMode: .init(day: 3))).count == 1)
     }
 }

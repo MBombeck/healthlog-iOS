@@ -20,7 +20,7 @@ struct W2I18nKeysTests {
     /// all 118 additions, but covers each namespace so a reflow that drops a
     /// group is caught.
     ///
-    /// D-12-05-A — "Regulatory disclaimer" left both lists with the MDR
+    /// "Regulatory disclaimer" left both lists with the MDR
     /// acknowledgment dialog that was its only caller. It is a deletion the
     /// server made first (`0160052289e4` dropped the same section header from
     /// six `messages/*.json`), not a reflow dropping a group, which is exactly
@@ -44,8 +44,6 @@ struct W2I18nKeysTests {
         // W2-5 form placeholders
         "med.form.name.placeholder",
         "med.form.dose.placeholder",
-        "med.form.advanced.section",
-        "measurement.form.value.placeholder",
         "measurement.form.recordedAt.section",
         // W2-6 charts
         "chart.axis.y.label",
@@ -55,12 +53,7 @@ struct W2I18nKeysTests {
         "chart.stat.median",
         // 1.4 B2 removed "chart.aggregation.label" and "chart.source.manual"
         // with the dead TrendsOverlayCard and ChartDetailSourcesRow.
-        // W2-7 surface names + isolated
-        "cloud_derived.surface.ai_provider",
-        "cloud_derived.surface.withings",
-        "cloud_derived.surface.source_priority",
-        "cloud_derived.surface.server_coach",
-        "cloud_derived.surface.insights",
+        // W2-7 surface names went with the standalone placeholders.
         "coach.onboarding.title",
         "coach.typing.label",
         "aiprovider.badge.saved",
@@ -87,7 +80,7 @@ struct W2I18nKeysTests {
         "chart.axis.index",
         "chart.series.sparkline",
         "chart.scrubber.selection",
-        // v0.13 WR — AI-source matrix card names + subtitles (the headline
+        // AI-source matrix card names + subtitles (the headline
         // v0.13 features); these were English-only-in-DE before WR. Plus the
         // BYO consent revoke bullet, the on-device Coach toggle title, the BYO
         // configured-state line, and the two German-literal conversions.
@@ -101,7 +94,7 @@ struct W2I18nKeysTests {
         // #13 (2026-06-11): the heatmap window is operator-selectable; the empty-state
         // key became a %lld format key driven by the picked week count.
         "Once you log medications and acknowledge reminders, your %lld-week compliance history appears here.",
-        // 1.4 B2-c — the coach's "Ask me a question about your data" welcome
+        // The coach's "Ask me a question about your data" welcome
         // subtitle was deleted; its anchor went with it.
         // v0.13.1 WAVE I18N — German-completeness sweep. The six UnitPreferences
         // picker labels (shipped English-in-DE — the operator's "Settings shows
@@ -120,7 +113,7 @@ struct W2I18nKeysTests {
         "30 days",
         "90 days",
         "1 year",
-        // 1.4 B2-c — "Order your sources per data type …" left with the editor's
+        // "Order your sources per data type …" left with the editor's
         // lead section; its anchor went with it.
         "Sources without values are still shown so you can set the order before a sensor first syncs.",
         "Every metric returns to its original order: Apple Health → Withings → Manual.",
@@ -128,7 +121,7 @@ struct W2I18nKeysTests {
         "Four pillars: blood pressure on target, weight trend, mood stability, medication compliance. Missing pillars are redistributed proportionally across the ones present — the score never lies about what was actually measured."
     ]
 
-    /// v0.13 WR — universal/near-universal tokens whose DE value intentionally
+    /// Universal/near-universal tokens whose DE value intentionally
     /// equals the source key (e.g. "Coach"). Exempted from the `value != key`
     /// "untranslated" assertion in ``germanValuesPresent`` — they are present +
     /// non-empty, just identical across locales.
@@ -173,15 +166,14 @@ struct W2I18nKeysTests {
             "sleep.stage.awake",
             "Trend rising",
             "settings.localreport.title",
-            "med.form.advanced.section",
             "chart.axis.y.label",
             "healthscore.source.mixed",
-            // 1.4 B4: "trends.averaging.raw" left with the dead TrendsOverlayStore.
+            // "trends.averaging.raw" left with the dead TrendsOverlayStore.
             "sources.mode.bidirectional",
             "export.create.button",
             "notifications.diagnostics.allowed",
             "notifications.diagnostics.denied",
-            // v0.13 WR — these MUST carry a real DE distinct from the EN source
+            // These MUST carry a real DE distinct from the EN source
             // (the regression we are pinning: they shipped English-in-DE).
             "Own key",
             "External AI",

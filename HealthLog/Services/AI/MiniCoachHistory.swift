@@ -1,6 +1,6 @@
 import Foundation
 
-/// In-memory conversation history for the Mini-Coach (C3).
+/// In-memory conversation history for the Mini-Coach.
 ///
 /// Contract per the operator brief:
 ///   - 8-turn cap (a "turn" = one user line + one contributor line OR a
@@ -19,7 +19,7 @@ public actor MiniCoachHistory {
     /// Counts every completed turn — user-line *plus* the matching
     /// contributor / refused entry. Surfaced via ``completedTurns()``.
     ///
-    /// UI-Standard R15 (U1) — bis hierher trieb dieser Zähler zusätzlich die
+    /// UI-Standard R15 — bis hierher trieb dieser Zähler zusätzlich die
     /// Fünf-Zug-Kadenz des Pauschalsatzes, den ``MiniCoachService`` an jede
     /// fünfte Antwort hängte. Der Satz ist gefallen, die Kadenz (`disclaimerEvery`)
     /// mit ihm.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v1.28 (GH iOS #45) — medication-efficacy ("Wirkung") seam on the medications
+/// v1.28 — medication-efficacy ("Wirkung") seam on the medications
 /// repository.
 ///
 /// Two routes, both server-authoritative:
@@ -9,9 +9,8 @@ import Foundation
 ///
 /// **The read is graceful.** A `404` (route absent on ≤ v1.27 servers) or a
 /// `422` maps to `nil` so the detail screen simply omits the section — the
-/// feature is *absent*, not *errored*. Standalone mode returns `nil` too (no
-/// server ledger, and efficacy leans on the server compliance engine — it is a
-/// paired-only surface). Any transport hiccup self-suppresses to `nil`.
+/// feature is *absent*, not *errored*. Any transport hiccup self-suppresses
+/// to `nil`.
 ///
 /// **The write is interactive** (retarget picker): it mints one
 /// ``IdempotencyKey`` (PROJECT_GUIDE.md interactive-write convention — the header
@@ -22,11 +21,9 @@ import Foundation
 /// `efficacy(...)`.
 public extension MedicationsRepository {
     /// Fetches the resolved efficacy view, or `nil` when the feature is absent
-    /// (`404`/`422`, standalone, or any transport error). Never throws — the
+    /// (`404`/`422`, or any transport error). Never throws — the
     /// section self-suppresses on `nil`.
     func efficacy(medicationID: String) async -> MedicationEfficacyDTO? {
-        // Paired-only surface: standalone has no server compliance engine.
-        if isStandaloneActive { return nil }
         do {
             let req: APIRequest<MedicationEfficacyDTO> = .get(
                 "/api/medications/\(medicationID)/efficacy"

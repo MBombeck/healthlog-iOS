@@ -123,7 +123,7 @@
             #expect(!facts.lastCheckFoundNothingNew)
         }
 
-        // MARK: - The pulse contradiction (#126 1.4)
+        // MARK: - The pulse contradiction
 
         @Test("Day totals and pulse: the server's line for the same type sits next to the local record")
         func pulseIsTwoFactsNotAContradiction() {

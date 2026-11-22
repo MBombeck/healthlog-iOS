@@ -10,7 +10,7 @@ public extension MedicationWireDTO {
     /// entries for the pre-v0.10 render paths.
     func toDomain() -> Medication {
         let isOneShot = oneShot ?? false
-        // v1.39.1 (#1033) — a medication kept as a record plans nothing. The
+        // v1.39.1 — a medication kept as a record plans nothing. The
         // server already serves it with `schedules: []`; the domain schedule
         // is emptied here as well, so no reminder, alarm, Live Activity or
         // synthesised dose can ever be derived from a row that says otherwise.
@@ -63,7 +63,7 @@ public extension MedicationWireDTO {
             intakeActionable: intakeActionable
         )
         medication.categoryLabel = categoryLabel
-        // MED (#1280): an ended course stops every reminder from its `endedAt`
+        // An ended course stops every reminder from its `endedAt`
         // on; the server's `remindersActive` already says so, the fold keeps a
         // row that carries only `endedAt` honest too.
         medication.remindersActive = autoMarkTaken == true || endedAt != nil ? false : remindersActive
@@ -77,7 +77,14 @@ public extension MedicationWireDTO {
         medication.autoMarkTaken = autoMarkTaken
         medication.courseCount = courseCount
         medication.previousCourseEndedOn = previousCourseEndedOn
+        medication.note = Self.displayNote(note)
         return medication
+    }
+
+    /// A note worth showing: trimmed, and `nil` when nothing is left.
+    static func displayNote(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     /// Parse the wire `nextDueAt` ISO8601 timestamp (a full instant, not a

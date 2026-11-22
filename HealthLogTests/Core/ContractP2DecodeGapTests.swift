@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #126 P2 — small decode gaps closed in 1.3.0 (W4). Display of these fields
+/// Small decode gaps closed in 1.3.0. Display of these fields
 /// is later work; what is pinned here is that the server's values arrive.
 @Suite("#126 P2 decode gaps")
 struct ContractP2DecodeGapTests {

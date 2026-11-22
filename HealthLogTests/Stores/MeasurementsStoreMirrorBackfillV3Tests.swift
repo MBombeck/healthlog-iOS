@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **MIRROR (1.5, #152, server #1272)** — the historical mirror pass v3.
+    /// The historical mirror pass v3.
     ///
     /// Against a server known to be 1.46.0 or later the pass pages
     /// `?type=…&appleHealthMirror=true` per mirror-writable kind instead of one
@@ -70,7 +70,6 @@
             return MeasurementsStore(
                 repo: repo,
                 healthKit: hk,
-                isStandalone: { false },
                 userIDProvider: { "user-a" },
                 backfillDefaults: backfill,
                 serverVersionDefaults: serverVersion

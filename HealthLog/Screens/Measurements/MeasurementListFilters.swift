@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// v0.5.5.1 — pure filter pipeline behind `MeasurementListScreen`. Lives
+/// Pure filter pipeline behind `MeasurementListScreen`. Lives
 /// outside the View so unit tests can lock the contract via
 /// `MeasurementListFilter.apply(...)` without spinning up a SwiftUI
 /// render context.
@@ -42,9 +42,14 @@ enum MeasurementListFilter {
         return rangeFiltered.filter { measurement in
             if measurement.note?.lowercased().contains(needle) == true { return true }
             if sourceSearchLabel(measurement.source).contains(needle) { return true }
-            let dateLabel = measurement.recordedAt
-                .formatted(.dateTime.month(.wide).weekday(.wide).day())
-                .lowercased()
+            // Weekday, day and month in both widths, so "nov" and "november"
+            // both find the reading.
+            let date = measurement.recordedAt
+            let dateLabel = [
+                HLDateFormat.weekday(date),
+                HLDateFormat.dayMonth(date),
+                HLDateFormat.monthYear(date)
+            ].joined(separator: " ").lowercased()
             return dateLabel.contains(needle)
         }
     }
@@ -131,7 +136,7 @@ enum MeasurementListFilter {
         let canonical: [MeasurementSource] = [
             .appleHealth, .withings, .whoop, .fitbit, .googleHealth,
             .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .computed, .telegram, .mcp,
-            // Audit B-4 — last, next to the derived rows: it is the only chip
+            // Last, next to the derived rows: it is the only chip
             // whose members can change meaning between releases.
             .external, .manual, .import_, .unknown
         ]
@@ -173,7 +178,7 @@ enum MeasurementListFilter {
     }
 }
 
-// v0.5.5.1 — measurement-list filter affordances. Extracted from
+// Measurement-list filter affordances. Extracted from
 // `MeasurementListScreen.swift` so the screen stays under the 600-line
 // SwiftLint `file_length` baseline.
 //
@@ -191,22 +196,15 @@ struct SourceFilterChips: View {
     @Binding var selection: MeasurementSource?
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: HLSpace.xs) {
-                Chip(
-                    label: String(localized: "All"),
-                    isSelected: selection == nil
-                ) { selection = nil }
-                ForEach(available, id: \.self) { source in
-                    Chip(
-                        label: Self.label(for: source),
-                        isSelected: selection == source
-                    ) {
-                        selection = selection == source ? nil : source
-                    }
+        HLFlowLayout {
+            HLChip(verbatim: String(localized: "All"), isSelected: selection == nil) { selection = nil }
+            ForEach(available, id: \.self) { source in
+                HLChip(verbatim: Self.label(for: source), isSelected: selection == source) {
+                    selection = selection == source ? nil : source
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
     }
 
@@ -236,31 +234,6 @@ struct SourceFilterChips: View {
         case .unknown: String(localized: "measurement.source.unknown")
         }
     }
-
-    private struct Chip: View {
-        let label: String
-        let isSelected: Bool
-        let action: () -> Void
-
-        var body: some View {
-            Button(action: action) {
-                Text(label)
-                    .font(.hlCaption.weight(.semibold))
-                    // FW1-C (M6): the selected-pill label now uses the canonical
-                    // inverted-label token `HLSurface.primary` (the tab-strip's
-                    // solution, InsightsMetricTabStrip) instead of raw `Color
-                    // .white`, so the app has a single selected-pill vocabulary.
-                    .foregroundStyle(isSelected ? HLSurface.primary : HLText.secondary)
-                    .padding(.horizontal, HLSpace.md)
-                    .padding(.vertical, HLSpace.xs)
-                    .background(
-                        Capsule().fill(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(HLColor.surface))
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        }
-    }
 }
 
 /// v1.18.5 parity — collapsible numeric value-range filter. Collapsed it is
@@ -278,7 +251,7 @@ struct ValueRangeFilterControl: View {
     @State private var clearTick = false
     @FocusState private var focusedField: Field?
 
-    /// A11Y (audit-v0162 §5) — gates the disclosure expand/collapse animation so
+    /// A11Y — gates the disclosure expand/collapse animation so
     /// it snaps instead of sliding when Reduce Motion is on.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -291,7 +264,7 @@ struct ValueRangeFilterControl: View {
             || !maxText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    /// A360-5 H-4 — a bound the user typed that can't be parsed (e.g. "abc",
+    /// A bound the user typed that can't be parsed (e.g. "abc",
     /// "1.2.3"). Surfacing it stops the range filter from silently doing nothing
     /// on bad input. A blank field is not "invalid" — it's just open-ended.
     private func isUnparseable(_ text: String) -> Bool {
@@ -305,22 +278,15 @@ struct ValueRangeFilterControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Button {
+            // The app's unfolding row: the chevron turns, "Active" under the
+            // title while a bound is set.
+            HLRowButton {
                 withAnimation(reduceMotion ? nil : .default) { isExpanded.toggle() }
             } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "slider.horizontal.3")
-                    Text("Value range")
-                    if isActive {
-                        Circle().fill(.tint).frame(width: 6, height: 6)
-                    }
-                    Spacer()
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                HLRow("Value range", detail: isActive ? Text("Active") : nil, accessory: .expand(isExpanded)) {
+                    HLRowGlyph(symbol: "slider.horizontal.3")
                 }
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(HLText.secondary))
             }
-            .hlPressable()
             .accessibilityIdentifier("measurements.list.valueRange.toggle")
 
             if isExpanded {
@@ -333,25 +299,19 @@ struct ValueRangeFilterControl: View {
                         .focused($focusedField, equals: .max)
                         .accessibilityIdentifier("measurements.list.valueRange.max")
                     if !unit.isEmpty {
-                        Text(unit).font(.hlCaption).foregroundStyle(HLText.secondary)
+                        Text(unit).hlText(.compactUnit)
                     }
                     if isActive {
-                        Button {
+                        HLIconButton(systemImage: "xmark.circle.fill", label: "Clear value range", size: .inline) {
                             minText = ""
                             maxText = ""
                             clearTick.toggle()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(HLText.tertiary)
                         }
-                        .hlPressable()
-                        .accessibilityLabel(Text("Clear value range"))
                     }
                 }
                 if hasInvalidBound {
                     Text("measurements.list.valueRange.invalid")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLColor.statusBad)
+                        .hlText(.rowStatus, status: HLColor.statusBad)
                         .accessibilityIdentifier("measurements.list.valueRange.invalid")
                 }
             }
@@ -362,7 +322,7 @@ struct ValueRangeFilterControl: View {
             // so they're never trapped behind the keyboard (QA-b198 Design-M3).
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button(String(localized: "Done")) { focusedField = nil }
+                Button(HLControlWord.done.key) { focusedField = nil }
             }
         }
     }
@@ -404,22 +364,17 @@ struct DateRangeFilterControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Button {
+            HLRowButton {
                 withAnimation(reduceMotion ? nil : .default) { isExpanded.toggle() }
             } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Image(systemName: "calendar")
-                    Text("measurements.list.dateRange.label")
-                    if isActive {
-                        Circle().fill(.tint).frame(width: 6, height: 6)
-                    }
-                    Spacer()
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                HLRow(
+                    "measurements.list.dateRange.label",
+                    detail: isActive ? Text("Active") : nil,
+                    accessory: .expand(isExpanded)
+                ) {
+                    HLRowGlyph(symbol: "calendar")
                 }
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(HLText.secondary))
             }
-            .hlPressable()
             .accessibilityIdentifier("measurements.list.dateRange.toggle")
 
             if isExpanded {
@@ -434,20 +389,11 @@ struct DateRangeFilterControl: View {
                     identifier: "measurements.list.dateRange.to"
                 )
                 if isActive {
-                    Button {
+                    HLLinkButton("measurements.list.dateRange.clear", systemImage: "xmark", alignment: .leading) {
                         from = nil
                         to = nil
                         clearTick.toggle()
-                    } label: {
-                        Label {
-                            Text("measurements.list.dateRange.clear")
-                        } icon: {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
                     }
-                    .hlPressable()
                     .accessibilityIdentifier("measurements.list.dateRange.clear")
                 }
             }
@@ -463,19 +409,14 @@ struct DateRangeFilterControl: View {
         if let value = date.wrappedValue {
             HStack(spacing: HLSpace.sm) {
                 DatePicker(
-                    label,
                     selection: Binding(get: { value }, set: { date.wrappedValue = $0 }),
                     displayedComponents: [.date]
-                )
-                .font(.hlCaption)
-                Button {
-                    date.wrappedValue = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(HLText.tertiary)
+                ) {
+                    HLRowTitle(label)
                 }
-                .hlPressable()
-                .accessibilityLabel(Text("measurements.list.dateRange.clearBound"))
+                HLIconButton(systemImage: "xmark.circle.fill", label: "measurements.list.dateRange.clearBound", size: .inline) {
+                    date.wrappedValue = nil
+                }
             }
             .accessibilityIdentifier(identifier)
         } else {
@@ -488,8 +429,7 @@ struct DateRangeFilterControl: View {
                     Text("measurements.list.dateRange.unset")
                         .foregroundStyle(HLText.tertiary)
                 }
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             }
             .hlPressable()
             .accessibilityIdentifier(identifier)
@@ -498,7 +438,7 @@ struct DateRangeFilterControl: View {
 }
 
 struct NoMatchesState: View {
-    /// Audit-01 C1 — the canonical `HLEmptyState` lockup, matching every other
+    /// The canonical `HLEmptyState` lockup, matching every other
     /// empty surface app-wide.
     var body: some View {
         HLEmptyState(icon: "magnifyingglass", title: "No matches")

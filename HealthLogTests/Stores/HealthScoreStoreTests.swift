@@ -110,7 +110,7 @@ struct HealthScoreStoreTests {
         // Network handler must NEVER be hit while offline.
         nonisolated(unsafe) var hits = 0
         MockURLProtocol.install { request in
-            // CU-07: the handler is process-global — `hits == 0` only holds as an
+            // The handler is process-global — `hits == 0` only holds as an
             // assertion if a parallel suite's request cannot raise it.
             if request.targets("/api/dashboard/snapshot") { hits += 1 }
             return (Self.ok(request), Data(Self.snapshotJSON.utf8))

@@ -18,7 +18,7 @@ public extension AppContainer {
     /// The matched-geometry namespace stays a *screen-level* concern — it is a
     /// `ChartDetailScreen` parameter, not a store input, and only the Dashboard
     /// owns a namespace source — so it is wired at the call-site, not here.
-    /// **#115 B7 — the status family's client consent gate, coupled to `ai`.**
+    /// **The status family's client consent gate, coupled to `ai`.**
     ///
     /// Server v1.39 resolves consent for the per-metric status routes itself
     /// (`statusText` → `consent_required`, `text: null`), so once it has sent an
@@ -41,28 +41,28 @@ public extension AppContainer {
             kind: kind,
             measurementsRepo: measurementsRepo,
             insightsRepo: metricInsightsRepo,
-            // PB1 H1 — chart-detail "Befunde" respects the same AI-consent
+            // Chart-detail "Befunde" respects the same AI-consent
             // gate as the Insights tab — on servers older than v1.39. A server
-            // that reports `ai` resolves consent itself (#115 B7).
+            // that reports `ai` resolves consent itself.
             consentGate: Self.statusFamilyConsentGate(capabilities: aiCapabilityGate, consentGate: makeAIConsentGate()),
-            // v0.6.2.x bug-c10 — cumulative kinds (Steps) POST today's fresh
+            // Cumulative kinds (Steps) POST today's fresh
             // HK day-total before the series fan-out so the chart never paints
             // a stale day-total. `nil` for spot kinds keeps the round-trip
             // scoped.
             preLoadHook: makeChartDetailPreLoadHook(for: kind),
-            // v0.6.2.x bug-c10-ios-direct — resolve today's HK-direct step
+            // Resolve today's HK-direct step
             // total from the live store so the chart-detail today-bar + hero
             // can override the (frozen) server snapshot. Honored only for
             // `.steps` inside the store.
             liveTodayStepsProvider: { [weak self] in self?.liveHealthKitTodayStore.todayStepCount },
-            // v0.14 DATA — user height (cm) from the server profile, for the
+            // User height (cm) from the server profile, for the
             // derived `.bmi` series (BMI = weight_kg / height_m²). Read live so a
             // later settings hydration is honoured; only consulted for `.bmi`.
             heightCmProvider: { [weak self] in self?.settingsStore.profile?.heightCm.map(Double.init) }
         )
     }
 
-    /// v0.14 DATA — point the medications store's due-derive at the server-
+    /// Point the medications store's due-derive at the server-
     /// profile IANA timezone. Read live via a provider so a later SWR profile
     /// emission is honoured without re-wiring; falls back to `.current` until the
     /// profile carries a valid zone. Lives here (not the composition-root file)
@@ -86,7 +86,7 @@ public extension AppContainer {
         // day N+1 and render a phantom "2 von 2 genommen".
         dashboardStore.profileTimeZoneProvider = resolve
 
-        // AUD-3 D-3 — bridge the SAME profile zone to the off-main-actor
+        // Bridge the SAME profile zone to the off-main-actor
         // `MeasurementsRepository` so its `.dashboardSummary` write-invalidation
         // day-key matches the day-key `DashboardStore` READS. The repo's provider
         // is `@Sendable`, so it reads the lock-protected box rather than reaching

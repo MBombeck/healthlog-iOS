@@ -40,7 +40,8 @@ import Foundation
 
         func fetchRecordings(since anchor: Data?) async throws -> EcgSourceFetchResult {
             let decoded = HealthKitAnchorArchive.decodeAnchor(anchor, label: "ecg")
-            let (samples, newAnchor) = try await fetchSamples(anchor: decoded)
+            let page = try await fetchSamples(anchor: decoded)
+            let (samples, deletedIDs, newAnchor) = (page.samples, page.deletedIDs, page.newAnchor)
             var cache: [String: HKElectrocardiogram] = [:]
             var mapped: [EcgSourceRecording] = []
             mapped.reserveCapacity(samples.count)
@@ -57,7 +58,8 @@ import Foundation
             pending = cache
             return EcgSourceFetchResult(
                 recordings: mapped,
-                anchor: HealthKitAnchorArchive.encodeAnchor(newAnchor, label: "ecg")
+                anchor: HealthKitAnchorArchive.encodeAnchor(newAnchor, label: "ecg"),
+                deletedIDs: deletedIDs
             )
         }
 
@@ -125,7 +127,7 @@ import Foundation
         /// a non-live `HKAnchoredObjectQuery` invokes its handler exactly once.
         private func fetchSamples(
             anchor: HKQueryAnchor?
-        ) async throws -> (samples: [HKElectrocardiogram], newAnchor: HKQueryAnchor?) {
+        ) async throws -> EcgAnchoredPage {
             let type = HKObjectType.electrocardiogramType()
             return try await withCheckedThrowingContinuation { continuation in
                 let query = HKAnchoredObjectQuery(
@@ -133,13 +135,17 @@ import Foundation
                     predicate: nil,
                     anchor: anchor,
                     limit: HKObjectQueryNoLimit
-                ) { _, samples, _, newAnchor, error in
+                ) { _, samples, deleted, newAnchor, error in
                     if let error {
                         continuation.resume(throwing: error)
                         return
                     }
                     let recordings = (samples as? [HKElectrocardiogram]) ?? []
-                    continuation.resume(returning: (recordings, newAnchor))
+                    continuation.resume(returning: EcgAnchoredPage(
+                        samples: recordings,
+                        deletedIDs: (deleted ?? []).map(\.uuid.uuidString),
+                        newAnchor: newAnchor
+                    ))
                 }
                 store.execute(query)
             }
@@ -200,4 +206,11 @@ import Foundation
         case unsupportedResult
     }
 
+    /// One anchored ECG read: recordings, deletions and the new anchor.
+    /// Immutable after delivery.
+    struct EcgAnchoredPage: @unchecked Sendable {
+        let samples: [HKElectrocardiogram]
+        let deletedIDs: [String]
+        let newAnchor: HKQueryAnchor?
+    }
 #endif

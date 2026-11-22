@@ -1,6 +1,6 @@
 import Foundation
 
-/// #20 — which heart-rate series the Dashboard pulse slot shows.
+/// Which heart-rate series the Dashboard pulse slot shows.
 ///
 /// Mirrors the web dashboard (`src/app/page-client.tsx`, HealthLog v1.39.x:
 /// `hasRestingHr = (summaries.RESTING_HEART_RATE?.count ?? 0) > 0`,

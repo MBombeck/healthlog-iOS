@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 08 Wave 0 — the document surface, hermetically.**
+/// **The document surface, hermetically.**
 ///
 /// Plan 08-02's store suite proved the *publication* of a superseded document
 /// query is fenced. These cases are about the other half: what is on screen
@@ -50,7 +50,7 @@ final class Phase8DocumentsUITests: XCTestCase {
         record(violations, for: "newest-filter")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI older document filter replaced the newest result"
+            "UI older document filter replaced the newest result"
         )
     }
 
@@ -79,6 +79,12 @@ final class Phase8DocumentsUITests: XCTestCase {
         let trash = Self.localized(app, ["Delete", "Löschen"])
         guard app.awaitPhase8(trash, "the bulk bar's delete action") else { return }
         trash.tap()
+        // Several documents at once are asked about first; the red answer
+        // of the question carries the same word.
+        let question = app.alerts.firstMatch
+        if question.waitForExistence(timeout: 5) {
+            question.buttons.matching(NSPredicate(format: "label IN %@", ["Delete", "Löschen"])).firstMatch.tap()
+        }
 
         // The server applied one id and refused the other. The refused id must
         // stay selected — which means the bulk bar must still be there.
@@ -102,7 +108,7 @@ final class Phase8DocumentsUITests: XCTestCase {
         record(violations, for: "import-and-partial-bulk")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI document import or partial failure was hidden"
+            "UI document import or partial failure was hidden"
         )
     }
 
@@ -133,7 +139,7 @@ final class Phase8DocumentsUITests: XCTestCase {
         record(violations, for: "module-disabled")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI disabled Documents exposed unusable controls"
+            "UI disabled Documents exposed unusable controls"
         )
     }
 
@@ -162,8 +168,12 @@ final class Phase8DocumentsUITests: XCTestCase {
     /// an infrastructure miss, never a finding.
     @MainActor
     private func selectBothRows(_ app: XCUIApplication) -> Bool {
+        // Selecting sits in the list menu, beside the filter.
+        let listMenu = app.phase8Element("documents.toolbar.filter")
+        guard app.awaitPhase8(listMenu, "the list menu") else { return false }
+        listMenu.tap()
         let select = app.phase8Element("documents.toolbar.select")
-        guard app.awaitPhase8(select, "the multi-select toolbar entry") else { return false }
+        guard app.awaitPhase8(select, "the multi-select menu entry") else { return false }
         select.tap()
 
         // Selection mode has to be *observed* before the rows are tapped. Out of

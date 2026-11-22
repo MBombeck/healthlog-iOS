@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v1.39.1 (#1032) — every logged day entry reaches the calendar.**
+/// **v1.39.1 — every logged day entry reaches the calendar.**
 ///
 /// Until v1.39.1 the calendar read carried flow, symptoms, BBT, the ovulation
 /// test, the mucus reading and the cervix signs, and dropped the rest of the

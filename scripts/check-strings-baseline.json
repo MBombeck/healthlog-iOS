@@ -31,6 +31,8 @@
   },
   "knownOrphans": [],
   "serverProvided": [
+    "HL_LA_START_BODY",
+    "HL_LA_START_TITLE",
     "mentalHealth.considerProfessional",
     "mentalHealth.considerWellbeing",
     "mentalHealth.disclaimer"

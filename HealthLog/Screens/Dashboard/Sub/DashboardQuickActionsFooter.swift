@@ -19,56 +19,35 @@ import SwiftUI
 struct DashboardQuickActionsFooter: View {
     /// Pushes the dashboard-customization screen.
     let onShowCustomize: () -> Void
+    /// #186 — pushes the symptom quick entry; `nil` hides the row (illness
+    /// module off, or a server that predates linked occurrences).
+    var onLogSymptom: (() -> Void)?
 
     var body: some View {
-        HLCard {
-            actionRow(
-                icon: "slider.horizontal.3",
-                title: String(localized: "Customize dashboard"),
-                identifier: "dashboard.quickAction.customize",
-                action: onShowCustomize
-            )
-        }
-    }
-
-    private func actionRow(
-        icon: String,
-        title: String,
-        identifier: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: HLSpace.md) {
-                // 1.4 B4 — a pixel-locked glyph in its column: the body-sized
-                // symbol outgrew the 28 pt frame at the accessibility sizes
-                // and ran into the title.
-                Image(systemName: icon)
-                    .font(.hlIcon(HLIconSize.lg))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: HLSpace.sm)
-                Image(systemName: "chevron.right")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.tertiary)
-                    .accessibilityHidden(true)
+        // A menu row: it opens a settings page and shows no value, so it
+        // keeps the chevron (Z2).
+        HLCard(layout: .rows) {
+            if let onLogSymptom {
+                // The same row as its neighbour: it opens a page to log on.
+                HLRowButton(action: onLogSymptom) {
+                    HLRow("symptoms.add", accessory: .chevron) {
+                        HLRowGlyph(symbol: "heart.text.square")
+                    }
+                }
+                .accessibilityIdentifier("dashboard.quickAction.symptom")
             }
-            .padding(.vertical, HLSpace.sm)
-            .contentShape(Rectangle())
+            HLRowButton(action: onShowCustomize) {
+                HLRow("Customize dashboard", accessory: .chevron) {
+                    HLRowGlyph(symbol: "slider.horizontal.3")
+                }
+            }
+            .accessibilityIdentifier("dashboard.quickAction.customize")
         }
-        .buttonStyle(.plain)
-        .hlPressable()
-        .accessibilityIdentifier(identifier)
-        .accessibilityAddTraits(.isButton)
     }
 }
 
 #Preview("DashboardQuickActionsFooter") {
-    DashboardQuickActionsFooter(onShowCustomize: {})
+    DashboardQuickActionsFooter(onShowCustomize: {}, onLogSymptom: {})
         .padding()
         .background(HLSurface.primary)
 }

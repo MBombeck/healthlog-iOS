@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.4 B4 — a y range that fits the readings.** Swift Charts starts a value
+/// **A y range that fits the readings.** Swift Charts starts a value
 /// axis at zero unless told otherwise, which flattens a series that moves in a
 /// narrow band far from zero (an HbA1c around 6.5 %, a weight around 80 kg):
 /// the medication effect chart drew its line along the top of a 0-based axis.

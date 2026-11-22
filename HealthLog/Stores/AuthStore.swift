@@ -7,7 +7,7 @@ import Observation
 @MainActor
 @Observable
 public final class AuthStore {
-    // `Phase` + `AdoptUploadState` live in `AuthStore+Phase.swift`
+    // `Phase` lives in `AuthStore+Phase.swift`
     // (file_length-Disziplin — moved out so the #65 web-handoff leg has room).
 
     /// The authenticated phase, and — since 07-09 — the one place the shared
@@ -56,7 +56,7 @@ public final class AuthStore {
     /// `AuthStore+Phase.swift`, which owns it; Swift's `private` is file-scoped).
     @ObservationIgnored var authAttemptGeneration: UInt64 = 0
 
-    /// 24-01 — the once-per-launch latch for the blanked-identity repair (see
+    /// The once-per-launch latch for the blanked-identity repair (see
     /// `AuthStore+IdentityRecovery.swift`). Set before its await, so a failed
     /// recovery is retried on the next launch and never inside this one.
     @ObservationIgnored var didAttemptUserIDRecovery = false
@@ -65,22 +65,15 @@ public final class AuthStore {
     let accountBoundaryTransition = AuthAccountBoundaryTransition()
     @ObservationIgnored var authenticatedSessionRegistry = AuthenticatedSessionLeaseRegistry()
 
-    public private(set) var adoptUploadState: AdoptUploadState = .idle
-
     func applySharingRecoveryUser(_ user: User) {
         switch phase {
         case .authenticated: phase = .authenticated(user)
         case .authenticating: phase = .authenticating(user)
-        case .unknown, .unauthenticated, .standalone: break
+        case .unknown, .unauthenticated: break
         }
     }
 
     let auth: AuthService, keychain: KeychainStoring
-    /// Lookup-only reference: AuthStore decides phase, SyncModeStore tracks
-    /// the user-visible mode. `bootstrap()` reconciles the two so that
-    /// upgraders (Keychain-token present, no `syncMode` key set) default to
-    /// `.paired` without re-onboarding.
-    private weak var syncMode: SyncModeStore?
     /// Non-secret UI/state persistence (the pending-web-deletion marker, #37/#38
     /// Privacy H3). Injectable so the return-detection tests can pin the flag
     /// without touching `.standard`.
@@ -89,12 +82,10 @@ public final class AuthStore {
     public init(
         auth: AuthService,
         keychain: KeychainStoring,
-        syncMode: SyncModeStore? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.auth = auth
         self.keychain = keychain
-        self.syncMode = syncMode
         self.defaults = defaults
     }
 
@@ -102,7 +93,7 @@ public final class AuthStore {
         guard await beginAuthenticationTransition() else { return }
         defer { finishAuthenticationTransition() }
         let isAuth = await auth.isAuthenticated
-        // 24-01 — reads the slot, and heals it first when a pre-fix refresh
+        // Reads the slot, and heals it first when a pre-fix refresh
         // blanked it. A healthy install resolves without a network call; the
         // poisoned one gets exactly one `GET /api/auth/me`, because the profile
         // read that knows the id is itself lease-fenced and cannot run until
@@ -117,149 +108,9 @@ public final class AuthStore {
             // profile the moment `SettingsStore.load()` lands.
             let nameHint = keychain.getString(forKey: KeychainKey.userDisplayName)
             phase = .authenticated(User(id: id, email: nil, username: nil, displayName: nameHint, createdAt: .now))
-            // Existing v0.4.0 upgraders: token-present + `syncMode == nil` means
-            // they completed onboarding before SyncMode existed. Default `.paired`.
-            if syncMode?.mode == nil { syncMode?.setMode(.paired) }
-            return
-        }
-        // No token present. If the user previously chose standalone the
-        // OnboardingMode key sticks; render the standalone shell without
-        // re-prompting.
-        if syncMode?.mode == .standalone {
-            phase = .standalone
             return
         }
         phase = .unauthenticated
-    }
-
-    /// Onboarding helper: marks the device as standalone-only, transitions to
-    /// `.standalone` phase. Caller (`OnboardingFlow.standalone` branch) invokes
-    /// this AFTER the local HK + backfill steps complete.
-    public func enterStandaloneMode() {
-        syncMode?.setOnboardingChoice(.standalone)
-        phase = .standalone
-    }
-
-    /// Onboarding-completion helper for server-mode: records the choice and
-    /// keeps the existing phase transition path (login flow drives `.authenticated`).
-    public func markOnboardingMode(_ choice: OnboardingMode) {
-        syncMode?.setOnboardingChoice(choice)
-    }
-
-    /// Pair-later flow per `22-standalone-and-server-pairing.md §3.3`. The
-    /// standalone user taps "Mit Server verbinden" in Settings; we drop them
-    /// back into `OnboardingFlow` by clearing standalone mode + resetting
-    /// `phase = .unauthenticated`. The OnboardingFlow's mode-selection step
-    /// is skipped server-side via a follow-up (v0.4.2) — for v0.4.1 the
-    /// user simply picks "Mit Server" again. Local SwiftData is untouched;
-    /// after successful login an upload-backfill pass copies existing
-    /// measurements to the server (v0.4.2 milestone).
-    public func beginServerPairing() {
-        // v0.11 W4 — remember that THIS pairing is an adopt-on-pair flow (the
-        // user was standalone and is now joining a server). `clearOnLogout()`
-        // wipes the runtime `mode` immediately, so by the time login completes
-        // the live mode no longer reads standalone — we can't detect the
-        // transition from the store at `.authenticated` time. Capturing the
-        // intent here is the robust signal: a normal paired login never calls
-        // `beginServerPairing()`, so the flag is never set and the upload never
-        // fires for paired-from-start users.
-        if syncMode?.isStandalone == true {
-            pendingAdoptUpload = true
-        }
-        syncMode?.clearOnLogout()
-        phase = .unauthenticated
-    }
-
-    /// v0.11 W4 — set by `beginServerPairing()` when the user was standalone;
-    /// consumed once when the phase reaches `.authenticated` (in
-    /// `completeOnboarding()`). A normal paired login leaves it `false`, so the
-    /// adopt-on-pair upload only ever runs for a genuine standalone→paired
-    /// transition.
-    private var pendingAdoptUpload = false
-
-    /// Composition-Root hook (set by `AppContainer`) that runs the adopt-on-pair
-    /// upload. Returns the terminal progress so the store can publish a
-    /// `.done` / `.failed` state. Reports intermediate progress via the
-    /// `@Sendable` callback so the UI can animate the move. Lives on AuthStore
-    /// (not AuthService) because it threads the iOS-side `LocalRepository` +
-    /// `StandaloneAdoptUploadService`, which the Core-resident AuthService can
-    /// not see.
-    public var adoptUploadHook: (@Sendable (
-        @escaping @Sendable (AdoptUploadProgress) async -> Void
-    ) async -> Result<AdoptUploadProgress, Error>)?
-
-    /// True while an adopt run is in flight, so a re-entrant trigger (a second
-    /// `completeOnboarding()` or a manual retry tap mid-upload) can't double-fire
-    /// the hook. Distinct from `pendingAdoptUpload` (which is "a run is owed").
-    private var adoptUploadInFlight = false
-
-    /// Fires the adopt-on-pair upload once, if this was a standalone→paired
-    /// transition. Called from `completeOnboarding()` (the single terminal
-    /// `.authenticated` site for the server branch) and from
-    /// ``retryAdoptUpload()`` (the manual retry behind the `.failed` banner).
-    /// Idempotent within a run — `adoptUploadInFlight` guards against a
-    /// double-fire while one is running. v0.13 WR: the upload is now safely
-    /// re-runnable (client-side med-create dedup), so a `chunkFailed` re-arms
-    /// `pendingAdoptUpload` and the local mirror is replayed on the next trigger.
-    private func runAdoptUploadIfPending() {
-        guard pendingAdoptUpload, !adoptUploadInFlight, let hook = adoptUploadHook else { return }
-        pendingAdoptUpload = false
-        adoptUploadInFlight = true
-        adoptUploadState = .uploading(AdoptUploadProgress(completed: 0, total: 0))
-        // A weak, @Sendable progress sink the off-actor hook can call. Hoisting
-        // it out of the Task keeps the @Sendable closure from capturing the
-        // Task's `weak var self` (a concurrently-mutated binding).
-        let progressSink: @Sendable (AdoptUploadProgress) async -> Void = { [weak self] progress in
-            await MainActor.run {
-                self?.publishAdoptProgress(progress)
-            }
-        }
-        Task { [weak self] in
-            let result = await hook(progressSink)
-            // `Task {}` on a @MainActor store inherits the main actor, so this
-            // publish is a direct synchronous call once `self` is still alive.
-            guard let self else { return }
-            publishAdoptTerminal(result)
-        }
-    }
-
-    private func publishAdoptProgress(_ progress: AdoptUploadProgress) {
-        adoptUploadState = .uploading(progress)
-    }
-
-    private func publishAdoptTerminal(_ result: Result<AdoptUploadProgress, Error>) {
-        adoptUploadInFlight = false
-        switch result {
-        case let .success(progress):
-            adoptUploadState = .done(progress)
-        case let .failure(error):
-            let progress = if case let AdoptUploadError.chunkFailed(_, completed, total) = error {
-                AdoptUploadProgress(completed: completed, total: total)
-            } else {
-                AdoptUploadProgress(completed: 0, total: 0)
-            }
-            adoptUploadState = .failed(progress)
-            // v0.13 WR — re-arm so the recovery path can re-run. The upload is
-            // idempotent (measurements/mood/intake bulk dedup on externalId; the
-            // med-create now dedups client-side by (name, dose)), so a re-run
-            // replays the whole local mirror safely and finishes the stranded
-            // chunk. `retryAdoptUpload()` (manual, behind the failed banner) or a
-            // future reachability hook can fire it.
-            pendingAdoptUpload = true
-            HLLog.auth
-                .warning(
-                    "Adopt-on-pair upload failed (recoverable, re-armed): \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
-                )
-        }
-    }
-
-    /// v0.13 WR — manual retry for a `.failed` adopt-on-pair upload (the
-    /// affordance behind the failed banner's retry glyph). Re-runs the upload
-    /// from the intact local mirror; idempotent, so a re-run never duplicates
-    /// server rows (intakes/measurements/mood dedup on externalId, med-create on
-    /// `(name, dose)`). No-op if nothing is owed or a run is already in flight.
-    public func retryAdoptUpload() {
-        runAdoptUploadIfPending()
     }
 
     public func login(email: String, password: String) async {
@@ -268,13 +119,13 @@ public final class AuthStore {
         await runAttempt(classify: failPasswordLogin) { attempt in
             switch try await self.auth.login(email: email, password: password) {
             case let .session(session):
-                // v0.6.0.9 — the server branch flips to `.authenticating(user)`
+                // The server branch flips to `.authenticating(user)`
                 // so OnboardingFlow can run the HealthKit + Notifications steps
                 // before `RootView` swaps in `AuthenticatedShell`; the promotion
                 // to `.authenticated(user)` happens in `completeOnboarding()`.
                 self.acceptSession(session, for: attempt)
             case let .mfaRequired(ticket, methods):
-                // #37 — password accepted, second factor required. The ticket is
+                // Password accepted, second factor required. The ticket is
                 // held transiently (in-memory, ~5 min — never persisted, never
                 // logged) and the phase stays pre-auth until a code verifies.
                 self.acceptMfaChallenge(ticket: ticket, methods: methods, for: attempt)
@@ -333,7 +184,7 @@ public final class AuthStore {
         clearMfaState()
     }
 
-    /// #37 — completes the challenge with a TOTP or recovery code. On success,
+    /// Completes the challenge with a TOTP or recovery code. On success,
     /// joins the normal post-login handoff (`phase = .authenticating(user)` →
     /// OnboardingFlow → `completeOnboarding()`), identical to a password login.
     ///
@@ -370,7 +221,7 @@ public final class AuthStore {
         }
     }
 
-    /// #37 — completes the challenge with a WebAuthn security key. Reuses
+    /// Completes the challenge with a WebAuthn security key. Reuses
     /// `AuthService.mfaWebauthnVerify` (which reuses `PasskeyService.assert`).
     /// Benign user/system passkey-sheet cancels are mapped to `.canceled` (no
     /// error banner), mirroring `loginWithPasskey`.
@@ -446,7 +297,7 @@ public final class AuthStore {
     /// the HealthKit + Notifications permission steps complete.
     /// Rate-limited (5/15min/IP) — duplicate taps debounced by `isWorking`.
     ///
-    /// b182 W-B182-INVITE (GH #16) — `inviteToken` (server invite `hlv_<64 hex>`)
+    /// `inviteToken` (server invite `hlv_<64 hex>`)
     /// is passed straight through to `AuthService.register`. On a closed-
     /// registration instance it is the door key; an invalid/expired token
     /// surfaces as the server's `403` via `runWorkable`'s `lastError`. The token
@@ -473,12 +324,12 @@ public final class AuthStore {
     public func loginWithPasskey(anchor: ASPresentationAnchorProvider) async {
         guard await beginAuthenticationTransition() else { return }
         defer { finishAuthenticationTransition() }
-        await runAttempt(classify: failPasskeyLogin) { attempt in // L1: a refusal is not an expiry
+        await runAttempt(classify: failPasskeyLogin) { attempt in // A refusal is not an expiry
             do {
                 let session = try await self.auth.passkeyLogin(presentationAnchor: anchor)
                 self.acceptSession(session, for: attempt)
             } catch {
-                // v0.11 — a user-cancelled system passkey sheet surfaces as an
+                // A user-cancelled system passkey sheet surfaces as an
                 // `ASAuthorizationError` (`.canceled`, sometimes `.unknown` /
                 // `.notInteractive`). Normalising it to the benign
                 // `HLError.canceled` lets the shared classifier stop the spinner
@@ -488,7 +339,7 @@ public final class AuthStore {
         }
     }
 
-    // MARK: - Publication funnels (09-07)
+    // MARK: - Publication funnels
 
     /// `phase`, `isWorking` and `lastError` keep their `private(set)` setters —
     /// Swift's `private` is file-scoped and the fenced transition that owns them
@@ -507,7 +358,7 @@ public final class AuthStore {
         lastError = error
     }
 
-    /// 13-02 — the only writer of ``passwordFallbackRevealed``. Callers go
+    /// The only writer of ``passwordFallbackRevealed``. Callers go
     /// through the fenced `revealPasswordFallback(for:)` / `clearPasswordFallback()`
     /// in `AuthStore+Phase.swift`, which is where the attempt fences live.
     func publishPasswordFallbackRevealed(_ revealed: Bool) {
@@ -517,13 +368,13 @@ public final class AuthStore {
     // MARK: - OIDC SSO (#49 / v1.30.11 native single sign-on)
 
     #if canImport(AuthenticationServices)
-        /// #49 — the native OIDC SSO driver (`ASWebAuthenticationSession`). Wired by
+        /// The native OIDC SSO driver (`ASWebAuthenticationSession`). Wired by
         /// the composition root (`AppContainer`). Nil in unit tests that don't
         /// exercise the web-auth leg; ``loginWithSSO(anchor:)`` surfaces a clear
         /// error then.
         public var oidcAuthenticator: OidcAuthenticating?
 
-        /// #49 — starts the native OIDC SSO flow. Generates app-side PKCE (S256),
+        /// Starts the native OIDC SSO flow. Generates app-side PKCE (S256),
         /// opens `…/api/auth/oidc/login?client=native&code_challenge=…` in an
         /// `ASWebAuthenticationSession`, and finalizes the returned
         /// `healthlog://oidc-callback?…` into one of three paths (token exchange /
@@ -576,7 +427,7 @@ public final class AuthStore {
             }
         }
 
-        /// #49 — routes the parsed `healthlog://oidc-callback` into the correct
+        /// Routes the parsed `healthlog://oidc-callback` into the correct
         /// finalization path. `codeVerifier` is the in-memory PKCE verifier from
         /// ``loginWithSSO(anchor:)``; it is consumed exactly once here and never
         /// logged. `internal` (not `private`) so the flow-routing test can drive it
@@ -629,6 +480,12 @@ public final class AuthStore {
 
     #endif
 
+    /// Sends the app back to the sign-in flow once a server switch has torn
+    /// down the old session.
+    public func returnToSignIn() {
+        phase = .unauthenticated
+    }
+
     /// Terminal server-branch onboarding handoff: called by
     /// `OnboardingFlow.advanceFromNotifications` once the HealthKit +
     /// Notifications permission steps have run. Promotes the carried user
@@ -641,12 +498,13 @@ public final class AuthStore {
     public func completeOnboarding() {
         guard case let .authenticating(user) = phase else { return }
         phase = .authenticated(user)
-        // v0.11 W4 — terminal `.authenticated` site for the server branch. If
-        // this login concluded a standalone→paired transition, move the local
-        // rows up now (fire-and-forget; the store publishes progress via
-        // `adoptUploadState`). No-op for paired-from-start users.
-        runAdoptUploadIfPending()
+        if let hook = onSignedInHook { Task { await hook() } }
     }
+
+    /// Composition-root hook, run once a sign-in has reached `.authenticated`.
+    /// Writes that outlived the previous sign-out wait in the outbox for this
+    /// moment, and neither a network edge nor a scene change follows a login.
+    public var onSignedInHook: (@Sendable () async -> Void)?
 
     // CU-15 (catchup-v134 A5): `enrollPasskey` is gone together with
     // `AuthService.passkeyEnroll`. The register-options / register-verify pair
@@ -656,7 +514,7 @@ public final class AuthStore {
     // (`loginWithPasskey`) is untouched.
 
     public func logout() async {
-        // 06-05 — hold the 06-10 account boundary for the whole sign-out so a
+        // Hold the 06-10 account boundary for the whole sign-out so a
         // replacement admission (or same-owner re-login) queues until the
         // remote revoke, credential wipe, HK-anchor cleanup, and the shared
         // local cascade below have all completed.
@@ -668,7 +526,7 @@ public final class AuthStore {
             // stale the shared authenticated-session lease BEFORE any wipe:
             // no suspended producer may publish into the closing session.
             self.invalidateAuthenticatedSession()
-            // N1 — the account's last word before its credentials go: a device
+            // The account's last word before its credentials go: a device
             // that told the server it delivers medication reminders itself takes
             // that back (`clientManaged`), so the server's APNs reminders resume
             // for the account's other devices. Best effort, fail-fast, and it
@@ -677,7 +535,7 @@ public final class AuthStore {
                 await hook()
             }
             try await self.auth.logout()
-            // v0.7.0 W-LOGOUT (NEW-H-1): the Composition-Root sets
+            // The Composition-Root sets
             // `onPostLogoutHook` to `AppContainer.performFullLocalLogout(reason:
             // .userInitiated)` so this UI-driven sign-out runs the SAME
             // cascade as the 401-bridge + account-deletion. Pre-v0.7.0 this
@@ -686,18 +544,6 @@ public final class AuthStore {
             // outbox cipher key behind for the next user on the same device.
             if let hook = self.onPostLogoutHook {
                 await hook()
-            }
-            // v0.12 W7-6 — latent standalone-routing safeguard. The primary fix
-            // (W7-1) hides sign-out in standalone Settings, so this branch is
-            // normally unreachable. But if sign-out is ever reached on a
-            // standalone install, clearing the runtime `syncMode` keeps the
-            // in-session outcome well-defined: the user lands on the onboarding
-            // mode picker over a now-mode-less install rather than re-running the
-            // picker over an install whose flag still says `.standalone`
-            // (undefined-feeling). Paired logout already clears `syncMode`
-            // elsewhere; this only fires for the standalone edge.
-            if self.syncMode?.isStandalone == true {
-                self.syncMode?.clearOnLogout()
             }
             self.clearPendingWebDeletion()
             self.phase = .unauthenticated
@@ -712,7 +558,7 @@ public final class AuthStore {
     /// not see. See `AppContainer+Logout.swift`.
     public var onPostLogoutHook: (@Sendable () async -> Void)?
 
-    /// **N1** — runs during a user-initiated sign-out after the session lease
+    /// Runs during a user-initiated sign-out after the session lease
     /// was invalidated and BEFORE `AuthService.logout()` revokes the refresh
     /// token and wipes the keychain, so a final server write can still
     /// authenticate as the account that is leaving. Set by the composition root
@@ -772,8 +618,8 @@ public final class AuthStore {
     /// and `.authenticating` (server-login resolved but the user is still
     /// inside `OnboardingFlow` walking the HealthKit + Notifications
     /// permission steps) — a 401 in that brief window otherwise leaves the
-    /// onboarding view stuck with an invalid token in Keychain (v0.6.0.9).
-    /// 06-05 — asked by the composition 401 bridge BEFORE it runs the shared
+    /// onboarding view stuck with an invalid token in Keychain.
+    /// Asked by the composition 401 bridge BEFORE it runs the shared
     /// cleanup cascade, so the cascade can precede the credential wipe and the
     /// terminal publication without tearing anything down for pre-auth 401s
     /// (wrong password, dead MFA ticket, …) or racing a deletion
@@ -782,7 +628,7 @@ public final class AuthStore {
         guard !deletionOwnsAccountBoundary else { return false }
         switch phase {
         case .authenticated, .authenticating: return true
-        case .unknown, .unauthenticated, .standalone: return false
+        case .unknown, .unauthenticated: return false
         }
     }
 
@@ -794,7 +640,7 @@ public final class AuthStore {
         guard !deletionOwnsAccountBoundary else { return false }
         switch phase {
         case .authenticated, .authenticating: break
-        case .unknown, .unauthenticated, .standalone: return true
+        case .unknown, .unauthenticated: return true
         }
         // 06-05 (step 1) — the 401 is terminal for this session: stale the
         // shared authenticated-session lease BEFORE the credential wipe so no
@@ -817,7 +663,7 @@ public final class AuthStore {
         let previousUserID = keychain.getString(forKey: KeychainKey.userID)
         _ = try? await auth.invalidateAndWipeSessionCredentials()
         if let cleanup = onLogoutCleanup {
-            // 06-05 — AWAITED, never detached: the anchor cleanup must be
+            // AWAITED, never detached: the anchor cleanup must be
             // complete before this teardown returns, so it can never outlive
             // a replacement account's admission.
             await cleanup(previousUserID)
@@ -870,7 +716,7 @@ public final class AuthStore {
         do {
             try await block()
         } catch let err as HLError where err == .canceled {
-            // v0.11 — user cancelled the system passkey sheet (or any benign
+            // User cancelled the system passkey sheet (or any benign
             // user/system cancel that `passkeyLogin` mapped to `.canceled`).
             // The spinner just stops; NO error banner. We deliberately do not
             // set `lastError` here — a "Cancelled."/"Abgebrochen." banner on a
@@ -894,7 +740,27 @@ extension AuthStore {
     static func sessionOwner(in phase: Phase) -> String? {
         switch phase {
         case let .authenticated(user), let .authenticating(user): user.id
-        case .unknown, .unauthenticated, .standalone: nil
+        case .unknown, .unauthenticated: nil
         }
+    }
+}
+
+// MARK: - The stored session at process start
+
+/// In this file because `phase` is `private(set)`.
+extension AuthStore {
+    /// Admits the stored session while the process starts, before any scene
+    /// exists: a background launch never runs the view task that calls
+    /// `bootstrap()`. Only the healthy Keychain state is admitted here; a
+    /// blanked id or a missing token stays `.unknown` for `bootstrap()`.
+    @discardableResult
+    func restoreStoredSessionAtLaunch() -> Bool {
+        guard case .unknown = phase, accountBoundaryTransition.isIdle else { return false }
+        guard keychain.getString(forKey: KeychainKey.authToken) != nil,
+              let id = keychain.getString(forKey: KeychainKey.userID),
+              id.trimmedNonEmptyHint != nil else { return false }
+        let nameHint = keychain.getString(forKey: KeychainKey.userDisplayName)
+        phase = .authenticated(User(id: id, email: nil, username: nil, displayName: nameHint, createdAt: .now))
+        return true
     }
 }

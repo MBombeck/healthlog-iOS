@@ -10,87 +10,51 @@ import SwiftUI
 extension InsightsMetricScreen {
     // MARK: - Header (#33 — mirrors InsightsScreen.insightsHeader)
 
-    /// In-content per-metric header that mirrors the Übersicht header pattern
-    /// EXACTLY: the metric title left-aligned, the two EQUAL-sized trailing
-    /// circles (the (i), the gear when an editable target band exists, then the
-    /// `✦` Coach action).
-    ///
-    /// Both circles are the SAME `InsightsHeaderActionCircle` primitive — the
-    /// monochrome, STATIC glass circle (the operator wanted the Coach to carry
-    /// the same subtle static shimmer as the gear, "ohne dass sich das bewegt",
-    /// not the moving brand-gradient coin). The Coach circle uses the `sparkles`
-    /// SF Symbol; gear + Coach therefore share diameter AND treatment, so the
-    /// per-metric + Übersicht headers can't drift apart.
+    /// In-content per-metric header, the same `HLTabHeader` as the overview
+    /// and the special pages: the metric title, the actions in one glass group.
     var metricHeader: some View {
-        // DRIFT-2 — route through the canonical `InsightsPageHeader` so the
-        // metric page shares ONE header primitive with the Mood / Medications /
-        // Workouts pages (and the overview). 1.4 B2: the explainer that stood
-        // below the title lives behind the (i) now.
-        InsightsPageHeader(
-            LocalizedStringKey(kind.displayName),
-            accessibilityIdentifierSuffix: kind.rawValue
-        ) {
-            // 1.4 B2 — the page's one (i): the explainer, the method of every
-            // card that has one, the references and the guide. Leading, so the
-            // Coach keeps the trailing edge.
-            HLInfoButton(
-                content: InsightsMetricInfo.content(
-                    for: kind,
-                    canShowCloudInsights: backend.canShowCloudInsights,
-                    showsCorrelation: correlationPanel != nil
-                ),
-                style: .circle,
-                accessibilityIdentifier: "insights.metric.info.\(kind.rawValue)"
+        HLTabHeader(
+            LocalizedStringResource(String.LocalizationValue(kind.displayName)),
+            titleIdentifier: "insights.page.header.title.\(kind.rawValue)",
+            actions: metricHeaderActions
+        )
+    }
+
+    /// The header's one glass group in the fixed order: the (i) with the
+    /// explainer and references, the target range when the metric has an
+    /// editable band, the coach while its capability is open (the sheet
+    /// routes on-device or server itself).
+    private var metricHeaderActions: HLTabHeaderActions {
+        var items: [HLTabHeaderAction] = [
+            .info(
+                InsightsMetricInfo.content(for: kind, showsCorrelation: correlationPanel != nil),
+                identifier: "insights.metric.info.\(kind.rawValue)"
             )
-
-            // Gear — the shared equal-sized glass circle. Shown ONLY when this
-            // metric carries an editable target band (no dead button).
-            if canEditTargetBand {
-                InsightsHeaderActionCircle(
-                    systemImage: "slider.horizontal.3",
-                    accessibilityLabelText: String(localized: "Adjust target range"),
-                    accessibilityIdentifier: "insights.metric.targetEdit.\(kind.rawValue)"
-                ) {
-                    presentTargetEditor = true
-                }
-            }
-
-            // `✦` Coach — the SAME monochrome, STATIC glass circle as the gear,
-            // sitting INLINE to the RIGHT of the edit (gear) button. v0152 C4
-            // (operator-confirmed): the inline coach button appears on EVERY
-            // Insights metric page and ALWAYS opens the canonical `AskCoachSheet`,
-            // which routes correctly per user (`prefersServerArm`): an
-            // External-AI-selected user reaches the EXTERNAL web/server coach (never
-            // silently on-device, never minting an on-device consent receipt — the
-            // sheet surfaces the consent CTA when a server grant is still pending,
-            // C3 `831665ec`); an on-device chooser keeps the on-device arm. It is
-            // therefore shown unconditionally — the SHEET decides the arm, not this
-            // button, so there is no longer a `.none`-mode hide or an on-device
-            // assistant-insight fallback branch here.
-            // #115 · 0.2 — hidden once a decision (operator, record, module, the
-            // person's own switch) closed the `coach` capability; a missing
-            // provider or consent keeps it (the sheet routes those).
-            if appContainer.offersCoach {
-                InsightsHeaderActionCircle(
-                    systemImage: "sparkles",
-                    accessibilityLabelText: String(localized: "Ask the coach"),
-                    accessibilityIdentifier: "insights.metric.coach.\(kind.rawValue)"
-                ) {
-                    presentAskCoach = true
-                }
-                .hlPressable()
-            }
+        ]
+        if canEditTargetBand {
+            items.append(.settings(
+                label: "Adjust target range",
+                identifier: "insights.metric.targetEdit.\(kind.rawValue)"
+            ) {
+                presentTargetEditor = true
+            })
         }
+        if appContainer.offersCoach {
+            items.append(.coach(identifier: "insights.metric.coach.\(kind.rawValue)") {
+                presentAskCoach = true
+            })
+        }
+        return HLTabHeaderActions(items)
     }
 
     // MARK: - 30 Tage Durchschnitt status card (C4 — ONE canonical card)
 
-    /// v0.14.3 C4 — the **ONE canonical "30 Tage Durchschnitt" status card** for
+    /// The **ONE canonical "30 Tage Durchschnitt" status card** for
     /// EVERY metric. Replaces the old `kind == .bloodPressure` fork (rich
     /// `BPStatusCard` for BP vs thin `InsightsPrimaryTile` for everything else)
     /// with a single `InsightsMetricStatusCard` driven by a pure descriptor.
     ///
-    /// A **"30 Tage Durchschnitt" section heading** (C1) sits above the card; the
+    /// A **"30 Tage Durchschnitt" section heading** sits above the card; the
     /// in-card avg hint was removed (C2 — redundant under the heading). The card
     /// self-suppresses entirely when the descriptor carries no signal, so the
     /// heading only renders when there IS a card beneath it — a sparse metric
@@ -99,14 +63,19 @@ extension InsightsMetricScreen {
     var statusBlock: some View {
         let descriptor = statusDescriptor
         if descriptor.hasAnyContent {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("30-day average", flush: true)
-                InsightsMetricStatusCard(descriptor: descriptor)
-                    // v0.14.1 D — the canonical 30-day card is the tile the
-                    // operator long-presses to pin to Home.
-                    .pinToHomeContextMenu(kind: kind, container: appContainer)
-            }
+            // The assessment of the page: status, the 30-day average as a
+            // fact row, the in-range rail. No heading of its own, the card
+            // follows the figure it qualifies.
+            InsightsMetricStatusCard(descriptor: descriptor)
+                // v0.14.1 D — the canonical 30-day card is the tile the
+                // operator long-presses to pin to Home.
+                .pinToHomeContextMenu(kind: kind, container: appContainer)
         }
+    }
+
+    /// Whether the 30-day status card has anything to show.
+    var hasStatusCard: Bool {
+        statusDescriptor.hasAnyContent
     }
 
     /// The pure descriptor for the canonical status card, built from the server
@@ -120,44 +89,38 @@ extension InsightsMetricScreen {
             digest: insightsStore.digest,
             target: statusTargetItem,
             latestValue: store.latestPoint?.value,
-            // v0.14.4 D1 — the same in-range chart values the detail chart draws
+            // The same in-range chart values the detail chart draws
             // (`displaySeries` → `recentInRange` fallback), so the card's
             // target-less Verlauf matches the line below for non-targeted kinds.
             sparklineValues: store.chartPoints.map(\.value),
-            // #115 P2 — the headline, its unit and the target band read in the
+            // The headline, its unit and the target band read in the
             // account's unit, with glucose pinned to the series' unit.
             units: store.effectiveUnits(settingsStore.unitPreferences),
             serverAverage30: serverAverage30
         )
     }
 
-    // MARK: - Labelled stats row (I4 — BP systolic/diastolic)
+    // MARK: - Blood pressure stats (systolic over diastolic)
 
-    /// A `StatsRow` with a small caption above it, so the BP page can stack a
-    /// labelled systolic row over a labelled diastolic row. Caption rides the
-    /// canonical section-header ramp (`.hlCaption` semibold / `HLText.secondary`).
-    /// `internal` (not `private`) so the call site in the main file's `scrollBody`
-    /// can reach it across the file_length split.
-    func labelledStatsRow(
+    /// One row of the blood pressure statistic under its heading, for the
+    /// stacked ``HLStatGrid`` (Systolic over Diastolic). The stats convert to
+    /// the account's unit; the label flips mmHg to kPa.
+    func bloodPressureStatsSection(
         title: String,
         stats: SeriesStats?,
         median: Double?,
         units: UnitPreferences
-    ) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(title)
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-            // A360-5 C-1 — BP stats (both systolic + diastolic rows) convert to
-            // the user's chosen unit; the label flips kg→lb / mmHg→kPa.
-            StatsRow(
+    ) -> HLStatGrid.Section {
+        HLStatGrid.Section(
+            title: title,
+            cells: StatsRow(
                 stats: stats,
                 median: median,
                 unit: store.displayUnit(units: units),
                 kind: kind,
                 units: units
-            )
-        }
+            ).cells
+        )
     }
 
     // MARK: - Correlation (I-1 D — relocated cross-metric combo card)
@@ -179,7 +142,7 @@ extension InsightsMetricScreen {
         }
     }
 
-    /// **A360 H2 (v0156)** — the per-metric Coach circle hands off this page's
+    /// The per-metric Coach circle hands off this page's
     /// metric (a localized opener + wire scope so the first server turn narrows the
     /// snapshot). A correlation card overrides both with the pair-specific
     /// seed/scope it set before presenting. `coachScopeSource == nil` (a metric
@@ -196,8 +159,8 @@ extension InsightsMetricScreen {
     /// on the page.
     var correlationPanel: CorrelationsPanel? {
         let pairs = correlationPairs
-        guard !pairs.isEmpty, backend.canShowCloudInsights, let digest = insightsStore.digest else { return nil }
-        // A360 H2 — each correlation card carries an "Ask the coach about
+        guard !pairs.isEmpty, let digest = insightsStore.digest else { return nil }
+        // Each correlation card carries an "Ask the coach about
         // this" link that opens the canonical AskCoachSheet pre-scoped to both
         // metrics in the pair (same sheet the per-page coach circle opens; it
         // self-gates the arm / placeholder per user).
@@ -222,18 +185,16 @@ extension InsightsMetricScreen {
             // They used to hang off a `showsDisclaimer` flag that this call site
             // and both others passed `false`, so neither reached a screen; the
             // flag is gone, and there is nothing here to opt into any more.
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // v0.14.3 D2 — the right-aligned "How your metrics relate …"
+            Group {
+                // The right-aligned "How your metrics relate …"
                 // subtext was removed (declutter).
-                // v0.14.3 D4 — `flush: true` drops the header's `HLSpace.xs`
+                // `flush: true` drops the header's `HLSpace.xs`
                 // inset so its leading edge sits flush with the unpadded
                 // correlation prose below — matching the Einschätzung /
                 // Letzte-Messung left edge (symmetry).
-                InsightsSectionHeader("Relationships", flush: true)
+                HLSectionHeader("Relationships", rank: .area)
                 panel
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .contain)
         }
     }
 
@@ -250,8 +211,8 @@ extension InsightsMetricScreen {
     @ViewBuilder
     var lastMeasurementBlock: some View {
         if store.latestPoint != nil {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("Last measurement", flush: true)
+            Group {
+                HLSectionHeader("Last measurement", rank: .area)
                 // W36/#22 — forward the presenting screen's matched-geometry
                 // namespace (Dashboard) so the hero number stays the tile→detail
                 // zoom-morph destination; `nil` on the pager/tile surfaces falls
@@ -265,7 +226,7 @@ extension InsightsMetricScreen {
 
     /// A tappable row into ``SleepHypnogramScreen`` (stage bands over the night),
     /// shown ONLY on the sleep metric page. Defaults the detail to the server's
-    /// MOST-RECENT night by passing NO date (v0.14.3 E1) — the old
+    /// MOST-RECENT night by passing NO date — the old
     /// `store.latestPoint?.at` day-key was a sleep-SAMPLE instant in the device
     /// tz that missed the server's wake-day/server-tz night key (→ empty/422 →
     /// "konnte nicht geladen werden"). With no date the server returns the latest
@@ -274,29 +235,17 @@ extension InsightsMetricScreen {
     @ViewBuilder
     var sleepHypnogramRow: some View {
         if kind == .sleep {
-            NavigationLink {
-                SleepHypnogramScreen()
-            } label: {
-                HLCard {
-                    HStack(spacing: HLSpace.md) {
-                        Image(systemName: "chart.bar.xaxis")
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                            Text("sleep.hypnogram.entry.title")
-                                .font(.hlHeadline)
-                                .foregroundStyle(HLText.primary)
-                            Text("sleep.hypnogram.entry.subtitle")
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        Spacer()
-                        HLDisclosureChevron()
-                    }
+            HLCard(layout: .rows) {
+                HLSettingsActionRow(
+                    icon: "chart.bar.xaxis",
+                    title: "sleep.hypnogram.entry.title",
+                    subtitle: "sleep.hypnogram.entry.subtitle",
+                    presents: .push
+                ) {
+                    SleepHypnogramScreen()
                 }
+                .accessibilityIdentifier("insights.metric.sleep.hypnogram")
             }
-            .hlPressable() // QOL-AUDIT H1: press feedback
-            .accessibilityIdentifier("insights.metric.sleep.hypnogram")
         }
     }
 
@@ -311,7 +260,8 @@ extension InsightsMetricScreen {
     @ViewBuilder
     var sleepDerivedBlock: some View {
         if kind == .sleep {
-            SleepInsightsBlock()
+            // The composition chart follows the page's period control.
+            SleepInsightsBlock(rangeDays: store.range.rawValue)
         }
     }
 
@@ -323,14 +273,12 @@ extension InsightsMetricScreen {
     /// (`W/src/app/insights/pulse/page.tsx:163-166`), so the page reads
     /// "the range → this day".
     ///
-    /// Double-gated on purpose: pulse-only (every other metric page never
-    /// constructs the block and therefore never fires the read) AND
-    /// `canShowCloudInsights`, because the day curve is pure server compute —
-    /// in standalone / no-server there is nothing to ask for, so no round-trip
-    /// and no empty shell. The block owns its own load + states from there.
+    /// Pulse-only: every other metric page never constructs the block and
+    /// therefore never fires the read. The block owns its own load + states
+    /// from there.
     @ViewBuilder
     var intradayPulseBlock: some View {
-        if IntradayPulseBlock.isAvailable(for: kind, canShowCloudInsights: backend.canShowCloudInsights) {
+        if IntradayPulseBlock.isAvailable(for: kind) {
             IntradayPulseBlock()
         }
     }
@@ -341,15 +289,11 @@ extension InsightsMetricScreen {
     /// own typical standing at the SAME hour of day. Only the four cumulative
     /// types the server baselines construct it (steps / active energy /
     /// walking+running distance / flights), so no other metric page fires the
-    /// read; and it is pure server compute, so it stays absent in standalone /
-    /// no-server. Sits directly under the range chart, where the page narrows
+    /// read. Sits directly under the range chart, where the page narrows
     /// from "the range" to "today so far".
     @ViewBuilder
     var sameTimeBaselineBlock: some View {
-        if let type = SameTimeBaselineBlock.supportedType(
-            for: kind,
-            canShowCloudInsights: backend.canShowCloudInsights
-        ) {
+        if let type = SameTimeBaselineBlock.supportedType(for: kind) {
             SameTimeBaselineBlock(type: type)
         }
     }
@@ -365,32 +309,20 @@ extension InsightsMetricScreen {
     /// `ecg-cross-link.tsx:27-30`), so the row can never be a dead tap.
     @ViewBuilder
     var ecgCrossLinkRow: some View {
-        if kind == .pulse, backend.canShowCloudInsights, ecgStore.hasRecordings {
-            NavigationLink {
-                InsightsEcgPage()
-            } label: {
-                HLCard {
-                    HStack(spacing: HLSpace.md) {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                            Text("insights.ecg.crossLink.title")
-                                .font(.hlHeadline)
-                                .foregroundStyle(HLText.primary)
-                            Text(ecgCrossLinkSubtitle)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                        HLDisclosureChevron()
-                    }
+        if kind == .pulse, ecgStore.hasRecordings {
+            HLCard(layout: .rows) {
+                HLSettingsActionRow(
+                    icon: "waveform.path.ecg",
+                    title: "insights.ecg.crossLink.title",
+                    subtitle: LocalizedStringKey(ecgCrossLinkSubtitle),
+                    presents: .push
+                ) {
+                    // Pushed over the pager, the page has no strip of its own.
+                    InsightsEcgPage()
+                        .environment(\.insightsInPager, false)
                 }
+                .accessibilityIdentifier("insights.metric.pulse.ecgCrossLink")
             }
-            .hlPressable()
-            .accessibilityIdentifier("insights.metric.pulse.ecgCrossLink")
         }
     }
 
@@ -409,10 +341,10 @@ extension InsightsMetricScreen {
     // MARK: - 4. Chart block (reused primitives)
 
     var chartBlock: some View {
-        // v0.14.1 §5 — the `HeroStrip` moved UP into the canonical "Letzte
+        // The `HeroStrip` moved UP into the canonical "Letzte
         // Messung" block (`lastMeasurementBlock`, position 4), so the chart block
         // is the chart alone. No duplicate hero.
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             ChartCard(
                 kind: kind,
                 store: store,
@@ -424,18 +356,21 @@ extension InsightsMetricScreen {
                 zoomNamespace: fullscreenZoomNamespace,
                 zoomSourceID: Self.zoomSourceID,
                 onTapChart: { presentFullscreenChart = true },
-                // 1.5 LAB-LINES — a chosen part of the day replaces the
+                // A chosen part of the day replaces the
                 // whole-day change line with the part's name.
                 rangeDelta: store.activePartOfDay == nil ? rangeDelta : nil,
                 headline: coachReadHeadline,
-                caption: store.activePartOfDay.map(ChartDetailStore.partOfDayCaption)
+                caption: store.activePartOfDay.map(ChartDetailStore.partOfDayCaption),
+                summary: store.activePartOfDay == nil
+                    ? MetricPeriodSummary.Model.resolve(store: store, units: settingsStore.unitPreferences)
+                    : nil
             )
         }
     }
 
     // MARK: - Period-over-period delta (W5-3, self-suppresses)
 
-    /// W5-3 — "vs prior <range>" caption from the already-loaded series (no new
+    /// "vs prior <range>" caption from the already-loaded series (no new
     /// server contract), the chart card's one caption line since 1.4 B2.
     /// 1.5 VERDICTS — the series' own `change` with the server's verdict
     /// (`ChartDetailStore.rangeChange`); on a server before v1.43 the own
@@ -454,6 +389,16 @@ extension InsightsMetricScreen {
                 ),
                 range: store.range
             )
+        case .priorWindow:
+            let units = store.effectiveUnits(settingsStore.unitPreferences)
+            return MetricRangeDelta(
+                source: .priorWindow(
+                    delta: store.displayDelta(of: change, units: units),
+                    unit: store.displayUnit(of: change, units: units),
+                    trend: change.trend ?? .unknown
+                ),
+                range: store.range
+            )
         case .priorHalf:
             guard let points = store.displaySeries?.points, !points.isEmpty else { return nil }
             return MetricRangeDelta(source: .ownComparison(points), range: store.range)
@@ -467,7 +412,7 @@ extension InsightsMetricScreen {
         return insightsTargetsStore.target(forType: type)
     }
 
-    /// #20 — the target row whose band the 30-day card may show: the row that
+    /// The target row whose band the 30-day card may show: the row that
     /// describes THIS page's series (``MetricChartMath/bandTargetType(for:)``).
     /// The resting-pulse band (server type `PULSE`) lands on the resting heart
     /// rate page, never next to raw pulse.
@@ -485,7 +430,7 @@ extension InsightsMetricScreen {
         return InsightsTargetBandEditorSheet.editableMetrics(forTargetType: item.type)
     }
 
-    /// #32 — current measured reference value(s) (30-day average) for the
+    /// Current measured reference value(s) (30-day average) for the
     /// target editor's faint "Currently: …" hint, keyed by `metric.rawValue`.
     /// BP fans the systolic + diastolic averages onto their threshold metrics.
     var editorCurrentValues: [String: Double] {

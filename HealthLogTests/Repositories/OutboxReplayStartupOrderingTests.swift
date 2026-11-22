@@ -30,7 +30,7 @@ struct OutboxReplayStartupOrderingTests {
             onDiscarded: { notices in await syncState.noteDiscarded(notices) },
             ownerIsAlive: { true }
         )
-        // Phase 09 / plan 09-05 — the bootstrap now waits for the app to draw
+        // The bootstrap now waits for the app to draw
         // before it warms the store and consumes the first interface edge. The
         // Phase-6 contract below is unchanged *behind* that barrier; this is the
         // frame the launch would have drawn.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-HKBACKFILL** — one-shot historical backfill of server-origin
+/// One-shot historical backfill of server-origin
 /// measurements into Apple Health.
 ///
 /// **Why this exists.** The b198 latest-page mirror
@@ -25,7 +25,6 @@ import Foundation
 ///   mirror — or a prior partial backfill — already wrote).
 /// - Per-write-type share-authorization gate (skips unauthorized types, never
 ///   fails the whole pass).
-/// - Suppressed entirely in standalone mode (same guard as the call site).
 /// All of the above live INSIDE `mirrorServerMeasurements`; this driver only
 /// supplies the full-history input set and the run-once gate.
 ///
@@ -46,7 +45,7 @@ public extension MeasurementsStore {
     /// this. Bump to force a one-shot re-run (e.g. when a new mirror-writable
     /// kind is added to `MetricKind.serverMirrorWritableKinds`).
     ///
-    /// v2 (S1 / public #11): `.manual` joined the mirror's source policy, so a
+    /// v2: `.manual` joined the mirror's source policy, so a
     /// user whose v1 pass already completed re-runs once to pick up manual
     /// rows typed on the web or another device. The mirror's dedup keeps the
     /// rows this app already wrote at create-time out of the second pass.
@@ -54,7 +53,7 @@ public extension MeasurementsStore {
         2
     }
 
-    /// **MIRROR (1.5, #152, server #1272) — v3.** Against a server known to
+    /// **v3.** Against a server known to
     /// be 1.46.0 or later the pass pages `?type=…&appleHealthMirror=true` per
     /// mirror-writable kind instead of one fetch per source, so it also reaches
     /// EXTERNAL readings from a token the person switched on. It runs once more
@@ -92,15 +91,10 @@ public extension MeasurementsStore {
     }
 
     /// **Trigger.** Called from the SWR `.fresh` arm right after the latest-page
-    /// mirror, already inside the standalone + HK-present guard. No-ops when the
+    /// mirror, already inside the HK-present guard. No-ops when the
     /// per-user run-once marker is already set. Otherwise retains exactly one
     /// utility task whose owner, marker key, and lease are immutable.
     func runHistoricalHealthKitBackfillIfNeeded(healthKit: AnyHealthKitWriter) {
-        // Standalone suppression — structural, not just call-site discipline.
-        // Mirrors the b198 mirror's standalone guard: in offline/standalone mode
-        // there is no server history to mirror (and the create-time double-write
-        // reasoning applies symmetrically), so the backfill must never run.
-        guard isStandalone?() != true else { return }
         guard historicalBackfillTask == nil else { return }
         guard let lease = captureAuthenticatedSessionLease() else { return }
         let markerKey = Self.historicalBackfillMarkerKey(ownerID: lease.ownerID)
@@ -232,7 +226,7 @@ public extension MeasurementsStore {
             try lease.requireCurrent()
             let decided = await healthKit.mirrorServerMeasurements(history)
             try lease.requireCurrent()
-            // B5 (1.4) — the person's direction was not known, so the pass
+            // The person's direction was not known, so the pass
             // wrote nothing: stay due.
             guard decided else { return false }
         } catch {

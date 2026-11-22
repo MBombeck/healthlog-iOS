@@ -1,6 +1,6 @@
 import Foundation
 
-/// #114 / #115 · 0.2 — an AI action the server refused because its capability
+/// An AI action the server refused because its capability
 /// is unavailable.
 ///
 /// Server v1.39 answers with `{ data: null, error, meta: { errorCode,

@@ -5,7 +5,7 @@ import Testing
     import HealthKit
 #endif
 
-// V0.5.2 N4 — Wiring-Tests fuer den HK-STATS-Pfad. Stellt sicher, dass
+// Wiring-Tests fuer den HK-STATS-Pfad. Stellt sicher, dass
 //
 // 1. `BackgroundSyncCoordinator.attachAnchorSweepHook` den Hook nach
 //    `activateHealthKitBackgroundDeliveries` und nach jedem BGTask-Wake
@@ -97,19 +97,17 @@ import Testing
             func coordinatorConformsToSyncingProtocol() async throws {
                 let cache = try HealthKitDailyStatsCache(modelContainer: HealthKitDailyStatsCache.makeInMemory())
                 let stub = StubAPI()
-                let flags = StubFeatureFlags(enableDailyStats: false)
                 let coord = HealthKitStatisticsSyncCoordinator(
                     statisticsService: HealthKitStatisticsService(),
                     cache: cache,
                     uploader: MeasurementBatchUploader(
                         api: stub,
                         throttle: BatchSyncThrottle(maxPerWindow: 60, window: 60.0, jitter: 0 ... 0)
-                    ),
-                    featureFlags: flags
+                    )
                 )
                 let syncing: HealthKitDailyStatsSyncing = coord
-                // Wenn der Flag OFF ist short-circuited sync und macht keinen
-                // einzigen HTTP-Call — sicher in Unit-Tests aufrufbar.
+                // Ohne Admission verweigert der Sweep und macht keinen einzigen
+                // HTTP-Call — sicher in Unit-Tests aufrufbar.
                 await syncing.triggerDailyStatsSync(lookbackDays: 1)
                 #expect(await stub.requestCount == 0)
             }
@@ -179,16 +177,6 @@ import Testing
             func download(_: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
                 requestCount += 1
                 throw HLError.network(.other("stub"))
-            }
-        }
-
-        struct StubFeatureFlags: FeatureFlagsServicing {
-            let enableDailyStats: Bool
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableDailyStats: enableDailyStats
-                default: true
-                }
             }
         }
     }

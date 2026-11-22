@@ -2,9 +2,9 @@
 import Foundation
 
 public extension MedicationDetailStore {
-    // MARK: - v0.6.1.2 Y4 — compliance KPI + Verlauf glyph track
+    // MARK: - Compliance KPI + Verlauf glyph track
 
-    /// **#115 · 1.3 — the KPI is the server's 30-day adherence, verbatim.**
+    /// **The KPI is the server's 30-day adherence, verbatim.**
     ///
     /// Until 1.0.3 the detail KPI tallied "on time" slots on the client (from
     /// the dose-history ledger, else the drained intake table with a ±30 min
@@ -55,13 +55,13 @@ public extension MedicationDetailStore {
     /// statement that no adherence applies (`.notApplicable`,
     /// `applicable: false` / `NO_LOCAL_SCHEDULE` — its zero placeholders are
     /// never painted as 0 %), or "unknown" when the load settled without a
-    /// server payload (`.unavailable`: offline, standalone). No client-derived
+    /// server payload (`.unavailable`: offline). No client-derived
     /// number paints in any state.
     enum ComplianceKPIState: Sendable, Equatable {
         case pending
         case server(ServerAdherence)
         case notApplicable
-        /// v1.39.1 (#1033) — intake tracking is off (`trackIntake: false`,
+        /// v1.39.1 — intake tracking is off (`trackIntake: false`,
         /// `notApplicableReason: INTAKE_NOT_TRACKED`): the medication is a
         /// record and has no adherence at all.
         case notTracked
@@ -85,7 +85,7 @@ public extension MedicationDetailStore {
     /// `VerlaufGlyph` per day from `now - (days-1)` to `now` inclusive,
     /// oldest-first.
     ///
-    /// **W45 (v0.11) — intake-authoritative, matching the table.** The same
+    /// **Intake-authoritative, matching the table.** The same
     /// `intakes` set that the intake TABLE renders is the source of truth for
     /// the glyph track: `glyph(forDay:)` reduces each day's loaded events into
     /// a glyph exactly as the table-row status would read. `load()` drains the
@@ -101,12 +101,12 @@ public extension MedicationDetailStore {
     /// read as a false miss. A day that DOES have loaded intakes is always
     /// rendered from those intakes — the table's truth wins.
     func verlaufGlyphs(days: Int = 14, now: Date = .now, calendar: Calendar? = nil) -> [VerlaufGlyph] {
-        // W-TZ-MED — default to the profile-zone calendar so a traveling user
+        // Default to the profile-zone calendar so a traveling user
         // buckets each dose on the profile day (matching the card/dashboard/
         // ledger). Explicit `calendar` (tests) overrides; nil profile zone →
         // `.current` device-TZ fallback inside the provider.
         let calendar = calendar ?? profileCalendar
-        // W3-MEDCONTRACT — ledger-first (same rationale as
+        // Ledger-first (same rationale as
         // `complianceSummary`): the server ledger already minted each day
         // against the schedule that was live THEN, so the glyph track stays
         // truthful across schedule edits. Fallback below for ≤ v1.15.17.
@@ -116,7 +116,7 @@ public extension MedicationDetailStore {
         let today = calendar.startOfDay(for: now)
         // v1.7.0-capable server payload → per-day `due` overlay for empty days.
         //
-        // Audit B-6 — ONE zone forms the key: the profile zone the caller's
+        // ONE zone forms the key: the profile zone the caller's
         // calendar carries. The UTC fallback that used to sit behind this
         // lookup answered a profile day with its NEIGHBOUR's bucket for every
         // user east of UTC — the UTC rendering of a profile-day midnight is the
@@ -157,7 +157,7 @@ public extension MedicationDetailStore {
         }
     }
 
-    /// W3-MEDCONTRACT — per-day glyph reduction over the server ledger.
+    /// Per-day glyph reduction over the server ledger.
     ///
     /// One `VerlaufGlyph` per day from `now − (days−1)` to `now`,
     /// oldest-first (same shape as the legacy path). A day reduces over its
@@ -220,11 +220,11 @@ public extension MedicationDetailStore {
     /// formatting those in UTC for a user east of UTC (Berlin) lands on the
     /// previous day → every lookup misses → `.noSchedule` dashes. Using the
     /// caller's `calendar.timeZone` makes the iOS key == the server key. Since
-    /// W-TZ-MED (v0.15.2) the caller's calendar defaults to the server-profile
+    /// W-TZ-MED the caller's calendar defaults to the server-profile
     /// zone (not the device TZ), so a traveling user (device tz ≠ account tz)
     /// now keys on the same profile day the server graded against.
     ///
-    /// **Audit B-6** — this is the only zone the lookup uses. The UTC second
+    /// This is the only zone the lookup uses. The UTC second
     /// attempt it used to be paired with is gone: see ``verlaufGlyphs(days:now:calendar:)``.
     private nonisolated static func dailyComplianceKeyFormatter(for timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
@@ -263,7 +263,7 @@ public extension MedicationDetailStore {
     /// ("7.5 mg" / "1.0 mg" / "5 mg"). Returns the **first** numeric token,
     /// parsed locale-awarely — no other units accepted (defensive).
     ///
-    /// FORM-5: display-only. The old implementation blindly replaced ","→"."
+    /// Display-only. The old implementation blindly replaced ","→"."
     /// which mangled a German grouped headline ("1.000 mg" → `1.0`, wrong by
     /// 1000×). We now extract the leading numeric token and hand it to
     /// ``LocaleDecimalParser`` (the single canonical seam that honours the

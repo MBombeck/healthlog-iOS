@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// W-B184 #19 — the verbatim-section echo workaround is RETIRED. Server
+/// The verbatim-section echo workaround is RETIRED. Server
 /// v1.16.13/1.16.14 (`serializeInsightsLayout`, GH #19) now MERGE-preserves the
 /// stored `sections` on a PUT that omits the field, so iOS no longer needs to
 /// re-send the GET's sections on every tiles-only write. These tests pin the
@@ -219,7 +219,7 @@ struct InsightsLayoutSectionsEchoTests {
         #expect(decoded.layout.sections == nil, "replay payload carries no sections echo — server merges them")
     }
 
-    // MARK: - Parity Build 4 · 4.5 — iOS now EDITS sections
+    // MARK: - iOS now EDITS sections
 
     @Test("store section reorder reaches the wire, defaults-merged")
     @MainActor

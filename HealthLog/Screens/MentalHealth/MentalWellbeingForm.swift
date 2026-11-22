@@ -4,7 +4,7 @@ import SwiftUI
 /// Answering advances between scored items, while submission always requires a
 /// deliberate button tap. PHQ-9 alone has an optional, unscored final question.
 ///
-/// 1.5.0 (L10N-MH): stems, items and answer labels are the server's wording in
+/// Stems, items and answer labels are the server's wording in
 /// the interface language (``MentalHealthStore/activeWording``), never catalogue
 /// strings. Where that text is not a validated translation the header says so
 /// in one line and a centred text link below switches to the English original
@@ -34,12 +34,18 @@ struct MentalWellbeingForm: View {
         hasFunctionalFollowUp && step == scoredCount
     }
 
+    /// "3 / 9" for a scored question, `nil` for the unscored follow-up.
+    nonisolated static func progress(step: Int, scoredCount: Int) -> (current: Int, total: Int)? {
+        guard step < scoredCount else { return nil }
+        return (step + 1, scoredCount)
+    }
+
     private var isLastStep: Bool {
         step == totalSteps - 1
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xl) {
+        VStack(alignment: .leading, spacing: HLLayout.sectionGapBefore) {
             instrumentHeader
             if store.translationIsUnvalidated {
                 wordingToggle
@@ -62,26 +68,29 @@ struct MentalWellbeingForm: View {
     }
 
     private var instrumentHeader: some View {
+        // The instrument's name is the page title while the check-in runs
+        // (MentalWellbeingScreen), so the header starts with what it asks.
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(localizedKey("mentalHealth.instrument.\(instrument.keySegment)"))
-                .font(.hlTitle2)
-                .foregroundStyle(HLText.primary)
             Text(localizedKey("mentalHealth.instrumentDescription.\(instrument.keySegment)"))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.pageSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
             if store.translationIsUnvalidated {
                 Text("mentalHealth.wording.unvalidatedNote")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("mentalHealth.wording.unvalidatedNote")
+            } else {
+                // The validated wording keeps its own form of address, which
+                // is not the app's; one line says why.
+                Text("mentalHealth.wording.originalNote")
+                    .hlText(.note)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mentalHealth.wording.originalNote")
             }
             // 1.0.3 (1.4.1) — screening, not diagnosis: stated before the first
             // question, not just on the result.
             Text("mentalHealth.disclaimer")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.note)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("mentalHealth.form.disclaimer")
         }
@@ -90,45 +99,39 @@ struct MentalWellbeingForm: View {
     /// The switch between the reader's translation and the English original,
     /// a quiet centred text link under the header (the "Erweitert" pattern).
     private var wordingToggle: some View {
-        Button {
+        HLLinkButton(Text(store.showsEnglishOriginal ? "mentalHealth.wording.showTranslation" : "mentalHealth.wording.showOriginal")) {
             withAnimation(.easeInOut(duration: 0.2)) { store.toggleEnglishOriginal() }
-        } label: {
-            Text(store.showsEnglishOriginal ? "mentalHealth.wording.showTranslation" : "mentalHealth.wording.showOriginal")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-                .frame(minHeight: 44)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(store.isSubmitting)
         .accessibilityIdentifier("mentalHealth.wording.toggle")
     }
 
+    /// Back and forth between the questions, around the counter. Forward
+    /// only over an answered question; answering moves on by itself.
     private var progressHeader: some View {
-        HStack(spacing: HLSpace.sm) {
-            if step > 0 {
-                Button {
-                    goBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLAccent.userBrandTint)
-                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("mentalHealth.back"))
-                .accessibilityIdentifier("mentalHealth.back")
-            }
+        HLStepperHeader(
+            title: progressTitle,
+            canGoPrevious: step > 0,
+            canGoNext: Self.canAdvance(step: step, answers: store.answers, totalSteps: totalSteps),
+            identifier: "mentalHealth.step",
+            previous: goBack,
+            next: goForward
+        )
+    }
 
-            Text("mentalHealth.progress \(step + 1) \(totalSteps)")
-                .font(.hlSubhead.weight(.medium))
-                .foregroundStyle(HLText.secondary)
-                .monospacedDigit()
-            Spacer(minLength: 0)
+    /// The counter runs over the scored questions; PHQ-9's optional
+    /// follow-up is not one of the nine and carries no number.
+    private var progressTitle: Text {
+        if let progress = Self.progress(step: step, scoredCount: scoredCount) {
+            return Text("mentalHealth.progress \(progress.current) \(progress.total)")
         }
+        return Text("questionnaire.step.followUp")
+    }
+
+    /// Forward is open while a later step exists and this one is answered.
+    nonisolated static func canAdvance(step: Int, answers: [Int], totalSteps: Int) -> Bool {
+        guard step < totalSteps - 1 else { return false }
+        return answers.indices.contains(step) && answers[step] >= 0
     }
 
     private func questionStep(_ index: Int) -> some View {
@@ -141,8 +144,7 @@ struct MentalWellbeingForm: View {
             }
 
             Text(spoken(wording?.item(index) ?? ""))
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
+                .hlText(.objectName)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("mentalHealth.item.\(index).text")
 
@@ -164,13 +166,13 @@ struct MentalWellbeingForm: View {
 
     private var functionalStep: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            // 1.4 B2 — "(optional)" rides on the question instead of a
+            // "(optional)" rides on the question instead of a
             // sentence under it.
-            (Text(spoken(wording?.functional?.title ?? "")) + Text(verbatim: " ")
-                + Text("mentalHealth.functionalOptional").foregroundStyle(HLText.secondary))
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "\(Text(spoken(wording?.functional?.title ?? ""))) \(Text("mentalHealth.functionalOptional").foregroundStyle(HLText.secondary))"
+            )
+            .hlText(.objectName)
+            .fixedSize(horizontal: false, vertical: true)
 
             MentalHealthOptionPicker(
                 labels: Dictionary(uniqueKeysWithValues: (0 ... 3).map { ($0, wording?.functional?.anchor($0) ?? "") }),
@@ -190,8 +192,7 @@ struct MentalWellbeingForm: View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             if store.lastError != nil {
                 Text("mentalHealth.error")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLColor.statusBad)
+                    .hlText(.emptyMessage, status: HLColor.statusBad)
                     .accessibilityIdentifier("mentalHealth.error")
             }
             HLButton(
@@ -224,6 +225,13 @@ struct MentalWellbeingForm: View {
         }
     }
 
+    private func goForward() {
+        guard Self.canAdvance(step: step, answers: store.answers, totalSteps: totalSteps) else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            step = min(step + 1, totalSteps - 1)
+        }
+    }
+
     private var wording: QuestionnaireWording? {
         store.activeWording
     }
@@ -246,7 +254,8 @@ struct MentalWellbeingForm: View {
     }
 }
 
-/// Vertical single-select rows used by both scored and optional questions.
+/// Single-select rows used by both scored and optional questions, the
+/// check mark at the trailing edge like every single choice in the app.
 /// The labels are questionnaire text (server wording), not catalogue keys.
 struct MentalHealthOptionPicker: View {
     let labels: [Int: String]
@@ -257,39 +266,17 @@ struct MentalHealthOptionPicker: View {
     let onSelect: (Int) -> Void
 
     var body: some View {
-        VStack(spacing: HLSpace.xs) {
+        HLCard(layout: .rows) {
             ForEach(values, id: \.self) { value in
-                optionRow(value)
+                HLChoiceRow(
+                    title: Text(Self.spoken(labels[value] ?? "", language: language)),
+                    isSelected: selected == value
+                ) {
+                    onSelect(value)
+                }
+                .accessibilityIdentifier("\(accessibilityPrefix).option.\(value)")
             }
         }
-    }
-
-    private func optionRow(_ value: Int) -> some View {
-        let isSelected = selected == value
-        return Button {
-            onSelect(value)
-        } label: {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(isSelected ? HLAccent.userBrandTint : HLText.tertiary)
-                Text(Self.spoken(labels[value] ?? "", language: language))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, HLSpace.xs)
-            .padding(.horizontal, HLSpace.sm)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
-                    .fill(isSelected ? HLAccent.userBrandTint.opacity(0.12) : Color.clear)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("\(accessibilityPrefix).option.\(value)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// `text` with its language attached for speech.

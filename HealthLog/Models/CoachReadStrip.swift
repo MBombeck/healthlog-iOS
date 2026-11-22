@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 LAB-LINES, from COACH-R point 5 (#126 3.9)** — line one of
+/// **1.5 LAB-LINES, from COACH-R point 5** — line one of
 /// `GET /api/insights/coach-read?metric=` (`CoachReadStrip.baseline`): the
 /// person's usual range for the metric and where the latest reading sits.
 ///

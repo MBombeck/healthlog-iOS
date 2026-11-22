@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// W-SYNCVIS — the visible sync lifecycle phase driving the footer caption.
+/// The visible sync lifecycle phase driving the footer caption.
 ///
 /// The pre-b178 footer was invisible on fast networks: the syncing line only
 /// rendered while `isLoading` was `true` (often < 300 ms for the GET) and the
@@ -46,19 +46,19 @@ public final class SyncStateStore {
     public private(set) var error: HLError?
     public private(set) var lastHandshakeAt: Date?
 
-    // MARK: - b178 W-SYNCVIS — perceivable handshake phases
+    // MARK: - Perceivable handshake phases
 
     /// The current sync lifecycle phase (see ``SyncPhase``). Every
     /// `handshake()` walks `.syncing → .done → .idle` with minimum hold
     /// times so the footer caption is actually visible to the user.
     public private(set) var phase: SyncPhase = .idle
 
-    // MARK: - b177 W-SYNCPROGRESS — honest sync-progress quantities
+    // MARK: - Honest sync-progress quantities
 
     /// Queued outbox writes waiting for replay (offline edits, retriable
     /// uploads). Fed live by `bindOutbox` — every enqueue/dequeue broadcast
     /// updates the count, so the footer's "N ausstehend" counts down as the
-    /// replay drains. ZERO invention: this IS the persisted backlog (§4.5).
+    /// replay drains. ZERO invention: this IS the persisted backlog.
     public private(set) var pendingOutboxCount: Int = 0
 
     /// Distinct SWR keys currently mid-revalidation (the pull-to-refresh
@@ -92,7 +92,7 @@ public final class SyncStateStore {
     /// drain). Sticky until a real drain, a re-submit, or logout clears it.
     public private(set) var showsFailedDrop: Bool = false
 
-    /// **Audit B-3 — what was lost, not just how much.** The writes this session
+    /// **What was lost, not just how much.** The writes this session
     /// stopped carrying, each named by operation kind and machine reason (see
     /// ``OutboxDiscardNotice``). Kept alongside ``failedDropCount`` rather than
     /// as a second banner: one surface says "N Einträge konnten nicht übermittelt
@@ -111,7 +111,7 @@ public final class SyncStateStore {
         )
     }
 
-    // MARK: - Phase 07 / plan 07-07 — named HealthKit sync truth
+    // MARK: - Named HealthKit sync truth
 
     /// The most recent orchestrated HealthKit pass, as a privacy-safe snapshot.
     ///
@@ -159,7 +159,7 @@ public final class SyncStateStore {
         healthSyncAdmissionRefusalCount += snapshot.capabilitiesRefusedForMissingAdmission.count
     }
 
-    // MARK: - U1 (#16) — one sync-activity source
+    // MARK: - One sync-activity source
 
     /// The last real outbox drain (`>0 → 0` without a dead-letter drop): queued
     /// writes the server accepted. In-memory, like `lastHandshakeAt`.
@@ -340,7 +340,7 @@ public final class SyncStateStore {
         revokeDrainConfirmation()
     }
 
-    /// **Audit B-3 — surface a discarded write.** Sibling of
+    /// **Surface a discarded write.** Sibling of
     /// ``noteDeadLettered(_:)`` and deliberately the same destination: a write
     /// the replay dropped for a permanent server verdict is exactly as lost as
     /// one that ran out of retries, so it raises the same honest failure state
@@ -355,7 +355,7 @@ public final class SyncStateStore {
     }
 
     /// Disarms the drain beat. When it was still up, the drop that armed it was
-    /// this failure — so its last-sync stamp goes too (U1 #16).
+    /// this failure — so its last-sync stamp goes too.
     private func revokeDrainConfirmation() {
         if showsDrainConfirmation {
             lastOutboxDrain = outboxDrainBeforeConfirmation
@@ -467,26 +467,26 @@ public final class SyncStateStore {
         state = nil
         error = nil
         lastHandshakeAt = nil
-        // U1 (#16) — the Apple Health half is cleared by
+        // The Apple Health half is cleared by
         // `HKSyncDiagnostics.reset()` in the same logout.
         lastOutboxDrain = nil
         outboxDrainBeforeConfirmation = nil
-        // b177 W-SYNCPROGRESS — a logout-driven outbox wipe must not flash
+        // A logout-driven outbox wipe must not flash
         // "Daten übermittelt ✓"; the live counts re-settle via the streams.
         drainConfirmationTask?.cancel()
         showsDrainConfirmation = false
         // audit-v0162 H1 (Opt 2) — a logout must not carry a stale DLQ failure
-        // banner into the next session. Audit B-3 — nor the discard detail,
+        // banner into the next session. Nor the discard detail,
         // which names the previous account's write kinds.
         failedDropCount = 0
         showsFailedDrop = false
         discardedWrites = []
-        // b178 W-SYNCVIS — drop the phase machine too; the generation bump
+        // Drop the phase machine too; the generation bump
         // neutralizes any still-in-flight handshake or pending decay.
         handshakeGeneration &+= 1
         phaseDecayTask?.cancel()
         phase = .idle
-        // Phase 07 / plan 07-07 — the previous account's HealthKit pass is not
+        // The previous account's HealthKit pass is not
         // this session's truth, and its refusal counter is not either.
         lastHealthSyncPass = nil
         healthSyncAdmissionRefusalCount = 0

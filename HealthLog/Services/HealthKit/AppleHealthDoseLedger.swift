@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 3 — the Apple-medication dose ledger.
+// The Apple-medication dose ledger.
 //
 // The shipped importer kept one `Date` watermark: it imported whatever it could,
 // then moved the watermark to the newest instant it managed to import. Two
@@ -62,7 +62,20 @@ struct AppleHealthDoseLedger: Sendable {
         /// seed happens exactly once even if the legacy value is later cleared.
         let seededFromDateCursor: Bool
         let updatedAt: Date
+        /// Doses already accounted for inside the trailing window, so the
+        /// re-read of that window never sends them again. `nil` in a record
+        /// written before the window existed.
+        var settled: [String: Date]?
+        /// The medication concepts the last sweep read. A concept missing here
+        /// was just shared with HealthLog, and its doses are read in full once.
+        /// `nil` until the first sweep that could read the medication list.
+        var knownConcepts: [String]?
     }
+
+    /// How far behind the horizon every sweep reads again. A dose logged
+    /// late with an earlier time (entered afterwards, edited, synced late from
+    /// the Watch) lands behind the horizon, and only a re-read finds it.
+    static let trailingWindow: TimeInterval = 7 * 24 * 60 * 60
 
     private let storage: HealthSyncCursorStorage
     private let key: HealthSyncCursorKey
@@ -124,6 +137,26 @@ struct AppleHealthDoseLedger: Sendable {
         return record.horizon
     }
 
+    /// Where the HealthKit read starts: the trailing window behind the
+    /// horizon, or the oldest pending dose when that is earlier. `nil` reads
+    /// everything, like ``resumeInstant()``.
+    func readStart() -> Date? {
+        guard let record = record() else { return nil }
+        let trailing = record.horizon?.addingTimeInterval(-Self.trailingWindow)
+        return [record.pending.values.min(), trailing].compactMap { $0 }.min()
+    }
+
+    /// Doses inside the trailing window that are already accounted for.
+    func settledIdentities() -> Set<String> {
+        guard let settled = record()?.settled else { return [] }
+        return Set(settled.keys)
+    }
+
+    /// The medication concepts seen so far; `nil` when never recorded.
+    func knownConcepts() -> Set<String>? {
+        record()?.knownConcepts.map(Set.init)
+    }
+
     /// Dose identities this ledger is still waiting to account for. Operator-
     /// grade: the count is what a diagnostics surface reports.
     func pendingIdentities() -> Set<String> {
@@ -172,6 +205,8 @@ struct AppleHealthDoseLedger: Sendable {
     ///   - readWindow: **1.4 / iOS 27** — how far back the sweep could read
     ///     dose events. A pending dose older than that cannot come back, so its
     ///     absence says nothing and it stays pending.
+    ///   - knownConcepts: the medication concepts this sweep read; `nil` when
+    ///     the list could not be read, which keeps the stored set.
     ///
     /// The horizon only ever moves forward, and it moving forward is safe
     /// precisely because the holes travel with it in `pending`.
@@ -179,6 +214,7 @@ struct AppleHealthDoseLedger: Sendable {
         observed: [String: Date],
         accountedFor: Set<String>,
         readWindow: HealthReadWindow = .unlimited,
+        knownConcepts: Set<String>? = nil,
         requiring lease: HealthSyncAuthenticatedLease
     ) throws {
         let previous = record()
@@ -194,13 +230,47 @@ struct AppleHealthDoseLedger: Sendable {
         let horizon = [previous?.horizon, observed.values.max()]
             .compactMap { $0 }
             .max()
+        // Settled doses are kept as long as a read can see them again: the
+        // trailing window, or back to the oldest pending dose, where the read
+        // starts while one is open. Otherwise a held dose would make every
+        // sweep post the settled ones behind it again.
+        let trailing = horizon?.addingTimeInterval(-Self.trailingWindow) ?? .distantPast
+        let floor = min(trailing, pending.values.min() ?? trailing)
+        let settled = (previous?.settled ?? [:])
+            .merging(observed.filter { accountedFor.contains($0.key) }) { _, new in new }
+            .filter { $0.value >= floor && pending[$0.key] == nil }
+        // The list as it is now: a medication taken away and shared again
+        // counts as new once more. An unreadable list keeps the stored one.
+        let concepts = knownConcepts.map { $0.sorted() } ?? previous?.knownConcepts
         try write(
             Record(
                 version: Self.formatVersion,
                 horizon: horizon,
                 pending: pending,
                 seededFromDateCursor: previous?.seededFromDateCursor ?? true,
-                updatedAt: clock()
+                updatedAt: clock(),
+                settled: settled,
+                knownConcepts: concepts
+            ),
+            requiring: lease
+        )
+    }
+
+    /// Takes deleted doses out of the pending set. The settled set keeps
+    /// them: it only stops a re-read from sending a dose twice.
+    func forget(_ identities: Set<String>, requiring lease: HealthSyncAuthenticatedLease) throws {
+        guard !identities.isEmpty, let current = record() else { return }
+        let pending = current.pending.filter { !identities.contains($0.key) }
+        guard pending.count != current.pending.count else { return }
+        try write(
+            Record(
+                version: Self.formatVersion,
+                horizon: current.horizon,
+                pending: pending,
+                seededFromDateCursor: current.seededFromDateCursor,
+                updatedAt: clock(),
+                settled: current.settled,
+                knownConcepts: current.knownConcepts
             ),
             requiring: lease
         )

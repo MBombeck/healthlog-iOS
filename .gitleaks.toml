@@ -1,0 +1,41 @@
+# Gitleaks configuration for HealthLog iOS. Extends the built-in rules and
+# allows the known false positives of the `generic-api-key` rule, which reads
+# any `…Key = "<high-entropy string>"` as a token. Every entry names what it
+# lets through and why; a real credential matches none of them.
+#
+# CI runs `gitleaks dir` over the tree and `gitleaks git` over the commits of
+# a push or pull request (.github/workflows/hygiene.yml). Locally:
+#   gitleaks dir --no-banner --redact --config .gitleaks.toml .
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test fixtures and recorded contract evidence: synthetic tokens, test vectors and route inventories"
+paths = [
+  '''^HealthLogTests/.*Tests\.swift$''',
+  '''^HealthLogTests/(.+/)?Fixtures/''',
+  '''^HealthLogTests/Fixtures/''',
+  '''^HealthLogUITests/''',
+  '''^scripts/fixtures/''',
+  '''^scripts/route-matrix/''',
+  '''^scripts/verify-server-contract-fixtures\.sh$''',
+  # The private planning tree is not mirrored; it quotes fixture values.
+  '''^\.planning/''',
+]
+
+[[allowlists]]
+description = "Namespaced UserDefaults keys and type names, which are identifiers, not secrets"
+regexTarget = "secret"
+regexes = [
+  # `static let defaultsKey = "hl.labs.healthRecords.consent.v1"` and kin.
+  '''^hl\.[A-Za-z0-9_.]+$''',
+  # `bindingKey: Curve25519.Signing.PrivateKey` is a parameter type.
+  '''^Curve25519\.''',
+]
+
+[[allowlists]]
+description = "Request correlation ids in Apple's distribution logs"
+regexTarget = "line"
+regexes = [
+  '''x-apple-jingle-correlation-key''',
+]

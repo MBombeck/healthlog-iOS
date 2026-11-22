@@ -1,6 +1,6 @@
 // 14-05 (J3 foreground half, D-09-06-A) — a truncated pass stops burning the window.
 //
-// Since build 266 the foreground pass is bounded at 250 ms + 50 ms (09-06). The
+// Since build 266 the foreground pass is bounded at 250 ms + 50 ms. The
 // coarse A7-M1 throttle that admits its six cheap members is read — and STAMPED
 // — when the plan is built (`ForegroundPassPlan.make` →
 // `AppContainer.shouldRunForegroundCheapMembers()` →
@@ -60,7 +60,7 @@
             let second = Self.makePlan(container)
             #expect(
                 second.members.contains(.cycleGate),
-                "EXPECTED_RED: a pass that did nothing still consumes the 8 s window"
+                "a pass that did nothing still consumes the 8 s window"
             )
         }
 
@@ -98,7 +98,7 @@
             // Nothing about what is asserted changes; the fixture stops racing
             // the mechanism it is measuring. The wall-clock bound only exists
             // so a genuine failure to cancel is a failure rather than a hang.
-            // T1 (1.4) — 30 s like the other hang guards, not 5 s: under load
+            // 30 s like the other hang guards, not 5 s: under load
             // the cancellation hops can take seconds, and a member that gave
             // up first would let the leg run on and read as a red.
             let pass = coordinator.begin(ForegroundPlan(legs: [
@@ -124,7 +124,7 @@
             // already exists — closed-set words, no identifiers, no payloads.
             #expect(
                 observed.lines.contains { $0.hasPrefix("foreground-pass ") && $0.contains("skipped=") },
-                "EXPECTED_RED: which members did not run is not recorded anywhere readable"
+                "which members did not run is not recorded anywhere readable"
             )
         }
 

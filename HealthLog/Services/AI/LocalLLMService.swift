@@ -11,19 +11,17 @@ import Observation
 /// exposing Apple FoundationModels' `SystemLanguageModel.default.availability`
 /// behind a single `@Observable` reader, and run the real one-shot
 /// `respond(_:)` call against `LanguageModelSession` on iOS 26+. The session
-/// is hoisted to the service's lifetime (#14): created lazily on first
+/// is hoisted to the service's lifetime: created lazily on first
 /// `prewarm()` / send, reused across turns so the model carries the
 /// conversation context, dropped on `resetSession()` (conversation clear /
 /// logout) and on availability flips, and rebuilt with a condensed transcript
 /// when the context window overflows.
 ///
-/// **Availability:** the public type compiles on iOS 18+ (the package
-/// target deployment baseline) so call-sites do not need `#available`
-/// guards. The actual FoundationModels-backed wiring is gated by
-/// `@available(iOS 26.0, *)` per the v0.5.7 brief — `SystemLanguageModel`
-/// only ships on iOS 26.0+ alongside Apple Intelligence. On iOS 18 / 25
-/// the `availability` reader stays `.unsupported` so the AskCoach kill-card
-/// renders the legacy "Coming Soon" panel.
+/// **Availability:** call-sites do not need availability guards. The actual
+/// FoundationModels-backed wiring sits behind `#if canImport(FoundationModels)`;
+/// where the framework is not importable the `availability` reader stays
+/// `.unsupported` so the AskCoach kill-card renders the legacy "Coming Soon"
+/// panel.
 ///
 /// **Why a @MainActor @Observable wrapper around a tri-state enum?**
 /// `LanguageModelSession` is itself main-actor-isolated upstream, and the
@@ -59,8 +57,8 @@ public final class LocalLLMService {
         /// 15 Pro / non-M-series iPad). Kill-card surfaces a
         /// device-ineligible note + hides the AskCoach hero entirely.
         case deviceNotEligible
-        /// FoundationModels is not importable in this build configuration
-        /// (Mac Catalyst, watchOS, or pre-iOS-26 runtime). Identical UX
+        /// FoundationModels is not importable in this build configuration,
+        /// or the model does not speak the interface language. Identical UX
         /// to `.deviceNotEligible` from the kill-card's perspective.
         case unsupported
     }
@@ -70,7 +68,7 @@ public final class LocalLLMService {
     /// subclassing without re-running the FoundationModels probe.
     private var cachedAvailability: Availability
 
-    /// **v0.12 W8-2 / #14 — hoisted `LanguageModelSession`.** Held across
+    /// **Hoisted `LanguageModelSession`.** Held across
     /// turns so the transcript context survives and we don't pay the
     /// cold-start instantiation on every send (the documented G.3↔G.5 seam,
     /// resolved via issue #14). Lazily created on first `prewarm()` /
@@ -110,7 +108,7 @@ public final class LocalLLMService {
         return fresh
     }
 
-    /// **#14 — store-lifetime session reset.** Drops the hoisted session so
+    /// **Store-lifetime session reset.** Drops the hoisted session so
     /// the next turn starts a fresh `LanguageModelSession` with no carried
     /// transcript. Called by `CoachConversationStore.reset()` ("Neue
     /// Unterhaltung") and `clearOnLogout`, and internally on availability
@@ -120,7 +118,7 @@ public final class LocalLLMService {
         hoistedSession = nil
     }
 
-    /// **#14 — availability-change invalidation.** Mutates the published
+    /// **Availability-change invalidation.** Mutates the published
     /// availability reader and drops the hoisted session when the value
     /// actually changed (e.g. Apple Intelligence toggled off → on between
     /// turns): a session created under the old availability state must not
@@ -134,7 +132,6 @@ public final class LocalLLMService {
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func session() -> LanguageModelSession {
             let box = cachedSession { LanguageModelSession() }
             if let typed = box as? LanguageModelSession {
@@ -147,7 +144,7 @@ public final class LocalLLMService {
             return fresh
         }
 
-        /// **#14 — context-window overflow recovery.** When `error` is
+        /// **Context-window overflow recovery.** When `error` is
         /// `LanguageModelSession.GenerationError.exceededContextWindowSize`,
         /// replaces the hoisted session with a fresh one carrying a condensed
         /// transcript (Apple's documented pattern: keep the first entry — the
@@ -155,7 +152,6 @@ public final class LocalLLMService {
         /// middle) and returns `true` so the caller retries the turn exactly
         /// once. Any other error returns `false` and leaves the session
         /// untouched.
-        @available(iOS 26.0, *)
         public func recoverFromContextOverflow(_ error: Error) -> Bool {
             guard let generationError = error as? LanguageModelSession.GenerationError,
                   case .exceededContextWindowSize = generationError else
@@ -174,7 +170,6 @@ public final class LocalLLMService {
         /// entry (the instructions) + the latest entry, so the new session
         /// keeps the persona and the immediate context without the
         /// overflowing middle of the conversation.
-        @available(iOS 26.0, *)
         private static func condensedSession(from previous: LanguageModelSession) -> LanguageModelSession {
             let entries = previous.transcript
             var condensed: [Transcript.Entry] = []
@@ -188,15 +183,14 @@ public final class LocalLLMService {
         }
     #endif
 
-    /// **v0.12 W8-2 — pre-warm hook.** Call when the Coach sheet is about to
+    /// **Pre-warm hook.** Call when the Coach sheet is about to
     /// appear (`AskCoachSheet.onAppear`) so the model is loaded by the time the
     /// user submits the first turn, killing the visible cold-start spinner.
     /// Guarded internally on `availability == .available`; a no-op on every
-    /// other runtime (pre-26, AI off, model downloading, device ineligible) so
+    /// other runtime (AI off, model downloading, device ineligible) so
     /// call-sites can fire it unconditionally on appear.
     public func prewarm() {
         #if canImport(FoundationModels)
-            guard #available(iOS 26.0, *) else { return }
             guard cachedAvailability == .available else { return }
             session().prewarm()
         #endif
@@ -283,7 +277,6 @@ public final class LocalLLMService {
     ///   wrapped as `.modelResponseFailed(_:)` so the call-site can
     ///   inspect the underlying `LanguageModelSession.GenerationError`
     ///   without losing context.
-    @available(iOS 26.0, *)
     public func respond(prompt: String) async throws -> CoachInsight {
         #if canImport(FoundationModels)
             // Re-probe the model availability synchronously — cheap (it's
@@ -300,23 +293,25 @@ public final class LocalLLMService {
             }
 
             do {
-                // **v0.12 W8-2 / #14** — use the hoisted session so transcript
+                // Use the hoisted session so transcript
                 // context persists across turns and the cold-start is paid
                 // once (or earlier via `prewarm()`), not per send.
                 let response = try await session().respond(
                     to: prompt,
-                    generating: CoachInsight.self
+                    generating: CoachInsight.self,
+                    options: Self.coachGenerationOptions
                 )
                 return response.content
             } catch {
-                // **#14 — context overflow:** rebuild the session with a
+                // **Context overflow:** rebuild the session with a
                 // condensed transcript and retry the turn exactly once so a
                 // long conversation degrades gracefully instead of erroring.
                 if recoverFromContextOverflow(error) {
                     do {
                         let retried = try await session().respond(
                             to: prompt,
-                            generating: CoachInsight.self
+                            generating: CoachInsight.self,
+                            options: Self.coachGenerationOptions
                         )
                         return retried.content
                     } catch {
@@ -333,18 +328,17 @@ public final class LocalLLMService {
             }
         #else
             // FoundationModels is not linkable in this build
-            // configuration (Mac Catalyst, pre-iOS-26 SDK). The
-            // `@available(iOS 26.0, *)` annotation already prevents
-            // call-sites from reaching this branch at runtime — the
-            // throw is a defence-in-depth backstop so the compiler can
-            // still resolve the symbol.
+            // configuration. `availability` reads `.unsupported` here,
+            // so gated call-sites never reach this branch — the throw
+            // is a defence-in-depth backstop so the compiler can still
+            // resolve the symbol.
             _ = prompt
             throw LocalLLMError.foundationModelsUnavailable
         #endif
     }
 
     #if canImport(FoundationModels)
-        /// **v0.12 W8-1 — streaming structured generation.** Returns the
+        /// **Streaming structured generation.** Returns the
         /// `ResponseStream` of `CoachInsight.PartiallyGenerated` snapshots so
         /// the AskCoach surface can render the headline → body → actions
         /// progressively instead of "spinner then wall of text." Each element
@@ -357,7 +351,6 @@ public final class LocalLLMService {
         /// and throws `.foundationModelsUnavailable` when the model isn't ready.
         /// Generation errors surface as the stream throwing, which the caller
         /// maps to `.modelResponseFailed`.
-        @available(iOS 26.0, *)
         public func streamResponse(
             prompt: String
         ) throws -> LanguageModelSession.ResponseStream<CoachInsight> {
@@ -367,40 +360,44 @@ public final class LocalLLMService {
             }
             return session().streamResponse(
                 to: prompt,
-                generating: CoachInsight.self
+                generating: CoachInsight.self,
+                options: Self.coachGenerationOptions
             )
         }
+    #endif
+
+    #if canImport(FoundationModels)
+        /// A Coach answer is a title, a short body and up to three talking
+        /// points. The cap keeps a model that keeps writing from filling the
+        /// whole context window: the turn then fails fast with the retry
+        /// card instead of running until the context overflows.
+        static let coachGenerationOptions = GenerationOptions(maximumResponseTokens: 2048)
     #endif
 
     // MARK: - Private
 
     /// Maps Apple's `SystemLanguageModel.Availability` to our internal
     /// `Availability` enum. Compiled-out on platforms where
-    /// FoundationModels is not importable; returns `.unsupported` at
-    /// runtime on iOS 18 / 25 because the `#available` check fails.
+    /// FoundationModels is not importable.
     private static func probeAvailability() -> Availability {
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                let model = SystemLanguageModel.default
-                switch model.availability {
-                case .available:
-                    // The on-device Coach prompts in the interface language
-                    // (``PrivacyFirstPromptBuilder``). A language the model
-                    // or the MDR filter does not speak hides the on-device
-                    // card like an unsupported runtime does.
-                    return OnDeviceLanguageGate.allows(locale: AppLanguage.current.locale) ? .available : .unsupported
-                case let .unavailable(reason):
-                    return map(unavailableReason: reason)
-                }
+            let model = SystemLanguageModel.default
+            switch model.availability {
+            case .available:
+                // The on-device Coach prompts in the interface language
+                // (``PrivacyFirstPromptBuilder``). A language the model
+                // or the MDR filter does not speak hides the on-device
+                // card like an unsupported runtime does.
+                return OnDeviceLanguageGate.allows(locale: AppLanguage.current.locale) ? .available : .unsupported
+            case let .unavailable(reason):
+                return map(unavailableReason: reason)
             }
-            return .unsupported
         #else
             return .unsupported
         #endif
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private static func map(
             unavailableReason reason: SystemLanguageModel.Availability.UnavailableReason
         ) -> Availability {
@@ -425,14 +422,14 @@ public final class LocalLLMService {
 
 /// Error surface for `LocalLLMService.respond(prompt:)`.
 ///
-/// **v0.5.7 G.2** adds `.foundationModelsUnavailable` (covers both
-/// pre-iOS-26 and `availability != .available` runtime branches) and
-/// `.modelResponseFailed(_:)` (wraps any
+/// `.foundationModelsUnavailable` covers both builds without FoundationModels
+/// and the `availability != .available` runtime branch;
+/// `.modelResponseFailed(_:)` wraps any
 /// `LanguageModelSession.GenerationError` so the AskCoach UI can offer
-/// a retry without re-importing FoundationModels).
+/// a retry without re-importing FoundationModels.
 public enum LocalLLMError: Error, Sendable {
     /// FoundationModels is not usable on this runtime — either the
-    /// build is pre-iOS-26 (the framework is not linkable) or the
+    /// framework is not linkable in this build or the
     /// runtime probe returned `.unavailable(...)` (Apple Intelligence
     /// disabled, model still downloading, device not eligible). The
     /// AskCoach hero gates on `LocalLLMService.isReady` and surfaces
@@ -444,7 +441,7 @@ public enum LocalLLMError: Error, Sendable {
     /// breadcrumb retains full context without exposing
     /// FoundationModels types to call-sites.
     case modelResponseFailed(Error)
-    /// **v0.13 W4** — wraps a ``BYOLLMError`` from the client-side BYO-key Coach
+    /// Wraps a ``BYOLLMError`` from the client-side BYO-key Coach
     /// arm so the AskCoach banner can render an honest, per-case message
     /// (invalid key → "check your key in Settings", unreachable, rate-limited)
     /// without a new view-layer error type. The associated value keeps the
@@ -461,7 +458,7 @@ public enum LocalLLMError: Error, Sendable {
     case serverFailed(Error)
 }
 
-/// **22-02 (D-14-04-A) — the third outcome, made representable.**
+/// **The third outcome, made representable.**
 ///
 /// A coach turn was modelled as having two endings: an assistant answer, or a
 /// documented error. Under load the on-device runtime produced a third — the

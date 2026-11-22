@@ -7,7 +7,7 @@
     import SwiftUI
     import UIKit
 
-    /// **Phase 09 / plan 09-03 — a Keychain that counts instead of asking.**
+    /// **A Keychain that counts instead of asking.**
     ///
     /// The claim 09-03 has to support is "an audited SwiftUI body performs no
     /// Keychain query". A Keychain query is not observable from the outside — it
@@ -122,6 +122,8 @@
             let pixels: Data
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         static func render(_ view: some View, size: CGSize = CGSize(width: 393, height: 700)) -> Painted {
             let host = UIHostingController(rootView: AnyView(view))
             let window = UIWindow(frame: CGRect(origin: .zero, size: size))

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **CU-32 — Anamnese: Rauchen, Alkohol, Schichtarbeit.**
+/// **Anamnese: Rauchen, Alkohol, Schichtarbeit.**
 ///
 /// Die Fläche zeigt drei effektiv-datierte Angaben. Ihr Zweck ist **nicht** nur
 /// der heutige Stand, sondern seit wann er gilt und was vorher galt — deshalb
@@ -20,45 +20,25 @@ import SwiftUI
 /// Anamnese ist das kein Detail — die eine Aussage trägt Information, die
 /// andere nur Abwesenheit.
 struct SettingsAnamnesisScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: AnamnesisFactsStore?
 
     var body: some View {
-        Group {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                List {
-                    HLCloudDerivedPlaceholder(
-                        variant: .inline,
-                        surfaceName: String(localized: "anamnesis.title"),
-                        onConnect: { authStore.beginServerPairing() }
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
+        connectedBody
+            .navigationTitle("anamnesis.title")
+            .navigationBarTitleDisplayMode(.inline)
+            // The screen's one (i): where these answers are kept and
+            // what "never recorded" means, once instead of under each card and
+            // below the last one.
+            .hlPageActions([.info(Self.info, identifier: "anamnesis.info")])
+            .accessibilityIdentifier("anamnesis.screen")
+            .task {
+                guard store == nil, let container else { return }
+                let created = AnamnesisFactsStore(repo: AnamnesisRepository(api: container.api))
+                store = created
+                await created.load()
             }
-        }
-        .navigationTitle("anamnesis.title")
-        .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2-c — the screen's one (i): where these answers are kept and
-        // what "never recorded" means, once instead of under each card and
-        // below the last one.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: Self.info, accessibilityIdentifier: "anamnesis.info")
-            }
-        }
-        .accessibilityIdentifier("anamnesis.screen")
-        .task {
-            guard backend.hasServer, store == nil, let container else { return }
-            let created = AnamnesisFactsStore(repo: AnamnesisRepository(api: container.api))
-            store = created
-            await created.load()
-        }
     }
 
     @ViewBuilder
@@ -79,17 +59,14 @@ struct SettingsAnamnesisScreen: View {
     }
 
     private func loadFailedState(store: AnamnesisFactsStore) -> some View {
-        HLEmptyState(icon: "wifi.exclamationmark", title: "anamnesis.loadFailed") {
-            HLButton("Try again", icon: "arrow.clockwise", variant: .secondary) {
-                Task { await store.load() }
-            }
+        HLErrorState("anamnesis.loadFailed") {
+            await store.load()
         }
-        .containerCentered()
         .accessibilityIdentifier("anamnesis.loadFailed")
     }
 
     private func page(store: AnamnesisFactsStore) -> some View {
-        HLSettingsPage(title: "anamnesis.title") {
+        HLPage {
             if let writeError = store.writeError {
                 writeErrorBanner(writeError, store: store)
             }
@@ -117,24 +94,19 @@ struct SettingsAnamnesisScreen: View {
     /// Fehlerbildern, deren Ausweg „neu laden" heisst, hat der Store das
     /// bereits getan — der Text sagt das auch.
     private func writeErrorBanner(_ message: String, store: AnamnesisFactsStore) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(HLColor.statusBad)
-            Text(message)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.sm)
-            Button {
-                store.clearWriteError()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(HLText.secondary)
+        HLCard {
+            HStack(alignment: .top, spacing: HLSpace.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(HLColor.statusBad)
+                Text(message)
+                    .font(.hlFootnote)
+                    .foregroundStyle(HLText.primary)
+                Spacer(minLength: HLSpace.sm)
+                HLDismissButton(label: "anamnesis.error.dismiss") {
+                    store.clearWriteError()
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("anamnesis.error.dismiss")
         }
-        .padding(HLSpace.md)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card))
         .accessibilityIdentifier("anamnesis.writeError")
     }
 }

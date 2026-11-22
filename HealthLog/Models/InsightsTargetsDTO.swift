@@ -63,7 +63,7 @@ public struct InsightsTargetsResponseDTO: Codable, Sendable, Equatable {
         /// target counts, judged against the person's own band. `nil` on an
         /// older server and on a block this build cannot read.
         public var direction: TrendVerdict?
-        /// #135 — the verdict applied to this target's own `trend`. `nil` on an
+        /// The verdict applied to this target's own `trend`. `nil` on an
         /// older server; an unknown word is ``TrendSentiment/unknown``.
         public var trendSentiment: TrendSentiment?
 
@@ -164,7 +164,7 @@ public struct InsightsTargetsResponseDTO: Codable, Sendable, Equatable {
     }
 }
 
-// MARK: - Tolerant decode (1.5 VERDICTS)
+// MARK: - Tolerant decode
 
 /// The two v1.43 verdict fields decode on their own: a block this build cannot
 /// read is "not sent", never a failed targets page. Everything else decodes

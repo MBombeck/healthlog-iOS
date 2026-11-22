@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 1 — the admission fence every HealthKit operation passes.
+// The admission fence every HealthKit operation passes.
 //
 // Wave 0 named the identity half of the problem: `HealthSyncOwnerLease`
 // forwards Phase-06's owner and generation and deliberately mints no counter of

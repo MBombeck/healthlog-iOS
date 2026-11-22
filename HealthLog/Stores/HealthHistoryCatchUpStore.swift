@@ -4,7 +4,7 @@ import Observation
     import UIKit
 #endif
 
-/// **1.3 (public #25) — "Sync everything now".**
+/// **"Sync everything now".**
 ///
 /// The history walk runs on its own in leftover time and never holds new
 /// readings back. Someone who wants the whole history on the server today can

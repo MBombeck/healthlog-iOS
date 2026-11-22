@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.10.0 W-Mood-B** — "Log my mood" Siri / Shortcuts intent.
+/// "Log my mood" Siri / Shortcuts intent.
 ///
 /// Records a single mood check-in through the **same** `MoodRepository.log`
 /// path the in-app capture sheet uses: optimistic server POST with an
@@ -119,7 +119,7 @@ enum MoodLevelAppEnum: String, AppEnum {
 
     /// HealthLog mood score (1…5) for the repository call.
     ///
-    /// Audit B-4 — `serverLevel` is built from a closed App-Intent enum that
+    /// `serverLevel` is built from a closed App-Intent enum that
     /// names five levels, so it is never the sentinel and the score always
     /// resolves; the fallback exists only to keep the type non-optional.
     var score: Int {

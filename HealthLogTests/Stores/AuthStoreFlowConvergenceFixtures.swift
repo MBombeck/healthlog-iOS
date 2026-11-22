@@ -1,4 +1,4 @@
-// **Phase 09 / plan 09-07 — the seams the cross-flow convergence proof runs on.**
+// **The seams the cross-flow convergence proof runs on.**
 //
 // Six flows can end in an `AuthSession`: password, MFA (TOTP here, security key
 // in the cancellation clause), registration, passkey, native OIDC SSO and the
@@ -9,12 +9,12 @@
 // Two deliberate choices:
 //
 //   * **A scripted `APIClientProtocol`, not `MockURLProtocol`.** The handler slot
-//     is process-global (D-09-13-A / issue #82) and Swift Testing parallelises
+//     is process-global and Swift Testing parallelises
 //     suites; this file adds no assignment to it, which is also why the
 //     repository audit receipt does not move. The REAL `AuthService`, the real
 //     `AuthStore` and the real wire DTOs are exercised — only the socket is
 //     replaced.
-//   * **A barrier, not a sleep.** `Phase09Gate` (09-06) parks a flow at a named
+//   * **A barrier, not a sleep.** `Phase09Gate` parks a flow at a named
 //     path and stays there until the test opens it, so "what was true while the
 //     newer attempt was still working" is a sampled fact rather than a race.
 
@@ -176,7 +176,7 @@
     @MainActor
     final class Phase09AuthStubAnchor: ASPresentationAnchorProvider {
         func anchor() -> ASPresentationAnchor {
-            ASPresentationAnchor()
+            SceneAnchorProvider.windowlessAnchor()
         }
     }
 

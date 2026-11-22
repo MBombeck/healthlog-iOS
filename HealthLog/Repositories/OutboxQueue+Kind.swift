@@ -38,31 +38,31 @@ public extension OutboxQueue.Operation {
         /// duplicate-safe (server `withIdempotency` + the `intake_events`
         /// UNIQUE-key both dedup). Replay drains via `dispatchMedications`.
         case logMedicationIntake
-        /// v0.7.1 W-TARGETS-EDITOR — per-user target-range override write.
+        /// Per-user target-range override write.
         /// Server route `PUT /api/user/thresholds` (upsert-merge). Payload
         /// is `Payloads.UpdateThresholds`.
         case updateThresholds
-        /// v0.8.0 W10 — server-first Insights tile layout (order +
+        /// Server-first Insights tile layout (order +
         /// visibility). Server route `PUT /api/insights/layout`. Payload
         /// is `Payloads.UpdateInsightsLayout`.
         case updateInsightsLayout
-        /// v0.12 SP3 — GLP-1 side-effect log create.
+        /// GLP-1 side-effect log create.
         /// `POST /api/medications/[id]/side-effects`.
         /// Payload `Payloads.CreateMedicationSideEffect`.
         case createMedicationSideEffect
-        /// v0.12 SP3 — GLP-1 side-effect log delete.
+        /// GLP-1 side-effect log delete.
         /// `DELETE /api/medications/[id]/side-effects/[logId]`.
         /// Payload `Payloads.DeleteMedicationSideEffect`.
         case deleteMedicationSideEffect
-        /// v0.12 SP4 — pen/vial inventory create.
+        /// Pen/vial inventory create.
         /// `POST /api/medications/[id]/inventory`.
         /// Payload `Payloads.CreateMedicationInventory`.
         case createMedicationInventory
-        /// v0.12 SP4 — pen/vial inventory update.
+        /// Pen/vial inventory update.
         /// `PATCH /api/medications/[id]/inventory/[itemId]`.
         /// Payload `Payloads.UpdateMedicationInventory`.
         case updateMedicationInventory
-        /// v0.12 SP4 — pen/vial inventory delete.
+        /// Pen/vial inventory delete.
         /// `DELETE /api/medications/[id]/inventory/[itemId]`.
         /// Payload `Payloads.DeleteMedicationInventory`.
         case deleteMedicationInventory
@@ -71,31 +71,31 @@ public extension OutboxQueue.Operation {
         /// Payload `Payloads.LogCycleDayLog`. UPSERT-keyed on `externalId`,
         /// last-writer-wins on replay (mood precedent).
         case logCycleDayLog
-        /// v0.14.8 — cycle day-log update. `PATCH /api/cycle/day-logs/[id]`.
+        /// Cycle day-log update. `PATCH /api/cycle/day-logs/[id]`.
         /// Payload `Payloads.UpdateCycleDayLog`.
         case updateCycleDayLog
-        /// v0.14.8 — cycle day-log soft delete.
+        /// Cycle day-log soft delete.
         /// `DELETE /api/cycle/day-logs/[id]`. Payload `Payloads.DeleteCycleDayLog`.
         case deleteCycleDayLog
-        /// v0.14.8 — one-tap period start/end. `POST /api/cycle/period`.
+        /// One-tap period start/end. `POST /api/cycle/period`.
         /// Payload `Payloads.CyclePeriod`.
         case cyclePeriod
-        /// v0.14.8 audit Wave A (C4.1) — HK-sourced workout batch ingest.
+        /// HK-sourced workout batch ingest.
         /// `POST /api/workouts/batch`. Payload `Payloads.UploadWorkoutBatch`.
         /// The server's `@@unique([userId, source, externalId])` UPSERT plus
         /// the persisted idempotency key make a replayed batch duplicate-safe.
         case uploadWorkoutBatch
-        /// v0.14.8 W3 — multi-select bulk delete (v1.15.13).
+        /// Multi-select bulk delete (v1.15.13).
         /// `POST /api/measurements/bulk-delete` `{ ids: [≤200] }`. Payload
         /// `Payloads.BulkDeleteMeasurements`. Tombstone-idempotent server-
         /// side (already-deleted ids are silent no-ops), so a replay after
         /// the original actually landed is harmless even past the 24h
         /// idempotency window.
         case bulkDeleteMeasurements
-        /// W-B187 COACH-3 — adopt / "remember this" → self-context
+        /// Adopt / "remember this" → self-context
         /// (`POST /api/coach/about-me/adopt`; server dedupes the replay).
         case coachAboutMeAdopt
-        /// W-B187 COACH-3 — dismiss a pending clarifying question
+        /// Dismiss a pending clarifying question
         /// (`DELETE /api/coach/about-me/questions`; exact-match idempotent).
         case coachAboutMeDismissQuestion
         // v1.18.6 PHI — labs + illness durable writes. Each carries a
@@ -148,20 +148,28 @@ public extension OutboxQueue.Operation {
         case createCustomMetricEntry
         case updateCustomMetricEntry
         case deleteCustomMetricEntry
-        /// Build 7.6 (GH #48) — manual water quick-add.
+        /// Build 7.6 — manual water quick-add.
         /// `POST /api/nutrients/water` (MANUAL source row). Payload
         /// `Payloads.LogNutrientWater`. The server's `withIdempotency` on the
         /// route + the persisted idempotency key make a replay-after-original-
         /// landed a no-op, so an offline quick-add can never double-increment the
         /// day total. Replay drains via `OutboxReplayService.dispatchNutrients`.
         case logNutrientWater
-        /// A5 (1.4, R3 S4) — Apple Health deletions of hand-kept readings.
+        /// Apple Health deletions of hand-kept readings.
         /// `DELETE /api/measurements/by-external-ids` with
         /// `Payloads.DeleteHealthKitSamples`. The route touches only the
         /// owner's `APPLE_HEALTH` rows and each row once, so a replay is
         /// harmless at any age. Replay drains via `dispatchMeasurementsAndMood`.
         case deleteHealthKitSamples
-        /// **Phase 07 — the forward-compatibility sentinel.** A `kindRaw` this
+        /// Apple Health symptoms (`POST /api/symptoms/events/batch`), payload
+        /// `Payloads.UploadAppleHealthSymptoms`. Idempotent on `externalId`
+        /// (a deleted one answers `duplicate`), so a replay is harmless.
+        case uploadAppleHealthSymptoms
+        /// Apple Health deletions for one domain's delete-by-externalId route,
+        /// payload `Payloads.DeleteAppleHealthRecords`. Each route touches a row
+        /// once, so a replay is a no-op.
+        case deleteAppleHealthRecords
+        /// **The forward-compatibility sentinel.** A `kindRaw` this
         /// build cannot name decodes to this case so the dispatcher's switch
         /// stays exhaustive and fail-closed.
         ///

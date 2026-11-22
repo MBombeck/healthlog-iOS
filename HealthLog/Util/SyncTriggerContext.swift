@@ -6,7 +6,7 @@ import Foundation
 /// `POST /api/measurements/batch` (Geschwister von `entries`, Server ≥ v1.32.31).
 /// Bewusst ein **geschlossenes** Enum: wir *senden* nur, was der Vertrag kennt.
 ///
-/// **V1 (1.2)** — `manual` kam mit Server v1.42.0 dazu (#123, HealthLog#1173):
+/// `manual` kam mit Server v1.42.0 dazu (#123, HealthLog#1173):
 /// ein vom Nutzer gestartetes „Alle synchronisieren". Ältere Server lehnen den
 /// Wert mit 400 für den ganzen Batch ab (`z.enum` ohne `manual`), deshalb geht
 /// er nur auf den Draht, wenn der Server ihn nachweislich kennt
@@ -24,7 +24,7 @@ public enum SyncTrigger: String, Codable, Sendable, CaseIterable, Equatable {
     /// Der Nutzer hat „Alle synchronisieren" / „Jetzt syncen" gedrückt
     /// (Server ≥ v1.42.0).
     case manual
-    /// **X4 (1.3, #138 / #77)** — ein Verlaufs-Nachtrag (der stündliche
+    /// Ein Verlaufs-Nachtrag (der stündliche
     /// 30-Tage-Backfill der Summentypen). Bewegt beim Server nur
     /// `syncProgress` und `lastBackfillAt`, nie `lastReceivedAt` oder
     /// `lastTrigger`. Nie aus einem Pass abgeleitet: nur die Markierung am
@@ -35,7 +35,7 @@ public enum SyncTrigger: String, Codable, Sendable, CaseIterable, Equatable {
 
     /// The first server release whose batch route accepts `manual`.
     public static let manualMinimumServerVersion = "1.42.0"
-    /// X4 — the first server release that can carry `backfill` and the hourly
+    /// The first server release that can carry `backfill` and the hourly
     /// `stats:` rows. Necessary, not sufficient: the `/api/auth/me` feature
     /// flag decides (``KnownServerVersion/supports(_:defaults:)``).
     public static let backfillMinimumServerVersion = "1.43.0"
@@ -68,7 +68,7 @@ public enum SyncTrigger: String, Codable, Sendable, CaseIterable, Equatable {
 ///   Restmenge immer `foreground`, und ein Lauf, der nach dem Schließen eines
 ///   Hintergrund-Fensters postete (der Herzfrequenz-Lauf aus einer
 ///   Zustellung), kam als `foreground` beim Server an (#66, Serverlog 8./9.10.).
-/// - **W5 (1.3, #126 1.2)** — ein geschlossenes Fenster wird nicht mehr
+/// - **W5** — ein geschlossenes Fenster wird nicht mehr
 ///   zu `foreground`. Ist der App-Zustand unbekannt, gilt der Auslöser des
 ///   zuletzt geschlossenen Fensters; liegt die App im Hintergrund und das
 ///   letzte Fenster war ein Push (später geschlossen als der Zustand gemeldet
@@ -91,15 +91,15 @@ public final class SyncTriggerContext: @unchecked Sendable {
     private let lock = NSLock()
     private var scopes: [SyncTrigger] = []
     private var applicationBackgrounded: Bool?
-    /// W5 — a counter, not a clock: which of "app state noted" and "last
+    /// A counter, not a clock: which of "app state noted" and "last
     /// window closed" happened later.
     private var sequence: UInt64 = 0
     private var applicationStateSequence: UInt64 = 0
-    /// W5 — the trigger of the window that closed last, with its sequence.
+    /// The trigger of the window that closed last, with its sequence.
     private var lastClosedScope: (trigger: SyncTrigger, sequence: UInt64)?
     /// Nur ohne `defaults` (isolierte Testinstanz): die gemerkte Version im Speicher.
     private var inMemoryServerVersion: ServerVersionInfo?
-    /// X4 — nur ohne `defaults`: die gemerkten Server-Funktionen im Speicher.
+    /// Nur ohne `defaults`: die gemerkten Server-Funktionen im Speicher.
     private var inMemoryFeatures: Set<KnownServerVersion.Feature> = []
     private let defaults: UserDefaults?
 
@@ -107,7 +107,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
     /// können, ohne den prozessweiten Zustand anzufassen. Ohne `defaults`
     /// bleibt die Server-Version nur im Speicher.
     ///
-    /// **INT-N (1.2)** — mit `defaults` liest der Kontext die eine gemerkte
+    /// Mit `defaults` liest der Kontext die eine gemerkte
     /// Server-Version (``KnownServerVersion``), die auch
     /// `HealthKitServerTypeGate` (RMSSD, V4) liest. Die App schreibt sie an
     /// genau einer Stelle (`refreshMedicationSlotGate`) und vergisst sie an
@@ -126,7 +126,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         return lock.withLock { inMemoryServerVersion }?.isAtLeast(minimum) ?? false
     }
 
-    /// X4 — ob der Server `syncTrigger: backfill` annimmt (v1.43-Flag).
+    /// Ob der Server `syncTrigger: backfill` annimmt (v1.43-Flag).
     private var serverAcceptsBackfill: Bool {
         if let defaults {
             return KnownServerVersion.supports(.syncTriggerBackfill, defaults: defaults)
@@ -144,7 +144,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         }
     }
 
-    /// W5 — the answer with no binding and no open window. Caller holds `lock`.
+    /// The answer with no binding and no open window. Caller holds `lock`.
     private var fallbackLocked: SyncTrigger {
         switch applicationBackgrounded {
         case false?:
@@ -174,7 +174,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         wireValue(backfill: false)
     }
 
-    /// **SYNC-TRIG (1.5, #138)** — what a batch carries when the caller
+    /// What a batch carries when the caller
     /// says whether it is a history catch-up. The mark is an argument of the
     /// one upload, not a task-local: a task-local followed the work into every
     /// `Task { }` started under it (a heart-rate sweep a page kicks, a stamp
@@ -187,7 +187,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         return accepted(current)
     }
 
-    /// **SYNC-TRIG** — the word a parked batch replays under. The outbox keeps
+    /// The word a parked batch replays under. The outbox keeps
     /// the trigger the batch was posted with; the server it replays against
     /// may no longer take it (a self-hosted rollback, an older server after a
     /// change of address). `manual` and `backfill` fall back to `foreground`
@@ -238,7 +238,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         return try await bind(trigger, body)
     }
 
-    /// **V1** — bindet `trigger` nur an die Task, ohne prozessweites Fenster.
+    /// Bindet `trigger` nur an die Task, ohne prozessweites Fenster.
     /// Für einen Pass, der seinen Auslöser kennt: alles, was er (auch in
     /// eigenen Tasks) postet, trägt ihn, und gleichzeitige fremde Arbeit
     /// bleibt unberührt.
@@ -254,7 +254,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         }
     }
 
-    /// **V1** — der zuletzt beobachtete App-Zustand, für Arbeit ohne Bindung.
+    /// Der zuletzt beobachtete App-Zustand, für Arbeit ohne Bindung.
     /// `RootView` meldet `.active` / `.background`; `nil` heißt unbekannt.
     public func noteApplicationState(backgrounded: Bool?) {
         lock.withLock {
@@ -264,7 +264,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         }
     }
 
-    /// **V1** — merkt sich die Antwort des `/api/version`-Probes. Mit
+    /// Merkt sich die Antwort des `/api/version`-Probes. Mit
     /// `defaults` ist das genau ``KnownServerVersion/record(_:defaults:)``.
     /// Ein Wechsel der Server-Adresse vergisst sie (``forgetServer()``).
     public func noteServerVersion(_ info: ServerVersionInfo) {
@@ -286,7 +286,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
         }
     }
 
-    /// X4 — merkt sich `features` aus `GET /api/auth/me`. Mit `defaults` ist
+    /// Merkt sich `features` aus `GET /api/auth/me`. Mit `defaults` ist
     /// das ``KnownServerVersion/recordFeatures(_:defaults:)``.
     func noteServerFeatures(_ features: Set<KnownServerVersion.Feature>) {
         if let defaults {
@@ -305,7 +305,7 @@ public final class SyncTriggerContext: @unchecked Sendable {
     #endif
 }
 
-/// **INT-N (1.2)** — the last answer of `GET /api/version` for the configured
+/// The last answer of `GET /api/version` for the configured
 /// server, kept once for every client-side capability gate that depends on
 /// it: V1's `syncTrigger: manual` (``SyncTriggerContext``) and V4's RMSSD
 /// collection (`HealthKitServerTypeGate`). Before INT-N each kept its own copy
@@ -322,14 +322,27 @@ enum KnownServerVersion {
 
     static func record(_ info: ServerVersionInfo, defaults: UserDefaults = .standard) {
         defaults.set(info.version, forKey: defaultsKey)
+        // The answer is the whole truth about the host: no `features` means
+        // the server has none of them.
+        defaults.set(info.features.sorted(), forKey: capabilitiesDefaultsKey)
     }
 
     static func forget(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: defaultsKey)
         defaults.removeObject(forKey: featuresDefaultsKey)
+        defaults.removeObject(forKey: capabilitiesDefaultsKey)
     }
 
-    /// **X4 (1.3, #138)** — what `GET /api/auth/me` `features` says this
+    /// The `features` of `GET /api/version` (server 1.49.0, #191):
+    /// dotted capability names such as `measurement.reading-timezone`.
+    static let capabilitiesDefaultsKey = "hl.server.versionCapabilities"
+
+    /// `true` only when the last version answer listed `capability`.
+    static func hasCapability(_ capability: String, defaults: UserDefaults = .standard) -> Bool {
+        (defaults.stringArray(forKey: capabilitiesDefaultsKey) ?? []).contains(capability)
+    }
+
+    /// What `GET /api/auth/me` `features` says this
     /// server understands. The server publishes the flags so a client released
     /// apart from it never sends a form an older server would misread (a v1.42
     /// server stores every hourly row as its own measurement and inflates the
@@ -337,6 +350,11 @@ enum KnownServerVersion {
     enum Feature: String, CaseIterable, Sendable {
         case cumulativeHourBuckets
         case syncTriggerBackfill
+        /// Apple Health ingest v2 (`CONTRACT-apple-health-v2`); read through
+        /// `AppleHealthIngestCapability`, which adds the version fallback.
+        case appleHealthSymptoms
+        case appleHealthDeletes
+        case nutrientMacros
     }
 
     static let featuresDefaultsKey = "hl.server.features"

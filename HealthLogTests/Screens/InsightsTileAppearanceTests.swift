@@ -2,7 +2,7 @@
 import SwiftUI
 import Testing
 
-/// **v0152 T1 — locks the single-shipped-style tile-appearance contract.**
+/// **Locks the single-shipped-style tile-appearance contract.**
 ///
 /// The b182 dev-switchable tile-style picker (thirteen concepts + an `@AppStorage`
 /// override) was the ONE hard App-Store review blocker (dev UI in Release). The

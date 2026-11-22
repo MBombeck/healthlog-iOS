@@ -1,8 +1,8 @@
-// L1 — no hard-coded German user copy anywhere in the app code.
+// No hard-coded German user copy anywhere in the app code.
 //
 // App Review reads 1.1.0 in English. J1 (`AppLockLocalizationGuardTests`) found
 // German literals in the app-lock prompt and guarded those three files; the
-// sweep that followed (L1) found the same class of leak across the app:
+// sweep that followed found the same class of leak across the app:
 // Personal Records (segment labels, metric names, streak and best-day labels,
 // the comparison band, every VoiceOver sentence), the workout detail tiles,
 // chart audio-graph labels, error detail sentences and passkey errors.
@@ -432,7 +432,7 @@
                     HLLog.auth
                         .debug("Übersprungen, kein Fehler.")
                 }
-                let card = HLSettingsCard(bothSlotsJustification: "Zwei Aussagen, beide nötig.")
+                let card = HLCard(bothSlotsJustification: "Zwei Aussagen, beide nötig.")
                 let marked = "Grund: bewusst" // i18n-guard: allow — fixture
             }
             #if DEBUG

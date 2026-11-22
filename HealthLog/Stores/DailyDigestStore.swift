@@ -146,7 +146,8 @@ private extension DailyDigest {
             lead: deliversLead ? .delivered(resolvedLead) : .absent,
             signalLine: deliversSignalLine ? .delivered(signalLine) : .absent,
             today: today,
-            restMode: restMode
+            restMode: restMode,
+            languages: languages
         )
     }
 }

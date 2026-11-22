@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **LIFE (1.5.0)** — the questions of one section.
+/// The questions of one section.
 ///
 /// Follow-up questions appear only where they apply: cigarettes per day only
 /// with cigarettes, the quit month only for a former smoker, night work only
@@ -95,7 +95,7 @@ struct LifeSectionFields: View {
         if let pack = derived.packYears {
             if pack.status == .computed, let value = pack.value {
                 LifeDerivedLine(
-                    text: String(localized: "life.derived.packYears \(value.formatted(.number.precision(.fractionLength(1))))"),
+                    text: String(localized: "life.derived.packYears \(HLValueFormat.number(value, fractionDigits: 1 ... 1))"),
                     identifier: "life.derived.packYears"
                 )
             } else if pack.status == .missingInputs,
@@ -320,14 +320,10 @@ struct LifeSourceLink: View {
     var body: some View {
         let text = String(localized: "life.source \(label)")
         if let url {
-            Link(destination: url) {
-                Text(verbatim: text)
-                    .font(.hlCaption)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .tint(HLAccent.userBrandTint)
+            HLTextLink(verbatim: text, destination: url)
+                .font(.hlCaption)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text(verbatim: text)
                 .font(.hlCaption)

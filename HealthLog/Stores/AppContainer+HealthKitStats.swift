@@ -3,10 +3,10 @@ import Foundation
     import HealthKit
 #endif
 
-// MARK: - V0.5.2 N4 — HK-STATS-Wiring
+// MARK: - HK-STATS-Wiring
 
 extension AppContainer {
-    // **Phase 07 / plan 07-09** — `wireEcgBackgroundSync` is gone. It attached a
+    // `wireEcgBackgroundSync` is gone. It attached a
     // second ECG hook to the BGProcessing wake, and the orchestrated pass already
     // runs `ecgUpload` as one of its eleven capabilities against the same
     // coordinator, which self-gates on the device-local opt-in and
@@ -74,8 +74,8 @@ extension AppContainer {
     }
 
     /// Instanziiert den `HealthKitStatisticsSyncCoordinator` zusammen mit
-    /// seinen Dependencies (`HealthKitDailyStatsCache`, `HealthKitStatisticsService`,
-    /// `LiveFeatureFlagsService`). Returnt `nil`, wenn `healthKit == nil`
+    /// seinen Dependencies (`HealthKitDailyStatsCache`, `HealthKitStatisticsService`).
+    /// Returnt `nil`, wenn `healthKit == nil`
     /// (Non-iOS-Build, Tests ohne HK-Stub) oder HealthKit am Build-Site
     /// nicht verfuegbar ist.
     ///
@@ -92,13 +92,11 @@ extension AppContainer {
     /// kumulativen HK-Types an den Server gehen.
     ///
     /// Ohne diesen Wiring-Pfad bleiben die per-Sample-gefilterten Cumulative-
-    /// Types unhochgeladen (wenn `enableDailyStats` ON ist, Default ON) →
-    /// Dashboard zeigt das letzte Einzelsample ("37 Schritte") statt das
-    /// Day-Cumulative-Total. Operator-reported Regression auf v0.5.1.
+    /// Types unhochgeladen → Dashboard zeigt das letzte Einzelsample
+    /// ("37 Schritte") statt das Day-Cumulative-Total. Operator-reported Regression auf v0.5.1.
     static func wireHealthKitDailyStats(
         healthKit: AnyHealthKitWriter?,
         uploader: MeasurementBatchUploader,
-        featureFlagsStore: FeatureFlagsStore,
         backgroundSync: BackgroundSyncCoordinator,
         swr: SWRCoordinator,
         keychain: KeychainStoring,
@@ -111,13 +109,12 @@ extension AppContainer {
         let stats = makeHealthKitDailyStatsSync(
             healthKit: healthKit,
             uploader: uploader,
-            featureFlagsStore: featureFlagsStore,
             keychain: keychain,
             registry: registry,
             retryQueue: retryQueue,
             profileTimeZoneBox: profileTimeZoneBox
         )
-        // **Phase 07 / plan 07-09 — the bundled anchor-sweep hook is gone.**
+        // **The bundled anchor-sweep hook is gone.**
         //
         // It fired daily statistics, HR buckets and nutrients as one closure on
         // every BG-activate and BGTask wake. Those are three capabilities in the
@@ -132,7 +129,7 @@ extension AppContainer {
         // `markDailyStatsAllTimeBackfillCompleted` are still the only two
         // functions that decide it.
 
-        // V0.12 W8-4 — wire the BGTask cache-sweep hook here (both the SWR + the
+        // Wire the BGTask cache-sweep hook here (both the SWR + the
         // daily-stats sweepers are available). Impl in AppContainer+Foreground.
         wireCacheSweepHook(backgroundSync: backgroundSync, swr: swr, dailyStats: stats)
         return stats
@@ -150,13 +147,12 @@ extension AppContainer {
     /// init's order: the HR-bucket sync is built FIRST so it can ride the same
     /// anchor-sweep hook the daily-stats sync arms (single hook slot → both
     /// triggered in one closure), then the live-today step store wraps the
-    /// daily-stats reader in a `Sendable` closure (bug-c10-ios-direct). Pure
+    /// daily-stats reader in a `Sendable` closure. Pure
     /// move of the inline init block; behaviour-identical.
     static func makeHealthKitStatsCluster(
         healthKit: AnyHealthKitWriter?,
         api: APIClientProtocol,
         uploader: MeasurementBatchUploader,
-        featureFlagsStore: FeatureFlagsStore,
         backgroundSync: BackgroundSyncCoordinator,
         swr: SWRCoordinator,
         keychain: KeychainStoring,
@@ -168,10 +164,9 @@ extension AppContainer {
         let hrBucketSync = makeHRBucketSync(
             healthKit: healthKit,
             uploader: uploader,
-            featureFlagsStore: featureFlagsStore,
             keychain: keychain
         )
-        // GH #48 — built BEFORE `wireHealthKitDailyStats` so it can ride the same
+        // Built BEFORE `wireHealthKitDailyStats` so it can ride the same
         // anchor-sweep hook the daily-stats sync arms (single hook slot).
         let nutrientSync = makeNutrientDailySync(
             healthKit: healthKit,
@@ -183,7 +178,6 @@ extension AppContainer {
         let dailyStats = wireHealthKitDailyStats(
             healthKit: healthKit,
             uploader: uploader,
-            featureFlagsStore: featureFlagsStore,
             backgroundSync: backgroundSync,
             swr: swr,
             keychain: keychain,
@@ -206,7 +200,7 @@ extension AppContainer {
         )
     }
 
-    /// **Audit B-7 — the day-anchoring zone the statistics service cuts its day
+    /// **The day-anchoring zone the statistics service cuts its day
     /// boundaries on.** Reads the same lock-protected ``ProfileTimeZoneBox`` the
     /// medication / dashboard / measurement day keys already share, so a HK day
     /// total is posted under the day the server consolidates it into
@@ -219,7 +213,7 @@ extension AppContainer {
         return { box.current }
     }
 
-    /// GH #48 — builds the nutrient daily-totals coordinator. Returns `nil` when
+    /// Builds the nutrient daily-totals coordinator. Returns `nil` when
     /// `healthKit == nil` (non-iOS build / HK-less test host) so the slot stays
     /// inert. The `nutrients` module gate is read live off the main actor via a
     /// closure so the actor stays free of the `@MainActor` `ModuleGate`.
@@ -261,7 +255,7 @@ extension AppContainer {
     /// ``markDailyStatsAllTimeBackfillCompleted(keychain:defaults:)``) every
     /// later sweep returns the incremental `7`-day catch-up.
     ///
-    /// **v0.7.1 M-3 — pure read.** This used to `set(true)` the completion
+    /// **Pure read.** This used to `set(true)` the completion
     /// flag as a side-effect when it handed out the wide span, which burned
     /// the one-shot *before* the sweep had actually run: a sync that threw or
     /// a BGTask killed mid-flight left the flag set with no historical day-rows
@@ -301,9 +295,9 @@ extension AppContainer {
 
     /// Marks the per-User one-shot all-time daily-stats backfill as completed
     /// so subsequent sweeps return the incremental window. Called by the sweep
-    /// hook **after** `triggerDailyStatsSync` returns (v0.7.1 M-3), so a failed
+    /// hook **after** `triggerDailyStatsSync` returns, so a failed
     /// or interrupted first sweep re-arms on the next launch. Idempotent.
-    /// Build 273 (A8) — the one-shot is burnt only for a full (non-incremental)
+    /// The one-shot is burnt only for a full (non-incremental)
     /// pass whose sweep completed. Burning it after an incomplete sweep left
     /// every later sweep at 7 days and the historical day-rows never arrived.
     nonisolated static func shouldBurnDailyStatsAllTimeBackfill(incrementalOnly: Bool, completed: Bool) -> Bool {
@@ -335,15 +329,13 @@ extension AppContainer {
         }
     }
 
-    /// W-HR-BUCKET-UPLOAD / GH #34 — builds the 10-minute-HR-bucket coordinator.
+    /// Builds the 10-minute-HR-bucket coordinator.
     /// Returns `nil` when `healthKit == nil` (non-iOS build / HK-less test host)
     /// so the slot stays inert. The coordinator shares the live
-    /// `MeasurementBatchUploader` (idempotency-key + throttle + backoff reuse)
-    /// and reads the standalone predicate live off the main actor.
+    /// `MeasurementBatchUploader` (idempotency-key + throttle + backoff reuse).
     static func makeHRBucketSync(
         healthKit: AnyHealthKitWriter?,
         uploader: MeasurementBatchUploader,
-        featureFlagsStore: FeatureFlagsStore,
         keychain: KeychainStoring
     ) -> HealthKitHRBucketSyncing? {
         #if canImport(HealthKit)
@@ -351,28 +343,22 @@ extension AppContainer {
             return HealthKitHRBucketSyncCoordinator(
                 service: HealthKitHRBucketService(),
                 uploader: uploader,
-                featureFlags: featureFlagsStore.liveService(),
-                keychain: keychain,
-                isStandalone: standaloneModePredicate()
+                keychain: keychain
             )
         #else
             _ = healthKit
             _ = uploader
-            _ = featureFlagsStore
             _ = keychain
             return nil
         #endif
     }
 
-    /// GH #47 — builds the iOS 26+ HealthKit medications reader. Returns `nil`
-    /// below iOS 26 or on a non-HealthKit build so `MedicationHealthSyncStore`
+    /// Builds the iOS 26+ HealthKit medications reader. Returns `nil`
+    /// on a non-HealthKit build so `MedicationHealthSyncStore`
     /// reports `isAvailable == false` and never offers the toggle.
     static func makeAppleHealthMedicationReader() -> AppleHealthMedicationReading? {
         #if canImport(HealthKit)
-            if #available(iOS 26.0, *) {
-                return AppleHealthMedicationReader()
-            }
-            return nil
+            return AppleHealthMedicationReader()
         #else
             return nil
         #endif
@@ -381,7 +367,6 @@ extension AppContainer {
     static func makeHealthKitDailyStatsSync(
         healthKit: AnyHealthKitWriter?,
         uploader: MeasurementBatchUploader,
-        featureFlagsStore: FeatureFlagsStore,
         keychain: KeychainStoring? = nil,
         registry: AuthenticatedSessionLeaseRegistry? = nil,
         retryQueue: OutboxQueue? = nil,
@@ -389,8 +374,7 @@ extension AppContainer {
     ) -> HealthKitDailyStatsSyncing? {
         #if canImport(HealthKit)
             guard healthKit != nil else { return nil }
-            let liveFlags = featureFlagsStore.liveService()
-            // Phase 07 / Plan 07-04 — the admission, evaluated fresh per sweep.
+            // The admission, evaluated fresh per sweep.
             // Same shape as `installAppOwnedHealthCollection`: the signed-in user
             // and the bearer paired with it, read once and pinned for the pass.
             // Without both, the sweep refuses rather than syncing under whoever
@@ -423,14 +407,12 @@ extension AppContainer {
                 statisticsService: stats,
                 cacheTask: cacheTask,
                 uploader: uploader,
-                featureFlags: liveFlags,
                 admission: admission,
                 retry: retryQueue
             )
         #else
             _ = healthKit
             _ = uploader
-            _ = featureFlagsStore
             _ = keychain
             _ = registry
             _ = retryQueue

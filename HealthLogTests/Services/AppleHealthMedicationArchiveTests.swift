@@ -15,7 +15,7 @@ struct AppleHealthMedicationArchiveTests {
         )
         let keychain = InMemoryKeychain()
         try keychain.setString("bearer-abc", forKey: KeychainKey.authToken)
-        // **Phase 07 / plan 07-05.** A bearer alone is no longer a sweep: the
+        // A bearer alone is no longer a sweep: the
         // importer admits an *account* before its first read, because the dose
         // ledger it writes is an owner partition. This fixture used to carry a
         // token and no user id, which now correctly refuses.

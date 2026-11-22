@@ -10,7 +10,7 @@ import Foundation
 ///    nach jedem Run wieder einreihen) und betritt dann **genau einen** benannten
 ///    Pass.
 ///
-/// **Phase 07 / Plan 07-09 — ein Trigger, ein Pass.** Der Coordinator besitzt
+/// **Ein Trigger, ein Pass.** Der Coordinator besitzt
 /// vier der sechsundzwanzig inventarisierten Trigger (`processing`,
 /// `appRefresh`, `manual` und — über den Silent-Push-Handler — `silentPush`).
 /// Bis Wave 4 rief jeder Wake der Reihe nach vier Hooks auf (Writer-Sweep,
@@ -64,7 +64,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
 
     private let hookLock = NSLock()
 
-    /// **Phase 07 / plan 07-09 — the coordinator's one HealthKit route.**
+    /// **The coordinator's one HealthKit route.**
     ///
     /// This replaces four separate hooks (the daily-statistics anchor sweep, the
     /// ECG sweep, the Spezi collection trigger, and the direct workout pass),
@@ -84,7 +84,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         @Sendable (HealthSyncTrigger, @escaping @Sendable () -> Bool) async -> [HealthSyncCapability]
     )?
 
-    /// **v0.12 W8-4 — Cache-Sweep-Hook.** Wird am Ende jedes BGTask-Wakeups
+    /// **Cache-Sweep-Hook.** Wird am Ende jedes BGTask-Wakeups
     /// best-effort aufgerufen, damit die SWR- + HK-Daily-Stats-SQLite-Caches
     /// nicht monoton wachsen (`sweepOlderThan` war definiert + getestet, aber
     /// nie verdrahtet). Closure-Indirection statt direkter Cache-Dependency,
@@ -118,7 +118,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// dieser Wakes verlängert sie. `nil` = nicht verdrahtet (Tests, Pre-Attach).
     private nonisolated(unsafe) var onReminderTopUp: (@Sendable () async -> Void)?
 
-    /// **v0.15.5 AUD-1 F4 — Mood-Reminder-Re-Arm-Hook.** Wird am Ende jedes
+    /// **Mood-Reminder-Re-Arm-Hook.** Wird am Ende jedes
     /// BGTask-Wakeups best-effort aufgerufen, damit der lokale Abend-Mood-
     /// Reminder (`mood-reminder-local`, ein nicht-wiederholender
     /// `UNCalendarNotificationTrigger`) auch ohne App-Foreground neu armiert
@@ -131,7 +131,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// Re-Arm-Fehler blockt den BGTask-Erfolg nicht.
     private nonisolated(unsafe) var onMoodReconcile: (@Sendable () async -> Void)?
 
-    /// **v0.16.1 W-LA-BG (LIVE-ACTIVITY BACKGROUND START) — LA-Reconcile-Hook.**
+    /// **LA-Reconcile-Hook.**
     /// Wird am Ende jedes BGTask-Wakeups best-effort + **inline awaited**
     /// aufgerufen, NACHDEM `onMedicationReconcile` den Store frisch geladen hat,
     /// damit eine Dosis, die *waehrend* der Hintergrund-Phase faellig wurde,
@@ -149,7 +149,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// Pre-Attach). Best-effort: ein Reconcile-Fehler blockt den BGTask nicht.
     private nonisolated(unsafe) var onLiveActivityReconcile: (@Sendable () async -> Void)?
 
-    /// **Reliability M1 (audit-v0162) — Outbox-Drain-Hook.** Wird am Ende jedes
+    /// **Reliability M1 — Outbox-Drain-Hook.** Wird am Ende jedes
     /// BGTask-Wakeups best-effort aufgerufen, damit ein offline geloggter
     /// *User*-Write (Messung / Mood / Medikamenten-Einnahme) auch ohne
     /// App-Foreground repliziert wird. Ohne diesen Hook lief der Outbox-Replay
@@ -170,12 +170,17 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// `.incrementalOnly`, whose writer-side anchor gate prevents a first-run
     /// history walk in their short budget.
     ///
-    /// **Phase 07 / plan 07-09** kept this hook and stopped calling it from the
+    /// Kept this hook and stopped calling it from the
     /// wake bodies. It is wired with the authenticated user resolution and the
     /// post-ingest revalidation that `AppContainer.wireWorkoutBackgroundSync`
     /// owns, so it — not a second, thinner call — is what the orchestrator's
     /// `workoutImport` capability runs. One owner, reached through one pass.
     private nonisolated(unsafe) var onWorkoutSync: (@Sendable (WorkoutSyncPassMode) async -> Bool)?
+
+    /// What a wake may do (``BackgroundWakeScope``). `nil` = not wired (tests,
+    /// pre-attach): the wake then keeps the behaviour it had before the scope
+    /// existed, the HealthKit-gated one.
+    private nonisolated(unsafe) var onWakeScope: (@Sendable () async -> BackgroundWakeScope)?
 
     /// Process-weit eindeutiger State, weil `BGTaskScheduler.register` mit demselben
     /// Identifier zweimal aufzurufen NSInternalInconsistencyException wirft (kein
@@ -187,8 +192,15 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     private static let registrationLock = NSLock()
     private nonisolated(unsafe) static var registeredIdentifiers: Set<String> = []
 
-    public init(healthKit: AnyHealthKitWriter?) {
+    /// Whether this device registers and submits the guaranteed
+    /// `healthkit-sync` BGProcessingTask. `false` on the iPad, which reads no
+    /// HealthKit (``HealthKitAvailabilityPolicy``); the frequent app-refresh
+    /// wake stays, because reminders and the outbox need it everywhere.
+    let registersHealthKitTask: Bool
+
+    public init(healthKit: AnyHealthKitWriter?, registersHealthKitTask: Bool = true) {
         self.healthKit = healthKit
+        self.registersHealthKitTask = registersHealthKitTask
     }
 
     /// Attaches the one HealthKit route (plan 07-09). `AppContainer` wires
@@ -223,7 +235,26 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         return await route(trigger, isExpired)
     }
 
-    /// **v0.12 W8-4** — Setzt den Cache-Sweep-Hook nachtraeglich. `AppContainer`
+    /// Wires the provider that decides what a wake may do. `AppContainer`
+    /// answers from the session and the HealthKit readiness of the account.
+    func attachWakeScopeProvider(_ provider: @escaping @Sendable () async -> BackgroundWakeScope) {
+        hookLock.withLock { onWakeScope = provider }
+    }
+
+    private func providedWakeScope() async -> BackgroundWakeScope? {
+        guard let provider = hookLock.withLock({ onWakeScope }) else { return nil }
+        return await provider()
+    }
+
+    /// Asks the system for both wakes. Called for every signed-in person, with
+    /// or without HealthKit, so reminders, the outbox and the widget and watch
+    /// snapshots keep moving while the app stays closed.
+    public func scheduleBackgroundWakes() {
+        scheduleNextBGSync()
+        scheduleNextBGRefresh()
+    }
+
+    /// Setzt den Cache-Sweep-Hook nachtraeglich. `AppContainer`
     /// ruft diesen, sobald `SWRCoordinator` + ggf.
     /// `HealthKitStatisticsSyncCoordinator` verfuegbar sind.
     public func attachCacheSweepHook(_ hook: @escaping @Sendable () async -> Void) {
@@ -234,7 +265,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         hookLock.withLock { onCacheSweep }
     }
 
-    /// **b181 W-B181** — Setzt den Med-Reconcile-Hook nachtraeglich.
+    /// Setzt den Med-Reconcile-Hook nachtraeglich.
     /// `AppContainer` ruft diesen, sobald `MedicationsStore` verfuegbar ist.
     public func attachMedicationReconcileHook(_ hook: @escaping @Sendable () async -> Void) {
         hookLock.withLock { onMedicationReconcile = hook }
@@ -261,7 +292,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         return true
     }
 
-    /// **v0.15.5 AUD-1 F4** — Setzt den Mood-Reminder-Re-Arm-Hook nachtraeglich.
+    /// Setzt den Mood-Reminder-Re-Arm-Hook nachtraeglich.
     /// `AppContainer` ruft diesen, sobald `MoodStore` + `SettingsStore` +
     /// `NotificationService` verfuegbar sind.
     public func attachMoodReconcileHook(_ hook: @escaping @Sendable () async -> Void) {
@@ -272,7 +303,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         hookLock.withLock { onMoodReconcile }
     }
 
-    /// **v0.16.1 W-LA-BG** — Setzt den Live-Activity-Reconcile-Hook
+    /// Setzt den Live-Activity-Reconcile-Hook
     /// nachtraeglich. `AppContainer` ruft diesen, sobald der
     /// `MedicationLiveActivityController` + `MedicationsStore` verfuegbar sind.
     public func attachLiveActivityReconcileHook(_ hook: @escaping @Sendable () async -> Void) {
@@ -283,7 +314,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         hookLock.withLock { onLiveActivityReconcile }
     }
 
-    /// **Reliability M1 (audit-v0162)** — Setzt den Outbox-Drain-Hook
+    /// **Reliability M1** — Setzt den Outbox-Drain-Hook
     /// nachtraeglich. `AppContainer` verdrahtet den probe-gated
     /// `OutboxReplayService.runOnce()`-Pfad hinein (siehe
     /// `AppContainer+OutboxBGDrain`).
@@ -322,7 +353,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
 
     /// The manual "Jetzt syncen" pass; V1: `manual` on the wire (server v1.42+, else `foreground`).
     ///
-    /// **Plan 07-09** replaced its three-call fan-out (workout → aggregates →
+    /// Replaced its three-call fan-out (workout → aggregates →
     /// ECG) with the one `.manual` pass, whose plan is every capability rather
     /// than the three someone remembered. That is the whole point of the phase:
     /// "sync everything" used to be whatever the call site listed.
@@ -332,7 +363,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         }
     }
 
-    /// **b182 W-B182 (#22)** — Runs the attached med-reconcile hook on demand.
+    /// Runs the attached med-reconcile hook on demand.
     /// Used by the silent-push handler so a server intake push reconciles the
     /// store (→ Live Activity end + widget reload) without waiting for the next
     /// foreground or BGTask wake. No-op when no hook is attached yet.
@@ -361,17 +392,19 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// `AppContainer.init`, der seinerseits aus `HealthLogApp.init` getrieben wird.
     public func registerBGTaskHandler() {
         #if canImport(BackgroundTasks) && !targetEnvironment(macCatalyst)
-            // Der schwere garantierte-Sync `BGProcessingTask` …
-            registerHandler(identifier: Self.bgTaskIdentifier) { [weak self] task in
-                // BGTask ist nicht Sendable in Swift 6 — wir packen es in einen
-                // `@unchecked Sendable`-Shim, damit es in den Task hineinwandern darf.
-                // Der System-Handler ruft uns nur einmal pro Submission, kein Aliasing.
-                let envelope = BGTaskEnvelope(task: task)
-                Task.detached { [weak self] in
-                    await self?.handleBGTask(envelope: envelope)
+            // Der schwere garantierte-Sync `BGProcessingTask` … (nicht auf dem iPad)
+            if registersHealthKitTask {
+                registerHandler(identifier: Self.bgTaskIdentifier) { [weak self] task in
+                    // BGTask ist nicht Sendable in Swift 6 — wir packen es in einen
+                    // `@unchecked Sendable`-Shim, damit es in den Task hineinwandern darf.
+                    // Der System-Handler ruft uns nur einmal pro Submission, kein Aliasing.
+                    let envelope = BGTaskEnvelope(task: task)
+                    Task.detached { [weak self] in
+                        await self?.handleBGTask(envelope: envelope)
+                    }
                 }
             }
-            // … und der leichte, häufiger gewährte `BGAppRefreshTask` (#66 P0.1).
+            // … und der leichte, häufiger gewährte `BGAppRefreshTask`.
             registerHandler(identifier: Self.bgRefreshTaskIdentifier) { [weak self] task in
                 let envelope = BGTaskEnvelope(task: task)
                 Task.detached { [weak self] in
@@ -468,6 +501,8 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// EINEN Wakeup nach App-Install.
     public func scheduleNextBGSync() {
         #if canImport(BackgroundTasks) && !targetEnvironment(macCatalyst)
+            // An unregistered identifier must never be submitted.
+            guard registersHealthKitTask else { return }
             let request = BGProcessingTaskRequest(identifier: Self.bgTaskIdentifier)
             // HK-Sync braucht weder Power noch Network *zwingend* — die HK-DB lebt lokal,
             // Server-Upload wäre "nice", aber wir wollen lieber einen Sync-Pass ohne Netz
@@ -553,7 +588,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         }
     }
 
-    /// **W-HK-RELIABILITY H-3 — exactly-once completion + expiration-safe + reschedule.**
+    /// **Exactly-once completion + expiration-safe + reschedule.**
     ///
     /// Testable core of the BGTask handler, abstracted over ``BGTaskCompleting``
     /// so a unit test can drive it without a real `BGTask` (which the test host
@@ -586,17 +621,24 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         // wake even if the pass later expires.
         await recordWake(.processing)
 
-        // Reschedule BEFORE work so a crash doesn't kill the recurrence.
-        scheduleNextBGSync()
+        // Without a wired provider the wake keeps its old HealthKit gate.
+        let provided = await providedWakeScope()
+        let scope = provided ?? (healthKit != nil ? .full : .idle)
 
-        guard healthKit != nil else {
-            wake.finish(success: false)
+        // Reschedule BEFORE work so a crash doesn't kill the recurrence.
+        if provided == nil || scope.reschedules {
+            scheduleNextBGSync()
+        }
+
+        guard scope != .idle else {
+            // Signed out and never set up: nothing failed, there was nothing to do.
+            wake.finish(success: provided != nil)
             return
         }
 
         // The work runs in a child Task so the expiration handler can cancel it.
         await wake.run { [weak self] expirationFlag in
-            await self?.runBGSyncPasses(expirationFlag: expirationFlag)
+            await self?.runBGSyncPasses(expirationFlag: expirationFlag, scope: scope)
         }
 
         // Normal path completion — exactly-once guarded against the expiration
@@ -614,37 +656,37 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// `syncTrigger: "background"` on the wire. That is the signal the server
     /// needs to tell "this phone delivers on its own" from "this phone delivers
     /// only while the app is open" — the verification #66 was missing.
-    private func runBGSyncPasses(expirationFlag: ExpirationFlag) async {
+    private func runBGSyncPasses(expirationFlag: ExpirationFlag, scope: BackgroundWakeScope) async {
         await SyncTriggerContext.shared.withTrigger(.background) {
-            await runBGSyncPassesBody(expirationFlag: expirationFlag)
+            await runBGSyncPassesBody(expirationFlag: expirationFlag, scope: scope)
         }
     }
 
-    private func runBGSyncPassesBody(expirationFlag: ExpirationFlag) async {
-        guard healthKit != nil else { return }
-
+    private func runBGSyncPassesBody(expirationFlag: ExpirationFlag, scope: BackgroundWakeScope) async {
         // R5 — the reminder top-up comes FIRST. It is cheap (cache only, no
         // network), while the HealthKit pass below can use up the whole grant;
         // the med reconcile further down only runs if the grant has not expired
         // by then.
         await runReminderTopUp()
 
-        // **Plan 07-09 — one named trigger, one pass.** This used to be four
+        // **One named trigger, one pass.** This used to be four
         // sequential calls (the writer's shimmed sweep, the direct workout pass,
         // the aggregate anchor-sweep hook, the ECG hook), three of which the
         // orchestrated pass the first one started *also* made. The
         // `HealthSyncCapability` list that comes back is what this wake actually
         // reached; the pass names every capability it planned, including the ones
         // it did not admit and the ones the expiring grant cut short.
-        let answered = await runHealthSyncPass(
-            HealthSyncTrigger.processing,
-            isExpired: { expirationFlag.value }
-        )
-        // A count of fixed enum cases — operator-grade, no PII.
-        // swiftlint:disable:next hllog_public_privacy_interpolation
-        HLLog.healthKit.info("BG processing pass named \(answered.count, privacy: .public) capabilities")
+        if scope.runsHealthKitPass {
+            let answered = await runHealthSyncPass(
+                HealthSyncTrigger.processing,
+                isExpired: { expirationFlag.value }
+            )
+            // A count of fixed enum cases — operator-grade, no PII.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.healthKit.info("BG processing pass named \(answered.count, privacy: .public) capabilities")
+        }
 
-        // V0.12 W8-4: nach dem Sync-Pass die SQLite-Caches sweepen, damit
+        // Nach dem Sync-Pass die SQLite-Caches sweepen, damit
         // sie nicht monoton wachsen (SWR 30d, HK-Daily-Stats 90d). Best-
         // effort — laeuft nur, wenn kein Expiration ansteht, und blockt den
         // BGTask-Erfolg nicht (Sweep-Fehler werden im Hook geschluckt +
@@ -663,7 +705,7 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
             await reconcile()
         }
 
-        // v0.16.1 W-LA-BG (LIVE-ACTIVITY BACKGROUND START): AFTER the med
+        // AFTER the med
         // reconcile has force-loaded the store with the current day's intakes,
         // reconcile the medication Live Activity so a dose that became due
         // *while backgrounded* gets its Live Activity STARTED — not just the
@@ -691,16 +733,19 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
             await moodReconcile()
         }
 
-        // Reliability M1 (audit-v0162): the encrypted Outbox is drained on the
+        // Reliability M1: the encrypted Outbox is drained on the
         // guaranteed-sync wakeup so a user write logged offline (measurement /
         // mood / medication intake) does not sit queued until the user next
         // foregrounds the app — for a passive widgets/watch-only user, days.
         //
-        // **Plan 07-09** no longer calls the drain hook a second time here: the
+        // No longer calls the drain hook a second time here: the
         // pass above plans `outboxDrain` as its last capability, and it is the
         // same probe-gated hook (`confirmedReachable()`) reached through the
         // orchestrator. Draining it here as well would replay the same rows
-        // twice in one wake.
+        // twice in one wake. Without that pass the drain runs here, once.
+        if !scope.runsHealthKitPass, !expirationFlag.value, !Task.isCancelled {
+            await runOutboxDrain()
+        }
     }
 
     // MARK: - BGAppRefreshTask core (#66 P0.1 — Baustein 1)
@@ -710,11 +755,10 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// reschedule-first, expiration-safe, exactly-once completion), but doing
     /// only the *light* work the more frequent AppRefresh wake warrants: one
     /// `.appRefresh` pass, whose plan is the incremental capability set under the
-    /// AppRefresh budget. The med-/mood-/LA-reconcile hooks stay on the
-    /// `BGProcessingTask` so an AppRefresh grant (short runtime budget) is never
-    /// wasted on multi-thousand-row backfills.
+    /// AppRefresh budget, preceded by the medication and Live Activity
+    /// reconcile (#189 (5)). The mood reconcile stays on the `BGProcessingTask`.
     func runBGRefresh(on task: some BGTaskCompleting) async {
-        // R-A1 (1.4) — the expiration handler first, as in runBGSync. The
+        // The expiration handler first, as in runBGSync. The
         // AppRefresh grant is the short one, so the window mattered most here.
         let wake = BGTaskWake(task: task) {
             HLLog.healthKit.warning("BGAppRefresh Expiration-Handler getriggert — Refresh abgebrochen.")
@@ -724,12 +768,21 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         // #66 P0.1 (Baustein 4) — honest evidence: this AppRefresh wake fired.
         await recordWake(.appRefresh)
 
+        let scope = await providedWakeScope() ?? .full
+
         // Reschedule BEFORE work so a crash / early expiry doesn't kill the
         // recurrence (Apple-Pattern, mirrors runBGSync).
-        scheduleNextBGRefresh()
+        if scope.reschedules {
+            scheduleNextBGRefresh()
+        }
+
+        guard scope != .idle else {
+            wake.finish()
+            return
+        }
 
         await wake.run { [weak self] expirationFlag in
-            await self?.runBGRefreshPasses(expirationFlag: expirationFlag)
+            await self?.runBGRefreshPasses(expirationFlag: expirationFlag, scope: scope)
         }
 
         wake.finish()
@@ -739,24 +792,33 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
     /// route is a no-op; a failure never fails the task). **CU-21 (1)** — same
     /// `.background` ``SyncTriggerContext`` window as the heavy pass, so every
     /// POST it causes still carries `syncTrigger: "background"` on the wire.
-    private func runBGRefreshPasses(expirationFlag: ExpirationFlag) async {
+    private func runBGRefreshPasses(expirationFlag: ExpirationFlag, scope: BackgroundWakeScope) async {
         await SyncTriggerContext.shared.withTrigger(.background) {
-            await runBGRefreshPassesBody(expirationFlag: expirationFlag)
+            await runBGRefreshPassesBody(expirationFlag: expirationFlag, scope: scope)
         }
     }
 
-    /// **Plan 07-09 — one named trigger, one pass.** The AppRefresh wake used to
+    /// **One named trigger, one pass.** The AppRefresh wake used to
     /// arm the collectors, then run the workout pass, then drain the outbox. The
     /// `.appRefresh` plan is the incremental set — sample collection, workouts,
     /// heart events, State of Mind, outbox — under the AppRefresh budget (one
     /// page per type, incremental only, no first history walk), and every
     /// capability outside that set comes back named `deferred` rather than
     /// silently missing.
-    private func runBGRefreshPassesBody(expirationFlag: ExpirationFlag) async {
+    private func runBGRefreshPassesBody(expirationFlag: ExpirationFlag, scope: BackgroundWakeScope) async {
         // R5 — the AppRefresh wake is the frequent one, and up to R5 it never
         // touched the local medication reminders. The top-up reads the cached
         // medication list only, so it costs no request out of the short budget.
         await runReminderTopUp()
+        guard scope.runsHealthKitPass else {
+            await runRefreshWithoutHealthKit(expirationFlag: expirationFlag)
+            return
+        }
+        // #189 (5): the frequent wake reconciles medications at every scope,
+        // before HealthKit takes the short grant. With HealthKit active it
+        // used to run HealthKit only, so a dose taken elsewhere waited for
+        // the rare processing task or a foreground.
+        await runMedicationAndLiveActivityReconcile(expirationFlag: expirationFlag)
         let answered = await runHealthSyncPass(
             HealthSyncTrigger.appRefresh,
             isExpired: { expirationFlag.value }
@@ -765,9 +827,19 @@ public final class BackgroundSyncCoordinator: @unchecked Sendable {
         // swiftlint:disable:next hllog_public_privacy_interpolation
         HLLog.healthKit.info("BG refresh pass named \(answered.count, privacy: .public) capabilities")
     }
+
+    /// The frequent wake for a person without HealthKit. No HealthKit pass
+    /// competes for the short grant, so it carries the outbox and the
+    /// medication reconcile, whose store change refreshes widgets and watch,
+    /// followed by the Live Activity.
+    private func runRefreshWithoutHealthKit(expirationFlag: ExpirationFlag) async {
+        guard !expirationFlag.value, !Task.isCancelled else { return }
+        await runOutboxDrain()
+        await runMedicationAndLiveActivityReconcile(expirationFlag: expirationFlag)
+    }
 }
 
-// MARK: - BGTask completion abstraction (W-HK-RELIABILITY H-3)
+// MARK: - BGTask completion abstraction
 
 /// Minimal seam over the two `BGTask` calls the coordinator needs
 /// (`setExpirationHandler` + `setTaskCompleted`). Abstracting them lets the
@@ -821,3 +893,34 @@ final class OneShotCompletion: @unchecked Sendable {
         let task: BGTask
     }
 #endif
+
+// MARK: - Medication reconcile (#188, #189)
+
+extension BackgroundSyncCoordinator {
+    /// **#188 (3) — the `MEDICATION_INTAKE_SYNC` silent push.** Reconciles the
+    /// medications store first (the awaited load fires `onIntakesDidChange`,
+    /// which completes the reminders of resolved slots and suspends their
+    /// critical alarms), then awaits the Live Activity reconcile, so the end
+    /// of a dose taken elsewhere has happened before the handler answers. The
+    /// `onIntakesDidChange` chain only starts the Activity mutation in a task
+    /// iOS may suspend with the process. Returns `true` when the store
+    /// reconcile ran.
+    @discardableResult
+    public func runMedicationIntakeSync() async -> Bool {
+        guard await runMedicationReconcile() else { return false }
+        if let liveActivityReconcile = currentLiveActivityReconcileHook() {
+            await liveActivityReconcile()
+        }
+        return true
+    }
+
+    /// One medication GET with its reconcile, then the Live Activity.
+    func runMedicationAndLiveActivityReconcile(expirationFlag: ExpirationFlag) async {
+        if !expirationFlag.value, !Task.isCancelled, let reconcile = currentMedicationReconcileHook() {
+            await reconcile()
+        }
+        if !expirationFlag.value, !Task.isCancelled, let liveActivityReconcile = currentLiveActivityReconcileHook() {
+            await liveActivityReconcile()
+        }
+    }
+}

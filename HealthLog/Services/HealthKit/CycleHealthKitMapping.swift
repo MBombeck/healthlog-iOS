@@ -15,7 +15,7 @@ import Foundation
 /// live `HKHealthStore`; the HealthKit-typed surfaces (category-value codepoints,
 /// the read/write type sets) are `#if canImport(HealthKit)` + iOS-18-gated.
 ///
-/// **Flow value source.** The contract (§5, Q3) mandates
+/// **Flow value source.** The contract mandates
 /// `HKCategoryValueVaginalBleeding` (the iOS-18 reproductive type) with a legacy
 /// `HKCategoryValueMenstrualFlow` fallback. Both map to the same contract flow
 /// enum (`NONE|SPOTTING|LIGHT|MEDIUM|HEAVY`); `unspecified → LIGHT` (a logged-
@@ -23,8 +23,8 @@ import Foundation
 /// counterpart — it is only ever produced by a MANUAL entry, and on write-back a
 /// `SPOTTING` day maps to HK `light` (the spotting↔light boundary per Q3).
 ///
-/// Everything here stays dormant behind `FeatureFlag.cycleTracking` (the importer
-/// + writer above it are only constructed when the gate passes).
+/// The importer and writer above it are only constructed when `CycleGate`
+/// passes.
 enum CycleHealthKitMapping {
     // MARK: - HK category-type identifiers (server constants)
 
@@ -170,7 +170,7 @@ enum CycleHealthKitMapping {
         var protectedSex: Bool?
         var pregnancyTest: CycleTestResult?
         var progesteroneTest: CycleTestResult?
-        /// v0.14.8 — the active contraceptive method, recorded on the day-log
+        /// The active contraceptive method, recorded on the day-log
         /// timeline (the write contract surfaced the field in v1.16.x).
         var contraceptive: CycleContraceptiveKind?
         /// Seeded symptom catalogue key + optional severity to link on the day.
@@ -266,7 +266,7 @@ enum CycleHealthKitMapping {
     /// The contraceptive branch of ``route`` — its own helper so neither
     /// `route` nor `routeValueBearing` breaches the complexity budget.
     ///
-    /// v0.14.8 — the v1.16.x write contract surfaced `contraceptive` on the
+    /// The v1.16.x write contract surfaced `contraceptive` on the
     /// day-log input, so the method now lands on the timeline (the half of the
     /// former 2026-06-20 TODO this module can own). The server-side
     /// counterpart — nudging a still-default GENERAL_HEALTH profile goal to

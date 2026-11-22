@@ -1,66 +1,33 @@
 import SwiftUI
 
-/// **v0.14.2 (FW5-C) — "What the assistant knows" (server B4).**
+/// **"What the assistant knows" (server B4).**
 ///
 /// Lists the coach facts the assistant has extracted about the user, grouped by
 /// category, with swipe-to-forget per fact and a "Forget all" affordance. Facts
 /// are server-extracted, so this is a read + delete surface — there is no add /
 /// edit path.
 ///
-/// **Server-only surface.** Coach memory lives on the server, so the screen gates
-/// on `BackendAvailability.hasServer` (standalone → the calm
-/// `HLCloudDerivedPlaceholder`, never a dead list). When paired but the operator
+/// **Server-only surface.** Coach memory lives on the server. When the operator
 /// disabled the Coach surface, the store flips `isCoachDisabled` (from the typed
 /// `HLError.aiUnavailable`) and we render the disabled-surface placeholder —
 /// the same kill-switch the rest of the Coach stack honours.
 ///
 /// Entry point: `Settings → Coach → What the assistant knows`.
 struct CoachMemoryScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: CoachFactsStore?
-    @State private var showForgetAllConfirmation = false
 
     var body: some View {
-        Group {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                List {
-                    HLCloudDerivedPlaceholder(
-                        variant: .inline,
-                        surfaceName: String(localized: "what the assistant knows"),
-                        onConnect: { authStore.beginServerPairing() }
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
+        connectedBody
+            .navigationTitle("What the assistant knows")
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                guard store == nil, let api = container?.api else { return }
+                let s = CoachFactsStore(repo: CoachFactsRepository(api: api))
+                store = s
+                await s.load()
             }
-        }
-        .navigationTitle("What the assistant knows")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            guard backend.hasServer, store == nil, let api = container?.api else { return }
-            let s = CoachFactsStore(repo: CoachFactsRepository(api: api))
-            store = s
-            await s.load()
-        }
-        // R13 — die Bestätigungsleiter: ein Massenlöschen innerhalb einer
-        // Sammlung ist ein `confirmationDialog`, kein `.alert` (der bleibt dem
-        // Ein-Feld-Umbenennen vorbehalten).
-        .hlConfirmDestructive(
-            Text("Forget everything?"),
-            isPresented: $showForgetAllConfirmation,
-            message: Text("The assistant will forget everything it has learned about you. This cannot be undone."),
-            confirm: Text("Forget everything"),
-            cancel: Text("Cancel"),
-            onCancel: { showForgetAllConfirmation = false },
-            action: {
-                Task { await store?.forgetAll() }
-            }
-        )
     }
 
     @ViewBuilder
@@ -68,13 +35,11 @@ struct CoachMemoryScreen: View {
         if store?.isCoachDisabled == true {
             // Coach kill-switch — calm placeholder in a stable `List` root.
             List {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "the coach")
-                )
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+                CoachUnavailableCard()
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
+            .hlPageMargins()
         } else {
             // v0151 nav-scroll RCA-2: STABLE SCROLL ROOT. The connected path used
             // to swap `ProgressView → List` after load. `HLAsyncListScreen` renders
@@ -96,7 +61,7 @@ struct CoachMemoryScreen: View {
     private var phase: HLAsyncListPhase {
         guard let store else { return .loading }
         if store.isLoading, !store.didLoad { return .loading }
-        // AUD-5 H1 — a failed load with nothing learned is an ERROR, not the calm
+        // A failed load with nothing learned is an ERROR, not the calm
         // "Nothing learned yet" empty state. Offer Retry so a 500 / cold-offline
         // fetch is not silently presented as "the assistant knows nothing".
         if store.isEmpty, store.error != nil {
@@ -113,51 +78,55 @@ struct CoachMemoryScreen: View {
             HLEmptyState(
                 icon: "brain.head.profile",
                 title: "Nothing learned yet",
-                // 1.4 B2-c — the first sentence repeated the title.
+                // The first sentence repeated the title.
                 message: "coachMemory.empty.message"
             )
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+        .hlFormRowSurface()
     }
 
     @ViewBuilder
     private func factRows(store: CoachFactsStore) -> some View {
-        // 1.4 B2-c — no lead line: the title says what this is, the rows
+        // No lead line: the title says what this is, the rows
         // swipe like every list, and "Forget everything" closes the list.
         ForEach(store.groupedByCategory, id: \.category) { group in
-            Section(Self.categoryTitle(group.category)) {
+            Section {
                 ForEach(group.facts) { fact in
                     factRow(fact)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task { await store.forget(fact) }
-                            } label: {
-                                Label("Forget", systemImage: "trash")
-                            }
-                        }
+                        .hlSwipeDelete(.confirmed(title: "settings.coachMemory.forget.confirm.title") {
+                            await store.forget(fact)
+                        })
                 }
+            } header: {
+                HLSectionHeader(verbatim: Self.categoryTitle(group.category))
             }
+            .hlFormRowSurface()
         }
 
         Section {
-            Button(role: .destructive) {
-                showForgetAllConfirmation = true
-            } label: {
-                Label("Forget everything", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
-            }
+            HLDeleteButton(
+                "Forget everything",
+                form: .row,
+                action: .confirmed(
+                    title: "Forget everything?",
+                    message: "The assistant will forget everything it has learned about you. This cannot be undone."
+                ) {
+                    await store.forgetAll()
+                }
+            )
             .accessibilityIdentifier("coachMemory.forgetAll")
         }
+        .hlFormRowSurface()
     }
 
     private func factRow(_ fact: CoachFactDTO) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(fact.text)
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-        }
-        .accessibilityIdentifier("coachMemory.fact.\(fact.id)")
+        // A remembered fact is a sentence: it wraps in the row title's type
+        // instead of ending in "…".
+        HLRowTitle(Text(verbatim: fact.text))
+            .frame(maxWidth: .infinity, minHeight: HLRowMetrics.minHeight, alignment: .leading)
+            .accessibilityIdentifier("coachMemory.fact.\(fact.id)")
     }
 
     /// Maps a raw server category key to a display title. Unknown categories fall

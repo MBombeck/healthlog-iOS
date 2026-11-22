@@ -348,7 +348,7 @@ struct IllnessFHIRTests {
     func conditionSNOMEDCategoryMap() throws {
         let cases: [(IllnessType, String)] = [
             (.infection, "40733004"),
-            // #115 R3 — 106190000 is inactive; server v1.39.3 uses 473011001.
+            // 106190000 is inactive; server v1.39.3 uses 473011001.
             (.allergy, "473011001"),
             (.injury, "417163006"),
             (.mentalHealth, "74732009"),
@@ -475,7 +475,7 @@ struct IllnessFHIRTests {
         #expect(try conditions(in: bundle).isEmpty)
 
         let entries = try #require(bundle.entry)
-        // No lab report — and (#115 R3) no vitals report either, because this
+        // No lab report — and no vitals report either, because this
         // spec carries no vital sign; the server leaves an empty one out too.
         let reports = entries.compactMap { entry -> DiagnosticReport? in
             if case let .diagnosticReport(r) = entry.resource { return r }

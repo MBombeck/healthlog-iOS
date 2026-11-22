@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #25 / #115 · 1.3 — the Bestand headline renders the server's `summary`
+/// The Bestand headline renders the server's `summary`
 /// (`GET /api/medications/{id}/inventory`, `MedicationSupplySummary` in
 /// `docs/api/openapi.yaml` at `v1.39.0`) instead of summing containers on the
 /// device, and `expiredUnits` reaches the screen.

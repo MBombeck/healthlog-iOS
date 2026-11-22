@@ -378,4 +378,41 @@ struct AccountDeletionTests {
         #expect(kc.getString(forKey: KeychainKey.authToken) == "hlk_bearer_xyz")
         #expect(kc.getString(forKey: KeychainKey.deviceID) == "device-uuid-existing")
     }
+
+    /// Deleting is not idempotent on the server, so a failed attempt is never
+    /// re-sent behind the user's back, neither after a 5xx nor after a lost connection.
+    @Test("a failed deletion is sent exactly once", arguments: [false, true])
+    func failedDeletionIsSentOnce(transportFails: Bool) async throws {
+        let kc = InMemoryKeychain()
+        try seedAuthenticatedKeychain(kc)
+        let service = makeService(keychain: kc)
+        let deletes = DeleteCounter()
+
+        MockURLProtocol.install { req in
+            if req.httpMethod == "DELETE", req.url?.path == "/api/settings/account" { deletes.increment() }
+            if transportFails { throw URLError(.networkConnectionLost) }
+            return (
+                HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"data":null,"error":"Internal"}"#.utf8)
+            )
+        }
+
+        await #expect(throws: (any Error).self) {
+            try await service.deleteAccount()
+        }
+        #expect(deletes.value == 1)
+    }
+
+    private final class DeleteCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+
+        func increment() {
+            lock.withLock { count += 1 }
+        }
+
+        var value: Int {
+            lock.withLock { count }
+        }
+    }
 }

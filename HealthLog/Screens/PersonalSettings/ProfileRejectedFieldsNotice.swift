@@ -1,6 +1,6 @@
 import SwiftUI
 
-// #97 / #115 · 0.4 — how a partial profile save is told to the person.
+// How a partial profile save is told to the person.
 //
 // The server answers 200 and names the skipped fields in `rejectedFields`;
 // `SettingsStore.rejectedProfileFields` holds them. This file turns each one
@@ -80,6 +80,7 @@ struct ProfileRejectedFieldsSection: View {
             Section {
                 ProfileRejectedFieldsNotice(fields: fields)
             }
+            .hlFormRowSurface()
         }
     }
 }

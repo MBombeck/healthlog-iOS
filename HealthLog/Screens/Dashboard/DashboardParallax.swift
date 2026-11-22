@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// W-IMPL-MOTION-POLISH (v0.5.5.1) — Dashboard scroll-driven greeting fade.
+/// Dashboard scroll-driven greeting fade.
 ///
-/// **Wave 2 / 2.4 — the HERO PARALLAX WAS REMOVED (operator b227).** The hero no
+/// **The HERO PARALLAX WAS REMOVED (operator b227).** The hero no
 /// longer translates at `HLMotion.parallaxRate`; the `DashboardParallaxOffset`
 /// wrapper and the `heroOffset(for:reduceMotion:)` math are gone. Rationale: the
 /// web hero has no parallax (parity), HIG `scroll-views` cautions that custom
@@ -17,7 +17,7 @@ import SwiftUI
 /// the parallax modifier resolves to the identity transform (no offset, no
 /// opacity ramp). The rest of the layout stays bit-identical.
 ///
-/// **Implementation (v0.14.8 AUDIT-HOME M11):** the original
+/// **Implementation:** the original
 /// `GeometryReader`/`PreferenceKey` probe wrote a `@State` on
 /// `DashboardScreen` every scrolled frame, re-evaluating the ENTIRE screen
 /// body (header, hero, grid construction, `orderedMetrics` dictionary
@@ -30,7 +30,7 @@ import SwiftUI
 /// re-evaluates per frame — the tile stack stays untouched. The math stays
 /// in the pure `DashboardParallaxMath` helper — see `DashboardParallaxTests`.
 enum DashboardParallaxMath {
-    // Wave 2 / 2.4 — `heroOffset(for:reduceMotion:)` was DELETED together with
+    // `heroOffset(for:reduceMotion:)` was DELETED together with
     // its only caller, `DashboardParallaxOffset`. See the type doc above.
 
     /// Returns the greeting block's opacity for a given scroll offset.
@@ -45,7 +45,7 @@ enum DashboardParallaxMath {
     }
 }
 
-/// v0.14.8 AUDIT-HOME M11 — observable box for the live scroll offset.
+/// Observable box for the live scroll offset.
 ///
 /// The ScrollView's `onScrollGeometryChange` writes `scrollOffset` per
 /// frame; because the write happens inside an action closure (not the
@@ -62,11 +62,11 @@ final class DashboardParallaxModel {
     var scrollOffset: CGFloat = 0
 }
 
-// Wave 2 / 2.4 — `DashboardParallaxOffset` (the per-frame hero-offset wrapper)
+// `DashboardParallaxOffset` (the per-frame hero-offset wrapper)
 // was DELETED. The hero no longer translates while scrolling; the greeting fade
 // reads `DashboardParallaxModel` directly inside `DashboardHeader`.
 
-// MARK: - Matched-geometry helper (W-IMPL-MOTION-POLISH, v0.5.5.1)
+// MARK: - Matched-geometry helper
 
 /// Stable identifier prefix shared by the source tile + destination
 /// `ChartDetailScreen.HeroStrip`. Encodes the `MetricKind` so two distinct

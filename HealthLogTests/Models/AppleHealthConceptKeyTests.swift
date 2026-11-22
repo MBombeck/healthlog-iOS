@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-10 / GH #47** — the stable-identity seam of the Apple Health medication
+/// The stable-identity seam of the Apple Health medication
 /// mirror.
 ///
 /// `HKHealthConceptIdentifier` cannot be constructed in a unit test, so the

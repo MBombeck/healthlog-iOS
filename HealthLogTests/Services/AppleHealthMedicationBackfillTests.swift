@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A2 (1.4, #138) — the dose import marks its history as `backfill`.
+/// The dose import marks its history as `backfill`.
 ///
 /// The first sweep of a fresh account sends every dose Apple Health keeps,
 /// years of them. The server records the trigger on its `MEDICATION_DOSE`

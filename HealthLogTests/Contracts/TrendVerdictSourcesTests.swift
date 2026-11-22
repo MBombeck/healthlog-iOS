@@ -230,7 +230,7 @@ struct TrendVerdictSourcesTests {
         #expect(older.carriesServerVerdicts == false)
     }
 
-    // MARK: - #151: slope null is no trend
+    // MARK: - Slope null is no trend
 
     @Test("a null slope or a slope without direction draws no chip; the others keep their order")
     func nullSlopesDrawNothing() throws {

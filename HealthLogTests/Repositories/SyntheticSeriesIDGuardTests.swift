@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #115 R3 — series point ids `day:` / `hour:` (pulse and glucose today, HRV and
+/// Series point ids `day:` / `hour:` (pulse and glucose today, HRV and
 /// SpO2 from server v1.39.7), the day-collapsed list key `day:<TYPE>:<day>` and
 /// the sleep keys are **not** measurement rows. The app synthesises
 /// `Measurement`s from such points (`ChartDetailStore.measurementsFromSeriesPoints`,

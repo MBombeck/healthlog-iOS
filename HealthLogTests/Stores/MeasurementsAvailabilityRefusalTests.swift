@@ -173,7 +173,7 @@
             try #require(
                 window.measurementsLines == [Self.line("lease_unavailable")],
                 """
-                EXPECTED_RED: the nil-lease exit at MeasurementsStore+Availability.swift:20 returns bare, \
+                the nil-lease exit at MeasurementsStore+Availability.swift:20 returns bare, \
                 so an availability read that never started is invisible to every operator diagnostic
                 """
             )
@@ -209,7 +209,7 @@
             try #require(
                 window.measurementsLines == [Self.line("lease_retired")],
                 """
-                EXPECTED_RED: the success-path stale-lease guard at MeasurementsStore+Availability.swift:23 \
+                the success-path stale-lease guard at MeasurementsStore+Availability.swift:23 \
                 returns bare — the lost-race exit, the one the operator's own scenario takes, records nothing
                 """
             )
@@ -260,7 +260,7 @@
             try #require(
                 window.measurementsLines == [Self.line("load_failed")],
                 """
-                EXPECTED_RED: the catch at MeasurementsStore+Availability.swift:29-33 writes an HLLog line \
+                the catch at MeasurementsStore+Availability.swift:29-33 writes an HLLog line \
                 and nothing countable, so a terminal availability failure has no signature to filter on
                 """
             )
@@ -283,14 +283,14 @@
             try #require(
                 window.measurementsLines == [Self.line("load_interrupted")],
                 """
-                EXPECTED_RED: a cancelled availability read is indistinguishable from an account that \
+                a cancelled availability read is indistinguishable from an account that \
                 genuinely has no measurements — the ambiguity that made R4 survive four attempts
                 """
             )
             #expect(store.availableKinds.isEmpty, "an interrupted read must publish nothing")
         }
 
-        // MARK: - The healthy bound (PIN — green by construction, no EXPECTED_RED)
+        // MARK: - The healthy bound (PIN, green by construction)
 
         /// R4-ANSWER §4 item 3. Row 1 of the decision table on a healthy wire was
         /// **10 kinds in 0.006 s with zero refusals**. This pins the shape of that

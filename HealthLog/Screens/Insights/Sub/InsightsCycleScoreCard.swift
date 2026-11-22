@@ -32,7 +32,7 @@ struct CycleScoreRingCard: View {
             } label: {
                 tile(model: model, phase: phase)
             }
-            .hlPressable() // QOL-AUDIT H1: press feedback
+            .hlPressable(hover: .lift) // Press feedback, the card rises under the pointer
             .accessibilityElement(children: .combine)
             .accessibilityLabel(Text(accessibilityLabel(phase: phase)))
             .accessibilityHint(Text(String(localized: "Double-tap for the breakdown")))
@@ -61,7 +61,7 @@ struct CycleScoreRingCard: View {
                 )
                 .frame(width: 96, height: 96)
                 Text(label(for: phase))
-                    .font(.hlSubhead.weight(.medium))
+                    .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(WellnessRingPalette.label)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -109,7 +109,7 @@ struct CycleScoreRingCard: View {
         )
     }
 
-    /// Z1 (#72) — the SERVER's phase. `nil` in OVERDUE / INSUFFICIENT_DATA, and
+    /// The SERVER's phase. `nil` in OVERDUE / INSUFFICIENT_DATA, and
     /// this half-width glance tile then self-suppresses: it carries no room for
     /// the caption an overdue state needs, and the full `CycleScreen` is one tap
     /// away with the whole picture.

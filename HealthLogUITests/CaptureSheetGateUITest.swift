@@ -1,6 +1,6 @@
 import XCTest
 
-/// #115 · 1.1 T1 — the shell's sheet gate driven through the real tab bar.
+/// The shell's sheet gate driven through the real tab bar.
 ///
 /// TestFlight 1.1.0 (286) aborted when a shell sheet preempted a presentation
 /// that was still on screen ("Dando al botón + se ha cerrado la App"). The crash
@@ -66,7 +66,7 @@ final class CaptureSheetGateUITest: XCTestCase {
     // MARK: - Helpers
 
     private func plusButton(_ app: XCUIApplication) -> XCUIElement {
-        app.tabBars.buttons.containing(.image, identifier: "plus.circle.fill").firstMatch
+        ShellNavigator.button(symbol: "plus.circle.fill", in: app)
     }
 
     /// Taps the bar button by coordinate so the tap lands even while a sheet is

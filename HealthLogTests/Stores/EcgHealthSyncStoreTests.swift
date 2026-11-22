@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **GH #74 — der Schalter, an dem die EKG-Übernahme hängt.**
+/// **Der Schalter, an dem die EKG-Übernahme hängt.**
 ///
 /// Die Entscheidung, die hier festgenagelt wird: der EKG-Lesetyp gehört NICHT
 /// ins Standardpaket beim Onboarding. Er ist die sensibelste Fläche des
@@ -180,7 +180,6 @@ private final class SpyHealthKitWriter: AnyHealthKitWriter, @unchecked Sendable 
     func attachUploader(_: MeasurementBatchUploader) async {}
     func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
     func setInitialBackfillCutoff(_: Date?) async {}
-    func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     func stopWorkoutImportObserver() async {}
     func resetWorkoutImportObserver() async {}
 }

@@ -176,7 +176,7 @@ struct DashboardSummaryDecodingTests {
         #expect(summary.compliance.scheduledToday == 3)
     }
 
-    // MARK: - W-SERVER-SYNC — tolerant titleKey/unitKey decode
+    // MARK: - Tolerant titleKey/unitKey decode
 
     @Test("Metric decodes server v1.5.5 titleKey/unitKey (resolves via catalogue)")
     func metricWithTitleKey() throws {
@@ -290,7 +290,7 @@ struct DashboardSummaryDecodingTests {
         // TIME-ASLEEP total ALREADY IN HOURS (float) with an explicit
         // `unit: "h"` (`src/app/api/dashboard/summary/route.ts` —
         // `latestValue: toHours(night.asleepMinutes)`). A real night ≈ 7.2 h.
-        // The earlier ÷60 (Task #105) is gone — applying it would have shrunk
+        // The earlier ÷60 is gone — applying it would have shrunk
         // 7.2 h to 0.12 h ("an empty night"). We read the hours verbatim.
         let json = Data(#"""
         {
@@ -310,10 +310,9 @@ struct DashboardSummaryDecodingTests {
         #expect(metric.latestValue == 7.2)
         #expect(metric.sparkline == [7.0, 6.5, 5.2])
         // The tile renders via `formattedPrimary()` → `.durationHM`: 7.2 h →
-        // "7h 12m". Never "0h 7m" (a stray ÷60) nor "432h" (a stray ×60).
-        let rendered = metric.formattedPrimary()
-        #expect(rendered.contains("7h"))
-        #expect(rendered.contains("12m"))
+        // 7 hours 12 minutes. Never "0h 7m" (a stray ÷60) nor "432h" (a stray ×60).
+        // In the app's language: "7 Std. 12 Min." in German, "7h 12m" in English.
+        #expect(metric.formattedPrimary() == String(localized: "\(7)h \(12)m"))
     }
 
     @Test("A clean 7.2h sleep night agrees with the list-path night total")
@@ -336,9 +335,8 @@ struct DashboardSummaryDecodingTests {
         """#.utf8)
         let metric = try decoder.decode(DashboardMetric.self, from: json)
         #expect(metric.latestValue == 7.2)
-        let rendered = metric.formattedPrimary()
-        #expect(rendered.contains("7h"))
-        #expect(rendered.contains("12m"))
+        // In the app's language: "7 Std. 12 Min." in German, "7h 12m" in English.
+        #expect(metric.formattedPrimary() == String(localized: "\(7)h \(12)m"))
     }
 
     @Test("Non-sleep metrics decode verbatim (regression guard)")
@@ -516,7 +514,7 @@ struct DashboardMetricNonFiniteGuardTests {
     }
 }
 
-/// **1.4 B4 — a cached tile reads in the current language.** The SWR layer
+/// **A cached tile reads in the current language.** The SWR layer
 /// re-encodes the summary before it writes it to disk; the catalogue keys ride
 /// along so the read-back resolves them again.
 @Suite("1.4 B4: dashboard tiles keep their catalogue keys through the cache")

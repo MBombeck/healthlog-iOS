@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **GH #83 — Settings → Health Score, the store behind the surface.**
+/// **Settings → Health Score, the store behind the surface.**
 ///
 /// The one behaviour worth defending here is the difference between a *failure*
 /// and a *refusal*. The server answers a too-narrow selection with a `422` and a

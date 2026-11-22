@@ -8,7 +8,7 @@ import Testing
 
 private typealias Measurement = HealthLog.Measurement
 
-/// #119 / #126 P2 — the doctor report takes the server's figures:
+/// The doctor report takes the server's figures:
 /// pulse per the v1.40.1 rule (a day is the mean of its hours, a window the
 /// mean of its days), and adherence from `GET /api/medications/compliance`
 /// with `meta.aggregate` and `?days=`. Fixtures follow

@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import UIKit
 
-/// **v0.6.2 W-SEC-A — Gravatar removed.**
+/// **Gravatar removed.**
 ///
 /// The earlier v0.5.4-NF-1 contract pinned the deterministic email →
 /// Gravatar-URL transform (so re-renders surfaced "the operator's face"

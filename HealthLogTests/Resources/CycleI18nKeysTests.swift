@@ -26,7 +26,7 @@ struct CycleI18nKeysTests {
     static let cycleUIKeys: [String] = [
         // CycleScreen — title, calendar header, hero centre, log action.
         "cycle.home.title",
-        // v1.39.1 (#1032) — the two day markers the calendar gained.
+        // v1.39.1 — the two day markers the calendar gained.
         "cycle.legend.intercourse",
         "cycle.legend.otherEntries",
         "cycle.calendar.a11y.intercourse",
@@ -36,7 +36,7 @@ struct CycleI18nKeysTests {
         "cycle.home.center.cycleDay",
         "cycle.home.center.learning.title",
         "cycle.home.center.learning.subtitle",
-        // Z1 (#72) — the OVERDUE centre carries `overdueDays`, not a cycle day,
+        // The OVERDUE centre carries `overdueDays`, not a cycle day,
         // and the copy names what the number counts.
         "cycle.home.center.late.title",
         "cycle.home.center.overdue.title",
@@ -69,7 +69,7 @@ struct CycleI18nKeysTests {
         "cycle.capture.period.start",
         "cycle.capture.period.end",
         "cycle.capture.period.none",
-        // CU-25 (#72) — the flow-without-period reconciliation prompt.
+        // The flow-without-period reconciliation prompt.
         "cycle.capture.reconcile.title",
         "cycle.capture.reconcile.message",
         "cycle.capture.reconcile.confirm",
@@ -138,7 +138,7 @@ struct CycleI18nKeysTests {
         "cycle.settings.secondarySymptom.mucus",
         "cycle.settings.secondarySymptom.cervix",
         "cycle.settings.secondarySymptom.footer",
-        // Build 5 — capture, settings, analytics, and custom symptoms.
+        // Capture, settings, analytics, and custom symptoms.
         "cycle.bbt.accessibility.summary",
         "cycle.bbt.axis.celsius",
         "cycle.bbt.axis.date",
@@ -242,7 +242,7 @@ struct CycleI18nKeysTests {
         "cycle.symptom.libido_high",
         "cycle.symptom.libido_low",
         "cycle.settings.secondarySymptom.error",
-        // 1.4 B2 — the info sheet's patterns section and the empty-prior prompt.
+        // The info sheet's patterns section and the empty-prior prompt.
         // The eight "empty" and footer keys the cards and forms no longer show
         // left the catalogue and this list together.
         "cycle.info.patterns",

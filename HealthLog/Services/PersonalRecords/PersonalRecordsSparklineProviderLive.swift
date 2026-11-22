@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.5.5.6 POLISH-PR — live `PersonalRecordsSparklineProvider`.
+/// Live `PersonalRecordsSparklineProvider`.
 ///
 /// Pulls a 30-day trajectory leading to the record-day from the
 /// `MeasurementsRepository.series(kind:days:)` SWR cache. The provider

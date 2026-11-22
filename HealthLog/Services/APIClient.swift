@@ -35,7 +35,7 @@ private final class SharingRecoveryHandlerSlot: @unchecked Sendable {
 // remain one state machine. New logic still receives scoped complexity checks.
 // swiftlint:disable file_length type_body_length
 
-/// 13-02 — `WebLoginRouteProbing` is inherited rather than restated so the
+/// `WebLoginRouteProbing` is inherited rather than restated so the
 /// availability gate can ask any client where the login route leads, while the
 /// 67 stub conformers inherit the fail-closed default (see
 /// `WebLoginRouteProbe.swift`) instead of each implementing a transport they do
@@ -44,7 +44,7 @@ public protocol APIClientProtocol: Sendable, WebLoginRouteProbing {
     func send<T: Decodable & Sendable>(_ request: APIRequest<T>) async throws -> T
     func sendVoid(_ request: APIRequest<EmptyPayload>) async throws
     func download(_ request: APIRequest<Data>) async throws -> (Data, HTTPURLResponse)
-    /// **A360 H3 (v0156)** — progressive SSE line stream for the coach turn.
+    /// Progressive SSE line stream for the coach turn.
     /// Returns the response body as a sequence of newline-delimited lines that
     /// arrive AS THEY STREAM (not buffered whole), so the caller can parse + render
     /// each `token` frame the instant it lands instead of waiting for the body to
@@ -70,7 +70,7 @@ public protocol APIClientProtocol: Sendable, WebLoginRouteProbing {
     /// not implement it.
     func purgeCachedResponses() async
 
-    /// **Phase 09 / plan 09-02** — send an app-owned file as the whole request
+    /// Send an app-owned file as the whole request
     /// body, in exactly one authenticated attempt.
     ///
     /// This is the only route in the client that never materialises its body.
@@ -134,7 +134,7 @@ public extension APIClientProtocol {
         )
         let (data, response) = try await download(dataRequest)
         guard let envelope = try? JSONDecoder.hlDefault.decode(APIEnvelope<T>.self, from: data) else {
-            // L2 — preserve the raw-`T` fallback that `send`/`decodePayload` keep:
+            // Preserve the raw-`T` fallback that `send`/`decodePayload` keep:
             // a non-enveloped 200 (a future caller, or an upstream proxy that
             // strips the envelope) still decodes into `(data: T, meta: nil)` rather
             // than failing the whole call. The login/MFA callers always envelope,
@@ -198,7 +198,7 @@ public actor APIClient: APIClientProtocol {
     /// `internal` (not `private`) so `APIClient+HealthProbe.swift` can run
     /// the captive-portal probe through the same pinned session.
     let session: URLSession
-    /// #96 — dedicated FAIL-FAST session for interactive auth legs (passkey
+    /// Dedicated FAIL-FAST session for interactive auth legs (passkey
     /// login-options/verify, email login, register, refresh). The default
     /// `session` waits for connectivity + a 60 s resource timeout — right for
     /// the outbox, wrong for the login door (a no-network attempt parks on a
@@ -208,7 +208,7 @@ public actor APIClient: APIClientProtocol {
     /// still intercepts). Selected per-request via `APIRequest.failFast`; every
     /// non-auth request keeps the patient `session` untouched.
     let authSession: URLSession
-    /// W-COACH-SSE — dedicated STREAMING session for the server-Coach SSE turn
+    /// Dedicated STREAMING session for the server-Coach SSE turn
     /// (`POST /api/insights/chat`). Applies ``CoachStreamTimeoutPolicy`` (idle-reset
     /// request timeout + generous resource ceiling) instead of the patient
     /// session's 20 s/60 s wall, which prematurely cut off a slow LLM turn. Same
@@ -217,7 +217,7 @@ public actor APIClient: APIClientProtocol {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let onUnauthorized: (@Sendable () async -> Void)?
-    /// #114 / #115 · 0.2 — notification closure invoked when a route refuses an
+    /// Notification closure invoked when a route refuses an
     /// AI action (``AIRefusal``). AppContainer wires this to mirror the refusal
     /// into ``AICapabilityGate`` so the surface follows on the next render tick,
     /// without waiting for the next `/api/auth/me` load. Fire-and-forget: the
@@ -241,8 +241,10 @@ public actor APIClient: APIClientProtocol {
     /// ein transienter Refresh-Fehler darf nicht in einen Logout-Storm kippen.
     private var refreshHandler: (@Sendable () async -> RefreshOutcome)?
     private var selectedAccount: AccountAccessEntry?
+    /// D5 #2: the shared `/api/auth/me` answer (`APIClient+AuthMeSnapshot.swift`).
+    var authMeSnapshot = AuthMeSnapshot()
     private nonisolated let sharingRecoveryHandler = SharingRecoveryHandlerSlot()
-    /// #134 — where a failure the server answered is recorded with its
+    /// Where a failure the server answered is recorded with its
     /// request id. Production writes to the process-wide log the error banner
     /// and "Support-Info kopieren" read; a test injects its own.
     nonisolated let failureLog: RecentFailureLog
@@ -255,7 +257,7 @@ public actor APIClient: APIClientProtocol {
         keychain: KeychainStoring,
         pinner: CertificatePinner = CertificatePinner(),
         sessionConfiguration: URLSessionConfiguration = .default,
-        // W-COACH-SSE — the timeout policy for the coach SSE streaming session.
+        // The timeout policy for the coach SSE streaming session.
         // Production uses the generous default (`.coachStream`); a test can inject
         // a short policy to exercise the inactivity-stall path without a real
         // 120 s wait. Non-streaming paths are unaffected by this value.
@@ -285,7 +287,7 @@ public actor APIClient: APIClientProtocol {
         let delegate = PinningDelegate(pinner: pinner)
         session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
 
-        // #96 — fail-fast auth session: same pinning/headers/protocol-classes,
+        // Fail-fast auth session: same pinning/headers/protocol-classes,
         // but never waits for connectivity + short timeout. Built from a fresh
         // sibling config (inheriting `protocolClasses` so `MockURLProtocol`
         // still intercepts) so these knobs can't leak into the outbox config.
@@ -298,7 +300,7 @@ public actor APIClient: APIClientProtocol {
         let authDelegate = PinningDelegate(pinner: pinner)
         authSession = URLSession(configuration: authConfig, delegate: authDelegate, delegateQueue: nil)
 
-        // W-COACH-SSE — streaming session for the server-Coach SSE turn. Same
+        // Streaming session for the server-Coach SSE turn. Same
         // pin/headers/protocol-classes as the patient session, but timeouts come
         // from `coachStreamPolicy`: request = inactivity timeout (resets on every
         // received chunk, so an actively streaming reply never trips it), resource
@@ -328,7 +330,7 @@ public actor APIClient: APIClientProtocol {
     public func send<T: Decodable & Sendable>(_ request: APIRequest<T>) async throws -> T {
         let started = ContinuousClock.now
         do {
-            let (data, response) = try await execute(request)
+            let (data, response) = try await executeSharingAuthMe(request)
             return try recordingFailure(method: request.method, path: request.path, response: response, data: data) {
                 try ensureSuccess(response: response, data: data)
                 return try decodePayload(T.self, data: data, status: response.statusCode)
@@ -339,7 +341,7 @@ public actor APIClient: APIClientProtocol {
         }
     }
 
-    /// #134 — runs the status check and decode of one response and, if they
+    /// Runs the status check and decode of one response and, if they
     /// throw, records the failure with the request id of exactly that
     /// response before rethrowing. `internal` so the file upload path uses it.
     func recordingFailure<R>(
@@ -382,7 +384,7 @@ public actor APIClient: APIClientProtocol {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            if data.isEmpty, let empty = EmptyResponse() as? T { return empty } // C4 — a bodiless 2xx (204) is the ack.
+            if data.isEmpty, let empty = EmptyResponse() as? T { return empty } // A bodiless 2xx (204) is the ack.
             throw HLError.decoding(String(describing: error))
         }
     }
@@ -390,7 +392,7 @@ public actor APIClient: APIClientProtocol {
     public func sendVoid(_ request: APIRequest<EmptyPayload>) async throws {
         let started = ContinuousClock.now
         do {
-            let (data, response) = try await execute(request)
+            let (data, response) = try await executeSharingAuthMe(request)
             try recordingFailure(method: request.method, path: request.path, response: response, data: data) {
                 try ensureSuccess(response: response, data: data)
             }
@@ -403,7 +405,7 @@ public actor APIClient: APIClientProtocol {
     public func download(_ request: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
         let started = ContinuousClock.now
         do {
-            let (data, response) = try await execute(request)
+            let (data, response) = try await executeSharingAuthMe(request)
             try recordingFailure(method: request.method, path: request.path, response: response, data: data) {
                 try ensureSuccess(response: response, data: data)
             }
@@ -426,7 +428,7 @@ public actor APIClient: APIClientProtocol {
     /// `URLCache.shared` so no PHI JSON outlives the signed-in user. Idempotent
     /// and cheap (logout is rare); called from `performFullLocalLogout`.
     ///
-    /// INT-Q: `async`, exactly like the requirement. A synchronous method here
+    /// `async`, exactly like the requirement. A synchronous method here
     /// lost to the protocol extension's async no-op whenever a caller wrote
     /// `await client.purgeCachedResponses()` on the concrete actor in an async
     /// context (X1 found it in a test), so that call purged nothing; with the
@@ -440,11 +442,12 @@ public actor APIClient: APIClientProtocol {
             cache?.removeAllCachedResponses()
         }
         URLCache.shared.removeAllCachedResponses()
-        // #134 — the recent request ids belong to the closing session.
+        invalidateAuthMeSnapshot()
+        // The recent request ids belong to the closing session.
         failureLog.clear()
     }
 
-    /// **A360 H3 (v0156)** — progressive SSE line stream (see protocol doc).
+    /// Progressive SSE line stream (see protocol doc).
     /// Single-shot (no retry loop): the coach request already carries
     /// `maxRetries: 0`, and a streamed reply must not be silently re-issued mid
     /// way. Resolves the transport exactly like ``execute(_:)`` (streaming session
@@ -453,8 +456,14 @@ public actor APIClient: APIClientProtocol {
     /// caller starts consuming tokens. The returned line stream drives each chunk
     /// as it lands; `URLSession.bytes(for:)` resets the session's inactivity timer
     /// per chunk — identical idle-reset behaviour to ``download(_:)``.
+    ///
+    /// A 401 is the one answer that is re-sent: it arrives before any line has
+    /// reached the caller, so opening the stream again with a renewed bearer
+    /// repeats nothing. It goes through the same one-shot bridge as every
+    /// other request and only then surfaces as `.unauthorized`.
     public func streamLines(_ request: APIRequest<Data>) async throws -> AsyncThrowingStream<String, Error> {
-        let urlRequest = try buildURLRequest(request)
+        if request.method != .get { invalidateAuthMeSnapshot() }
+        var urlRequest = try buildURLRequest(request)
         let transport: URLSession = if request.failFast {
             authSession
         } else if request.streaming {
@@ -463,21 +472,15 @@ public actor APIClient: APIClientProtocol {
             session
         }
 
-        let bytes: URLSession.AsyncBytes
-        let response: URLResponse
-        do {
-            (bytes, response) = try await transport.bytes(for: urlRequest)
-        } catch let urlError as URLError {
-            throw mapURLError(urlError)
+        var budget = UnauthorizedBudget(userID: keychain.getString(forKey: KeychainKey.userID))
+        var opened = try await openStream(urlRequest, on: transport)
+        while opened.http.statusCode == 401 {
+            guard try await retryAfterUnauthorized(request: request, urlRequest: &urlRequest, budget: &budget) else {
+                throw HLError.unauthorized
+            }
+            opened = try await openStream(urlRequest, on: transport)
         }
-        guard let http = response as? HTTPURLResponse else {
-            throw HLError.network(.other("non-HTTP response"))
-        }
-        if http.statusCode == 401 {
-            // Mirror the buffered path's 401 surfacing. The coach turn never
-            // refreshes mid-stream (one-shot); the store surfaces a sign-in error.
-            throw HLError.unauthorized
-        }
+        let (bytes, http) = opened
         if http.statusCode == 429 {
             let retryAfter = RateLimitDelay.seconds(from: http, body: nil)
             throw HLError.rateLimited(retryAfter: retryAfter)
@@ -515,6 +518,21 @@ public actor APIClient: APIClientProtocol {
         }
     }
 
+    private func openStream(
+        _ urlRequest: URLRequest,
+        on transport: URLSession
+    ) async throws -> (bytes: URLSession.AsyncBytes, http: HTTPURLResponse) {
+        do {
+            let (bytes, response) = try await transport.bytes(for: urlRequest)
+            guard let http = response as? HTTPURLResponse else {
+                throw HLError.network(.other("non-HTTP response"))
+            }
+            return (bytes, http)
+        } catch let urlError as URLError {
+            throw mapURLError(urlError)
+        }
+    }
+
     // MARK: - Internals
 
     /// Optional Setter — wird vom AppContainer nach Bootstrap genutzt um den
@@ -524,13 +542,13 @@ public actor APIClient: APIClientProtocol {
         refreshHandler = handler
     }
 
-    /// #114 / #115 · 0.2 — composition-root setter for the AI-refusal mirror
+    /// Composition-root setter for the AI-refusal mirror
     /// closure. Idempotent (overwrites).
     public func setAIRefusalHandler(_ handler: @escaping @Sendable (AIRefusal) async -> Void) {
         onAIRefusal = handler
     }
 
-    /// #30 — composition-root setter for the module-disabled mirror closure.
+    /// Composition-root setter for the module-disabled mirror closure.
     /// Idempotent. AppContainer wires this so ``ModuleGate`` learns about a
     /// disabled module in the same tick the route 403's, without a follow-up
     /// `/api/auth/me` round-trip.
@@ -573,7 +591,7 @@ public actor APIClient: APIClientProtocol {
     /// the URLSession (the session config is bundle-ID + version + UA only; none
     /// of those change when the user just retargets a different host).
     ///
-    /// **Runtime guard (M-2, v0.6.2):** a HOST CHANGE while an auth token is in
+    /// **Runtime guard:** a HOST CHANGE while an auth token is in
     /// the Keychain is refused (logged, the live session continues against the
     /// previous environment): switching mid-session would invalidate the
     /// Cert-Pin SPKI contract of the host the token was issued for. The one
@@ -591,7 +609,7 @@ public actor APIClient: APIClientProtocol {
     /// geänderte Header bis zum nächsten Start verschluckt und in DEBUG eine
     /// `assertionFailure` ausgelöst. Header allein tauscht ``setAccessHeaders(_:)``.
     public func setEnvironment(_ newEnvironment: AppEnvironment) {
-        // R1 — Ersteinrichtung ist kein Hostwechsel. Ohne bisherige Adresse
+        // Ersteinrichtung ist kein Hostwechsel. Ohne bisherige Adresse
         // gibt es keinen vorherigen Host, dessen Pins verletzt werden könnten,
         // und keinen Transport, auf dem der Token je benutzt wurde. Diesen Fall
         // zu verweigern hat den Betreiber ausgesperrt: das Onboarding schrieb
@@ -619,16 +637,16 @@ public actor APIClient: APIClientProtocol {
     // Ordered transport state machine: session choice, one-shot auth recovery,
     // rate limits, server retries, URL errors, and typed retry delays.
     // swiftlint:disable:next cyclomatic_complexity
-    private func execute(_ request: APIRequest<some Any>) async throws -> (Data, HTTPURLResponse) {
+    func execute(_ request: APIRequest<some Any>) async throws -> (Data, HTTPURLResponse) {
         var urlRequest = try buildURLRequest(request)
         var attempt = 0
         let maxRetries = request.maxRetries
-        // #5 — this request's auth-recovery budget: at most one refresh AND at
+        // This request's auth-recovery budget: at most one refresh AND at
         // most one retry against a session that rotated underneath it.
-        var budget = UnauthorizedBudget()
+        var budget = UnauthorizedBudget(userID: keychain.getString(forKey: KeychainKey.userID))
         var attemptedSharingReconcile = false
-        // #96 — interactive auth legs ride the fail-fast session (no
-        // wait-for-connectivity, short timeout). W-COACH-SSE — the coach SSE
+        // Interactive auth legs ride the fail-fast session (no
+        // wait-for-connectivity, short timeout). The coach SSE
         // turn rides the streaming session (idle-reset request timeout + generous
         // resource ceiling). Everything else keeps the patient outbox session.
         // `failFast` is checked first so an auth leg can never be misrouted onto
@@ -664,7 +682,7 @@ public actor APIClient: APIClientProtocol {
                     if Self.surfaces401(path: request.path, body: data) {
                         return (data, http)
                     }
-                    // #5 — `urlRequest` still carries the bearer THIS attempt was
+                    // `urlRequest` still carries the bearer THIS attempt was
                     // sent with, which is what makes the rotation check possible
                     // here; the helper rebuilds it when it says "retry".
                     guard try await retryAfterUnauthorized(
@@ -678,7 +696,7 @@ public actor APIClient: APIClientProtocol {
                     continue
                 }
 
-                // 14-06 — gated on the only two status codes that can consume the
+                // Gated on the only two status codes that can consume the
                 // result. This is behaviour-preserving BY CONSTRUCTION, not by
                 // argument: both arms below already require `403` and `409`
                 // respectively, so for every other status the decode was computed
@@ -721,7 +739,7 @@ public actor APIClient: APIClientProtocol {
                 }
 
                 if http.statusCode == 429 {
-                    // #110 — ab Server v1.39 trägt jede Limiter-429 `Retry-After`
+                    // Ab Server v1.39 trägt jede Limiter-429 `Retry-After`
                     // (Sekunden, ≥ 1) neben `X-RateLimit-Reset` (ISO-8601);
                     // manche Routen spiegeln den Zeitpunkt in `meta.retryAt`.
                     // `RateLimitDelay` liest sie in dieser Reihenfolge (auch die
@@ -783,7 +801,7 @@ public actor APIClient: APIClientProtocol {
         await sharingRecoveryHandler.invoke(SharingRecoveryEvent(reason: reason, reconciledUser: user))
     }
 
-    /// #5 — what one request may still spend on recovering from a 401: one
+    /// What one request may still spend on recovering from a 401: one
     /// refresh (the pre-existing budget) and one retry against a session that
     /// rotated while the request was on the wire. Both are one-shot, so the
     /// pathological case — a server that answers 401 to every bearer — costs at
@@ -791,9 +809,13 @@ public actor APIClient: APIClientProtocol {
     private struct UnauthorizedBudget {
         var attemptedRefresh = false
         var retriedAfterRotation = false
+        /// The account signed in when the request was first built. A rotated
+        /// bearer is re-sent only for the same account (#2): after a sign-out
+        /// of A and a sign-in of B the Keychain's bearer is B's.
+        let userID: String?
     }
 
-    /// #5 — resolves a 401 into "re-send" or "give up", and rebuilds
+    /// Resolves a 401 into "re-send" or "give up", and rebuilds
     /// `urlRequest` when it says re-send.
     ///
     /// The defect: at the 24 h access-token boundary every in-flight request
@@ -820,6 +842,16 @@ public actor APIClient: APIClientProtocol {
         urlRequest: inout URLRequest,
         budget: inout UnauthorizedBudget
     ) async throws -> Bool {
+        // #2 — another account signed in while this request was on the wire.
+        // Its 401 answers the previous account's bearer; neither a re-send nor
+        // a refresh may carry the body over to the account now signed in, and
+        // the new session is no reason to sign anyone out.
+        guard RequestOwnerBinding.canonical(keychain.getString(forKey: KeychainKey.userID))
+            == RequestOwnerBinding.canonical(budget.userID) || Self.isAuthExempt(path: request.path) else
+        {
+            HLLog.api.info("401 for a session that has since changed accounts — not re-sent")
+            return false
+        }
         let currentBearer = keychain.getString(forKey: KeychainKey.authToken).map { "Bearer \($0)" }
         if !budget.retriedAfterRotation,
            request.allowsAuthenticationRecovery,
@@ -861,7 +893,7 @@ public actor APIClient: APIClientProtocol {
     /// — sie haben kein Refresh-Token-Konzept und der Server hat ihre 401s schon
     /// mit `Invalid credentials` etc. erklärt.
     ///
-    /// **401-Cascade-Gating (v0.10.0):** der Refresh liefert ein dreiwertiges
+    /// **401-Cascade-Gating:** der Refresh liefert ein dreiwertiges
     /// ``RefreshOutcome``. Nur ``RefreshOutcome/authFailure`` (revoked/reuse/
     /// invalid → toter Token) triggert `onUnauthorized` (Logout-Cascade).
     /// ``RefreshOutcome/transient`` (Netzwerk/5xx/Rate-Limit beim Refresh selbst)
@@ -913,7 +945,7 @@ public actor APIClient: APIClientProtocol {
     /// genau der vom Server diktierte Wert (+ kleiner Jitter) verwendet —
     /// kein zusätzliches Exponential-Backoff. Sonst Standard-Backoff.
     ///
-    /// #110 — a wait beyond ``inRequestRateLimitCeiling`` is thrown back
+    /// A wait beyond ``inRequestRateLimitCeiling`` is thrown back
     /// instead of slept: re-sending after the ceiling but before the named
     /// instant only spends the bucket again. The caller owns the long wait
     /// (the outbox pauses its pass, an importer holds its window).
@@ -935,11 +967,11 @@ public actor APIClient: APIClientProtocol {
             || path.hasPrefix("/api/auth/logout")
             || path.hasPrefix("/api/auth/passkey/")
             || path.hasPrefix("/api/auth/register")
-            // #37 — the second-factor verify legs are pre-auth (the ticket, not
+            // The second-factor verify legs are pre-auth (the ticket, not
             // a Bearer, is the credential). A wrong/expired code returns 401/422
             // that must surface verbatim, NOT trigger the refresh→logout bridge.
             || path.hasPrefix("/api/auth/mfa")
-            // #49 — the native OIDC token exchange is pre-auth (the one-time
+            // The native OIDC token exchange is pre-auth (the one-time
             // handoff code + PKCE verifier are the credential, there is no Bearer
             // yet). Its single generic 401 (invalid/expired/used/PKCE-mismatch) is
             // a login failure that must surface, NOT trigger the refresh→logout
@@ -964,7 +996,7 @@ public actor APIClient: APIClientProtocol {
     ///   as a bogus "please re-login"), so the body must survive for the delete flow
     ///   to detect it and route the user to the web deletion page. This path is
     ///   ONLY ever the account-delete DELETE, so preserving all its 401s is safe.
-    /// - **Any path, by code (R2 / #115 A3):** a 401 whose body carries an
+    /// - **Any path, by code:** a 401 whose body carries an
     ///   `auth.stepup.*` / `auth.reproof.*` code (``SecurityStepUp/isProofRefusal(body:)``)
     ///   also surfaces verbatim — the token was fine, the action wants a fresh
     ///   proof. This covers `POST /api/share-links`, `POST /api/mcp/tokens`,
@@ -990,7 +1022,7 @@ public actor APIClient: APIClientProtocol {
             // "step up on the web" from "your session died", showing a
             // misleading re-login prompt for a perfectly valid session.
             || path == "/api/settings/data"
-            // #57 — native 2FA: `step-up`'s generic-401 factor re-proof and the
+            // Native 2FA: `step-up`'s generic-401 factor re-proof and the
             // `…/me/mfa/*` `401 auth.stepup.required` must surface verbatim, not
             // collapse to `.unauthorized` + the refresh→logout bridge (the token
             // is valid; the store branches on the body to re-prompt the ceremony).
@@ -1034,12 +1066,23 @@ public actor APIClient: APIClientProtocol {
         var req = URLRequest(url: finalURL)
         req.httpMethod = request.method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        // #176 — the interface language, always. URLSession fills the header
+        // from the bundle's preferred localizations, which a per-app language
+        // usually but not provably follows; the server words the Today texts
+        // in this language on a Bearer request, so it is set here explicitly.
+        req.setValue(AppLanguage.current.acceptLanguageHeader, forHTTPHeaderField: "Accept-Language")
 
         if let body = request.body {
             req.httpBody = body
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        // #2 — a request bound to an account (the outbox replay binds each
+        // row's owner) is built only while that account is signed in. Read
+        // here, beside the bearer, so a rebuild for a retry asks again.
+        guard RequestOwnerBinding.admits(signedIn: keychain.getString(forKey: KeychainKey.userID)) else {
+            throw HLError.authenticatedSessionChanged
+        }
         if let token = keychain.getString(forKey: KeychainKey.authToken) {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -1052,7 +1095,7 @@ public actor APIClient: APIClientProtocol {
             req.setValue(device, forHTTPHeaderField: "X-Device-Id")
         }
 
-        // GH-iOS #27 — Cloudflare Access, Pangolin and other proxy headers.
+        // Cloudflare Access, Pangolin and other proxy headers.
         environment.applyAccessHeaders(to: &req)
 
         // An EMPTY key means "this route does not evaluate one"
@@ -1095,38 +1138,58 @@ public actor APIClient: APIClientProtocol {
             )
         }
         guard let selectedAccount else { return }
-        switch Self.recordRoute(for: request.path) {
-        case .actor:
-            return
-        case let .section(section):
-            guard selectedAccount.allows(section: section, write: request.method != .get) else {
-                throw Self.localSharingDenial()
-            }
-        case .wholeRecord:
-            guard selectedAccount.allowsWholeRecord(write: request.method != .get) else {
-                throw Self.localSharingDenial()
-            }
-        case .unclassified:
+        let route = Self.recordRoute(for: request.path, method: request.method)
+        if route == .actor { return }
+        guard route.admits(selectedAccount, method: request.method) else {
             throw Self.localSharingDenial()
         }
         urlRequest.setValue(selectedAccount.accountId, forHTTPHeaderField: header)
     }
 
-    private enum RecordRoute {
+    enum RecordRoute: Equatable {
         case actor
+        /// A section route that only a managed profile's guardian reaches
+        /// (`requireRecordAuth("guardian", …)`, server v1.48.0).
+        case guardian(AccountAccessSection)
+        /// A guardian surface over the whole managed profile
+        /// (`requireGuardianAuth`, the `/api/record-settings` family).
+        case guardianRecord
+        /// A section route that takes a MANAGE grant on every method.
+        case manage(AccountAccessSection)
         case section(AccountAccessSection)
         case wholeRecord
         case unclassified
+
+        /// Whether the selected grant reaches this route under `method`.
+        func admits(_ account: AccountAccessEntry, method: HTTPMethod) -> Bool {
+            switch self {
+            case .actor: true
+            case let .guardian(section): account.allowsGuardian(section: section)
+            case .guardianRecord: account.isGuardianOfManagedProfile
+            case let .manage(section): account.level == .manage && account.allows(section: section, write: true)
+            case let .section(section): account.allows(section: section, write: method != .get)
+            case .wholeRecord: account.allowsWholeRecord(write: method != .get)
+            case .unclassified: false
+            }
+        }
     }
 
-    private nonisolated static func recordRoute(for path: String) -> RecordRoute {
+    nonisolated static func recordRoute(for path: String, method: HTTPMethod = .get) -> RecordRoute {
         let actorPrefixes = [
             "/api/auth", "/api/account", "/api/meta", "/api/health", "/api/version",
             "/api/devices", "/api/notifications", "/api/integrations", "/api/import",
-            "/api/workouts", "/api/insights/ecg"
+            "/api/workouts", "/api/insights/ecg", "/api/settings/module-list-layout"
         ]
         if actorPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
             return .actor
+        }
+        // Apple Health sync is the owner's own device writing its own record;
+        // these routes are owner-only and never take a record selector.
+        if path == "/api/symptoms/events/batch" || path.hasSuffix("/by-external-ids") {
+            return .actor
+        }
+        if let guarded = guardedRecordRoute(for: path, method: method) {
+            return guarded
         }
         let sections: [(String, AccountAccessSection)] = [
             ("/api/measurements", .measurements), ("/api/custom-metrics", .measurements),
@@ -1144,13 +1207,38 @@ public actor APIClient: APIClientProtocol {
         if let section = sections.first(where: { path == $0.0 || path.hasPrefix($0.0 + "/") })?.1 {
             return .section(section)
         }
-        // POLISH-A A6 — the timeline admits the whole record only (server
+        // The timeline admits the whole record only (server
         // v1.47.0 `requireRecordAuth("read", "record")`), never a scoped grant.
         let wholeRecordPrefixes = ["/api/dashboard", "/api/insights", "/api/export/health-record", "/api/timeline"]
         if wholeRecordPrefixes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
             return .wholeRecord
         }
         return .unclassified
+    }
+
+    /// The routes whose need depends on the method or on the managed-profile
+    /// marker (server v1.48.0): `record-settings`, the document vault and
+    /// the seizure diary. `nil` for every other path.
+    private nonisolated static func guardedRecordRoute(for path: String, method: HTTPMethod) -> RecordRoute? {
+        if path == "/api/record-settings" || path.hasPrefix("/api/record-settings/") {
+            return .guardianRecord
+        }
+        // The vault: reads on the section, changes for the guardian, the
+        // source integrations and the purge for the owner only.
+        switch DocumentRouteAccess.need(path: path, method: method) {
+        case .read?: return .section(.documents)
+        case .guardian?: return .guardian(.documents)
+        case .ownerOnly?: return .unclassified
+        case nil: break
+        }
+        // The seizure diary rides the illness section (server table, dev
+        // #191): reads on READ, a new seizure and a rescue dose on WRITE,
+        // every edit, delete, type and the rule on MANAGE.
+        guard path == "/api/seizures" || path.hasPrefix("/api/seizures/") else { return nil }
+        if method == .get || (method == .post && SeizureRoutePaths.isWriteLevelPost(path)) {
+            return .section(.illness)
+        }
+        return .manage(.illness)
     }
 
     private nonisolated static func localSharingDenial() -> HLError {
@@ -1164,7 +1252,7 @@ public actor APIClient: APIClientProtocol {
     /// `internal` — see `decodePayload`.
     func ensureSuccess(response: HTTPURLResponse, data: Data) throws {
         guard !(200 ... 299).contains(response.statusCode) else { return }
-        // Audit B-2 — the ONE response header the replay path needs, read here
+        // The ONE response header the replay path needs, read here
         // because here is where the status and the headers are still together;
         // everything downstream sees only the thrown error. `409` +
         // `X-Idempotent-Replay: false` is the server still processing the FIRST
@@ -1175,7 +1263,7 @@ public actor APIClient: APIClientProtocol {
             throw HLError.idempotencyReplayInFlight
         }
         let envelope = try? decoder.decode(APIEnvelope<EmptyPayload>.self, from: data)
-        // #30 — module-gate rejection: `403` + `meta.errorCode ==
+        // Module-gate rejection: `403` + `meta.errorCode ==
         // "module.disabled"` + `meta.module: "<key>"`. We honour the typed
         // error only when BOTH (a) status is 403 AND (b) the meta carries the
         // module.disabled code with a non-empty module key. Any other shape
@@ -1197,7 +1285,7 @@ public actor APIClient: APIClientProtocol {
             if let handler = onModuleDisabled {
                 Task { await handler(module) }
             }
-            // #115 · 0.2 — beside an AI refusal the module code carries
+            // Beside an AI refusal the module code carries
             // `meta.capability` + `meta.reason`; hand those to the capability
             // gate too, so the surface can name the reason.
             if let refusal = AIRefusal.moduleRefusal(meta: meta), let handler = onAIRefusal {
@@ -1205,7 +1293,7 @@ public actor APIClient: APIClientProtocol {
             }
             throw HLError.moduleDisabled(module)
         }
-        // #114 / #115 · 0.2 — an AI refusal. Server v1.39 carries the code in
+        // An AI refusal. Server v1.39 carries the code in
         // `meta.errorCode` next to `meta.capability` / `meta.reason` /
         // `meta.module`; the pre-v1.39 top-level `errorCode` is the fallback.
         // Before this read the top level only, so no v1.39 refusal was ever
@@ -1224,12 +1312,12 @@ public actor APIClient: APIClientProtocol {
             }
             throw HLError.aiUnavailable(refusal)
         }
-        // v1.35.0 (GH #83) — a refusal that states WHICH rule it missed throws
+        // v1.35.0 — a refusal that states WHICH rule it missed throws
         // its own typed error; every other envelope falls through (see
         // `APIRefusal`).
         try APIRefusal.throwIfReasoned(envelope?.meta)
         let msg = envelope?.error ?? "HTTP \(response.statusCode)"
-        // E1 — v1.39.1 names the batch route's schema refusal and lists the
+        // v1.39.1 names the batch route's schema refusal and lists the
         // offending entries under `details.issues`; the uploader splits on it.
         if let invalid = MeasurementBatchInvalid.from(
             path: response.url?.path ?? "",
@@ -1239,7 +1327,16 @@ public actor APIClient: APIClientProtocol {
         ) {
             throw invalid
         }
-        // #110 / #112 — the opted-in routes whose `meta` carries detail the
+        // #191 — the reminder-phase PUT names its bounds under
+        // `details.issues[]`, so the sheet can say the allowed range.
+        if let refusal = MedicationPhaseConfigRefusal.from(
+            path: response.url?.path ?? "",
+            status: response.statusCode,
+            body: data
+        ) {
+            throw refusal
+        }
+        // The opted-in routes whose `meta` carries detail the
         // surface shows (refused leaf ids, a relay's answer). Every other
         // refusal keeps the `HLError.server` shape below (see `APIRefusalDetail`).
         if let detail = APIRefusalDetail.detail(
@@ -1254,14 +1351,16 @@ public actor APIClient: APIClientProtocol {
         // every code there, e.g. `consent.ai.required`,
         // `documents.inbound.providerUnsupported`); the top-level `errorCode` is
         // the pre-v1.39 fallback. Prefer the nested one.
+        // Server 1.49.0: a refused field names its allowed range
+        // (`details.issues[].minimum/maximum`); the message then says it.
         throw HLError.server(
             status: response.statusCode,
             code: envelope?.meta?.errorCode ?? envelope?.errorCode,
-            message: msg
+            message: APIValidationBounds.message(status: response.statusCode, serverMessage: envelope?.error, body: data) ?? msg
         )
     }
 
-    /// Audit B-2 — the server's idempotency verdict header. `false` on a `409`
+    /// The server's idempotency verdict header. `false` on a `409`
     /// means a request with the same key is IN FLIGHT (retry later); `true` on a
     /// `2xx` means the body is the first request's answer replayed, which the
     /// success path already treats as delivery and needs no branch of its own.
@@ -1289,7 +1388,7 @@ public actor APIClient: APIClientProtocol {
         switch err.code {
         case .timedOut: .network(.timeout)
         case .notConnectedToInternet: .offline
-        // B5 (1.4) — severed mid-load: a write may have reached the server.
+        // Severed mid-load: a write may have reached the server.
         case .networkConnectionLost: .network(.connectionLost)
         case .cannotFindHost, .dnsLookupFailed: .network(.dnsFailure)
         case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected, .clientCertificateRequired:
@@ -1299,7 +1398,7 @@ public actor APIClient: APIClientProtocol {
         }
     }
 
-    /// E1 — ``mapURLError(_:)`` for one request. A write (any non-GET that is
+    /// ``mapURLError(_:)`` for one request. A write (any non-GET that is
     /// neither an interactive auth leg nor a stream) cut off on the wire while
     /// its task is still running was not cancelled by anyone who meant it: the
     /// app was suspended, a background window ended, or the certificate pin
@@ -1314,7 +1413,7 @@ public actor APIClient: APIClientProtocol {
         return .network(.writeCancelled)
     }
 
-    /// #153 (public #27) — swaps only the access headers, signed in or not.
+    /// Swaps only the access headers, signed in or not.
     /// The address, and with it the pinned host and the session the token was
     /// issued on, stays as it is, so there is nothing for the M-2 guard of
     /// ``setEnvironment(_:)`` to protect. Every request built after this

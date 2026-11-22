@@ -7,7 +7,7 @@
     import os
     import Testing
 
-    /// **R-A2 (1.4) — the dose and State-of-Mind observers start at launch.**
+    /// **The dose and State-of-Mind observers start at launch.**
     ///
     /// Up to 1.3 `RootView` armed both after eight awaits of its phase task,
     /// so a launch that never drew a view never registered them. They are now
@@ -152,7 +152,6 @@
         func attachUploader(_: MeasurementBatchUploader) async {}
         func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
         func setInitialBackfillCutoff(_: Date?) async {}
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     }
 
     /// A dose reader whose arming takes a moment, so a second caller arrives

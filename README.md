@@ -1,4 +1,4 @@
-<h1 align="center">HealthLog Companion App for iPhone and Apple Watch</h1>
+<h1 align="center">HealthLog Companion App for iPhone, iPad and Apple Watch</h1>
 
 <p align="center">
   The native iOS app for <a href="https://github.com/MBombeck/HealthLog">HealthLog</a>, the self-hosted health tracker you run on your own server.<br />
@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://apps.apple.com/app/id6769501341"><img src="https://img.shields.io/itunes/v/6769501341?label=App%20Store&color=0D96F6" alt="HealthLog on the App Store" /></a>
-  <img src="https://img.shields.io/badge/iOS-18%2B-000000" alt="iOS 18 or later" />
+  <img src="https://img.shields.io/badge/iOS%20%7C%20iPadOS-26%2B-000000" alt="iOS and iPadOS 26 or later" />
   <img src="https://img.shields.io/badge/watchOS-11%2B-000000" alt="watchOS 11 or later" />
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue.svg" alt="License: PolyForm Noncommercial 1.0.0" /></a>
@@ -24,12 +24,29 @@
 ---
 
 <p align="center">
-  <img src="docs/screenshots/ios-dashboard.png" width="240" alt="HealthLog home screen in dark mode: a medication compliance ring showing 2 of 3 doses taken today, and tiles for weight, blood pressure and pulse, each with a trend line. Synthetic demo data." />
-  <img src="docs/screenshots/ios-medications.png" width="240" alt="Medications list in dark mode: one card per medication with last and next intake, 7-day and 30-day compliance bars, and Taken and Skipped buttons. Synthetic demo data." />
-  <img src="docs/screenshots/ios-sharing.png" width="240" alt="Share screen in dark mode: pick what is included, the time range, and the output as a revocable link, a PDF report or a ZIP record. Synthetic demo data." />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-dashboard-dark.png" />
+    <img src="docs/screenshots/iphone-dashboard-light.png" width="160" alt="HealthLog home screen on iPhone: a medication compliance ring showing 2 of 3 doses taken today, and tiles for weight, blood pressure and pulse with trend lines. Synthetic demo data." />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-medications-dark.png" />
+    <img src="docs/screenshots/iphone-medications-light.png" width="160" alt="Medications on iPhone: one card per medication with last and next intake, 30-day compliance and Take and Skip buttons. Synthetic demo data." />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-insights-dark.png" />
+    <img src="docs/screenshots/iphone-insights-light.png" width="160" alt="Insights overview on iPhone: rings for health score, daily condition, sleep score, daily load and recovery. Synthetic demo data." />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-timeline-dark.png" />
+    <img src="docs/screenshots/iphone-timeline-light.png" width="160" alt="Timeline on iPhone: conditions, medications with dose changes, a vaccination and a doctor visit above lines for blood pressure, weight, resting heart rate, sleep and headache on one time axis. Synthetic demo data." />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-sharing-dark.png" />
+    <img src="docs/screenshots/iphone-sharing-light.png" width="160" alt="Share screen on iPhone: the time range, the output form with Report (PDF) selected, and an optional practice name for the report. Synthetic demo data." />
+  </picture>
 </p>
 
-HealthLog is a health tracker for iPhone and Apple Watch that stores everything on a server you run yourself. It keeps Apple Health (HealthKit) in two-way sync with that server, reminds you about your medications, and shows blood pressure, weight, glucose, sleep and your other readings as charts you can actually read. It is meant for people who self-host things: in a homelab, on a NAS or on a small VPS.
+HealthLog is a health tracker for iPhone, iPad and Apple Watch that stores everything on a server you run yourself. It keeps Apple Health (HealthKit) in two-way sync with that server, reminds you about your medications, and shows blood pressure, weight, glucose, sleep and your other readings as charts you can actually read. It is meant for people who self-host things: in a homelab, on a NAS or on a small VPS.
 
 The app needs a [HealthLog server](https://github.com/MBombeck/HealthLog) to talk to. It has no built-in server and no default address. On first launch you enter the URL of your own instance, and every reading you log lands in the same database your HealthLog web app reads from. If you don't have a server yet, you can look around on the public demo first (see below).
 
@@ -40,6 +57,23 @@ This repository holds the full source of the app. Each [release](https://github.
 The easiest way is the [App Store](https://apps.apple.com/app/id6769501341). HealthLog costs a small one-time price there, with no subscription and no in-app purchases. The price helps cover Apple's yearly developer fee. If the price is a problem for you, write to [marc@healthlog.dev](mailto:marc@healthlog.dev) and you'll get a free code, no questions asked. The [App Store announcement](https://github.com/MBombeck/healthlog-iOS/discussions/8) has the background.
 
 There are two free alternatives. The [TestFlight beta](https://testflight.apple.com/join/bucuTBpa) gets new builds before the App Store does. You can also build the app yourself from this repository; the steps are further down.
+
+## On the iPad
+
+Since 1.7 HealthLog is a universal app, and the iPad version costs nothing extra. In a wide window a sidebar holds every section, grouped into Journal and Findings, and the "+" for logging sits at the top right. Home, Insights, metric pages, labs and documents use the width: the chart beside its summary, the lab markers as a table with the selected marker's history next to it, a document's preview beside the list. Narrow windows and Split View look like the iPhone. The pointer and a hardware keyboard work too.
+
+The iPad talks to your server like the web app does. Apple Health stays on the iPhone, so the iPad does not read or write HealthKit. Medication reminders are planned on one device: the iPad schedules them only when no iPhone on your account has been seen for a week, or when you turn them on there.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ipad-insights-dark.png" />
+    <img src="docs/screenshots/ipad-insights-light.png" width="380" alt="Insights on iPad with the sidebar open: the sections Journal and Findings on the left, health score rings and vital trends on the right. Synthetic demo data." />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/ipad-timeline-dark.png" />
+    <img src="docs/screenshots/ipad-timeline-light.png" width="380" alt="Timeline on iPad with the sidebar open: conditions, medications, a vaccination and a doctor visit above lines for blood pressure, weight, resting heart rate, sleep and headache, with the week's averages below. Synthetic demo data." />
+  </picture>
+</p>
 
 ## Try it with the demo server
 
@@ -54,12 +88,13 @@ The demo holds about a year of synthetic data. You can browse all of it, but cha
 - **Home screen.** Today at a glance: a health ring, your medication compliance, and tiles for blood pressure, pulse, weight, steps, mood, glucose and sleep. A "+" sheet lets you log any metric your server tracks.
 - **Apple Health sync in both directions.** Weight, blood pressure, heart rate, HRV, blood oxygen, glucose and mood (State of Mind) go both ways. Steps, activity, workouts, sleep stages and ECG recordings go from Apple Health to your server. Every write carries an external ID, so the server and Apple Health don't copy each other's entries back and forth. The [table below](#what-syncs-with-apple-health) has the details.
 - **Medication tracker and reminders.** Daily, weekly, cyclic, rolling and as-needed schedules. You can correct past intakes. Due doses show up as Live Activities, and the buttons in a reminder notification record a dose without opening the app. GLP-1 medications also get drug-level curves calculated from your actual doses, titration plans, injection-site tracking and a side-effects log.
+- **Timeline.** Conditions, medications with their dose changes, vaccinations, doctor visits and your own values on one time axis, from a week to everything. On the iPhone it turns sideways in full screen. Needs a server that offers it.
 - **Charts.** Every metric has a detail view with a linear or logarithmic axis, a time range picker, reference bands from the ESC/ESH and ADA guidelines, and VoiceOver descriptions. Reference ranges and scores link to the sources they are based on.
 - **Insights and an optional coach.** A health score breakdown, correlation cards, a daily briefing and a coach you can ask about your numbers. All AI features are off until you turn them on (see [Privacy](#privacy)).
-- **Apple Watch, widgets and Shortcuts.** A Watch app with complications, home screen and lock screen widgets, App Intents for Siri and Shortcuts ("Did I take my medication?"), and Spotlight search for your medications.
+- **Apple Watch, widgets and Shortcuts.** A Watch app with complications, home screen and lock screen widgets (one of them configurable, with a daily trend), App Intents for Siri and Shortcuts ("Did I take my medication?"), and Spotlight search for your medications.
 - **Sharing with your doctor.** You choose what is included, the time range and the format: a link you can revoke, a PDF report, or a ZIP of the record. There is also a doctor report based on FHIR with LOINC codes.
 
-The app is available in English, German and Dutch. How it picks its language and how a new one gets in: [docs/localization.md](docs/localization.md).
+The app is available in English, German, Dutch, Korean and Spanish. Translations are made in Tolgee at [translate.healthlog.dev](https://translate.healthlog.dev). How the app picks its language and how a new one gets in: [docs/localization.md](docs/localization.md).
 
 ## What syncs with Apple Health
 
@@ -69,16 +104,17 @@ The app is available in English, German and Dutch. How it picks its language and
 | Weight, body fat, BMI, body temperature, VO₂ max | Both ways | Writes from the app carry `HKMetadataKeyExternalUUID` so re-reads are recognised and not duplicated. |
 | Blood pressure, heart rate, resting heart rate, HRV, blood oxygen, blood glucose | Both ways | Same duplicate protection. The server is the reference for values you typed in, Apple Health for values a device measured. |
 | Mood (State of Mind) | Both ways | Can be turned off in the app's settings. |
+| Symptoms, resting energy, nutrition, heart events | To the server | Symptoms land in the symptom diary. Read only where your server offers the matching feature. |
 | Sleep stages, walking metrics, respiratory rate and other measured values | To the server | |
 | ECG recordings | To the server | |
 | Workouts with heart rate detail | To the server | Sent as workout bundles. |
 | Medication intakes, notes | Server only | HealthKit has no standard type for these, so the app and the web UI write them to the server directly. |
 
-You decide per data type in the iOS permission sheet what the app may read and write. Types you don't allow stay on the phone.
+You decide per data type in the iOS permission sheet what the app may read and write. Types you don't allow stay on the phone. Deleting a reading, workout, ECG or mood entry in Apple Health removes it on your server too. Only the iPhone syncs with Apple Health; the iPad reads your data from the server.
 
 ## Requirements
 
-- An iPhone with iOS 18 or later. The Watch app needs watchOS 11.
+- An iPhone with iOS 26 or later, or an iPad with iPadOS 26 or later. iPhones on iOS 18 to 25 keep version 1.5. The Watch app needs watchOS 11.
 - A [HealthLog server](https://github.com/MBombeck/HealthLog) the phone can reach over HTTPS, or the demo server for a first look. Keep the server up to date: the app checks the server version and only offers features your server supports. Signing in through your instance's own login page needs server v1.32.11 or later.
 - For the on-device coach: an iPhone that supports Apple Intelligence, on iOS 26.
 
@@ -163,14 +199,15 @@ CI holds the project to these gates: `swiftlint` and `swiftformat --lint` clean,
 │   ├── LiveActivity/           # Medication Live Activities
 │   ├── Models/                 # Codable + Sendable domain types
 │   ├── Pharmacokinetics/       # GLP-1 level modelling (EMA-parameterised)
+│   ├── PushRelay/              # Opt-in end-to-end sealed pushes through the relay
 │   ├── Repositories/           # SWR + Outbox network glue
 │   ├── Screens/                # SwiftUI screen surfaces
 │   ├── Services/               # APIClient, Keychain, HealthKit, Passkey, AI/
-│   ├── Standalone/             # Local-only runtime (its entry point is switched off in release builds)
 │   ├── Stores/                 # @MainActor @Observable view-models
 │   └── Sync/                   # BackgroundSyncCoordinator + cluster filter
 ├── HealthLogWatch/             # watchOS companion app
 ├── HealthLogWidgets/           # Home/lock-screen widgets
+├── NotificationServiceExtension/ # Opens sealed relay pushes on the device
 ├── HealthLogTests/             # Swift Testing + SnapshotTesting
 ├── HealthLogUITests/           # XCUITest journeys
 ├── docs/                       # Architecture, security, API contract, ADRs
@@ -192,13 +229,14 @@ The most useful things you can do:
 - **Run the app** against your own server (or the demo) and tell me where it breaks.
 - **Open an [issue](https://github.com/MBombeck/healthlog-iOS/issues)** with the build number from **More > About**, one line on what you tried, one line on what happened compared with what you expected, a screenshot if it's visual, and whether it happens again.
 - **Tell me what's missing.** The roadmap follows what people who self-host actually reach for.
-- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. Working with AI tooling is fine; [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) has the ground rules.
+- **Pull requests** are welcome for small fixes and tests. For larger work please open an issue first so we don't duplicate effort. [CONTRIBUTING.md](CONTRIBUTING.md) explains the workflow and the gates, and the [Code of Conduct](CODE_OF_CONDUCT.md) applies everywhere. Working with AI tooling is fine; [CONTRIBUTING-AI.md](CONTRIBUTING-AI.md) has the ground rules.
+- **Translations** go through [translate.healthlog.dev](https://translate.healthlog.dev), not pull requests.
 
-Questions that don't fit an issue go to the [support page](https://healthlog.dev/support). If you find a **security issue**, please report it privately through the [server project's security channel](https://github.com/MBombeck/HealthLog/security) instead of a public issue.
+Questions that don't fit an issue go to the [support page](https://healthlog.dev/support). If you find a **security issue**, please report it privately as described in [SECURITY.md](SECURITY.md) instead of opening a public issue. What the app does with your data is summarised in [PRIVACY.md](PRIVACY.md).
 
 ## License
 
-HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), the same license as the [server project](https://github.com/MBombeck/HealthLog). The source is available, and you may use, build and modify it for noncommercial purposes. Commercial use needs a separate agreement.
+HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), the same license as the [server project](https://github.com/MBombeck/HealthLog). The source is available, and you may use, build and modify it for noncommercial purposes. Commercial use needs a separate agreement. The third-party packages the app is built with are listed with their licenses in [docs/third-party-licenses.md](docs/third-party-licenses.md).
 
 ---
 

@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// **1.5 ROUTES (#149)** — the "Send routes" switch: off by default,
+    /// The "Send routes" switch: off by default,
     /// the permission asked only on switching on, off stops this phone first,
     /// the server's off clears this phone, and the states render.
     @Suite("ROUTES — the route switch in Settings", .serialized)
@@ -201,6 +201,8 @@
             .padding(HLSpace.md)
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(
             _ view: some View,
             name: String,

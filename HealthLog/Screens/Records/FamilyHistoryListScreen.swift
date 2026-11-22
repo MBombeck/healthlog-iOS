@@ -20,9 +20,12 @@ struct FamilyHistoryListScreen: View {
             empty: { emptyRows },
             content: { if let store { loadedRows(store: store) } }
         )
+        .hlPageMargins()
         .navigationTitle(Text("familyHistory.list.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .hlPageActions([
+            .add(label: "familyHistory.add.title", identifier: "familyHistory.toolbar.add") { showAddSheet = true }
+        ])
         .task { await onAppear() }
         .sheet(isPresented: $showAddSheet) {
             if let store {
@@ -33,18 +36,6 @@ struct FamilyHistoryListScreen: View {
             if let store {
                 FamilyHistoryEditorSheet(store: store, record: record)
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showAddSheet = true
-            } label: {
-                Label("familyHistory.add.title", systemImage: "plus")
-            }
-            .accessibilityIdentifier("familyHistory.toolbar.add")
         }
     }
 
@@ -65,28 +56,26 @@ struct FamilyHistoryListScreen: View {
                 row(record, store: store)
             }
         }
+        .hlFormRowSurface()
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
+        .hlFormRowSurface()
     }
 
     private func row(_ record: FamilyHistoryEntryDTO, store: FamilyHistoryStore) -> some View {
-        Button {
+        HLRowButton {
             editingRecord = record
         } label: {
             FamilyHistoryRow(record: record)
         }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                store.delete(record, undoMessage: String(localized: "familyHistory.delete.undo"))
-            } label: {
-                Label("familyHistory.delete.action", systemImage: "trash")
-            }
-            Button {
+        // The store keeps the way back, so the row goes at once with the
+        // undo hint.
+        .hlSwipeDelete(.undoable {
+            store.delete(record, undoMessage: String(localized: "familyHistory.delete.undo"))
+        }) {
+            Button("familyHistory.edit.action", systemImage: "pencil") {
                 editingRecord = record
-            } label: {
-                Label("familyHistory.edit.action", systemImage: "pencil")
             }
             .tint(HLAccent.userBrandTint)
         }
@@ -98,14 +87,11 @@ struct FamilyHistoryListScreen: View {
                 icon: "figure.2.and.child.holdinghands",
                 title: "familyHistory.empty.title",
                 message: "familyHistory.empty.subtitle"
-            ) {
-                HLButton("familyHistory.add.title", icon: "plus", variant: .secondary) {
-                    showAddSheet = true
-                }
-            }
+            )
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+        .hlFormRowSurface()
     }
 
     private func onAppear() async {
@@ -120,42 +106,18 @@ struct FamilyHistoryListScreen: View {
     }
 }
 
-/// Single family-history list row: relationship + condition + optional
-/// age-at-onset caption + a note glyph when a note exists.
+/// Single family-history list row: the condition, and one detail line with
+/// the relative and the age at onset.
 struct FamilyHistoryRow: View {
     let record: FamilyHistoryEntryDTO
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(spacing: HLSpace.xs) {
-                Text(record.condition)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if record.note?.isEmpty == false {
-                    Image(systemName: "note.text")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-            HStack(spacing: HLSpace.xs) {
-                HLBadge(record.relationship.localizedLabel, tone: .neutral)
-                if let age = record.ageAtOnset {
-                    Text(ageCaption(age))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-            }
-        }
-        .padding(.vertical, HLSpace.xxs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+        HLRow(
+            title: Text(verbatim: record.condition),
+            detail: HLRowDetail.text(RecordsRowContent.familyDetailParts(record))
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-    }
-
-    private func ageCaption(_ age: Int) -> String {
-        String(format: String(localized: "familyHistory.row.ageAtOnset"), age)
     }
 
     private var accessibilityText: String {

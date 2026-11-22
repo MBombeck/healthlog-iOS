@@ -6,13 +6,13 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// Phase 07 / Plan 07-04 — the daily-stat sweep finishes honestly.
+    /// The daily-stat sweep finishes honestly.
     ///
     /// `HealthKitStatisticsRoundTripTests` proves what one action puts on the
     /// wire. This suite proves the other half: what the sweep is allowed to
     /// *claim* afterwards. A sweep is complete only when every planned row is
-    /// either terminally accepted or durably queued, and "the sweep ran" is not
-    /// the same statement as "the history is complete".
+    /// terminally accepted (since 1.7 a day total is never queued, #3), and
+    /// "the sweep ran" is not the same statement as "the history is complete".
     @Suite("HK-STATS completion truth — terminal, durably queued, or incomplete", .serialized, .mockURLSession)
     struct HealthKitStatisticsCompletionTests {
         static let owner = "account-a"
@@ -60,7 +60,7 @@ import Testing
             let registry: AuthenticatedSessionLeaseRegistry
         }
 
-        // MARK: - Completion truth (Phase 07 / Plan 07-04)
+        // MARK: - Completion truth
 
         private func makeRetryHarness(
             api: APIClientProtocol,
@@ -79,7 +79,6 @@ import Testing
                 statisticsService: HealthKitStatisticsService(),
                 cache: cache,
                 uploader: Self.makeUploader(api: api),
-                featureFlags: AlwaysOnFeatureFlags(),
                 admission: { lease },
                 retry: retry
             )
@@ -101,33 +100,18 @@ import Testing
             }
         }
 
-        @Test("a non-terminal chunk becomes an owner-bound outbox row, and the sweep stays complete")
-        func heldChunkIsDurablyQueued() async throws {
+        @Test("a non-terminal chunk is not queued: the sweep stays incomplete and the cache does not advance (#3)")
+        func heldChunkIsNotQueued() async throws {
             let retry = RecordingStatsRetryQueue()
             let harness = try makeRetryHarness(api: makeAPI(), retry: retry)
             respondFailed()
 
-            let row = sampleRow(value: 8345)
-            let summary = await harness.coordinator.process([row], requiring: harness.lease)
+            let summary = await harness.coordinator.process([sampleRow(value: 8345)], requiring: harness.lease)
 
             #expect(summary.failed == 1)
-            #expect(summary.retryQueued == 1)
-            #expect(summary.isComplete, "a durably queued row keeps the sweep complete")
-
-            #expect(await retry.enqueueCount() == 1)
-            #expect(await retry.owners() == [Self.owner], "the row must be bound to the admitted account")
-            let externalIds = await retry.externalIds()
-            #expect(externalIds == [["stats:HKQuantityTypeIdentifierStepCount:2026-05-16"]])
-            // The key is derived from the page's own stable identity, so a
-            // process that dies before the cache write rebuilds the same one.
-            let expected = HealthSyncRetryEnvelope(
-                ownerID: Self.owner,
-                source: .dailyStatistics,
-                stableIdentity: "stats:HKQuantityTypeIdentifierStepCount:2026-05-16"
-            )
-            #expect(await retry.keys() == [expected?.idempotencyKey])
-
-            // And the cache never advanced.
+            #expect(summary.retryQueued == 0)
+            #expect(!summary.isComplete, "the next sweep sums the day again instead of replaying this value")
+            #expect(await retry.enqueueCount() == 0, "a day total never waits in the outbox")
             #expect(await harness.cache.read(
                 ownerUserID: Self.owner,
                 hkIdentifier: "HKQuantityTypeIdentifierStepCount",

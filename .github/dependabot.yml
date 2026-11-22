@@ -1,0 +1,38 @@
+version: 2
+
+# Version updates for the GitHub Actions. They are pinned by commit SHA
+# (scripts/test-workflow-hygiene.sh); Dependabot moves the SHA and the release
+# comment together. One grouped pull request a week, so CI on the Mac mini
+# runs once for all of them. The three CodeQL actions are one release pinned
+# in three places and must move together, or analyze refuses the config that
+# init wrote.
+#
+# No `swift` entry, deliberately. Dependabot's Swift support reads a
+# `Package.swift` with dependencies; HealthLog's packages are declared in
+# `project.yml` and resolved into the Xcode project, which it cannot read or
+# update. The pins there are exact on purpose (each carries its reason) and
+# move by hand. Security alerts for them still arrive: the hygiene workflow
+# submits the resolved packages to the dependency graph on every push to main.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      actions:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "github/codeql-action*"
+        update-types:
+          - "minor"
+          - "patch"

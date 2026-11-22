@@ -8,31 +8,9 @@ import SwiftUI
 
 // MARK: - Queued banner
 
-struct RetroMutateQueuedBanner: View {
-    var body: some View {
-        HStack(spacing: HLSpace.sm) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .foregroundStyle(HLText.secondary)
-            Text(String(localized: "medication.quick_mark.queued"))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer()
-        }
-        .padding(.horizontal, HLSpace.md)
-        .padding(.vertical, HLSpace.sm)
-        .background(
-            RoundedRectangle(cornerRadius: HLRadius.sm)
-                .fill(HLColor.surfaceElevated)
-                .overlay(
-                    RoundedRectangle(cornerRadius: HLRadius.sm)
-                        .stroke(HLColor.separator, lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, HLSpace.lg)
-        .padding(.top, HLSpace.sm)
-        .accessibilityElement(children: .combine)
-    }
-}
+/// The detail page's offline hint is the quick-mark hint: one form for
+/// "saved, waiting to sync" wherever a dose was marked.
+typealias RetroMutateQueuedBanner = QuickMarkQueuedBanner
 
 // MARK: - Hero
 
@@ -54,29 +32,38 @@ struct MedicationHeroSection: View {
     /// detail screen so the hero reads through the SAME recurrence engine the
     /// list card + reminders use). Defaults to `.current` for previews.
     var profileTimeZone: TimeZone = .current
+    /// The newest take the history on the same page shows. The medication
+    /// row's `lastTakenAt` can lag behind it; the hero never reads "—" above
+    /// a history full of takes.
+    var latestHistoryTake: Date?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The medallion grows with the title next to it.
+    @ScaledMetric(relativeTo: .title2) private var medallionSide: CGFloat = 44
 
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HStack(spacing: HLSpace.md) {
+                // At the accessibility sizes the medallion stands over the
+                // name, so the name keeps the card's width instead of a
+                // column beside it ("Lisino-/pril").
+                identityLayout {
                     // Route-appropriate glyph on a flat mono backplate
                     // (handbook §1.2): a syringe for an injection, a pill for
                     // everything else — an oral med no longer shows a syringe.
                     Image(systemName: medication.isInjection ? "syringe.fill" : "pills.fill")
                         .font(.hlIcon(HLIconSize.hero))
                         .foregroundStyle(HLText.primary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: medallionSide, height: medallionSide)
                         .background(Circle().fill(HLSurface.tertiary))
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                        // The object's name in 17 pt semibold, as on the
+                        // list card and in the sheets.
                         Text(medication.name)
-                            .font(.hlTitle2)
-                            .foregroundStyle(HLText.primary)
+                            .hlText(.objectName)
                         Text(verbatim: Self.subtitle(medication))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                     }
-                    Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 // Category pill — same chrome and the same rule as the list
@@ -84,42 +71,107 @@ struct MedicationHeroSection: View {
                 // "Medikament" or "Sonstige" pill). GLP-1 INN/class badges ride
                 // the badge row below.
                 if let categoryLabel {
-                    Text(categoryLabel)
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
-                        .padding(.horizontal, HLSpace.sm)
-                        .padding(.vertical, HLSpace.xs)
-                        .background(HLSurface.tertiary, in: Capsule())
+                    HLBadge(categoryLabel)
                 }
 
-                // Consistent "Letzte / Nächste Einnahme" strip — the SAME label
-                // set + order the list card uses, regardless of cadence or med
-                // type. A record has nothing due (v1.39.1, #1033): its
-                // "Nur dokumentiert" badge below says so, as on the list card.
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                // The plan belongs to the object (Z16 §3): its cadence and
+                // dose windows, then the consistent "Letzte / Nächste
+                // Einnahme" pair the list card uses. A record has nothing due
+                // (v1.39.1, #1033): its "Nur dokumentiert" badge says so.
+                HLFactGroup {
+                    // The person's own directions, in full, before the plan.
+                    if let note = medication.note {
+                        HLFactRow(label: Text("med.note.label"), value: Text(verbatim: note))
+                    }
+                    if let plan = MedicationPlanText.line(medication.displaySchedule) {
+                        HLFactRow(label: Text("Plan"), value: Text(verbatim: plan))
+                    }
+                    if let windows = MedicationPlanText.doseWindows(medication.displaySchedule) {
+                        HLFactRow(label: Text("med.hero.doseWindows.label"), value: Text(verbatim: windows))
+                    }
                     heroScheduleRow(labelKey: "med.card.schedule.daily.last.label", value: lastValue)
                     if medication.tracksIntake {
                         heroScheduleRow(labelKey: "med.card.schedule.daily.next.label", value: nextValue)
                     }
                 }
 
-                HStack(spacing: HLSpace.sm) {
-                    // GLP-1 INN + frequency badges (when recognised) ride the
-                    // badge row, not the header — mono `.neutral` tone keeps the
-                    // hero monochrome. The active checkmark is canonical signal.
-                    if let drug {
-                        HLBadge(drug.inn, tone: .neutral)
-                        HLBadge(frequencyLabel(drug.standardInjectionFrequency), tone: .neutral)
-                    } else if let cls = medication.treatmentClass {
-                        HLBadge(cls, tone: .neutral)
+                // The badges wrap as whole chips, line by line, so a large
+                // text size never splits "Aktiv" into letters.
+                if hasBadges {
+                    HLFlowLayout(spacing: HLSpace.sm) {
+                        // GLP-1 INN + frequency badges (when recognised) ride
+                        // the badge row, not the header — mono `.neutral` tone
+                        // keeps the hero monochrome. The active checkmark is
+                        // canonical signal.
+                        if let drug {
+                            HLBadge(Self.innLabel(drug.inn), tone: .neutral)
+                            HLBadge(frequencyLabel(drug.standardInjectionFrequency), tone: .neutral)
+                        } else if let cls = medication.treatmentClass {
+                            HLBadge(cls, tone: .neutral)
+                        }
+                        if medication.active {
+                            HLBadge(String(localized: "Active"), icon: "checkmark", tone: .success)
+                        }
+                        if !medication.tracksIntake {
+                            HLBadge(String(localized: "medications.recordOnly.badge"), icon: "doc.text")
+                                .accessibilityIdentifier("medications.recordOnly.badge")
+                        }
+                        if let course = MedicationCourseBadge.resolve(medication) { MedicationCourseStatusBadge(badge: course) }
                     }
-                    if medication.active {
-                        HLBadge(String(localized: "Active"), icon: "checkmark", tone: .success)
-                    }
-                    if !medication.tracksIntake { RecordOnlyMedicationBadge() }
-                    if let course = MedicationCourseBadge.resolve(medication) { MedicationCourseStatusBadge(badge: course) }
                 }
             }
+        }
+    }
+
+    private var identityLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
+            : AnyLayout(HStackLayout(spacing: HLSpace.md))
+    }
+
+    private var hasBadges: Bool {
+        drug != nil || medication.treatmentClass != nil || medication.active || !medication.tracksIntake
+            || MedicationCourseBadge.resolve(medication) != nil
+    }
+
+    /// The newest of the medication's own `lastTakenAt` and the history's
+    /// newest take.
+    nonisolated static func lastTaken(_ lastTakenAt: Date?, latestHistoryTake: Date?) -> Date? {
+        switch (lastTakenAt, latestHistoryTake) {
+        case let (row?, history?): max(row, history)
+        case let (row?, nil): row
+        case let (nil, history?): history
+        case (nil, nil): nil
+        }
+    }
+
+    /// The newest take in the server ledger, or, without one, in the intake
+    /// pages: a taken dose (on time, late or ad hoc), never a skip or a miss.
+    nonisolated static func latestTake(
+        ledger: [MedicationDoseHistoryRow]?,
+        intakes: [PaginatedIntakeEvent]
+    ) -> Date? {
+        if let ledger {
+            return ledger.compactMap { row -> Date? in
+                switch row.status {
+                case .takenOnTime, .takenLate, .adHoc: row.intake?.takenAt ?? row.at
+                default: nil
+                }
+            }.max()
+        }
+        return intakes.filter { !$0.skipped }.compactMap(\.takenAt).max()
+    }
+
+    /// The active ingredient in the reader's language ("Dulaglutid"); a name
+    /// the catalogue does not know stays as the drug record spells it.
+    nonisolated static func innLabel(_ inn: String) -> String {
+        switch inn {
+        case "Tirzepatide": String(localized: "glp1.inn.tirzepatide")
+        case "Semaglutide": String(localized: "glp1.inn.semaglutide")
+        case "Liraglutide": String(localized: "glp1.inn.liraglutide")
+        case "Dulaglutide": String(localized: "glp1.inn.dulaglutide")
+        case "Exenatide": String(localized: "glp1.inn.exenatide")
+        default: inn
         }
     }
 
@@ -136,22 +188,7 @@ struct MedicationHeroSection: View {
     /// POLISH-A (SHOTS F-AX-MEDCARD) — side by side, and label over value at
     /// an accessibility size, where two columns cut "morgen, 8…".
     private func heroScheduleRow(labelKey: String.LocalizationValue, value: String) -> some View {
-        let stacked = dynamicTypeSize.isAccessibilitySize
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xxs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: HLSpace.sm))
-        return layout {
-            Text(String(localized: labelKey))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-            if !stacked { Spacer(minLength: HLSpace.sm) }
-            Text(value)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(stacked ? .leading : .trailing)
-                .lineLimit(stacked ? nil : 2)
-        }
-        .accessibilityElement(children: .combine)
+        HLFactRow(label: Text(String(localized: labelKey)), value: Text(value))
     }
 
     private var categoryLabel: String? {
@@ -159,7 +196,7 @@ struct MedicationHeroSection: View {
     }
 
     private var lastValue: String {
-        guard let last = medication.lastTakenAt else {
+        guard let last = Self.lastTaken(medication.lastTakenAt, latestHistoryTake: latestHistoryTake) else {
             return String(localized: "med.card.schedule.value.unset")
         }
         return MedicationCard.relativeDateTime(last)
@@ -185,43 +222,9 @@ struct MedicationHeroSection: View {
     }
 }
 
-// MARK: - Last dose card
-
-struct LastDoseSection: View {
-    let lastTakenAt: Date
-    let medication: Medication
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // Wording: "letzte Dosis" / "last dose" — never "next dose". The
-            // SwiftLint guard in `Pharmacokinetics/` + this file forbids
-            // any predictive copy (MDR boundary).
-            HLSectionLabel("Last dose")
-            HLCard {
-                HStack(spacing: HLSpace.md) {
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text(HLDateFormat.date(lastTakenAt, style: .complete))
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                        // M3 — clock honours the user's time-format preference.
-                        Text(HLTimeFormat.time(lastTakenAt))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                    Spacer()
-                    Text(medication.dose)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Intake history
 
-/// v0.6.1.25 B2 — operator brief 2026-05-24: "in den Verlauf Sachen
+/// Operator brief 2026-05-24: "in den Verlauf Sachen
 /// sehe ich auch die Sachen relativ unsortiert leider noch. […]
 /// vor allen Dingen nur die Sachen angezeigt werden, die ich nicht
 /// genommen habe". `Alle` keeps the existing at-a-glance read,
@@ -235,6 +238,11 @@ private enum VerlaufFilter: Hashable {
 struct IntakeHistorySection: View {
     let intakes: [PaginatedIntakeEvent]
     let hasMore: Bool
+    /// The medication's configured dose for the taken rows.
+    var dose: String = ""
+    /// The server's count of all intakes (`meta.total`), `nil` when it sent
+    /// none.
+    var totalCount: Int?
     let isLoading: Bool
     let onLoadMore: () -> Void
     /// T-4 retro-mutate hooks (commit 2 = signature plumbing,
@@ -242,7 +250,7 @@ struct IntakeHistorySection: View {
     let onMarkTaken: (PaginatedIntakeEvent) -> Void
     let onMarkSkipped: (PaginatedIntakeEvent) -> Void
     let onDelete: (PaginatedIntakeEvent) -> Void
-    /// **15-01 (B1)** — the corrected administration instant for an entry the
+    /// The corrected administration instant for an entry the
     /// operator picked in the inline editor below. Parent sends it over the
     /// intake PUT (`MedicationDetailScreen.editIntakeTime(_:to:)`).
     let onEditTime: (PaginatedIntakeEvent, Date) -> Void
@@ -254,7 +262,7 @@ struct IntakeHistorySection: View {
     /// The instant the open editor currently holds.
     @State private var draftTime: Date = .now
 
-    /// v0.6.1.25 B2 — local-only filter state, not persisted across
+    /// Local-only filter state, not persisted across
     /// app launches (operator only wants ad-hoc isolation when they
     /// scan the history, default Alle keeps "what did I do recently"
     /// intact on every fresh open).
@@ -272,13 +280,20 @@ struct IntakeHistorySection: View {
     private static let collapsedCount = 7
 
     /// Sort + filter applied in one pass so the parent stays a thin
-    /// pass-through. Sort is stable `scheduledFor` desc (REG-10) —
+    /// pass-through. Sort is stable `scheduledFor` desc —
     /// the call site also pre-sorts, but doing it here too means the
     /// section is self-contained and any future caller stays safe.
+    /// On the detail page the newest entries and a row to the full list;
+    /// the full list, with filter and paging, is its own page.
+    var mode: LedgerHistorySection.Mode = .preview
+
     private var visibleIntakes: [PaginatedIntakeEvent] {
         let now = Date.now
         let sorted = intakes.sorted { $0.scheduledFor > $1.scheduledFor }
-        // D9 — collapse to the 7 most-recent ENTRIES (the filter is applied
+        if mode == .preview {
+            return Array(sorted.prefix(LedgerHistorySection.previewCount))
+        }
+        // Collapse to the 7 most-recent ENTRIES (the filter is applied
         // AFTER the window so "Alle"/"Nicht genommen" both read from the same
         // 7-row collapsed set; expanding lifts the cap before filtering).
         let windowed: [PaginatedIntakeEvent] = isExpanded
@@ -290,7 +305,7 @@ struct IntakeHistorySection: View {
         case .nichtGenommen:
             // "Nicht genommen" = anything that does not render the
             // green-checkmark in IntakeHistoryRow. Mirrors the row's
-            // statusIcon branches: skipped, auto-skipped (REG-10),
+            // statusIcon branches: skipped, auto-skipped,
             // and past-due-pending all count; future-scheduled rows
             // are dropped because they have not had a chance yet.
             return windowed.filter { event in
@@ -303,46 +318,58 @@ struct IntakeHistorySection: View {
 
     var body: some View {
         let rows = visibleIntakes
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                HLSectionLabel("History")
-                Spacer()
-                filterMenu
-            }
-            HLCard {
-                if rows.isEmpty {
-                    Text(emptyLabel)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { idx, event in
-                            IntakeHistoryRow(
-                                event: event,
-                                // Retro-mark only on past/due rows; delete is
-                                // offered on every row inside IntakeHistoryRow
-                                // (v0.14.8 operator brief — delete everywhere).
-                                canRetroMark: event.scheduledFor < .now,
-                                onMarkTaken: { onMarkTaken(event) },
-                                onMarkSkipped: { onMarkSkipped(event) },
-                                onDelete: { onDelete(event) },
-                                onEditTime: { beginTimeEdit(event) }
-                            )
-                            if timeEditTarget == event.id {
-                                timeEditor(for: event)
-                            }
-                            if idx < rows.count - 1 {
-                                Divider().background(HLColor.separator)
-                            }
+        Group {
+            HLSectionHeader("History", rank: .area)
+            if rows.isEmpty {
+                HLCard { HLEmptyNote(Text(emptyLabel)) }
+            } else {
+                HLCard(layout: .rows) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { _, event in
+                        IntakeHistoryRow(
+                            event: event,
+                            // Retro-mark only on past/due rows; delete is
+                            // offered on every row inside IntakeHistoryRow
+                            // (v0.14.8 operator brief — delete everywhere).
+                            canRetroMark: event.scheduledFor < .now,
+                            onMarkTaken: { onMarkTaken(event) },
+                            onMarkSkipped: { onMarkSkipped(event) },
+                            onDelete: { onDelete(event) },
+                            onEditTime: { beginTimeEdit(event) },
+                            dose: dose
+                        )
+                        if timeEditTarget == event.id {
+                            timeEditor(for: event)
                         }
+                    }
+                    if mode == .preview {
+                        // The row to the full list whenever there is a
+                        // history, with the server's total once more pages wait.
+                        if !intakes.isEmpty {
+                            HLDrillRow("med.history.show_all", count: hasMore ? totalCount : intakes.count)
+                                .hlRowLink { fullPage }
+                                .accessibilityIdentifier("med.history.showAll")
+                        }
+                    } else {
                         historyToggle
                     }
                 }
             }
         }
+        // The filter belongs to the full list's bar, not to its content.
+        .hlPageActions(mode == .full ? HLTabHeaderActions([filterAction]) : .none)
     }
 
-    /// **15-01 (B1)** — open the inline editor on `event`, seeded with the time
+    /// The whole history on a page of its own, with filter and paging.
+    private var fullPage: some View {
+        var full = self
+        full.mode = .full
+        return HLPage { full }
+            .navigationTitle(Text("History"))
+            .navigationBarTitleDisplayMode(.inline)
+            .hlDeleteConfirmation()
+    }
+
+    /// Open the inline editor on `event`, seeded with the time
     /// it currently claims (never `.now`: the operator is correcting a value,
     /// not entering a new one).
     private func beginTimeEdit(_ event: PaginatedIntakeEvent) {
@@ -356,28 +383,23 @@ struct IntakeHistorySection: View {
     private func timeEditor(for event: PaginatedIntakeEvent) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             DatePicker(
-                String(localized: "med.history.edit_time.label"),
                 selection: $draftTime,
                 in: Date.now.addingTimeInterval(-MedicationsStore.takenAtMaxAge) ... Date.now,
                 displayedComponents: [.date, .hourAndMinute]
-            )
+            ) {
+                HLRowTitle("med.history.edit_time.label")
+            }
             .datePickerStyle(.compact)
-            HStack(spacing: HLSpace.md) {
-                Button(String(localized: "Cancel")) {
-                    timeEditTarget = nil
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Button(String(localized: "Save")) {
+            HLButtonPair {
+                HLButton(HLControlWord.save.key) {
                     timeEditTarget = nil
                     onEditTime(event, draftTime)
                 }
-                .buttonStyle(.plain)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            } secondary: {
+                HLButton(HLControlWord.cancel.key, variant: .secondary) {
+                    timeEditTarget = nil
+                }
             }
-            .font(.hlSubhead)
         }
         .padding(.vertical, HLSpace.sm)
         .accessibilityElement(children: .contain)
@@ -390,7 +412,7 @@ struct IntakeHistorySection: View {
         intakes.count > Self.collapsedCount
     }
 
-    /// D9 — collapsed-by-7-entries disclosure. Reuses the existing
+    /// Collapsed-by-7-entries disclosure. Reuses the existing
     /// "Load more" link styling (`HLText.primary` mono). Three states on the
     /// `.alle` filter:
     /// - collapsed + (older loaded rows OR more pages) → "Mehr" expands.
@@ -399,54 +421,51 @@ struct IntakeHistorySection: View {
     /// The `.nichtGenommen` filter keeps paging only (no day window toggle).
     @ViewBuilder
     private var historyToggle: some View {
-        if filter == .alle {
-            if !isExpanded, hasOlderLoadedRows || hasMore {
-                toggleLink(titleKey: "med.verlauf.history.show_more", isBusy: false) {
-                    isExpanded = true
-                }
-            } else if isExpanded, hasMore {
-                toggleLink(titleKey: "Load more", isBusy: isLoading, action: onLoadMore)
-            } else if isExpanded {
-                toggleLink(titleKey: "med.verlauf.history.show_less", isBusy: false) {
-                    isExpanded = false
-                }
+        switch Self.historyLink(
+            filtersMissed: filter == .nichtGenommen,
+            isExpanded: isExpanded,
+            hasOlderLoadedRows: hasOlderLoadedRows,
+            hasMore: hasMore
+        ) {
+        case .showMore:
+            HLLinkButton("med.verlauf.history.show_more", isExpanded: false) {
+                isExpanded = true
             }
-        } else if hasMore {
-            toggleLink(titleKey: "Load more", isBusy: isLoading, action: onLoadMore)
+        case .showFewer:
+            HLLinkButton("med.verlauf.history.show_less", isExpanded: true) {
+                isExpanded = false
+            }
+        case .loadMore:
+            HLLoadMoreRow(hasMore: true, isLoading: isLoading, load: onLoadMore)
+        case .none:
+            EmptyView()
         }
     }
 
-    private func toggleLink(
-        titleKey: String.LocalizationValue,
-        isBusy: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack {
-                Spacer()
-                if isBusy {
-                    ProgressView().controlSize(.small)
-                } else {
-                    // v0.6.1.2 Y4 (D-026) — link flips from .tint to
-                    // HLText.primary mono.
-                    Text(String(localized: titleKey))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                }
-                Spacer()
-            }
-            .padding(.top, HLSpace.md)
-        }
-        .buttonStyle(.plain)
-        .disabled(isBusy)
+    /// The link under the full history.
+    enum HistoryLink: Equatable {
+        case showMore
+        case showFewer
+        case loadMore
+        case none
     }
 
-    /// Trailing menu next to the "Verlauf" caption — mirrors the
-    /// inline filter affordances we already use on MedicationsScreen
-    /// (active/archived) and SourceFilterChips. Menu over a chip row
-    /// keeps the header height stable and stays compact in DE locale.
-    private var filterMenu: some View {
-        Menu {
+    /// Collapsed, the link unfolds the rows already loaded; unfolded, it
+    /// pages the next ones while the server has more, then folds back. The
+    /// missed-only filter only pages.
+    nonisolated static func historyLink(
+        filtersMissed: Bool,
+        isExpanded: Bool,
+        hasOlderLoadedRows: Bool,
+        hasMore: Bool
+    ) -> HistoryLink {
+        if filtersMissed { return hasMore ? .loadMore : .none }
+        if !isExpanded { return hasOlderLoadedRows || hasMore ? .showMore : .none }
+        return hasMore ? .loadMore : .showFewer
+    }
+
+    private var filterAction: HLTabHeaderAction {
+        .filter(label: "Filter history", isSelected: filter != .alle) {
             Picker(
                 selection: $filter,
                 label: Text(String(localized: "Filter history"))
@@ -454,26 +473,6 @@ struct IntakeHistorySection: View {
                 Text(String(localized: "All")).tag(VerlaufFilter.alle)
                 Text(String(localized: "Not taken")).tag(VerlaufFilter.nichtGenommen)
             }
-        } label: {
-            HStack(spacing: HLSpace.xxs) {
-                Text(filterLabel)
-                    .font(.hlCaption.weight(.semibold))
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.hlIcon(HLIconSize.rowAction, weight: .regular))
-            }
-            .foregroundStyle(HLText.secondary)
-            .contentShape(Rectangle())
-            .accessibilityLabel(Text(String(localized: "Filter history")))
-            .accessibilityValue(Text(filterLabel))
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-    }
-
-    private var filterLabel: String {
-        switch filter {
-        case .alle: String(localized: "All")
-        case .nichtGenommen: String(localized: "Not taken")
         }
     }
 
@@ -497,44 +496,40 @@ struct InventorySection: View {
     let inventory: Glp1InventoryDTO
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("Supply")
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HStack(spacing: HLSpace.md) {
-                        Image(systemName: inventory.lowStock ? "exclamationmark.triangle.fill" : "tray.full.fill")
-                            .font(.hlIcon(HLIconSize.lg))
-                            .foregroundStyle(inventory.lowStock ? HLColor.statusWarn : HLText.secondary)
-                        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                            // **W-INVENTORY** — the GLP-1 pen aggregate was the
-                            // ONE unguarded supply path: raw `Int` counts rendered
-                            // verbatim, so a corrupt server value would read as
-                            // "minus X Pens". Route both counts through the same
-                            // central sanity gate; a corrupt count renders "—".
-                            if let pens = inventory.pensRemaining {
-                                Text(InventorySanity.validCount(pens).map {
-                                    String(format: String(localized: "%d Pens"), $0)
-                                } ?? InventorySanity.placeholder)
-                                    .font(.hlHeadline)
-                                    .foregroundStyle(HLText.primary)
-                                    .monospacedDigit()
-                            }
-                            if let weeks = inventory.weeksOfSupply {
-                                Text(InventorySanity.validCount(weeks).map {
-                                    String(format: String(localized: "≈ %d weeks of supply"), $0)
-                                } ?? InventorySanity.placeholder)
-                                    .font(.hlSubhead)
-                                    .foregroundStyle(HLText.secondary)
-                                    .monospacedDigit()
-                            }
+        HLSectionHeader("Supply", rank: .area)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HStack(spacing: HLSpace.md) {
+                    Image(systemName: inventory.lowStock ? "exclamationmark.triangle.fill" : "tray.full.fill")
+                        .font(.hlIcon(HLIconSize.lg))
+                        .foregroundStyle(inventory.lowStock ? HLColor.statusWarn : HLText.secondary)
+                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                        // The GLP-1 pen aggregate was the
+                        // ONE unguarded supply path: raw `Int` counts rendered
+                        // verbatim, so a corrupt server value would read as
+                        // "minus X Pens". Route both counts through the same
+                        // central sanity gate; a corrupt count renders "—".
+                        if let pens = inventory.pensRemaining {
+                            Text(InventorySanity.validCount(pens).map {
+                                String(format: String(localized: "%d Pens"), $0)
+                            } ?? InventorySanity.placeholder)
+                                .hlText(.objectName)
+                                .monospacedDigit()
                         }
-                        Spacer()
+                        if let weeks = inventory.weeksOfSupply {
+                            Text(InventorySanity.validCount(weeks).map {
+                                String(format: String(localized: "≈ %d weeks of supply"), $0)
+                            } ?? InventorySanity.placeholder)
+                                .hlText(.factLabel)
+                                .monospacedDigit()
+                        }
                     }
-                    if inventory.lowStock {
-                        Text(String(localized: "Supply is running low."))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLColor.statusWarn)
-                    }
+                    Spacer()
+                }
+                if inventory.lowStock {
+                    Text(String(localized: "Supply is running low."))
+                        .font(.hlCaption)
+                        .foregroundStyle(HLColor.statusWarn)
                 }
             }
         }
@@ -547,14 +542,11 @@ struct NotesSection: View {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("Notes")
-            HLCard {
-                Text(text)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HLSectionHeader("Notes", rank: .area)
+        HLCard {
+            Text(text)
+                .hlText(.factLabel)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

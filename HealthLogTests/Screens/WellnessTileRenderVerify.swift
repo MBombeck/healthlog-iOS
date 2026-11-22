@@ -29,7 +29,7 @@ struct WellnessTileRenderVerify {
             .padding(HLSpace.lg)
             .background(scheme == .dark ? Color.black : Color(white: 0.96))
             .environment(\.colorScheme, scheme)
-            // v0141 — `InsightsScoreCardsBlock` now reads the per-card hide store
+            // `InsightsScoreCardsBlock` now reads the per-card hide store
             // from the environment; inject a fresh (empty → nothing hidden) one so
             // the render matches the shipping default.
             .environment(WellnessCardVisibilityStore())
@@ -98,7 +98,7 @@ struct WellnessTileRenderVerify {
     /// `CycleScoreRingCard` (which can't be hosted directly — its `CycleStore`
     /// verdict/prediction are `private(set)`).
     ///
-    /// Z1 (#72): this used to call `CycleScreenModel.representativeModel`, the
+    /// This used to call `CycleScreenModel.representativeModel`, the
     /// client-side "your data looks sparse, here is a population backdrop"
     /// substitution. That decision belongs to the server now, so the harness
     /// carries its own literal rather than keeping a shipping code path alive.
@@ -194,7 +194,7 @@ struct WellnessTileRenderVerify {
         )
     }
 
-    // MARK: - W-B190 — the P9 uniform prism renders (unlike the Metal shader)
+    // MARK: - The P9 uniform prism renders (unlike the Metal shader)
 
     /// Hero-sized + small ring, BOTH with the P9 `prismUniform` effect, side by
     /// side — the proof the new default renders identically on every tile in the

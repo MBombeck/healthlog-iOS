@@ -11,7 +11,7 @@ import SwiftUI
 /// ``SwiftUI/View/hlReserveErrorBannerSpace(_:)``. Auto-hides when the store
 /// clears `error` after a successful refresh.
 ///
-/// **K1 — the banner makes room instead of covering.** It used to sit in an
+/// **The banner makes room instead of covering.** It used to sit in an
 /// `.overlay(alignment: .top)`, on top of the first card. In a real failure —
 /// a refresh that fails offline while the cached list stays on screen — that
 /// hid exactly what the user was looking at (H2: the medication name on the
@@ -26,7 +26,7 @@ import SwiftUI
 /// Audit ref: `audit-v021/ux-hig.md` C5 — silent error swallowing on
 /// Charts / Insights / Medications / Mood / Achievements.
 ///
-/// **#134 — the error id.** On a 5xx or an unreadable answer the banner names
+/// **The error id.** On a 5xx or an unreadable answer the banner names
 /// the server's request id in its short form („Fehler-ID 3f9a2c1b“) with a
 /// copy button, read from ``RecentFailureLog``. No id, no line: older servers
 /// and failures the server never answered show the banner as before.
@@ -57,7 +57,7 @@ public struct ErrorBanner: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text(error.userFacingDescription)
+                        Text(retry == nil ? error.userFacingDescription : error.retryBannerDescription)
                             .font(.hlCaption)
                             .lineLimit(stacked ? nil : 3)
                             .multilineTextAlignment(.leading)
@@ -70,12 +70,7 @@ public struct ErrorBanner: View {
                 }
                 if let retry {
                     Button(action: retry) {
-                        Text("Try again")
-                            .font(.hlCaption.weight(.semibold))
-                            .padding(.horizontal, HLSpace.sm)
-                            .padding(.vertical, HLSpace.xs)
-                            .background(Color.white.opacity(0.18))
-                            .clipShape(Capsule())
+                        retryLabel(stacked: stacked)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("Try again"))
@@ -101,6 +96,31 @@ public struct ErrorBanner: View {
                     Button("error.id.copy") { copy(errorID) }
                 }
             }
+        }
+    }
+
+    /// Side by side a capsule around one line. Stacked, the button takes the
+    /// banner's width and a rounded rectangle that grows with the words: a
+    /// capsule around two lines cut into „Erneut" and „versuchen".
+    @ViewBuilder
+    private func retryLabel(stacked: Bool) -> some View {
+        let title = Text("Try again")
+            .font(.hlCaption.weight(.semibold))
+            .padding(.horizontal, HLSpace.sm)
+            .padding(.vertical, HLSpace.xs)
+        if stacked {
+            title
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: HLHitTarget.minimum)
+                .background(
+                    Color.white.opacity(0.18),
+                    in: RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
+                )
+                .contentShape(Rectangle())
+        } else {
+            title
+                .background(Color.white.opacity(0.18))
+                .clipShape(Capsule())
         }
     }
 
@@ -164,7 +184,7 @@ public extension View {
     /// transition layer (SwiftUI substitutes a cross-fade / cut when motion
     /// is reduced), so no explicit `reduceMotion` branch is required here.
     ///
-    /// **K1 — an inset, not an overlay.** The name is kept so the call sites
+    /// **An inset, not an overlay.** The name is kept so the call sites
     /// stay put, but the banner is mounted with `safeAreaInset(edge: .top)`:
     /// the content below it moves down by the banner's height instead of
     /// being covered. A scroll view keeps scrolling underneath, as it does
@@ -178,7 +198,7 @@ public extension View {
         .animation(.easeInOut(duration: 0.3), value: error)
     }
 
-    /// **K1 — room for a banner that is mounted as an overlay at the call site.**
+    /// **Room for a banner that is mounted as an overlay at the call site.**
     ///
     /// Ten screens attach `ErrorBanner` themselves in an `.overlay(alignment:
     /// .top)`. That overlay is a counted presentation in the Phase-06 PHI
@@ -190,11 +210,16 @@ public extension View {
     /// lands exactly on that reserved band. Hidden, the copy is neither drawn
     /// nor read by VoiceOver; with no error it takes no space.
     ///
+    /// The copy carries a retry button like the overlays do (`withRetry`),
+    /// so the band is as high as the banner drawn over it: at the
+    /// accessibility sizes the button stands on its own line, and a band
+    /// without it let the banner cover the first row.
+    ///
     /// Must sit *inside* (before) the `.overlay`, so the overlay's own safe
     /// area does not include the reserved band and the banner is drawn over it.
-    func hlReserveErrorBannerSpace(_ error: HLError?) -> some View {
+    func hlReserveErrorBannerSpace(_ error: HLError?, withRetry: Bool = true) -> some View {
         safeAreaInset(edge: .top, spacing: 0) {
-            ErrorBanner(error: error)
+            ErrorBanner(error: error, retry: withRetry ? {} : nil)
                 .hidden()
                 .padding(.bottom, error == nil ? 0 : HLSpace.sm)
         }

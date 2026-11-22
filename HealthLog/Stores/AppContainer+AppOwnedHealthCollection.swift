@@ -4,7 +4,7 @@
     @_spi(APISupport) import Spezi
     import SpeziHealthKit
 
-    // Phase 07 Wave 2 — composition for the app-owned sample collection.
+    // Composition for the app-owned sample collection.
     //
     // Kept in its own Spezi-scoped extension file for the same reason
     // `AppContainer+SpeziStandard.swift` exists: the `@_spi(APISupport)` Spezi
@@ -28,7 +28,6 @@
             registry: AuthenticatedSessionLeaseRegistry,
             uploader: MeasurementBatchUploader,
             skipRegister: HealthKitSkippedRowRegister = .shared,
-            featureFlags: (any FeatureFlagsServicing)? = nil,
             deliveryFollowUp: (@Sendable () async -> Void)? = nil,
             serverFreshness: (@Sendable () async -> [MetricFreshness]?)? = nil
         ) {
@@ -51,21 +50,21 @@
 
             let store = HKHealthStore()
             let cursors = DurableHealthCursorStore()
+            let observer = HealthKitSampleChangeObserver(store: store)
             let coordinator = AppOwnedHealthCollectionCoordinator(
                 collector: AnchoredHealthSampleCollector(
                     cursors: cursors,
                     query: HealthKitAnchoredPageSource(store: store),
                     consumer: SpeziStandardPageConsumer(),
-                    observer: HealthKitSampleChangeObserver(store: store),
-                    // 1.3 (#127) — the backwards history walk.
+                    observer: observer,
+                    // The backwards history walk.
                     history: HealthKitHistoryPageSource(store: store),
-                    // A2 (1.4, R-A8) — not for the summed types while the
-                    // statistics path sends them (the per-sample gate's own
-                    // fail-closed default: on until the flags say otherwise).
+                    // Not for the summed types: the statistics
+                    // path sends them.
                     historyOwnedElsewhere: { typeIdentifier in
                         HealthSampleSplitPolicy.historyOwnedByStatistics(
                             typeIdentifier,
-                            dailyStatsEnabled: featureFlags?.isEnabled(.enableDailyStats) ?? true
+                            dailyStatsEnabled: true
                         )
                     },
                     deliveryFollowUp: deliveryFollowUp
@@ -76,17 +75,23 @@
                 reoffer: Self.skippedRowReoffer(uploader: uploader, register: skipRegister),
                 serverFreshness: serverFreshness
             )
+            // Synchronously, so the launch registers the observers before it
+            // ends. The same set the first pass observes.
+            HealthObserverLaunchArming.install(
+                register: { observer.register(AppOwnedHealthCollectionCoordinator.launchObservedTypeIdentifiers) },
+                prepare: { await coordinator.armAtLaunch() }
+            )
             Task { @MainActor in
                 AppOwnedHealthCollection.installSampleCollection { trigger in
                     await coordinator.run(trigger)
                 }
-                // 1.3 (#127, public #25) — the history state and "Sync
+                // The history state and "Sync
                 // everything now", under the collection's own admission.
                 AppOwnedHealthCollection.installHistory(
                     overview: { await coordinator.historyOverview() },
                     catchUp: { progress in await coordinator.runFullCatchUp(progress: progress) }
                 )
-                // #113 — Sync Diagnostics reads and resends the register only
+                // Sync Diagnostics reads and resends the register only
                 // under the same admission the collection uses.
                 HealthKitSkippedRowAccess.install(
                     snapshot: {
@@ -156,7 +161,7 @@
             return await standard.consume(samples, ofType: typeIdentifier, requiring: lease)
         }
 
-        /// A2 (1.4, R-A7) — a history page, posted as `backfill`.
+        /// A history page, posted as `backfill`.
         func consumeHistory(
             _ samples: [HKSample],
             ofType typeIdentifier: String,
@@ -169,7 +174,7 @@
         }
     }
 
-    /// A5 (1.4, R3 S4) — a page's deletions, to the running standard. Before the
+    /// A page's deletions, to the running standard. Before the
     /// Spezi graph is up there is nowhere to send or keep them, so the page
     /// holds, exactly like its samples.
     extension SpeziStandardPageConsumer: HealthSampleDeletionConsuming {

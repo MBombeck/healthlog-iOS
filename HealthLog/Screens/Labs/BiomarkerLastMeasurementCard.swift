@@ -1,83 +1,158 @@
 import SwiftUI
 
-/// v0154 LR-REDO — the "Letzte Messung" card on the biomarker detail page.
-///
-/// Mirrors the anatomy of the Insights `HeroStrip` "Letzte Messung" block —
-/// large value + unit, a small caption underneath = when it was taken, and a
-/// status indicator top-right — but is a thin biomarker-specific view because
-/// `HeroStrip` is hard-coupled to `ChartDetailStore` / `MetricKind`. The status
-/// indicator reuses the NEUTRAL ``LabRangeBadge`` so an out-of-range value reads
-/// informative, never an alarm (the server `rangeStatus` is rendered as-is).
+/// The "Letzte Messung" card on the biomarker detail page: the newest
+/// reading in the one hero form the lab pages share with the reference
+/// metric page.
 struct BiomarkerLastMeasurementCard: View {
     let latest: LabResultDTO
-    /// 1.0.3 (App Review 1.4.1) — the sources behind the range verdict. 1.4
-    /// B2-c: they sit in this card, the one that states the verdict, since the
-    /// explainer they stood under moved behind the page's (i). `nil` hides it.
-    var sourcesTopic: MedicalSourceTopic?
+    /// The marker's earlier values, oldest first, as faint points on the range.
+    var previous: [Double] = []
+    /// The range the marker page judges against (the catalog's when linked).
+    var referenceLow: Double?
+    var referenceHigh: Double?
+
+    var body: some View {
+        LabReadingHero(
+            reading: LabReadingHero.Reading(
+                value: latest.value, valueText: latest.valueText, unit: latest.unit, printed: latest.sourceValue
+            ),
+            status: latest.rangeStatus,
+            caption: Self.takenCaption(latest.takenAt),
+            conversion: LabConversion(latest),
+            range: LabReadingHero.Range(low: referenceLow, high: referenceHigh, previous: previous)
+        )
+    }
+
+    /// "When taken": relative phrasing paired with the absolute medium date
+    /// ("Erhoben vor 5 Monaten, 12. Jan. 2026"). Falls back to the bare
+    /// medium date when the wire timestamp can't be parsed.
+    static func takenCaption(_ takenAt: String) -> String {
+        guard let date = LabsDateFormat.readingDate(takenAt) else {
+            return LabsDateFormat.labDate(takenAt)
+        }
+        let relative = date.formatted(.relative(presentation: .named))
+        let absolute = LabsDateFormat.labDate(takenAt)
+        let template = String(localized: "biomarker.detail.taken.dated")
+        return String(format: template, relative, absolute)
+    }
+}
+
+/// One lab reading as the page's one large figure, built like the hero of
+/// the reference metric page (Ruhepuls, Blutdruck): the number in the hero
+/// role with its unit small and quiet beside it, the range verdict as quiet
+/// text at the top right, the date under it, and the value on its reference
+/// range. The biomarker page and the single reading's page use this one form;
+/// the name of the marker is the page's or the column's head, never the card's.
+struct LabReadingHero: View {
+    /// What the reading says, as the server delivered it.
+    struct Reading: Equatable {
+        let value: Double?
+        let valueText: String?
+        let unit: String
+        /// What the report printed when the server converted the value.
+        let printed: Double?
+
+        /// The figure and its unit apart. A number keeps every digit it was
+        /// recorded with; a qualitative result is its text and has no unit;
+        /// the unity "1" never prints.
+        var parts: (number: String, unit: String?) {
+            if let value {
+                return (RecordedNumber.text(value, printed: printed), LabUnit.suffix(unit))
+            }
+            if let valueText, !valueText.isEmpty {
+                return (valueText, nil)
+            }
+            return (LabValueDisplay.absentPlaceholder, nil)
+        }
+
+        /// Figure and unit as one spoken text.
+        var spoken: String {
+            LabValueDisplay.text(value: value, valueText: valueText, unit: unit, printed: printed)
+        }
+    }
+
+    /// The reference range the value is placed on, with earlier values.
+    struct Range: Equatable {
+        var low: Double?
+        var high: Double?
+        var previous: [Double] = []
+    }
+
+    let reading: Reading
+    let status: LabRangeStatus
+    let caption: String
+    let conversion: LabConversion
+    var range = Range()
+
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    // POLISH-C (F-AX-CAPSULE) — at an accessibility size the
-                    // badge goes under the value; side by side one of them
-                    // had to break into single letters.
-                    let layout = dynamicTypeSize.isAccessibilitySize
-                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
-                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
-                    layout {
-                        Text(valueLabel)
-                            .font(.hlMetric(.largeTitle))
-                            .monospacedDigit()
-                            .foregroundStyle(HLText.primary)
-                        if !dynamicTypeSize.isAccessibilitySize {
-                            Spacer(minLength: HLSpace.sm)
-                        }
-                        LabRangeBadge(status: latest.rangeStatus)
+                // From the accessibility sizes on, the verdict moves under the
+                // value; beside it one of them broke into single letters.
+                let stacked = dynamicTypeSize.isAccessibilitySize
+                let row = stacked
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
+                    : AnyLayout(HStackLayout(alignment: .top, spacing: HLSpace.xs))
+                row {
+                    figure
+                    if !stacked {
+                        Spacer(minLength: HLSpace.xs)
                     }
-                    Text(takenCaption)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    // #126 3.5 — a reading the server converted names what was printed.
-                    LabConversionNote(conversion: LabConversion(latest))
+                    if let verdict = status.rowStatus {
+                        verdict.badge
+                            .fixedSize()
+                    }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text(accessibilityText))
-                // Outside the combined element, so VoiceOver reaches it as its
-                // own control.
-                if let sourcesTopic {
-                    HLSourcesLink(topic: sourcesTopic)
+                Text(verbatim: caption)
+                    .hlText(.rowSubtitle)
+                // A single value is read against its range at once, before any
+                // course exists.
+                if let bar = LabRangeBar(
+                    value: reading.value,
+                    previous: range.previous,
+                    low: range.low,
+                    high: range.high,
+                    accessibilityText: ""
+                ) {
+                    bar
+                        .padding(.top, HLSpace.xs)
+                        .accessibilityHidden(true)
                 }
+                // A reading the server converted names what was printed.
+                LabConversionNote(conversion: conversion)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(verbatim: accessibilityText))
+        }
+    }
+
+    private var figure: some View {
+        let parts = reading.parts
+        return HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
+            Text(verbatim: parts.number)
+                .hlText(.heroValue)
+                .lineLimit(1)
+                .minimumScaleFactor(HeroStrip.valueMinimumScaleFactor)
+                .layoutPriority(1)
+            if let unit = parts.unit {
+                Text(verbatim: unit)
+                    .hlText(.valueUnit)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
     }
 
-    private var valueLabel: String {
-        // Item 1.5 — qualitative rows render their result text, not a phantom 0.
-        latest.displayValue
-    }
-
-    /// "When taken" caption — relative phrasing paired with the absolute medium
-    /// date so it stays coherent with the absolute dates on the "Alle Messungen"
-    /// rows directly below (e.g. "Erhoben vor 5 Monaten · 12. Jan. 2026"). Falls
-    /// back to the bare medium date when the wire timestamp can't be parsed.
-    private var takenCaption: String {
-        guard let date = LabsDateFormat.parse(latest.takenAt) else {
-            return LabsDateFormat.mediumDate(latest.takenAt)
-        }
-        let relative = date.formatted(.relative(presentation: .named))
-        let absolute = LabsDateFormat.mediumDate(latest.takenAt)
-        let template = String(localized: "biomarker.detail.taken.dated")
-        return String(format: template, relative, absolute)
-    }
-
-    /// One spoken element: value + range status. Distinct from `labs.row.a11y`
-    /// (which is name + value + status) so the value isn't read twice — the card
-    /// has no separate name line, so a dedicated 2-placeholder string keeps
-    /// VoiceOver to a single, non-redundant utterance.
+    /// One spoken element: value, range status, date and the range, so
+    /// nothing is read twice.
     private var accessibilityText: String {
         let template = String(localized: "biomarker.detail.lastMeasurement.a11y")
-        return String(format: template, valueLabel, latest.rangeStatus.localizedLabel)
+        var text = String(format: template, reading.spoken, status.localizedLabel) + ", " + caption
+        if let reference = BiomarkerSeries.referenceText(low: range.low, high: range.high, unit: reading.unit) {
+            text += ", \(String(localized: "labs.detail.reference")) \(reference)"
+        }
+        return text
     }
 }

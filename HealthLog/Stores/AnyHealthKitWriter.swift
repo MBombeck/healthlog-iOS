@@ -21,41 +21,47 @@ public enum WorkoutSyncPassMode: Sendable, Equatable, Hashable {
 public protocol AnyHealthKitWriter: Sendable {
     func write(_ measurement: Measurement) async throws
 
-    /// **W-HKMIRROR** — mirror SERVER-ORIGIN measurements (entered on web /
+    /// Mirror SERVER-ORIGIN measurements (entered on web /
     /// another device, or imported) into Apple Health. Closes the bidirectional
     /// gap where only `.manual` rows round-tripped. Source/kind policy +
     /// anti-dup (externalUUID) + idempotency live in the implementation; the
     /// caller passes the authoritative server page. Skips silently without
     /// share-auth; non-HK builds + test doubles no-op via the default below.
     ///
-    /// B5 (1.4) — returns `false` when the person's direction setting was not
+    /// Returns `false` when the person's direction setting was not
     /// known and the pass wrote nothing for that reason, so a one-shot caller
     /// tries again later.
     @discardableResult
     func mirrorServerMeasurements(_ measurements: [Measurement]) async -> Bool
 
-    /// **B5 (1.4)** — setter-injection for the person's per-type direction
+    /// Replaces this app's own Apple Health copy of an edited reading. Never
+    /// touches an object of another source.
+    func replaceOwnCopy(of old: Measurement, with new: Measurement) async
+
+    /// Removes this app's own Apple Health copies of a deleted reading.
+    func removeOwnCopies(of measurement: Measurement) async
+
+    /// Setter-injection for the person's per-type direction
     /// (`GET /api/integrations/healthkit`), read by the server mirror and the
     /// create-time write. `nil` from the provider means "not known now".
     /// Idempotent; implementations that write nothing no-op via the default.
     func attachWriteBackPolicy(_ provider: (@Sendable () async -> HealthKitWriteBackPolicy?)?) async
 
-    /// S4 / QA6 #2: mirror a MoodEntry into HKStateOfMindSample. iOS 18+
-    /// only; pre-18 implementations no-op.
+    /// Mirror a MoodEntry into HKStateOfMindSample.
     func writeMood(_ entry: MoodEntry) async throws
 
-    /// **v0.10.0 W10 M1** — delete the HKStateOfMind sample mirrored for a mood
+    /// Delete the HKStateOfMind sample mirrored for a mood
     /// entry (looked up by `HKMetadataKeyExternalUUID == id`) so a deleted mood
-    /// doesn't linger in Apple Health. iOS 18+ / HK builds; otherwise no-op.
+    /// doesn't linger in Apple Health. HK builds; otherwise no-op.
     func deleteMood(id: String) async throws
 
-    /// **v0.10.0 W-Mood-B** — request State-of-Mind read+share auth.
+    /// Request State-of-Mind read+share auth.
     /// 16-03/E2: the type is now in the first sheet's default sets, so this is
     /// the recovery path behind the `syncMoodWithAppleHealth` Settings toggle
-    /// rather than the first ask. iOS 18+; older OS + non-HK builds no-op.
+    /// rather than the first ask. Non-HK builds no-op.
     func requestMoodAuthorization() async throws
 
-    /// **v0.10.0 W-Mood-B** — start importing foreign `HKStateOfMind` samples
+    /// Start importing foreign `HKStateOfMind` samples
     /// (logged in Apple Health / Journal / elsewhere) into HealthLog mood via
     /// `MoodRepository`, anti-duped against our own writes. Idempotent.
     func startMoodImport(repo: MoodRepository, userID: String?) async
@@ -65,11 +71,11 @@ public protocol AnyHealthKitWriter: Sendable {
     /// opt-in is already enabled; it never requests authorization itself.
     func refreshMoodImport(repo: MoodRepository, userID: String?) async
 
-    /// **v0.10.0 W-Mood-B** — stop the State-of-Mind import observer (toggle
+    /// Stop the State-of-Mind import observer (toggle
     /// off / logout).
     func stopMoodImport() async
 
-    /// **v0.10.0 W10 M2** — reset the per-user State-of-Mind import anchor and
+    /// Reset the per-user State-of-Mind import anchor and
     /// stop the observer (logout / user-change). The next user must start clean:
     /// without this, a different user signing in on the same device re-imports
     /// the full HKStateOfMind history into their account. iOS 18+ / HK builds;
@@ -94,7 +100,7 @@ public protocol AnyHealthKitWriter: Sendable {
     /// nicht.
     func attachUploader(_ uploader: MeasurementBatchUploader) async
 
-    /// Reconciler for HK-deletions (S2): forwards `deletedObjects` from
+    /// Reconciler for HK-deletions: forwards `deletedObjects` from
     /// HKAnchoredObjectQuery to the server `DELETE
     /// /api/measurements/by-external-ids` route.
     func attachDeletionReconciler(_ reconciler: MeasurementDeletionReconciler) async
@@ -106,29 +112,25 @@ public protocol AnyHealthKitWriter: Sendable {
     /// nil = "Alle / kein Cutoff" (Default-Verhalten ohne Backfill-Window).
     func setInitialBackfillCutoff(_ cutoff: Date?) async
 
-    /// v0.5.5 W-A3 setter-injection for the feature-flags reader. The
-    /// HK-STATS daily-stats gate (`enableDailyStats`) reads from this seam.
-    /// (The former Spezi-cutover skip-filter flags were removed in the v0162
-    /// cleanup once the legacy per-sample observer pipeline was retired.)
-    /// Idempotent — safe to call multiple times.
-    func attachFeatureFlags(_ featureFlags: (any FeatureFlagsServicing)?) async
-
-    /// **Phase 07 / plan 07-05** — setter-injection for the account admission the
+    /// Setter-injection for the account admission the
     /// opt-in importers sweep under.
     ///
-    /// Same shape and the same reason as ``attachFeatureFlags(_:)``: this
-    /// protocol is `public` while the Phase-07 lease vocabulary is
-    /// module-internal, so the admission crosses the seam inside
+    /// Setter-injection because this protocol is `public` while the Phase-07
+    /// lease vocabulary is module-internal, so the admission crosses the seam inside
     /// ``HealthSyncImporterAdmission`` — a public carrier with an internal
     /// payload. Idempotent. Implementations that own no importer no-op via the
     /// default below.
     func attachHealthSyncAdmission(_ admission: HealthSyncImporterAdmission?) async
 
-    /// **Phase 07 / plan 07-06** — setter-injection for the owner-bound outbox a
+    /// Setter-injection for the owner-bound outbox a
     /// held heart-event page is written to. Same shape and the same reason as
     /// ``attachHealthSyncAdmission(_:)``. Idempotent; implementations that own no
     /// importer no-op via the default below.
     func attachHealthSyncRetryQueue(_ queue: OutboxQueue?) async
+
+    /// Setter-injection for the module question the ingest-v2 units ask
+    /// (illness for symptoms, mental health for PHQ-9 / GAD-7). Default no-op.
+    func attachIngestModuleProbe(_ probe: (@Sendable (ModuleKey) async -> Bool)?) async
 
     // MARK: - Workouts (v1.15 W-WORKOUT)
 
@@ -139,7 +141,7 @@ public protocol AnyHealthKitWriter: Sendable {
     /// workout so the `WorkoutsStore` revalidates. Idempotent. Non-HK builds
     /// no-op.
     ///
-    /// **W-B184** — `forceFullSweep: true` clears the persisted anchor BEFORE
+    /// `forceFullSweep: true` clears the persisted anchor BEFORE
     /// starting, so the first sweep re-backfills the full HKWorkout history. The
     /// workout-read re-auth migration (`HKReadinessStore`) passes `true` for
     /// returning users: a pre-b182 build may have advanced the anchor over an
@@ -170,9 +172,9 @@ public protocol AnyHealthKitWriter: Sendable {
     /// the observer (logout / user-change), so the next user starts clean.
     func resetWorkoutImportObserver() async
 
-    // MARK: - Heart-health + mobility EVENTS (W-HKREAD)
+    // MARK: - Heart-health + mobility EVENTS
 
-    /// **W-HKREAD** — start importing categorical EVENT-class HealthKit samples
+    /// Start importing categorical EVENT-class HealthKit samples
     /// (irregular-rhythm, high/low-HR, walking-steadiness, sleep-apnea,
     /// audio-exposure events) and forwarding the device's verdict to
     /// `POST /api/measurements/batch`. Always-on (a core read surface, not
@@ -180,7 +182,7 @@ public protocol AnyHealthKitWriter: Sendable {
     /// Non-HK builds no-op.
     func startEventImportIfNeeded(userID: String?) async
 
-    /// **Phase 07 / plan 07-07** — ensure the event importer exists, then force
+    /// Ensure the event importer exists, then force
     /// exactly one bounded anchored read of every event type, and report what it
     /// did. The route the orchestrator's `heartHealthEvents` capability takes.
     ///
@@ -190,39 +192,39 @@ public protocol AnyHealthKitWriter: Sendable {
     /// that gives it a caller.
     func refreshEventImport(userID: String?) async -> HealthSyncImportOutcome
 
-    /// **W-HKREAD** — stop the event import observers (logout).
+    /// Stop the event import observers (logout).
     func stopEventImportObserver() async
 
-    /// **W-HKREAD** — reset every per-type event anchor and stop the observers
+    /// Reset every per-type event anchor and stop the observers
     /// (logout / user-change), so the next user starts clean.
     func resetEventImportObserver() async
 
     // MARK: - Cycle (reproductive-health) — Phase C2/C4
 
-    /// **v0.14.8 C4** — request the full reproductive-category read+share auth
+    /// Request the full reproductive-category read+share auth
     /// set. Only reached once `CycleGate.isCycleTrackingAvailable` is true (men
     /// are never prompted). iOS 18+ / HK builds; otherwise no-op.
     func requestCycleAuthorizationIfNeeded() async throws
 
-    // MARK: - Nutrients (GH #48)
+    // MARK: - Nutrients
 
-    /// **GH #48** — request read authorization for the nutrient catalog types.
+    /// Request read authorization for the nutrient catalog types.
     /// Only reached once the opt-in `nutrients` module is ENABLED (the dietary
     /// types are kept out of the always-on onboarding sheet, so a user who never
     /// switches nutrients on is never prompted). Read-only. HK builds; otherwise
     /// no-op.
     func requestNutrientAuthorizationIfNeeded() async throws
 
-    // MARK: - ECG (GH #74)
+    // MARK: - ECG
 
-    /// **GH #74** — request READ authorization for `HKElectrocardiogramType`.
+    /// Request READ authorization for `HKElectrocardiogramType`.
     /// 16-03/E2: the type is now in the always-on first sheet, so this is the
     /// recovery path for a user who declined there and later turns the
     /// device-local switch on (``EcgHealthSyncStore``), not the first ask.
     /// Read-only — the app never writes an ECG back. HK builds; otherwise no-op.
     func requestEcgAuthorizationIfNeeded() async throws
 
-    /// **v0.14.8 C4** — mirror a MANUAL cycle day-log into Apple Health (gated
+    /// Mirror a MANUAL cycle day-log into Apple Health (gated
     /// on a 2xx server write). `isCycleStart` flags the period-start day — it
     /// feeds the REQUIRED `HKMetadataKeyMenstrualCycleStart` metadata on the
     /// menstrual-flow sample. iOS 18+ / HK builds; otherwise no-op.
@@ -233,7 +235,7 @@ public protocol AnyHealthKitWriter: Sendable {
     /// Idempotent. Caller gates on `CycleGate`.
     func startCycleImportIfEligible(repo: CycleRepository, userID: String?) async
 
-    /// **Phase 07 / plan 07-07** — ensure the cycle importer exists, then force
+    /// Ensure the cycle importer exists, then force
     /// exactly one bounded anchored read of every reproductive type, and report
     /// what it did. The route the orchestrator's `cycleImport` capability takes.
     func refreshCycleImport(repo: CycleRepository, userID: String?) async -> HealthSyncImportOutcome
@@ -254,6 +256,14 @@ public protocol AnyHealthKitWriter: Sendable {
 }
 
 public extension AnyHealthKitWriter {
+    /// A reading was changed in HealthLog: replace the copy this app wrote to
+    /// Apple Health. Default no-op for builds and doubles without HealthKit.
+    func replaceOwnCopy(of _: Measurement, with _: Measurement) async {}
+
+    /// A reading was deleted in HealthLog: remove the copy this app wrote.
+    /// Default no-op for builds and doubles without HealthKit.
+    func removeOwnCopies(of _: Measurement) async {}
+
     /// Default no-op so non-HK test doubles need not implement the server mirror.
     @discardableResult
     func mirrorServerMeasurements(_: [Measurement]) async -> Bool {
@@ -271,6 +281,9 @@ public extension AnyHealthKitWriter {
     /// Default no-op: an implementation that owns no importer has no page to
     /// make durable. The live HealthKit service overrides it.
     func attachHealthSyncRetryQueue(_: OutboxQueue?) async {}
+
+    /// Default no-op: an implementation that owns no event importer asks nothing.
+    func attachIngestModuleProbe(_: (@Sendable (ModuleKey) async -> Bool)?) async {}
 
     /// Non-HK/test default: starting the importer is the closest available
     /// behavior. The live HealthKit service overrides this with an explicit
@@ -404,7 +417,7 @@ public extension AnyHealthKitWriter {
             await resetWorkoutImport()
         }
 
-        // MARK: - Heart-health + mobility EVENTS (W-HKREAD)
+        // MARK: - Heart-health + mobility EVENTS
 
         public func startEventImportIfNeeded(userID: String?) async {
             await startEventImport(userID: userID)
@@ -432,13 +445,13 @@ public extension AnyHealthKitWriter {
             await refreshCycleImportSweep(repo: repo, userID: userID)
         }
 
-        // MARK: - Nutrients (GH #48)
+        // MARK: - Nutrients
 
         public func requestNutrientAuthorizationIfNeeded() async throws {
             try await requestNutrientAuthorization()
         }
 
-        // MARK: - ECG (GH #74)
+        // MARK: - ECG
 
         public func requestEcgAuthorizationIfNeeded() async throws {
             try await requestEcgAuthorization()

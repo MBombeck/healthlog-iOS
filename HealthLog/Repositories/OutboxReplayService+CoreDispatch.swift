@@ -1,21 +1,21 @@
 import Foundation
 
-// audit-v0162 — split out of `OutboxReplayService.swift` to keep the actor body
+// Split out of `OutboxReplayService.swift` to keep the actor body
 // under the `type_body_length` + `file_length` budgets (mirrors `+Records` /
 // `+LabsIllness`). Holds (a) the per-op replay-outcome helpers the `runOnce`
 // loop delegates to and (b) the lower-coupling dispatch arms (cycle / workout /
 // coach / therapy-log). Pure move — behaviour-identical.
 
 extension OutboxReplayService {
-    // MARK: - Per-op replay outcome (audit-v0162 H1 / H-4)
+    // MARK: - Per-op replay outcome
 
-    /// audit-v0162 H1 — the two reasons to leave a live row untouched this pass.
+    /// The two reasons to leave a live row untouched this pass.
     /// Over budget: the age-gated sweep at the end of the pass owns it, and it is
     /// never deleted here, so the write stays recoverable. Inside the back-off
     /// window: rapid replay triggers (a foreground edge and a reachability edge
     /// seconds apart) must not burn several attempts within minutes.
     ///
-    /// #110 — and while the server's rate-limit hold runs, no row is sent at
+    /// And while the server's rate-limit hold runs, no row is sent at
     /// all: the bucket is shared, so every row would meet the same 429.
     func isOnHoldThisPass(_ op: OutboxQueue.Operation, now: Date) -> Bool {
         if isRateLimitHeld(now: now) { return true }
@@ -24,7 +24,7 @@ extension OutboxReplayService {
         return false
     }
 
-    /// Audit B-2 — has the server already taken this operation? True from the
+    /// Has the server already taken this operation? True from the
     /// persisted stamp, or from this process' own record when the stamp itself
     /// could not be written.
     func isDelivered(_ op: OutboxQueue.Operation) -> Bool {
@@ -33,23 +33,23 @@ extension OutboxReplayService {
 
     /// A dispatch succeeded — and the order of what follows is the fix.
     ///
-    /// **Audit B-11 (remap first).** When the op was a `create` that just landed
+    /// When the op was a `create` that just landed
     /// with a real server id, every sibling (a queued update/delete on the same
     /// `optimistic-<uuid>`) is retargeted so the dependent write addresses the
     /// real record, not a 404-ing optimistic id. A remap that FAILS used to be
     /// swallowed by `try?`, which left the dependents pointing at an id the
-    /// server never had — they replayed into a 404 and were discarded (B-3).
+    /// server never had — they replayed into a 404 and were discarded.
     /// It is now a replay failure of this op: the create keeps its row, the
     /// attempt is counted, and the next pass re-sends it under the SAME
     /// idempotency key — which the server answers with the first response
     /// (`X-Idempotent-Replay: true`), so the remap gets another chance without a
     /// second record ever being created.
     ///
-    /// **Audit B-2 (delivered before remove).** Only then is the row marked
+    /// Only then is the row marked
     /// delivered and removed — in that order, so a `remove` that fails cannot
     /// put an operation the server already has back on the wire.
     ///
-    /// **1.4 (S5).** `createdServerId` is what this pass's own dispatch
+    /// `createdServerId` is what this pass's own dispatch
     /// returned, never shared actor state, and a pass the watchdog superseded
     /// while its request hung only finishes the delivery (see
     /// ``onSupersededDelivery(_:createdServerId:)``).
@@ -95,7 +95,7 @@ extension OutboxReplayService {
         return optimisticId
     }
 
-    /// **1.4 (S5) — a success that reached a superseded pass.** The pass that
+    /// **A success that reached a superseded pass.** The pass that
     /// replaced it owns the queue and the in-pass remap, so this one never
     /// remaps. It marks the row delivered and removes it, unless the answer
     /// is a server id that dependents still wait to be remapped onto: then
@@ -114,7 +114,7 @@ extension OutboxReplayService {
         await completeDelivery(op)
     }
 
-    /// **1.4 (S5) — any other answer that reached a superseded pass.** The row
+    /// **Any other answer that reached a superseded pass.** The row
     /// is left exactly as it is, like an interruption; the pass that owns the
     /// queue meets the same answer and handles it.
     func onSuperseded(_ op: OutboxQueue.Operation) {
@@ -123,7 +123,7 @@ extension OutboxReplayService {
         HLLog.outbox.notice("Op \(op.kind.rawValue, privacy: .public) answered a superseded pass: row left to the current one")
     }
 
-    /// **Audit B-2 — finish a write the server already took.** Removes the row;
+    /// **Finish a write the server already took.** Removes the row;
     /// a failure leaves it in place, still stamped delivered, so the next drain
     /// lands here again instead of on the wire. Never counts an attempt and
     /// never reports a discard: nothing was lost, a local delete is merely owed.
@@ -146,12 +146,16 @@ extension OutboxReplayService {
     /// time (back-off) but do NOT burn the retry budget toward dead-lettering —
     /// the write did not fail on its own merits (audit-v0162 H1 Opt 3).
     func onRetriableFailure(_ op: OutboxQueue.Operation, err: HLError, degraded: Bool, now: Date) async {
-        // #110 — a 429 is never the write's fault: nothing counted, nothing
+        // #6 — a 401 or a session that changed says nothing about the write:
+        // stamped, never counted (`+Session`).
+        if err.isAuthenticationHold { return await onSessionTransition(op, now: now) }
+        // A 429 is never the write's fault: nothing counted, nothing
         // stamped, the pass holds (see `OutboxReplayService+RateLimit`).
         if case let .rateLimited(retryAfter) = err { return onRateLimited(op, retryAfter: retryAfter) }
         if err.isServerKeyMismatch { return onServerKeyMismatch(op) }
+        rerun.failedThisPass = true
         let sanitized = Self.lastErrorKeepingUnconfirmed(op, LogSanitizer.redact(err.localizedDescription))
-        // W1 (1.3.0) — a timeout or a lost connection is the network's fault,
+        // A timeout or a lost connection is the network's fault,
         // not the write's. Counted, it pushed rows over budget within one bad
         // background window, and an over-budget row waited unsent for the
         // seven days before the dead-letter sweep. Stamped only, it goes out
@@ -186,14 +190,24 @@ extension OutboxReplayService {
     /// replay stops carrying reaches the same honest failure count the
     /// dead-letter lane feeds, named by kind and machine reason.
     ///
-    /// **C4**: and never lost either. An unreadable 2xx is "sent, unconfirmed"
+    /// And never lost either. An unreadable 2xx is "sent, unconfirmed"
     /// and stays; a refusal dead-letters the row (retained, recoverable) unless
     /// dropping it loses nothing. Cancellation never gets here (`runOnce` ends
     /// the pass first). Returns `true` when the row stays in the live queue, so
     /// the pass can hold back its dependents.
     @discardableResult
     func onNonRetriable(_ op: OutboxQueue.Operation, error: Error, now: Date) async -> Bool {
-        // #115 / 0.3 — two answers that are not a refusal of the write: a
+        // #12 — the dose is on the server already: a delivery.
+        if let already = error as? MedicationAlreadyTaken {
+            await onAlreadyTaken(op, already)
+            return false
+        }
+        // #6 — a lease that no longer matches the session.
+        if Self.isSessionTransition(error) {
+            await onSessionTransition(op, now: now)
+            return true
+        }
+        // Two answers that are not a refusal of the write: a
         // replayed HealthKit batch whose rows the server still cannot map, and a
         // module switched off for a kind HealthKit feeds. Both must never reach
         // the delete (see `OutboxReplayService+HealthKit`).
@@ -218,7 +232,7 @@ extension OutboxReplayService {
         return false
     }
 
-    /// **Audit B-3 — our own stored payload no longer decodes.** The CI run of
+    /// **Our own stored payload no longer decodes.** The CI run of
     /// 8 September showed the live case ("Op createMeasurement verworfen:
     /// DecodingError … not valid JSON"): a payload an older build wrote and this
     /// one cannot read used to be DELETED, as if the server had refused it. It
@@ -243,7 +257,7 @@ extension OutboxReplayService {
         await publishDiscard(.init(kind: op.kind.rawValue, reason: .payloadUnreadable))
     }
 
-    /// Audit B-3 — name the failure in the finite vocabulary the surface reads.
+    /// Name the failure in the finite vocabulary the surface reads.
     /// `HLError.decoding` is the SERVER's answer being unreadable (we cannot
     /// tell whether the write landed); `.unknown` is this build failing to route
     /// the op at all; everything else that reaches here is a stated refusal.
@@ -259,7 +273,7 @@ extension OutboxReplayService {
 
     // MARK: - Lower-coupling dispatch arms
 
-    /// v0.14.8 — cycle outbox kinds. Each replays under the persisted
+    /// Cycle outbox kinds. Each replays under the persisted
     /// idempotency key (UPSERT-idempotent via `externalId`); a missing
     /// `cycleRepo` dead-letters (non-retriable) so an unwired build never
     /// busy-loops.
@@ -285,7 +299,7 @@ extension OutboxReplayService {
         }
     }
 
-    /// v0.14.8 audit Wave A (C4.1) — replay path for `uploadWorkoutBatch`.
+    /// Replay path for `uploadWorkoutBatch`.
     /// Re-POSTs `POST /api/workouts/batch` with the persisted idempotency key
     /// (24h server envelope dedup) — and beyond that window the per-entry
     /// `externalId` UPSERT folds a batch that already landed into `duplicate`
@@ -320,7 +334,7 @@ extension OutboxReplayService {
         } catch is OutboxQueue.OwnerLeaseError {
             // Session transitions are retryable protocol uncertainty, never a
             // reason to drop the PHI row. The message contains no owner/token.
-            throw HLError.network(.other("authenticated session changed"))
+            throw HLError.authenticatedSessionChanged
         }
         do {
             try WorkoutBatchAcceptance.validate(postedCount: p.workouts.count, response: response)
@@ -332,7 +346,7 @@ extension OutboxReplayService {
         }
     }
 
-    /// W-B187 COACH-3 — replay the coach clarifying-question writes. Each
+    /// Replay the coach clarifying-question writes. Each
     /// re-issues under the persisted idempotency key (the server dedupes a
     /// replayed adoption against the stored prose, and exact-match dismissal is
     /// naturally idempotent). A missing `coachAboutMeRepo` dead-letters
@@ -353,7 +367,7 @@ extension OutboxReplayService {
         }
     }
 
-    /// v0.12 SP3+SP4 — replay path for the GLP-1 side-effect + inventory CRUD
+    /// Replay path for the GLP-1 side-effect + inventory CRUD
     /// kinds. Each re-issues its mutation with the persisted idempotency-key so
     /// the server's `(userId, key, method, path)` dedup suppresses a write that
     /// may already have landed before app-kill. When the repo is unwired the op
@@ -400,7 +414,7 @@ extension HLError {
     /// this shape is the SERVER's fault, not the write's, so it must not count
     /// toward the dead-letter budget. (429 surfaces as `.rateLimited`, not
     /// `.server`, so both arms are needed.)
-    /// W1 (1.3.0) — no connection, a lost one, or none in time. Never a verdict
+    /// W1 — no connection, a lost one, or none in time. Never a verdict
     /// on the write; the replay re-sends without counting the attempt.
     var isTransientConnectivity: Bool {
         switch self {

@@ -144,8 +144,8 @@ struct MedicationDSTCardSlotTests {
         #expect(pick?.scheduledAt == day.at(20))
     }
 
-    @Test("A weekly medication on an off-day still looks back to its last slot (H3 kept)")
-    func weeklyOffDayStillLooksBack() {
+    @Test("D3 #3: a weekly medication on an off-day books now, no look-back to last week")
+    func weeklyOffDayBooksNow() {
         let day = Self.days[0]
         let entry = ScheduleEntry(
             cadence: .weekdays([.mon]),
@@ -159,13 +159,13 @@ struct MedicationDSTCardSlotTests {
             schedule: MedicationSchedule(entries: [entry]),
             createdAt: day.at(9, dayOffset: -60)
         )
-        // 25.10.2026 is a Sunday; the last Monday 09:00 is 19.10.
+        // 25.10.2026 is a Sunday; last Monday's 09:00 (19.10.) is not this dose.
         let resolved = ActiveMedicationsSection.resolveAdHocScheduledFor(
             medication: med,
             now: day.at(14),
             timeZone: day.timeZone
         )
-        #expect(resolved == day.at(9, dayOffset: -6))
+        #expect(resolved == day.at(14))
     }
 }
 

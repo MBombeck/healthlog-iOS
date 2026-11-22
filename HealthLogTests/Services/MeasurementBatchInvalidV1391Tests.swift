@@ -10,7 +10,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// E1 — `measurement.batch.invalid` (server v1.39.1) is final for the batch
+    /// `measurement.batch.invalid` (server v1.39.1) is final for the batch
     /// as sent, and names the offending entries under `details.issues`.
     ///
     /// Fixtures are the v1.39.1 route's own envelope: `apiValidationError(…,

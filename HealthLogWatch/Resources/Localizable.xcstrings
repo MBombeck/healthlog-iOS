@@ -21,6 +21,18 @@
             "state": "translated",
             "value": "%lld van %lld ingenomen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld/%lld 복용함"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld de %lld tomados"
+          }
         }
       }
     },
@@ -43,6 +55,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld vandaag"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 %lld건"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld: hoy"
           }
         }
       }
@@ -67,6 +91,18 @@
             "state": "translated",
             "value": "Alles gedaan"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 완료"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo hecho"
+          }
         }
       }
     },
@@ -89,6 +125,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slecht"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나쁨"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mal"
           }
         }
       }
@@ -113,6 +161,18 @@
             "state": "translated",
             "value": "Bloeddruk"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "혈압"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presión arterial"
+          }
         }
       }
     },
@@ -135,6 +195,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wijzigen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변경"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar"
           }
         }
       }
@@ -159,6 +231,18 @@
             "state": "translated",
             "value": "Kan iPhone niet bereiken"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone에 연결할 수 없음"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo conectar con el iPhone"
+          }
         }
       }
     },
@@ -181,6 +265,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diastolisch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이완기"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diastólica"
           }
         }
       }
@@ -205,6 +301,18 @@
             "state": "translated",
             "value": "Glucose"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "혈당"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glucosa"
+          }
         }
       }
     },
@@ -227,6 +335,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Goed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "좋음"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bien"
           }
         }
       }
@@ -251,6 +371,18 @@
             "state": "translated",
             "value": "Super"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아주 좋음"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genial"
+          }
         }
       }
     },
@@ -273,6 +405,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hoe gaat het met je?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분이 어때요?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo estás?"
           }
         }
       }
@@ -297,6 +441,18 @@
             "state": "translated",
             "value": "Laatste niet bewaard, tik om opnieuw te proberen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 항목 저장 안 됨, 탭하여 다시 시도"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El último no se guardó, toca para reintentar"
+          }
         }
       }
     },
@@ -319,6 +475,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Laatste: wordt gesynchroniseerd"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 항목: 동기화 예정"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último: se sincronizará"
           }
         }
       }
@@ -343,6 +511,18 @@
             "state": "translated",
             "value": "Later"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más tarde"
+          }
         }
       }
     },
@@ -365,6 +545,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vastleggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar"
           }
         }
       }
@@ -389,6 +581,18 @@
             "state": "translated",
             "value": "Vastgelegd"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록됨"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrado"
+          }
         }
       }
     },
@@ -411,6 +615,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Legt deze stemming vast"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기분을 기록해요"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra este estado de ánimo"
           }
         }
       }
@@ -435,6 +651,18 @@
             "state": "translated",
             "value": "Beroerd"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아주 나쁨"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatal"
+          }
         }
       }
     },
@@ -457,6 +685,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Medicatie"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "약"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medicamentos"
           }
         }
       }
@@ -481,6 +721,18 @@
             "state": "translated",
             "value": "Stemming"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ánimo"
+          }
         }
       }
     },
@@ -503,6 +755,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volgende"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
           }
         }
       }
@@ -527,6 +791,18 @@
             "state": "translated",
             "value": "Oké"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보통"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
         }
       }
     },
@@ -549,6 +825,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pols"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "맥박"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulso"
           }
         }
       }
@@ -573,6 +861,18 @@
             "state": "translated",
             "value": "Opnieuw proberen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시도"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
         }
       }
     },
@@ -595,6 +895,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bewaard, wordt met iPhone gesynchroniseerd"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장됨, iPhone과 동기화 예정"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado, se sincronizará con el iPhone"
           }
         }
       }
@@ -619,6 +931,18 @@
             "state": "translated",
             "value": "Versturen…"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보내는 중…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviando…"
+          }
         }
       }
     },
@@ -641,6 +965,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Log in op je iPhone"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone에서 로그인하세요"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión en tu iPhone"
           }
         }
       }
@@ -665,6 +1001,18 @@
             "state": "translated",
             "value": "Overgeslagen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건너뜀"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitida"
+          }
         }
       }
     },
@@ -687,6 +1035,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Synchroniseren…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "동기화 중…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizando…"
           }
         }
       }
@@ -711,6 +1071,18 @@
             "state": "translated",
             "value": "Systolisch"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수축기"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistólica"
+          }
         }
       }
     },
@@ -733,6 +1105,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomada"
           }
         }
       }
@@ -757,6 +1141,18 @@
             "state": "translated",
             "value": "Vandaag"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy"
+          }
         }
       }
     },
@@ -779,6 +1175,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gewicht"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "체중"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peso"
           }
         }
       }
@@ -803,6 +1211,18 @@
             "state": "translated",
             "value": "bpm"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bpm"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lpm"
+          }
         }
       }
     },
@@ -822,6 +1242,18 @@
           }
         },
         "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kg"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kg"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "kg"
@@ -849,6 +1281,18 @@
             "state": "translated",
             "value": "mg/dL"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mg/dL"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mg/dL"
+          }
         }
       }
     },
@@ -872,51 +1316,17 @@
             "state": "translated",
             "value": "mmHg"
           }
-        }
-      }
-    },
-    "· not saved": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "(nicht gespeichert)"
+            "value": "mmHg"
           }
         },
-        "en": {
+        "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "(not saved)"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(niet bewaard)"
-          }
-        }
-      }
-    },
-    "· will sync": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(wird synchronisiert)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(will sync)"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(wordt gesynchroniseerd)"
+            "value": "mmHg"
           }
         }
       }
@@ -940,6 +1350,702 @@
           "stringUnit": {
             "state": "translated",
             "value": "mmol/L"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mmol/L"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mmol/L"
+          }
+        }
+      }
+    },
+    "Open HealthLog on your iPhone": {
+      "comment": "Watch medications — the last snapshot from the iPhone is from an earlier day; nothing to show or tap until the iPhone refreshes it",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne HealthLog auf deinem iPhone"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open HealthLog on your iPhone"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open HealthLog op je iPhone"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "iPhone에서 HealthLog를 여세요"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Abre HealthLog en tu iPhone"
+          }
+        }
+      }
+    },
+    "(will sync)": {
+      "comment": "Watch medications — status after the dose time when the iPhone queued the mark and will send it later",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(wird synchronisiert)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(will sync)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(wordt gesynchroniseerd)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(곧 동기화)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(se sincronizará)"
+          }
+        }
+      }
+    },
+    "(not saved)": {
+      "comment": "Watch medications — status after the dose time when the mark did not reach the iPhone",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(nicht gespeichert)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(not saved)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(niet bewaard)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(저장 안 됨)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(no se guardó)"
+          }
+        }
+      }
+    },
+    "med.dose.action.take": {
+      "comment": "Dose action: take this dose (term list #191)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Innemen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomar"
+          }
+        }
+      }
+    },
+    "med.dose.action.skip": {
+      "comment": "Dose action: skip this dose (term list #191)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überspringen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overslaan"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건너뛰기"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitir"
+          }
+        }
+      }
+    },
+    "med.dose.action.undo": {
+      "comment": "Dose action: undo the last dose action (term list #191)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rückgängig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongedaan maken"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 취소"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deshacer"
+          }
+        }
+      }
+    },
+    "med.dose.action.snooze": {
+      "comment": "Dose action: snooze the reminder by the account's span in minutes (term list #191)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später erinnern (%lld Min.)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remind me later (%lld min)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later herinneren (%lld min)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에 알림 (%lld분)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recordar más tarde (%lld min)"
+          }
+        }
+      }
+    },
+    "med.dose.state.pending": {
+      "comment": "Dose state: not yet due (wire upcoming)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausstehend"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gepland"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예정"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendiente"
+          }
+        }
+      }
+    },
+    "med.dose.state.due": {
+      "comment": "Dose state: due now",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fällig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Due"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aan de beurt"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용 시간"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora"
+          }
+        }
+      }
+    },
+    "med.dose.state.overdue": {
+      "comment": "Dose state: overdue",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überfällig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overdue"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te laat"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시간 지남"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrasada"
+          }
+        }
+      }
+    },
+    "med.dose.state.taken": {
+      "comment": "Dose state: taken",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용함"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomada"
+          }
+        }
+      }
+    },
+    "med.dose.state.taken_late": {
+      "comment": "Dose state: taken, but late",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verspätet genommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken late"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te laat ingenomen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "늦게 복용함"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomada tarde"
+          }
+        }
+      }
+    },
+    "med.dose.state.skipped": {
+      "comment": "Dose state: skipped",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overgeslagen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건너뜀"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitida"
+          }
+        }
+      }
+    },
+    "med.dose.state.missed": {
+      "comment": "Dose state: missed",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verpasst"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemist"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "놓침"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perdida"
+          }
+        }
+      }
+    },
+    "med.dose.state.missed_still_counts": {
+      "comment": "Hint under a missed dose",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimmst du sie jetzt, zählt sie noch, als verspätet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking it now still counts, as late."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neem je hem nu, dan telt hij nog, als te laat."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 복용해도 늦게 복용한 것으로 기록돼요."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si la tomas ahora, aún cuenta, como tardía."
+          }
+        }
+      }
+    },
+    "med.dose.state.snoozed_until": {
+      "comment": "Dose state: the reminder was snoozed; the argument is a time",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erinnerung verschoben auf %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reminder snoozed until %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herinnering uitgesteld tot %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@까지 알림 미룸"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recordatorio pospuesto hasta las %@"
+          }
+        }
+      }
+    },
+    "med.dose.form.title": {
+      "comment": "Title of the one intake form",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einnahme erfassen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log intake"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inname vastleggen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복용 기록"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar toma"
+          }
+        }
+      }
+    },
+    "med.dose.toast.taken": {
+      "comment": "Toast after a take; medication name, time",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: genommen, %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: taken, %2$@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: ingenomen, %2$@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: 복용함, %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: tomada, %2$@"
+          }
+        }
+      }
+    },
+    "med.dose.toast.skipped": {
+      "comment": "Toast after a skip; medication name",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: übersprungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: skipped"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: overgeslagen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: 건너뜀"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: omitida"
           }
         }
       }

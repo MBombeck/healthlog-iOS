@@ -5,7 +5,7 @@
     import Testing
     import UIKit
 
-    /// POLISH-ACHIEVE (v0.5.5.6) — locks the 3-column medallion grid
+    /// Locks the 3-column medallion grid
     /// contract that replaces the legacy 2-column chunky `HLCard` grid.
     ///
     /// Both the medallion (`AchievementMedallion`) and the tappable wrapper

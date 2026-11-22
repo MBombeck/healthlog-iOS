@@ -7,7 +7,6 @@ import XCTest
 /// the sweep's language and appearance. Only runs when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
     func test_19v_verdicts() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-verdicts", "-uitest-area-meds"])
         shotToEnd("19v-today")
 

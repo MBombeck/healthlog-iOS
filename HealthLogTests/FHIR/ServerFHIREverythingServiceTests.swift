@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.2 FW5-C — server FHIR `$everything` fetcher + source selection (B3).**
+/// **Server FHIR `$everything` fetcher + source selection.**
 ///
 /// Pins, against the *real* `APIClient` + stubbed `URLSession`:
 ///   - the `searchset` Bundle decode (`total` + `entry[]`),
@@ -78,7 +78,7 @@ struct ServerFHIREverythingServiceTests {
         nonisolated(unsafe) var requestCount = 0
         nonisolated(unsafe) var capturedAccept: String?
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — only the FHIR route counts.
+            // The handler is process-global — only the FHIR route counts.
             if req.targets("/api/fhir/Patient/$everything") {
                 capturedAccept = req.value(forHTTPHeaderField: "Accept")
                 requestCount += 1
@@ -128,14 +128,14 @@ struct ServerFHIREverythingServiceTests {
         #expect(!fetched.isEmpty)
     }
 
-    // MARK: - CU-13 — the route moved to the Patient type
+    // MARK: - The route moved to the Patient type
 
     @Test("every page is requested from /api/fhir/Patient/$everything")
     func requestsTypeLevelPatientRoute() async throws {
         let api = makeAPI()
         nonisolated(unsafe) var paths: [String] = []
         MockURLProtocol.install { req in
-            // CU-07: scoped to the FHIR namespace, NOT to the new route — the
+            // Scoped to the FHIR namespace, NOT to the new route — the
             // assertions below must still be able to see a hit on the deleted
             // `/api/fhir/$everything` path if the follower ever regressed there.
             if req.targets(prefixedBy: "/api/fhir") {

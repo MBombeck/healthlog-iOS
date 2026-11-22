@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// v0.5.5 W-MED — regression-guard for the `scheduleLocalReminder`
+    /// Regression-guard for the `scheduleLocalReminder`
     /// category + userInfo plumbing.
     ///
     /// Before W-MED the helper produced a `UNMutableNotificationContent`

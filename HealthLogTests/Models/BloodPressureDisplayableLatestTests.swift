@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// #33 — locks the client-side defensive guard that stops a malformed
+/// Locks the client-side defensive guard that stops a malformed
 /// 0-systolic / 0-diastolic blood-pressure row from ever surfacing as the
 /// "latest / last measurement" value on the dashboard tile, the chart-detail
 /// HeroStrip, and the AI/Spotlight summaries.

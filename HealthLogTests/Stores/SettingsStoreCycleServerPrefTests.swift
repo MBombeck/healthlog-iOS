@@ -31,13 +31,10 @@ struct SettingsStoreCycleServerPrefTests {
     private func makeStore(defaults: UserDefaults) throws -> SettingsStore {
         let api = makeClient()
         let cycleRepo = try CycleRepository(api: api, outbox: OutboxQueue(inMemory: true))
-        // syncMode nil → `.paired` → hasServer == true.
-        let backend = BackendAvailability(syncMode: nil, authStore: nil)
         return SettingsStore(
             repo: SettingsRepository(api: api),
             defaults: defaults,
-            cycleRepo: cycleRepo,
-            backend: backend
+            cycleRepo: cycleRepo
         )
     }
 

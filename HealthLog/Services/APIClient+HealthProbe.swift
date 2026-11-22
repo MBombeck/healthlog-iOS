@@ -58,7 +58,7 @@ public extension APIClient {
         // purpose of detecting a live captive portal.
         req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         req.timeoutInterval = max(1, timeout)
-        // Proxy access headers (GH-iOS #27) travel on every request when
+        // Proxy access headers travel on every request when
         // configured; the public health route ignores them, but an instance
         // behind Cloudflare Access or Pangolin needs them to reach the origin.
         environment.applyAccessHeaders(to: &req)

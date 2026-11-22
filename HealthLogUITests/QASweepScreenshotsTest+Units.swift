@@ -1,6 +1,6 @@
 import XCTest
 
-/// **#115 P2 — the imperial account, photographed.**
+/// **The imperial account, photographed.**
 ///
 /// TestFlight 1.1.0 (284): "Units set to imperial but range is showing metric."
 /// The dashboard weight tile read "162.1 lb" over "Target 61.9–83.3 kg". This
@@ -11,7 +11,6 @@ import XCTest
 /// only runs when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
     func test_12_imperialUnits() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-imperial"])
         let tile = app.descendants(matching: .any).matching(
             NSPredicate(format: "identifier == 'tile.weight.withChart' OR identifier == 'tile.weight.noChart'")

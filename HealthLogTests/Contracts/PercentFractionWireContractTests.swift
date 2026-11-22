@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// #113 / public #7 — the two halves of the percent contract, tested together.
+    /// The two halves of the percent contract, tested together.
     ///
     /// Until 1.0.4 each side only tested its own half: the server fed a raw `0.97`
     /// into its mapper, the app asserted that `0.97` left the phone as `97`. Both

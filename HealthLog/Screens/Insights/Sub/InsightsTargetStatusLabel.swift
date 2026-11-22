@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 L10N-FINAL — the target classification in the reader's language.**
+/// **The target classification in the reader's language.**
 ///
 /// `/api/insights/targets` emits `classification.category` as a canonical
 /// English token ("Optimal", "Overweight", "Hypertension Grade 1"); the web

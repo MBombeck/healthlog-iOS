@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import UIKit
 
-/// **AUDITC (1.5.0, #132)** — the state of the AUDIT-C form and of the
+/// **AUDITC** — the state of the AUDIT-C form and of the
 /// removal question, beside the alcohol section.
 ///
 /// Held by the section card, so it lives as long as the screen: closing the
@@ -161,7 +161,7 @@ final class AuditCModel {
         }
     }
 
-    // MARK: - The earlier one-word answer (POLISH-C, C7)
+    // MARK: - The earlier one-word answer
 
     /// The removal of the earlier answer is being asked about, in place.
     var isConfirmingLegacyRemoval = false

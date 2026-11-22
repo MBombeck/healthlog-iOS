@@ -4,22 +4,24 @@ struct CycleInsightsSection: View {
     let store: CycleStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        // The page's own gap, so the section headers inside keep their room.
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             if store.isLoadingInsights, store.insights == nil {
                 ProgressView("cycle.insights.loading")
                     .frame(maxWidth: .infinity)
             } else if store.insightsError != nil {
-                HLSettingsCard(icon: "chart.dots.scatter", title: "cycle.insights.title") {
+                HLSectionHeader("cycle.insights.title", rank: .area)
+                HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         Text("cycle.insights.error")
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.secondary)
-                        Button("Retry") { Task { await store.loadInsights(force: true) } }
-                            .buttonStyle(.bordered)
+                            .hlText(.emptyMessage)
+                        HLButton(HLControlWord.retry.key, variant: .secondary) {
+                            Task { await store.loadInsights(force: true) }
+                        }
                     }
                 }
             } else if let insights = store.insights {
-                // 1.4 B2 — while the server holds no supported pattern there
+                // While the server holds no supported pattern there
                 // is no card saying so.
                 if !insights.isLearning {
                     if let headline = Self.standaloneHeadline(insights) {
@@ -37,13 +39,14 @@ struct CycleInsightsSection: View {
                 }
             }
         }
+        .hlContainerGap(HLLayout.cardGap)
         .task {
             await store.loadCustomSymptoms()
             await store.loadInsights()
         }
     }
 
-    /// 1.4 B4 — the "most notable pattern" card only for a pattern the
+    /// The "most notable pattern" card only for a pattern the
     /// "Phase × Vitalwerte" card does not list. The server's headline is its
     /// strongest row, so with the rows on screen the card repeated their first
     /// line word for word.
@@ -56,20 +59,21 @@ struct CycleInsightsSection: View {
 
 private struct CycleInsightHeadlineCard: View {
     let row: CyclePhaseMetricRow
-    /// #115 P2 — weight, temperature and glucose averages in the account's unit.
+    /// Weight, temperature and glucose averages in the account's unit.
     @Environment(\.unitPreferences) private var units
 
     var body: some View {
-        HLSettingsCard(icon: "sparkles", title: "cycle.insights.headline.title") {
+        HLSectionHeader("cycle.insights.headline.title", rank: .area)
+        // One level under the header: the metric names the pattern in row
+        // type, the comparison follows as body text.
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(CycleInsightFormatting.metricLabel(row.metricKey))
-                    .font(.hlHeadline)
+                HLRowTitle(Text(verbatim: CycleInsightFormatting.metricLabel(row.metricKey)))
                 Text(CycleInsightFormatting.comparison(row, units: units))
-                    .font(.hlBody)
+                    .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
                 Text(CycleInsightFormatting.evidence(row))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
             }
             .accessibilityElement(children: .combine)
         }
@@ -78,31 +82,18 @@ private struct CycleInsightHeadlineCard: View {
 
 private struct CyclePhaseVitalRows: View {
     let rows: [CyclePhaseMetricRow]
-    /// #115 P2 — weight, temperature and glucose averages in the account's unit.
+    /// Weight, temperature and glucose averages in the account's unit.
     @Environment(\.unitPreferences) private var units
 
     var body: some View {
-        HLSettingsCard(icon: "waveform.path.ecg", title: "cycle.insights.vitals.title") {
-            VStack(spacing: HLSpace.md) {
-                ForEach(rows) { row in
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(CycleInsightFormatting.metricLabel(row.metricKey))
-                                .font(.hlSubhead)
-                            Spacer()
-                            Text(CycleInsightFormatting.delta(row, units: units))
-                                .font(.hlSubhead.monospacedDigit())
-                        }
-                        Text(CycleInsightFormatting.comparison(row, units: units))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                        Text(CycleInsightFormatting.evidence(row))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    if row.id != rows.last?.id { Divider() }
-                }
+        HLSectionHeader("cycle.insights.vitals.title", rank: .area)
+        HLCard(layout: .rows) {
+            ForEach(rows) { row in
+                HLRow(
+                    title: Text(verbatim: CycleInsightFormatting.metricLabel(row.metricKey)),
+                    detail: CycleInsightFormatting.rowDetail(row, units: units),
+                    value: Text(verbatim: CycleInsightFormatting.delta(row, units: units))
+                )
             }
         }
     }
@@ -114,19 +105,19 @@ private struct CycleSymptomPatternCard: View {
     let customSymptoms: [CycleCustomSymptomDTO]
 
     var body: some View {
-        HLSettingsCard(icon: "square.stack.3d.up", title: "cycle.insights.symptoms.title") {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
+        HLSectionHeader("cycle.insights.symptoms.title", rank: .area)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLLayout.rowSpacing) {
                 ForEach(patterns) { pattern in
                     VStack(alignment: .leading, spacing: HLSpace.xs) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(symptomLabel(pattern.symptomKey)).font(.hlSubhead)
                             Spacer()
                             Text(topPhaseLabel(pattern))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowStatus)
                         }
                         GeometryReader { proxy in
-                            HStack(spacing: 1) {
+                            HStack(spacing: HLSpace.hair) {
                                 ForEach(CyclePhaseValue.allCases, id: \.self) { phase in
                                     let count = pattern.counts[phase]
                                     if count > 0 {
@@ -173,7 +164,7 @@ private struct CycleSymptomPatternCard: View {
         }.joined(separator: ", ")
     }
 
-    /// 1.4 B2-b: an interpolated `LocalizationValue` looks up the key
+    /// An interpolated `LocalizationValue` looks up the key
     /// `cycle.phase.%@.name`, which does not exist, so the raw key showed on
     /// screen. The explainer's own resource names the phase.
     private func phaseLabel(_ phase: CyclePhaseValue) -> String {
@@ -208,12 +199,17 @@ enum CycleInsightFormatting {
         )
     }
 
-    static func delta(_ row: CyclePhaseMetricRow, units: UnitPreferences) -> String {
-        let sign = row.delta > 0 ? "+" : ""
-        return sign + formatted(row.delta, display: row.displayValue, units: units, isDelta: true)
+    /// The one detail line of a phase row: the comparison, then the days
+    /// it rests on.
+    static func rowDetail(_ row: CyclePhaseMetricRow, units: UnitPreferences) -> Text? {
+        HLRowDetail.text([comparison(row, units: units), evidence(row)])
     }
 
-    /// #115 P2 — the displays whose canonical values follow the account's
+    static func delta(_ row: CyclePhaseMetricRow, units: UnitPreferences) -> String {
+        formatted(row.delta, display: row.displayValue, units: units, isDelta: true, signed: true)
+    }
+
+    /// The displays whose canonical values follow the account's
     /// unit, mapped to the kind carrying the transform (web parity:
     /// `cycle-phase-crosstab.tsx` `DISPLAY_TO_TYPE`, plus glucose, which
     /// follows the account's glucose unit here as everywhere else in the app).
@@ -226,7 +222,7 @@ enum CycleInsightFormatting {
         }
     }
 
-    /// The days a phase comparison rests on. 1.4 B2: the q-value left the line;
+    /// The days a phase comparison rests on. The q-value left the line;
     /// what it guarantees is said in the screen's (i) (`cycle.info.patterns`).
     static func evidence(_ row: CyclePhaseMetricRow) -> String {
         String(
@@ -240,17 +236,24 @@ enum CycleInsightFormatting {
         _ value: Double,
         display: CycleInsightDisplay,
         units: UnitPreferences,
-        isDelta: Bool
+        isDelta: Bool,
+        signed: Bool = false
     ) -> String {
+        /// A change carries its sign; a level does not.
+        func text(_ number: Double) -> String {
+            signed
+                ? HLValueFormat.signedNumber(number, fractionDigits: 1 ... 1)
+                : HLValueFormat.number(number, fractionDigits: 1 ... 1)
+        }
         // A phase average converts as a level; a phase DELTA by the factor
         // alone (a 0.3 °C shift is 0.54 °F, never 32.54 °F).
         if let kind = kind(for: display), units.transform(for: kind).rescales,
            let suffix = units.transform(for: kind).suffix
         {
             let converted = isDelta ? units.displayDelta(value, kind: kind) : units.displayValue(value, kind: kind)
-            return "\(converted.formatted(.number.precision(.fractionLength(1)))) \(suffix)"
+            return "\(text(converted)) \(suffix)"
         }
-        let number = value.formatted(.number.precision(.fractionLength(1)))
+        let number = text(value)
         switch display {
         case .hours: return String(format: String(localized: "cycle.insights.unit.hours"), number)
         case .steps: return String(format: String(localized: "cycle.insights.unit.steps"), number)

@@ -2,7 +2,7 @@ import Foundation
 import os
 
 /// Thread-safe, `Sendable` snapshot of the user's resolved server-profile
-/// timezone (AUD-3 D-3).
+/// timezone.
 ///
 /// **Why this exists:** the `@MainActor` stores (`MedicationsStore` /
 /// `DashboardStore`) read the profile timezone live off `settingsStore.profile`
@@ -14,7 +14,7 @@ import os
 /// change (`SettingsStore.profile.didSet`), and the repo's `@Sendable` provider
 /// READS the latest snapshot under a lock.
 ///
-/// **Audit B-7 — it also remembers, because a background wake has nobody to
+/// **It also remembers, because a background wake has nobody to
 /// push it.** The push only happens once the UI has loaded a profile. A
 /// HealthKit background delivery (`AppOwnedHealthCollection.install`) runs a
 /// whole sync pass without that: the app was launched into the background, no
@@ -27,17 +27,17 @@ import os
 /// an absent or unparseable identifier falls back to `.current` exactly as
 /// before.
 public final class ProfileTimeZoneBox: Sendable {
-    /// Audit B-7 — the mirror's `UserDefaults` key, app-scoped. #115 B5: the
+    /// The mirror's `UserDefaults` key, app-scoped. The
     /// widget extension reads the account-scoped App-Group copy instead
     /// (``SharedAccountPrefs``), because this domain is invisible to it.
     static let defaultsKey = "hl.profile.timeZoneIdentifier"
 
-    /// #115 1.5 — the app-wide box. `AppContainer` feeds THIS instance from the
+    /// The app-wide box. `AppContainer` feeds THIS instance from the
     /// settings store, so every day key the app cuts (``ProfileDay``) reads the
     /// same zone the medication / dashboard / measurement keys already use,
     /// including from a view or a repository that holds no container.
     ///
-    /// #115 B5 — it also mirrors into the account-scoped App-Group entry
+    /// It also mirrors into the account-scoped App-Group entry
     /// (``SharedAccountPrefs/live``), so the widget extension, whose
     /// `.standard` domain never saw the app's mirror, cuts the same days.
     public static let shared = ProfileTimeZoneBox(sharedPrefs: .live)
@@ -48,7 +48,7 @@ public final class ProfileTimeZoneBox: Sendable {
     /// Swift 6 sense while being documented as thread-safe. The box is read from
     /// off-main-actor `@Sendable` providers, which is the whole point of it.
     private nonisolated(unsafe) let defaults: UserDefaults
-    /// #115 B5 — the account-scoped App-Group mirror, or `nil` (tests).
+    /// The account-scoped App-Group mirror, or `nil` (tests).
     private let sharedPrefs: SharedAccountPrefs?
 
     /// - Parameters:
@@ -61,7 +61,7 @@ public final class ProfileTimeZoneBox: Sendable {
         storage = OSAllocatedUnfairLock<TimeZone?>(initialState: nil)
     }
 
-    /// #115 B5 — the seed, in order: the account-scoped App-Group entry for
+    /// The seed, in order: the account-scoped App-Group entry for
     /// the account signed in now, the app's own mirror, the device zone. Read
     /// once, on first use rather than at construction, so the Keychain lookup
     /// behind the account check never runs on a path that never asks.
@@ -70,7 +70,7 @@ public final class ProfileTimeZoneBox: Sendable {
         return Self.seedZone(identifier: defaults.string(forKey: Self.defaultsKey))
     }
 
-    /// Audit B-7 — the pure seeding rule: a stored IANA identifier this device
+    /// The pure seeding rule: a stored IANA identifier this device
     /// can resolve wins; anything else (absent, empty, renamed out of the
     /// system database) falls back to the device zone.
     ///
@@ -97,7 +97,7 @@ public final class ProfileTimeZoneBox: Sendable {
     /// Push the latest resolved zone. Called on the main actor whenever the
     /// profile timezone could change.
     ///
-    /// Audit B-7 — also mirrors the identifier so the NEXT launch (including a
+    /// Also mirrors the identifier so the NEXT launch (including a
     /// background wake that never loads a profile) starts on it.
     public func update(_ timeZone: TimeZone) {
         storage.withLock { $0 = timeZone }
@@ -105,7 +105,7 @@ public final class ProfileTimeZoneBox: Sendable {
         sharedPrefs?.setTimeZone(timeZone)
     }
 
-    /// **#115 B5 — the update path into the App-Group mirror.** An install that
+    /// **The update path into the App-Group mirror.** An install that
     /// resolved its account zone before this build has it only in the app's own
     /// mirror; the extension would keep answering the device zone until the next
     /// `/me` emission. Copy it across once, when the shared entry for the

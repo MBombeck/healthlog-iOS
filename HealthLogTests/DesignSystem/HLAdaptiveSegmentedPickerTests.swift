@@ -5,7 +5,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **K1 — segments only while no label is cut.** The widths are the ones
+    /// **Segments only while no label is cut.** The widths are the ones
     /// measured on iOS 26.5 in the cycle capture sheet (17 Pro Max form row
     /// 359 pt, SE 295 pt; „Periode gestartet" 104 pt, „Schmierblutung" 95 pt at
     /// the segment font).

@@ -15,7 +15,7 @@ protocol WorkoutRoutesSettingServing: Sendable {
     func update(storeWorkoutRoutes: Bool) async throws -> WorkoutRoutesSettingDTO
 }
 
-/// **1.5 ROUTES (#149) — the account's workout-route opt-in.**
+/// **The account's workout-route opt-in.**
 ///
 /// - `GET` reads whether the server keeps GPS tracks (off by default).
 /// - `PATCH` hard-sets it; idempotent and audit-logged server-side. Turning it

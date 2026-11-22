@@ -1,4 +1,4 @@
-// 13-03 (A1) — the dashboard must not lie about loading.
+// The dashboard must not lie about loading.
 //
 // The operator's A1 is "lädt manchmal extrem langsam, manchmal kommen die
 // Daten gar nicht". Two of its three code-proven mechanisms are here, and both
@@ -8,7 +8,7 @@
 // this symptom. The only way out on a shipped build is pull-to-refresh.
 //
 // Drives the REAL stores over the REAL `APIClient` on a session-scoped
-// `MockURLProtocolSession` (09-13) and a real in-memory `SWRCache`, because the
+// `MockURLProtocolSession` and a real in-memory `SWRCache`, because the
 // defect lives in the interaction between the SWR stream, the account fence and
 // the flag — not in any one of them.
 
@@ -109,16 +109,28 @@
             registry.activate(ownerID: Self.owner)
             let store = try makeDashboardStore(session, registry: registry)
 
+            // The fetch parks until the test has moved the boundary. The
+            // order `.empty` (flag raised) -> boundary moves -> `.failed`
+            // refused is now made by the test, not by the scheduler: the
+            // stream does not wait for its consumer, so letting the handler
+            // move the boundary raced the MainActor's pickup of `.empty`.
+            let boundaryMoved = DispatchSemaphore(value: 0)
             session.install { request in
-                // The boundary moves underneath the in-flight fetch.
-                registry.activate(ownerID: "owner-b")
+                _ = boundaryMoved.wait(timeout: .now() + 10)
                 return (
                     HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
                     Data(#"{"data":null,"error":"boom"}"#.utf8)
                 )
             }
 
-            await store.load()
+            let fencedLoad = Task { await store.load() }
+            let fencedRaised = await phase09AwaitCondition { await MainActor.run { store.isLoading } }
+            #expect(fencedRaised, "the cold-cache emission must raise the skeleton first")
+            // The boundary moves underneath the in-flight fetch, on the main
+            // actor, the way AuthStore moves it in the app.
+            registry.activate(ownerID: "owner-b")
+            boundaryMoved.signal()
+            await fencedLoad.value
 
             // The fence still protects the data. Untouched by this plan.
             #expect(store.summary == nil)
@@ -150,7 +162,54 @@
             _ = await load.value
             #expect(
                 cancelled.isLoading == false,
-                "EXPECTED_RED: a cancelled dashboard load strands the skeleton forever"
+                "a cancelled dashboard load strands the skeleton forever"
+            )
+        }
+
+        /// The other order, pinned: the boundary moves BEFORE the MainActor has
+        /// picked up the cold-cache `.empty`. `SWRCoordinator.observe` yields
+        /// `.empty` and goes straight on to the fetch without waiting for its
+        /// consumer, so under main-thread load this order is real (release run
+        /// 1.7.0 internal-df396142c). The superseded load must publish
+        /// nothing, so the flag is never raised and stays at its initial value.
+        @Test("Grenze vor der ersten Emission: nichts wird veröffentlicht, auch kein Skelett")
+        func boundaryBeforeFirstEmissionPublishesNothing() async throws {
+            let session = MockURLProtocolSession()
+            defer { session.invalidate() }
+            let registry = AuthenticatedSessionLeaseRegistry()
+            registry.activate(ownerID: Self.owner)
+            let store = try makeDashboardStore(session, registry: registry)
+
+            let handlerRan = DispatchSemaphore(value: 0)
+            session.install { request in
+                registry.activate(ownerID: "owner-b")
+                handlerRan.signal()
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
+                    Data(#"{"data":null,"error":"boom"}"#.utf8)
+                )
+            }
+
+            let heldUntilHandlerRan = RefusalCounter()
+            let load = Task { await store.load() }
+            // Synchronously, before this test's next suspension: queued on the
+            // main queue BEHIND the load task's first slice. The load captures
+            // its lease and hops into `swr.observe`; this block then holds the
+            // main thread until the handler has moved the boundary, so the
+            // consumer's resumption onto the MainActor queues up behind it.
+            DispatchQueue.main.async {
+                if handlerRan.wait(timeout: .now() + 10) == .success {
+                    heldUntilHandlerRan.increment()
+                }
+            }
+            await load.value
+
+            #expect(heldUntilHandlerRan.value == 1, "the handler must run while the main thread is held")
+            #expect(store.summary == nil)
+            #expect(store.error == nil)
+            #expect(
+                store.isLoading == false,
+                "a superseded generation never raised the skeleton and publishes nothing"
             )
         }
 
@@ -187,7 +246,7 @@
 
             #expect(
                 store.isLoading == false,
-                "EXPECTED_RED: clearOnLogout leaves isLoading true into the next session"
+                "clearOnLogout leaves isLoading true into the next session"
             )
             load.cancel()
             _ = await load.value
@@ -261,7 +320,7 @@
             await store.load()
             #expect(
                 counter.value > 0,
-                "EXPECTED_RED: a strand in isReloading makes every later load a no-op"
+                "a strand in isReloading makes every later load a no-op"
             )
         }
 

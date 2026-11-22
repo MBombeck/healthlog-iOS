@@ -70,7 +70,7 @@ import Testing
         func defaultWriteTypesExpansion() {
             // 4 originals + 7 v0.5.4 BF-5 additions + 1 heartRate that was
             // already used for `.pulse` writes but only got formal write-auth
-            // with that change = 12, + 1 State of Mind (16-03 / E2) = 13.
+            // with that change = 12, + 1 State of Mind = 13.
             #expect(HealthKitService.defaultWriteTypes.count == 13)
             #expect(
                 HealthKitService.defaultWriteTypes.map(\.identifier).contains(HKObjectType.stateOfMindType().identifier),
@@ -124,7 +124,7 @@ import Testing
         }
     }
 
-    // MARK: - Server-origin mirror policy (W-HKMIRROR)
+    // MARK: - Server-origin mirror policy
 
     /// Bidirectional HealthKit: measurements that arrive FROM the server
     /// (entered on web / another device / imported) are mirrored back into
@@ -149,7 +149,7 @@ import Testing
         func mirrorsUserAuthoredElsewhere() {
             #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .withings)))
             #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .import_)))
-            // S1 / public #11 — a reading typed on the web is MANUAL on the
+            // A reading typed on the web is MANUAL on the
             // server; the create-time dedup, not the source, keeps this
             // device's own manual rows from being written twice.
             #expect(HealthKitService.shouldMirrorFromServer(makeMeasurement(source: .manual)))
@@ -196,7 +196,7 @@ import Testing
             #expect(samples.allSatisfy { $0.metadata?[HKMetadataKeyExternalUUID] as? String == "srv-bp" })
         }
 
-        // MARK: - W-HKBACKFILL — platform-free policy stays aligned
+        // MARK: - Platform-free policy stays aligned
 
         /// A representative value per kind so `quantitySamples` produces its real
         /// branch output (a `.scalar`/`.bloodPressure` mismatch would yield `[]`

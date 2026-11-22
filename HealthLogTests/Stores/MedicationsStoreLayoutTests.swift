@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **W-B184 MED-1 — medications-list layout mutations.**
+/// **Medications-list layout mutations.**
 ///
 /// Locks the store-level `setListOrder` contract against the web
 /// `PUT /api/medications/layout`: the optimistic order is applied to
@@ -37,7 +37,7 @@ struct MedicationsStoreLayoutTests {
         try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    /// **08-13 — the update path for an account that already stored a legacy
+    /// **The update path for an account that already stored a legacy
     /// presentation, asserted at the store rather than at the decoder.**
     ///
     /// This replaces the two cases that drove `setListView`. That setter is

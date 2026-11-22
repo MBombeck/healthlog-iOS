@@ -3,7 +3,7 @@ import Foundation
 import ModelsR4
 import Testing
 
-/// A2-L4 — locks the non-throwing FHIR date/time construction that replaced the
+/// Locks the non-throwing FHIR date/time construction that replaced the
 /// `try! DateTime(date:…)` / `try! Instant(date:…)` on runtime dates in the FHIR
 /// export path. The converter must never throw and must round-trip the wall-
 /// clock components for the supplied timezone.

@@ -1,3 +1,4 @@
+import Accessibility
 import Charts
 import SwiftUI
 
@@ -10,9 +11,9 @@ import SwiftUI
 /// — a fixed band (screening: `0…maxScore`) or `nil` for an auto axis (a metric's
 /// own value range). Both axis value labels and the accessibility phrasing are
 /// injected so each host keeps its own localized wording while sharing the exact
-/// same chart chrome (`HLAccent.userBrandTint`, 2-pt line, 55/35-pt symbols,
-/// `AxisMarks(.leading)`, 220-pt height, `.ignore`d element with a summarised
-/// value).
+/// same chart: a card with the title as its head, the series line, the shared
+/// axes (values leading), 220 pt high, scrubbable, one summarised element for
+/// VoiceOver.
 struct HistoryLineChart: View {
     /// One dated observation. `value` is already the plotted scalar (a screening
     /// sum as `Double`, or a metric's `primaryValue`).
@@ -48,13 +49,12 @@ struct HistoryLineChart: View {
         Self.ordered(points)
     }
 
+    /// The point under the finger while the chart is scrubbed.
+    @State private var selectedDate: Date?
+
     var body: some View {
         if !orderedPoints.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(title)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-
+            HLCard(title) {
                 chart
                     .frame(height: HLChartStyle.heightRegular)
                     .accessibilityElement(children: .ignore)
@@ -67,32 +67,57 @@ struct HistoryLineChart: View {
     private var chart: some View {
         let ordered = orderedPoints
         let lastID = ordered.last?.id
-        return Chart(ordered) { point in
-            LineMark(
-                x: .value(xValueLabel, point.date),
-                y: .value(yValueLabel, point.value)
-            )
-            .foregroundStyle(HLAccent.userBrandTint)
-            .lineStyle(StrokeStyle(lineWidth: 2))
+        return Chart {
+            ForEach(ordered) { point in
+                LineMark(
+                    x: .value(xValueLabel, point.date),
+                    y: .value(yValueLabel, point.value)
+                )
+                .foregroundStyle(HLChartTints.series)
+                .lineStyle(StrokeStyle(lineWidth: HLChartStyle.lineWidth, lineJoin: .round))
 
-            PointMark(
-                x: .value(xValueLabel, point.date),
-                y: .value(yValueLabel, point.value)
-            )
-            .foregroundStyle(HLAccent.userBrandTint)
-            .symbolSize(point.id == lastID ? 55 : 35)
-            .annotation(position: .top, alignment: .trailing) {
-                if point.id == lastID, let text = annotation(point) {
-                    Text(text)
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.secondary)
+                PointMark(
+                    x: .value(xValueLabel, point.date),
+                    y: .value(yValueLabel, point.value)
+                )
+                .foregroundStyle(HLChartTints.series)
+                .symbolSize(point.id == lastID ? 55 : 35)
+                .annotation(position: .top, alignment: .trailing) {
+                    if point.id == lastID, selectedDate == nil, let text = annotation(point) {
+                        Text(text)
+                            .font(.hlCaption2)
+                            .foregroundStyle(HLText.secondary)
+                    }
                 }
+            }
+            HLChartScrubber.marks(selectedDate: selectedDate, in: ordered, date: \.date, value: \.value) { point in
+                HLScrubCallout(
+                    title: HLDateFormat.date(point.date),
+                    value: annotation(point) ?? HLValueFormat.number(point.value, fractionDigits: 0 ... 1)
+                )
             }
         }
         .modifier(YDomainModifier(domain: yDomain))
-        .chartYAxis { AxisMarks(position: .leading) }
-        // 1.4 B4 — the app's one date-axis rule.
-        .chartXAxis { ChartDateAxis.marks(for: ordered.map(\.date)) }
+        .hlChartAxes(dates: ordered.map(\.date), unit: "")
+        .hlChartScrub($selectedDate)
+        .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
+    }
+
+    /// The audio graph behind the summary: the same points, dated, with the
+    /// host's own wording for each value.
+    private var chartDescriptor: AXChartDescriptor {
+        let ordered = orderedPoints
+        return HLChartAX.singleSeries(
+            title: yValueLabel,
+            summary: accessibilityValue,
+            xAxisTitle: xValueLabel,
+            yAxisTitle: yValueLabel,
+            seriesName: yValueLabel,
+            points: ordered.enumerated().map { index, point in
+                (x: Double(index), y: point.value, xLabel: HLDateFormat.date(point.date))
+            },
+            yValueLabel: { HLValueFormat.number($0, fractionDigits: 0 ... 1) }
+        )
     }
 
     private var accessibilityValue: String {

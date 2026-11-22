@@ -35,14 +35,13 @@ import SwiftUI
 /// never duplicates the edit UI.
 struct AboutMeScreen: View {
     @Environment(SettingsStore.self) private var settingsStore
-    @Environment(SyncModeStore.self) private var syncMode
-    /// 25-02 (E-2026-08-29 #1) — backs the relocated glucose-targets card.
+    /// Backs the relocated glucose-targets card.
     @Environment(DiabetesStore.self) private var diabetes
     /// v1.26.1 — read the app-wide dashboard state so the latest weight can be
     /// shown read-only WITHOUT a second fetch. Populated when the Home tab has
     /// resolved its metric states; absent (→ no weight row) otherwise.
     @Environment(DashboardStore.self) private var dashboardStore
-    /// #105 — gates the injection-sites door (see `showsInjectionSites`).
+    /// Gates the injection-sites door (see `showsInjectionSites`).
     @Environment(MedicationsStore.self) private var medications
 
     /// Presents the canonical profile editor (`EditProfileSheet`) so the
@@ -50,7 +49,7 @@ struct AboutMeScreen: View {
     /// duplicating any field UI here.
     @State private var showEditProfile = false
 
-    /// 25-02 — in-flight latch for the diabetes toggle's optimistic PATCH.
+    /// In-flight latch for the diabetes toggle's optimistic PATCH.
     @State private var diabetesInFlight = false
 
     /// The re-parented static self-medical-history entry points the hub groups,
@@ -79,7 +78,7 @@ struct AboutMeScreen: View {
     }
 
     var body: some View {
-        HLSettingsPage(title: "aboutMe.title") {
+        HLPage {
             profileCard
             bodyDataCard
             if Self.showsInjectionSites(medications: medications.medications) {
@@ -100,16 +99,13 @@ struct AboutMeScreen: View {
         }
         .task {
             // Reuse the existing app-wide profile fetch — never a second one.
-            // Standalone installs have no server profile (the call would 401,
-            // which the 401-bridge reads as logout), so gate it exactly like
-            // `SettingsScreen`.
-            if !syncMode.isStandalone, settingsStore.profile == nil {
+            if settingsStore.profile == nil {
                 await settingsStore.load()
             }
-            // 25-02 — the relocated diabetes flag, TTL-guarded by the store
+            // The relocated diabetes flag, TTL-guarded by the store
             // (the same call the old Datenschutz-und-Sicherheit host made).
             await diabetes.refresh()
-            // #105 — the injection-sites door is gated on `medications.medications`,
+            // The injection-sites door is gated on `medications.medications`,
             // but this screen never loaded that store: only the Dashboard, the
             // Medications screen and the foreground pass populate it. Cold launch
             // → Mehr → Über mich therefore hid the door from exactly the users it
@@ -131,12 +127,9 @@ struct AboutMeScreen: View {
     /// wird gestrichen, nicht verlinkt — und für den Namen existiert der
     /// Absprung („In Profil bearbeiten") bereits auf diesem Bildschirm.
     private var profileCard: some View {
-        HLSettingsCard(
-            icon: "person.crop.circle.fill",
-            title: "aboutMe.profile.title"
-        ) {
-            infoRow(icon: "person.fill", label: "aboutMe.profile.name", value: displayName)
-            infoRow(icon: "envelope.fill", label: "aboutMe.profile.email", value: profile?.email?.nonBlank)
+        HLCard("aboutMe.profile.title", layout: .rows) {
+            infoRow(label: "aboutMe.profile.name", value: displayName)
+            infoRow(label: "aboutMe.profile.email", value: profile?.email?.nonBlank)
         }
     }
 
@@ -152,25 +145,25 @@ struct AboutMeScreen: View {
     /// derselbe Wegweiser wie auf der Profil-Karte und ist gefallen; die Zeile
     /// „In Profil bearbeiten" darunter *ist* der Absprung. Ihr zweiter Satz
     /// bleibt als einzige Aussage der Fußnote stehen: „Das Gewicht kommt aus
-    /// deinen Messwerten." ist eine **Herkunfts**-Angabe (R2) und beantwortet
+    /// deinen Messwerten." ist eine **Herkunfts**-Angabe und beantwortet
     /// genau die Frage, die der Editor sonst aufwirft — dort gibt es kein
     /// Gewichtsfeld, weil das Gewicht eine Messung ist und kein Profilwert.
     private var bodyDataCard: some View {
-        // 1.4 B2-c — the weight's origin is said only when there is a weight
+        // The weight's origin is said only when there is a weight
         // row it can be about.
-        HLSettingsCard(
-            icon: "figure.stand",
-            title: "aboutMe.body.title",
-            footer: latestWeightDisplay == nil ? nil : "aboutMe.body.footer"
+        HLCard(
+            "aboutMe.body.title",
+            footer: latestWeightDisplay == nil ? nil : "aboutMe.body.footer",
+            layout: .rows
         ) {
-            infoRow(icon: "ruler.fill", label: "aboutMe.body.height", value: heightDisplay)
-            infoRow(icon: "person.fill.questionmark", label: "aboutMe.body.sex", value: sexDisplay)
-            infoRow(icon: "calendar", label: "aboutMe.body.dateOfBirth", value: dateOfBirthDisplay)
-            infoRow(icon: "birthday.cake.fill", label: "aboutMe.body.age", value: ageDisplay)
+            infoRow(label: "aboutMe.body.height", value: heightDisplay)
+            infoRow(label: "aboutMe.body.sex", value: sexDisplay)
+            infoRow(label: "aboutMe.body.dateOfBirth", value: dateOfBirthDisplay)
+            infoRow(label: "aboutMe.body.age", value: ageDisplay)
             // Latest weight is a measurement, not a profile field — shown only
             // when the app-wide dashboard already resolved it (no extra fetch).
             if let weight = latestWeightDisplay {
-                infoRow(icon: "scalemass.fill", label: "aboutMe.body.weight", value: weight)
+                infoRow(label: "aboutMe.body.weight", value: weight)
             }
             editInProfileRow
         }
@@ -245,18 +238,18 @@ struct AboutMeScreen: View {
         .accessibilityIdentifier("aboutMe.body.editInProfile")
     }
 
-    // MARK: - Injection sites (#105)
+    // MARK: - Injection sites
 
-    /// **#105** — the global injection-site deny-list is a statement about the
+    /// The global injection-site deny-list is a statement about the
     /// user's own body and a standing preference, not a property of one
     /// medication: it lives with the Körperdaten. Same catalogue keys and the
-    /// same destination as the door that closed the Medications tab (25-02)
+    /// same destination as the door that closed the Medications tab
     /// and, before that, sat under Datenschutz und Sicherheit. The per-
     /// medication preference stays in the medication's own sheet
     /// (`InjectionSiteTrackingSection`); the site picker after logging an
     /// injection links here as well.
     private var injectionSitesCard: some View {
-        HLSettingsCard { // 1.4 B4 — one row, one heading: the row names its screen.
+        HLCard(layout: .rows) { // One row, one heading: the row names its screen.
             HLSettingsActionRow(title: "Injection sites", presents: .push) {
                 SettingsInjectionSitesScreen()
             }
@@ -278,10 +271,7 @@ struct AboutMeScreen: View {
     /// Familienanamnese." stand über genau den zwei Zeilen, die „Allergien" und
     /// „Familienanamnese" heißen. Reines Inhaltsverzeichnis, ersatzlos gefallen.
     private var historyCard: some View {
-        HLSettingsCard(
-            icon: "heart.text.square.fill",
-            title: "aboutMe.history.title"
-        ) {
+        HLCard("aboutMe.history.title") {
             // Allergies + family history carry no module gate (v1.25.0), so
             // every hosted row always renders.
             ForEach(Self.hostedHistoryRows, id: \.id) { row in
@@ -290,43 +280,17 @@ struct AboutMeScreen: View {
         }
     }
 
-    /// **Warum diese Zeile (noch) handgebaut ist — R8-Restschuld, bewusst.**
-    /// `HLSettingsActionRow` kennt keinen Untertitel-Slot; „Allergien" trägt
-    /// mit „Stoffe und Reaktionen" aber einen, der nach R5 bleibt (er grenzt
-    /// ein, statt den Titel umzuformulieren). Die Zeile auf das Primitive zu
-    /// heben, hieße den Untertitel zu opfern — das wäre Kürzen um der Regel
-    /// willen. Sie bleibt deshalb als einziger Eintrag dieser Datei in der
-    /// `hl_no_handmade_chevron`-Ratsche stehen (3 → 1); auflösbar erst, wenn
-    /// das Primitive einen Untertitel bekommt.
+    /// A history row: symbol, title, the optional subtitle that narrows the
+    /// title down ("Stoffe und Reaktionen" under "Allergien"), chevron.
     private func historyRow(_ row: MoreScreen.Layout.Row) -> some View {
-        NavigationLink {
+        HLSettingsActionRow(
+            icon: row.icon,
+            title: LocalizedStringKey(row.title),
+            subtitle: row.subtitle.map { LocalizedStringKey($0) },
+            presents: .push
+        ) {
             destination(for: row)
-        } label: {
-            HStack(spacing: HLSpace.md) {
-                HLSettingsIconChip(symbol: row.icon, tint: HLAccent.userBrandTint)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(LocalizedStringKey(row.title))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                    // R5 — der Zeilen-Untertitel ist optional geworden:
-                    // „Erkrankungen in der Familie" unter „Familienanamnese"
-                    // war eine Umformulierung des Titels und ist gefallen,
-                    // „Stoffe und Reaktionen" unter „Allergien" grenzt ein
-                    // und bleibt.
-                    if let subtitle = row.subtitle {
-                        Text(LocalizedStringKey(subtitle))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                }
-                Spacer(minLength: HLSpace.sm)
-                HLDisclosureChevron()
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier(row.accessibilityIdentifier)
     }
 
@@ -346,7 +310,7 @@ struct AboutMeScreen: View {
         }
     }
 
-    // MARK: - Anamnese (CU-32)
+    // MARK: - Anamnese
 
     /// Front door to the effective-dated anamnesis facts (smoking / alcohol /
     /// shift work). It sits in this hub — next to allergies and family history
@@ -357,13 +321,13 @@ struct AboutMeScreen: View {
     /// **UI-Standard R2/R8** — der Karten-Untertitel zählte „Rauchen, Alkohol
     /// und Schichtarbeit" auf, direkt über der einzigen Zeile der Karte, die
     /// wortgleich „Rauchen, Alkohol, Schichtarbeit" heißt. Die tippbare Zeile
-    /// ist die Heimat der Aussage (R3), der Untertitel ist gefallen; die Zeile
+    /// ist die Heimat der Aussage, der Untertitel ist gefallen; die Zeile
     /// selbst ist jetzt die kanonische `HLSettingsActionRow(presents: .push)`
     /// statt einer handgebauten Chevron-Zeile.
     private var anamnesisCard: some View {
-        // 1.4 B4 — one row, one heading: "Anamnese" names the screen, the
+        // One row, one heading: "Anamnese" names the screen, the
         // three things it holds are the row's subtitle.
-        HLSettingsCard {
+        HLCard {
             HLSettingsActionRow(
                 icon: "smoke.fill",
                 title: "anamnesis.title",
@@ -377,7 +341,7 @@ struct AboutMeScreen: View {
         }
     }
 
-    // MARK: - Glukose-Zielwerte (25-02, E-2026-08-29 #1)
+    // MARK: - Glukose-Zielwerte
 
     /// **The glucose-targets card, moved here from Einstellungen →
     /// Datenschutz und Sicherheit**, where it had no business. „Ich habe
@@ -389,10 +353,7 @@ struct AboutMeScreen: View {
     /// `DiabetesStore`, same optimistic-write semantics as before the move.
     private var glucoseTargetsCard: some View {
         let enabled = diabetes.hasDiabetes ?? false
-        return HLSettingsCard(
-            icon: "drop.fill",
-            title: "settings.diabetes.title"
-        ) {
+        return HLCard("settings.diabetes.title") {
             HLSettingsToggleRow(
                 title: "settings.diabetes.toggle_label",
                 description: "settings.diabetes.toggle_caption",
@@ -425,36 +386,28 @@ struct AboutMeScreen: View {
     /// diesem Bildschirm (Zeile „In Profil bearbeiten" in der Körperdaten-Karte);
     /// R4 verlangt an dieser Stelle deshalb ausdrücklich **nichts**.
     private var insuranceCard: some View {
-        HLSettingsCard(
-            icon: "cross.case.fill",
-            title: "aboutMe.insurance.title"
-        ) {
+        HLCard("aboutMe.insurance.title", layout: .rows) {
             // Krankenkasse — a REAL server-backed field (`insurerName` on
             // `GET/PATCH /api/user/profile`), so it is surfaced truthfully
             // read-only, never a fake placeholder. Reuses the "Health insurer"
             // key that already renders as "Krankenkasse" (de).
-            infoRow(icon: "building.2.fill", label: "Health insurer", value: profile?.insurerName?.nonBlank)
+            infoRow(label: "Health insurer", value: profile?.insurerName?.nonBlank)
         }
     }
 
     // MARK: - Shared read-only row
 
-    /// A read-only "label → value" row. A missing value collapses to the
-    /// localized "Nicht hinterlegt" placeholder in tertiary text.
-    private func infoRow(icon: String, label: LocalizedStringKey, value: String?) -> some View {
-        HStack(spacing: HLSpace.md) {
-            HLSettingsIconChip(symbol: icon, tint: HLAccent.userBrandTint)
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.sm)
-            Text(value ?? String(localized: "aboutMe.value.empty"))
-                .font(.hlBody)
-                .foregroundStyle(value == nil ? HLText.tertiary : HLText.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .accessibilityElement(children: .combine)
+    /// A read-only "label → value" row on the row grid. A missing value
+    /// collapses to the short localized "Fehlt" in tertiary text.
+    /// A read-only fact in the stat row of Server and sync diagnostics: the
+    /// label and its value at the height of their text, not on the 60 pt grid
+    /// of a control. A fact carries no symbol chip.
+    private func infoRow(label: LocalizedStringKey, value: String?) -> some View {
+        HLSettingsStatRow(
+            label: Text(label),
+            value: value ?? String(localized: "aboutMe.value.empty"),
+            tint: value == nil ? HLText.tertiary : HLText.secondary
+        )
     }
 }
 

@@ -42,6 +42,9 @@ import Foundation
         /// is a reference type so this leaks no ownership semantics.
         let deepLinks: DeepLinkRouter
         let backgroundSync: BackgroundSyncCoordinator?
+        /// How long a silent-push wake may work before iOS gets its answer.
+        /// A test shortens it; production keeps ``SilentPushWakeBudget/limit``.
+        var silentPushBudget: Duration = SilentPushWakeBudget.limit
         /// Medications repository — wired from `AppContainer` so the
         /// notification action handler can POST a server-roundtrip on
         /// "Genommen" / "Übersprungen" without bouncing through a store
@@ -55,20 +58,66 @@ import Foundation
         /// so tests can swap to an isolated suite without bleeding into
         /// `.standard`. Production wires `.standard`.
         let defaults: UserDefaults
+        /// Re-registers the categories when the account's snooze span changes.
+        private var snoozeSpanObserver: (any NSObjectProtocol)?
 
         struct RegistrationState: Equatable {
             let tokenHex: String
             let env: APNsEnvironment
-            /// W-B189 (#22) — the Live-Activity push token sent alongside the
+            /// The Live-Activity push token sent alongside the
             /// APNs token. Part of the dedup key so a *new* LA token re-fires
             /// `POST /api/devices` (the server needs the current token to push
             /// the running Activity), but an unchanged LA token does not spam.
             let liveActivityPushToken: String?
+            /// #191 — the per-Activity list, when the capability is open.
+            var liveActivityTokens: [LiveActivityTokenWire]?
+            /// ``DeviceRegistrationPushFields/fingerprint``: empty when the
+            /// device adds nothing, so the key of an installation without
+            /// the relay and without a delivery decision stays as it was.
+            var pushFingerprint: String = ""
         }
 
-        var lastRegistration: RegistrationState?
+        /// #179 — this device's medication delivery, set by the reminder
+        /// planning. `nil` until it decided: the body then says nothing.
+        var medicationDeliveryReport: DeviceMedicationDeliveryReport?
 
-        /// v0.8.4 WWIDGET-1 — latest ActivityKit push-to-start token (hex).
+        /// #190 5.3 — in envelope mode a silent push starts work only when its
+        /// envelope opens; the store decides and names the opened template.
+        var relaySilentGate: (@MainActor (_ userInfo: [AnyHashable: Any]) async -> RelaySilentDecision)?
+
+        /// #190 5.3 — in envelope mode a tap or an action on a remote
+        /// notification acts only when the extension opened it.
+        var relayTapGate: (@MainActor (_ requestIdentifier: String, _ isRemote: Bool, _ userInfo: [AnyHashable: Any]) -> Bool)?
+
+        /// #190 / #191 — `pushKey`, `relayConsent` and `relayBinding`, from
+        /// ``PushRelayStore``. Called once per registration attempt.
+        var relayRegistrationProvider: (@MainActor (_ apnsTokenHex: String) -> DeviceRegistrationPushFields)?
+
+        /// #190 5.4 — `statement` and `signature` for one `liveActivityTokens[]`
+        /// entry. The per-Activity list of #188 asks it per token; `nil` while
+        /// the relay is off.
+        var relayActivityProof: (@MainActor (_ liveActivityTokenHex: String) -> RelayActivityProof?)?
+
+        /// #191 — an opened `DATA_CHANGED`: reload stores, widgets and the
+        /// Watch, coalesced. Returns whether a reload ran.
+        var relayDataChanged: (@MainActor () async -> Bool)?
+
+        /// #190 (20:09) — the `push` block of the `POST /api/devices` answer.
+        var relayRegistrationAnswer: (@MainActor (_ device: RelayCapability.Device?) -> Void)?
+
+        /// #191 — a 422 `devices.push.*` from `POST /api/devices`.
+        var relayRegistrationRejected: (@MainActor (_ errorCode: String) async -> Void)?
+        /// R1 (4): a 2xx answer to a body with these relay fields; only now
+        /// are its one-time parts no longer due.
+        var relayRegistrationAccepted: (@MainActor (_ fields: DeviceRegistrationPushFields) -> Void)?
+        /// R1 (4): the post failed or was refused; its one-time parts stay due.
+        var relayRegistrationFailed: (@MainActor () -> Void)?
+
+        var lastRegistration: RegistrationState?
+        /// The registration loop's clock; a test sets it.
+        var registrationClock: () -> Date = { Date.now }
+
+        /// Latest ActivityKit push-to-start token (hex).
         /// Cached so the wiring is exercised on-device; forwarded to the
         /// server via `POST /api/devices` `liveActivityPushToken` once a
         /// running Activity has no per-activity update token yet (W-B189 /
@@ -76,17 +125,23 @@ import Foundation
         /// a fresh token is delivered each launch the controller subscribes.
         var liveActivityPushToStartToken: String?
 
-        /// v0.8.4 WWIDGET-1 — latest per-activity update tokens (hex) keyed
-        /// by medication id. Same lifecycle + forwarding note as
-        /// ``liveActivityPushToStartToken``.
-        var liveActivityUpdateTokens: [String: String] = [:]
+        /// Per-activity update tokens (hex), one per running Activity with its
+        /// medication and slot (#188 (2)). Same lifecycle + forwarding note as
+        /// ``liveActivityPushToStartToken``: in memory only, refilled at launch
+        /// by `MedicationLiveActivityController.resubscribeRunningActivities()`.
+        var liveActivityUpdateTokens = LiveActivityTokenRegistry()
 
-        /// **v0.6.1.3 Y4.1 — App-Badge accessor.**
+        /// **App-Badge accessor.**
         /// Lazy accessor for `MedicationsStore` so the `willPresent`
         /// delegate hook can recompute the badge without a build-time
         /// import cycle. Wired from `AppContainer.init` once the store
         /// has been built. `nil` in headless tests + macOS builds.
         var medicationsStoreAccessor: (@MainActor () -> MedicationsStore?)?
+
+        /// Whether this device plans local reminders at all
+        /// (``ReminderDevicePolicy``): the evening mood nudge and the supply
+        /// alert are armed only when it says yes. Always open on a phone.
+        var plansLocalReminders: @MainActor () -> Bool = { true }
 
         /// **v0.14.1 notifications-bug H2 — "already logged today?" accessor.**
         /// Lazy read of the live `MoodStore` for the foreground `willPresent`
@@ -100,7 +155,7 @@ import Foundation
         /// reminder. Wired from `AppContainer.configureRuntimeWiring`.
         var moodLoggedTodayAccessor: (@MainActor () -> Bool)?
 
-        /// **v1.18.6 (#32) — Vorsorge reminder server-completion seam.**
+        /// **v1.18.6 — Vorsorge reminder server-completion seam.**
         /// Wired from `AppContainer` so the foreground "Erledigt" action can POST
         /// `…/{id}/complete` (server-authoritative) without an import cycle on the
         /// `MeasurementRemindersStore`. Returns `true` when the server call
@@ -118,7 +173,13 @@ import Foundation
         /// of a cached row. Wired from `AppContainer`; `nil` in headless tests.
         var measurementReminderRefresher: (@MainActor () async -> Void)?
 
-        /// v0.6.0.8 — operator-facing diagnostic of the last
+        /// **#191 — freshness after a notification interaction.** Compares
+        /// `/api/sync/state` `medications.lastUpdatedAt` and reloads the
+        /// medications on a difference. Wired from `AppContainer`; `nil` in
+        /// headless tests.
+        var medicationFreshnessCheck: (@MainActor () async -> Void)?
+
+        /// Operator-facing diagnostic of the last
         /// `POST /api/devices` attempt. Mirrored to UserDefaults so a
         /// crashed/restarted app still surfaces the most recent state in
         /// `NotificationDiagnosticsScreen`. PII discipline: only the
@@ -130,6 +191,11 @@ import Foundation
         /// so future schema changes can migrate forward without losing
         /// the existing operator-debug surface in one release.
         static let lastRegistrationDefaultsKey = "dev.healthlog.app.notif.lastRegistration.v1"
+
+        /// The account the registration belongs to, part of its fingerprint.
+        var registrationOwner: String {
+            keychain.getString(forKey: KeychainKey.userID)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
 
         /// The instance that owns the `UNUserNotificationCenter` delegate slot.
         ///
@@ -174,6 +240,14 @@ import Foundation
             UNUserNotificationCenter.current().delegate = self
             Self.installedDelegate = self
             registerCategories()
+            // #191: the snooze action names the account's span.
+            snoozeSpanObserver = NotificationCenter.default.addObserver(
+                forName: MedicationSnooze.didChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.registerCategories() }
+            }
             lastRegistrationSnapshot = Self.loadLastRegistration(from: defaults)
         }
 
@@ -237,24 +311,26 @@ import Foundation
 
     extension NotificationService {
         /// Builds + sends the `POST /api/devices` body. Split into this
-        /// extension (W-B189) to keep the core type body under the
+        /// extension to keep the core type body under the
         /// `type_body_length` budget — same file, so the private `keychain` /
         /// `environment` / `api` members stay reachable.
         ///
-        /// W-B189 (#22): `liveActivityPushToken` rides alongside the APNs token
+        /// `liveActivityPushToken` rides alongside the APNs token
         /// so the server (≥ v1.17.1) can push a running medication Live Activity
         /// directly. Omitted from the JSON body when `nil` (see
         /// `DeviceRegistration.encode(to:)`).
         func postDevice(
             tokenHex: String,
             env: APNsEnvironment,
-            liveActivityPushToken: String?
+            liveActivityPushToken: String?,
+            liveActivityTokens: [LiveActivityTokenWire]? = nil,
+            pushFields: DeviceRegistrationPushFields = DeviceRegistrationPushFields()
         ) async throws {
             let deviceUUID = (try? keychain.deviceID()) ?? UUID().uuidString.lowercased()
-            let body = DeviceRegistration(
+            var body = DeviceRegistration(
                 token: deviceUUID,
                 bundleId: environment.bundleID,
-                // POLISH-C (C4) — the interface language the person reads,
+                // The interface language the person reads,
                 // with the device region (`nl-BE`), never the device language:
                 // that can name a language the app does not ship.
                 locale: AppLanguage.current.regionTag,
@@ -262,18 +338,32 @@ import Foundation
                 model: Self.deviceModel(),
                 apnsToken: tokenHex,
                 apnsEnvironment: env,
-                liveActivityPushToken: liveActivityPushToken
+                liveActivityPushToken: liveActivityPushToken,
+                liveActivityTokens: liveActivityTokens
             )
-            let req: APIRequest<EmptyPayload> = try .post("/api/devices", body: body)
-            try await api.sendVoid(req)
+            body.pushFields = pushFields
+            let req: APIRequest<DeviceRegistrationAnswer> = try .post("/api/devices", body: body)
+            do {
+                // #190 (20:09): the answer's `push` block is `push.device`, with
+                // `liveActivityStarted` right after a `relayStart` token.
+                let answer = try await api.send(req)
+                relayRegistrationAccepted?(pushFields)
+                relayRegistrationAnswer?(answer.device)
+            } catch HLError.decoding {
+                // A bodiless or unknown 2xx is still a registration.
+                relayRegistrationAccepted?(pushFields)
+            } catch is DecodingError {
+                // The same for a client that decodes without the envelope.
+                relayRegistrationAccepted?(pushFields)
+            }
         }
 
         static func deviceModel() -> String {
-            UIDevice.current.model
+            DeviceProfile.current().model
         }
     }
 
-    // MARK: - LastRegistrationSnapshot (v0.6.0.8 audit)
+    // MARK: - LastRegistrationSnapshot
 
     extension NotificationService {
         /// Operator-facing audit blob describing the last `POST /api/devices`

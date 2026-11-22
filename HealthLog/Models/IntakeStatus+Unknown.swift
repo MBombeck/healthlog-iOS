@@ -13,11 +13,10 @@ import Synchronization
 // grown this enum before (`missed` is exactly such an addition, kept as a read
 // value for precisely this reason).
 //
-// Counting: the standalone mirror stores the status as a bare String, and five
-// call sites resolved it with `?? .taken`. A row a LATER build wrote, or a data
-// import carried in, was read back as a dose actually administered — it raised
-// the compliance rate, anchored the recurrence engine's rolling cadence, and
-// uploaded to the server as a real administration on adopt-on-pair.
+// Counting: a status stored as a bare String was resolved with `?? .taken` at
+// five call sites. A row a LATER build wrote, or a data import carried in, was
+// read back as a dose actually administered — it raised the compliance rate
+// and anchored the recurrence engine's rolling cadence.
 //
 // So the enum stops being closed. An unrecognised value lands on `.unknown`,
 // the row keeps its id, its medication and its scheduled instant — and states
@@ -27,7 +26,7 @@ import Synchronization
 // it, exactly as it refuses the terminal `.missed`).
 
 public extension IntakeStatus {
-    /// Audit B-5 — decodes an unrecognised status token onto ``unknown``
+    /// Decodes an unrecognised status token onto ``unknown``
     /// instead of throwing.
     ///
     /// This is the seam for the whole read path: the today-ledger array, the
@@ -38,7 +37,7 @@ public extension IntakeStatus {
         self.init(stored: raw, origin: "wire")
     }
 
-    /// Audit B-5 — resolves a status raw value read back from LOCAL storage
+    /// Resolves a status raw value read back from LOCAL storage
     /// (`LocalIntakeEntry.status`, a bare String column) onto a case.
     ///
     /// Replaces `IntakeStatus(rawValue:) ?? .taken`. A value this build cannot
@@ -52,7 +51,7 @@ public extension IntakeStatus {
         self = known
     }
 
-    /// Audit B-5 — `true` for a status that means "this dose was administered".
+    /// `true` for a status that means "this dose was administered".
     ///
     /// The single place the counting rule lives, so a future case cannot be
     /// folded into the taken bucket by writing `!= .skipped` somewhere. The
@@ -64,7 +63,7 @@ public extension IntakeStatus {
     }
 }
 
-/// Audit B-5 — logs each unrecognised intake-status token **once per process**.
+/// Logs each unrecognised intake-status token **once per process**.
 ///
 /// A ledger page full of one new status would otherwise write one identical
 /// warning per row. The token is a status enum name (`missed`-shaped) — never a

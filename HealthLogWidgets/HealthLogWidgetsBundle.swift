@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// **v0.8.4 WWIDGET-1 — HealthLog widget-extension bundle.**
+/// **HealthLog widget-extension bundle.**
 ///
 /// The single `@main` entry for the `dev.healthlog.app.widgets` extension.
 /// Today it vends only the medication-reminder Live Activity
@@ -19,13 +19,15 @@ struct HealthLogWidgetsBundle: WidgetBundle {
         // availability gate needed, which also keeps the
         // `@WidgetBundleBuilder` body non-empty.
         MedicationLiveActivityWidget()
-        // v0.8.4 WWIDGET-2 — interactive Home / Lock-Screen widgets.
+        // #190 — the Activity the push relay starts and updates.
+        RelayDoseLiveActivityWidget()
+        // Interactive Home / Lock-Screen widgets.
         // Both paint from the App Group snapshot the app writes
         // (`WidgetSnapshotWriter`); the next-dose widget carries an
         // inline `MarkMedicationTakenIntent` button on the Home sizes.
         NextDoseWidget()
         ComplianceWidget()
-        // v0.8.4 WWIDGET-3 — iOS 18 Controls (Control Center / Lock Screen /
+        // iOS 18 Controls (Control Center / Lock Screen /
         // Action Button). `CaptureControl` opens the capture flow
         // (`OpenCaptureIntent`, opensApp); `MarkNextDoseControl` one-tap marks
         // the next due dose taken (`MarkNextDoseTakenIntent`, reading the
@@ -33,7 +35,7 @@ struct HealthLogWidgetsBundle: WidgetBundle {
         // availability gate is needed.
         CaptureControl()
         MarkNextDoseControl()
-        // v0.10.0 W-Mood-B — the "Stimmung erfassen" control (opens the mood
+        // The "Stimmung erfassen" control (opens the mood
         // quick-entry sheet) + the interactive mood glance / quick-log widget.
         LogMoodControl()
         MoodWidget()

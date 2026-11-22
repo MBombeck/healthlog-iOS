@@ -160,7 +160,7 @@ struct SWRCoordinatorTests {
         #expect(failedLastKnownId == "old")
     }
 
-    // MARK: - forceRevalidate (W8-B1)
+    // MARK: - forceRevalidate
 
     @Test("Fresh cache + forceRevalidate: cached → fresh from network (TTL bypassed)")
     func forceRevalidateBypassesFreshCache() async throws {
@@ -284,7 +284,7 @@ struct SWRCoordinatorTests {
         #expect(counter.value == 1, "forceRevalidate must hit the network even on fresh cache")
     }
 
-    // MARK: - single-flight (W8-B2)
+    // MARK: - single-flight
 
     @Test("Concurrent observers of the same key collapse to one fetch")
     func singleFlightCollapsesConcurrentObservers() async throws {
@@ -345,7 +345,7 @@ struct SWRCoordinatorTests {
         return sequence
     }
 
-    // MARK: - fetchCachingFirst (W1-1)
+    // MARK: - fetchCachingFirst
 
     @Test("fetchCachingFirst — fresh cache returns cached, never calls fetch")
     func fetchCachingFirstHitsCache() async throws {
@@ -382,7 +382,7 @@ struct SWRCoordinatorTests {
             Payload(id: "fresh", value: 2)
         }
         #expect(result.id == "fresh")
-        // The revalidation cache write-back is detached (W-PERF-SWR) — drain it
+        // The revalidation cache write-back is detached — drain it
         // before peeking so the assertion is deterministic (no race).
         await coordinator.drainPendingWrites()
         // Write-back: a subsequent fetch with a fetch-closure that throws
@@ -420,7 +420,7 @@ struct SWRCoordinatorTests {
             Payload(id: "cold-fetch", value: 42)
         }
         #expect(result.id == "cold-fetch")
-        // W-PERF-SWR C2 — the cache write-through is now DETACHED (the fresh
+        // The cache write-through is now DETACHED (the fresh
         // value returns before the disk flush), so drain the pending persists
         // before asserting the row landed for a cold read-back.
         await coordinator.drainPendingWrites()

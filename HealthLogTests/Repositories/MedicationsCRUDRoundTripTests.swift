@@ -92,7 +92,7 @@ struct MedicationsCRUDRoundTripTests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
         let store = MedicationsStore(repo: repo)
 
-        // Phase 1 — offline create (network unreachable error).
+        // Offline create (network unreachable error).
         MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
         }
@@ -107,7 +107,7 @@ struct MedicationsCRUDRoundTripTests {
         #expect(queued.first?.kind == .createMedication)
         let queuedKey = queued.first?.idempotencyKey
 
-        // Phase 2 — network recovers, replay drains the row.
+        // Network recovers, replay drains the row.
         let captured = MethodPathRecorder()
         MockURLProtocol.install { [resp = Self.medResp] req in
             captured.record(method: req.httpMethod ?? "", path: req.url?.path ?? "")

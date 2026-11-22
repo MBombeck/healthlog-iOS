@@ -2,7 +2,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **V1 (1.2)** — the HealthKit read behind the daily-statistics sweep, as
+    /// The HealthKit read behind the daily-statistics sweep, as
     /// a seam, so a test can drive a whole sweep (read, plan, upload, trigger
     /// label) without a health store. ``HealthKitStatisticsService`` is the only
     /// production conformer.
@@ -13,11 +13,11 @@ import Foundation
             from: Date,
             to: Date
         ) async throws -> [HealthKitDailyStatRow]
-        /// X4 (1.3) — the hourly sums of the four hourly types from the start
+        /// The hourly sums of the four hourly types from the start
         /// of `from`'s day through the end of `through`'s hour, cut in
         /// ``hourlyTimeZone()``. Default: ``HealthKitHourlyStatsRead/unsupported``.
         func hourlyRows(from: Date, through: Date) async -> HealthKitHourlyStatsRead
-        /// X4 — the zone hours are cut in (the account's), `nil` when this
+        /// The zone hours are cut in (the account's), `nil` when this
         /// reader cannot cut hours at all.
         func hourlyTimeZone() async -> TimeZone?
     }
@@ -97,7 +97,7 @@ import Foundation
             }
         }
 
-        /// v0.6.2.x bug-c10-ios-direct — see protocol doc. (Moved here
+        /// See protocol doc. (Moved here
         /// unchanged in V1 for the coordinator file's length.) Reads today's
         /// step cumulative directly from HK so the dashboard tile + chart-
         /// detail today-segment can paint live values instead of the
@@ -141,6 +141,21 @@ import Foundation
                     at: at,
                     ownerID: ownerID,
                     defaults: defaultsProvider()
+                )
+            }
+        }
+    }
+
+    public extension HealthKitStatisticsSyncCoordinator {
+        /// Sign-out: every row of the leaving account goes. No lease is asked
+        /// for, the session is already gone; the id is the one the sign-out
+        /// captured before the keychain wipe.
+        func clearCache(ownerUserID: String) async {
+            do {
+                try await cache().clearAll(ownerUserID: ownerUserID)
+            } catch {
+                HLLog.healthKit.error(
+                    "HK-STATS cache clear on sign-out failed: \(error.localizedDescription, privacy: .private)"
                 )
             }
         }

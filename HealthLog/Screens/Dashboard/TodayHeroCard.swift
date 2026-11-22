@@ -7,21 +7,20 @@ import SwiftUI
 ///
 /// iOS **renders the digest verbatim** — it recomputes no score / band / delta,
 /// warms no AI on mount, and invents no colour: the ring is fully monochrome
-/// (Wave 2 dropped the band-derived cap dot), and each priority card's status
-/// wash is a restrained HL semantic tone. Composition, top → bottom:
+/// (Wave 2 dropped the band-derived cap dot), and each
+/// hint's status shows only on its symbol. Composition, top → bottom:
 ///   1. the **heading** — the lead sentence (`lead.text`, else
 ///      `briefingLead ?? line`) FULL WIDTH,
 ///      never squeezed by a trailing sibling (operator b227: "Überschrift gehört
 ///      über den Wert, nicht daneben");
-///   2. one row pairing the muted signal line (`signalLine` as delivered,
-///      `topSignal` only on an older server) with the trailing health-score
-///      ring lockup — rendered ONLY when the digest carries a score
-///      (25-02 / E-2026-08-29 #2: zero available inputs remove the ring
-///      entirely; the former en-dash provisional face is gone); the ring is
-///      a door into Insights;
-///   3. an optional muted freshness note when `sleepPending`;
-///   4. the bounded 0–3 "worth a look" rail of priority cards, or — when the day
-///      is all-clear — a single calm "nothing needs your attention" line.
+///   2. one row: on the left three or four equal fact pairs; on the right
+///      the health-score ring lockup with its footnotes (steady weeks, Rest
+///      Mode), rendered ONLY when the digest carries a score (25-02 /
+///      E-2026-08-29 #2). The lead already says what the muted signal line
+///      said, so the hero no longer shows it. The layout is
+///      ``TodayHeroReadLayout``; the ring is a door into Insights;
+///   3. UNDER the card, as a section of its own, the bounded 0–3 "worth a
+///      look" hints (``TodayHeroWorthALookSection``), one slim card each.
 ///
 /// **Wave 2 (b227 operator walkthrough) removals:** the "read the full briefing"
 /// button (the ring tap already opens the same Insights overview) and the
@@ -31,38 +30,43 @@ struct TodayHeroHost: View {
     /// pushes the Vorsorge reminders manage surface via the dashboard's
     /// `showVorsorge` state when the due reminder has no capture flow.
     let onOpenVorsorge: () -> Void
-    /// Wave 2 (2.5) — opens the bottom "Anstehende Einnahmen" slide-up sheet
+    /// Opens the bottom "Anstehende Einnahmen" slide-up sheet
     /// (`AnstehendeEinnahmenSheet`, the dashboard's `showIntakesSheet` state).
     /// The `dose.log` intent routes HERE instead of the medication detail screen:
     /// the sheet is the one-tap "Dosis erfassen" surface (operator b227).
     let onShowIntakes: () -> Void
+    /// The window is short (``TodayLayout/isShortWindow(height:width:)``): the hero
+    /// keeps to its short-window height.
+    var isShortWindow = false
 
     @Environment(DailyDigestStore.self) private var store
-    @Environment(BackendAvailability.self) private var backend
     @Environment(AppRouter.self) private var router
-    /// Wave 2 (2.6) — read ONLY inside `handleAction` (never in `body`), so this
+    /// Read ONLY inside `handleAction` (never in `body`), so this
     /// host registers no Observation dependency on the reminder list. Lets the
     /// hero's `checkup.view` inherit the retired standalone tile's superior
     /// routing: straight to the prefilled measure / check-in surface.
     @Environment(MeasurementRemindersStore.self) private var remindersStore
+    /// 1.7: the medication fact and the dose hints follow the confirmed
+    /// today rows. Optional, so a host without the store keeps the server's.
+    @Environment(MedicationsStore.self) private var medicationsStore: MedicationsStore?
 
     var body: some View {
         content
             .task {
-                // Server-authoritative, paired-only: warm only against a real
-                // server, and only once (the store single-flights + SWR-free).
-                guard backend.hasServer, store.digest == nil else { return }
+                // Server-authoritative: warm only once (the store
+                // single-flights + SWR-free).
+                guard store.digest == nil else { return }
                 await store.load()
             }
     }
 
     @ViewBuilder
     private var content: some View {
-        if backend.hasServer, !store.hasLoadedOnce {
-            // Paired device, first load in flight (or about to start on `.task`)
+        if !store.hasLoadedOnce {
+            // First load in flight (or about to start on `.task`)
             // — paint the no-layout-shift skeleton from the first frame so the
             // hero never flashes empty → skeleton → data.
-            TodayHeroSkeleton()
+            TodayHeroSkeleton(isShortWindow: isShortWindow)
         } else {
             loaded
         }
@@ -72,19 +76,44 @@ struct TodayHeroHost: View {
     private var loaded: some View {
         switch store.presentation {
         case .loading:
-            TodayHeroSkeleton()
+            TodayHeroSkeleton(isShortWindow: isShortWindow)
         case let .data(digest):
-            TodayHeroCard(
-                digest: digest,
-                coachActionInFlight: store.coachActionInFlight,
-                onRingTap: { router.requestInsightsOverview() },
-                onAction: handleAction,
-                onDismiss: { itemKey in Task { await store.dismiss(itemKey: itemKey) } }
-            )
+            // The hints stand under the hero as a section of their own, one
+            // card gap apart, so the hero carries only the day's read.
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                let medicationState = medicationsStore?.todayState ?? .unknown
+                TodayHeroCard(
+                    digest: digest,
+                    onRingTap: { router.requestInsightsOverview() },
+                    isShortWindow: isShortWindow,
+                    medicationState: medicationState
+                )
+                TodayHeroWorthALookSection(
+                    items: MedicationDigestFilter.visible(digest.rail, state: medicationState),
+                    coachActionInFlight: store.coachActionInFlight,
+                    onAction: handleAction,
+                    onDismiss: { itemKey in Task { await store.dismiss(itemKey: itemKey) } }
+                )
+            }
+            .hlContainerGap(HLLayout.cardGap)
         case .error:
-            TodayHeroErrorCard { Task { await store.refresh() } }
+            errorCard
         case .hidden:
             EmptyView()
+        }
+    }
+
+    /// The hero's own read failed while the rest of Home stands: one line
+    /// and the way to try again, in the hero's place.
+    private var errorCard: some View {
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                Text(verbatim: TodayHeroCopy.errorTitle)
+                    .hlText(.rowTitle)
+                HLButton(Text(verbatim: TodayHeroCopy.retry), variant: .secondary) {
+                    Task { await store.refresh() }
+                }
+            }
         }
     }
 
@@ -101,16 +130,16 @@ struct TodayHeroHost: View {
         case .coach:
             router.apply(.coach, isAuthenticated: true)
         case .intakes:
-            // Wave 2 (2.5) — operator b227: "Medikament fällig" opens the
+            // Operator b227: "Medikament fällig" opens the
             // bottom upcoming-intakes sheet, the canonical one-tap dose-logging
-            // surface (v0.5.6), not the medication detail screen.
+            // surface, not the medication detail screen.
             onShowIntakes()
         case .integrations:
             router.requestSettingsIntegrations()
         case .checkupFrontDoor:
             openVorsorge(for: item)
         case .checkupsList:
-            // #149 — `visit.view` for several visits: Vorsorge, whose
+            // `visit.view` for several visits: Vorsorge, whose
             // "Nächster Termin" shows the soonest.
             router.focusVisit(nil)
             onOpenVorsorge()
@@ -127,7 +156,7 @@ struct TodayHeroHost: View {
         }
     }
 
-    /// Wave 2 (2.6) — the `checkup.view` front door, inheriting the retired
+    /// The `checkup.view` front door, inheriting the retired
     /// standalone `VorsorgeTile`'s routing doctrine (operator b198: "take me
     /// straight to DOING it"). Resolves the soonest due reminder and branches on
     /// the SHARED `VorsorgeCard.primaryAction` seam — prefilled measure sheet /
@@ -158,65 +187,124 @@ struct TodayHeroHost: View {
 
 struct TodayHeroCard: View {
     let digest: DailyDigest
-    var coachActionInFlight: Bool = false
     let onRingTap: () -> Void
-    let onAction: (DailyPriorityItem, DailyPriorityItem.Action) -> Void
-    let onDismiss: (String) -> Void
+    /// The loading skeleton draws this card with a shimmer circle in the
+    /// ring's place, so both have one height.
+    var isPlaceholder = false
+    /// In a short window the card stays at or under
+    /// ``TodayLayout/shortWindowHeroHeight``: the lead keeps two lines and
+    /// the facts stay beside the ring until an accessibility size.
+    var isShortWindow = false
+    /// 1.7: what the medication fact may say (``MedicationDigestFilter``).
+    var medicationState: MedicationTodayState = .unknown
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The lead stays a heading but never pushes the facts down the page.
+    static let leadLineLimit = TodayLayout.standardLeadLines
 
     var body: some View {
-        HLCard(style: .elevated) {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
+                leadText
                 readRow
-                TodayHeroFacts(digest: digest) // #126 P2: today[], restMode, steadyWeeks
-                rail
             }
+            // Across a wide iPad the card spans the column, its read does
+            // not: the lead keeps a reading length and the ring stays beside
+            // the facts as one group (``TodayLayout/heroReadWidth(contentWidth:)``).
+            .frame(maxWidth: TodayLayout.heroReadMaximumWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .contain)
     }
 
-    // MARK: Read row (heading ABOVE, then signal + ring on one row)
+    // MARK: Lead (full width, ABOVE everything)
 
-    /// **Wave 2 / 2.1 (operator b227).** The heading is its OWN full-width row —
-    /// it no longer shares a band with the score, so a long German lead
-    /// ("Heute ist vor allem ein Beobachtungstag…") wraps freely instead of being
-    /// squeezed into a tall narrow column beside the ring. `fixedSize(vertical:)`
-    /// guarantees it never truncates at any Dynamic-Type size. HIG typography:
-    /// "at large sizes use a stacked layout where text appears above secondary
-    /// items". Below it ONE row pairs the muted top-signal with the trailing ring
-    /// lockup (echoing the web's trailing-edge ring).
+    /// The day's sentence is its OWN full-width row (operator b227:
+    /// "Überschrift gehört über den Wert, nicht daneben"), running text at
+    /// most three lines. It reads as prose, so the area header under the card
+    /// stays the only semibold line of its size. At accessibility sizes it
+    /// wraps freely, so nothing is cut where the text is needed most.
+    private var leadText: some View {
+        Text(verbatim: digest.lead)
+            .hlText(.prose)
+            .lineLimit(TodayLayout.leadLineLimit(
+                isShortWindow: isShortWindow,
+                isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+            ))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Read row (column beside the ring)
+
+    private var stacked: Bool {
+        TodayLayout.stacksRead(dynamicTypeSize, isShortWindow: isShortWindow)
+    }
+
+    private var readLayout: TodayHeroReadLayout {
+        .resolve(
+            hasScore: Self.availableScore(digest) != nil,
+            hasLeftContent: TodayHeroFacts.hasContent(digest),
+            stacked: stacked
+        )
+    }
+
+    /// One row under the lead: the facts on the left, the ring on the right,
+    /// both on one vertical centre. Without a score the facts take the width
+    /// and Rest Mode stands under them; without facts the ring stands
+    /// centred rather than beside an empty half.
+    @ViewBuilder
     private var readRow: some View {
-        VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text(verbatim: digest.lead)
-                .font(.hlTitle3)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // 25-02 (E-2026-08-29 #2) — the row exists only when it has
-            // something to carry: the signal text, the ring, or both. With
-            // zero available inputs (no score) and no signal there is no
-            // half-empty band reserving space.
-            // 1.2 (#121) — the line is the server's `signalLine` as delivered;
-            // only an older server without the field still gets the line built
-            // from `topSignal` (``DailyDigest/signalText``).
-            if digest.signalText != nil || Self.availableScore(digest) != nil {
-                HStack(alignment: .center, spacing: HLSpace.lg) {
-                    if let signalText = digest.signalText {
-                        Text(verbatim: signalText)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: HLSpace.sm)
-                    if let score = Self.availableScore(digest) {
-                        ringLockup(score: score)
-                    }
+        let layout = readLayout
+        let column = TodayHeroFacts(
+            digest: digest,
+            columns: layout.factColumns(factCount: TodayHeroFacts.facts(digest).count, stacked: stacked),
+            wrapsValues: dynamicTypeSize.isAccessibilitySize,
+            medicationState: medicationState
+        )
+        switch layout {
+        case .columnBesideRing:
+            HStack(alignment: .center, spacing: HLLayout.cardGap) {
+                column
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ring
+                    .frame(width: Self.ringColumnWidth)
+            }
+        case .columnAboveRing:
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                column
+                ring
+                    .frame(maxWidth: .infinity)
+            }
+        case .ringCentred:
+            ring
+                .frame(maxWidth: .infinity)
+        case .columnFullWidth:
+            VStack(alignment: .leading, spacing: HLSpace.md) {
+                column
+                ForEach(TodayHeroFacts.footnotes(digest), id: \.self) { line in
+                    TodayHeroFootnote(text: line, alignment: .leading)
                 }
             }
+        case .none:
+            EmptyView()
         }
     }
 
-    /// **25-02 (E-2026-08-29 #2) — the availability gate.** The score itself
+    @ViewBuilder
+    private var ring: some View {
+        if let score = Self.availableScore(digest) {
+            ringLockup(score: score)
+        }
+    }
+
+    /// Beside the facts the ring's column keeps one width, wide enough for
+    /// its word, so a footnote wraps under the ring instead of pushing the
+    /// facts into a narrower column.
+    static let ringColumnWidth: CGFloat = 128
+
+    /// **The availability gate.** The score itself
     /// is SERVER-computed — `Math.round(mean(eligible pillars))` over the
     /// composition the health-score-config route resolves — and iOS never
     /// recomputes or reweights. What the client owns is availability: a
@@ -229,7 +317,7 @@ struct TodayHeroCard: View {
         digest.score
     }
 
-    /// **Wave 2 / 2.3.** The score ring now renders with the EXACT Insights
+    /// The score ring now renders with the EXACT Insights
     /// wellness-ring recipe (`InsightsTileStyle.prismUniform` → the arc-masked
     /// prism + steady glow, 96 pt, the `hlSubhead.weight(.medium)` label) so the
     /// hero and the Insights score cards can never drift apart visually.
@@ -237,7 +325,7 @@ struct TodayHeroCard: View {
     /// "keine Farbe"); the band still reaches VoiceOver via `ringAccessibilityLabel`,
     /// so no meaning was ever carried by colour alone (HIG color.md).
     ///
-    /// **25-02 (E-2026-08-29 #3) — the painted „Eigene Auswahl" mark is
+    /// **The painted „Eigene Auswahl" mark is
     /// GONE.** It overloaded the tile visually (operator decision). The mark
     /// was `accessibilityHidden` here from the day it shipped, so nothing
     /// spoken was removed: the provenance statement still rides the ring's
@@ -248,37 +336,48 @@ struct TodayHeroCard: View {
         let fraction = max(0, min(1, score.value / 100))
         return Button(action: onRingTap) {
             VStack(spacing: HLSpace.sm) {
-                HLScoreRing(
-                    fraction: fraction,
-                    value: String(Int(score.value.rounded())),
-                    signal: appearance.ringSignal,
-                    fillColor: appearance.ringFill,
-                    trackColor: appearance.ringTrack,
-                    centreValueColor: appearance.ringValueColor,
-                    centreLabelColor: appearance.ringLabelColor,
-                    accessibilityLabel: ringAccessibilityLabel(score: score)
-                )
-                .frame(width: Self.ringDiameter, height: Self.ringDiameter)
-                .insightsRingEffect(appearance.ringEffect, fraction: fraction, isHero: true)
-                .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
-
-                Text(verbatim: TodayHeroCopy.scoreLabel)
-                    .font(.hlSubhead.weight(.medium))
-                    .foregroundStyle(appearance.labelColor)
-                    .multilineTextAlignment(.center)
-                // 1.4 B2 — last night's sleep is still missing: one word with
+                // The ring stands alone, centred on the facts beside it: no
+                // word and no footnote under it (operator decision 14.11.).
+                // The name, the score and the steady weeks still reach
+                // VoiceOver through `ringAccessibilityLabel`.
+                ringGraphic(score: score, appearance: appearance, fraction: fraction)
+                // Last night's sleep is still missing: one word with
                 // the score it qualifies, no sentence of its own.
                 if digest.sleepPending {
                     Text(verbatim: TodayHeroCopy.provisional)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                 }
             }
         }
-        .buttonStyle(.plain)
         .hlPressable()
+        .allowsHitTesting(!isPlaceholder)
         .accessibilityHint(Text(verbatim: TodayHeroCopy.ringLink(metric: TodayHeroCopy.scoreLabel)))
         .accessibilityIdentifier("dashboard.todayHero.scoreRing")
+    }
+
+    @ViewBuilder
+    private func ringGraphic(
+        score: DailyDigest.Score,
+        appearance: InsightsTileAppearance,
+        fraction: Double
+    ) -> some View {
+        if isPlaceholder {
+            HLSkeleton(.circle, width: Self.ringDiameter, height: Self.ringDiameter)
+        } else {
+            HLScoreRing(
+                fraction: fraction,
+                value: String(Int(score.value.rounded())),
+                signal: appearance.ringSignal,
+                fillColor: appearance.ringFill,
+                trackColor: appearance.ringTrack,
+                centreValueColor: appearance.ringValueColor,
+                centreLabelColor: appearance.ringLabelColor,
+                accessibilityLabel: ringAccessibilityLabel(score: score)
+            )
+            .frame(width: Self.ringDiameter, height: Self.ringDiameter)
+            .insightsRingEffect(appearance.ringEffect, fraction: fraction, isHero: true)
+            .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
+        }
     }
 
     /// The Insights diameter (`InsightsTileSurface` / `InsightsScoreCardsBlock`
@@ -286,43 +385,13 @@ struct TodayHeroCard: View {
     /// rather than the 84 pt 3-up shrink the score-rings row uses.
     private static let ringDiameter: CGFloat = 96
 
-    // MARK: Worth-a-look rail
-
-    @ViewBuilder
-    private var rail: some View {
-        let items = digest.rail
-        // 1.4 B2 — an empty rail is simply absent; "nothing needs your
-        // attention" said what the missing cards already show.
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // 1.4 B4 — a section inside a card has the app's one
-                // section label, not a hand-set caption.
-                HLSectionLabel(verbatim: TodayHeroCopy.worthALook)
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 240), spacing: HLSpace.md)],
-                    alignment: .leading,
-                    spacing: HLSpace.md
-                ) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                        PriorityRailCard(
-                            item: item,
-                            actionsPending: item.kindToken == .coachCheckin && coachActionInFlight,
-                            onAction: { action in onAction(item, action) },
-                            onDismiss: onDismiss
-                        )
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: Derivations (render-only)
 
-    // Wave 2 / 2.3 — `ringSignal` (band → green/yellow/red cap dot) was DELETED.
+    // `ringSignal` (band → green/yellow/red cap dot) was DELETED.
     // The hero ring is fully monochrome now, matching the Insights rings; the
     // band survives for VoiceOver only, via `ringAccessibilityLabel`.
     //
-    // 25-02 (E-2026-08-29 #2) — the nil-score branches (`ringFraction` 0,
+    // The nil-score branches (`ringFraction` 0,
     // `ringValue` en-dash, the "provisional" VoiceOver face) were DELETED with
     // the provisional face itself: the ring renders only through
     // `availableScore`, so every derivation now takes the score it renders.
@@ -334,155 +403,12 @@ struct TodayHeroCard: View {
     private func ringAccessibilityLabel(score: DailyDigest.Score) -> String {
         var label = "\(TodayHeroCopy.scoreLabel) \(Int(score.value.rounded())) of 100"
         if digest.sleepPending { label += ", \(TodayHeroCopy.provisional)" }
+        // The footnotes (steady weeks, Rest Mode) are no longer painted
+        // under the ring; VoiceOver still hears them with the score.
+        for line in TodayHeroFacts.footnotes(digest) {
+            label += ". \(line)"
+        }
         guard score.runsOnChosenComposition else { return label }
         return "\(label). \(HealthScorePresentation.chosenCompositionA11y)"
-    }
-}
-
-// MARK: - Priority rail card
-
-/// The single card behind every "worth a look" rail item — composed from HL
-/// primitives, a kind-derived SF Symbol, a restrained status-tone wash, an
-/// optional dismiss (observational kinds only), and 1–3 one-tap actions.
-struct PriorityRailCard: View {
-    let item: DailyPriorityItem
-    var actionsPending: Bool = false
-    let onAction: (DailyPriorityItem.Action) -> Void
-    let onDismiss: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            header
-            if let body = item.body, !body.isEmpty {
-                Text(verbatim: body)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !item.boundedActions.isEmpty {
-                actionsRow
-            }
-        }
-        .padding(HLSpace.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                .strokeBorder(statusTint.opacity(0.30), lineWidth: 1)
-        )
-        .accessibilityElement(children: .contain)
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            if let symbol = kindSymbol {
-                Image(systemName: symbol)
-                    .font(.hlSubhead)
-                    .foregroundStyle(statusTint)
-                    .accessibilityHidden(true)
-            }
-            Text(verbatim: item.title)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            if item.isDismissible, let itemKey = item.itemKey {
-                Button {
-                    onDismiss(itemKey)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .hlPressable()
-                .accessibilityLabel(Text(verbatim: TodayHeroCopy.dismiss))
-            }
-        }
-    }
-
-    private var actionsRow: some View {
-        HStack(spacing: HLSpace.sm) {
-            ForEach(Array(item.boundedActions.enumerated()), id: \.offset) { _, action in
-                Button {
-                    onAction(action)
-                } label: {
-                    Text(verbatim: TodayHeroCopy.actionLabel(action.labelKey))
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                        .padding(.vertical, HLSpace.xs)
-                        .padding(.horizontal, HLSpace.sm)
-                        .frame(minHeight: 36)
-                        .background(
-                            HLSurface.tertiary,
-                            in: RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
-                        )
-                }
-                .buttonStyle(.plain)
-                .hlPressable()
-                .disabled(action.href == nil && actionsPending)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// Deterministic SF Symbol per kind (the icon the serialisable item can't
-    /// carry). Unknown kind → no icon.
-    private var kindSymbol: String? {
-        switch item.kindToken {
-        case .doseWindow: "pills.fill"
-        case .preventiveCare: "calendar.badge.clock"
-        case .syncIssue: "arrow.triangle.2.circlepath"
-        case .coachCheckin: "message"
-        case .milestone: "medal"
-        case .ecgNewRecording: "waveform.path.ecg"
-        case .tensionWindow: "waveform.path"
-        // CU-30 — same-time baseline: the day's cumulative standing against the
-        // usual day at this hour. Steps-only on the rail, hence the walk glyph.
-        case .sameTimeBaseline: "figure.walk"
-        case .none: nil
-        }
-    }
-
-    /// Status → a restrained HL semantic tone (border + icon). Info / unknown
-    /// stay neutral (no colour) per monochrome doctrine.
-    private var statusTint: Color {
-        switch item.statusToken {
-        case .success: HLColor.statusOK
-        case .warning: HLColor.statusWarn
-        case .destructive: HLColor.statusBad
-        case .info, .none: HLColor.separator
-        }
-    }
-}
-
-// MARK: - Error card
-
-private struct TodayHeroErrorCard: View {
-    let onRetry: () -> Void
-
-    var body: some View {
-        HLCard(style: .elevated) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(verbatim: TodayHeroCopy.errorTitle)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                Button(action: onRetry) {
-                    Text(verbatim: TodayHeroCopy.retry)
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                        .padding(.vertical, HLSpace.xs)
-                        .padding(.horizontal, HLSpace.sm)
-                        .frame(minHeight: 36)
-                        .background(
-                            HLSurface.tertiary,
-                            in: RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous)
-                        )
-                }
-                .buttonStyle(.plain)
-                .hlPressable()
-            }
-        }
     }
 }

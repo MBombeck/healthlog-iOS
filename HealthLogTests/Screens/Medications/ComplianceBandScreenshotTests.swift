@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// v0.12 W4-1 — deterministic screenshot generator for the three medication
+/// Deterministic screenshot generator for the three medication
 /// compliance surfaces, proving the unified `ComplianceBand` now renders the
 /// SAME colour for the SAME percentage across card / detail / Insights.
 ///

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **W-VORSORGE-DETAIL (b244) — the detail model's per-arm load.**
+/// **The detail model's per-arm load.**
 ///
 /// Real `APIClient` + `MockURLProtocol` (PROJECT_GUIDE.md anti-pattern: no mock server)
 /// so a schema drift would actually break the test. `.serialized` because the

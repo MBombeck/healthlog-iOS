@@ -1,6 +1,6 @@
 import Foundation
 
-// **Parity 1.9 — the server-owned overdue predicate, per scheduled slot.**
+// **The server-owned overdue predicate, per scheduled slot.**
 //
 // Lives in its own file rather than growing `Medication.swift`, which is already
 // past the `file_length` budget (PROJECT_GUIDE.md: split into thematic extensions

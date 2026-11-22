@@ -191,7 +191,7 @@ struct CoachConversationStorePersistenceTests {
             // keychain `userID` is already gone by the time the
             // cleanup hook fires. The CALLER (AppContainer) supplies
             // the previous user id explicitly via `partition:`.
-            userIDProvider: { CoachChatMessage.standaloneUserID }
+            userIDProvider: { CoachChatMessage.signedOutUserID }
         )
         // The store init-hydrate ran against the standalone sentinel —
         // chat starts empty (sentinel partition has no rows).
@@ -205,7 +205,7 @@ struct CoachConversationStorePersistenceTests {
         // Flip back to the standalone provider before clearing — this
         // mirrors the real post-logout state where the keychain is
         // already wiped.
-        store.userIDProvider = { CoachChatMessage.standaloneUserID }
+        store.userIDProvider = { CoachChatMessage.signedOutUserID }
         store.clearOnLogout(partition: userID)
 
         #expect(store.chat.isEmpty)
@@ -215,7 +215,7 @@ struct CoachConversationStorePersistenceTests {
     @Test("clearOnLogout falls back to userIDProvider when no partition is supplied")
     func clearOnLogoutFallsBackToProvider() throws {
         let persistence = try makePersistence()
-        let sentinel = CoachChatMessage.standaloneUserID
+        let sentinel = CoachChatMessage.signedOutUserID
         persistence.insert(CoachChatMessage(userID: sentinel, role: .user, text: "standalone chat"))
 
         let store = CoachConversationStore(

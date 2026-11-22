@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#115 P2 — the surfaces the sweep routed through the account unit.**
+/// **The surfaces the sweep routed through the account unit.**
 ///
 /// One case per surface that printed a canonical value (or a hard-coded
 /// "kg" / "°C" / "km") on an imperial account before P2. Every case runs the
@@ -132,7 +132,7 @@ struct AccountUnitSurfaceTests {
         #expect(metricTiles.first { $0.kind == .weight }?.valueText.hasSuffix(" kg") == true)
     }
 
-    // 1.4 B4 — the Statistik briefing floor case went with
+    // The Statistik briefing floor case went with
     // `StatistikModeBriefingService`, whose only caller was the deleted
     // on-device briefing hero.
 

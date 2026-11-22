@@ -8,7 +8,7 @@ _gate_fail() {
 }
 
 _gate_usage() {
-    _gate_fail "usage: $0 <safe-suffix> [--physical-device <UDID>] -- <build|test|...> [xcodebuild arguments]"
+    _gate_fail "usage: $0 <safe-suffix> [--physical-device <UDID>] [--result-label <label>] -- <build|test|...> [xcodebuild arguments]"
 }
 
 [[ $# -ge 3 ]] || _gate_usage
@@ -28,6 +28,18 @@ if [[ "${1:-}" == "--physical-device" ]]; then
         _gate_fail "physical-device UDID must be one exact identifier, not a destination alias"
 fi
 
+# One suffix names one DerivedData, so `build-for-testing` and the test runs
+# that follow it share a suffix. The label keeps their result bundles apart;
+# without it the second test run would delete the first one's receipt.
+gate_result_label=""
+if [[ "${1:-}" == "--result-label" ]]; then
+    [[ $# -ge 3 ]] || _gate_usage
+    gate_result_label="$2"
+    shift 2
+    [[ "$gate_result_label" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,39}$ ]] ||
+        _gate_fail "result label must be 1-40 alphanumeric/hyphen characters"
+fi
+
 [[ "${1:-}" == "--" ]] || _gate_usage
 shift
 [[ $# -ge 1 ]] || _gate_usage
@@ -41,6 +53,14 @@ for gate_arg in "$@"; do
 done
 
 gate_action="$1"
+# `test-without-building` runs tests exactly like `test` does, so it gets the
+# same result bundle and the same zero-test and selector census.
+gate_runs_tests=0
+case "$gate_action" in
+    test | test-without-building) gate_runs_tests=1 ;;
+esac
+[[ -z "$gate_result_label" || "$gate_runs_tests" -eq 1 ]] ||
+    _gate_fail "--result-label only applies to an action that runs tests, not to $gate_action"
 gate_lock_dir="${HEALTHLOG_XCODE_GATE_LOCK_DIR:-/tmp/healthlog-xcode-gate.lock}"
 gate_lock_owner="$gate_lock_dir/owner-pid"
 gate_wait_seconds="${HEALTHLOG_XCODE_GATE_WAIT_SECONDS:-1800}"
@@ -180,6 +200,9 @@ done
 
 gate_acquired=1
 printf '%s\n' "$$" >"$gate_lock_owner"
+# How long this call queued, stated apart from how long it worked: a caller
+# timing its steps would otherwise book another checkout's build as its own.
+gate_waited=$((SECONDS - gate_started))
 if [[ -n "$gate_ticket" ]]; then
     rm -f -- "$gate_ticket"
     gate_ticket=""
@@ -189,7 +212,18 @@ command -v xcodegen >/dev/null 2>&1 || _gate_fail "xcodegen is unavailable"
 command -v xcodebuild >/dev/null 2>&1 || _gate_fail "xcodebuild is unavailable"
 xcodegen generate
 
-if [[ -n "$physical_udid" ]]; then
+# The watch scheme runs only on a watch simulator the caller names; every other
+# scheme keeps the iOS paths below unchanged.
+if [[ "${SCHEME:-HealthLog}" == "HealthLogWatch" ]]; then
+    [[ -z "$physical_udid" ]] ||
+        _gate_fail "the HealthLogWatch scheme runs only on a watchOS simulator, not on a physical device"
+    [[ "${GATE_DESTINATION:-}" == platform=watchOS\ Simulator,* ]] ||
+        _gate_fail "the HealthLogWatch scheme needs GATE_DESTINATION=\"platform=watchOS Simulator,id=<UDID>\""
+    # shellcheck source=resolve-gate-destination.sh
+    source "$(cd "$(dirname "$0")" && pwd)/resolve-gate-destination.sh"
+    [[ "$GATE_DESTINATION" == platform=watchOS\ Simulator,* ]] ||
+        _gate_fail "watch mode resolved a non-watchOS-simulator destination"
+elif [[ -n "$physical_udid" ]]; then
     GATE_DESTINATION="platform=iOS,id=$physical_udid"
     export GATE_DESTINATION
 else
@@ -200,9 +234,9 @@ else
 fi
 
 gate_derived_data="/tmp/dd-hl-$gate_suffix"
-gate_result_bundle="/tmp/xcresult-hl-$gate_suffix.xcresult"
+gate_result_bundle="/tmp/xcresult-hl-$gate_suffix${gate_result_label:+-$gate_result_label}.xcresult"
 
-if [[ "$gate_action" == "test" ]]; then
+if [[ "$gate_runs_tests" -eq 1 ]]; then
     case "$gate_result_bundle" in
         /tmp/xcresult-hl-*.xcresult) ;;
         *) _gate_fail "refusing unsafe result-bundle path" ;;
@@ -220,26 +254,27 @@ gate_command=(
     -derivedDataPath "$gate_derived_data"
 )
 gate_command+=("$@")
-if [[ "$gate_action" == "test" ]]; then
+if [[ "$gate_runs_tests" -eq 1 ]]; then
     gate_command+=(-resultBundlePath "$gate_result_bundle")
 fi
 
 printf 'run-serialized-xcode-gate: pid=%s suffix=%s destination=%s derivedData=%s\n' \
     "$$" "$gate_suffix" "$GATE_DESTINATION" "$gate_derived_data" >&2
-if [[ "$gate_action" == "test" ]]; then
+printf 'run-serialized-xcode-gate: waited=%ss for the lock\n' "$gate_waited" >&2
+if [[ "$gate_runs_tests" -eq 1 ]]; then
     printf 'run-serialized-xcode-gate: resultBundle=%s\n' "$gate_result_bundle" >&2
 fi
 
 "${gate_command[@]}"
 gate_status=$?
 
-# A `test` action that executed nothing is a false green, not a pass. Swift
+# A test action that executed nothing is a false green, not a pass. Swift
 # Testing does not address a case by bare function name, so a selector like
 # `-only-testing:Target/SuiteName/caseName` silently matches nothing and
 # xcodebuild still reports "Test run with 0 tests ... passed" and exits 0. The
 # result bundle is the only honest witness, so a zero-test run fails here
 # rather than in whatever reads the gate's exit code later.
-if [[ "$gate_action" == "test" && $gate_status -eq 0 ]]; then
+if [[ "$gate_runs_tests" -eq 1 && $gate_status -eq 0 ]]; then
     # Injectable so the self-test can exercise the census itself; the default
     # is the only thing that ever runs against a real bundle.
     gate_test_total="$("${HEALTHLOG_GATE_TEST_CENSUS:-_gate_test_census}" "$gate_result_bundle")"

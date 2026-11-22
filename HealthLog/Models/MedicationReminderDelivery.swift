@@ -1,6 +1,6 @@
 import Foundation
 
-/// **N1 — who delivers medication reminders: this phone or the server.**
+/// **Who delivers medication reminders: this phone or the server.**
 ///
 /// The app plans medication reminders as local notifications (SpeziScheduler,
 /// AlarmKit for critical medications). The server sends `MEDICATION_REMINDER`
@@ -62,7 +62,7 @@ enum MedicationReminderDeliveryPolicy {
     /// as-needed medication or one without a plan has nothing to remind of, on
     /// either side).
     ///
-    /// **v1.42.2 (#126 P2) — the server's `remindersActive` decides.** It
+    /// **v1.42.2 — the server's `remindersActive` decides.** It
     /// folds in what the local flags cannot see: `autoMarkTaken` (a supplement
     /// the server records by itself must not remind) and an ended course. When
     /// the server says `false`, nothing is armed, whatever the local flags say.
@@ -73,7 +73,7 @@ enum MedicationReminderDeliveryPolicy {
     /// `remindersActive: false` when the row is decoded
     /// (`MedicationWireDTO.toDomain()`), so either one stops a reminder.
     ///
-    /// **MED (#1280)** — a course ended at an instant (`endedAt`) arms nothing,
+    /// A course ended at an instant (`endedAt`) arms nothing,
     /// so tonight's dose of a course ended this afternoon is not reminded.
     static func plansLocalReminder(for medication: Medication) -> Bool {
         medication.remindersActive != false && !medication.hasEndedCourseNow
@@ -127,10 +127,15 @@ enum MedicationReminderDeliveryPolicy {
     ///   flag is account-wide and another phone may be the one delivering. That
     ///   is also what keeps two devices from overwriting each other on every
     ///   foreground: a release clears the claim, so it happens once.
+    ///
+    /// `otherPhoneDelivers`: an iPhone of the account is active and keeps the
+    /// flag, so a device that stops delivering only forgets its own claim and
+    /// never writes `false` (which would turn the APNs leg back on for it).
     static func decide(
         server: MedicationReminderServerDelivery?,
         deliversLocally: Bool,
-        claimedHere: Bool
+        claimedHere: Bool,
+        otherPhoneDelivers: Bool = false
     ) -> MedicationReminderDeliveryDecision {
         guard let server else { return .none }
         if deliversLocally {
@@ -138,7 +143,7 @@ enum MedicationReminderDeliveryPolicy {
             return claimedHere ? .none : .noteClaim
         }
         guard claimedHere else { return .none }
-        guard server.clientManaged, !server.isPinnedToClient else { return .dropClaim }
+        guard server.clientManaged, !server.isPinnedToClient, !otherPhoneDelivers else { return .dropClaim }
         return .release
     }
 }

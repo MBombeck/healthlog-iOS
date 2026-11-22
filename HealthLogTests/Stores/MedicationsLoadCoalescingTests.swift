@@ -1,4 +1,4 @@
-// 21-03 — `MedicationsStore.load()` and its overlapping triggers.
+// `MedicationsStore.load()` and its overlapping triggers.
 //
 // `MedicationsScreen` has four load triggers (`.task`, `.onAppear force: true`,
 // `.hlPullToRefresh`, the scenePhase hook) and `load()` has no coalescing, so
@@ -7,7 +7,7 @@
 // **What 21-03 shipped, and what it did not.** The pull itself is fixed: it now
 // passes `force: true, intent: .userInitiated` and takes the bounded-attach
 // path in `SWRCoordinator` (D-14-06-C, closed). The COALESCING half
-// (D-14-06-B) was written, worked, and was reverted — it needs a shared `Task`
+// was written, worked, and was reverted — it needs a shared `Task`
 // handle inside `MedicationsStore.swift`, which moves 11 effects from `load-1`
 // to a helper symbol and adds a new `owned-task` hit to the frozen Phase-06
 // effect census. A 21-xx plan may only ever write `removed-hit` there, so the

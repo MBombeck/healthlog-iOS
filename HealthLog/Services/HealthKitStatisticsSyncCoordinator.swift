@@ -15,13 +15,13 @@ public protocol HealthKitDailyStatsSyncing: AnyObject, Sendable {
     /// Per-Type-Fehlern (best-effort vs hard-fail). Fire-and-forget — der
     /// Caller (`BackgroundSyncCoordinator`, `AppContainer`-Bootstrap) braucht
     /// keine Summary-Counter, die landen im Log.
-    /// Build 273 (A8) — reports whether the sweep COMPLETED (every row either
+    /// Reports whether the sweep COMPLETED (every row either
     /// landed or is durably queued). The orchestrator burns the all-time
     /// backfill one-shot only on `true`.
     @discardableResult
     func triggerDailyStatsSync(lookbackDays: Int) async -> Bool
 
-    /// v0.6.2.x bug-c10-ios-direct — read today's cumulative step total
+    /// Read today's cumulative step total
     /// straight from HealthKit, bypassing the server-snapshot path. The
     /// server's `/api/measurements/batch` is insert-only on the
     /// `(type, externalId="stats:HKQuantityTypeIdentifierStepCount:<day>")`
@@ -35,24 +35,48 @@ public protocol HealthKitDailyStatsSyncing: AnyObject, Sendable {
     /// keep building unchanged.
     func liveTodayStepCount() async -> Double?
 
-    /// **v0.12 W8-4** — Sweep der Daily-Stats-Cache-Rows aelter als `maxAge`.
+    /// Sweep der Daily-Stats-Cache-Rows aelter als `maxAge`.
     /// Best-effort, fire-and-forget aus dem BGTask-Cache-Sweep-Hook. Default-
     /// Impl ist ein No-op (Return `0`), damit Test-Stubs unveraendert bauen.
     @discardableResult
     func sweepCacheOlderThan(_ maxAge: TimeInterval, now: Date) async -> Int
 
-    /// **V1 (1.2)** — asks for a sweep of today and yesterday in the
+    /// Sign-out: drops the leaving account's last-posted day totals, so no
+    /// step or energy total of that account outlives it on the device.
+    /// Default: nothing, so a stub keeps building.
+    func clearCache(ownerUserID: String) async
+
+    /// Asks for a sweep of today and yesterday in the
     /// coordinator's own task, labelled `trigger`. Returns once it is queued,
     /// not once it ran. Requests while one runs fold into one trailing sweep.
     func requestRecentDailyStatsSweep(trigger: SyncTrigger) async
 
-    /// **V1** — returns once no requested sweep is running. A HealthKit
+    /// Returns once no requested sweep is running. A HealthKit
     /// delivery waits on it before it hands back its completion handler.
     func awaitRequestedDailyStatsSweeps() async
+
+    /// The day totals of ONE type over `lookbackDays`: the history a type
+    /// that joins after the account's first backfill never got. `true` only
+    /// when every day was read and landed or is durably queued. Default:
+    /// `false`, so a stub never claims a backfill it did not run.
+    func backfillDailyStats(identifier: String, lookbackDays: Int) async -> Bool
+
+    /// After "Daten zurücksetzen": forget what this account's day and hour
+    /// totals were last sent as, so the next sweeps send them again. Default:
+    /// nothing to forget.
+    func forgetUploadedTotals(ownerID: String) async
 }
 
 public extension HealthKitDailyStatsSyncing {
+    func forgetUploadedTotals(ownerID _: String) async {}
+
+    func backfillDailyStats(identifier _: String, lookbackDays _: Int) async -> Bool {
+        false
+    }
+
     func requestRecentDailyStatsSweep(trigger _: SyncTrigger) async {}
+
+    func clearCache(ownerUserID _: String) async {}
 
     func awaitRequestedDailyStatsSweeps() async {}
 
@@ -78,8 +102,7 @@ public extension HealthKitDailyStatsSyncing {
     /// - Foreground-Bootstrap nach Login.
     /// - BGProcessingTask-Wake.
     /// - HK-Observer-Wakeup fuer einen kumulativen Type (filter-handoff vom
-    ///   `HealthKitService.handleNewSamples` — siehe FeatureFlag-Gate
-    ///   `enableDailyStats`).
+    ///   `HealthKitService.handleNewSamples`).
     ///
     /// Der Service ist `Sendable` actor-isolated, damit er gefahrlos vom
     /// Composition-Root in mehrere Konsumenten-Sites injectable ist.
@@ -96,15 +119,15 @@ public extension HealthKitDailyStatsSyncing {
 
         let statisticsService: any HealthKitDailyStatsReading
         private var cacheState: CacheState
-        /// V1 — the requested recent sweep and the trigger of the one request
+        /// The requested recent sweep and the trigger of the one request
         /// that arrived while it ran (``requestRecentDailyStatsSweep(trigger:)``).
         var recentSweep: Task<Void, Never>?
         var recentRerun: SyncTrigger?
-        /// V1 — the tail of the serial lane every sweep runs in, so a requested
+        /// The tail of the serial lane every sweep runs in, so a requested
         /// sweep and an orchestrated one never plan against the same cache at
         /// once and post the same day twice.
         var laneTail: Task<Void, Never>?
-        /// **Phase 07 / Plan 07-04** — the shared measurement uploader, not a
+        /// The shared measurement uploader, not a
         /// private `APIClient` call. The stats path used to hand-roll its own
         /// POST, which meant it had its own idempotency key minting, no throttle
         /// share, no backoff share, and — before this plan — no acceptance gate
@@ -115,10 +138,9 @@ public extension HealthKitDailyStatsSyncing {
         /// pre-composition): a chunk that needs a retry and has nowhere to write
         /// it leaves the sweep incomplete rather than claiming ground.
         let retry: (any HealthSyncBatchRetryEnqueuing)?
-        let featureFlags: FeatureFlagsServicing
-        private let calendar: Calendar
+        let calendar: Calendar
         let clock: @Sendable () -> Date
-        /// **Phase 07 / Plan 07-04** — the only place this coordinator learns
+        /// The only place this coordinator learns
         /// which account it is working for.
         ///
         /// A closure, evaluated fresh at the start of every sweep, exactly like
@@ -136,7 +158,6 @@ public extension HealthKitDailyStatsSyncing {
             statisticsService: any HealthKitDailyStatsReading,
             cache: HealthKitDailyStatsCache,
             uploader: MeasurementBatchUploader,
-            featureFlags: FeatureFlagsServicing,
             calendar: Calendar = .current,
             clock: @escaping @Sendable () -> Date = { Date() },
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
@@ -147,7 +168,6 @@ public extension HealthKitDailyStatsSyncing {
             cacheState = .resolved(cache)
             self.uploader = uploader
             self.retry = retry
-            self.featureFlags = featureFlags
             self.calendar = calendar
             self.clock = clock
             self.admission = admission
@@ -162,7 +182,6 @@ public extension HealthKitDailyStatsSyncing {
             statisticsService: any HealthKitDailyStatsReading,
             cacheTask: Task<HealthKitDailyStatsCache, Never>,
             uploader: MeasurementBatchUploader,
-            featureFlags: FeatureFlagsServicing,
             calendar: Calendar = .current,
             clock: @escaping @Sendable () -> Date = { Date() },
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
@@ -173,7 +192,6 @@ public extension HealthKitDailyStatsSyncing {
             cacheState = .pending(cacheTask)
             self.uploader = uploader
             self.retry = retry
-            self.featureFlags = featureFlags
             self.calendar = calendar
             self.clock = clock
             self.admission = admission
@@ -185,7 +203,8 @@ public extension HealthKitDailyStatsSyncing {
         /// `SWRCoordinator.cache()`.
         let defaultsProvider: @Sendable () -> UserDefaults
 
-        private func cache() async -> HealthKitDailyStatsCache {
+        /// Internal for the sign-out clear in `+Recent`.
+        func cache() async -> HealthKitDailyStatsCache {
             switch cacheState {
             case let .resolved(cache):
                 return cache
@@ -200,7 +219,7 @@ public extension HealthKitDailyStatsSyncing {
         /// inkl. heute. Liefert eine Zusammenfassung der ausgefuehrten
         /// Actions — Tests inspizieren die Zaehler.
         ///
-        /// **Phase 07 / Plan 07-04 — der Sweep ist erst fertig, wenn er es ist.**
+        /// **Der Sweep ist erst fertig, wenn er es ist.**
         /// Die Rows eines Passes gehen gebuendelt ueber den geteilten
         /// `MeasurementBatchUploader` (derselbe Idempotency-/Throttle-/Backoff-
         /// Pfad wie der Per-Sample-Pfad, gechunkt auf das Server-Limit). Ein
@@ -214,11 +233,6 @@ public extension HealthKitDailyStatsSyncing {
         }
 
         private func sweep(lookbackDays: Int) async -> HealthKitStatisticsSyncSummary {
-            guard featureFlags.isEnabled(.enableDailyStats) else {
-                HLLog.healthKit
-                    .debug("HK-STATS sync skipped — enableDailyStats flag is OFF")
-                return .disabled
-            }
             // The account this whole sweep belongs to, captured once. Every cache
             // read and every cache write below is keyed by it; there is no other
             // way for this coordinator to name an owner.
@@ -229,14 +243,28 @@ public extension HealthKitDailyStatsSyncing {
             }
 
             let now = clock()
-            let from = Self.sweepWindowStart(
-                now: now,
-                lookbackDays: lookbackDays,
-                lastCompletedSweepEnd: lastCompletedSweepEnd(ownerID: lease.ownerID),
+            // #3 — day totals no longer wait in the outbox; the ones an older
+            // build queued go, and their days are summed again below.
+            await dropQueuedDayTotals(requiring: lease)
+            // #8 — days a late sample or a dropped queue row touched, however
+            // old, are read again in this sweep.
+            let dirty = HealthKitStatsDirtyDays.read(ownerID: lease.ownerID, defaults: defaultsProvider())
+            let from = Self.sweepFrom(
+                Self.sweepWindowStart(
+                    now: now,
+                    lookbackDays: lookbackDays,
+                    lastCompletedSweepEnd: lastCompletedSweepEnd(ownerID: lease.ownerID),
+                    calendar: calendar
+                ),
+                dirty: dirty,
                 calendar: calendar
             )
-            let read = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
+            var read = await statisticsService.dailyRowsForAllDefaults(from: from, to: now)
+            read = await withEmptiedDays(read, from: from, to: now, ownerID: lease.ownerID)
             let summary = await finishSweep(read, requiring: lease, endingAt: now)
+            if summary.isComplete, let dirty {
+                HealthKitStatsDirtyDays.clear(dirty, ownerID: lease.ownerID, defaults: defaultsProvider())
+            }
             if read.failedTypes == 0 {
                 HealthKitStatsUploadLogStore.recordSweep(
                     uploaded: summary.posted + summary.reposted,
@@ -311,11 +339,19 @@ public extension HealthKitDailyStatsSyncing {
                 // partition, and must not claim the old owner's day converged.
                 try lease.requireCurrent()
             } catch {
+                // #3 — a day total is not queued. The next sweep sums the day
+                // again from HealthKit, and a queued row would only replay the
+                // older value over a newer one later (the server keeps the
+                // last write on the stable `stats:` id). The sweep stays
+                // incomplete, so its end does not move and the window is read
+                // again.
                 HLLog.healthKit
                     .error("HK-STATS chunk not accepted: \(error.localizedDescription, privacy: .public)")
-                let queued = await persistRetry(entries, requiring: lease)
-                return summary.tallyingHeld(chunk.count, retryQueued: queued)
+                return summary.tallyingHeld(chunk.count, retryQueued: false)
             }
+            // #3 — what the server just confirmed supersedes anything still
+            // waiting under the same ids.
+            await dropQueuedEntries(entries, requiring: lease)
 
             var uploadedByIdentifier: [String: Int] = [:]
             defer { recordUploads(uploadedByIdentifier, ownerID: lease.ownerID) }
@@ -341,7 +377,7 @@ public extension HealthKitDailyStatsSyncing {
                 }
                 summary = summary.tallying(action)
                 uploadedByIdentifier[row.hkIdentifier, default: 0] += 1
-                // BF-5 diagnostics: record the action by HK identifier so the
+                // Diagnostics: record the action by HK identifier so the
                 // operator sees cumulative kinds (Steps etc.) ticking through the
                 // stats path. The counter increments AFTER the cache write so the
                 // snapshot reflects state actually persisted.
@@ -415,6 +451,10 @@ public extension HealthKitDailyStatsSyncing {
         /// externalId), und `row.externalId` ist die stabile
         /// `stats:<type>:<day>`-Identitaet, auf der der Server upserted.
         private static func entry(for row: HealthKitDailyStatRow) -> HealthKitBatchEntryDTO {
+            HealthKitReadingTimeZone.stamp(unstampedEntry(for: row), dayZone: row.timeZoneIdentifier)
+        }
+
+        private static func unstampedEntry(for row: HealthKitDailyStatRow) -> HealthKitBatchEntryDTO {
             HealthKitBatchEntryDTO(
                 hkIdentifier: row.hkIdentifier,
                 value: row.value,
@@ -439,7 +479,7 @@ public extension HealthKitDailyStatsSyncing {
 
     /// Summary-Counters fuer einen Sync-Run. Tests asserten gegen die Felder.
     ///
-    /// **Phase 07 / Plan 07-04.** Zwei Aenderungen. `patched` ist entfallen —
+    /// Zwei Aenderungen. `patched` ist entfallen —
     /// der Zaehler zaehlte einen Arm, den Produktion nie erreichte (siehe
     /// ``HealthKitDailyStatsCacheAction``), und ein Feld, das strukturell immer
     /// 0 ist, ist eine falsche Aussage ueber den Pfad. Und ``isComplete`` ist
@@ -482,10 +522,6 @@ public extension HealthKitDailyStatsSyncing {
             skipped: 0,
             failed: 0
         )
-
-        /// Der Flag ist aus. Es gibt keine Historie, die dieser Pfad
-        /// vervollstaendigen muesste, also ist der Pass in sich vollstaendig.
-        public static let disabled = complete
 
         /// Der Pass durfte nicht laufen (keine Admission). Nichts ist passiert,
         /// und nichts ist erledigt.
@@ -567,13 +603,36 @@ public extension HealthKitDailyStatsSyncing {
             return complete
         }
 
-        /// **v0.12 W8-4** — Sweep der HK-Daily-Stats-Cache-Rows aelter als
+        /// The server deleted every value this account sent. The cache that
+        /// says "already sent", the sweep end, the hourly ledger and the dirty
+        /// mark go, so the day totals go out again from the chosen window.
+        public func forgetUploadedTotals(ownerID: String) async {
+            await serialized {
+                do {
+                    try await self.cache().clearAll(ownerUserID: ownerID)
+                } catch {
+                    HLLog.healthKit.error("HK-STATS cache could not be cleared after a data reset")
+                }
+                await self.forgetSweepState(ownerID: ownerID)
+            }
+        }
+
+        private func forgetSweepState(ownerID: String) {
+            let defaults = defaultsProvider()
+            defaults.removeObject(forKey: Self.lastSweepEndKey(ownerID: ownerID))
+            defaults.removeObject(forKey: HourlyStatsLedgerStore.key(ownerID: ownerID))
+            if let mark = HealthKitStatsDirtyDays.read(ownerID: ownerID, defaults: defaults) {
+                HealthKitStatsDirtyDays.clear(mark, ownerID: ownerID, defaults: defaults)
+            }
+        }
+
+        /// Sweep der HK-Daily-Stats-Cache-Rows aelter als
         /// `maxAge`. Passthrough auf `HealthKitDailyStatsCache.sweepOlderThan`,
         /// damit der `BackgroundSyncCoordinator`-Cache-Sweep-Hook den
         /// (private) Cache nicht direkt halten muss. Best-effort: Fehler werden
         /// geschluckt + geloggt, der BGTask faellt darauf nicht.
         ///
-        /// **Phase 07 / Plan 07-04** — owner-gebunden. Ohne admittierten Account
+        /// Owner-gebunden. Ohne admittierten Account
         /// wird nichts gefegt: ein altersbasierter Sweep unter Account B, der
         /// Account As Rows loescht, ist eine Mutation an fremdem State.
         @discardableResult

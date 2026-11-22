@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 08 Plan 15 — the deliberate, ephemeral gate in front of engineering
+/// **The deliberate, ephemeral gate in front of engineering
 /// detail.**
 ///
 /// Notification tokens, APNs environments, banner-category identifiers, pending

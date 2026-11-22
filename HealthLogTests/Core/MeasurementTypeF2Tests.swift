@@ -330,7 +330,7 @@ struct ServerMeasurementTypeF2Tests {
         )
     }
 
-    /// v1.25 (GH iOS #38) — regression guard: a manually-entered respiratory rate
+    /// v1.25 — regression guard: a manually-entered respiratory rate
     /// used to fall through `toCreateDTOs()`'s `default: []` (silent no-op save).
     /// It must now emit exactly one `RESPIRATORY_RATE` wire row carrying the value.
     @Test("toCreateDTOs persists a manual respiratoryRate (was a silent no-op)")

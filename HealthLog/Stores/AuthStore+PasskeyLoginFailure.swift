@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - L1 — what a refused passkey sign-in tells the person
+// MARK: - What a refused passkey sign-in tells the person
 
 extension AuthStore {
     /// `loginWithPasskey(anchor:)`'s failure routing: a refused passkey is not

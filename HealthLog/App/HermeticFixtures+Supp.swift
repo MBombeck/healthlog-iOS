@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **SUPP (1.5.0, #131) — a supplement's composition and the nutrient
+    /// **A supplement's composition and the nutrient
     /// split by source.**
     ///
     /// Under `-uitest-supp` (with `-uitest-area-meds`) the medication list

@@ -15,7 +15,7 @@ import Foundation
 // single-value glance surface is allowed to show.
 
 public extension Measurement {
-    /// Audit B-4 — the newest reading whose type this build can name.
+    /// The newest reading whose type this build can name.
     ///
     /// Glance surfaces (the Home-screen widget, the watch complication) answer
     /// "your latest measurement" with one row picked across every kind. A row
@@ -45,23 +45,26 @@ extension MetricKind {
     /// day's cumulative.
     var isCumulative: Bool {
         switch self {
-        // v0.8.3 W-D: the four activity aggregates the app already collects
+        // The four activity aggregates the app already collects
         // are per-day cumulative HK rows (`stats:HK_ID:DAY` externalId, see
         // `HealthKitCumulativeTypeConfig.cumulativeIdentifiers`). Their tile +
         // chart-detail surfaces must compose the displayed value via same-day
         // sum, exactly like `.steps`.
         case .steps, .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight:
             true
-        // HK-NEW (1.5) — the server sums these per day too
+        // The server sums these per day too
         // (`CUMULATIVE_HK_TYPES`, v1.44): a day is its total, never one sample.
         case .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes:
+            true
+        // Resting energy accrues through the day like active energy.
+        case .basalEnergy:
             true
         default:
             false
         }
     }
 
-    /// v0.14 b146 (M4) — `true` for low-frequency *event-count* kinds where a
+    /// `true` for low-frequency *event-count* kinds where a
     /// Min/Ø/Max/Median strip is degenerate: a sparse single occurrence yields
     /// Min == Ø == Max == Median, so the StatsRow reads as noise (the web sub-
     /// pages show no spread strip for count metrics either). The insights metric
@@ -75,7 +78,7 @@ extension MetricKind {
         }
     }
 
-    /// v0.15.2 D1 (#34) — `true` for the *continuous* vitals an Apple Watch can
+    /// `true` for the *continuous* vitals an Apple Watch can
     /// emit many times within a single clock-minute, so the chronological
     /// measurements feed should collapse a same-minute run into ONE honest row
     /// (value + "·N") instead of N near-identical rows. This is a DISPLAY-ONLY
@@ -118,7 +121,7 @@ extension MetricKind {
         }
     }
 
-    /// v0.13.1 IC — the server `MeasurementType` key whose all-time `count` in
+    /// The server `MeasurementType` key whose all-time `count` in
     /// the `/api/analytics?slice=summaries` slice signals "this kind has data".
     /// This is the per-kind has-data signal the web tab-strip gates its pills on
     /// (`metric-availability.ts:hasMetricData` → `summaries[METRIC].count > 0`),
@@ -191,7 +194,7 @@ extension MetricKind {
         .visceralFat: "VISCERAL_FAT",
         .walkingHeartRate: "WALKING_HEART_RATE_AVERAGE",
         .fatMass: "FAT_MASS",
-        // v0.13.1 IC — v1.10.0 additive HealthKit signals.
+        // v1.10.0 additive HealthKit signals.
         .falls: "FALL_COUNT",
         .sixMinuteWalk: "SIX_MINUTE_WALK_DISTANCE",
         .stairAscentSpeed: "STAIR_ASCENT_SPEED",
@@ -202,12 +205,12 @@ extension MetricKind {
         .averageHeartRate: "AVERAGE_HEART_RATE",
         .maxHeartRate: "MAX_HEART_RATE",
         .sleepDisturbanceCount: "SLEEP_DISTURBANCE_COUNT",
-        // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+        // v1.17.1 source-fixed render-only signals.
         .ansCharge: "ANS_CHARGE",
         .cardioLoad: "CARDIO_LOAD",
         .sleepScore: "SLEEP_SCORE",
         .bodyTemperatureDeviation: "BODY_TEMPERATURE_DEVIATION",
-        // v0158 — v1.25 clinical measurement types. Keys mirror the server
+        // v1.25 clinical measurement types. Keys mirror the server
         // `measurementTypeEnum` SCREAMING_SNAKE form so the availability slice
         // lights their has-data signal.
         .painNRS: "PAIN_NRS",
@@ -238,21 +241,27 @@ extension MetricKind {
         .lowHeartRateEvent: "LOW_HEART_RATE_EVENT",
         .walkingSteadinessEvent: "WALKING_STEADINESS_EVENT",
         .breathingDisturbanceEvent: "BREATHING_DISTURBANCE_EVENT",
-        // Audit B-4 — the 77th server type, keyed like its five sibling events
+        // The 77th server type, keyed like its five sibling events
         // so the availability slice lights its has-data signal too. `.unknown`
         // is deliberately absent: it is no server type and has no count.
         .audioExposureEvent: "AUDIO_EXPOSURE_EVENT",
-        // #162 — Garmin (server v1.47.0); keys as in the summaries map.
+        // Garmin (server v1.47.0); keys as in the summaries map.
         .bodyBattery: "BODY_BATTERY",
         .stressLevel: "STRESS_LEVEL",
         .trainingReadiness: "TRAINING_READINESS",
         .acuteTrainingLoad: "ACUTE_TRAINING_LOAD",
-        // HK-NEW (1.5) — server v1.44 Apple Health types.
+        // Server v1.44 Apple Health types.
         .exerciseMinutes: "EXERCISE_MINUTES",
         .standMinutes: "STAND_MINUTES",
         .standHours: "STAND_HOURS",
         .mindfulMinutes: "MINDFUL_MINUTES",
         .stateOfMindValence: "STATE_OF_MIND_VALENCE",
-        .afibBurden: "AFIB_BURDEN"
+        .afibBurden: "AFIB_BURDEN",
+        // Read-only types from server v1.44 to v1.47.2.
+        .bloodKetones: "BLOOD_KETONES",
+        .basalEnergy: "BASAL_ENERGY_BURNED",
+        .indoorCO2: "INDOOR_CO2",
+        .indoorTemperature: "INDOOR_TEMPERATURE",
+        .indoorHumidity: "INDOOR_HUMIDITY"
     ]
 }

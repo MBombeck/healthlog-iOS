@@ -97,29 +97,17 @@ public enum LogoutReason: Sendable, Equatable {
         self == .accountDeleted
     }
 
-    /// Whether the cascade should wipe the **standalone local mirror**
-    /// (`localRepo`) — the offline-mode measurement/intake history.
-    ///
-    /// **v0.11 marathon (RISK-2 fix):** wiped on `.accountDeleted` **and**
-    /// `.switchServer`, NOT only on delete. The mirror is the offline
-    /// history that the adopt-upload hook pushes into whatever account the
-    /// user next pairs (`AuthStore.adoptUploadHook`). Unlike the GLP-1 store
-    /// it is NOT a server-agnostic personal ledger that "the same user simply
-    /// re-points": a server switch can move between two *different* accounts
-    /// (standalone → pair account A → switch server → standalone → pair
-    /// account B). Keeping the mirror across that switch would adopt-upload
-    /// account A's offline history into account B — a cross-account data
-    /// leak. So the mirror dies with the server context, leaving only the
-    /// row-preserving same-account paths (`.userInitiated` / `.tokenExpired`)
-    /// — where the standalone history legitimately belongs to the same
-    /// signed-in/standalone identity — to keep it.
-    var clearsStandaloneMirror: Bool {
+    /// Whether the cascade removes the records an offline-mode build may have
+    /// left on disk (`StandaloneRetirement.removeLocalStore`). They die with
+    /// the server context: on `.accountDeleted` and `.switchServer`, never on
+    /// the row-preserving same-account paths.
+    var clearsLegacyStandaloneStore: Bool {
         self == .accountDeleted || self == .switchServer
     }
 }
 
 public extension AppContainer {
-    /// **AUD-7 H1 / 06-05 — the EXPLICIT logout-clearing registry.**
+    /// **The EXPLICIT logout-clearing registry.**
     ///
     /// Every stored `AppContainer` property that conforms to `LogoutClearable`,
     /// listed LITERALLY in stored-property declaration order. Plan 06-05
@@ -136,7 +124,6 @@ public extension AppContainer {
     /// pre-06-05 clear order of the reflection sweep.
     var logoutClearables: [any LogoutClearable] {
         [
-            syncModeStore,
             dashboardStore,
             dashboardLayoutStore,
             insightsLayoutStore,
@@ -157,6 +144,7 @@ public extension AppContainer {
             nutrientStore,
             environmentStore,
             illnessStore,
+            seizuresStore,
             documentsStore,
             allergiesStore,
             familyHistoryStore,
@@ -185,7 +173,7 @@ public extension AppContainer {
             avatarStore,
             hkReadinessStore,
             wellnessCardVisibilityStore,
-            featureFlagsStore,
+            medicationVisibilityStore,
             liveHealthKitTodayStore
         ]
     }
@@ -211,9 +199,8 @@ public extension AppContainer {
     /// 2. Clear the encrypted outbox queue on account-deletion AND
     ///    switch-server (rows point at a deleted account / the previous
     ///    server); clear the local-only GLP-1 store on account-deletion
-    ///    only; wipe the standalone local mirror on account-deletion AND
-    ///    switch-server (RISK-2 — it adopt-uploads into the next paired
-    ///    account, so it must not survive a server/account change).
+    ///    only; remove the legacy offline-mode records on account-deletion
+    ///    AND switch-server.
     /// 3. Wipe the outbox AES-GCM key from Keychain in lockstep with the
     ///    row clear above so the next sign-in generates a fresh cipher key
     ///    on first enqueue (v0.6.2.3 F3-SEC; v0.7.1 C-1 invariant).
@@ -234,7 +221,7 @@ public extension AppContainer {
     /// launch tick (PA5 Bottleneck #1) and the SwiftData open may not
     /// have completed by the time logout fires.
     ///
-    /// **06-05 — sole awaited terminal teardown orchestrator.** Before any
+    /// **Sole awaited terminal teardown orchestrator.** Before any
     /// cache/store clearing this cascade (a) invalidates the shared
     /// authenticated-session lease so no suspended producer can publish into
     /// the closing session, and (b) cancels AND awaits every registered
@@ -292,30 +279,22 @@ public extension AppContainer {
                 )
             }
         }
-        // v0.11 marathon (RISK-2) — the standalone local mirror is NOT
-        // server-agnostic the way the GLP-1 store is: the adopt-upload hook
-        // pushes it into whatever account the user next pairs, so it must die
-        // with the server context. Wipe on account-deletion AND server-switch
-        // (`clearsStandaloneMirror`) so a switch between two different paired
-        // accounts can never adopt-upload the prior account's offline history
-        // into the next one. The earlier W1 reasoning that grouped it with the
-        // account-deletion-only GLP-1 gate was wrong and has been removed.
-        if reason.clearsStandaloneMirror {
-            // W-PHI-HARDENING precedent — surface (don't swallow) a wipe failure
-            // of the standalone offline mirror: if it survives, the adopt-upload
-            // hook could push the prior account's offline history into the next
-            // paired account (RISK-2 cross-account leak). Logged sanitised; the
-            // cascade continues.
+        // Records an offline-mode build may have left on disk go with the
+        // server context. A failed removal is logged, the cascade continues.
+        if reason.clearsLegacyStandaloneStore {
             do {
-                try await localRepo.deleteAll()
+                try StandaloneRetirement.removeLocalStore(
+                    defaults: legacyStandaloneDefaults,
+                    applicationSupport: legacyStandaloneStoreBase
+                )
             } catch {
                 HLLog.storage.error(
-                    "logout standalone-mirror wipe failed — previous-user PHI may linger: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                    "logout standalone-store removal failed — previous-user PHI may linger: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
                 )
             }
         }
 
-        // 3. Outbox cipher-key wipe (v0.6.2.3 F3-SEC). Pre-v0.6.2.3 the
+        // 3. Outbox cipher-key wipe. Pre-v0.6.2.3 the
         // per-install AES-GCM key for the encrypted outbox payload column
         // survived both logout AND account-deletion. A second user
         // signing in on the same device then inherited the previous
@@ -325,7 +304,7 @@ public extension AppContainer {
         // payload. Wipe here so the next sign-in generates a fresh key
         // on first enqueue.
         //
-        // **v0.7.1 fix (C-1):** gate the key wipe on the SAME condition
+        // **v0.7.1 fix:** gate the key wipe on the SAME condition
         // as the row clear above (step 2) — `reason.clearsOutbox`. The key
         // and the rows it decrypts always move together:
         //  - When the rows are KEPT (`.userInitiated` / `.tokenExpired`) so
@@ -339,7 +318,7 @@ public extension AppContainer {
         //    leakage is covered: the next sign-in mints a fresh key on
         //    first enqueue, with no leftover rows under the old key.
         if reason.clearsOutbox {
-            // Build 273 (A2) — the signed-out-user memo exists only to attribute
+            // The signed-out-user memo exists only to attribute
             // outbox rows; it goes wherever the rows go.
             try? keychain.remove(forKey: KeychainKey.lastSessionUserID)
             // W-PHI-HARDENING precedent — the outbox AES-GCM key wipe is a hard
@@ -362,7 +341,7 @@ public extension AppContainer {
         // Keeping this as one API prevents a newly added consent namespace from
         // drifting out of the logout boundary. Idempotent on repeated teardown.
         aiConsentStore.resetForSessionEnd()
-        // v0.13 W2 — wipe the BYO API **key bytes** in lockstep with the consent
+        // Wipe the BYO API **key bytes** in lockstep with the consent
         // grant above. The key is the secret half (the grant is just consent);
         // both must be gone before the next user touches the device so a shared
         // device can never inherit a working device→provider key. Idempotent.
@@ -375,7 +354,7 @@ public extension AppContainer {
         // HealthLogCore module which can't import AppContainer.
         unauthorizedRef.reset()
 
-        // **AUD-7 H1 / 06-05 — registry-driven store clear.** Every
+        // **Registry-driven store clear.** Every
         // `LogoutClearable` stored `AppContainer` property (the ~50 plain
         // synchronous `clearOnLogout()` stores — settings, measurements,
         // medications, labs/illness, dashboard/charts/insights, all
@@ -391,20 +370,23 @@ public extension AppContainer {
         // is `async`; `MoodHealthSyncStore` / `CycleStore` carry an `async`
         // `deactivateOnLogout()` (importer stop) ON TOP of the sync clear the
         // registry already runs; `ServerStatsStores` is a value-type bundle.
+        // The hidden-medication selection outlives a sign-out of its account,
+        // not the account itself; it resolves the partition before the sweep forgets it.
+        if reason == .accountDeleted { medicationVisibilityStore.wipeSelection() }
         for clearable in logoutClearables {
             clearable.clearOnLogout()
         }
 
-        // v0.15 W-FRONTDOORS — Vorsorge reminders. `clearOnLogout()` is `async`
+        // Vorsorge reminders. `clearOnLogout()` is `async`
         // here (not in the registry); the next user must never inherit the
         // previous user's preventive-care reminders.
         await measurementRemindersStore.clearOnLogout()
-        // W-THRESHOLD-NUDGE — drop the per-breach debounce map so the next user
+        // Drop the per-breach debounce map so the next user
         // never inherits the previous user's out-of-range nudge history. The map
         // holds breach keys (biomarker id / analyte name), not values; clearing
         // it on logout keeps the device clean for the next account. Static wipe.
         ThresholdNudgeDebounceStore.clearAll()
-        // v0.8.4 WWIDGET-2 — reset the App Group widget snapshot so the previous
+        // Reset the App Group widget snapshot so the previous
         // user's next dose / compliance / mood / score / latest measurement never
         // lingers on the Home / Lock Screen for the next user on a shared device.
         //
@@ -415,7 +397,7 @@ public extension AppContainer {
         // no PHI) rather than pass it by. `reset()` still reloads every widget
         // timeline regardless of the write outcome (its own `defer`), so the
         // widgets get a best-effort repaint to their empty/placeholder state
-        // even on a write failure; the cascade continues either way. 09-03 — it
+        // even on a write failure; the cascade continues either way. It
         // is AWAITED too: admission closes, the epoch retires and the queued widget writes drain before the placeholder lands.
         do {
             try await widgetSnapshotWriter.reset()
@@ -424,18 +406,18 @@ public extension AppContainer {
                 "logout widget-snapshot reset failed — previous-user widget PHI may linger: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
             )
         }
-        // Privacy H4 (audit-v0162) — mirror the widget reset onto the watch. The
+        // Privacy H4 — mirror the widget reset onto the watch. The
         // watch snapshot (med names + doses + mood + latest measurement) lives in
         // the paired watch's own App Group container, which the store-object
         // reflection cascade cannot reach; push a PHI-free placeholder so the
         // watch app + complications clear on the next tick. Best-effort on every
-        // logout reason. #115 B5 — plus the App-Group account prefs (zone, unit).
+        // logout reason. Plus the App-Group account prefs (zone, unit).
         resetDeviceMirrorsOnLogout()
-        // W-B187 QOL-2 — tear down the CoreSpotlight index so the previous
+        // Tear down the CoreSpotlight index so the previous
         // user's medication names never surface in system search after sign-
         // out (PHI residue). Fire-and-forget off the main actor.
         spotlightCoordinator.clearAll()
-        // v0.10.0 W10 M2 — force the Apple-Health mood-sync toggle off + reset
+        // Force the Apple-Health mood-sync toggle off + reset
         // the per-user State-of-Mind import anchor. Without this, the next user
         // on the same device re-imports the previous user's full HKStateOfMind
         // history into their account. The importer still holds the just-logged-
@@ -443,24 +425,27 @@ public extension AppContainer {
         // (The in-memory store reset already ran via the registry; this is the
         // `async` importer-stop half.)
         await moodHealthSyncStore.deactivateOnLogout()
-        // GH #47 — force the Apple-Health medications toggle off + clear the
+        // Force the Apple-Health medications toggle off + clear the
         // per-user mirror registry so the next user on the device never inherits
         // the prior user's concept → med-id map.
         await medicationHealthSyncStore.deactivateOnLogout()
-        // GH #74 — force the Apple-Health ECG upload switch off + clear the
+        // Force the Apple-Health ECG upload switch off + clear the
         // per-user HealthKit cursor. Consent to upload a cardiac waveform is the
         // most personal switch on this device and must never be inherited; and a
         // cursor left behind would let the next user's first sweep silently skip
         // everything that arrived while the switch was off.
         await ecgHealthSyncStore.deactivateOnLogout()
-        // v0.14.8 W3 (AUDIT-SECURITY-B175 H-1) — stop the cycle HK import
+        // The Health Records answer belongs to the leaving account too: the
+        // next one is asked before the device's lab records reach it.
+        clinicalLabRecordsStore.clearOnLogout()
+        // Stop the cycle HK import
         // observer + reset its per-user anchors. Without this the importer kept
         // running under the next user's token (device cycle samples uploaded
         // into the wrong account). The in-memory cycle state (calendar /
         // predictions / profile) was already dropped via the registry's
         // `CycleStore.clearOnLogout()`; this is the `async` importer-stop half.
         await cycleStore.deactivateOnLogout()
-        // v0.7.0 W-SEC-M-1 — wipe any doctor-report PDF/FHIR residue
+        // Wipe any doctor-report PDF/FHIR residue
         // left behind in `temporaryDirectory`. The store-level
         // `clearOnLogout` only knows the URLs it currently tracks; a
         // crash-during-render or a previous-session render whose URL
@@ -468,14 +453,14 @@ public extension AppContainer {
         // PHI bytes through to the next user. Pass `ttl: 0` to wipe
         // every owned file unconditionally.
         _ = DoctorReportTmpSweeper.sweep(ttl: 0)
-        // #30 — `ModuleGate` is not a `…Store` (not in the registry); the next
+        // `ModuleGate` is not a `…Store` (not in the registry); the next
         // user re-loads their own module map.
         moduleGate.clearOnLogout()
-        // Server-stats stores (V052-A7). The 401 bridge cleared these
+        // Server-stats stores. The 401 bridge cleared these
         // inline pre-v0.7.0; the standard `handleLocalLogout()` did
         // NOT, which meant a user-tap sign-out left behind workouts +
         // PR + insights-target snapshots that the next user inherited.
-        // v0.14.8 W3 (AUDIT-SECURITY-B175 M-1) — the canonical bundle helper
+        // The canonical bundle helper
         // clears ALL 13 members (it's a value-type bundle, not in the
         // `LogoutClearable` registry of class instances). The previously
         // duplicated per-member calls (personalRecords / insightsTargets /
@@ -489,24 +474,21 @@ public extension AppContainer {
         // the just-logged-out user's anchor key here, so the reset targets the
         // correct partition). No-op when no importer is live or on non-HK builds.
         await healthKit?.resetWorkoutImportObserver()
-        // W-HKREAD — same logout rationale for the categorical-EVENT importer:
+        // Same logout rationale for the categorical-EVENT importer:
         // reset every per-type event anchor + stop the observers so the next
         // user on the same device starts clean (never re-imports the prior
         // user's flagged cardiac / mobility events).
         await healthKit?.resetEventImportObserver()
-        // 08-06 — the clinician-reviewer-name wipe went with the feature. No
+        // The clinician-reviewer-name wipe went with the feature. No
         // surface reads the legacy UserDefaults blob or Keychain name slot, so
         // no previous user's typed name can paint, and the account-delete
         // sweep still covers the shared service it lived under. Deliberately no
         // targeted purge: naming those keys again is the residue removed here.
 
-        // 5. On-device AI caches + avatar PNG. QC-1 / Arch-H3 reconcile:
-        // both the briefing hero + trend observation strings were
-        // leaking previous-user data across logouts. BF-5 added the
-        // HK diagnostics counter reset; v0.5.5 W-UX-1 added the
-        // avatar PNG sweep. All four were ONLY wired into
-        // `handleLocalLogout()` (the switch-server path) pre-v0.7.0 —
-        // every other logout path skipped them.
+        // 5. On-device AI caches, HK diagnostics counters and the avatar
+        // PNG. The briefing and trend-observation strings would otherwise
+        // carry the previous user's data across a logout, on every logout
+        // path, not only the switch-server one.
         OnDeviceBriefingCache.shared.clearOnLogout()
         TrendObservationCache.shared.clearOnLogout()
         HKSyncDiagnostics.shared.reset()
@@ -531,7 +513,7 @@ public extension AppContainer {
         // so no SwiftUI re-paint flashes the predecessor's data.
         await MiniCoachBox.shared.clearStores(for: self)
 
-        // Build 6 / Item 6.6 — drop the box-cached Coach/AI privacy store so the
+        // Drop the box-cached Coach/AI privacy store so the
         // next user on a shared device never inherits the previous user's
         // `documentsAutoAiRead` / `insightsPrivacyMode` flags before their own
         // load. Preference flags (not PHI), so this rides its own dedicated box
@@ -552,7 +534,7 @@ public extension AppContainer {
         await notificationClearOnLogoutHook?()
     }
 
-    /// **06-05 — registered owned-task drains.** Awaits every cancel-and-drain
+    /// **Registered owned-task drains.** Awaits every cancel-and-drain
     /// seam a store family exposes for its retained authenticated tasks. New
     /// producers that retain authenticated work MUST register their drain here
     /// (the Dashboard/Settings/Medications/Labs/Documents families fence and
@@ -560,6 +542,8 @@ public extension AppContainer {
     /// registered owner). Idempotent — draining an idle store is a no-op.
     func drainAuthenticatedSessionWork() async {
         await measurementsStore.cancelAndDrainAuthenticatedWork()
+        // The account that leaves takes the reminder-device decision with it.
+        reminderPlanning.reset()
     }
 
     /// Back-compat shim — kept for callers/tests that drive the switch-server
@@ -570,7 +554,7 @@ public extension AppContainer {
         await performFullLocalLogout(reason: .switchServer)
     }
 
-    /// **06-05 — the sole switch-server terminal path.** Stages `url`, holds
+    /// **The sole switch-server terminal path.** Stages `url`, holds
     /// the 06-10 account boundary for the whole operation, completes the old
     /// session's invalidate → drain → cleanup cascade FIRST, then wipes the
     /// old session's credentials, only then commits the persisted/runtime
@@ -589,7 +573,8 @@ public extension AppContainer {
 
         // Old-session teardown: invalidate shared lease, drain owned tasks,
         // then the reason-specific cleanup cascade (outbox + cipher key +
-        // standalone mirror die with the server context — see LogoutReason).
+        // the legacy offline records die with the server context — see
+        // LogoutReason).
         await performFullLocalLogout(reason: .switchServer)
 
         // Credentials of the old session (still-applicable per switch-server
@@ -603,7 +588,7 @@ public extension AppContainer {
             KeychainKey.refreshTokenExpiresAt,
             KeychainKey.accessTokenExpiresAt,
             KeychainKey.userID,
-            // v0.8.0 W9 L-1 — the cold-launch display-name hint moves with
+            // The cold-launch display-name hint moves with
             // `userID` so the previous account's name never paints against
             // the next server.
             KeychainKey.userDisplayName,
@@ -616,7 +601,7 @@ public extension AppContainer {
         // quiescent and stripped, then publish readmission.
         try AppEnvironment.setCustomBaseURL(url, keychain: keychain)
         await reloadEnvironment()
-        authStore.beginServerPairing()
+        authStore.returnToSignIn()
     }
 
     /// **v0.5.7 G.5** — Coach chat transcript hygiene on logout /
@@ -628,7 +613,7 @@ public extension AppContainer {
     /// resolve the previous partition via the store's
     /// `userIDProvider`. Wipe **every** partition in the chat
     /// persistence store — there is only one signed-in user with a
-    /// transcript on the device at any time, and the standalone
+    /// transcript on the device at any time, and the signed-out
     /// sentinel is the only other partition. Then drop the cached
     /// conversation store so the next AskCoach open re-hydrates
     /// against the new partition.

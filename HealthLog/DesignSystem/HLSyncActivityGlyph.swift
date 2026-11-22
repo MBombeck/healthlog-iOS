@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// U1 (#16) — the **top-bar sync glyph**, Immich-style. INT-L (1.1.1): it is
+/// The **top-bar sync glyph**, Immich-style. It is
 /// now the one sync slot next to the avatar and also carries the attention
 /// states the avatar badge used to show.
 ///

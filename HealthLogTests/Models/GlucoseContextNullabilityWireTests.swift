@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-18 — Glukose-Kontext: nullbar UND offen.**
+/// **Glukose-Kontext: nullbar UND offen.**
 ///
 /// Zwei getrennte Server-Realitäten, beide auf demselben Feld:
 ///
@@ -99,10 +99,10 @@ struct GlucoseContextNullabilityWireTests {
         #expect(list.measurements[1].glucoseContext == .fasting)
     }
 
-    @Test("Die vier bekannten Literale mappen unverändert", arguments: [
+    @Test("Die vier Server-Literale mappen unverändert", arguments: [
         ("FASTING", GlucoseContext.fasting),
-        ("BEFORE_MEAL", GlucoseContext.beforeMeal),
-        ("AFTER_MEAL", GlucoseContext.afterMeal),
+        ("POSTPRANDIAL", GlucoseContext.afterMeal),
+        ("RANDOM", GlucoseContext.random),
         ("BEDTIME", GlucoseContext.bedtime)
     ])
     func knownLiteralsStillMap(literal: String, expected: GlucoseContext) async throws {
@@ -178,6 +178,6 @@ struct GlucoseContextNullabilityWireTests {
 
     @Test("Der Kontext-Picker bietet weiterhin genau die vier Server-Literale an")
     func pickerHasNoInventedCase() {
-        #expect(GlucoseContext.allCases.map(\.rawValue) == ["FASTING", "BEFORE_MEAL", "AFTER_MEAL", "BEDTIME"])
+        #expect(GlucoseContext.allCases.map(\.rawValue) == ["FASTING", "POSTPRANDIAL", "RANDOM", "BEDTIME"])
     }
 }

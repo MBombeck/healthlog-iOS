@@ -2,33 +2,26 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// P7 — where the intraday day curve is allowed to exist.
+/// Where the intraday day curve is allowed to exist.
 ///
 /// The block reads a server-only route, so its placement gate is the thing that
-/// keeps every OTHER metric page from firing that read and keeps the block out
-/// of standalone / no-server entirely (no round-trip, no empty shell). Pure
-/// logic, pinned here so a future refactor of `InsightsMetricScreen+Sections`
+/// keeps every OTHER metric page from firing that read. Pure logic, pinned here so a future refactor of `InsightsMetricScreen+Sections`
 /// cannot silently widen it.
-@Suite("IntradayPulseBlock — placement gate (pulse-only + cloud-gated)")
+@Suite("IntradayPulseBlock — placement gate (pulse-only)")
 struct IntradayPulseBlockPlacementTests {
-    @Test("the block exists on the pulse page when a cloud surface is available")
+    @Test("the block exists on the pulse page")
     func availableOnPulse() {
-        #expect(IntradayPulseBlock.isAvailable(for: .pulse, canShowCloudInsights: true))
+        #expect(IntradayPulseBlock.isAvailable(for: .pulse))
     }
 
     @Test("no other metric page ever mounts the block")
     func suppressedOnEveryOtherKind() {
         for kind in MetricKind.allCases where kind != .pulse {
             #expect(
-                !IntradayPulseBlock.isAvailable(for: kind, canShowCloudInsights: true),
+                !IntradayPulseBlock.isAvailable(for: kind),
                 "\(kind.rawValue) must not fire the intraday read"
             )
         }
-    }
-
-    @Test("standalone / no-server hides the block even on the pulse page")
-    func suppressedWithoutCloud() {
-        #expect(!IntradayPulseBlock.isAvailable(for: .pulse, canShowCloudInsights: false))
     }
 
     @Test("the intraday copy keys resolve (no raw key leaks into the UI)")

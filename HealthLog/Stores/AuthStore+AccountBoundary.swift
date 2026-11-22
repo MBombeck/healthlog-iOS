@@ -38,6 +38,11 @@ final class AuthAccountBoundaryTransition {
         owner == .deletedAccount
     }
 
+    /// Nobody holds the boundary and nobody waits for it.
+    var isIdle: Bool {
+        owner == nil && waiters.isEmpty
+    }
+
     /// Returns explicit ownership. A cancelled queued task completes with
     /// `false`; only a `true` result may install a matching `defer release`.
     func acquireOwnership(_ requestedOwner: Owner) async -> Bool {

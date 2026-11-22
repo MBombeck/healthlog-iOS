@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-/// #141 (RELATED, 1.5.0) — the "Related" section at the end of a lab
+/// The "Related" section at the end of a lab
 /// result, document, illness episode or medication page.
 ///
 /// The server resolves `related` (v1.43+) and lists only kinds whose module is
@@ -16,80 +16,40 @@ struct RelatedRecordsSection: View {
 
     var body: some View {
         if !links.isEmpty {
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("related.title")
-                    ForEach(links) { link in
-                        RelatedRecordRow(link: link)
-                    }
+            HLCard("related.title", layout: .rows) {
+                ForEach(links) { link in
+                    RelatedRecordRow(link: link)
                 }
             }
         }
     }
 }
 
-/// One related record. Navigation is a view push inside whatever stack hosts
-/// the page, so no new `navigationDestination` and no deep-link mapping.
+/// One related record: its kind's symbol, the label, the date as the detail
+/// line. A record with a page opens it as a whole row, without a chevron;
+/// navigation is a view push inside whatever stack hosts the page.
 struct RelatedRecordRow: View {
     let link: RelatedLink
 
     var body: some View {
         if link.kind.opensInApp {
-            NavigationLink {
-                RelatedRecordDestination(link: link)
-            } label: {
-                RelatedRecordRowLabel(link: link, opens: true)
-            }
-            .buttonStyle(.plain)
+            label
+                .hlRowLink { RelatedRecordDestination(link: link) }
+                .accessibilityIdentifier("related.row.\(link.kind.rawValue)")
         } else {
-            RelatedRecordRowLabel(link: link, opens: false)
+            label
+                .accessibilityIdentifier("related.row.\(link.kind.rawValue)")
         }
     }
-}
 
-struct RelatedRecordRowLabel: View {
-    let link: RelatedLink
-    /// Opens a page. Repo standard R8 forbids a hand-drawn chevron outside the
-    /// settings rows, so (like the episode's document rows) an opening row is a
-    /// plain link in primary ink and a visit or vaccination reads secondary.
-    let opens: Bool
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let stacked = dynamicTypeSize.isAccessibilitySize
-        HStack(spacing: HLSpace.sm) {
-            if !stacked {
-                Image(systemName: link.kind.icon)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
-            }
-            let layout = stacked
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xxs))
-                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: HLSpace.sm))
-            layout {
-                Text(verbatim: link.label)
-                    .font(.hlSubhead)
-                    .foregroundStyle(opens ? HLText.primary : HLText.secondary)
-                    .lineLimit(stacked ? nil : 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let date = RelatedRecordFormat.date(link.date) {
-                    Text(verbatim: date)
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                        .fixedSize()
-                }
-            }
+    private var label: some View {
+        HLRow(
+            title: Text(verbatim: link.label),
+            detail: RelatedRecordFormat.date(link.date).map { Text(verbatim: $0) }
+        ) {
+            HLRowGlyph(symbol: link.kind.icon)
         }
-        .padding(.vertical, HLSpace.xxs)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: RelatedRecordFormat.spokenLabel(link)))
-        .accessibilityAddTraits(opens ? .isButton : [])
-        // On the label itself: it is the one accessibility element of the row.
-        .accessibilityIdentifier("related.row.\(link.kind.rawValue)")
     }
 }
 
@@ -130,7 +90,7 @@ enum RelatedRecordFormat {
     }
 }
 
-/// #141 — the related list for a page whose own read does not carry it
+/// The related list for a page whose own read does not carry it
 /// (an episode and a medication are opened from their list rows). The page
 /// holds this in `@State`, starts ``load(_:)`` from its `.task`, and puts
 /// ``RelatedRecordsLoadedSection`` at its end.
@@ -188,14 +148,10 @@ struct RelatedRecordsLoadedSection: View {
         case let .loaded(links):
             RelatedRecordsSection(links: links)
         case .failed:
-            HLCard {
+            HLCard("related.title") {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("related.title")
-                    Text("related.loadFailed")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary, size: .compact) {
+                    HLEmptyNote("related.loadFailed")
+                    HLButton(HLControlWord.retry.key, variant: .secondary) {
                         Task { await model.reload() }
                     }
                     .accessibilityIdentifier("related.retry")

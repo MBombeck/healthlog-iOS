@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.2 FW5-A — clinician share-link contract (server B1), extended by
+/// **Clinician share-link contract (server B1), extended by
 /// CU-12 for server v1.32.39.**
 ///
 /// Pins the create/list/revoke wire shapes against the *real* `APIClient` with a

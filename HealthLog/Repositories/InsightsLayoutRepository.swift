@@ -51,7 +51,7 @@ public actor InsightsLayoutRepository {
 
     private var cached: InsightsLayout?
     private var cachedAt: Date?
-    /// **CU-20 (#69)** — last `updatedAt` seen from `/api/insights/layout`.
+    /// Last `updatedAt` seen from `/api/insights/layout`.
     /// Cleared by ``reset()``, whose DELETE response carries no token
     /// (`api/insights/layout/route.ts:232-245`); the next write is then
     /// unconditional rather than guarded by a token the reset invalidated.
@@ -87,7 +87,7 @@ public actor InsightsLayoutRepository {
         do {
             let req: APIRequest<InsightsLayout> = .get("/api/insights/layout")
             let fetched = try await api.send(req)
-            // CU-20 — take the token off the RAW response: `reconciled()`
+            // Take the token off the RAW response: `reconciled()`
             // rebuilds the layout and must not be relied on to carry it.
             baseUpdatedAt = fetched.updatedAt
             let payload = fetched.reconciled()
@@ -119,16 +119,12 @@ public actor InsightsLayoutRepository {
         _ layout: InsightsLayout,
         idempotencyKey: IdempotencyKey
     ) async throws -> InsightsLayout {
-        do {
-            return try await put(layout, idempotencyKey: idempotencyKey)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            // Server merge-preserves stored sections on a partial PUT (GH #19,
-            // v1.16.13+), so the replay payload no longer needs a sections echo.
-            await enqueue(
-                layout.filteringForServer(),
-                idempotencyKey: idempotencyKey
-            )
-            throw err
+        // Server merge-preserves stored sections on a partial PUT (GH #19,
+        // v1.16.13+), so the replay payload no longer needs a sections echo.
+        let payload = try encoder.encode(OutboxQueue.Payloads.UpdateInsightsLayout(layout: layout.filteringForServer()))
+        let op = OutboxQueue.Operation(kind: .updateInsightsLayout, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
+            try await put(layout, idempotencyKey: idempotencyKey)
         }
     }
 
@@ -143,7 +139,7 @@ public actor InsightsLayoutRepository {
         let echoed = try await api.send(req).reconciled()
         cached = echoed
         cachedAt = clock()
-        // CU-20 — the DELETE reset takes no token AND returns none
+        // The DELETE reset takes no token AND returns none
         // (`route.ts:232-245` responds with the bare defaults). Keeping the old
         // one would send a token for a row that was just rewritten, so the next
         // guarded PUT would 409 on a change the user just made themselves.
@@ -176,7 +172,7 @@ public actor InsightsLayoutRepository {
         idempotencyKey: IdempotencyKey
     ) async throws -> InsightsLayout {
         // A1 (v1.15.11 layout v2) — the verbatim-section echo workaround is
-        // GONE (GH #19). Server v1.16.13/1.16.14 MERGE-preserves the stored
+        // GONE. Server v1.16.13/1.16.14 MERGE-preserves the stored
         // sections on a PUT that omits the field, so a tiles-only iOS PUT no
         // longer resets the operator's WEB section arrangement. Send a plain
         // `filteringForServer()` body: no donor GET, no cache backfill. A
@@ -210,19 +206,6 @@ public actor InsightsLayoutRepository {
             // side effect, so read the token from there.
             _ = try await fetch()
             return baseUpdatedAt
-        }
-    }
-
-    private func enqueue(_ layout: InsightsLayout, idempotencyKey: IdempotencyKey) async {
-        do {
-            let payload = try encoder.encode(OutboxQueue.Payloads.UpdateInsightsLayout(layout: layout))
-            try await outbox.enqueue(.init(
-                kind: .updateInsightsLayout,
-                payload: payload,
-                idempotencyKey: idempotencyKey.raw
-            ))
-        } catch {
-            HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
         }
     }
 }

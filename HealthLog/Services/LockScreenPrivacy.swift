@@ -30,6 +30,9 @@ import Foundation
 enum LockScreenPrivacy {
     /// UserDefaults key for the "hide medication name on lock screen" opt-out.
     static let hideMedicationNameKey = "hl.privacy.hideMedicationNameOnLockScreen.v1"
+    /// The key of "Hide content in notifications" (``NotificationContentPrivacy``),
+    /// here so the widget reads it without that type.
+    static let hideNotificationContentKey = "hl.privacy.hideNotificationContent.v1"
 
     /// Shared App-Group identifier. Single source of truth is
     /// `WidgetAppGroup.identifier`; duplicated here as a bare constant so this
@@ -48,7 +51,15 @@ enum LockScreenPrivacy {
 
     /// `true` when the user has opted in to hide medication names on
     /// lock-screen surfaces. Defaults to `false` (current behaviour).
+    ///
+    /// "Hide content in notifications" (``NotificationContentPrivacy``) hides
+    /// names too, so every surface that honours this follows it.
     static func hideMedicationName(defaults: UserDefaults = LockScreenPrivacy.sharedDefaults) -> Bool {
+        hideMedicationNameSetting(defaults: defaults) || defaults.bool(forKey: hideNotificationContentKey)
+    }
+
+    /// The switch itself, without the content option (the settings toggle).
+    static func hideMedicationNameSetting(defaults: UserDefaults = LockScreenPrivacy.sharedDefaults) -> Bool {
         defaults.bool(forKey: hideMedicationNameKey)
     }
 

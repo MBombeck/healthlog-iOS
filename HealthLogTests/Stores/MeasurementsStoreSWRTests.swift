@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.6.2.3 F2-CHARTLAG — pins the contract that:
+/// Pins the contract that:
 ///
 /// 1. `MeasurementsStore.load()` routes through `SWRCoordinator.observe`
 ///    when a coordinator is wired, emitting the standard

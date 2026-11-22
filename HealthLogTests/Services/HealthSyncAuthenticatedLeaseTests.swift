@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 
-/// Phase 07 Wave 1 — admission and revalidation for the shared health-sync lease.
+/// Admission and revalidation for the shared health-sync lease.
 ///
 /// The three properties this suite pins are the ones every later importer
 /// depends on: admission is all-or-nothing, a change to *any* of owner /

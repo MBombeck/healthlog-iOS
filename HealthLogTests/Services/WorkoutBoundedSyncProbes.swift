@@ -1,4 +1,4 @@
-// 22-02 — the three fixtures this plan added to `WorkoutBoundedSyncTests`.
+// The three fixtures this plan added to `WorkoutBoundedSyncTests`.
 //
 // Split out rather than grown inside it: the overrun demonstration and the
 // arrival barrier took that file from 508 lines to 665, past SwiftLint's
@@ -35,7 +35,7 @@ import Testing
         }
     }
 
-    /// **22-02 (D-14-02-A), closed in REG (1.5)** — "the later callers have
+    /// **22-02, closed in REG (1.5)** — "the later callers have
     /// made their join decision", as a barrier instead of a hope.
     ///
     /// The 22-02 gate was an actor of its own: a caller arrived there and only
@@ -102,7 +102,7 @@ import Testing
         private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
         private(set) var modes: [WorkoutSyncPassMode] = []
         private(set) var partitions: [String] = []
-        /// **22-02** — how often the coordinator ran a pass this case did not
+        /// How often the coordinator ran a pass this case did not
         /// seed. Counted rather than trapped: see `run(partition:mode:)`.
         private(set) var overrunCount = 0
         private let seededCount: Int
@@ -119,7 +119,7 @@ import Testing
             self.report = report
         }
 
-        /// **22-02 — an overrun FAILS; it does not trap.**
+        /// **An overrun FAILS; it does not trap.**
         ///
         /// This used to end in a bare `pendingResults.removeFirst()`. One pass
         /// more than the case seeded — a lost race in the coordinator, a

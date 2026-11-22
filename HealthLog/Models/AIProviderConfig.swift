@@ -1,6 +1,6 @@
 import Foundation
 
-/// W-B186 COACH-1 (#24) — origin of the AI provider that can actually serve
+/// Origin of the AI provider that can actually serve
 /// the user, sent on `GET /api/user/ai-provider` as `managedBy` since server
 /// v1.16.16. `"server"` is the previously-`null` admin/operator-managed case:
 /// the server holds the key, so the per-user provider fields are empty but the
@@ -51,7 +51,7 @@ public enum AIConsentTarget: Sendable, Equatable {
 /// only their last-4-character preview (`"...XXXX"`) plus the `hasXKey`
 /// boolean flag are exposed for the configured-or-not affordance.
 ///
-/// **W-B186 COACH-1 (#24):** server v1.16.16 added `aiAvailable` + `managedBy`
+/// Server v1.16.16 added `aiAvailable` + `managedBy`
 /// so the Coach can be shown whenever a provider can actually serve the user —
 /// including the admin/server-managed case where the per-user `provider` field
 /// is `null`. Both are optional/tolerant: an older server omits them and the
@@ -66,15 +66,19 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
     public let hasOpenaiKey: Bool
     public let openaiKeyPreview: String?
     public let hasLocalKey: Bool
+    /// **#184 (server v1.48.3)** — the Local provider's own model, whichever
+    /// provider is selected. Since then `model` is the model of the ACTIVE
+    /// provider. `nil` on an older server, where `model` is one shared column.
+    public let localModel: String?
 
-    /// W-B186 COACH-1 — `true` when ANY provider can answer (personal key,
+    /// `true` when ANY provider can answer (personal key,
     /// local model, OR the operator's server/admin-managed key). `nil` on an
     /// older server that doesn't send the field — callers MUST treat `nil` as
     /// "unknown, fall back to the per-provider resolution" so legacy servers
     /// behave exactly as before.
     public let aiAvailable: Bool?
 
-    /// W-B186 COACH-1 — raw `managedBy` wire value (`"user"|"local"|"server"`).
+    /// Raw `managedBy` wire value (`"user"|"local"|"server"`).
     /// Decoded via ``managedByResolved``; kept raw here for `Codable` round-trip.
     public let managedBy: String?
 
@@ -88,7 +92,8 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         openaiKeyPreview: String? = nil,
         hasLocalKey: Bool = false,
         aiAvailable: Bool? = nil,
-        managedBy: String? = nil
+        managedBy: String? = nil,
+        localModel: String? = nil
     ) {
         self.provider = provider
         self.model = model
@@ -98,6 +103,7 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         self.hasOpenaiKey = hasOpenaiKey
         self.openaiKeyPreview = openaiKeyPreview
         self.hasLocalKey = hasLocalKey
+        self.localModel = localModel
         self.aiAvailable = aiAvailable
         self.managedBy = managedBy
     }
@@ -120,7 +126,26 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         AIProvider.fromWire(provider) ?? .unconfigured
     }
 
-    // MARK: - W-B186 COACH-1 (#24) — effective AI availability
+    /// The model a provider's card shows (#184).
+    ///
+    /// - Local: `localModel`; without it (an older server) `model` while
+    ///   Local is the active provider, since that is the shared column then.
+    /// - OpenAI / Anthropic: `model`, unless Local is active on a server that
+    ///   keeps Local's own model (`localModel` sent): then `model` is Local's
+    ///   and the shared cloud model is not part of the read, so the card
+    ///   starts empty and saving it untouched changes nothing.
+    public func model(for card: AIProvider) -> String? {
+        switch card {
+        case .local:
+            localModel ?? (resolvedProvider == .local ? model : nil)
+        case .anthropic, .openai:
+            resolvedProvider == .local && localModel != nil ? nil : model
+        case .unconfigured, .openaiCompatible:
+            model
+        }
+    }
+
+    // MARK: - Effective AI availability
 
     /// The decoded `managedBy` origin. ``AIManagedBy/unknown`` on an older
     /// server (field absent) so the pre-COACH-1 per-provider path is taken.
@@ -128,7 +153,7 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         AIManagedBy.fromWire(managedBy)
     }
 
-    /// W-B186 COACH-1 — the server's effective-availability boolean, or `nil`
+    /// The server's effective-availability boolean, or `nil`
     /// when the server doesn't send it (older deployment). Callers gate Coach
     /// visibility on this **only when present**; `nil` means "unknown, use the
     /// legacy per-provider resolution" so a pre-1.16.16 server is unchanged.
@@ -166,7 +191,7 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         aiConsentTarget != .unavailable
     }
 
-    /// W-B186 COACH-1 — `true` only when the server explicitly reports NO
+    /// `true` only when the server explicitly reports NO
     /// provider can serve the user (`aiAvailable == false`). This is the sole
     /// case where the Coach stays genuinely hidden. `nil`/absent is NOT this —
     /// an older server falls through to the legacy per-provider resolution.
@@ -190,7 +215,7 @@ public struct AIProviderConfig: Codable, Sendable, Equatable {
         case .anthropic: hasAnthropicKey
         case .openai: hasOpenaiKey
         case .local: hasLocalKey && baseUrl?.isEmpty == false
-        // CU-16 — the base URL + key of an OpenAI-compatible endpoint live in
+        // The base URL + key of an OpenAI-compatible endpoint live in
         // server columns iOS never reads (there is no `hasOpenaiCompatibleKey`
         // flag). The server having SELECTED this provider is the only signal we
         // have; painting "Nicht konfiguriert" over it would assert a defect we

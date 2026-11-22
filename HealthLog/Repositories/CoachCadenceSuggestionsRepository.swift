@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-COACH-CADENCE (#30) — proactive coach cadence-suggestion action wire.**
+/// **Proactive coach cadence-suggestion action wire.**
 ///
 /// Thin wrapper over the **action** leg of the proactive coach cadence route:
 ///

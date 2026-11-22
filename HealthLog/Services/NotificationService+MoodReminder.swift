@@ -3,12 +3,12 @@ import Foundation
     import UserNotifications
 #endif
 
-/// **v0.10.0 W-Mood-B** — UserDefaults mirror of the server's
+/// UserDefaults mirror of the server's
 /// `notificationPrefs.mood.reminderHour`.
 ///
 /// The server (v1.7.0) is the source of truth, but the local scheduler runs on
 /// every foreground — sometimes before the notification-prefs payload has
-/// loaded (or while offline / standalone). This mirror lets the scheduler read
+/// loaded (or while offline). This mirror lets the scheduler read
 /// a sensible hour immediately: the Settings card + the prefs-load path write
 /// it whenever the server value is known; the scheduler reads it with a 22:00
 /// fallback. UserDefaults is the correct tier — it's a UI-pref echo, not the
@@ -29,13 +29,13 @@ public enum MoodReminderPrefStore {
     }
 }
 
-/// **MED-4 / AUDIT-PARITY C3** — UserDefaults mirror of the server's
+/// UserDefaults mirror of the server's
 /// `notificationPrefs.medication.lowStockRunwayDays` low-supply threshold.
 ///
 /// The server cron is the authority for *firing* the alert, but the medication
 /// card / detail screen needs the threshold to decide when to render the runway
 /// ("≈ X Tage") — and that screen is reachable before the Notifications-prefs
-/// payload has loaded (or while offline / standalone). This mirror lets any
+/// payload has loaded (or while offline). This mirror lets any
 /// medication surface read the threshold immediately: the Settings card + the
 /// prefs cold-read write it whenever the server value is known; medication
 /// screens read it. `nil` (no key written, OR an explicit off) means the alert
@@ -69,7 +69,7 @@ public enum LowStockRunwayPrefStore {
 
 #if canImport(UserNotifications)
 
-    /// **v0.10.0 W-Mood-B — iOS-local evening mood reminder.**
+    /// **iOS-local evening mood reminder.**
     ///
     /// The server APNs cron path (v1.7.0) is a backstop; this local scheduler
     /// is the load-bearing reliability fix (R-Mood-5). It arms a **repeating**
@@ -108,7 +108,7 @@ public enum LowStockRunwayPrefStore {
         /// When disabled or auth-denied → the pending reminder is cancelled.
         /// Otherwise a **repeating** daily reminder is (re-)armed at the chosen
         /// hour — a single OS-delivered trigger with no background re-arm
-        /// dependency (H2). Idempotent: re-running replaces the same-id request
+        /// dependency. Idempotent: re-running replaces the same-id request
         /// so a changed hour re-arms cleanly. Never throws — a scheduling hiccup
         /// must not break the foreground path.
         @MainActor
@@ -120,8 +120,9 @@ public enum LowStockRunwayPrefStore {
         ) async {
             let center = UNUserNotificationCenter.current()
 
-            // Gate 1 — opted out → cancel + done.
-            guard enabled else {
+            // Gate 1 — opted out, or this device does not plan reminders
+            // (an iPad next to an active iPhone) → cancel + done.
+            guard enabled, plansLocalReminders() else {
                 center.removePendingNotificationRequests(
                     withIdentifiers: [Self.moodReminderLocalIdentifier]
                 )
@@ -146,7 +147,7 @@ public enum LowStockRunwayPrefStore {
                 now: now,
                 calendar: calendar
             )
-            // Build 272 — a HealthLog Focus filter must HOLD the routine nudge
+            // A HealthLog Focus filter must HOLD the routine nudge
             // back, not delete it. Removing the pending request and then handing
             // the rebuilt one to the Focus-gated `addLocalNotification` (which
             // refuses to add under Focus) deleted the repeating trigger for every
@@ -214,7 +215,7 @@ public enum LowStockRunwayPrefStore {
         /// repeating, the `MOOD_REMINDER` category + the routing userInfo)
         /// without `UNUserNotificationCenter` authorization.
         ///
-        /// **v0.14.1 H2 — repeating daily trigger.** A bare `hour:minute`
+        /// **Repeating daily trigger.** A bare `hour:minute`
         /// `UNCalendarNotificationTrigger(repeats: true)` fires at the next
         /// matching wall-clock time and then every day thereafter, delivered by
         /// iOS with no app involvement. The `now` / `calendar` parameters are
@@ -229,7 +230,7 @@ public enum LowStockRunwayPrefStore {
             content.title = String(localized: "How are you feeling?")
             content.body = String(localized: "Take a moment to log your mood for today.")
             content.sound = .default
-            // v0.10.0 W10 M-3 — a daily wellness nudge is NOT urgent: keep it
+            // A daily wellness nudge is NOT urgent: keep it
             // at `.active` (the default) and explicitly so. The app holds the
             // time-sensitive entitlement for *medication* reminders only;
             // marking a mood reminder `.timeSensitive`/`.critical` is an
@@ -241,6 +242,8 @@ public enum LowStockRunwayPrefStore {
             // The receive side keys on the eventType marker to route a body-tap
             // to the mood quick-entry sheet (see `dispatchAction`).
             content.userInfo = ["eventType": Self.categoryMood]
+            // Hide content in notifications: only the neutral text is stored.
+            NotificationContentPrivacy.apply(to: content, kind: .reminder)
 
             let clampedHour = max(0, min(23, hour))
             // A repeating calendar trigger matches only the components we set —

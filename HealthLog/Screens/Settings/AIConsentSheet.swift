@@ -5,7 +5,7 @@ import SwiftUI
 /// provider change. Sheet copy enumerates the data flow, the anonymisation
 /// promise, and the revoke path.
 struct AIConsentSheet: View {
-    /// Bug 5 (v0.14.8) — distinguishes WHICH data-flow this consent governs so
+    /// Bug 5 — distinguishes WHICH data-flow this consent governs so
     /// the copy never asserts a provider the client can't actually know.
     enum Context {
         /// Server (External) AI: data goes to the user's own server, which then
@@ -22,7 +22,7 @@ struct AIConsentSheet: View {
     /// Defaults to `.serverMediated` because both current call sites (the shell
     /// gate + the Coach server-fallback) are server-mediated grants.
     var context: Context = .serverMediated
-    /// #143 — the operator-held services the server names in
+    /// The operator-held services the server names in
     /// `ai.consent.recipients` while it reports `needed` (`OpenAI`,
     /// `Anthropic`, an endpoint host). When present, the server-mediated copy
     /// names them as where the data goes instead of "its AI provider".
@@ -30,27 +30,18 @@ struct AIConsentSheet: View {
     let onAccept: () -> Void
     let onDecline: () -> Void
 
+    /// A required decision in the sheet frame: the decision is the title,
+    /// the X at the leading edge declines like the "Decline" button beside
+    /// "Accept", and swiping down is locked so no answer is skipped.
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    // T2-4 + Y8: hero icon stays mono; size lifted off the
-                    // raw 32pt literal onto .hlLargeTitle so Dynamic Type
-                    // scales the glyph alongside the title beside it.
-                    Image(systemName: "sparkles")
-                        .font(.hlLargeTitle.weight(.light))
-                        .foregroundStyle(HLText.primary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    Text("Enable assistant insights")
-                        .font(.hlLargeTitle)
-                        .foregroundStyle(HLText.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        HLSheetScaffold("Enable assistant insights", onClose: onDecline) {
+            HLPage {
+                Text(consentCopy)
+                    .font(.hlBody)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    Text(consentCopy)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
+                HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         HLIconTextRow(
                             icon: "lock.shield",
@@ -73,50 +64,21 @@ struct AIConsentSheet: View {
                             verbatim: String(localized: "You can disable transmission at any time in Settings → Assistant.")
                         )
                     }
-                    .padding(HLSpace.md)
-                    .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md))
-
-                    if showsExternalProcessingDisclosure {
-                        legalDisclosure
-                    }
-
-                    Spacer(minLength: HLSpace.xl)
                 }
-                .padding(HLSpace.lg)
-            }
-            // v0.5.x C-9 — iOS 26+ soft scroll-edge so consent body blurs
-            // into the sheet's Liquid Glass header instead of clipping cleanly.
-            // iOS 18-25: no-op (system stays flat-translucent).
-            .hlScrollEdgeSoft()
-            .navigationTitle("Data flow")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Decline", action: onDecline)
+
+                if showsExternalProcessingDisclosure {
+                    legalDisclosure
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: HLSpace.sm) {
-                    // v0.14.4 FW-COACH — pin the primary CTA's fill to the
-                    // monochrome `HLAccent.primary` token so it matches the
-                    // tint the button's WCAG label-clamp samples. Without this
-                    // the fill inherited the sheet's ambient `.tint` (the
-                    // AccentColor asset), which could resolve near-white in
-                    // light mode → white fill under the white label
-                    // (white-on-white). Pinning fill + clamped label to the
-                    // same token guarantees contrast in light AND dark.
-                    HLButton(
-                        String(localized: "Accept"),
-                        variant: .primary,
-                        size: .large,
-                        action: onAccept
-                    )
-                    .tint(HLAccent.primary)
-                    // 1.4 B2-c — no third "change it anytime" line: the
-                    // last bullet above already says how to take it back.
+            // Locked at both ends of the sheet's own discard guard (which
+            // unlocks while nothing is typed), so no swipe skips the answer.
+            .interactiveDismissDisabled(true)
+            .hlBottomBar {
+                HLButtonPair {
+                    HLButton("Accept", variant: .primary, action: onAccept)
+                } secondary: {
+                    HLButton("Decline", variant: .secondary, action: onDecline)
                 }
-                .padding(HLSpace.lg)
-                .background(HLMaterialBackground(.regularMaterial))
             }
         }
         .interactiveDismissDisabled(true)
@@ -131,37 +93,33 @@ struct AIConsentSheet: View {
     /// only a genuinely user-chosen local/on-device route omits this block.
     /// Mirrors the wording of `src/app/privacy/page.tsx`.
     private var legalDisclosure: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Label(
-                String(localized: "consent.legal.leavesDevice"),
-                systemImage: "iphone.and.arrow.forward"
-            )
-            .font(.hlFootnote.weight(.semibold))
-            .foregroundStyle(HLText.primary)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                Label(
+                    String(localized: "consent.legal.leavesDevice"),
+                    systemImage: "iphone.and.arrow.forward"
+                )
+                .font(.hlFootnote.weight(.semibold))
+                .foregroundStyle(HLText.primary)
 
-            Text(subProcessorDisclosure)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(subProcessorDisclosure)
+                    .hlText(.rowSubtitle)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Text(String(localized: "consent.legal.transferRetention"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(String(localized: "consent.legal.transferRetention"))
+                    .hlText(.rowSubtitle)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Text(String(localized: "consent.legal.article9"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(String(localized: "consent.legal.article9"))
+                    .hlText(.footnote)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HLSpace.md)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md))
         .accessibilityElement(children: .combine)
     }
 
     private var consentCopy: String {
-        // Bug 5 (v0.14.8) — never hardcode a third-party provider name in the
+        // Bug 5 — never hardcode a third-party provider name in the
         // server (External) AI path. The client cannot know which provider the
         // *server* uses (it's a server/operator concern), so the old switch that
         // asserted a concrete vendor/model was a category error. For
@@ -176,7 +134,7 @@ struct AIConsentSheet: View {
             case .anthropic: "Anthropic"
             case .openai: "OpenAI"
             case .local: String(localized: "your local LLM")
-            // CU-16 — an OpenAI-compatible endpoint can be anyone's; naming a
+            // An OpenAI-compatible endpoint can be anyone's; naming a
             // company here would be an invention. The neutral wording is the
             // honest one.
             case .unconfigured, .openaiCompatible: String(localized: "your assistant provider")
@@ -205,7 +163,7 @@ struct AIConsentSheet: View {
             case .anthropic: "Anthropic, PBC"
             case .openai: "OpenAI, L.L.C."
             case .local: String(localized: "your local LLM")
-            // CU-16 — an OpenAI-compatible endpoint is NOT necessarily OpenAI.
+            // An OpenAI-compatible endpoint is NOT necessarily OpenAI.
             // Naming a legal entity we cannot identify would be a false
             // sub-processor disclosure; stay generic.
             case .unconfigured, .openaiCompatible: String(localized: "your assistant provider")
@@ -217,7 +175,7 @@ struct AIConsentSheet: View {
         }
     }
 
-    /// Bug 5 (v0.14.8) — the server-mediated body copy, composed from two
+    /// Bug 5 — the server-mediated body copy, composed from two
     /// localized sentences so each literal stays under the line-length budget and
     /// translators get focused units. The data goes to the user's own server,
     /// which forwards it onward — never a hardcoded third-party name.
@@ -234,7 +192,7 @@ struct AIConsentSheet: View {
         return sent + " " + forwarded
     }
 
-    /// #143 — the server-named recipients as one locale-formatted list
+    /// The server-named recipients as one locale-formatted list
     /// ("OpenAI und Anthropic"), `nil` when the server named none.
     private var recipientList: String? {
         let names = recipients.filter { !$0.isEmpty }
@@ -242,7 +200,7 @@ struct AIConsentSheet: View {
         return names.formatted(.list(type: .and))
     }
 
-    /// Bug 5 (v0.14.8) — the "who receives this data" bullet. Server-mediated
+    /// Bug 5 — the "who receives this data" bullet. Server-mediated
     /// grants name the server (the client can't trust the onward provider name);
     /// user-chosen grants name the provider the user themselves picked.
     private var recipientBulletText: String {

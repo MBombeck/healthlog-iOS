@@ -2,7 +2,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// **v0.8.4 WWIDGET-2 — next-scheduled-dose widget.**
+/// **Next-scheduled-dose widget.**
 ///
 /// Home-screen (`systemSmall` / `systemMedium`) + Lock-Screen
 /// (`accessoryRectangular` / `accessoryCircular`). Paints the soonest due
@@ -39,7 +39,7 @@ struct NextDoseEntry: TimelineEntry {
     let date: Date
     let dose: WidgetSnapshot.NextDose?
 
-    /// **v0.10.0 W-Widget-2Tap** — whether the current dose's "Genommen"
+    /// Whether the current dose's "Genommen"
     /// button is armed for confirm (first tap landed). When `true` the button
     /// renders "Bestätigen?"; a fresh tap on this state commits the intake.
     /// Read from the App Group pending-confirm marker at timeline-build time;
@@ -51,13 +51,27 @@ struct NextDoseEntry: TimelineEntry {
     /// SAME clock (12h / 24h / auto) the app does. Defaults to "AUTO".
     var timeFormatRaw: String = "AUTO"
 
-    /// **audit-v0162 M3** — `true` when the backing snapshot's `generatedAt`
+    /// `true` when the backing snapshot's `generatedAt`
     /// is older than ``WidgetTimelinePolicy/nextDoseStaleThreshold`` (the app
     /// hasn't refreshed it in a long time — e.g. no BGTask over a weekend). The
     /// view then paints the neutral "open the app" state instead of a stale
     /// dose, and `dose` is forced to `nil` so the interactive "Genommen" button
     /// is suppressed (no intake recorded against a slot that has long passed).
     var isStale: Bool = false
+
+    /// What the last "Taken" tap on this dose did, until the app has written
+    /// a newer snapshot (``WidgetDoseOutcomeStore``).
+    var outcome: WidgetDoseOutcomeStore.Kind?
+
+    /// Smart Stack ranking: high around the slot, low otherwise, zero without
+    /// an open dose or once a tap saved it (``NextDoseRelevance``).
+    var relevance: TimelineEntryRelevance? {
+        TimelineEntryRelevance(score: NextDoseRelevance.relevance(
+            for: dose?.scheduledAt,
+            now: date,
+            settled: outcome?.settlesDose ?? false
+        ))
+    }
 }
 
 /// Reads the App Group snapshot + builds a refresh timeline. The timeline
@@ -67,13 +81,34 @@ struct NextDoseEntry: TimelineEntry {
 struct NextDoseProvider: TimelineProvider {
     private let store: WidgetSnapshotStore
     private let pendingStore: WidgetPendingConfirmStore
+    private let outcomeStore: WidgetDoseOutcomeStore
 
     init(
         store: WidgetSnapshotStore = WidgetSnapshotStore(),
-        pendingStore: WidgetPendingConfirmStore = WidgetPendingConfirmStore()
+        pendingStore: WidgetPendingConfirmStore = WidgetPendingConfirmStore(),
+        outcomeStore: WidgetDoseOutcomeStore = WidgetDoseOutcomeStore()
     ) {
         self.store = store
         self.pendingStore = pendingStore
+        self.outcomeStore = outcomeStore
+    }
+
+    /// The tap outcome of `dose`, or `.recorded` when the confirmation push
+    /// recorded it as taken elsewhere (#189 (1)).
+    static func outcome(
+        store: WidgetDoseOutcomeStore,
+        dose: WidgetSnapshot.NextDose?,
+        snapshot: WidgetSnapshot,
+        now: Date
+    ) -> WidgetDoseOutcomeStore.Kind? {
+        if let dose, ResolvedDoseLedger().contains(
+            medicationId: dose.medicationId,
+            slotAt: dose.scheduledAt,
+            recordedAfter: snapshot.generatedAt
+        ) {
+            return .recorded
+        }
+        return store.kind(for: dose, snapshotGeneratedAt: snapshot.generatedAt, now: now)
     }
 
     func placeholder(in _: Context) -> NextDoseEntry {
@@ -83,42 +118,76 @@ struct NextDoseProvider: TimelineProvider {
     func getSnapshot(in _: Context, completion: @escaping @Sendable (NextDoseEntry) -> Void) {
         let now = Date.now
         let snapshot = store.read() ?? .placeholder
-        // audit-v0162 M3 — a snapshot the app hasn't refreshed in a long time
+        // A snapshot the app hasn't refreshed in a long time
         // (no BGTask over a weekend) must not surface a stale dose; drop it so
         // the "open the app" state renders and the action button is suppressed.
-        let stale = WidgetTimelinePolicy.isNextDoseStale(generatedAt: snapshot.generatedAt, now: now)
+        let stale = WidgetTimelinePolicy.isNextDoseUntrusted(
+            generatedAt: snapshot.generatedAt,
+            scheduledAt: snapshot.nextDose?.scheduledAt,
+            now: now
+        )
+        let dose = stale ? nil : snapshot.nextDose
         completion(NextDoseEntry(
             date: now,
-            dose: stale ? nil : snapshot.nextDose,
+            dose: dose,
             pendingConfirm: false,
             timeFormatRaw: snapshot.timeFormatRaw,
-            isStale: stale
+            isStale: stale,
+            outcome: Self.outcome(store: outcomeStore, dose: dose, snapshot: snapshot, now: now)
         ))
     }
 
     func getTimeline(in _: Context, completion: @escaping @Sendable (Timeline<NextDoseEntry>) -> Void) {
         let now = Date.now
         let snapshot = store.read() ?? .placeholder
-        // audit-v0162 M3 — suppress a stale dose (+ its live action button)
+        // Suppress a stale dose (+ its live action button)
         // when the snapshot is older than the next-dose staleness cutoff.
         let stale = WidgetTimelinePolicy.isNextDoseStale(generatedAt: snapshot.generatedAt, now: now)
         let dose = stale ? nil : snapshot.nextDose
-        // Armed only for the dose currently surfaced — a stale or
-        // different-dose marker reads `false` so the button auto-reverts.
-        let pending = dose.map { pendingStore.armed(for: $0.medicationId, now: now) } ?? false
-        let entry = NextDoseEntry(
-            date: now,
-            dose: dose,
-            pendingConfirm: pending,
-            timeFormatRaw: snapshot.timeFormatRaw,
-            isStale: stale
+        let outcome = Self.outcome(store: outcomeStore, dose: dose, snapshot: snapshot, now: now)
+        // Armed only for the slot currently surfaced — a stale or
+        // different-dose marker reads as absent so the button auto-reverts.
+        let armedAt = dose.flatMap { dose in
+            pendingStore.armed(for: dose.medicationId, scheduledFor: dose.scheduledAt, now: now)
+                ? pendingStore.read(now: now)?.armedAt
+                : nil
+        }
+        // The revert is its own frame at the window edge, not a reload request:
+        // WidgetKit does not reload on the second, but it never shows a frame early.
+        // The relevance window edges are frames too, so the Smart Stack sees
+        // the score change at the edge and not at the next reload.
+        let frames = NextDoseRelevance.frames(
+            WidgetTimelinePolicy.pendingConfirmFrames(
+                now: now,
+                armedAt: armedAt,
+                window: WidgetPendingConfirmStore.pendingConfirmWindow
+            ),
+            scheduledAt: dose?.scheduledAt,
+            now: now
         )
-        // When armed, reload again at the window edge so the button reverts to
-        // "Genommen" if the second tap never lands; else the normal cadence.
-        let armReload = now.addingTimeInterval(WidgetPendingConfirmStore.pendingConfirmWindow)
-        let baseReload = WidgetTimelinePolicy.nextDoseReload(after: now, scheduledAt: dose?.scheduledAt)
-        let reload = pending ? min(armReload, baseReload) : baseReload
-        completion(Timeline(entries: [entry], policy: .after(reload)))
+        let entries = frames.map { frame in
+            // #189 (7): from the due time on, a snapshot written long before
+            // it can no longer vouch for the dose; that frame shows no button.
+            let untrusted = stale || WidgetTimelinePolicy.isNextDoseUntrusted(
+                generatedAt: snapshot.generatedAt,
+                scheduledAt: dose?.scheduledAt,
+                now: frame.date
+            )
+            return NextDoseEntry(
+                date: frame.date,
+                dose: untrusted ? nil : dose,
+                pendingConfirm: frame.armed,
+                timeFormatRaw: snapshot.timeFormatRaw,
+                isStale: untrusted,
+                outcome: outcome
+            )
+        }
+        var reload = WidgetTimelinePolicy.nextDoseReload(after: now, scheduledAt: dose?.scheduledAt)
+        // A "not saved" note leaves when its window closes.
+        if outcome == .notSaved, let at = outcomeStore.read()?.at {
+            reload = min(reload, max(now, at.addingTimeInterval(WidgetDoseOutcomeStore.notSavedWindow)))
+        }
+        completion(Timeline(entries: entries, policy: .after(reload)))
     }
 }
 
@@ -126,7 +195,12 @@ struct NextDoseProvider: TimelineProvider {
 
 private struct NextDoseWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: NextDoseEntry
+
+    private var tint: WidgetTint {
+        WidgetTint(renderingMode)
+    }
 
     var body: some View {
         switch family {
@@ -144,14 +218,19 @@ private struct NextDoseWidgetView: View {
     // MARK: Home-screen sizes (interactive)
 
     private var homeSmall: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.stackSpacing) {
             header
             Spacer(minLength: 0)
             if entry.isStale {
                 staleState
             } else if let dose = entry.dose {
                 doseTitle(dose)
-                takenButton(dose)
+                if isSaved {
+                    savedState
+                } else {
+                    takenButton(dose)
+                    notSavedNote
+                }
             } else {
                 emptyState
             }
@@ -159,47 +238,71 @@ private struct NextDoseWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// A tap on this dose was saved or queued: no second button for it.
+    private var isSaved: Bool {
+        entry.outcome == .recorded || entry.outcome == .queued
+    }
+
+    private var savedState: some View {
+        Label {
+            Text(entry.outcome == .queued ? "widget.next_dose.queued" : "widget.next_dose.recorded")
+        } icon: {
+            Image(systemName: entry.outcome == .queued ? "clock.badge.checkmark" : "checkmark.circle.fill")
+                .widgetLayer(.statusSymbol, in: .nextDose)
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(entry.outcome == .queued ? LAColor.textSecondary : LAColor.success)
+        .lineLimit(2)
+        .minimumScaleFactor(0.8)
+    }
+
+    @ViewBuilder
+    private var notSavedNote: some View {
+        if entry.outcome == .notSaved {
+            Text("widget.next_dose.not_saved")
+                .font(.caption2)
+                .foregroundStyle(LAColor.warn)
+                .lineLimit(2)
+        }
+    }
+
     private var homeMedium: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: WidgetMetrics.columnSpacing) {
+            VStack(alignment: .leading, spacing: WidgetMetrics.stackSpacing) {
                 header
                 Spacer(minLength: 0)
                 if entry.isStale {
                     staleState
                 } else if let dose = entry.dose {
                     doseTitle(dose)
+                    notSavedNote
                 } else {
                     emptyState
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
 
-            // audit-v0162 M3 — no interactive button while stale: `entry.dose`
+            // No interactive button while stale: `entry.dose`
             // is already `nil` in that case, so the button never renders and no
             // intake can be recorded against an out-of-date slot.
-            if !entry.isStale, let dose = entry.dose {
+            if !entry.isStale, entry.dose != nil, isSaved {
+                savedState
+                    .frame(maxWidth: WidgetMetrics.actionColumnWidth)
+            } else if !entry.isStale, let dose = entry.dose {
                 takenButton(dose)
-                    .frame(maxWidth: 130)
+                    .frame(maxWidth: WidgetMetrics.actionColumnWidth)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var header: some View {
-        Label {
-            Text("widget.next_dose.header")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(LAColor.textSecondary)
-        } icon: {
-            Image(systemName: "pills.fill")
-                .foregroundStyle(LAColor.accent)
-        }
-        .labelStyle(.titleAndIcon)
+        WidgetHeader(title: Text("widget.next_dose.header"), symbol: "pills.fill", surface: .nextDose)
     }
 
     private func doseTitle(_ dose: WidgetSnapshot.NextDose) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // W-RECONCILE H1 — redact the PHI med name on a locked Home-screen
+        VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
+            // Redact the PHI med name on a locked Home-screen
             // widget, consistent with the lock-screen accessory below.
             Text(dose.medicationName)
                 .font(.headline)
@@ -213,7 +316,7 @@ private struct NextDoseWidgetView: View {
         }
     }
 
-    /// **v0.10.0 W-Widget-2Tap** — the two-step "Genommen" affordance,
+    /// The two-step "Genommen" affordance,
     /// mirroring the Live Activity's `TakenButton`. When not armed it reads
     /// "Genommen"; the first tap arms the App Group pending-confirm marker and
     /// reloads, re-rendering this as "Bestätigen?" — only a fresh tap on that
@@ -228,20 +331,22 @@ private struct NextDoseWidgetView: View {
             )
         ) {
             Label {
-                Text(armed ? "la.med.action.taken.confirm" : "widget.next_dose.taken")
+                Text(armed ? "la.med.action.taken.confirm" : "med.dose.action.take")
             } icon: {
                 Image(systemName: armed ? "checkmark.circle" : "checkmark")
             }
             .font(.subheadline.weight(.semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
-            // b146 — was `.tint(LAColor.accent) + .buttonStyle(.borderedProminent)`,
+            // Was `.tint(LAColor.accent) + .buttonStyle(.borderedProminent)`,
             // which rendered white-on-white in dark mode. Now the shared dark-pill
-            // (explicit fill/text/border, honouring the armed two-state).
-            .laMedTakenPill(pendingConfirm: armed)
+            // (explicit fill/text/border, honouring the armed two-state); the
+            // outlined variant where the system drops the hues.
+            .widgetTakenPill(pendingConfirm: armed, tint: tint)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(armed ? "la.med.action.taken.confirm" : "widget.next_dose.taken"))
+        .widgetLayer(.actionButton, in: .nextDose)
+        .accessibilityLabel(Text(armed ? "la.med.action.taken.confirm" : "med.dose.action.take"))
     }
 
     private var emptyState: some View {
@@ -251,7 +356,7 @@ private struct NextDoseWidgetView: View {
             .lineLimit(2)
     }
 
-    /// **audit-v0162 M3** — shown when the snapshot is too old to trust (the
+    /// Shown when the snapshot is too old to trust (the
     /// app hasn't refreshed the widget in a long time). Neutral prompt to open
     /// the app; carries no dose, no time, and no action button.
     private var staleState: some View {
@@ -264,14 +369,15 @@ private struct NextDoseWidgetView: View {
     // MARK: Lock-Screen accessories (glanceable, non-interactive)
 
     private var accessoryRectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
             if entry.isStale {
-                // audit-v0162 M3 — stale snapshot: prompt to open the app rather
+                // Stale snapshot: prompt to open the app rather
                 // than paint an out-of-date dose as if it were still due.
                 Label {
                     Text("widget.stale.open_app")
                 } icon: {
                     Image(systemName: "exclamationmark.arrow.circlepath")
+                        .widgetLayer(.statusSymbol, in: .nextDose)
                 }
                 .font(.headline)
             } else if let dose = entry.dose {
@@ -279,6 +385,7 @@ private struct NextDoseWidgetView: View {
                     Text(dose.medicationName).lineLimit(1)
                 } icon: {
                     Image(systemName: "pills.fill")
+                        .widgetLayer(.statusSymbol, in: .nextDose)
                 }
                 .font(.headline)
                 // Lock-screen accessory: the medication name is PHI — redact it
@@ -292,6 +399,7 @@ private struct NextDoseWidgetView: View {
                     Text("widget.next_dose.empty")
                 } icon: {
                     Image(systemName: "checkmark.circle")
+                        .widgetLayer(.statusSymbol, in: .nextDose)
                 }
                 .font(.headline)
             }
@@ -304,6 +412,7 @@ private struct NextDoseWidgetView: View {
             AccessoryWidgetBackground()
             Image(systemName: circularSymbol)
                 .font(.title2)
+                .widgetLayer(.statusSymbol, in: .nextDose)
         }
         .widgetAccessibilityLabel(accessoryLabel)
     }
@@ -317,7 +426,7 @@ private struct NextDoseWidgetView: View {
         if entry.isStale {
             Text("widget.stale.open_app")
         } else if let dose = entry.dose {
-            Text("widget.next_dose.header") + Text(": ") + Text(dose.medicationName)
+            Text("\(Text("widget.next_dose.header")): \(Text(dose.medicationName))")
         } else {
             Text("widget.next_dose.empty")
         }

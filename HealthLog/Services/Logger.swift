@@ -18,7 +18,7 @@ import os
 //   6. Token-ähnliche Strings: ≥32 Zeichen [A-Za-z0-9_-] → "[redacted-token]"
 //
 // Alle HLLog-Calls werden über `HLLogger` zentral durch `LogSanitizer.redact()`
-// geführt, damit kein Call-Site eine Redaktion „vergessen“ kann (Audit H-3).
+// geführt, damit kein Call-Site eine Redaktion „vergessen“ kann.
 //
 // Audit-Referenzen: Security H-2 (UUIDs), H-3 (Routing), H-4 (URL-Strip).
 // Doku: docs/security.md  →  „Logging“-Abschnitt.
@@ -36,7 +36,7 @@ public enum LogSanitizer {
 
     /// Match http/https URL inkl. optionalem Path/Query/Fragment. Wir capturen
     /// Scheme + Host getrennt, damit `replace(...)` die URL auf `scheme://host`
-    /// reduziert (Audit H-4).
+    /// reduziert.
     private static let urlRegex: NSRegularExpression? = try? NSRegularExpression(
         pattern: "(https?)://([^/\\s?#]+)(?:[/?#][^\\s]*)?",
         options: []
@@ -49,7 +49,7 @@ public enum LogSanitizer {
 
     /// Canonical UUID 8-4-4-4-12 hex (case-insensitive). Catches Idempotency-Keys
     /// und alle UUID-förmigen Identifier, die der `tokenLikeRegex` ({32,}) verfehlt,
-    /// weil die Bindestriche die Run-Length brechen (Audit H-2).
+    /// weil die Bindestriche die Run-Length brechen.
     private static let uuidRegex: NSRegularExpression? = try? NSRegularExpression(
         pattern: "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         options: []
@@ -76,7 +76,7 @@ public enum LogSanitizer {
         options: []
     )
 
-    /// #57 — step-up elevation tokens (`hle_<64 hex>`). The generic
+    /// Step-up elevation tokens (`hle_<64 hex>`). The generic
     /// `tokenLikeRegex` already swallows the ~68-char contiguous run, but a
     /// dedicated rule gives a clear marker AND defends a shorter/edge-cased
     /// value (a `hle_` head below the {32,} floor would otherwise leak). Matched
@@ -93,7 +93,7 @@ public enum LogSanitizer {
         options: []
     )
 
-    /// v0.13 W2 — BYO-key (device→provider) LLM API-key shapes. Provider keys
+    /// BYO-key (device→provider) LLM API-key shapes. Provider keys
     /// (OpenAI `sk-…` / `sk-proj-…`, Anthropic `sk-ant-…`) start with a short
     /// `sk-` prefix and run to a length BELOW the generic `tokenLikeRegex`
     /// `{32,}` floor only for the prefix segment — but the body is `-`-broken
@@ -107,7 +107,7 @@ public enum LogSanitizer {
         options: []
     )
 
-    /// v0.13 W2 — provider auth header VALUES. `x-api-key` (Anthropic) and
+    /// Provider auth header VALUES. `x-api-key` (Anthropic) and
     /// `x-goog-api-key` (Gemini) carry the raw key. We redact the value after
     /// the header name + colon, leaving the header NAME so a log line stays
     /// debuggable (`x-api-key: [redacted-llm-key]`).
@@ -129,7 +129,7 @@ public enum LogSanitizer {
         s = replace(s, regex: bearerRegex, with: "[redacted-bearer]")
         // Provider auth-header values (x-api-key / x-goog-api-key / …) and the
         // sk-… key shape BEFORE the URL/token sweeps so the key never survives
-        // a partial earlier match (v0.13 W2).
+        // a partial earlier match.
         s = replace(s, regex: providerHeaderRegex, with: "$1: [redacted-llm-key]")
         s = replace(s, regex: llmKeyRegex, with: "[redacted-llm-key]")
         // URL-Strip vor Token-Match: sonst frisst der {32,}-Match die Pfad-Segmente
@@ -140,7 +140,7 @@ public enum LogSanitizer {
         // cuid-style entity IDs (med_/mood_/pr_/…) before the {32,} token
         // sweep — they sit below the token floor, so without this they'd
         // slip through (v0.12 W1 — Security W1-5).
-        // #57 — step-up elevation (`hle_…`) FIRST, before both the entity-ID and
+        // Step-up elevation (`hle_…`) FIRST, before both the entity-ID and
         // the generic token sweeps: an `hle_` token is long enough to also match
         // the ~28-char `entityIDRegex` ([redacted-id]), so it must claim its own
         // `[redacted-elevation]` marker before that rule swallows it.
@@ -185,7 +185,7 @@ public enum HLLog {
 /// die Argumente, formatiert lokal, redacts, und reicht den finalen String an
 /// `os.Logger` weiter.
 ///
-/// **M-7 (v0.6.2) — privacy passthrough:** Call-Sites tagging `.private` (or
+/// **Privacy passthrough:** Call-Sites tagging `.private` (or
 /// `.sensitive` / `.auto`) propagieren ihre Privacy-Intention jetzt ins OSLog —
 /// the message goes out under `.private` at the OS level so `sysdiagnose`
 /// captures redact die Zeile bei Nicht-Developer-Devices automatisch. Default-
@@ -270,7 +270,7 @@ public struct HLLogger: Sendable {
 /// String und liefert via `sanitized` die durch `LogSanitizer.redact()` geführte
 /// Variante.
 ///
-/// **M-7 (v0.6.2):** the interpolation now also tracks whether any segment
+/// The interpolation now also tracks whether any segment
 /// was tagged `.private`, `.sensitive`, or `.auto` so the OS-level privacy
 /// boundary can be honoured (the OS hides `.private` payloads in
 /// `sysdiagnose` for non-developer-signed devices). The sanitizer continues

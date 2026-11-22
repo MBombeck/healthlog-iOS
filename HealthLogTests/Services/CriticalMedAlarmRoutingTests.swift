@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.9.0 W2** — pins the pure AlarmKit routing + schedule-mapping
+/// Pins the pure AlarmKit routing + schedule-mapping
 /// (`CriticalMedAlarmRouting`): the alarm-vs-UNNotification routing
 /// predicate (coexistence = REPLACE), the weekly slot mapping, and the
 /// deterministic alarm-id derivation. AlarmKit-free so it runs on the host
@@ -35,19 +35,8 @@ struct CriticalMedAlarmRoutingTests {
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
             medication: m,
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ) == true)
-    }
-
-    @Test("Ineligible on iOS < 26 (osAvailable == false)")
-    func ineligibleOldOS() {
-        #expect(CriticalMedAlarmRouting.isAlarmEligible(
-            medication: med(),
-            alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: false
-        ) == false)
     }
 
     @Test("Ineligible when AlarmKit unauthorized")
@@ -55,8 +44,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
             medication: med(),
             alarmEnabled: { _ in true },
-            authorized: false,
-            osAvailable: true
+            authorized: false
         ) == false)
     }
 
@@ -65,8 +53,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
             medication: med(),
             alarmEnabled: { _ in false },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ) == false)
     }
 
@@ -76,10 +63,10 @@ struct CriticalMedAlarmRoutingTests {
         let noNotif = med(notificationsEnabled: false)
         let predicate: (String) -> Bool = { _ in true }
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
-            medication: archived, alarmEnabled: predicate, authorized: true, osAvailable: true
+            medication: archived, alarmEnabled: predicate, authorized: true
         ) == false)
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
-            medication: noNotif, alarmEnabled: predicate, authorized: true, osAvailable: true
+            medication: noNotif, alarmEnabled: predicate, authorized: true
         ) == false)
     }
 
@@ -91,8 +78,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
             medication: biweekly,
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ) == true)
     }
 
@@ -101,8 +87,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect(CriticalMedAlarmRouting.isAlarmEligible(
             medication: med(times: []),
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ) == false)
     }
 
@@ -117,10 +102,9 @@ struct CriticalMedAlarmRoutingTests {
         let (alarmMeds, unMeds) = CriticalMedAlarmRouting.route(
             medications: [critical, normal, biweekly],
             alarmEnabled: { alarmOn.contains($0) },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         )
-        // v0.10 R1 §3.5 — critical AND biweekly are both opted-in + eligible
+        // Critical AND biweekly are both opted-in + eligible
         // (biweekly schedules a fixed next-occurrence alarm); normal is not
         // opted in so it stays on the UN path.
         #expect(Set(alarmMeds.map(\.id)) == ["critical", "biweekly"])
@@ -133,8 +117,7 @@ struct CriticalMedAlarmRoutingTests {
         let (alarmMeds, unMeds) = CriticalMedAlarmRouting.route(
             medications: meds,
             alarmEnabled: { _ in true },
-            authorized: false,
-            osAvailable: true
+            authorized: false
         )
         #expect(alarmMeds.isEmpty)
         #expect(unMeds.count == 2)
@@ -187,7 +170,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect((bytes[8] & 0xC0) == 0x80) // RFC-4122 variant
     }
 
-    // MARK: - Orphan purge: snooze survival + removal (HIGH-1 / HIGH-2)
+    // MARK: - Orphan purge: snooze survival + removal
 
     @Test("snooze slot index is outside the scheduled-slot ceiling")
     func snoozeSlotOutsideScheduledRange() {
@@ -240,7 +223,7 @@ struct CriticalMedAlarmRoutingTests {
         #expect(orphans == [slot1])
     }
 
-    // MARK: - v0.10 R1 §3.5 — generalised planner
+    // MARK: - Generalised planner
 
     private func entryMed(
         id: String = "m1",

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// **Phase 21 (21-01) — first-paint instrumentation for the SWR layer.**
+/// **First-paint instrumentation for the SWR layer.**
 ///
 /// `SWRCache` is a `@ModelActor`: every SWR-backed surface awaits `read`
 /// before it can yield `.cached` or `.empty`, so every surface's first paint

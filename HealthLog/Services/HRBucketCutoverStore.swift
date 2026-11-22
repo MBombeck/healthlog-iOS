@@ -3,7 +3,7 @@ import Foundation
 /// Per-User UTC-day boundary marking when the client switches heart-rate
 /// upload from per-sample (raw) to hourly `stats:` buckets.
 ///
-/// **Why a cutover boundary at all? (W-HR-BUCKET-UPLOAD / GH #34)**
+/// **Why a cutover boundary at all?**
 /// The server's nightly PULSE consolidation folds raw per-sample HR rows and
 /// *ignores* the hourly `stats:` rows. So a single UTC day must NOT carry BOTH
 /// raw per-sample HR rows AND hourly `stats:` HR rows from the client — the
@@ -46,7 +46,7 @@ enum HRBucketCutoverStore {
         defaultsKeyPrefix + HealthKitBackfillWindowStore.partitionToken(for: userId)
     }
 
-    /// Build 273 (A7) — the HR-bucket upload cursor (start of the newest
+    /// The HR-bucket upload cursor (start of the newest
     /// 10-minute bucket the coordinator uploaded), per user. Lives here so the
     /// cutover can consult it when it re-arms: logout clears the cutover, and
     /// re-arming at the *next* UTC midnight on a day that already carries
@@ -81,7 +81,7 @@ enum HRBucketCutoverStore {
         if let stored {
             return stored
         }
-        // A7 — a persisted upload cursor means this account is already in
+        // A persisted upload cursor means this account is already in
         // bucket mode on the cursor's UTC day; continue there instead of
         // starting a fresh raw day.
         let armed: Date = if let cursor = defaults.object(forKey: lastBucketKey(for: userId)) as? Date {

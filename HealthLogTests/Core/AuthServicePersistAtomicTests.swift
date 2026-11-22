@@ -234,7 +234,7 @@ struct AuthServicePersistAtomicTests {
         }
         // No fail-key set.
 
-        // #37 — `login` now returns a `LoginOutcome`; the no-MFA happy path
+        // `login` now returns a `LoginOutcome`; the no-MFA happy path
         // resolves to `.session`.
         guard case let .session(session) = try await service.login(email: "fresh@example.com", password: "irrelevant") else {
             Issue.record("expected .session outcome on the no-MFA happy path")

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 07 / plan 07-05 — `MoodRepository.logDurable`.**
+/// **`MoodRepository.logDurable`.**
 ///
 /// The shipped `log(...)` swallowed a failed outbox enqueue behind the transport
 /// error it was already about to throw, so "we queued it" and "we dropped it"

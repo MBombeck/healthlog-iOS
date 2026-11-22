@@ -18,19 +18,14 @@ import SwiftUI
 /// otherwise (e.g. "Text HOME to 741741").
 struct MentalHealthCrisisCard: View {
     let crisis: CrisisResourceSet
-    @Environment(\.openURL) private var openURL
 
-    /// Restrained amber accent (calm, not alarm). Mirrors the web `border-amber-400/50`.
-    private static let accent = Color(red: 0.85, green: 0.6, blue: 0.13)
+    /// Restrained amber accent (calm, not alarm): the app's warning token,
+    /// the web's `border-amber-400/50`.
+    private static let accent: Color = HLColor.statusWarn
 
     var body: some View {
-        HLCard {
+        HLCard("mentalHealth.crisis.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Text("mentalHealth.crisis.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 Text("mentalHealth.crisis.intro")
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
@@ -43,7 +38,7 @@ struct MentalHealthCrisisCard: View {
 
                 Divider()
 
-                HLSectionLabel("mentalHealth.crisis.resourcesTitle")
+                HLCardLabel("mentalHealth.crisis.resourcesTitle")
 
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     ForEach(crisis.resources) { resource in
@@ -77,8 +72,7 @@ struct MentalHealthCrisisCard: View {
             // still shows its contact lines, never a raw catalogue key.
             if let name = Self.name(for: resource.id) {
                 Text(name)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(Array(resource.contacts.enumerated()), id: \.offset) { _, contact in
@@ -91,16 +85,8 @@ struct MentalHealthCrisisCard: View {
     @ViewBuilder
     private func contactView(_ contact: String) -> some View {
         if let url = Self.link(for: contact) {
-            Button {
-                openURL(url)
-            } label: {
-                Text(contact)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLAccent.userBrandTint)
-                    .underline()
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(.isLink)
+            HLTextLink(verbatim: contact, destination: url)
+                .font(.hlSubhead)
         } else {
             Text(contact)
                 .font(.hlSubhead)

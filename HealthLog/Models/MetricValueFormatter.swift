@@ -70,7 +70,7 @@ public enum MetricValueFormatter {
         }
     }
 
-    /// **#115 P2 — the one account-unit scalar formatter.** Converts a
+    /// **The one account-unit scalar formatter.** Converts a
     /// canonical value of `kind` into the account's unit
     /// (`UnitPreferences.transform(for:)`) and renders it at that unit's fixed
     /// precision. Where the transform leaves precision open (the identity

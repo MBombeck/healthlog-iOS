@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.12 P2 — watch contract round-trip.** The phone + watch exchange a
+/// **Watch contract round-trip.** The phone + watch exchange a
 /// single JSON blob under a plist-safe key. These guard the wire format
 /// against drift (a break here would silently stop the watch updating /
 /// acting).

@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "exceptions": [
+    {
+      "path": "HealthLog/Screens/Documents/DocumentComponents.swift",
+      "anchor": "documents.filter.clear",
+      "reason": "Setzt den Dokumentfilter zurück, löscht keine Daten."
+    },
+    {
+      "path": "HealthLog/Screens/Medications/MedicationEfficacySection.swift",
+      "anchor": "med.wirkung.retarget.reset",
+      "reason": "Setzt einen eigenen Zielwert auf den Standard zurück, löscht keine Daten."
+    },
+    {
+      "path": "HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift",
+      "anchor": "signOutRow",
+      "reason": "Abmelden ist rot gezeichnet, löscht aber nichts. Zurücksetzen und Konto löschen bleiben offen und bekommen den Vermerk der Stufe 3."
+    },
+    {
+      "path": "HealthLog/Screens/Settings/TwoFactorManagementScreen.swift",
+      "anchor": "settings.security.twoFactor.disable",
+      "reason": "Zweiten Faktor ausschalten ändert eine Sicherheitseinstellung und löscht keine Daten. Das Entfernen eines Schlüssels bleibt offen."
+    },
+    {
+      "path": "HealthLog/Screens/Settings/Sub/SourcePriorityEditorScreen.swift",
+      "anchor": "Reset to default",
+      "reason": "Stellt die Reihenfolge der Datenquellen wieder her, löscht keine Daten. Die Rückfrage steht schon auf der Seite."
+    },
+    {
+      "path": "HealthLog/Screens/Settings/TwoFactorManagementScreen.swift",
+      "anchor": "settings.security.twoFactor.securityKeys.removeNamed",
+      "reason": "Öffnet das Blatt zum Entfernen des Schlüssels, das einen frischen zweiten Faktor verlangt. Dieses Blatt ist die Rückfrage, eine zweite davor wäre doppelt."
+    },
+    {
+      "path": "HealthLog/Screens/Medications/ActiveMedicationRow.swift",
+      "anchor": "medications.row.action.archive",
+      "reason": "Archivieren nimmt das Medikament aus der aktiven Liste, der Verlauf bleibt und lässt sich zurückholen; die Rückfrage stellt MedicationsScreen."
+    }
+  ]
+}

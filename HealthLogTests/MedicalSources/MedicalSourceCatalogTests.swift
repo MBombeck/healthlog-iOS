@@ -88,7 +88,7 @@ struct MedicalSourceCatalogTests {
         }
     }
 
-    /// R25 / I2 — `sources.method.metricExplainer` promises "the references
+    /// `sources.method.metricExplainer` promises "the references
     /// below", so `methodologyKey(for:)` must withhold it for exactly the eight
     /// kinds that resolve to no references. Without this the Sources sheet
     /// opened on those kinds shows a promise and an empty page.
@@ -109,7 +109,7 @@ struct MedicalSourceCatalogTests {
         #expect(MedicalSourceCatalog.methodologyKey(for: .metric(.bloodPressure)) == "sources.method.metricExplainer")
     }
 
-    /// A4.4 — the GLP-1 topics carry no static ids; everything the sheet shows
+    /// The GLP-1 topics carry no static ids; everything the sheet shows
     /// for them comes from `dynamicSources(for:)`. Asserted here because the
     /// surfaces (`MDRGatedDrugLevelSection`, `TitrationLadderSection`) pass a
     /// `DrugID` straight through and a silent empty list would read as "no

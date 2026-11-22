@@ -1,13 +1,13 @@
 import Foundation
 import Testing
 
-// W-FOCUS-FILTER — this suite touches app-only types (`FocusFilterConfig`,
+// This suite touches app-only types (`FocusFilterConfig`,
 // `CoachNudgeStore`, `CoachCadenceSuggestionsStore`), so it compiles only in the
 // app test target, never the platform-free `HealthLogCore` SPM build.
 #if !SWIFT_PACKAGE
     @testable import HealthLog
 
-    /// **W-FOCUS-FILTER (v0.15.2)** — proves the proactive coach surfaces honour
+    /// Proves the proactive coach surfaces honour
     /// the Focus filter's "pause coach nudges" while never touching server state.
     ///
     /// The config is **injected** into the stores (not read from the shared App

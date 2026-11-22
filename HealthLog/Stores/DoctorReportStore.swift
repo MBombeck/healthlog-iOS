@@ -19,7 +19,7 @@ public final class DoctorReportStore {
         self.service = service
     }
 
-    /// - Parameter selection: the scope to render (CU-11). The server requires
+    /// - Parameter selection: the scope to render. The server requires
     ///   it; there is no default, and an empty selection legally means *no
     ///   health data*. The last failure is kept in ``failure`` so the screen can
     ///   distinguish the `422 export.selection.unknown_leaf` contract mismatch

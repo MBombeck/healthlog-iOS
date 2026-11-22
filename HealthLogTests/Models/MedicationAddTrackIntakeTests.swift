@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// E1 — the "Track intake" switch on the add sheet (v1.39.1 #1033).
+/// The "Track intake" switch on the add sheet (v1.39.1 #1033).
 ///
 /// The web offers the switch in its wizard summary; D1 put it into the editor
 /// only. The add sheet now offers it too, under the same rule as the editor:

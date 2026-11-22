@@ -168,7 +168,7 @@ extension CyclePredictionEngine {
         return lengths
     }
 
-    /// §1 + §5 — robust median+MAD over the trailing window with 3-MAD outlier
+    /// Robust median+MAD over the trailing window with 3-MAD outlier
     /// exclusion + missed-log detection (`estimateCycleLength`).
     static func estimateCycleLength(
         _ lengths: [Int],
@@ -250,7 +250,7 @@ extension CyclePredictionEngine {
         return lastBleeding + 1
     }
 
-    /// §2 — robust period-length over the last 6 cycles, clamped [1,10]
+    /// Robust period-length over the last 6 cycles, clamped [1,10]
     /// (`estimatePeriodLength`).
     static func estimatePeriodLength(
         _ cycles: [CycleInput],
@@ -384,7 +384,7 @@ extension CyclePredictionEngine {
         tuning: Tuning
     ) -> (cAdherence: Double, logSparsity: Double) {
         let sinceStart = max(0, dayDiff(today, lastStart))
-        // A360-5 M-3 — clamp the value itself to ≥ 1. On the cycle-start day
+        // Clamp the value itself to ≥ 1. On the cycle-start day
         // (`sinceStart == 0`) the old `min(0, …)` resolved 0, and although the
         // density division below guards with `max(1, …)`, the loop filter
         // (`offset > expectedDays`) used the un-clamped 0 → day-0 observations
@@ -438,7 +438,7 @@ extension CyclePredictionEngine {
         let sortedStarts = cycles.map(\.startDate).sorted { dayDiff($0, $1) < 0 }
         let lastConfirmedStart = sortedStarts.last ?? today
 
-        // -------- 0-cycle priors-only cold start (§5) --------
+        // -------- 0-cycle priors-only cold start --------
         if lengths.isEmpty {
             let estLen = profile.typicalCycleLength ?? tuning.populationDefaultCycle
             let periodLen = clampInt(
@@ -462,11 +462,11 @@ extension CyclePredictionEngine {
             )
         }
 
-        // -------- robust estimation (§1, §2) --------
+        // -------- robust estimation --------
         let est = estimateCycleLength(lengths, goal: profile.goal, tuning: tuning)
         let periodLen = estimatePeriodLength(cycles, dayLogs: dayLogs, profile: profile, tuning: tuning)
 
-        // -------- calendar baseline next-period point estimate (§1) --------
+        // -------- calendar baseline next-period point estimate --------
         var method: PredictionMethod = .calendar
         var nextStart = addDays(lastConfirmedStart, est.lengthRounded)
         var predictedOvulation = addDays(nextStart, -lutealLength)

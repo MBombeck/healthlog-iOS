@@ -1,6 +1,6 @@
 import XCTest
 
-/// #153 (public #27) follow-up — leaving the app from a Settings page must
+/// #153 follow-up — leaving the app from a Settings page must
 /// bring the user back to that same page.
 ///
 /// The privacy shield replaces the whole window as soon as the scene stops
@@ -86,7 +86,7 @@ final class SettingsRouteUITest: XCTestCase {
         )
     }
 
-    /// POLISH-C (C2) — a page one level below the Settings overview:
+    /// A page one level below the Settings overview:
     /// Account › Security comes back after the shield, not the Account page.
     @MainActor
     func testAccountSecurityPageSurvivesLeavingTheApp() {
@@ -107,7 +107,7 @@ final class SettingsRouteUITest: XCTestCase {
         XCTAssertTrue(security.waitForExistence(timeout: 10), "Back did not return to Account")
     }
 
-    /// POLISH-C (C2) — Integrations › Withings comes back after the shield.
+    /// Integrations › Withings comes back after the shield.
     @MainActor
     func testWithingsPageSurvivesLeavingTheApp() {
         let app = XCUIApplication()
@@ -127,7 +127,7 @@ final class SettingsRouteUITest: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10), "Back did not return to Integrations")
     }
 
-    /// POLISH-C (C3) — a filled access-header value is no password: after
+    /// A filled access-header value is no password: after
     /// leaving the app, the first Back works, no "Save password?" prompt
     /// takes the tap.
     @MainActor

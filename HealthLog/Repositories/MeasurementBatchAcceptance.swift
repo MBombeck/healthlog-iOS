@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 / Plan 07-04 — the acceptance gate for `POST /api/measurements/batch`.
+// The acceptance gate for `POST /api/measurements/batch`.
 //
 // Split out of `MeasurementBatchUploader.swift` because three production paths
 // now run it and only one of them is the uploader: the online batch POST, the
@@ -29,7 +29,7 @@ public struct MeasurementBatchAcceptanceError: Error, Sendable, Equatable, Custo
 
 /// Exact indexed, reason-aware acceptance gate for `POST /api/measurements/batch`.
 ///
-/// **Phase 07 / Plan 07-04.** HTTP 200 proves that the envelope arrived, nothing
+/// HTTP 200 proves that the envelope arrived, nothing
 /// more. This gate is the only place that decides whether a posted index carried
 /// terminal evidence, and it is deliberately fail-closed: a row this build cannot
 /// classify holds the cursor rather than being assumed accepted.
@@ -71,9 +71,9 @@ public enum MeasurementBatchAcceptance {
         /// X4 (v1.43, #138) — an hourly `stats:` row whose `startDate` is
         /// not the start of that local hour in the account's zone.
         public static let hourBucketMisaligned = "hour_bucket_misaligned"
-        /// X4 — an hourly row for a type or source the hour form does not take.
+        /// An hourly row for a type or source the hour form does not take.
         public static let hourBucketUnsupportedType = "hour_bucket_unsupported_type"
-        /// X4 — an hourly row more than 400 days back.
+        /// An hourly row more than 400 days back.
         public static let hourBucketTooOld = "hour_bucket_too_old"
         /// A2 (1.4, server v1.42) — a `duplicate` whose hour (heart rate, HRV,
         /// SpO2 after 90 days) or day (the mean types after 36 hours) the server
@@ -110,7 +110,7 @@ public enum MeasurementBatchAcceptance {
         /// separately (see `HealthSampleConsumption`), which keeps a page of 500
         /// from retrying because one row named a type the server cannot map yet.
         ///
-        /// X4 (1.3) — the three hour-bucket reasons are deterministic refusals
+        /// The three hour-bucket reasons are deterministic refusals
         /// of one row (the same row re-sent is skipped the same way), so they
         /// are terminal too. Holding them would re-post a misaligned hour on
         /// every sweep.

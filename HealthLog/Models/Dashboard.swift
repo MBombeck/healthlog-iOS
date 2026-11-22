@@ -9,7 +9,7 @@ import Foundation
 /// felt as "springt hoch". Equality lets the store skip the no-op assignment.
 public struct DashboardSummary: Codable, Sendable, Equatable {
     public let greeting: Greeting
-    // v0.12 W4-5 — the `streak: StreakBadge?` field was decoded + plumbed
+    // The `streak: StreakBadge?` field was decoded + plumbed
     // through two `DashboardStore` reducers but NEVER rendered by any view
     // (dead carry-through, consistent with the "no dashboard streak
     // gamification" decision — MEMORY: operator flagged streak counters as
@@ -32,13 +32,11 @@ public extension DashboardSummary {
         case greeting, compliance, highlightInsight, metrics, lastUpdated
     }
 
-    /// Element-tolerant metrics decode. **#51 — the summary route now emits
-    /// `mood`/`bmi` tile kinds (and may add more) that iOS does not model until
-    /// Build 7.3.** `MetricKind` is a closed enum, so the non-optional per-element
-    /// `kind` decode threw on an unmodelled raw value and rejected the WHOLE
-    /// `metrics` array → the entire summary failed to decode ("Daten konnten nicht
-    /// gelesen werden", tiles fell back to the error card). Each tile is decoded
-    /// lossily and un-modellable ones are dropped, mirroring
+    /// Element-tolerant metrics decode. The summary route may emit tile kinds
+    /// iOS does not model. `MetricKind` is a closed enum, so a strict
+    /// per-element decode would reject the WHOLE `metrics` array on one
+    /// unmodelled raw value and the entire summary would fail to decode. Each
+    /// tile is decoded lossily and un-modellable ones are dropped, mirroring
     /// ``DashboardScoreRing/SkipUnknown``. Order is preserved for the survivors.
     /// (Memberwise init stays available because this lives in an extension.)
     init(from decoder: any Decoder) throws {
@@ -82,7 +80,7 @@ public struct ComplianceSnapshot: Codable, Sendable, Equatable {
         self.takenToday = takenToday
     }
 
-    /// v0.5.1-A B3: when nothing is scheduled today the previous return of
+    /// When nothing is scheduled today the previous return of
     /// `1.0` (interpreted as 100%) was misleading — the ring filled to a
     /// full circle even when the operator had no meds queued at all.
     /// New contract: an empty schedule maps to `0` so renderers can detect
@@ -145,9 +143,18 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
     /// #135 (server v1.43) — the verdict applied to this card's `trend`:
     /// colour the arrow from this. `nil` on an older server (no colour change).
     public let trendSentiment: TrendSentiment?
-    /// #135 — which way a change of this metric counts for this person.
+    /// Which way a change of this metric counts for this person.
     public let direction: TrendVerdict?
-    /// **1.4 B4** — the server's catalogue keys behind ``title`` and ``unit``,
+    /// **#176 (server v1.48)** — the window behind ``trend``: `30` when the
+    /// arrow compares this month's mean with last month's (the rule of the
+    /// metric page's `/api/analytics/range?range=30d`), `nil` when it is the
+    /// first-to-last direction over the sparkline (mood, BMI, a card without
+    /// a previous month). ``deliversTrendWindow`` tells a null from an older
+    /// server that never sends the field.
+    public let trendWindowDays: Int?
+    /// `true` when the card carried the `trendWindowDays` key at all.
+    public let deliversTrendWindow: Bool
+    /// The server's catalogue keys behind ``title`` and ``unit``,
     /// kept so the SWR round-trip stores the KEY and resolves it again on the
     /// way back. It used to store the resolved text only, so a cached summary
     /// answered in the language of the day it was fetched, for the rest of that
@@ -168,7 +175,8 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         trendSentiment: TrendSentiment? = nil,
         direction: TrendVerdict? = nil,
         titleKey: String? = nil,
-        unitKey: String? = nil
+        unitKey: String? = nil,
+        trendWindow: DailyDigest.Delivered<Int> = .absent
     ) {
         self.id = id
         self.kind = kind
@@ -183,11 +191,13 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         self.direction = direction
         self.titleKey = titleKey
         self.unitKey = unitKey
+        trendWindowDays = trendWindow.value
+        deliversTrendWindow = trendWindow.isDelivered
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, title, titleKey, latestValue, secondaryValue, unit, unitKey, trend, sparkline, updatedAt
-        case trendSentiment, direction
+        case trendSentiment, direction, trendWindowDays
     }
 
     public init(from decoder: any Decoder) throws {
@@ -199,7 +209,7 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         // IN HOURS (float, e.g. 7.2) with an explicit `unit: "h"`
         // (`src/app/api/dashboard/summary/route.ts` — `latestValue: toHours(
         // night.asleepMinutes)`, `unit: "h"`, sparkline = trailing nights'
-        // asleep hours). The earlier ÷60 (Task #105) assumed raw minutes and is
+        // asleep hours). The earlier ÷60 assumed raw minutes and is
         // now WRONG — it would shrink a real 7.2 h night to 0.12 h. We read the
         // hours value verbatim, so the tile agrees with the list path
         // (`MeasurementDTO.sleepHours`) and the series route, which also send
@@ -211,9 +221,12 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         trend = try c.decode(TrendIndicator.self, forKey: .trend)
         sparkline = try c.decodeIfPresent([Double].self, forKey: .sparkline) ?? []
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
-        // #135 — additive v1.43 fields; an unreadable block is "not sent".
+        // Additive v1.43 fields; an unreadable block is "not sent".
         trendSentiment = try? c.decodeIfPresent(TrendSentiment.self, forKey: .trendSentiment)
         direction = try? c.decodeIfPresent(TrendVerdict.self, forKey: .direction)
+        // #176 (v1.48) — additive; an unreadable value reads as null.
+        deliversTrendWindow = c.contains(.trendWindowDays)
+        trendWindowDays = (try? c.decodeIfPresent(Int.self, forKey: .trendWindowDays)).flatMap { $0 }
         titleKey = try c.decodeIfPresent(String.self, forKey: .titleKey)
         unitKey = try c.decodeIfPresent(String.self, forKey: .unitKey)
         title = try Self.resolve(key: titleKey, legacy: c.decodeIfPresent(String.self, forKey: .title))
@@ -225,7 +238,7 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         try c.encode(id, forKey: .id)
         try c.encode(kind, forKey: .kind)
         try c.encode(title, forKey: .title)
-        // 1.4 B4 — the keys ride along, so a cached row resolves in the
+        // The keys ride along, so a cached row resolves in the
         // current language when it is read back (see ``titleKey``).
         try c.encodeIfPresent(titleKey, forKey: .titleKey)
         try c.encodeIfPresent(unitKey, forKey: .unitKey)
@@ -242,6 +255,11 @@ public struct DashboardMetric: Codable, Sendable, Identifiable, Hashable {
         try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try c.encodeIfPresent(trendSentiment, forKey: .trendSentiment)
         try c.encodeIfPresent(direction, forKey: .direction)
+        // A delivered null survives the SWR round trip as null, so a cached
+        // card keeps hiding its arrow.
+        if deliversTrendWindow {
+            try c.encode(trendWindowDays, forKey: .trendWindowDays)
+        }
     }
 
     /// Build 7 / item 7.3 — decode `kind` with the summary route's short-token
@@ -312,7 +330,7 @@ public extension DashboardMetric {
     var displayValue: String {
         guard let latest = latestValue, latest.isFinite else { return "—" }
         if let secondary = secondaryValue {
-            // W-CRASHGUARD — `latestValue`/`secondaryValue` decode unsanitized
+            // `latestValue`/`secondaryValue` decode unsanitized
             // from the server (`1e400` → +inf, a server-side divide → NaN, a
             // finite `1e30` out of `Int.range`). `Int()` of any of those TRAPS
             // at runtime → dashboard crash. Route both operands through
@@ -324,7 +342,7 @@ public extension DashboardMetric {
         return latest.formatted(.number.precision(.fractionLength(0 ... 1)))
     }
 
-    /// #33 — `true` when the server-summary snapshot carries a real BP reading:
+    /// `true` when the server-summary snapshot carries a real BP reading:
     /// both components present, finite, and `> 0`. A malformed `0/77` snapshot
     /// (a seed/validation gap the server is fixing) must NOT paint on the
     /// dashboard tile's cold-launch first frame before the guarded

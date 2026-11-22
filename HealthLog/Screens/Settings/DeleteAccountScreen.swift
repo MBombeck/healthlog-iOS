@@ -19,7 +19,6 @@ struct DeleteAccountScreen: View {
     @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
     @Environment(\.openURL) private var openURL
-    @Environment(\.dismiss) private var dismiss
 
     @State private var step: Step = .explain
     @State private var consentChecked: Bool = false
@@ -31,7 +30,7 @@ struct DeleteAccountScreen: View {
     /// is cookie-only and thus web-first. Non-nil ⇒ render the web-routing card
     /// (the destructive in-app path cannot complete) instead of a retry banner.
     @State private var stepUpWebURL: URL?
-    /// KONTO (#151) — whether the server erases at once or locks first and
+    /// Whether the server erases at once or locks first and
     /// erases after its grace window (1.46.0+). Decides every sentence that
     /// says "irreversible", so the copy is true for both server generations.
     @State private var policy: AccountDeletionPolicy = .initial()
@@ -44,53 +43,26 @@ struct DeleteAccountScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                header
-                if let webURL = stepUpWebURL {
-                    stepUpCard(webURL)
-                } else if step == .explain {
-                    explainStep
-                } else {
-                    typeConfirmStep
-                }
-                if stepUpWebURL == nil, let error = deletionError {
-                    errorBanner(error)
-                }
+        HLPage {
+            if let webURL = stepUpWebURL {
+                stepUpCard(webURL)
+            } else if step == .explain {
+                explainStep
+            } else {
+                typeConfirmStep
             }
-            .padding(HLSpace.lg)
+            if stepUpWebURL == nil, let error = deletionError {
+                errorBanner(error)
+            }
         }
-        .background(HLColor.background)
-        // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).
-        .hlScrollEdgeSoft()
-        .navigationTitle("Delete account")
+        // One title: the bar's, worded by the deletion policy.
+        .navigationTitle(headerTitle)
         .navigationBarTitleDisplayMode(.inline)
         .interactiveDismissDisabled(isDeleting)
         .task { policy = await authStore.accountDeletionPolicy() }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        // T2-4: destructive header kept (red explicitly sanctioned by HIG
-        // for irreversible actions — exception to Theme-2.0 accent-restraint).
-        // Glyph 36→32pt so it sits closer to the title weight, removes a
-        // touch of visual shouting without losing the danger signal.
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                // Danger hero glyph on the canonical display scale (audit-01 H2
-                // pulled the one-off 32pt onto `HLIconSize.display`). Signal
-                // colour is sanctioned — this IS a destructive-action warning.
-                .font(.hlIcon(HLIconSize.display, weight: .bold))
-                .foregroundStyle(HLColor.statusBad)
-            Text(headerTitle)
-                .font(.hlTitle2)
-                .foregroundStyle(HLText.primary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Copy by deletion policy (KONTO, #151)
+    // MARK: - Copy by deletion policy
 
     private var headerTitle: LocalizedStringKey {
         policy.isImmediate ? "Delete account permanently" : "Delete account"
@@ -107,7 +79,7 @@ struct DeleteAccountScreen: View {
     // MARK: - Step 1
 
     private var explainStep: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             Text(introText)
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -118,39 +90,27 @@ struct DeleteAccountScreen: View {
                 bullet(Text(verbatim: AccountDeletionCopy.deleteFinalLine(policy)))
             }
 
-            Toggle(isOn: $consentChecked) {
-                Text(consentText)
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-            }
-            .toggleStyle(.switch)
+            // The settings switch row keeps the switch inside the row's edge;
+            // the red tint marks the consent to a deletion.
+            HLSettingsToggleRow(
+                title: consentText,
+                description: nil,
+                isOn: $consentChecked,
+                accessibilityID: Self.consentToggleIdentifier
+            )
             .tint(HLColor.statusBad)
-            .accessibilityIdentifier(Self.consentToggleIdentifier)
 
-            VStack(spacing: HLSpace.sm) {
-                // W-BUTTONS: destructive STAYS destructive-coloured (danger
-                // semantic must not flatten to a benign action) — only the
-                // SIZE drops from the `.large` slab to the restrained compact
-                // 44pt floor, matching the app-wide button-size pass.
-                HLButton(
-                    String(localized: "Continue"),
-                    icon: "chevron.right",
-                    variant: .destructive,
-                    size: .compact
-                ) {
-                    step = .typeConfirm
-                }
-                .disabled(!consentChecked)
-                .accessibilityIdentifier(Self.continueButtonIdentifier)
-
-                HLButton(
-                    String(localized: "Cancel"),
-                    variant: .secondary,
-                    size: .regular
-                ) {
-                    dismiss()
-                }
+            // Destructive stays destructive-coloured: the danger must not
+            // read like a benign action.
+            HLButton(
+                "Continue",
+                systemImage: "chevron.right",
+                variant: .destructive
+            ) {
+                step = .typeConfirm
             }
+            .disabled(!consentChecked)
+            .accessibilityIdentifier(Self.continueButtonIdentifier)
         }
     }
 
@@ -159,13 +119,13 @@ struct DeleteAccountScreen: View {
     }
 
     private func bullet(_ text: Text) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "circle.fill")
-                // 6pt bullet dot — micro list-marker geometry, fixed by design.
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 6))
+        // The dot is set in the text's own font and sits on the first line's
+        // baseline, so it stays beside the first line at every text size.
+        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+            Text(verbatim: "\u{2022}")
+                .font(.hlBody)
                 .foregroundStyle(HLText.secondary)
-                .padding(.top, HLSpace.sm)
+                .accessibilityHidden(true)
             text
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -175,7 +135,7 @@ struct DeleteAccountScreen: View {
     // MARK: - Step 2
 
     private var typeConfirmStep: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             Text("Type \(requiredConfirmation) to confirm.")
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -187,23 +147,21 @@ struct DeleteAccountScreen: View {
                 .disabled(isDeleting)
                 .accessibilityIdentifier(Self.confirmFieldIdentifier)
 
-            VStack(spacing: HLSpace.sm) {
+            HLButtonPair {
                 HLButton(
-                    String(localized: "Delete account forever"),
-                    icon: "trash.fill",
+                    "Delete account forever",
+                    systemImage: "trash.fill",
                     variant: .destructive,
-                    size: .compact,
                     isLoading: isDeleting
                 ) {
                     Task { await performDeletion() }
                 }
                 .disabled(isDeleting || !DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation))
                 .accessibilityIdentifier(Self.deleteButtonIdentifier)
-
+            } secondary: {
                 HLButton(
-                    String(localized: "Back"),
-                    variant: .secondary,
-                    size: .regular
+                    "Back",
+                    variant: .secondary
                 ) {
                     deletionError = nil
                     typedConfirmation = ""
@@ -220,33 +178,17 @@ struct DeleteAccountScreen: View {
     /// fresh-MFA step-up the native session cannot satisfy. Explains why the
     /// deletion must finish on the web and deep-links to the web account page.
     private func stepUpCard(_ webURL: URL) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
-            HStack(alignment: .top, spacing: HLSpace.sm) {
-                Image(systemName: "lock.shield.fill")
-                    // 20pt informational shield — calm, not the danger hero.
-                    // swiftlint:disable:next dynamic_type_bypass
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(HLAccent.userBrandTint)
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("deleteAccount.stepUp.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("deleteAccount.stepUp.body")
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            VStack(spacing: HLSpace.sm) {
+        HLCard("deleteAccount.stepUp.title") {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                Text("deleteAccount.stepUp.body")
+                    .hlText(.factLabel)
+                    .fixedSize(horizontal: false, vertical: true)
                 HLButton(
-                    String(localized: "deleteAccount.stepUp.openButton"),
-                    icon: "safari",
-                    variant: .primary,
-                    size: .compact
+                    "deleteAccount.stepUp.openButton",
+                    systemImage: HLRowIndicator.externalSymbol,
+                    variant: .primary
                 ) {
-                    // Privacy H3 (audit-v0162) — arm the return-detection probe
+                    // Privacy H3 — arm the return-detection probe
                     // BEFORE handing off to the browser. On the next app
                     // foreground `AuthStore.reconcilePendingWebDeletion()` probes
                     // `/api/auth/me`; once the deletion completes on the web the
@@ -256,34 +198,16 @@ struct DeleteAccountScreen: View {
                     openURL(webURL)
                 }
                 .accessibilityIdentifier(Self.stepUpOpenButtonIdentifier)
-
-                HLButton(
-                    String(localized: "Cancel"),
-                    variant: .secondary,
-                    size: .regular
-                ) {
-                    dismiss()
-                }
             }
         }
-        .padding(HLSpace.md)
-        .background(HLAccent.userBrandTint.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
     }
 
-    // MARK: - Error banner
+    // MARK: - Error
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.octagon.fill")
-                .foregroundStyle(HLColor.statusBad)
-            Text("Deletion failed: \(message)")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.primary)
-        }
-        .padding(HLSpace.md)
-        .background(HLColor.statusBad.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+        HLFormErrorText(String(localized: "Deletion failed: \(message)"))
+            .font(.hlCaption)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Action

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// D-2 — MoodStore.suggestTags API coverage.
+/// MoodStore.suggestTags API coverage.
 ///
 /// The store delegates to `MoodTagExtractionService` and gates on whether
 /// an extraction service was injected at construction time. The store also
@@ -22,18 +22,10 @@ struct MoodStoreTagSuggestionsTests {
         #expect(store.supportsTagSuggestions == false)
     }
 
-    @Test("supportsTagSuggestions — true on iOS 26+ runtimes when service injected")
+    @Test("supportsTagSuggestions — true when service injected")
     func supportsTagSuggestionsTrueWithService() throws {
         let store = try makeStore(tagExtraction: MoodTagExtractionService())
-        // The test runner (iPhone 17 Pro simulator on Xcode 26.5) is iOS 26+,
-        // so the gate returns true. On older runtimes the gate would return
-        // false and the assertion would flip — that is by design, the UI
-        // hides the affordance on older OS.
-        if #available(iOS 26.0, *) {
-            #expect(store.supportsTagSuggestions == true)
-        } else {
-            #expect(store.supportsTagSuggestions == false)
-        }
+        #expect(store.supportsTagSuggestions == true)
     }
 
     @Test("suggestTags — nil when no extraction service injected")

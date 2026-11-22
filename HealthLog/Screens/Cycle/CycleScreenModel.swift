@@ -6,7 +6,7 @@ import Foundation
 /// lives here as `nonisolated static` pure functions so it is unit-testable
 /// without a SwiftUI host (`CycleScreenModelTests`) and carries no view state.
 ///
-/// **Z1 (#72) — this file no longer decides anything.** Until v1.35.2 it scanned
+/// **This file no longer decides anything.** Until v1.35.2 it scanned
 /// the calendar's per-day phase labels for menstrual runs to derive the current
 /// cycle window, counted the day of cycle itself, collapsed the days into
 /// segments, substituted a population-default ring when the data looked sparse,
@@ -87,7 +87,7 @@ public enum CycleScreenModel {
 
     // MARK: - Centre copy
 
-    /// **Z1 (#72) — in `OVERDUE` the centre carries `overdueDays`, not a cycle
+    /// **In `OVERDUE` the centre carries `overdueDays`, not a cycle
     /// day.** The two are different statements and the copy says which one it
     /// is: "12 Tage überfällig" is not "Tag 12". The server nulls `dayOfCycle`
     /// there on purpose — the likeliest reason a cycle runs long is that a new
@@ -118,12 +118,12 @@ public enum CycleScreenModel {
             // `cycleStartDate` stays set while overdue — the last logged period
             // start remains a fact once the count stops, and it is the ground
             // the number above is measured from.
-            guard let start = verdict.cycleStartDate, let date = dayKeyFormatter.date(from: start) else {
+            guard let start = verdict.cycleStartDate, let date = ProfileDay.startOfDay(forKey: start, timeZone: .current) else {
                 return String(localized: "cycle.home.center.overdue.subtitle.noStart")
             }
             return String(
                 format: String(localized: "cycle.home.center.overdue.subtitle"),
-                shortDayFormatter.string(from: date)
+                HLDateFormat.dayMonth(date)
             )
         }
         guard let day = verdict.dayOfCycle else {
@@ -131,26 +131,6 @@ public enum CycleScreenModel {
         }
         return String(format: String(localized: "cycle.home.center.cycleDay"), day)
     }
-
-    /// `YYYY-MM-DD` day keys, POSIX + device zone (the same pair `CycleScreen`
-    /// uses for the calendar grid).
-    static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    /// Day + month only — a cycle start is a date, not a timestamp.
-    static let shortDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
-        f.setLocalizedDateFormatFromTemplate("ddMMM")
-        return f
-    }()
 
     // MARK: - Arithmetic (no judgement below this line)
 
@@ -226,5 +206,38 @@ public enum CycleScreenModel {
         case .ovulatory: .ovulatory
         case .luteal: .luteal
         }
+    }
+}
+
+/// **The sections of the cycle page, in the order of every detail page.**
+///
+/// The insights metric page sets the order: the key figure first, then what
+/// it means, the statistics, the charts, the deeper blocks, and the
+/// background last. A section without data draws nothing and the next one
+/// moves up; the order itself never changes.
+enum CycleScreenSection: CaseIterable, Equatable, Sendable {
+    /// The ring: today's day and phase (the key figure).
+    case ring
+    /// The forecast of the next period (what the figure means).
+    case prediction
+    /// The periods the server projects after it (server v1.47.1).
+    case upcoming
+    /// Average length, variability and period (the statistics).
+    case statistics
+    /// The basal temperature of this cycle (chart).
+    case temperature
+    /// The lengths of the last cycles (chart).
+    case history
+    /// The month calendar with its notices (deeper block).
+    case calendar
+    /// The phase patterns the server found (deeper block).
+    case patterns
+    /// What happens in the body during this phase (background).
+    case explainer
+
+    /// The sections the page lays out. The explainer needs a phase; where
+    /// the record holds none the page claims none.
+    nonisolated static func visible(hasPhase: Bool) -> [CycleScreenSection] {
+        allCases.filter { $0 != .explainer || hasPhase }
     }
 }

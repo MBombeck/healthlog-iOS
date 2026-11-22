@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// Phase 07 Wave 1 — `syncHealthKitSample` is a durable, owner-bound replay path.
+/// `syncHealthKitSample` is a durable, owner-bound replay path.
 ///
 /// Before this wave the kind was enqueued but never drained: the dispatcher
 /// threw a non-retriable error and the row was deleted, so every transient
@@ -215,7 +215,7 @@ struct OutboxHealthKitBatchReplayTests {
         #expect(remaining.attempts == 1)
     }
 
-    /// #115 / 0.3 — the row the importers park for an unmappable identifier.
+    /// The row the importers park for an unmappable identifier.
     /// The acceptance gate calls that skip terminal for the envelope, which is
     /// why the 279 replay drained it: the row was deleted and the reading, whose
     /// anchor had already moved, was gone.
@@ -269,7 +269,7 @@ struct OutboxHealthKitBatchReplayTests {
         #expect(recorder.recordedKeys == [key, key, key])
     }
 
-    /// #115 / 0.3 — a State-of-Mind sample the importer queued (anchor
+    /// A State-of-Mind sample the importer queued (anchor
     /// committed) must not be deleted because the mood module is off when the
     /// row replays: the row is that reading's only copy.
     @Test("a queued mood write parks on 403 module.disabled and lands once the module is on")
@@ -429,7 +429,7 @@ private final class LockedFlag: @unchecked Sendable {
     }
 }
 
-// MARK: - #10 — a replayed batch stamps "Last synced"
+// MARK: - A replayed batch stamps "Last synced"
 
 extension OutboxHealthKitBatchReplayTests {
     private actor DeliveryLog {

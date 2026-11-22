@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 08 Plan 15 — the three legs of `testSupportDiagnosticsRequireConfirmation`.**
+/// **The three legs of `testSupportDiagnosticsRequireConfirmation`.**
 ///
 /// In a sibling `extension` rather than in the class, for the reason 08-08
 /// established: a test type that grows a leg at a time eventually trips
@@ -33,7 +33,7 @@ extension Phase8AccessibilityUITests {
         advanced.tap()
 
         var violations: [String] = []
-        // 08-06 — `probePhase8`, not `scrollToPhase8`: this clause asks whether
+        // `probePhase8`, not `scrollToPhase8`: this clause asks whether
         // the reviewer surface is still reachable, and "it is not" is now the
         // answer. The precondition form asserted the row into existence, so
         // deleting the row turned this RED into a harness failure that said

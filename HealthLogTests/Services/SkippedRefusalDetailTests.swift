@@ -5,7 +5,7 @@
 
     // swiftlint:disable force_unwrapping
 
-    /// 1.5 FIX-DATA (#126) — a `value_out_of_range` skip carries, since server
+    /// A `value_out_of_range` skip carries, since server
     /// v1.39.1, the value after conversion into the stored unit and the band that
     /// refused it (`entries[].convertedValue`, `entries[].range`). The list of
     /// refused readings shows both; without them it keeps the general sentence.

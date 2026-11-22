@@ -68,7 +68,7 @@ enum HealthScorePresentation {
         String(localized: String.LocalizationValue(labelKey(for: pillar)))
     }
 
-    // MARK: - Score basis (#103 / #115 · 1.3)
+    // MARK: - Score basis
 
     /// "Based on N of M areas" — the server's `scoreBasis`, rendered verbatim.
     /// A one-area score and a full one share the arithmetic; this line is what
@@ -105,7 +105,7 @@ enum HealthScorePresentation {
 
     // MARK: - Chosen composition (v1.35.0 / GH #83)
 
-    // 25-02 (E-2026-08-29 #3) — the painted provenance mark („Eigene
+    // The painted provenance mark („Eigene
     // Auswahl" / "Your selection") was DELETED, definition site and catalog
     // key together: the operator judged it visual overload on the score
     // tile. The statement survives in its two other carriers — the spoken
@@ -272,7 +272,7 @@ enum HealthScorePresentation {
                 comment: "Health Score rest mode explanation"
             )
         }
-        let date = since.formatted(.dateTime.day().month(.abbreviated))
+        let date = HLDateFormat.dayMonth(since)
         return String(
             localized: "A rest phase has been running since \(date). It frames this score, it does not change it.",
             comment: "Health Score rest mode explanation with onset"

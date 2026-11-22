@@ -2,7 +2,7 @@
     import Foundation
 
     extension HermeticUITestSupport {
-        /// **#115 P2.** `-uitest-imperial` — the imperial-account overlay. Only
+        /// `-uitest-imperial` — the imperial-account overlay. Only
         /// the QA sweep's `test_12_imperialUnits` passes it, and only together
         /// with `-uitest-sweep`.
         static let imperialOverlayArgument = "-uitest-imperial"
@@ -12,7 +12,7 @@
         }
     }
 
-    /// **#115 P2 — the TestFlight 284 world: an imperial account with a weight
+    /// **The TestFlight 284 world: an imperial account with a weight
     /// target.**
     ///
     /// `/api/auth/me` answers `unitPreference: "imperial"` (so the app adopts the

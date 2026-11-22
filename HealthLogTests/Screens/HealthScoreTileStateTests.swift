@@ -3,19 +3,19 @@ import Foundation
 import SnapshotTesting
 import Testing
 
-/// Locks the `HealthScoreTile` state matrix (loading / loaded / error)
-/// against accidental visual regressions. Image snapshots of `HLCard`
+/// Locks the Health Score state descriptors (loading / loaded / error)
+/// against accidental regressions. Image snapshots of `HLCard`
 /// are fragile across simulator / SDK rebuilds (system fonts,
 /// antialiasing) — we snapshot the **structural state descriptor** the
 /// view uses to choose its render branch instead, plus the formatted
 /// metric text. That's exactly what changes when someone refactors the
 /// tile and is what the user sees once SwiftUI lays it out.
 @MainActor
-@Suite("HealthScoreTile state matrix")
+@Suite("Health Score state matrix")
 struct HealthScoreTileStateTests {
     @Test("Loaded state — band/score/delta render exactly as the server emits")
     func loadedState() {
-        // v1.34.0 (CU-31): the four-pillar `components` object is gone from
+        // v1.34.0: the four-pillar `components` object is gone from
         // every wire; the score now carries its own composition + confidence.
         let score = HealthScore(
             score: 72,
@@ -61,7 +61,7 @@ struct HealthScoreTileStateTests {
         assertSnapshot(of: descriptor, as: .dump)
     }
 
-    /// W-B187 / #27 — the COLOUR band now follows the server-authoritative `band`
+    /// The COLOUR band now follows the server-authoritative `band`
     /// token via `HealthScore.displayBand`. When the server emits a band it wins,
     /// even if the local numeric thresholds would land elsewhere.
     @Test("Server band drives the tile band — overrides the local numeric threshold")
@@ -80,7 +80,7 @@ struct HealthScoreTileStateTests {
         #expect(serverGreenMid.displayBand == .green)
     }
 
-    /// #115 B7 — a nil server band (older server, unknown token) no longer falls
+    /// A nil server band (older server, unknown token) no longer falls
     /// back to iOS-side 67/34 thresholds: the tile, the widget and the watch
     /// stay neutral instead of naming a band the server never gave.
     @Test("Nil server band stays nil everywhere — no local threshold verdict")
@@ -96,7 +96,7 @@ struct HealthScoreTileStateTests {
         }
     }
 
-    /// W-B187 / #27 — "one engine": the same band token resolves to the SAME
+    /// "one engine": the same band token resolves to the SAME
     /// status colour token on the Dashboard tile (`displayBand` → HLColor) and the
     /// Insights score surfaces (`HLScoreRing.ScorePresentation.signal(forBand:)` →
     /// `HLSignal` → HLColor). Locking the band→signal correspondence guarantees the
@@ -115,7 +115,7 @@ struct HealthScoreTileStateTests {
         }
     }
 
-    /// v1.34.0 (CU-31): the "composite formula" line is gone. The server
+    /// v1.34.0: the "composite formula" line is gone. The server
     /// stopped shipping per-pillar weights + values, so there is no arithmetic
     /// left to present — the score names its composition instead. The pillar
     /// list is rendered verbatim in the server's registry order; iOS neither

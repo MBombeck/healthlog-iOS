@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — provider-neutral seam for the **client-side, device→provider**
+/// Provider-neutral seam for the **client-side, device→provider**
 /// BYO-key LLM path (`AIMode.byoKey`). Each concrete adapter
 /// (``OpenAIAdapter`` / ``AnthropicAdapter`` / ``GeminiAdapter`` /
 /// ``OpenAICompatibleAdapter``) is a pure ``Sendable`` value type: it builds a
@@ -17,7 +17,7 @@ import Foundation
 /// - The key is sent in a **header**, never in the URL — including Gemini, which
 ///   uses `x-goog-api-key` rather than `?key=` so the key can never land in a
 ///   logged `URLRequest.url` (defence-in-depth alongside `LogSanitizer`).
-/// - Non-streaming for v1 (D11): one parse path per adapter, correctness-first.
+/// - Non-streaming for v1: one parse path per adapter, correctness-first.
 public protocol LLMProvider: Sendable {
     /// The provider identity this adapter serves.
     var id: BYOProviderID { get }

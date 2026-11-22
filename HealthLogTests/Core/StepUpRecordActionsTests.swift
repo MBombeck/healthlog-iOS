@@ -1,4 +1,4 @@
-// R2 / #115 A3 + A4 — the proof family is "ask for proof and retry", never a
+// The proof family is "ask for proof and retry", never a
 // dead session, and the record actions carry the elevation when asked.
 //
 // Server contract, read at tag v1.39.6 (`git show`, not invented):
@@ -272,7 +272,7 @@
             #expect(wire.requests.filter { $0.method == "POST" }.map(\.stepUp) == [nil, Self.elevation])
         }
 
-        // MARK: - A4: full backup is a GET with the elevation
+        // MARK: - Full backup is a GET with the elevation
 
         @Test("full backup is GET /api/export?format=…&type=all — not the POST that answered 405")
         func fullBackupIsAGet() async throws {

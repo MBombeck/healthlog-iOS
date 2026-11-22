@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **HK-NEW (1.5, #149) — the six Apple Health types the server maps
+    /// **The six Apple Health types the server maps
     /// since v1.44.0.**
     ///
     /// Pinned against `src/lib/measurements/apple-health-mapping.ts` at
@@ -236,11 +236,18 @@
             #expect(collected.contains(HKQuantityTypeIdentifier.stepCount.rawValue))
             let configs = HealthKitCumulativeTypeConfig.serverCollectable { HealthKitServerTypeGate.serverAccepts($0, defaults: old) }
             #expect(Set(configs.map(\.identifier)).isDisjoint(with: HealthKitServer144Types.cumulativeIdentifiers))
-            #expect(configs.count == HealthKitCumulativeTypeConfig.defaults.count - 2)
+            // The two ring minutes, resting energy (v1.47.1) and the two 1.7
+            // distances (by capability only) wait.
+            #expect(configs.count == HealthKitCumulativeTypeConfig.defaults.count - 5)
 
             let new = try Self.defaults(version: "1.44.0")
-            let all = HealthKitCumulativeTypeConfig.serverCollectable { HealthKitServerTypeGate.serverAccepts($0, defaults: new) }
-            #expect(all.count == HealthKitCumulativeTypeConfig.defaults.count)
+            let rings = HealthKitCumulativeTypeConfig.serverCollectable { HealthKitServerTypeGate.serverAccepts($0, defaults: new) }
+            #expect(rings.count == HealthKitCumulativeTypeConfig.defaults.count - 3)
+            #expect(!rings.map(\.identifier).contains(HealthKitBasalEnergy.identifier))
+
+            let newest = try Self.defaults(version: HealthKitBasalEnergy.minimumServerVersion)
+            let all = HealthKitCumulativeTypeConfig.serverCollectable { HealthKitServerTypeGate.serverAccepts($0, defaults: newest) }
+            #expect(all.count == HealthKitCumulativeTypeConfig.defaults.count - 2, "the distances wait for their capability")
         }
 
         // MARK: - (d) acceptedTypes present and absent

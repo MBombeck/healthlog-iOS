@@ -9,7 +9,7 @@ import SwiftUI
 /// state-only view so snapshots can run on the public contract without
 /// dragging the parent screen in.
 ///
-/// POLISH-ACHIEVE (v0.5.5.6):
+/// POLISH-ACHIEVE:
 /// - Earned: glossy gradient ring around hero icon (matches medallion grid),
 ///   bounce on first-render of `unlockedAt`, **share button** ("Teilen")
 ///   surfacing a `ShareLink` with localized celebratory copy.
@@ -17,7 +17,6 @@ import SwiftUI
 /// - Hidden: opaque "Geheimnisvoller Erfolg" placeholder treatment.
 struct AchievementDetailSheet: View {
     let achievement: Achievement
-    let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -26,23 +25,25 @@ struct AchievementDetailSheet: View {
     @ScaledMetric(relativeTo: .largeTitle) private var iconFrameSize: CGFloat = 140
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
-            heroIcon
-            titleBlock
-            descriptionBlock
-            progressBlock
-            pointsBlock
-            Spacer(minLength: 0)
-            actionRow
+        // A sheet that only shows something: the close button, nothing to
+        // confirm. Sharing an earned badge is a further bar button. The
+        // badge's name is the sheet's title, not a second title in the content.
+        HLSheetScaffold(verbatim: visibleTitle, size: .standard) {
+            HLPage {
+                heroIcon
+                statusLine
+                descriptionBlock
+                progressBlock
+                pointsBlock
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(accessibilityLabel)
+            // Sharing an earned badge with its celebratory copy; locked and
+            // hidden badges have nothing to share.
+            .hlPageActions(HLTabHeaderActions(
+                achievement.unlocked ? [.share(text: shareMessage, identifier: "AchievementDetailSheet.share")] : []
+            ))
         }
-        .padding(.horizontal, HLSpace.xl)
-        .padding(.top, HLSpace.xxl)
-        .padding(.bottom, HLSpace.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .hlScreenBackground()
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(Text("Swipe down to dismiss."))
     }
 
     // MARK: - Subviews
@@ -69,7 +70,7 @@ struct AchievementDetailSheet: View {
                     .foregroundStyle(achievement.unlocked
                         ? HLAccent.userBrandTint
                         : HLText.tertiary)
-                    // v0.5.5.1 — bounce on the moment of unlock (the
+                    // Bounce on the moment of unlock (the
                     // `unlockedAt` timestamp flip is the canonical "first
                     // appearance after earning" trigger). Apple's
                     // `symbolEffect(.bounce)` honours
@@ -116,12 +117,9 @@ struct AchievementDetailSheet: View {
         }
     }
 
-    private var titleBlock: some View {
+    /// When it was earned, or that it is not yet; the name stands in the bar.
+    private var statusLine: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(visibleTitle)
-                .font(.hlTitle2)
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.leading)
             if achievement.unlocked, let earnedAt = achievement.unlockedAt {
                 Text("Earned on \(HLDateFormat.date(earnedAt, style: .long))")
                     .font(.hlSubhead)
@@ -193,39 +191,14 @@ struct AchievementDetailSheet: View {
                     Text("Points")
                         .font(.hlCaption.weight(.semibold))
                         .foregroundStyle(HLText.secondary)
-                    Text("\(points) points")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
+                    // The label above names the unit; the figure stands alone.
+                    HLValueText(Double(points), unit: .plain, size: .compact, fractionDigits: 0 ... 0)
                 }
                 Spacer()
             }
             .padding(HLSpace.md)
             .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
         }
-    }
-
-    /// Bottom action row — `Teilen` only for earned achievements (sharing
-    /// locked / hidden cards would be weird). v0.6.1 Y2 — dropped the
-    /// always-present `Schließen` button per docs/design-handbook-v1.md
-    /// §2.6 (Home-Compliance pattern). Drag-down dismisses the sheet;
-    /// the share-link stays because it's a functional action, not chrome.
-    @ViewBuilder
-    private var actionRow: some View {
-        if achievement.unlocked {
-            shareButton
-        }
-    }
-
-    private var shareButton: some View {
-        ShareLink(item: shareMessage) {
-            Label("Share", systemImage: "square.and.arrow.up")
-                .font(.hlHeadline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, HLSpace.sm)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .accessibilityIdentifier("AchievementDetailSheet.share")
     }
 
     // MARK: - Derived
@@ -272,8 +245,8 @@ struct AchievementDetailSheet: View {
     private var absoluteProgressLabel: String? {
         guard let current = achievement.current,
               let target = achievement.target, target > 0 else { return nil }
-        let currentText = current.formatted(.number.precision(.fractionLength(0)))
-        let targetText = target.formatted(.number.precision(.fractionLength(0)))
+        let currentText = HLValueFormat.number(current, fractionDigits: 0 ... 0)
+        let targetText = HLValueFormat.number(target, fractionDigits: 0 ... 0)
         switch achievement.format {
         case .percent:
             return "\(HLNumberFormat.percent(current)) / \(HLNumberFormat.percent(target))"
@@ -328,8 +301,7 @@ struct AchievementDetailSheet: View {
             unlockedAt: Date(timeIntervalSince1970: 1_716_800_000),
             progress: 1.0,
             points: 60
-        ),
-        onDismiss: {}
+        )
     )
 }
 
@@ -345,8 +317,7 @@ struct AchievementDetailSheet: View {
             unlockedAt: nil,
             progress: 0.42,
             points: 90
-        ),
-        onDismiss: {}
+        )
     )
 }
 
@@ -362,7 +333,6 @@ struct AchievementDetailSheet: View {
             unlockedAt: nil,
             progress: 0,
             points: 25
-        ),
-        onDismiss: {}
+        )
     )
 }

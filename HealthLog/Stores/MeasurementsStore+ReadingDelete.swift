@@ -69,11 +69,9 @@ public extension MeasurementsStore {
         }
     }
 
-    /// `true` when the paired server deletes and restores a whole reading from
-    /// one id. Standalone mode has no server and deletes its mirror row by row.
+    /// `true` when the server deletes and restores a whole reading from one id.
     internal var serverTakesWholeReading: Bool {
-        if isStandalone?() == true { return false }
-        return KnownServerVersion.isAtLeast(
+        KnownServerVersion.isAtLeast(
             BloodPressureReadingDelete.minimumServerVersion,
             defaults: serverVersionDefaults
         )

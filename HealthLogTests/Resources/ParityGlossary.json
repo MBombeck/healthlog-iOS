@@ -7,7 +7,7 @@
     { "forbidden": "Arztbericht", "canonical": "Gesundheitsbericht", "note": "Item 8.4 — EXPORT surfaces only. The inbound document TYPE (documents.kind.doctorReport) keeps 'Arztbericht'." },
     { "forbidden": "Rekorde", "canonical": "Bestleistungen", "note": "Item 8.4 — 'Rekorde & Erfolge' → 'Bestleistungen & Erfolge' + section-level values. Advisory only: partial per-hit sweep, not catalog-wide enforced." },
     { "forbidden": "Ovulation", "canonical": "Eisprung", "note": "Item 8.3 word-drift. Advisory: 'Ovulationstest' is the established kit term — per-hit decision." },
-    { "forbidden": "Dosis (Vorgang)", "canonical": "Einnahme", "note": "CU-24 / GH iOS #73 — one intent, one term: the ACT of logging or marking a taken medication is 'Einnahme' (EN 'intake') on every surface. 'Dosis' / 'dose' stays correct for the AMOUNT (med.form.dose, Abweichende Dosis, Dosen pro Einheit, Dosisstärke). NOT enforced catalog-wide for that reason; the logging surfaces (meds.quick.*, med.freelog.*) are enforced by MedicationLoggingEmptyStateTests." }
+    { "forbidden": "Dosis (Vorgang)", "canonical": "Einnahme", "note": "CU-24 / GH iOS #73 — one intent, one term: the ACT of logging or marking a taken medication is 'Einnahme' (EN 'intake') on every surface. 'Dosis' / 'dose' stays correct for the AMOUNT (med.form.dose, Abweichende Dosis, Dosen pro Einheit, Dosisstärke). NOT enforced catalog-wide for that reason; the logging surfaces (meds.quick.*, med.intake_form.*, med.dose.*) are enforced by MedicationLoggingEmptyStateTests." }
   ],
   "forbiddenTerms": [
     {
@@ -30,6 +30,41 @@
       "canonical": "Gesundheitsbericht",
       "exceptKeys": ["documents.kind.doctorReport"],
       "rationale": "Item 8.4 — the export surfaces ('Doctor report' family, settings.localreport.title, onboarding feature mentions) become 'Gesundheitsbericht'. The single exception is the inbound document TYPE 'documents.kind.doctorReport', which names the web's inbound doc kind and deliberately keeps 'Arztbericht' — that name collision is exactly what the export rename resolves. If the copy sweep (sibling agent) decides to keep 'Arztbericht' on any further key, add that key here."
+    },
+    {
+      "term": "Health Score",
+      "caseSensitive": true,
+      "canonical": "Gesundheitsscore",
+      "exceptKeys": [],
+      "rationale": "Stufentest C — the dashboard ring and the building blocks say 'Gesundheitsscore'; the settings title and the sources said 'Health Score'. One German name."
+    },
+    {
+      "term": "Email",
+      "caseSensitive": true,
+      "canonical": "E-Mail",
+      "exceptKeys": [],
+      "rationale": "Stufentest C — the sign-in field read 'Email'. German writes 'E-Mail'."
+    },
+    {
+      "term": "syncen",
+      "caseSensitive": false,
+      "canonical": "synchronisieren",
+      "exceptKeys": [],
+      "rationale": "Stufentest C — 'Jetzt syncen' stood next to 'Alles jetzt synchronisieren' on the Apple Health page."
+    },
+    {
+      "term": "gewiped",
+      "caseSensitive": false,
+      "canonical": "gelöscht",
+      "exceptKeys": [],
+      "rationale": "Stufentest C — the delete-account page said the caches 'werden gewiped'."
+    },
+    {
+      "term": "Provider",
+      "caseSensitive": true,
+      "canonical": "Anbieter",
+      "exceptKeys": [],
+      "rationale": "Stufentest C — 'Provider auswählen' stood under the heading 'Assistent-Anbieter'."
     }
   ]
 }

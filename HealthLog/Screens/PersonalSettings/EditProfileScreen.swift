@@ -13,7 +13,7 @@ import UIKit
 /// - `dateOfBirth`: 1900-01-01 … today.
 /// - `gender`: enum picker, nullable to clear ("Keine Angabe").
 ///
-/// **Auto-save UX (v0.8.3 W-C):** there is no explicit Save button anymore.
+/// **Auto-save UX:** there is no explicit Save button anymore.
 /// Field edits auto-commit through a short debounce (`commitDebounceNanos`),
 /// and a final commit fires on `onDisappear` so nothing is lost when the user
 /// taps back. Each commit reuses `buildPatch()` to send only the diverged
@@ -26,7 +26,7 @@ import UIKit
 /// feels redundant / photo-pick gives no feedback" report
 /// (`.planning/v083-reorder/R5-profile-save.md`).
 ///
-/// **v0.5.5.2 — first-edit gate.** The red "Bitte einen Anzeigenamen
+/// **First-edit gate.** The red "Bitte einen Anzeigenamen
 /// eingeben." footer used to fire the moment the screen opened on a
 /// profile whose server-side `displayName` was empty. Operator read that
 /// as "screen broken on open" rather than "field-needs-input". We now
@@ -34,7 +34,7 @@ import UIKit
 /// itself still runs (an invalid field is never auto-committed), it just
 /// no longer shouts before any keyboard interaction.
 struct EditProfileScreen: View {
-    /// W-B187 — not `private` so the `+Preferences` extension (units +
+    /// Not `private` so the `+Preferences` extension (units +
     /// time-format sections, split out for file-length hygiene) can read the
     /// store for its bindings, mirroring how `+PatientIdentity` reaches the
     /// shared `@State`.
@@ -43,19 +43,19 @@ struct EditProfileScreen: View {
     /// QoL-A2 (Felt-craft #5) — gate the "Saved" cue fade on reduce-motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// v0.8.0 W11 — PhotosPicker selection for the profile avatar.
+    /// PhotosPicker selection for the profile avatar.
     @State private var avatarPickerItem: PhotosPickerItem?
     /// Drives the inline "Could not load the photo" footer when the picked
     /// item can't be read as image data on-device (before any upload).
     @State private var avatarPickError: Bool = false
-    /// v0.8.2 W1c (A4) — `true` from the instant a pick fires until its
+    /// `true` from the instant a pick fires until its
     /// `loadTransferable` resolves (which can take seconds for a large iCloud
     /// asset). The picker disables on `isUploading || isPreparing` so a second
     /// pick can't start during the transferable load — only `isUploading`
     /// (set inside `AvatarStore.upload`) covered the *network* window, leaving
     /// the load window open to a racing re-pick.
     @State private var isPreparing: Bool = false
-    /// v0.8.2 W1c (A4) — handle to the in-flight pick→upload task. A re-pick
+    /// Handle to the in-flight pick→upload task. A re-pick
     /// cancels the prior task so the last selection wins `image`/`loadedKey`
     /// deterministically instead of "whichever upload finished last".
     @State private var pickTask: Task<Void, Never>?
@@ -65,7 +65,7 @@ struct EditProfileScreen: View {
     @State private var hasDateOfBirth: Bool = false
     @State private var gender: GenderOption = .unspecified
     @State private var heightCm: String = ""
-    /// v0.10.0 — extended patient-identity fields (full legal name, health
+    /// Extended patient-identity fields (full legal name, health
     /// insurer, KVNR). Feed the Doctor-Report cover + FHIR Patient. The KVNR
     /// is sensitive PII held only in this @State + the in-memory profile —
     /// never logged. Not `private` so the `+PatientIdentity` extension (split
@@ -73,28 +73,28 @@ struct EditProfileScreen: View {
     @State var fullName: String = ""
     @State var insurerName: String = ""
     @State var insuranceNumber: String = ""
-    /// v0.11.0 — insurer IKNR (9-digit Institutionskennzeichen). Feeds the
+    /// Insurer IKNR (9-digit Institutionskennzeichen). Feeds the
     /// FHIR `Coverage` payor Organization identifier. Identifying PII — held
     /// only in this @State + the in-memory profile, never logged.
     @State var insurerIkNumber: String = ""
-    /// v0.8.3 W-C — `true` while an auto-commit `PATCH` is in flight. Drives the
+    /// `true` while an auto-commit `PATCH` is in flight. Drives the
     /// inline progress affordance next to the "Saved" cue.
     @State var isSaving: Bool = false
     /// Toggled on every successful commit (field PATCH or photo upload) to fire
     /// `.sensoryFeedback(.success)`.
     @State private var saveSucceeded: Bool = false
-    /// v0.8.3 W-C — drives the brief "Saved"/"Gespeichert" pill. Set `true` on a
+    /// Drives the brief "Saved"/"Gespeichert" pill. Set `true` on a
     /// successful commit, auto-cleared after a short delay so the cue is a
     /// transient confirmation, not a permanent badge.
     @State var showSavedCue: Bool = false
-    /// v0.8.3 W-C — debounced auto-commit handle. A new field edit cancels the
+    /// Debounced auto-commit handle. A new field edit cancels the
     /// prior pending commit so we coalesce rapid keystrokes into one PATCH.
     @State private var commitTask: Task<Void, Never>?
-    /// v0.8.3 W-C — clears the transient "Saved" cue after it has been shown.
+    /// Clears the transient "Saved" cue after it has been shown.
     @State private var savedCueTask: Task<Void, Never>?
     /// Not `private` so the `+PatientIdentity` diff helper can read it.
     @State var baseline: ProfileFormState = .empty
-    /// v0.5.5.2 — flips to `true` on the first keystroke. The footer-error
+    /// Flips to `true` on the first keystroke. The footer-error
     /// rendering checks this so the "Bitte einen Anzeigenamen eingeben."
     /// copy doesn't surface on the initial server-prefill of an empty
     /// `displayName`. The auto-commit keeps honouring the validation
@@ -120,48 +120,43 @@ struct EditProfileScreen: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("editProfile.displayName")
                 } label: {
-                    Text("Display name")
+                    HLRowTitle("Display name")
                 }
             } header: {
-                Text("Identity")
+                HLSectionHeader("Identity")
             } footer: {
-                // 1.4 B2-c — only the validation error; "how you appear in the
+                // Only the validation error; "how you appear in the
                 // app" said what the label already does.
                 if hasUserEditedDisplayName, let length = displayNameValidationError {
                     HLFormErrorText(length)
                 }
             }
+            .hlFormRowSurface()
 
+            // Date of birth, gender and height as rows of one section: one
+            // section per row repeated each row's label as its heading
+            // ("Gender" over "Gender").
             Section {
-                Toggle(String(localized: "Set date of birth"), isOn: $hasDateOfBirth)
-                    .accessibilityIdentifier("editProfile.hasDateOfBirth")
+                Toggle(isOn: $hasDateOfBirth) {
+                    HLRowTitle("Set date of birth")
+                }
+                .accessibilityIdentifier("editProfile.hasDateOfBirth")
                 if hasDateOfBirth {
                     DatePicker(
-                        String(localized: "Date of birth"),
                         selection: $dateOfBirth,
                         in: minBirthDate ... .now,
                         displayedComponents: .date
-                    )
+                    ) {
+                        HLRowTitle("Date of birth")
+                    }
                     .accessibilityIdentifier("editProfile.dateOfBirth")
                 }
-            } header: {
-                Text("Date of birth")
-            } footer: {
-                Text("Used for age-based reference ranges (e.g. pulse zones).")
-            }
-
-            Section {
-                Picker(String(localized: "Gender"), selection: $gender) {
-                    ForEach(GenderOption.allCases) { option in
-                        Text(option.label).tag(option)
-                    }
+                // At AX sizes the value wraps under the title instead of
+                // being cut in the middle ("Keine…gabe").
+                HLFormPicker("Gender", selection: $gender, options: GenderOption.allCases) { option in
+                    Text(option.label)
                 }
                 .accessibilityIdentifier("editProfile.gender")
-            } header: {
-                Text("Gender")
-            }
-
-            Section {
                 LabeledContent {
                     TextField(
                         String(localized: "Optional"),
@@ -171,17 +166,21 @@ struct EditProfileScreen: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("editProfile.heightCm")
                 } label: {
-                    Text("Height (cm)")
+                    HLRowTitle("Height (cm)")
                 }
             } header: {
-                Text("Height")
+                HLSectionHeader("aboutMe.body.title")
             } footer: {
-                // 1.4 B2-c — the range shows up as the validation error when
-                // it matters; no standing hint.
-                if let err = heightValidationError {
-                    HLFormErrorText(err)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    Text("Used for age-based reference ranges (e.g. pulse zones).")
+                    // The range shows up as the validation error when it
+                    // matters; no standing hint.
+                    if let err = heightValidationError {
+                        HLFormErrorText(err)
+                    }
                 }
             }
+            .hlFormRowSurface()
 
             patientIdentitySection
 
@@ -190,8 +189,7 @@ struct EditProfileScreen: View {
             // own data": display units (from Account) + time format (from
             // Appearance). Both bind to the same `SettingsStore` paths as before.
             unitsSection
-            timeFormatSection
-            dateFormatSection
+            formatsSection
 
             ProfileRejectedFieldsSection(fields: settings.rejectedProfileFields) // #97 partial save
             if let error = settings.error {
@@ -200,27 +198,26 @@ struct EditProfileScreen: View {
                         .foregroundStyle(HLColor.statusBad)
                         .accessibilityIdentifier("editProfile.error")
                 }
+                .hlFormRowSurface()
             }
         }
+        .hlPageMargins()
         .scrollDismissesKeyboard(.interactively)
-        .hlScreenBackground()
-        // v0.5.x C-9 — iOS 26+ soft scroll-edge so Form content blurs into
-        // the navigation Liquid Glass instead of clipping cleanly.
-        // iOS 18-25: no-op (system stays flat-translucent).
-        .hlScrollEdgeSoft()
         .navigationTitle(Text("Edit Profile"))
         .navigationBarTitleDisplayMode(.inline)
-        // v0.8.3 W-C — the explicit Save button is gone; the toolbar now hosts
+        // The explicit Save button is gone; the toolbar now hosts
         // a transient "Saved" confirmation (or an in-flight spinner) so the
         // auto-commit is never silent.
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            // A state, not an action and not a confirm: the bar's default
+            // place, beside nothing the page could also offer.
+            ToolbarItem {
                 savedCue
             }
         }
         .sensoryFeedback(.success, trigger: saveSucceeded)
         .onAppear(perform: loadBaseline)
-        // v0.8.3 W-C — flush any pending commit when the screen leaves. A
+        // Flush any pending commit when the screen leaves. A
         // debounced edit that hasn't fired yet (user types then immediately
         // taps back) must still reach the server, so we commit un-debounced
         // here. `commitNow` is idempotent — a no-op when there's no diff.
@@ -229,17 +226,17 @@ struct EditProfileScreen: View {
             savedCueTask?.cancel()
             commitNow()
         }
-        // v0.5.5.2 — gate the displayName validation footer behind the
+        // Gate the displayName validation footer behind the
         // first real edit. `isApplyingBaseline` filters out the prefill
         // assignment in `loadBaseline` so server-empty displayNames don't
         // immediately surface as red errors on screen-open.
-        // v0.8.3 W-C — a real edit also schedules a debounced auto-commit.
+        // A real edit also schedules a debounced auto-commit.
         .onChange(of: displayName) { _, _ in
             guard !isApplyingBaseline else { return }
             hasUserEditedDisplayName = true
             scheduleCommit()
         }
-        // v0.8.3 W-C — auto-commit on the remaining editable fields. Toggling
+        // Auto-commit on the remaining editable fields. Toggling
         // DOB on/off, the date itself, the gender picker and the height field
         // all feed the same debounced commit so every change is persisted.
         // `scheduleCommit` itself no-ops while `isApplyingBaseline` is set, so
@@ -248,15 +245,15 @@ struct EditProfileScreen: View {
         .onChange(of: dateOfBirth) { _, _ in scheduleCommit() }
         .onChange(of: gender) { _, _ in scheduleCommit() }
         .onChange(of: heightCm) { _, _ in scheduleCommit() }
-        // v0.10.0 — auto-commit the patient-identity fields on the same
+        // Auto-commit the patient-identity fields on the same
         // debounce as every other editable field.
         .onChange(of: fullName) { _, _ in scheduleCommit() }
         .onChange(of: insurerName) { _, _ in scheduleCommit() }
         .onChange(of: insuranceNumber) { _, _ in scheduleCommit() }
         .onChange(of: insurerIkNumber) { _, _ in scheduleCommit() }
-        // v0.8.0 W11 — load the picked photo's bytes on-device, then upload
+        // Load the picked photo's bytes on-device, then upload
         // through AvatarStore (downscale + multipart + idempotent POST).
-        // v0.8.2 W1c (A4) — flip `isPreparing` synchronously here (disables
+        // Flip `isPreparing` synchronously here (disables
         // the picker before the transferable load), and cancel any prior
         // in-flight pick so a rapid re-pick can't race two uploads.
         .onChange(of: avatarPickerItem) { _, newValue in
@@ -272,7 +269,7 @@ struct EditProfileScreen: View {
         }
     }
 
-    // MARK: - Avatar section (W11)
+    // MARK: - Avatar section
 
     private var avatarSection: some View {
         // Snapshot the MainActor-isolated store state into plain locals so the
@@ -297,21 +294,24 @@ struct EditProfileScreen: View {
                         // `hasImage` is a Sendable Bool snapshotted above, so
                         // it captures cleanly into the @Sendable label closure.
                         // The two literals extract as separate catalogue keys.
+                        // Row-title weight, like the delete row under it.
                         if hasImage {
-                            Text("Change photo")
+                            Text("Change photo").font(.hlSubhead.weight(.semibold))
                         } else {
-                            Text("Add photo")
+                            Text("Add photo").font(.hlSubhead.weight(.semibold))
                         }
                     }
                     .disabled(avatarStore.isUploading || isPreparing)
                     .accessibilityIdentifier("editProfile.avatarPicker")
 
                     if hasImage {
-                        Button(role: .destructive) {
-                            Task { await avatarStore.remove() }
-                        } label: {
-                            Text("Remove photo")
-                        }
+                        HLDeleteButton(
+                            "Remove photo",
+                            form: .row,
+                            action: .confirmed(title: "settings.profile.photo.remove.confirm.title") {
+                                _ = await avatarStore.remove()
+                            }
+                        )
                         .disabled(avatarStore.isUploading || isPreparing)
                         .accessibilityIdentifier("editProfile.avatarRemove")
                     }
@@ -319,7 +319,7 @@ struct EditProfileScreen: View {
 
                 Spacer()
 
-                // v0.8.3 W-C — label the in-flight state so the disabled
+                // Label the in-flight state so the disabled
                 // picker reads as progress, not a freeze. `isPreparing` covers
                 // the on-device transferable load (seconds for large iCloud
                 // assets); `isUploading` covers the network upload window.
@@ -328,8 +328,7 @@ struct EditProfileScreen: View {
                         ProgressView()
                             .controlSize(.small)
                         Text("Loading photo…")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(Text("Loading photo…"))
@@ -338,7 +337,7 @@ struct EditProfileScreen: View {
             }
             .padding(.vertical, HLSpace.xs)
         } header: {
-            Text("Photo")
+            HLSectionHeader("Photo")
         } footer: {
             if avatarPickError {
                 HLFormErrorText(String(localized: "Could not load the selected photo."))
@@ -348,13 +347,14 @@ struct EditProfileScreen: View {
                 Text("Your photo is stored on your own HealthLog server — never shared with a third party.")
             }
         }
+        .hlFormRowSurface()
     }
 
     /// Reads the picked item's bytes on-device, decodes to `UIImage`, then
     /// hands off to `AvatarStore.upload` (which downscales + uploads). On a
     /// read failure surfaces the inline footer; never leaves a broken state.
     ///
-    /// v0.8.2 W1c (A4): `isPreparing` is cleared in a `defer` so the picker
+    /// `isPreparing` is cleared in a `defer` so the picker
     /// re-enables on every exit (success, decode failure, or cancellation).
     /// A cancellation between the transferable load and the upload (a re-pick
     /// superseded this task) bails before mutating store/image state, so the
@@ -383,7 +383,7 @@ struct EditProfileScreen: View {
         let uploaded = await avatarStore.upload(uiImage)
         // Reset the selection so re-picking the same asset fires onChange again.
         avatarPickerItem = nil
-        // v0.8.3 W-C — W1c uploads the photo silently; pulse the same success
+        // W1c uploads the photo silently; pulse the same success
         // confirmation the field auto-commit uses so the upload is never
         // feedback-less. A surfaced upload error is left to the avatar footer.
         if uploaded { signalSaved() }
@@ -419,7 +419,7 @@ struct EditProfileScreen: View {
         applyIdentityBaseline(snapshot)
     }
 
-    // MARK: - Auto-commit (v0.8.3 W-C)
+    // MARK: - Auto-commit
 
     /// Debounce window for the field auto-commit. Coalesces a burst of
     /// keystrokes / picker taps into a single PATCH rather than one-per-edit.
@@ -464,7 +464,7 @@ struct EditProfileScreen: View {
     }
 
     /// Fires the success haptic and shows the transient "Saved" cue. Shared by
-    /// the field auto-commit and the silent avatar upload (W1c) so every
+    /// the field auto-commit and the silent avatar upload so every
     /// successful write surfaces the same confirmation.
     private func signalSaved() {
         saveSucceeded.toggle()
@@ -511,20 +511,12 @@ struct EditProfileScreen: View {
             dirty = true
         }
 
-        // v0.10.0 — patient-identity diffs live in the +PatientIdentity split.
+        // Patient-identity diffs live in the +PatientIdentity split.
         if applyIdentityDiff(to: &patch) {
             dirty = true
         }
 
         return dirty ? patch : nil
-    }
-
-    private func sameDay(_ lhs: Date?, _ rhs: Date?) -> Bool {
-        switch (lhs, rhs) {
-        case (nil, nil): true
-        case let (a?, b?): Calendar.current.isDate(a, inSameDayAs: b)
-        default: false
-        }
     }
 
     // MARK: - Validation
@@ -537,7 +529,7 @@ struct EditProfileScreen: View {
         EditProfileFormValidator.heightError(for: heightCm)
     }
 
-    /// v0.5.5.2 — testable mirror of the live footer-gating logic. Returns
+    /// Testable mirror of the live footer-gating logic. Returns
     /// the same string the footer renders, given the input `displayName`
     /// and whether the user has typed since the screen opened. Tests pin
     /// this so a future refactor that breaks the "no red footer on initial
@@ -550,7 +542,7 @@ struct EditProfileScreen: View {
         return EditProfileFormValidator.displayNameError(for: displayName)
     }
 
-    /// v0.8.3 W-C — validation gate for the auto-commit. An invalid field
+    /// Validation gate for the auto-commit. An invalid field
     /// (empty/over-length name, out-of-range height) is never persisted; the
     /// inline footer already tells the user why. Replaces the old button-gating
     /// `canSave` — the dirty-check now lives in `buildPatch()` at commit time.
@@ -558,6 +550,17 @@ struct EditProfileScreen: View {
         displayNameValidationError == nil
             && heightValidationError == nil
             && identityValidationError == nil
+    }
+}
+
+/// Date helpers of the form, outside the type body.
+extension EditProfileScreen {
+    private func sameDay(_ lhs: Date?, _ rhs: Date?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil): true
+        case let (a?, b?): Calendar.current.isDate(a, inSameDayAs: b)
+        default: false
+        }
     }
 
     // MARK: - Date bounds

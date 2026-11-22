@@ -82,7 +82,7 @@ public protocol EcgSyncing: AnyObject, Sendable {
 /// - **Transport** (network, offline, 5xx) — stop the sweep, hold the anchor,
 ///   resume on the next wake.
 ///
-/// ## Progress survives a held anchor (S2)
+/// ## Progress survives a held anchor
 ///
 /// Every confirmed recording is remembered per account
 /// (``EcgConfirmedLedger``) and never posted again while the anchor still
@@ -114,7 +114,7 @@ public actor EcgSyncCoordinator {
     /// Test seam for a failed durable cursor write. Production uses the
     /// UserDefaults write + read-back path below.
     private let anchorPersistenceOverride: (@Sendable (Data, String) -> Bool)?
-    /// **Phase 07 / plan 07-06** — the Phase-06/07 account authority, when the
+    /// The Phase-06/07 account authority, when the
     /// composition root has one to give.
     ///
     /// It never *widens* this path: the sweep's owner and bearer are still
@@ -144,7 +144,7 @@ public actor EcgSyncCoordinator {
 
     /// Per-user anchor key prefix.
     static let anchorKeyPrefix = "hl.ecg.hk.anchor."
-    /// Per-user key prefix of the confirmed-recording ledger (S2).
+    /// Per-user key prefix of the confirmed-recording ledger.
     static let confirmedKeyPrefix = "hl.ecg.hk.confirmed."
 
     /// One account's ECG cursor identity, captured before any suspension.
@@ -234,12 +234,14 @@ public actor EcgSyncCoordinator {
             return EcgSyncSummary(stoppedBecause: .transport)
         }
 
-        let (summary, retainAnchor) = await uploadRecordings(
+        let (summary, retainUpload) = await uploadRecordings(
             fetched.recordings,
             requiring: authLease,
             within: partition
         )
-
+        // Deletions in Apple Health go out before the anchor may pass them.
+        var retainAnchor = retainUpload
+        if !retainUpload { retainAnchor = await deliverDeletions(fetched.deletedIDs, requiring: authLease) }
         return advanceAnchorIfEarned(
             summary: summary,
             retainAnchor: retainAnchor,
@@ -248,6 +250,33 @@ public actor EcgSyncCoordinator {
             requiring: authLease,
             within: partition
         )
+    }
+
+    /// Sends the page's deletions and those kept while the route was closed;
+    /// while it is closed they wait in their own list. `true` when the anchor
+    /// must hold because a send failed.
+    private func deliverDeletions(_ deletedIDs: [String], requiring authLease: EcgUploadAuthenticationLease) async -> Bool {
+        let all = AppleHealthPendingDeletions.toSend(
+            deletedIDs,
+            .ecg,
+            ownerID: authLease.ownerUserID,
+            routeOpen: AppleHealthIngestCapability.isAvailable(.appleHealthDeletes, defaults: defaults),
+            defaults: defaults
+        )
+        guard !all.isEmpty else { return false }
+        do {
+            for start in stride(from: 0, to: all.count, by: AppleHealthDeleteDomain.maxIDsPerRequest) {
+                let end = min(start + AppleHealthDeleteDomain.maxIDsPerRequest, all.count)
+                try await repo.deleteAppleHealthRecordings(Array(all[start ..< end]), requiring: authLease)
+            }
+            AppleHealthPendingDeletions.clear(.ecg, ownerID: authLease.ownerUserID, defaults: defaults)
+            return false
+        } catch where AppleHealthDeleteRefusal.isFinal(error) {
+            AppleHealthPendingDeletions.clear(.ecg, ownerID: authLease.ownerUserID, defaults: defaults)
+            return false
+        } catch {
+            return true
+        }
     }
 
     /// The tail of a sweep: decide whether this pass earned the fetched anchor,
@@ -275,7 +304,7 @@ public actor EcgSyncCoordinator {
         }
         guard !Self.shouldSkipAnchorSave(
             hadPersistedAnchor: storedAnchor != nil,
-            fetchedCount: fetched.recordings.count
+            fetchedCount: fetched.recordings.count + fetched.deletedIDs.count
         ) else {
             HLLog.healthKit.debug("ECG sweep empty — anchor NOT advanced (read auth pending or no visible history)")
             return summary
@@ -309,7 +338,7 @@ public actor EcgSyncCoordinator {
     /// Clear the per-user cursor (logout / user change / opt-out), so the next
     /// user never inherits this one's position in the ECG stream.
     ///
-    /// **Phase 07 / plan 07-06 — the owner is captured, then the work is drained,
+    /// **The owner is captured, then the work is drained,
     /// then the partition is cleared.** In that order, and the order is the fix.
     ///
     /// The shipped version chose its key from a live Keychain read at the moment
@@ -339,7 +368,7 @@ public actor EcgSyncCoordinator {
             _ = await task.value
         }
         defaults.removeObject(forKey: key)
-        // S2 — the progress goes with the cursor: the next account (or the
+        // The progress goes with the cursor: the next account (or the
         // same one after a re-enable) starts from its own, empty ledger.
         defaults.removeObject(forKey: confirmedKey)
         capturedPartition = nil
@@ -471,7 +500,7 @@ public actor EcgSyncCoordinator {
             guard response.status.isConfirmedStored else { return .halted(.transport) }
             return .accepted(response.status)
         } catch let HLError.rateLimited(retryAfter) {
-            // S2 — the wait the server named, so the loop above can sit it out
+            // The wait the server named, so the loop above can sit it out
             // and re-send this same recording instead of restarting the sweep.
             pacer.recordRateLimit(retryAfter: retryAfter, now: clock())
             return .halted(.rateLimited)
@@ -497,7 +526,7 @@ public actor EcgSyncCoordinator {
             return .halted(.unauthorized)
         case .rateLimited:
             return .halted(.rateLimited)
-        // Audit B-2 — an in-flight idempotency conflict is the server asking for
+        // An in-flight idempotency conflict is the server asking for
         // a later retry, which is exactly what holding the cursor does.
         case .network, .offline, .canceled, .serverNotConfigured, .idempotencyReplayInFlight:
             return .halted(.transport)

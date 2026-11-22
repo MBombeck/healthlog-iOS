@@ -27,7 +27,7 @@ import Testing
 
         static let owner = "account-a"
 
-        /// One round-trip fixture. Phase 07 / Plan 07-04: the coordinator has no
+        /// One round-trip fixture. The coordinator has no
         /// way to name an owner other than an admission, so the round-trip has
         /// to carry one.
         private struct Harness {
@@ -71,7 +71,6 @@ import Testing
                 statisticsService: HealthKitStatisticsService(),
                 cache: cache,
                 uploader: Self.makeUploader(api: api),
-                featureFlags: AlwaysOnFeatureFlags(),
                 admission: { lease }
             )
             return Harness(coordinator: coordinator, cache: cache, lease: lease, registry: registry)
@@ -99,7 +98,7 @@ import Testing
             nonisolated(unsafe) var capturedPath: String?
             nonisolated(unsafe) var capturedMethod: String?
             MockURLProtocol.install { req in
-                // CU-07: the handler is process-global — record only OUR route.
+                // The handler is process-global — record only OUR route.
                 if req.targets("/api/measurements/batch") {
                     capturedPath = req.url?.path
                     capturedMethod = req.httpMethod
@@ -144,7 +143,7 @@ import Testing
 
         // MARK: - Round-trip: .upsert path — late-Watch-Sync correction
 
-        /// **Restated (Phase 07 / Plan 07-04).** This was
+        /// **Restated.** This was
         /// `execute(.patch): PATCH /api/measurements/{id} updates value + cache`.
         /// That arm required a server row id the stats path never obtained —
         /// `postDailyStat` always returned `nil`, so `serverMeasurementId` was
@@ -330,7 +329,7 @@ import Testing
 
             nonisolated(unsafe) var requestCount = 0
             MockURLProtocol.install { req in
-                // CU-07: `requestCount == 0` is only meaningful when a parallel
+                // `requestCount == 0` is only meaningful when a parallel
                 // suite's request cannot raise it — scope to the measurement
                 // route this coordinator uses (.post/.upsert both hit
                 // `/api/measurements/batch`).
@@ -364,16 +363,6 @@ import Testing
                 data.append(buffer, count: read)
             }
             return data
-        }
-    }
-
-    // MARK: - Stub feature flags (round-trip variant)
-
-    /// Feature-flag stub that always reports ON — round-trip tests want the
-    /// daily-stats path active without touching UserDefaults.
-    struct AlwaysOnFeatureFlags: FeatureFlagsServicing {
-        func isEnabled(_: FeatureFlag) -> Bool {
-            true
         }
     }
 

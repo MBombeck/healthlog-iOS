@@ -33,42 +33,60 @@ readonly retired_reviewer_fingerprints=(
 )
 
 matches=0
-while IFS= read -r -d '' markdown_file; do
-    fingerprint_status=0
-    perl -MDigest::SHA=sha256_hex -e '
-        my %retired = map { $_ => 1 } @ARGV;
-        while (<STDIN>) {
+
+# One perl process for every file (one per file took 40 s on ~10,000 files).
+# It prints the name of each file that carries a retired fingerprint and
+# exits 2 on a file it cannot read.
+fingerprint_hits="$(mktemp "${TMPDIR:-/tmp}/healthlog-tracked-secret-hits.XXXXXX")" || {
+    echo "Tracked-secret scan failed: could not create the hit list." >&2
+    exit "$EXIT_SCANNER_FAILURE"
+}
+trap 'rm -f "$tracked_candidates" "$fingerprint_hits"' EXIT
+fingerprint_status=0
+perl -MDigest::SHA=sha256_hex -e '
+    open(my $list, "<", shift @ARGV) or exit 2;
+    my %retired = map { $_ => 1 } @ARGV;
+    local $/ = "\0";
+    while (my $name = <$list>) {
+        chomp $name;
+        open(my $file, "<", $name) or do { print STDERR "$name\n"; exit 2 };
+        local $/ = "\n";
+        FILE: while (<$file>) {
             while (/([A-Za-z0-9][A-Za-z0-9._%+@:-]{5,})/g) {
-                exit 1 if $retired{sha256_hex($1)};
+                if ($retired{sha256_hex($1)}) { print "$name\n"; last FILE }
             }
         }
-        exit 0;
-    ' "${retired_reviewer_fingerprints[@]}" < "$markdown_file" || fingerprint_status=$?
+        close $file;
+    }
+    exit 0;
+' "$tracked_candidates" "${retired_reviewer_fingerprints[@]}" >"$fingerprint_hits" || fingerprint_status=$?
+if (( fingerprint_status != 0 )); then
+    echo "Tracked-secret scan failed while inspecting the tracked files." >&2
+    exit "$EXIT_SCANNER_FAILURE"
+fi
+while IFS= read -r hit; do
+    echo "Potential tracked reviewer secret: $hit" >&2
+    matches=1
+done < "$fingerprint_hits"
 
-    if (( fingerprint_status > 1 )); then
-        echo "Tracked-secret scan failed while inspecting: $markdown_file" >&2
+review_notes=".planning/audit-release/APP-REVIEW-NOTES.md"
+if [[ -f "$review_notes" ]] && git ls-files --error-unmatch -- "$review_notes" >/dev/null 2>&1; then
+    placeholder_status=0
+    perl -ne '
+        if (/(?:password|kennwort|account identifier|reviewer (?:account|email)|username|benutzername)\s*:/i
+            && !/<ASC_REVIEW_[A-Z0-9_]+>/) {
+            exit 1;
+        }
+    ' "$review_notes" || placeholder_status=$?
+    if (( placeholder_status > 1 )); then
+        echo "Tracked-secret scan failed while inspecting: $review_notes" >&2
         exit "$EXIT_SCANNER_FAILURE"
     fi
-
-    placeholder_status=0
-    if [[ "$markdown_file" == ".planning/audit-release/APP-REVIEW-NOTES.md" ]]; then
-        perl -ne '
-            if (/(?:password|kennwort|account identifier|reviewer (?:account|email)|username|benutzername)\s*:/i
-                && !/<ASC_REVIEW_[A-Z0-9_]+>/) {
-                exit 1;
-            }
-        ' "$markdown_file" || placeholder_status=$?
-        if (( placeholder_status > 1 )); then
-            echo "Tracked-secret scan failed while inspecting: $markdown_file" >&2
-            exit "$EXIT_SCANNER_FAILURE"
-        fi
-    fi
-
-    if (( fingerprint_status == 1 || placeholder_status == 1 )); then
-        echo "Potential tracked reviewer secret: $markdown_file" >&2
+    if (( placeholder_status == 1 )); then
+        echo "Potential tracked reviewer secret: $review_notes" >&2
         matches=1
     fi
-done < "$tracked_candidates"
+fi
 
 if (( matches != 0 )); then
     exit "$EXIT_MATCH"

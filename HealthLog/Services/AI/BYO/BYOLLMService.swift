@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — the actor that drives the client-side **device→provider** BYO-key
+/// The actor that drives the client-side **device→provider** BYO-key
 /// AI path. It is the single consumer-facing seam W4 will call: hand it a
 /// composed prompt + a provider, it reads the key from ``BYOKeyStore`` at call
 /// time, builds the request via the matching ``LLMProvider`` adapter, performs
@@ -29,7 +29,7 @@ public actor BYOLLMService {
     private let session: URLSession
     private let keyStore: BYOKeyStore
     private let adapters: [BYOProviderID: any LLMProvider]
-    /// v0.13 W4 — informed-consent gate (Apple 5.1.2(i)). Consulted by the
+    /// Informed-consent gate (Apple 5.1.2(i)). Consulted by the
     /// stored-key ``generate(prompt:provider:)`` BEFORE any network call, so a
     /// BYO request can NEVER fire without an explicit per-provider consent grant.
     /// Production wires this to `AIConsentStore.hasBYOConsent(for:)`; `nil` means

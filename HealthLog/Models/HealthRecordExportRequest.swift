@@ -3,7 +3,7 @@ import Foundation
 /// Request body for `POST /api/export/health-record`
 /// (`src/lib/validations/health-record-export.ts`, server v1.32.39).
 ///
-/// **CU-11 — the shape changed and both iOS callers were broken by it.** The
+/// **The shape changed and both iOS callers were broken by it.** The
 /// grouped `sections` object and `includeAiSummary` are **gone** server-side,
 /// `selection` is **required**, and the schema is `.strict()`, so the two live
 /// call sites failed for two different reasons and both answered `422`:
@@ -13,7 +13,7 @@ import Foundation
 ///   - ``ExportService`` (via the health-record package screen) sent the removed
 ///     `sections` tree, so it died on the unknown-key check.
 ///
-/// The scope now rides as the shared ``ReportSelection`` (CU-01): membership is
+/// The scope now rides as the shared ``ReportSelection``: membership is
 /// inclusion, absence is exclusion, and an empty `leaves` array is legal and
 /// means *no health data*. The old `sections` tree resolved an absent key to
 /// "included", which is precisely the defect the v2 selection removes — so

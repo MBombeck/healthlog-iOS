@@ -128,7 +128,7 @@ extension InsightsCorrelationsDiscoveryBlock {
         )
     }
 
-    // MARK: - C1 — a row that looks pursuable is pursuable
+    // MARK: - A row that looks pursuable is pursuable
 
     /// **C1 (walkthrough 2026-08-22: „es gibt weiterhin Einträge, denen man nicht
     /// weiter nachgehen kann")** — the Insights metric page a correlation channel
@@ -183,7 +183,7 @@ extension InsightsCorrelationsDiscoveryBlock {
         return kinds
     }
 
-    /// **A360 H2 (v0156)** — collapse a discovered pair's two channel ids into a
+    /// Collapse a discovered pair's two channel ids into a
     /// Coach launch scope spanning both, when at least the behaviour maps to a
     /// known scope source. Returns `nil` when neither channel maps (the Coach then
     /// opens against the default all-source snapshot rather than an empty scope).

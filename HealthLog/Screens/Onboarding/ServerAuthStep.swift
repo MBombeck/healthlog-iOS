@@ -31,7 +31,7 @@ struct ServerAuthStep: View {
     /// bootstrapping; this hides the "Neues Konto" CTA accordingly.
     let registrationEnabled: Bool
 
-    /// parity 2.9 — `GET /api/auth/oidc/status`, probed by `OnboardingFlow`.
+    /// `GET /api/auth/oidc/status`, probed by `OnboardingFlow`.
     /// Decides three things the screen used to guess:
     /// * no IdP configured → the SSO button is hidden instead of dead;
     /// * `OIDC_ONLY` → password + passkey + register are hidden instead of
@@ -41,7 +41,7 @@ struct ServerAuthStep: View {
     /// probed or unreachable server never renders a screen with no way in.
     var oidcStatus: OidcStatus = .unknown
 
-    /// #65 / 13-02 — what `OnboardingFlow` has learned about this server's
+    /// What `OnboardingFlow` has learned about this server's
     /// web-handoff login route, probed on the same beat as `oidcStatus`.
     /// Combined with a `.selfHosted` region (``prefersWebHandoff(keychain:)``)
     /// `.available` swaps the native passkey/password form for the web-handoff
@@ -50,7 +50,7 @@ struct ServerAuthStep: View {
     /// distinguishable from `.unavailable` (see ``WebLoginAvailability``).
     var webLoginAvailability: WebLoginAvailability = .probing
 
-    /// b182 W-B182-INVITE (GH #16) — the server invite token (`hlv_<64 hex>`)
+    /// The server invite token (`hlv_<64 hex>`)
     /// from the web invite QR / universal link, threaded down by
     /// `OnboardingFlow`. Non-nil → auto-present the prefilled `RegistrationSheet`
     /// + render a calm "you've been invited" banner. The token is opaque: it is
@@ -58,7 +58,7 @@ struct ServerAuthStep: View {
     /// chip — never an editable field, never logged.
     var prefilledInviteToken: String?
 
-    /// **R1 — der fehlende Ausgang.**
+    /// **Der fehlende Ausgang.**
     ///
     /// Von der Anmeldefläche muss es IMMER einen Weg zur Serveradresse geben,
     /// auch wenn eine gesetzt ist: wer sich vertippt hat, sah bisher nur, dass
@@ -71,7 +71,7 @@ struct ServerAuthStep: View {
     @Environment(\.appContainer) private var container
     @State private var email: String = ""
     @State private var password: String = ""
-    /// 13-02 — the view's only piece of form state. Whether the form is on
+    /// The view's only piece of form state. Whether the form is on
     /// screen is decided by ``AuthStepFormVisibility``, not by this flag alone:
     /// a dead-ended web leg opens it through the store as well.
     @State private var emailSectionLatched: Bool = false
@@ -97,19 +97,19 @@ struct ServerAuthStep: View {
     /// (``AppEnvironment/supportsPasskeys(host:bundle:)`` gegen die
     /// mitgelieferten Relying-Party-Domains) statt wie früher den Namen
     /// eines fest eingebauten Hosts. Das alte Kriterium war für jeden
-    /// Selbst-Hoster schlicht falsch (GH #65): wer die App mit seiner
+    /// Selbst-Hoster schlicht falsch: wer die App mit seiner
     /// eigenen Domain neu baute, bekam die Schaltfläche trotzdem nie zu
     /// sehen.
     private var passkeySupportedForHost: Bool {
         server?.supportsPasskeys ?? false
     }
 
-    /// 09-03 — the configured server as a value, not a per-body Keychain read.
+    /// The configured server as a value, not a per-body Keychain read.
     private var server: ConfiguredServerSnapshot? {
         container?.configuredServer
     }
 
-    /// #65 — soll die Anmeldung an den Browser übergeben werden?
+    /// Soll die Anmeldung an den Browser übergeben werden?
     ///
     /// Nur, wenn der native Weg für diesen Host strukturell nicht
     /// funktionieren kann: der Server ist selbst gehostet (statt eines
@@ -128,7 +128,7 @@ struct ServerAuthStep: View {
         ).prefersWebHandoff
     }
 
-    /// #65 — the live UI gate: self-hosted region AND the server serves the
+    /// The live UI gate: self-hosted region AND the server serves the
     /// frozen web-handoff contract (`webLoginAvailable`). Both must hold, else
     /// the native passkey/password form stays. Independent of
     /// `oidcStatus.hidesPasswordAffordances` — on an `OIDC_ONLY` self-hosted
@@ -139,7 +139,7 @@ struct ServerAuthStep: View {
         formVisibility.showsWebHandoffCTA
     }
 
-    /// 13-02 — the rule, built fresh per body pass from the live inputs. The
+    /// The rule, built fresh per body pass from the live inputs. The
     /// store's `passwordFallbackRevealed` is folded in here so a web leg that
     /// dead-ended in the browser opens the same form the fallback link does —
     /// one door, two ways of reaching it.
@@ -167,7 +167,7 @@ struct ServerAuthStep: View {
                 .padding(.horizontal, HLSpace.xl)
                 .padding(.top, HLSpace.xxl)
 
-                // b182 W-B182-INVITE — calm "you've been invited" banner when
+                // Calm "you've been invited" banner when
                 // the user arrived via the web invite link. Opaque: no token is
                 // shown, only the fact that an invite is applied.
                 if prefilledInviteToken != nil {
@@ -175,7 +175,7 @@ struct ServerAuthStep: View {
                         .padding(.horizontal, HLSpace.xl)
                 }
 
-                // v0.7.0: Passkey-CTA reaktiviert. Der Backend-Handshake
+                // Passkey-CTA reaktiviert. Der Backend-Handshake
                 // ist seit v0.6.1.21 stabil (Server-Repo CHANGELOG), und
                 // `PasskeyService` haengt unveraendert am Anchor-Provider —
                 // siehe `HealthLogApp.swift:49` (`PasskeyService` wird im
@@ -186,11 +186,11 @@ struct ServerAuthStep: View {
                 // die App-Store-Review-Note "we support passkeys" gegen
                 // den tatsaechlichen Build-Output stellte. Reaktivierung
                 // bringt das Erlebnis in Linie mit der HIG-Direktive.
-                // parity 2.9 — on an `OIDC_ONLY` instance the server refuses
+                // On an `OIDC_ONLY` instance the server refuses
                 // password AND passkey sign-in, so neither the passkey CTA nor
                 // the "or" divider that introduces the email form is honest.
                 #if canImport(AuthenticationServices) && canImport(UIKit)
-                    // #65 — on a self-hosted instance that serves the frozen
+                    // On a self-hosted instance that serves the frozen
                     // web-handoff contract, the web-login CTA REPLACES the native
                     // passkey CTA + "or" divider (the native form can't bind that
                     // host's passkeys / password manager). Managed/review hosts
@@ -200,7 +200,7 @@ struct ServerAuthStep: View {
                         webHandoffSection
                             .padding(.horizontal, HLSpace.xl)
                     } else if !oidcStatus.hidesPasswordAffordances, formVisibility.showsPasskeyCTA {
-                        // Build 272 — the passkey CTA is offered only where the
+                        // The passkey CTA is offered only where the
                         // ceremony can run (`passkeySupportedForHost`). The
                         // audit-02 H-1 "visible but honestly captioned" variant
                         // shipped a primary button whose tap only re-revealed the
@@ -238,7 +238,7 @@ struct ServerAuthStep: View {
                         .padding(.horizontal, HLSpace.xl)
                         .accessibilityIdentifier("onboarding.sso.onlyNote")
                 } else if formVisibility.showsEmailSection {
-                    // #65 / 13-02 — under a live web CTA the password form is the
+                    // Under a live web CTA the password form is the
                     // fallback and stays closed until the fallback link (or a
                     // dead-ended web leg) opens it. Everywhere else it is the
                     // primary door and simply renders. `mayLatchOnAppear` is the
@@ -252,16 +252,16 @@ struct ServerAuthStep: View {
                 }
 
                 if let err = authStore.lastError {
-                    // R1 — die Anmelde-Fassung (L1, `signInFacingDescription`):
+                    // Die Anmelde-Fassung (L1, `signInFacingDescription`):
                     // lokalisiert, 4xx-Umschläge durchgereicht, offline ohne
                     // „zwischengespeicherte Werte"; Login-/Passkey-401 werden
-                    // vorher im Store zum Katalogsatz (J1 / F1, L1). Nie die
+                    // vorher im Store zum Katalogsatz. Nie die
                     // Diagnose-Fassung `localizedDescription`.
                     Text(err.signInFacingDescription)
                         .font(.hlSubhead)
                         .foregroundStyle(HLColor.statusBad)
                         .padding(.horizontal, HLSpace.xl)
-                        // 13-04 — the banner is what a dead-ended web login
+                        // The banner is what a dead-ended web login
                         // leaves behind, so the journey test has to be able to
                         // address it. Identifier only: no visual change.
                         .accessibilityIdentifier("onboarding.auth.errorBanner")
@@ -280,45 +280,41 @@ struct ServerAuthStep: View {
                             // the string catalog; the fallback is already
                             // resolved by `String(localized:)`.
                             HLButton(
-                                verbatim: oidcStatus.buttonLabel ?? String(localized: "onboarding.sso.title"),
-                                icon: "person.badge.key.fill",
-                                variant: .ghost
+                                Text(verbatim: oidcStatus.buttonLabel ?? String(localized: "onboarding.sso.title")),
+                                systemImage: "person.badge.key.fill",
+                                variant: .secondary
                             ) {
                                 Task { await authStore.loginWithSSO(anchor: SceneAnchorProvider.shared) }
                             }
                             .accessibilityIdentifier("onboarding.ssoCTA")
                         }
                     #endif
-                    // parity 2.9 — `OIDC_ONLY` refuses `POST /api/auth/register`
+                    // `OIDC_ONLY` refuses `POST /api/auth/register`
                     // too: identities come from the IdP, so a "create account"
                     // CTA here leads nowhere.
                     if registrationEnabled, !oidcStatus.hidesPasswordAffordances {
                         HLButton(
-                            String(localized: "onboarding.auth.createAccount"),
-                            icon: "person.crop.circle.badge.plus",
-                            variant: .ghost
+                            "onboarding.auth.createAccount",
+                            systemImage: "person.crop.circle.badge.plus",
+                            variant: .secondary
                         ) {
                             showRegistration = true
                         }
                         .accessibilityIdentifier("onboarding.registerCTA")
                     }
-                    // R1 — der Ausgang. Immer da, unabhängig davon, ob eine
+                    // Der Ausgang. Immer da, unabhängig davon, ob eine
                     // Adresse gesetzt ist: eine falsch eingetippte Adresse
                     // fällt erst hier auf, und bis hierher gab es von dieser
                     // Fläche keinen Weg zurück zu ihr. Bewusst dieselbe stille
                     // Zeilenform wie der Passwort-Rückfall im Web-Handoff
                     // oben — ein Ausgang, keine Werbung.
                     if let onChangeServer {
-                        Button(action: onChangeServer) {
-                            Text("onboarding.auth.changeServer")
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
-                                .underline()
-                        }
-                        .padding(.top, HLSpace.xs)
-                        .accessibilityIdentifier("onboarding.changeServerCTA")
+                        HLTextLink("onboarding.auth.changeServer", action: onChangeServer)
+                            .font(.hlCaption)
+                            .padding(.top, HLSpace.xs)
+                            .accessibilityIdentifier("onboarding.changeServerCTA")
                     }
-                    // parity 2.9 — pre-login path to the policy, pointed at the
+                    // Pre-login path to the policy, pointed at the
                     // configured instance. Last item: available, not shouted.
                     privacyLink
                         .padding(.top, HLSpace.sm)
@@ -326,7 +322,7 @@ struct ServerAuthStep: View {
                 .padding(.horizontal, HLSpace.xl)
                 .padding(.bottom, HLSpace.xxxl)
             }
-            // A11Y (audit-v0162 §5) — `hlAnimation` suppresses the spring under
+            // A11Y — `hlAnimation` suppresses the spring under
             // Reduce Motion so the email section cross-fades in instead of
             // springing (mirrors the OnboardingFlow container's step animation).
             .hlAnimation(.spring(response: 0.3, dampingFraction: 0.85), value: formVisibility)
@@ -334,7 +330,6 @@ struct ServerAuthStep: View {
         .background(HLColor.background)
         .sheet(isPresented: $showRegistration) {
             RegistrationSheet(prefilledInviteToken: prefilledInviteToken)
-                .hlSheetPresentation(.form)
         }
         // #37 / v1.23.0 — second-factor challenge. Presented when a password
         // login is accepted but the server requires a second factor
@@ -348,14 +343,13 @@ struct ServerAuthStep: View {
                     challenge: challenge,
                     passkeySupportedForHost: passkeySupportedForHost
                 )
-                .hlSheetPresentation(.form)
             }
         }
-        // b182 W-B182-INVITE — auto-open the prefilled registration sheet when
+        // Auto-open the prefilled registration sheet when
         // the user arrived via an invite link. The token implies they want a new
         // account; landing them straight on registration mirrors the web.
         .onAppear {
-            // parity 2.9 — an `OIDC_ONLY` instance refuses `POST /api/auth/register`,
+            // An `OIDC_ONLY` instance refuses `POST /api/auth/register`,
             // so auto-presenting the registration sheet would drop an invited
             // user straight into a form the server cannot accept. The invite
             // banner still explains why they are here; the IdP is their door.
@@ -365,7 +359,7 @@ struct ServerAuthStep: View {
         }
     }
 
-    /// b182 W-B182-INVITE — calm invite banner. Communicates "you've been
+    /// Calm invite banner. Communicates "you've been
     /// invited" without ever surfacing the token value.
     private var inviteBanner: some View {
         HLCard {
@@ -389,7 +383,7 @@ struct ServerAuthStep: View {
     }
 
     #if canImport(AuthenticationServices) && canImport(UIKit)
-        /// #65 — the self-hosted web-handoff surface: a primary CTA opening the
+        /// The self-hosted web-handoff surface: a primary CTA opening the
         /// instance's own sign-in page in `ASWebAuthenticationSession` (where its
         /// passkeys + password managers work), a hint, and — unless the server
         /// refuses passwords (`OIDC_ONLY`) — a ghost fallback link that reveals
@@ -398,7 +392,7 @@ struct ServerAuthStep: View {
             VStack(spacing: HLSpace.xs) {
                 HLButton(
                     String(localized: "onboarding.webLogin.cta"),
-                    icon: "safari",
+                    icon: HLRowIndicator.externalSymbol,
                     variant: .primary,
                     size: .large,
                     isLoading: authStore.isWorking
@@ -416,24 +410,10 @@ struct ServerAuthStep: View {
                 // parity with the `OIDC_ONLY` gate: an instance that refuses
                 // password sign-in must not advertise a password fallback.
                 if !oidcStatus.hidesPasswordAffordances {
-                    Button {
+                    // The quiet action under the card, in the app's one link
+                    // form: semibold, 44 pt, set apart from the hint above.
+                    HLLinkButton("onboarding.webLogin.fallbackPassword") {
                         revealEmailSection()
-                    } label: {
-                        // 16-02 (K5 polish) — it reads as an action now. It was
-                        // caption-sized secondary text with an underline, which
-                        // is the same ink as the hint two lines above it, and
-                        // the operator's report was that it did not look like
-                        // anything. Primary ink, the body size the app uses for
-                        // a tappable line, and the region rather than the
-                        // glyph: the literal 44 is `HLHitTarget.minimum`
-                        // spelled out because this call site states its own
-                        // frame, exactly as `OnboardingFlow`'s back control does.
-                        Text("onboarding.webLogin.fallbackPassword")
-                            .font(.hlSubhead.weight(.semibold))
-                            .foregroundStyle(HLText.primary)
-                            .underline()
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
                     }
                     .padding(.top, HLSpace.xs)
                     .accessibilityIdentifier("onboarding.webLoginFallback")
@@ -455,7 +435,7 @@ struct ServerAuthStep: View {
                     } else {
                         // Self-hosted host: can't assert here — surface the
                         // working email path instead of a doomed ceremony.
-                        // 16-02 — through the same seam as the fallback link:
+                        // Through the same seam as the fallback link:
                         // the two reveals had the identical same-tick focus
                         // bug two lines apart, and fixing one of them would
                         // have left the other reading as the defect's twin.
@@ -528,14 +508,14 @@ struct ServerAuthStep: View {
         if carriesFocus { pendingEmailFocus = true }
     }
 
-    // parity 2.9 — the "Forgot password?" link is GONE, not relocated. It
+    // The "Forgot password?" link is GONE, not relocated. It
     // opened `<base>/forgot-password`, a route the server app does not serve
     // (recovery is operator-only: `POST /api/admin/users/[id]/reset-password`
     // + `scripts/reset-password.mjs`). Every tap was a 404, in the one flow
     // where a user can least absorb a dead end; audit 02 · C-1 had only fixed
     // *which host* served that 404. Restore it if the route ever ships.
 
-    /// parity 2.9 — pre-login privacy link, resolved against the **configured**
+    /// Pre-login privacy link, resolved against the **configured**
     /// server. Web offers the policy before sign-in
     /// (`auth/login/page.tsx:420-430`); iOS offered no pre-login path at all,
     /// which is App-Review-relevant. Resolving against the configured base
@@ -550,17 +530,13 @@ struct ServerAuthStep: View {
     @ViewBuilder
     private var privacyLink: some View {
         if let destination = (server ?? .bundleFallback).privacyPolicyURL {
-            Link(destination: destination) {
-                Text("onboarding.privacy.link")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .underline()
-            }
-            .accessibilityIdentifier("onboarding.privacyLink")
+            HLTextLink("onboarding.privacy.link", destination: destination)
+                .font(.hlCaption)
+                .accessibilityIdentifier("onboarding.privacyLink")
         }
     }
 
-    /// #37 — drives the MFA challenge sheet off the store's transient challenge.
+    /// Drives the MFA challenge sheet off the store's transient challenge.
     /// A dismissal (swipe / programmatic) clears the ticket via
     /// `dismissMfaChallenge()`, which preserves a just-set expiry `lastError` so
     /// the password form can explain why the user is back. The explicit Cancel
@@ -569,9 +545,21 @@ struct ServerAuthStep: View {
         Binding(
             get: { authStore.mfaChallenge != nil },
             set: { presented in
-                if !presented { authStore.dismissMfaChallenge() }
+                if !presented { Self.mfaSheetClosed(authStore) }
             }
         )
+    }
+
+    /// The challenge sheet went away. With the challenge still set the person
+    /// closed it (close button or swipe): that is backing out, so the old
+    /// error goes with it. A challenge the store already cleared (expiry, a
+    /// dead ticket) keeps its message for the password form.
+    static func mfaSheetClosed(_ authStore: AuthStore) {
+        if authStore.mfaChallenge != nil {
+            authStore.cancelMFA()
+        } else {
+            authStore.dismissMfaChallenge()
+        }
     }
 
     private func login() async {
@@ -584,7 +572,7 @@ struct ServerAuthStep: View {
 /// register + login to `AuthStore.register` which chains the two server
 /// calls (see `M2-A11 §6.1` for the rationale).
 private struct RegistrationSheet: View {
-    /// b182 W-B182-INVITE — the opaque server invite token. Passed into the
+    /// The opaque server invite token. Passed into the
     /// register call as-is; surfaced to the user only as an "invite applied"
     /// chip (never an editable field). `nil` for a plain registration.
     var prefilledInviteToken: String?
@@ -601,7 +589,9 @@ private struct RegistrationSheet: View {
     enum Field { case email, username, password }
 
     var body: some View {
-        NavigationStack {
+        // The account is created by the step's own button below the fields;
+        // the bar only closes.
+        HLSheetScaffold("onboarding.registration.navTitle") {
             ScrollView {
                 VStack(alignment: .leading, spacing: HLSpace.lg) {
                     Text(
@@ -614,7 +604,7 @@ private struct RegistrationSheet: View {
                     .padding(.horizontal, HLSpace.xl)
                     .padding(.top, HLSpace.md)
 
-                    // b182 W-B182-INVITE — opaque "invite applied" chip. Confirms
+                    // Opaque "invite applied" chip. Confirms
                     // the invite is attached to this registration WITHOUT showing
                     // the token value (it's a secret). Never an editable field.
                     if prefilledInviteToken != nil {
@@ -644,7 +634,7 @@ private struct RegistrationSheet: View {
                             .foregroundStyle(HLColor.statusBad)
                             .padding(.horizontal, HLSpace.xl)
                     } else if let err = authStore.lastError {
-                        Text(err.signInFacingDescription) // J1 / F2, L1: sign-in copy
+                        Text(err.signInFacingDescription) // Sign-in copy
                             .font(.hlSubhead)
                             .foregroundStyle(HLColor.statusBad)
                             .padding(.horizontal, HLSpace.xl)
@@ -658,18 +648,11 @@ private struct RegistrationSheet: View {
                     ) {
                         Task { await register() }
                     }
-                    .padding(.horizontal, HLSpace.xl)
+                    // The card's edges, not a margin of its own.
+                    .padding(.horizontal, HLLayout.pageMargin)
                     .accessibilityIdentifier("onboarding.registrationSubmit")
 
                     Spacer(minLength: HLSpace.xxl)
-                }
-            }
-            .background(HLColor.background)
-            .navigationTitle(String(localized: "onboarding.registration.navTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
                 }
             }
             .onAppear { focused = .email }
@@ -682,7 +665,7 @@ private struct RegistrationSheet: View {
         // (length 3-32 for username, zxcvbn >= 3 for password). We just keep
         // the user from spamming the rate-limited endpoint with empty bodies.
         //
-        // v0.5.5.1 — email check tightened. The previous `email.contains("@")`
+        // Email check tightened. The previous `email.contains("@")`
         // happily accepted `@.com`, `a@@b.com`, `foo@bar` etc., which the
         // server would later 422 anyway but only after a network round-trip
         // and a rate-limit hit. RegistrationEmailValidator runs the canonical
@@ -714,8 +697,8 @@ private struct RegistrationSheet: View {
         switch authStore.phase {
         case .authenticating, .authenticated:
             dismiss()
-        case .unknown, .unauthenticated, .standalone:
-            // b182 W-B182-INVITE — registration didn't complete. If the user
+        case .unknown, .unauthenticated:
+            // Registration didn't complete. If the user
             // came via an invite and the server rejected it (403 — closed
             // instance + invalid/expired/exhausted invite), surface a clear
             // localized inline message instead of the raw server string.
@@ -725,21 +708,14 @@ private struct RegistrationSheet: View {
         }
     }
 
-    /// b182 W-B182-INVITE — opaque "invite applied" confirmation chip. Shows the
-    /// fact, never the token. Monochrome, glass-free — matches the onboarding
-    /// design language.
+    /// Opaque "invite applied" confirmation: the app's status capsule. Shows
+    /// the fact, never the token.
     private var inviteAppliedChip: some View {
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.hlCaption)
-            Text("onboarding.registration.invite.applied")
-                .font(.hlCaption)
-        }
-        .foregroundStyle(HLText.primary)
-        .padding(.horizontal, HLSpace.sm)
-        .padding(.vertical, HLSpace.xs)
-        .background(HLColor.surface, in: Capsule())
-        .accessibilityElement(children: .combine)
+        HLBadge(
+            String(localized: "onboarding.registration.invite.applied"),
+            icon: "checkmark.seal.fill",
+            tone: .success
+        )
         .accessibilityIdentifier("onboarding.inviteAppliedChip")
     }
 }
@@ -768,48 +744,5 @@ public enum RegistrationEmailValidator {
         guard !trimmed.isEmpty else { return false }
         let pattern = "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"
         return NSPredicate(format: "SELF MATCHES[c] %@", pattern).evaluate(with: trimmed)
-    }
-}
-
-struct HLTextField: View {
-    enum Kind { case email, password, newPassword, plain }
-
-    let title: String
-    @Binding var text: String
-    let kind: Kind
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(title)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-
-            Group {
-                switch kind {
-                case .email:
-                    TextField("", text: $text)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                case .password:
-                    SecureField("", text: $text)
-                        .textContentType(.password)
-                case .newPassword:
-                    // Registration path — offer iOS's strong-password suggestion.
-                    SecureField("", text: $text)
-                        .textContentType(.newPassword)
-                case .plain:
-                    TextField("", text: $text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            }
-            .font(.hlHeadline)
-            .foregroundStyle(HLText.primary)
-            .padding(HLSpace.md)
-            .background(HLColor.surface)
-            .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-        }
     }
 }

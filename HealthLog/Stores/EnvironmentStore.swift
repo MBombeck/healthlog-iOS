@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// `@MainActor @Observable` store backing the native environmental-context
-/// display surface (Build 7 Item 7.7). Loads the module overview via
+/// display surface. Loads the module overview via
 /// ``EnvironmentRepository`` (`GET /api/environment`) and holds the in-memory
 /// snapshot: the coarse home, the travel overrides, the observation-coverage
 /// summary, and the licence-mandated Open-Meteo attribution.

@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// W-SLEEP (v0.14.8) — render verification for the sleep hypnogram (#124).
+    /// Render verification for the sleep hypnogram.
     ///
     /// The hypnogram never rendered on-device: the live route serialises the
     /// summary minute fields UNROUNDED (floats) and emits `stage: null` for
@@ -59,6 +59,8 @@
 
         // MARK: - Render helper (mirrors HLSyncStatusFooterRenderTests)
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(_ view: some View, name: String, height: CGFloat = 852) throws -> UIImage {
             let size = CGSize(width: 393, height: height)
             let host = UIHostingController(rootView: AnyView(view))
@@ -129,7 +131,7 @@
 
         /// WHOOP-shaped night — per-stage TOTALS whose reconstructed segments
         /// all end at the wake instant (`measuredAt = sleep end` per stage).
-        /// W-B180: rendered literally these bars all hug the right edge
+        /// Rendered literally these bars all hug the right edge
         /// ("alle Balken kleben rechts"); the screen must fall back to the
         /// proportional distribution band instead of a fake timeline.
         private static let whoopSummaryNightJSON = #"""
@@ -166,7 +168,7 @@
             #expect(hasInk(image, fromY: 120, toY: 700), "distribution fallback must paint")
         }
 
-        /// W-SLEEPHYP — a `reconstructed: true` night (WHOOP / Polar) carries
+        /// A `reconstructed: true` night (WHOOP / Polar) carries
         /// no measured onsets; the server lays one segment per stage in a fixed
         /// order, so rendering a lane timeline would be a fake hypnogram. The
         /// screen must fall back to the honest distribution band + approximate

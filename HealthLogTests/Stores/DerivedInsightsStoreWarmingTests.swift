@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.1 — locks the warm-in-flight re-poll on `DerivedInsightsStore`.
+/// Locks the warm-in-flight re-poll on `DerivedInsightsStore`.
 ///
 /// On a cold first-login session the server is still computing the daily derived
 /// scores out of band and returns the batch envelopes with `revalidating: true`

@@ -104,7 +104,7 @@ struct DocumentsStoreTests {
         #expect(store.selection.isEmpty)
     }
 
-    // MARK: - Phase 2 — assist gate (data half) + content index
+    // MARK: - Assist gate (data half) + content index
 
     private nonisolated static let assistUsageBody = #"""
     {"data":{"usedBytes":0,"quotaBytes":1000,"maxFileBytes":500,"acceptedExtensions":[".pdf"],

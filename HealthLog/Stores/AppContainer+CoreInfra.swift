@@ -25,6 +25,8 @@ extension AppContainer {
         /// replay path to avoid burning a PHI write's retry budget on a server
         /// outage.
         let serverHealth: ServerHealthSignal
+        /// The owner-bound sign-out wipes of stores built after this phase.
+        let ownerPartitionCleanup: OwnerPartitionCleanup
     }
 
     /// Factory — constructs the foundational infrastructure VERBATIM from the
@@ -70,7 +72,7 @@ extension AppContainer {
         #endif
 
         let ref = unauthorizedRef
-        // W-HERMETIC-E2E (v0152) — in `-uitest-hermetic` runs, inject the
+        // In `-uitest-hermetic` runs, inject the
         // fixture-serving `HermeticURLProtocol` into the API session config so
         // EVERY request (incl. the pinned auth/stream sibling sessions, which
         // inherit `protocolClasses`) resolves from bundled JSON with NO network.
@@ -94,7 +96,7 @@ extension AppContainer {
         // persistenten Store, schiebt einen korrupten beiseite (nie `rm`), und
         // fällt im Worst-Case auf einen In-Memory-Store mit Log-Warnung zurück —
         // so crash't AppContainer.init nie an einem unleserlichen Outbox-Store.
-        // Phase 09 / plan 09-05 — **hier wird nichts mehr geöffnet.** Die
+        // **Hier wird nichts mehr geöffnet.** Die
         // Konstruktion ist weiterhin synchron (`BGTaskScheduler.register` muss
         // im selben applicationDidFinishLaunching-Tick laufen), aber der
         // SQLite-Open hängt jetzt an einem Single-Flight-Handle: die erste
@@ -102,7 +104,7 @@ extension AppContainer {
         // ersten Frame. Das `outbox.open`-Intervall bleibt genau hier, weil
         // `Repositories/` plattform-frei nach `HealthLogCore` kompiliert und
         // `HLPerfSignpost` dort bewusst nicht existiert.
-        // Build 274 (public #4) — this is the app-process outbox the HealthKit
+        // This is the app-process outbox the HealthKit
         // observer wake writes through (`HealthSampleConsumption.persistRetry`),
         // and the store lives in the shared app-group container. Build 271 was
         // killed by RunningBoard (`0xdead10cc`) for holding that SQLite lock
@@ -145,10 +147,11 @@ extension AppContainer {
         }
 
         let authService = AuthService(api: apiClient, keychain: keychain, passkey: passkey)
+        let ownerPartitionCleanup = OwnerPartitionCleanup()
         // HK-Anchor-Wipe nach Logout, partitioniert per User-ID. Lebt hier im
         // Composition-Root, weil HealthLogCore die HK-Symbole nicht kennen darf
         // (`Services/HealthKitService.swift` ist im SPM-Build excluded).
-        Task.detached {
+        Task.detached { [ownerPartitionCleanup] in
             await authService.setOnLogoutCleanup { previousUserID in
                 #if canImport(HealthKit)
                     HealthKitService.clearAnchors(for: previousUserID)
@@ -156,7 +159,7 @@ extension AppContainer {
                 // Backfill-Window ist auch user-bound — Re-Login mit anderem
                 // Account soll nicht die Wahl des vorigen Users erben.
                 HealthKitBackfillWindowStore.clear(for: previousUserID)
-                // W-HR-BUCKET-UPLOAD / GH #34 — clear the per-User HR-bucket
+                // Clear the per-User HR-bucket
                 // cutover boundary so a re-login re-arms it fresh (and the
                 // per-sample HR gate doesn't inherit the previous user's day).
                 // The operator's raw/bucket schedule goes with it: it is a
@@ -164,9 +167,10 @@ extension AppContainer {
                 // device, so the next account starts from the shipping default.
                 HRBucketCutoverStore.clear(for: previousUserID)
                 HRUploadModeSchedule.clear(for: previousUserID)
-                // GH #86 — same for the workout-HR backfill cursor: the next
+                // Same for the workout-HR backfill cursor: the next
                 // account walks its own history from scratch.
                 WorkoutHRBackfillStore.clear(for: previousUserID)
+                await ownerPartitionCleanup.run(previousUserID: previousUserID)
             }
         }
         // RefreshCoordinator + APIClient.refresh-Handler werden im Composition-Root
@@ -186,29 +190,24 @@ extension AppContainer {
             cacheInvalidator: cacheInvalidator,
             auth: authService,
             refreshCoordinator: refreshCoordinator,
-            serverHealth: serverHealth
+            serverHealth: serverHealth,
+            ownerPartitionCleanup: ownerPartitionCleanup
         )
     }
 }
 
-/// **Phase 09 Wave 0 — the outbox-open seam; Wave 7 — what it now produces.**
+/// **The outbox-open seam.**
 ///
-/// `makeCoreInfra` used to open the persistent SwiftData outbox synchronously,
-/// on the launch tick, so that `BGTaskScheduler.register` could still run inside
-/// `applicationDidFinishLaunchingWithOptions`. Plan 09-05 keeps the registration
-/// synchronous and defers only the store open behind a single-flight handle —
-/// and "opened exactly once, and not before the first frame" is not something a
-/// test can observe while the composition root calls a static factory directly.
+/// `BGTaskScheduler.register` stays synchronous inside
+/// `applicationDidFinishLaunchingWithOptions`, and only the persistent
+/// SwiftData outbox open is deferred behind a single-flight handle. "Opened
+/// exactly once, and not before the first frame" is not something a test can
+/// observe while the composition root calls a static factory directly, so the
+/// open goes through this seam.
 ///
-/// 09-01 landed this seam producing the whole `OutboxQueue`, because at that
-/// point constructing the queue *was* the open. 09-05 separated the two, so what
-/// the seam produces is now the thing that is actually expensive: one run of the
-/// G-9 recovery ladder. **The census is unchanged** — one call to `open()` is
-/// one SQLite open, before and after — which is what lets a before/after count be
-/// read off the same instrument.
-///
-/// The live default is the same ladder it always was, so nothing about recovery
-/// behaviour moves here.
+/// The seam produces the expensive part: one run of the G-9 recovery ladder.
+/// One call to `open()` is one SQLite open, which is what lets a test count
+/// opens. The live default is that ladder.
 struct OutboxOpenFactory: Sendable {
     private let handler: @Sendable () -> OutboxQueue.StoreHandle
 

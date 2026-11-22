@@ -31,13 +31,13 @@ public struct MoodRelationsResponse: Codable, Sendable, Equatable {
     public let tagInfluence: TagInfluence
     /// Unified "what's associated with your better days" board.
     public let betterDays: [BetterDayFactor]
-    /// v0.14.8 — the RATED-factor × metric crosstab (`factorCrosstab`, server
+    /// The RATED-factor × metric crosstab (`factorCrosstab`, server
     /// v1.14.0): per RATED factor, the mean of a tracked metric on the days the
     /// factor was rated LOW vs HIGH (median split, inverse-aware, Welch + FDR).
     /// This is the actual analytical USE of the slider rating VALUES. Tolerant:
     /// a pre-v1.14.0 payload decodes to `[]`.
     public let factorCrosstab: [FactorMetricCrosstabRow]
-    /// #115 · 1.3 — the server's day-to-day stability (`stability`, `null`
+    /// The server's day-to-day stability (`stability`, `null`
     /// below the server's day floor). The Mood analysis renders it instead of
     /// computing its own. Tolerant: absent or unreadable → `nil`.
     public let stability: MoodStability?

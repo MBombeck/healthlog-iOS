@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-WIDGET-DEEPLINK (v0152) — builds the per-measurement Insights deep link
+/// **Builds the per-measurement Insights deep link
 /// the `LatestMeasurement` widget opens.**
 ///
 /// The App-Group snapshot carries the reading's kind as a camelCase
@@ -19,7 +19,7 @@ import Foundation
 /// **Graceful fallback:** a `nil` / unknown / unmapped kind resolves to the bare
 /// `healthlog://insights` root (the old behaviour) — never a broken URL, never a
 /// crash. The route resolves to `.insights(metric: <slug>)` in `DeepLinkRouter`,
-/// which the Insights pager jumps to instantly (W-NAVANIM / W-INSIGHTS2).
+/// which the Insights pager jumps to instantly.
 public enum InsightsLatestMeasurementDeepLink {
     /// The bare Insights root the deep link falls back to when there is no
     /// per-metric page to land on.

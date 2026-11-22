@@ -70,7 +70,7 @@ struct SettingsServerScreenTests {
         KeychainKey.refreshTokenExpiresAt,
         KeychainKey.accessTokenExpiresAt,
         KeychainKey.userID,
-        // v0.8.0 W9 L-1 — the cold-launch display-name hint moves with the
+        // The cold-launch display-name hint moves with the
         // auth bundle on a server switch, mirroring the three account-exit
         // paths (`AuthService.logout()`, account-delete, 401-bridge) that
         // already wipe it. Without it the previous user's name lingered in

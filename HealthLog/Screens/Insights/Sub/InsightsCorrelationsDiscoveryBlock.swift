@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.12 — the discovered-correlations overview block. Renders the
+/// The discovered-correlations overview block. Renders the
 /// FDR-controlled behaviour × outcome associations from
 /// `GET /api/insights/correlations` (`CorrelationsDiscoveryStore.presentable`),
 /// one mono card per surviving pair plus an honest footer.
@@ -16,8 +16,7 @@ import SwiftUI
 /// `metrics` is empty and the block self-suppresses (`EmptyView`) — not an
 /// error, not an empty box.
 ///
-/// **Server-derived.** Pure server compute, no on-device fallback — the call
-/// site gates the block on `BackendAvailability.hasServer`. Monochrome, one
+/// **Server-derived.** Pure server compute, no on-device fallback. Monochrome, one
 /// card system (`HLCard`), `HLSpace` grid, `Font.hl*` tokens, reduce-motion
 /// gated. Mounts BELOW the derived-insights block in the overview.
 struct InsightsCorrelationsDiscoveryBlock: View {
@@ -27,17 +26,17 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     /// Behaviour × outcome pairs the server assessed (the honest footer). Only
     /// rendered when at least one pair surfaced.
     let pairsTested: Int
-    /// **A360 H2 (v0156)** — "Ask the coach about this" affordance per pair. The
+    /// "Ask the coach about this" affordance per pair. The
     /// host opens the Coach pre-scoped to BOTH channels in the pair (a localized
     /// opener + `scope { sources: [behaviour, outcome] }`) so the coach reads a
     /// snapshot covering the exact relationship the card describes. `nil` (e.g.
     /// when the coach surface is gated off) hides the affordance.
     var onAskCoach: ((DiscoveredCorrelation) -> Void)?
-    /// **CU-33** — the pairs the person has marked as not relevant for them
+    /// The pairs the person has marked as not relevant for them
     /// (`CorrelationsDiscoveryStore.dismissedPairs`). Kept out of the main list
     /// but reachable behind a disclosure, because the statement is reversible.
     var dismissedPairs: [DiscoveredCorrelation] = []
-    /// **CU-33** — records the person's relevance statement: `true` = "not
+    /// Records the person's relevance statement: `true` = "not
     /// relevant for me", `false` = takes that back. `nil` hides both controls
     /// (e.g. no host store wired).
     var onSetDismissed: ((DiscoveredCorrelation, Bool) -> Void)?
@@ -46,7 +45,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     /// Set when a statement could not be saved — the optimistic change has
     /// already been rolled back, and this says so.
     var actionError: String?
-    /// **C1** — deep-links a pair's channel into its own Insights page. `nil`
+    /// Deep-links a pair's channel into its own Insights page. `nil`
     /// only hides the per-channel jumps INSIDE the detail sheet; the sheet
     /// itself is offered either way, because "one shape for every entry" is the
     /// whole point of C1.
@@ -54,7 +53,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.appContainer) private var appContainer
-    /// **C1** — the id of the pair whose follow-up section is open. One shape for
+    /// The id of the pair whose follow-up section is open. One shape for
     /// every entry: the row that looks pursuable is pursuable, and there is
     /// nothing else to learn which rows are which.
     @State private var expandedPairID: String?
@@ -69,13 +68,12 @@ struct InsightsCorrelationsDiscoveryBlock: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
-                        // 1.4 B2 — the reading instruction once, at the top,
+                        // The reading instruction once, at the top,
                         // instead of a footer plus a second "Quellen" under the
                         // last card (each card carries its own citation).
                         if !pairs.isEmpty {
                             Text(Self.footer(pairsTested: pairsTested))
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
+                                .hlText(.footnote)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityIdentifier("insights.correlations.discovery.footer")
                         }
@@ -86,8 +84,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                         }
                         if let actionError {
                             Text(actionError)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowSubtitle)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityIdentifier("insights.correlations.discovery.actionError")
                         }
@@ -96,8 +93,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
                     .padding(.top, HLSpace.sm)
                 } label: {
                     Text(String(localized: "Relationships in your data"))
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.objectName)
                 }
                 .tint(HLText.secondary)
                 .accessibilityValue(Self.disclosureAccessibilityValue(isExpanded: isExpanded))
@@ -121,18 +117,16 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     private var dismissedSection: some View {
         if !dismissedPairs.isEmpty {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Button {
+                // A row that opens the set-aside pairs under it; the
+                // chevron turns while they show.
+                HLRowButton {
                     showsDismissed.toggle()
                 } label: {
-                    HStack(spacing: HLSpace.xs) {
-                        Image(systemName: showsDismissed ? "chevron.down" : "chevron.right")
-                            .font(.hlIcon(HLIconSize.sm))
-                        Text(Self.dismissedToggleLabel(count: dismissedPairs.count))
-                            .font(.hlFootnote)
-                    }
-                    .foregroundStyle(HLText.secondary)
+                    HLRow(
+                        title: Text(Self.dismissedToggleLabel(count: dismissedPairs.count)),
+                        accessory: .expand(showsDismissed)
+                    )
                 }
-                .buttonStyle(.plain)
                 .accessibilityIdentifier("insights.correlations.discovery.dismissedToggle")
                 if showsDismissed {
                     VStack(spacing: HLSpace.sm) {
@@ -147,7 +141,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
 
     // MARK: - Discovered-pair card
 
-    /// 1.4 B2 — headline, the server's reading, then ONE foot line: "Details"
+    /// Headline, the server's reading, then ONE foot line: "Details"
     /// and the card's citation. Everything else a card used to stack below
     /// (the n/r line, the set-aside and came-back notes, the coach link, the
     /// relevance control) opens with "Details", so a card is three lines.
@@ -156,29 +150,20 @@ struct InsightsCorrelationsDiscoveryBlock: View {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 // The descriptive headline — "<behaviour> hängt mit <outcome>
                 // zusammen", direction-aware, NEVER causal.
+                // Set like a card head (15 semibold); the prose under it never
+                // outgrows it.
                 Text(Self.headline(for: pair))
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 // The server's own conservative interpretation prose.
                 if !pair.interpretation.isEmpty {
                     Text(pair.interpretation)
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                 }
-                // C1 — the follow-up, on EVERY card, and 1.4.1 — the citation
+                // The follow-up, on EVERY card, and 1.4.1 — the citation
                 // Apple photographed, on every card and visible without
-                // expanding anything: one line, stacked when it does not fit.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: HLSpace.lg) {
-                        followUpLink(for: pair)
-                        Spacer(minLength: 0)
-                        HLSourcesLink(topic: .correlations)
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        followUpLink(for: pair)
-                        HLSourcesLink(topic: .correlations)
-                    }
-                }
+                // expanding anything, right under the row that opens.
+                followUpLink(for: pair)
+                HLSourcesLink(topic: .correlations)
                 if expandedPairID == pair.id {
                     InsightsCorrelationFollowUpSection(
                         pair: pair,
@@ -206,24 +191,18 @@ struct InsightsCorrelationsDiscoveryBlock: View {
         for pair: DiscoveredCorrelation,
         action: @escaping (DiscoveredCorrelation, Bool) -> Void
     ) -> some View {
-        Button {
+        HLLinkButton(
+            Text(pair.isDismissed ? Self.restoreLabel : Self.dismissLabel),
+            systemImage: pair.isDismissed ? "arrow.uturn.backward" : "eye.slash",
+            alignment: .leading
+        ) {
             action(pair, !pair.isDismissed)
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: pair.isDismissed ? "arrow.uturn.backward" : "eye.slash")
-                    .font(.hlIcon(HLIconSize.sm))
-                Text(pair.isDismissed ? Self.restoreLabel : Self.dismissLabel)
-                    .font(.hlFootnote)
-            }
-            .foregroundStyle(HLText.secondary)
         }
-        .buttonStyle(.plain)
         .disabled(pendingIDs.contains(pair.id))
-        .frame(minHeight: 44)
         .accessibilityIdentifier("insights.correlations.discovery.relevance")
     }
 
-    /// **C1** — the one follow-up affordance, identical on every card.
+    /// The one follow-up affordance, identical on every card.
     ///
     /// The glyph and the behaviour are one thing here: the row carries a
     /// disclosure *because* it opens something, it opens the same something
@@ -235,20 +214,11 @@ struct InsightsCorrelationsDiscoveryBlock: View {
     /// entries read as dead rows.
     private func followUpLink(for pair: DiscoveredCorrelation) -> some View {
         let isOpen = expandedPairID == pair.id
-        return Button {
+        return HLRowButton {
             expandedPairID = isOpen ? nil : pair.id
         } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text(Self.followUpLabel)
-                    .font(.hlFootnote)
-                Image(systemName: isOpen ? "chevron.down" : "chevron.right")
-                    .font(.hlIcon(HLIconSize.sm))
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            HLRow(title: Text(Self.followUpLabel), accessory: .expand(isOpen))
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("insights.correlations.discovery.followUp")
     }
 
@@ -311,7 +281,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
         "\(headline(for: pair)). \(statLine(for: pair))."
     }
 
-    // MARK: - C1 — follow-up copy
+    // MARK: - Follow-up copy
 
     /// The follow-up affordance's label. Deliberately the same on every card:
     /// it names the presentation, not the destination, because the destination
@@ -323,7 +293,7 @@ struct InsightsCorrelationsDiscoveryBlock: View {
         )
     }
 
-    // MARK: - CU-33 — relevance copy
+    // MARK: - Relevance copy
 
     /// The person's statement, phrased as their own judgement. Not "wrong",
     /// not "hide forever", not a delete.

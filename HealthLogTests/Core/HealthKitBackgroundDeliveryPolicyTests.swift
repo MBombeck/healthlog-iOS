@@ -1,4 +1,4 @@
-// W2 — background-delivery (energy) policy. R3 — aggressive-cadence promotion.
+// Background-delivery (energy) policy. Aggressive-cadence promotion.
 // Pins the per-type `continueInBackground` + `startsAutomatically` decisions
 // the `HealthLogSpeziDelegate` collectors are driven by. SpeziHealthKit exposes
 // only the boolean (delivery frequency is hardcoded `.immediate`), so the
@@ -47,20 +47,29 @@
 
         @Test("Cumulative + low-urgency types do NOT wake the app in the background")
         func lowUrgencyTypesAreNotBackground() {
-            // R3: heartRate / stepCount / sleepAnalysis are NO LONGER asserted
+            // heartRate / stepCount / sleepAnalysis are NO LONGER asserted
             // here — they moved to the aggressive-cadence background set (see
             // aggressiveCadenceTypesAreBackgroundAndAutomatic).
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.activeEnergyBurned.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.flightsClimbed.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.distanceWalkingRunning.id))
-            #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.bodyMass.id))
-            #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.bodyFatPercentage.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.vo2Max.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.environmentalAudioExposure.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: SampleType.headphoneAudioExposure.id))
             // Low-urgency types also stay start: .manual (no automatic observer).
-            #expect(!HealthKitBackgroundDeliveryPolicy.startsAutomatically(for: SampleType.bodyMass.id))
             #expect(!HealthKitBackgroundDeliveryPolicy.startsAutomatically(for: SampleType.activeEnergyBurned.id))
+        }
+
+        @Test("A smart scale's weight and body fat wake the app like a vital sign")
+        func sparseReadingsAreBackground() {
+            for id in [SampleType.bodyMass.id, SampleType.bodyFatPercentage.id] {
+                #expect(HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: id))
+                #expect(HealthKitBackgroundDeliveryPolicy.startsAutomatically(for: id))
+                #expect(!HealthKitBackgroundDeliveryPolicy.lowUrgencyIdentifiers.contains(id))
+            }
+            // Arming follows the policy, so the observed set holds them too.
+            let observed = Set(AppOwnedHealthCollectionCoordinator.observedTypeIdentifiers)
+            #expect(observed.isSuperset(of: [SampleType.bodyMass.id, SampleType.bodyFatPercentage.id]))
         }
 
         @Test("Low-urgency gait + mobility types are never background-delivered")
@@ -84,6 +93,11 @@
                 .isDisjoint(with: HealthKitBackgroundDeliveryPolicy.lowUrgencyIdentifiers))
             #expect(HealthKitBackgroundDeliveryPolicy.aggressiveCadenceIdentifiers
                 .isDisjoint(with: HealthKitBackgroundDeliveryPolicy.vitalSignIdentifiers))
+            #expect(HealthKitBackgroundDeliveryPolicy.sparseReadingIdentifiers
+                .isDisjoint(with: HealthKitBackgroundDeliveryPolicy.lowUrgencyIdentifiers))
+            #expect(HealthKitBackgroundDeliveryPolicy.sparseReadingIdentifiers
+                .isDisjoint(with: HealthKitBackgroundDeliveryPolicy.vitalSignIdentifiers
+                    .union(HealthKitBackgroundDeliveryPolicy.aggressiveCadenceIdentifiers)))
         }
 
         @Test("continueInBackground and startsAutomatically agree on every classified type")

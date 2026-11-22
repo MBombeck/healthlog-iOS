@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.8 W3 — v1.15.13 adoption: multi-select bulk delete for the
+/// v1.15.13 adoption: multi-select bulk delete for the
 /// measurement management list (`POST /api/measurements/bulk-delete`,
 /// RESEARCH-SERVER-PARITY A2).
 ///
@@ -27,24 +27,17 @@ extension MeasurementsRepository {
     /// - On a *retriable* failure the failed chunk AND every not-yet-sent
     ///   chunk land on the outbox under `bulkDeleteMeasurements`, then the
     ///   error re-throws — the calling store keeps its optimistic removal
-    ///   (mirrors the single-delete contract).
+    ///   (mirrors the single-delete contract). When they cannot all be
+    ///   stored, none stays queued and the error is `notPersisted`.
     /// - On a non-retriable failure the error re-throws without enqueueing;
     ///   the store rolls its optimistic removal back.
-    /// - **Standalone:** deletes the rows from the local mirror, no network.
     ///
-    /// Returns the number of rows the server confirmed tombstoned (standalone:
-    /// the number of local rows removed).
+    /// Returns the number of rows the server confirmed tombstoned.
     @discardableResult
     public func bulkDelete(ids requested: [String]) async throws -> Int {
-        // #115 R3 — a synthetic bucket key names no row; never send it.
+        // A synthetic bucket key names no row; never send it.
         let ids = requested.filter { !Measurement.isSyntheticServerRowID($0) }
         guard !ids.isEmpty else { return 0 }
-        if standalone?.isActive == true, let standalone {
-            for id in ids {
-                try await standalone.local.standaloneDeleteMeasurement(externalId: id)
-            }
-            return ids.count
-        }
         let chunks = stride(from: 0, to: ids.count, by: Self.bulkDeleteMaxIDsPerBatch).map {
             Array(ids[$0 ..< min($0 + Self.bulkDeleteMaxIDsPerBatch, ids.count)])
         }
@@ -52,17 +45,26 @@ extension MeasurementsRepository {
         var anyChunkLanded = false
         for (index, chunk) in chunks.enumerated() {
             let idempotencyKey = IdempotencyKey()
+            let row = UUID()
             do {
-                deleted += try await postBulkDelete(chunk, idempotencyKey: idempotencyKey)
+                let op = try Self.bulkDeleteOperation(chunk, idempotencyKey: idempotencyKey, row: row)
+                deleted += try await outbox.writeAhead(op) { [self] in
+                    try await postBulkDelete(chunk, idempotencyKey: idempotencyKey)
+                }
                 anyChunkLanded = true
             } catch {
+                var failure = error
                 if let err = error as? HLError, err.shouldPersistToOutbox {
-                    // Queue the failed chunk under ITS key, plus every chunk
-                    // that never got sent (fresh keys) — the replay drains
-                    // them in enqueue order.
-                    await enqueueBulkDelete(chunk, idempotencyKey: idempotencyKey)
-                    for pending in chunks.dropFirst(index + 1) {
-                        await enqueueBulkDelete(pending, idempotencyKey: IdempotencyKey())
+                    // The failed chunk is stored under ITS key already. Every
+                    // chunk that never got sent follows under a fresh key; the
+                    // replay drains them in enqueue order.
+                    do {
+                        try await enqueueUnsent(chunks.dropFirst(index + 1), after: row)
+                    } catch let enqueueError {
+                        // A chunk that is neither sent nor stored must not
+                        // pass as queued: the caller rolls the removal back.
+                        HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: enqueueError)))")
+                        failure = HLError.notPersisted(String(describing: err))
                     }
                 }
                 if anyChunkLanded {
@@ -70,7 +72,7 @@ extension MeasurementsRepository {
                     // pages even though the overall call failed.
                     await invalidateAfterWriteAllKinds()
                 }
-                throw error
+                throw failure
             }
         }
         // No kind context on an id-only delete — fan out (same as the
@@ -97,7 +99,7 @@ extension MeasurementsRepository {
         let ids: [String]
     }
 
-    /// 1.5 FIX-DATA — the delete-Undo counterpart of the bulk delete
+    /// The delete-Undo counterpart of the bulk delete
     /// (`POST /api/measurements/restore`, v1.16.4). From server 1.46.2 one
     /// blood-pressure half brings back every row deleted with it (the other
     /// half and the pulse). Not queued on failure: the caller shows the error
@@ -130,16 +132,33 @@ extension MeasurementsRepository {
         return try await api.send(req).deleted
     }
 
-    private func enqueueBulkDelete(_ ids: [String], idempotencyKey: IdempotencyKey) async {
+    /// Queues the chunks that were never sent, all of them or none. When one
+    /// cannot be stored, what this call has queued so far is taken back, the
+    /// failed chunk included: the caller hears "not saved" and shows every row
+    /// again, and a chunk left in the queue would delete some of them later.
+    /// A delete is safe to ask for again.
+    private func enqueueUnsent(_ unsent: ArraySlice<[String]>, after failedRow: UUID) async throws {
+        var queued = [failedRow]
         do {
-            let payload = try JSONEncoder.hlDefault.encode(OutboxQueue.Payloads.BulkDeleteMeasurements(ids: ids))
-            try await outbox.enqueue(.init(
-                kind: .bulkDeleteMeasurements,
-                payload: payload,
-                idempotencyKey: idempotencyKey.raw
-            ))
+            for chunk in unsent {
+                let op = try Self.bulkDeleteOperation(chunk, idempotencyKey: IdempotencyKey())
+                try await outbox.enqueue(op)
+                queued.append(op.id)
+            }
         } catch {
-            HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
+            for id in queued {
+                try? await outbox.remove(id: id)
+            }
+            throw error
         }
+    }
+
+    private static func bulkDeleteOperation(
+        _ ids: [String],
+        idempotencyKey: IdempotencyKey,
+        row: UUID = UUID()
+    ) throws -> OutboxQueue.Operation {
+        let payload = try JSONEncoder.hlDefault.encode(OutboxQueue.Payloads.BulkDeleteMeasurements(ids: ids))
+        return OutboxQueue.Operation(id: row, kind: .bulkDeleteMeasurements, payload: payload, idempotencyKey: idempotencyKey.raw)
     }
 }

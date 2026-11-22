@@ -7,14 +7,11 @@ public extension IntakeStatus {
 
     /// Status for mutation payloads; prevents read-only rows reaching network/outbox.
     ///
-    /// **Audit B-5** — the sentinel is refused here too. `__UNKNOWN__` is not a
+    /// The sentinel is refused here too. `__UNKNOWN__` is not a
     /// status any server or local column ever held; a client that sent it would
-    /// be inventing one, and a local mirror row written under it would be a
-    /// second unnameable status of our own making. Two of the four intake
-    /// write paths pass through here (`IntakeUpdate` to the API via
-    /// `record(intake:)`, `standaloneAddIntake` to the mirror via
-    /// `recordStandaloneIntake`); the other two are closed by their own
-    /// exhaustive checks — `markIntakeRetroactively` rejects `.missed` and
+    /// be inventing one. One of the three intake write paths passes through
+    /// here (`IntakeUpdate` to the API via `record(intake:)`); the other two
+    /// are closed by their own exhaustive checks — `markIntakeRetroactively` rejects `.missed` and
     /// `.unknown` before building its patch, and `recordFromReminder` guards
     /// `status == .taken || status == .skipped`. A fifth write path needs one
     /// of those two shapes; nothing here is automatic for it.
@@ -41,7 +38,7 @@ public extension IntakeStatus {
 
 /// Wire-body payloads for the medication CRUD + intake endpoints.
 ///
-/// Extracted from `MedicationsRepository` (v0.10 W-Meds-A2) so the actor body
+/// Extracted from `MedicationsRepository` so the actor body
 /// stays under the type-body-length budget after the v1.5/v1.6/v1.7 field
 /// growth. The nested-type names (`MedicationsRepository.MedicationCreate`,
 /// `…MedicationPatch`, `…IntakeUpdate`, `…IntakePatch`) are unchanged, so the
@@ -58,16 +55,29 @@ public extension MedicationsRepository {
         /// server silently drops it otherwise. Default-tolerant decode keeps
         /// older outbox payloads replayable.
         public let injectionSite: String?
+        /// **#188 (8)** — the end of a snooze, sent only with `snoozed`. The
+        /// server's own default is 30 minutes; the Watch's "Later" used to get
+        /// that while the notification and the alarm snoozed for
+        /// ``MedicationSnooze/interval``. Optional, so queued payloads from an
+        /// older build still replay.
+        public let snoozedUntil: Date?
 
-        public init(intakeId: String, status: String, takenAt: Date, injectionSite: String? = nil) {
+        public init(
+            intakeId: String,
+            status: String,
+            takenAt: Date,
+            injectionSite: String? = nil,
+            snoozedUntil: Date? = nil
+        ) {
             self.intakeId = intakeId
             self.status = status
             self.takenAt = takenAt
             self.injectionSite = injectionSite
+            self.snoozedUntil = snoozedUntil
         }
     }
 
-    /// **H6 — wire body for `POST /api/medications/{id}/intake`.** Mirrors the
+    /// **Wire body for `POST /api/medications/{id}/intake`.** Mirrors the
     /// server's `MedicationIntakeRequest` schema (`medication.ts:795+`): an
     /// idempotent insert-or-return keyed on `(medication, scheduledFor)` that
     /// accepts the optional `doseTaken` actual-dose override (free text ≤50
@@ -127,7 +137,7 @@ public extension MedicationsRepository {
         public let notificationsEnabled: Bool?
         public let schedules: [MedicationScheduleDTO]?
 
-        // MARK: - v0.10 R1 §3.8 — v1.5/v1.6 course-window + delivery fields
+        // MARK: - Course-window + delivery fields (server v1.5/v1.6)
 
         /// Single-administration medication (`createMedicationSchema.oneShot`).
         public let oneShot: Bool?
@@ -138,7 +148,7 @@ public extension MedicationsRepository {
         /// Route of administration (`ORAL | INJECTION | OTHER`).
         public let deliveryForm: String?
 
-        // MARK: - v1.7.0 delivery booleans (W-Meds-A2, SB-LA-1 / SB-AK-1)
+        // MARK: - v1.7.0 delivery booleans
 
         /// Per-medication Live-Activity gate. Omitted (nil) → server default.
         public let liveActivityEnabled: Bool?
@@ -154,7 +164,7 @@ public extension MedicationsRepository {
         /// server keeps its value.
         public let allowedInjectionSites: [String]?
 
-        // MARK: - v1.28 (GH #47) — Apple Health mirror + PRN + RxNorm
+        // MARK: - v1.28 — Apple Health mirror + PRN + RxNorm
 
         /// **Marks the medication as MIRRORED from an external list.** Only
         /// `"APPLE_HEALTH"` is accepted. Must be sent together with
@@ -173,9 +183,9 @@ public extension MedicationsRepository {
         /// schedules and is excluded from compliance. The Apple-mirror path
         /// sets this from `scheduleType == .asNeeded`.
         public let asNeeded: Bool?
-        /// **v1.39.1 (#1033) — intake tracking.** Omitted (nil) → the server
+        /// **v1.39.1 — intake tracking.** Omitted (nil) → the server
         /// default, tracked. The add sheet sends `false` only, and only against
-        /// a server that knows the field (E1).
+        /// a server that knows the field.
         public let trackIntake: Bool?
 
         public init(
@@ -244,7 +254,7 @@ public extension MedicationsRepository {
         public let notificationsEnabled: Bool?
         public let schedules: [MedicationScheduleDTO]?
 
-        // MARK: - v0.10 R1 §3.8 — v1.5/v1.6 course-window + delivery fields
+        // MARK: - Course-window + delivery fields (server v1.5/v1.6)
 
         /// Single-administration medication.
         public let oneShot: Bool?
@@ -255,7 +265,7 @@ public extension MedicationsRepository {
         /// Route of administration (`ORAL | INJECTION | OTHER`).
         public let deliveryForm: String?
 
-        // MARK: - v1.7.0 delivery booleans (W-Meds-A2, SB-LA-1 / SB-AK-1)
+        // MARK: - v1.7.0 delivery booleans
 
         /// Per-medication Live-Activity gate. **PUT accepts only the two
         /// booleans** (`nextDueAt` is server-computed read-only). Omitted (nil)
@@ -276,7 +286,7 @@ public extension MedicationsRepository {
         /// **As-needed (PRN) medication (v1.16.11, #316).** Omitted (nil) →
         /// unchanged server-side, like every other field here.
         ///
-        /// **09-14 — this field did not exist, and its absence was a bug with
+        /// **This field did not exist, and its absence was a bug with
         /// user impact.** Without it no edit could make a medication PRN or
         /// clear its plan, so "as needed" was reachable only at create time and
         /// even there it was written as a schedule-level key the server strips.
@@ -289,7 +299,7 @@ public extension MedicationsRepository {
         /// rather than by hand, so they cannot drift apart.
         public let asNeeded: Bool?
 
-        /// **v1.39.1 (#1033) — intake tracking.** Omitted (nil) → unchanged
+        /// **v1.39.1 — intake tracking.** Omitted (nil) → unchanged
         /// server-side. Named only when the person changed the switch, or to
         /// make a schedule edit on a medication kept as a record apply (the
         /// server drops `schedules`/`asNeeded`/`oneShot` on such a medication
@@ -297,11 +307,17 @@ public extension MedicationsRepository {
         /// ``MedicationTrackIntakeWrite/value(server:edited:scheduleChanged:)``.
         public let trackIntake: Bool?
 
-        /// **v1.42.2 — record doses automatically** (MED-PLUS). Omitted (nil) →
+        /// **v1.42.2 — record doses automatically**. Omitted (nil) →
         /// unchanged server-side; named only when the person flipped the switch
         /// (``MedicationAutoMarkTakenFormValue/write``). Outside the initialiser
         /// so every caller stays as it was.
         public var autoMarkTaken: Bool?
+
+        /// **#174 (server 1.47.6) — the medication's note**, at most 500
+        /// characters after trimming. Omitted (nil) → unchanged; an empty
+        /// string clears it. Named only when the person changed it
+        /// (``MedicationNoteWrite``), as the web does.
+        public var note: String?
 
         /// **Read-modify-write safety (R1 risk 5).** Every field is optional;
         /// the server applies only the keys present. When `schedules` is
@@ -372,7 +388,7 @@ public extension MedicationsRepository {
     /// attribution. Mirrors the server's `updateIntakeEventSchema`
     /// (v1.16.3): `{ takenAt?, skipped?, scheduledFor?, forceSlotInstant? }`.
     ///
-    /// **W3-MEDCONTRACT (v0.14.8) — contract fix.** The pre-v0.14.8 shape
+    /// **Contract fix.** The pre-v0.14.8 shape
     /// sent `{status, takenAt}`; the server's Zod schema *strips* the
     /// unknown `status` key, so "mark as skipped" silently no-opped and a
     /// skipped→taken flip left `skipped: true` standing. The body now
@@ -390,18 +406,25 @@ public extension MedicationsRepository {
         /// `.null` unpins ("Zuordnung lösen", re-attributes by band);
         /// `.absent` runs the default window-band attribution.
         public let forceSlotInstant: PatchField<Date>
+        /// #169 (server 1.48.0) — the dose's injection site, as the server's
+        /// enum string (``InjectionSite/serverRawValue``). `.value` sets it,
+        /// `.null` clears it, `.absent` keeps it. A site the medication does
+        /// not allow answers 422 `medications.intake.injection_site.disallowed`.
+        public let injectionSite: PatchField<String>
 
         public init(
             status: String? = nil,
             takenAt: Date? = nil,
             skipped: Bool? = nil,
             takenAtField: PatchField<Date>? = nil,
-            forceSlotInstant: PatchField<Date> = .absent
+            forceSlotInstant: PatchField<Date> = .absent,
+            injectionSite: PatchField<String> = .absent
         ) {
             self.status = status
             self.skipped = skipped
             self.takenAt = takenAtField ?? takenAt.map { .value($0) } ?? .absent
             self.forceSlotInstant = forceSlotInstant
+            self.injectionSite = injectionSite
         }
 
         enum CodingKeys: String, CodingKey {
@@ -409,6 +432,7 @@ public extension MedicationsRepository {
             case skipped
             case takenAt
             case forceSlotInstant
+            case injectionSite
         }
 
         public init(from decoder: Decoder) throws {
@@ -417,6 +441,7 @@ public extension MedicationsRepository {
             skipped = try container.decodeIfPresent(Bool.self, forKey: .skipped)
             takenAt = try Self.decodeField(container, key: .takenAt)
             forceSlotInstant = try Self.decodeField(container, key: .forceSlotInstant)
+            injectionSite = try Self.decodeField(container, key: .injectionSite)
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -425,19 +450,20 @@ public extension MedicationsRepository {
             try container.encodeIfPresent(skipped, forKey: .skipped)
             try Self.encodeField(takenAt, into: &container, key: .takenAt)
             try Self.encodeField(forceSlotInstant, into: &container, key: .forceSlotInstant)
+            try Self.encodeField(injectionSite, into: &container, key: .injectionSite)
         }
 
-        private static func decodeField(
+        private static func decodeField<Value: Codable & Sendable & Equatable>(
             _ container: KeyedDecodingContainer<CodingKeys>,
             key: CodingKeys
-        ) throws -> PatchField<Date> {
+        ) throws -> PatchField<Value> {
             guard container.contains(key) else { return .absent }
             if try container.decodeNil(forKey: key) { return .null }
-            return try .value(container.decode(Date.self, forKey: key))
+            return try .value(container.decode(Value.self, forKey: key))
         }
 
         private static func encodeField(
-            _ field: PatchField<Date>,
+            _ field: PatchField<some Codable & Sendable & Equatable>,
             into container: inout KeyedEncodingContainer<CodingKeys>,
             key: CodingKeys
         ) throws {
@@ -446,9 +472,198 @@ public extension MedicationsRepository {
                 break
             case .null:
                 try container.encodeNil(forKey: key)
-            case let .value(date):
-                try container.encode(date, forKey: key)
+            case let .value(value):
+                try container.encode(value, forKey: key)
             }
+        }
+    }
+}
+
+/// **#188 (8) — one snooze, everywhere.** The notification's "Remind me
+/// later", the critical alarm's, the Watch's, the card's and the detail
+/// page's defer a dose by the same span.
+///
+/// **#191 (final) — the account's snooze setting.** With
+/// ``MedicationCapability/snoozeSetting`` the span is the account's
+/// (`notificationPrefs.medication.snoozeMinutes`, an integer from 5 to 240,
+/// default 30), kept in the App Group by every prefs load and every change.
+/// Without it the server's own default applies, 30 minutes; the app's old
+/// fixed 15 minutes are gone.
+public enum MedicationSnooze {
+    /// The server's default for the setting, also the span while it is
+    /// unknown (#191).
+    public static let serverDefaultMinutes = 30
+    /// The span the setting may take (`5...240`); anything else reads as the
+    /// default.
+    public static let allowedMinutes = 5 ... 240
+    /// The choices the reminder settings offer, all inside ``allowedMinutes``.
+    public static let choices = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240]
+    static let minutesDefaultsKey = "hl.medications.snoozeMinutes"
+
+    public static var interval: TimeInterval {
+        interval(defaults: MedicationCapabilities.appGroupDefaults)
+    }
+
+    public static var minutes: Int {
+        minutes(defaults: MedicationCapabilities.appGroupDefaults)
+    }
+
+    public static func interval(defaults: UserDefaults?) -> TimeInterval {
+        TimeInterval(minutes(defaults: defaults) * 60)
+    }
+
+    /// The account's span in minutes, or the server default.
+    public static func minutes(defaults: UserDefaults?) -> Int {
+        guard MedicationCapabilities.isOpen(.snoozeSetting, defaults: defaults) else { return serverDefaultMinutes }
+        let stored = defaults?.object(forKey: minutesDefaultsKey) as? Int
+        return stored.flatMap { allowedMinutes.contains($0) ? $0 : nil } ?? serverDefaultMinutes
+    }
+
+    /// Posted after the stored span changed, so the notification category
+    /// can rename its action ("Remind me later (45 min)").
+    public static let didChange = Notification.Name("hl.medications.snoozeMinutes.didChange")
+
+    /// Keeps the account's span (or forgets it on `nil`).
+    public static func record(serverMinutes: Int?, defaults: UserDefaults? = MedicationCapabilities.appGroupDefaults) {
+        let before = defaults?.object(forKey: minutesDefaultsKey) as? Int
+        if let serverMinutes {
+            defaults?.set(serverMinutes, forKey: minutesDefaultsKey)
+        } else {
+            defaults?.removeObject(forKey: minutesDefaultsKey)
+        }
+        if before != serverMinutes { NotificationCenter.default.post(name: didChange, object: nil) }
+    }
+
+    /// Clamps a chosen span into ``allowedMinutes``.
+    public static func clamped(_ minutes: Int) -> Int {
+        min(allowedMinutes.upperBound, max(allowedMinutes.lowerBound, minutes))
+    }
+
+    /// "Remind me later (30 min)": the action's title wherever a dose can be
+    /// snoozed (term list, #191).
+    public static func actionTitle(minutes: Int = minutes) -> String {
+        String(
+            format: String(
+                localized: "med.dose.action.snooze",
+                defaultValue: "Remind me later (%lld min)",
+                comment: "Snooze action on a medication dose; the span in minutes is the account's setting"
+            ),
+            minutes
+        )
+    }
+}
+
+/// **#191 — the undo precondition on `DELETE …/intake/{eventId}`.** The
+/// version of the row the person saw: its `syncVersion` when the server sent
+/// one, otherwise the idempotency key the app's own take went out under. The
+/// server answers `409` ``changedSinceSeenCode`` when the row changed since.
+/// Sent only behind ``MedicationCapability/undoPrecondition``.
+public struct IntakeUndoPrecondition: Sendable, Equatable {
+    public let syncVersion: Int?
+    public let idempotencyKey: String?
+
+    public static let changedSinceSeenCode = "medications.intake.changedSinceSeen"
+
+    /// The server's longest `expectedIdempotencyKey`.
+    static let maxKeyLength = 128
+
+    /// `nil` when neither is known: an unconditional delete, as before.
+    /// A value the server would refuse as `422
+    /// medications.intake.invalidPrecondition` (a negative version, an empty
+    /// key or one over 128 characters) is left out, never sent.
+    public init?(syncVersion: Int?, idempotencyKey: String?) {
+        let version = syncVersion.flatMap { $0 >= 0 ? $0 : nil }
+        let key = idempotencyKey.flatMap { $0.isEmpty || $0.count > Self.maxKeyLength ? nil : $0 }
+        guard version != nil || key != nil else { return nil }
+        self.syncVersion = version
+        self.idempotencyKey = key
+    }
+
+    /// `422 medications.intake.invalidPrecondition`: the app never sends a
+    /// malformed precondition, but should a build ever do, the person reads a
+    /// sentence instead of the raw code.
+    public static let invalidPreconditionCode = "medications.intake.invalidPrecondition"
+
+    public static func isInvalidPrecondition(_ error: Error) -> Bool {
+        guard case let .server(status, code, _) = error as? HLError else { return false }
+        return status == 422 && code == invalidPreconditionCode
+    }
+
+    public static var invalidPreconditionNotice: HLError {
+        .server(
+            status: 422,
+            code: invalidPreconditionCode,
+            message: String(
+                localized: "med.undo.invalid_precondition",
+                defaultValue: "This dose could not be undone. Reload the list and try again."
+            )
+        )
+    }
+
+    /// The query of the DELETE. Every precondition the app knows goes out,
+    /// and the server deletes only when all of them match (#191, final).
+    /// Empty while the capability is shut, so an older server sees the
+    /// unchanged request.
+    func queryItems(capabilities: UserDefaults?) -> [(String, String)] {
+        guard MedicationCapabilities.isOpen(.undoPrecondition, defaults: capabilities) else { return [] }
+        var items: [(String, String)] = []
+        if let syncVersion { items.append(("expectedSyncVersion", String(syncVersion))) }
+        if let idempotencyKey { items.append(("expectedIdempotencyKey", idempotencyKey)) }
+        return items
+    }
+
+    /// Whether `error` is the server's "changed since you saw it" answer.
+    public static func isChangedSinceSeen(_ error: Error) -> Bool {
+        guard case let .server(status, code, _) = error as? HLError else { return false }
+        return status == 409 && code == changedSinceSeenCode
+    }
+
+    /// What the person reads instead of the raw 409.
+    public static var changedSinceSeenNotice: HLError {
+        .server(
+            status: 409,
+            code: changedSinceSeenCode,
+            message: String(
+                localized: "med.undo.changed_since_seen",
+                defaultValue: "This dose was changed on another device in the meantime, so nothing was undone."
+            )
+        )
+    }
+}
+
+/// **#190 (final) — intake refusals in plain words.** Pinning a take onto a
+/// slot that already holds one answers `422
+/// medications.intake.force_slot.occupied`; the person reads a sentence
+/// instead of the code. Every other error is returned as it came.
+public enum IntakeWriteRefusal {
+    public static let forceSlotOccupiedCode = "medications.intake.force_slot.occupied"
+
+    /// 422 when the instant is no real slot of the medication that day.
+    public static let forceSlotInvalidCode = "medications.intake.force_slot.invalid"
+
+    public static func explained(_ error: HLError) -> HLError {
+        guard case let .server(status, code, _) = error, status == 422 else { return error }
+        switch code {
+        case forceSlotOccupiedCode:
+            return .server(
+                status: 422,
+                code: forceSlotOccupiedCode,
+                message: String(
+                    localized: "med.intake.force_slot_occupied",
+                    defaultValue: "This dose already has an intake. Edit or delete that one first."
+                )
+            )
+        case forceSlotInvalidCode:
+            return .server(
+                status: 422,
+                code: forceSlotInvalidCode,
+                message: String(
+                    localized: "med.intake.force_slot_invalid",
+                    defaultValue: "There is no dose at this time on that day. Save it as an extra dose."
+                )
+            )
+        default:
+            return error
         }
     }
 }

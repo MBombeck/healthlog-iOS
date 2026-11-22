@@ -292,7 +292,7 @@ struct InsightsPrefetchServiceTests {
 
         #expect(log.count(matching: "/api/insights/targets") == 1)
         #expect(log.count(matching: "/api/insights/comprehensive") >= 1)
-        // 1.2 V5 — the warm used to POST `/api/insights/generate` on every
+        // The warm used to POST `/api/insights/generate` on every
         // foreground, ungated and uncached (production: 429 bursts). The
         // briefing is the DailyBriefingStore's to load.
         #expect(log.count(matching: "/api/insights/generate") == 0)

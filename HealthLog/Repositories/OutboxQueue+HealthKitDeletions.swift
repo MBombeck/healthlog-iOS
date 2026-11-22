@@ -1,6 +1,6 @@
 import Foundation
 
-// A5 (1.4, R3 S4) — Apple Health deletions that could not reach the server at
+// Apple Health deletions that could not reach the server at
 // once wait here, bound to the account whose samples they name.
 //
 // The server route (`DELETE /api/measurements/by-external-ids`, v1.43.10)

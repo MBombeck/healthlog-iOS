@@ -41,7 +41,7 @@ struct ResetDataScreen: View {
     /// structurally cannot satisfy. Renders the web-routing card instead of a
     /// retry banner, mirroring `DeleteAccountScreen.stepUpWebURL`.
     @State private var stepUpWebURL: URL?
-    /// KONTO (#151) — a 1.46 server keeps a copy an admin can restore
+    /// A 1.46 server keeps a copy an admin can restore
     /// until `restorableUntil`; older servers wipe for good. Decides the copy.
     @State private var policy: AccountDeletionPolicy = .initial()
     @State private var receipt: DataWipeReceipt?
@@ -53,50 +53,30 @@ struct ResetDataScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                header
-                if didSucceed {
-                    successCard
-                } else if let webURL = stepUpWebURL {
-                    stepUpCard(webURL)
-                } else if step == .explain {
-                    explainStep
-                } else {
-                    typeConfirmStep
-                }
-                if !didSucceed, stepUpWebURL == nil, let error = resetError {
-                    errorBanner(error)
-                }
+        HLPage {
+            if didSucceed {
+                successCard
+            } else if let webURL = stepUpWebURL {
+                stepUpCard(webURL)
+            } else if step == .explain {
+                explainStep
+            } else {
+                typeConfirmStep
             }
-            .padding(HLSpace.lg)
+            if !didSucceed, stepUpWebURL == nil, let error = resetError {
+                errorBanner(error)
+            }
         }
-        .background(HLColor.background)
-        .hlScrollEdgeSoft()
         .navigationTitle("resetData.navTitle")
         .navigationBarTitleDisplayMode(.inline)
         .interactiveDismissDisabled(isResetting)
         .task { policy = await authStore.accountDeletionPolicy() }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Image(systemName: "arrow.counterclockwise.circle.fill")
-                .font(.hlIcon(HLIconSize.display, weight: .bold))
-                .foregroundStyle(HLColor.statusBad)
-            Text("resetData.title")
-                .font(.hlTitle2)
-                .foregroundStyle(HLText.primary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - Step 1
 
     private var explainStep: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             Text(policy.isImmediate ? LocalizedStringKey("resetData.explain.intro") : "resetData.grace.intro")
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -110,35 +90,28 @@ struct ResetDataScreen: View {
             // The distinguishing promise of this screen vs. account deletion.
             // Stated positively and separately so it cannot be missed.
             Text("resetData.explain.keepsAccount")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Toggle(isOn: $consentChecked) {
-                Text(policy.isImmediate ? LocalizedStringKey("resetData.explain.consent") : "resetData.grace.consent")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-            }
-            .toggleStyle(.switch)
+            // The same switch row as on account deletion; the red tint marks
+            // the consent to a wipe.
+            HLSettingsToggleRow(
+                title: policy.isImmediate ? LocalizedStringKey("resetData.explain.consent") : "resetData.grace.consent",
+                description: nil,
+                isOn: $consentChecked,
+                accessibilityID: Self.consentToggleIdentifier
+            )
             .tint(HLColor.statusBad)
-            .accessibilityIdentifier(Self.consentToggleIdentifier)
 
-            VStack(spacing: HLSpace.sm) {
-                HLButton(
-                    String(localized: "Continue"),
-                    icon: "chevron.right",
-                    variant: .destructive,
-                    size: .compact
-                ) {
-                    step = .typeConfirm
-                }
-                .disabled(!consentChecked)
-                .accessibilityIdentifier(Self.continueButtonIdentifier)
-
-                HLButton(String(localized: "Cancel"), variant: .secondary, size: .regular) {
-                    dismiss()
-                }
+            HLButton(
+                "Continue",
+                systemImage: "chevron.right",
+                variant: .destructive
+            ) {
+                step = .typeConfirm
             }
+            .disabled(!consentChecked)
+            .accessibilityIdentifier(Self.continueButtonIdentifier)
         }
     }
 
@@ -147,13 +120,13 @@ struct ResetDataScreen: View {
     }
 
     private func bullet(_ text: Text) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "circle.fill")
-                // 6pt list-marker dot — same micro-geometry as DeleteAccountScreen.
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 6))
+        // The dot is set in the text's own font and sits on the first line's
+        // baseline, as on account deletion.
+        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+            Text(verbatim: "\u{2022}")
+                .font(.hlBody)
                 .foregroundStyle(HLText.secondary)
-                .padding(.top, HLSpace.sm)
+                .accessibilityHidden(true)
             text
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -163,7 +136,7 @@ struct ResetDataScreen: View {
     // MARK: - Step 2
 
     private var typeConfirmStep: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             Text("Type \(requiredConfirmation) to confirm.")
                 .font(.hlBody)
                 .foregroundStyle(HLText.primary)
@@ -175,20 +148,19 @@ struct ResetDataScreen: View {
                 .disabled(isResetting)
                 .accessibilityIdentifier(Self.confirmFieldIdentifier)
 
-            VStack(spacing: HLSpace.sm) {
+            HLButtonPair {
                 HLButton(
-                    String(localized: "resetData.confirmAction"),
-                    icon: "trash.fill",
+                    "resetData.confirmAction",
+                    systemImage: "trash.fill",
                     variant: .destructive,
-                    size: .compact,
                     isLoading: isResetting
                 ) {
                     Task { await performReset() }
                 }
                 .disabled(isResetting || !DeleteConfirmationPhrase.matches(typedConfirmation, required: requiredConfirmation))
                 .accessibilityIdentifier(Self.resetButtonIdentifier)
-
-                HLButton(String(localized: "Back"), variant: .secondary, size: .regular) {
+            } secondary: {
+                HLButton("Back", variant: .secondary) {
                     resetError = nil
                     typedConfirmation = ""
                     step = .explain
@@ -203,30 +175,17 @@ struct ResetDataScreen: View {
     /// The account survives, so unlike account deletion there is no shell swap
     /// to signal completion — the screen must confirm the outcome itself.
     private var successCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
-            HStack(alignment: .top, spacing: HLSpace.sm) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.hlIcon(HLIconSize.md, weight: .semibold))
-                    .foregroundStyle(HLColor.statusOK)
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("resetData.success.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(verbatim: AccountDeletionCopy.wipeSuccessMessage(receipt ?? DataWipeReceipt(restorableUntil: nil)))
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        HLCard("resetData.success.title") {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                Text(verbatim: AccountDeletionCopy.wipeSuccessMessage(receipt ?? DataWipeReceipt(restorableUntil: nil)))
+                    .hlText(.factLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                HLButton(HLControlWord.done.key, variant: .primary) {
+                    dismiss()
                 }
+                .accessibilityIdentifier(Self.doneButtonIdentifier)
             }
-            HLButton(String(localized: "Done"), variant: .primary, size: .compact) {
-                dismiss()
-            }
-            .accessibilityIdentifier(Self.doneButtonIdentifier)
         }
-        .padding(HLSpace.md)
-        .background(HLColor.statusOK.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
     }
 
     // MARK: - Step-up (web) routing card
@@ -241,59 +200,29 @@ struct ResetDataScreen: View {
     /// the account intact, so there is nothing to reconcile; the user simply
     /// pulls to refresh when they come back.
     private func stepUpCard(_ webURL: URL) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
-            HStack(alignment: .top, spacing: HLSpace.sm) {
-                Image(systemName: "lock.shield.fill")
-                    // 20pt informational shield — calm, not the danger hero.
-                    // swiftlint:disable:next dynamic_type_bypass
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(HLAccent.userBrandTint)
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("resetData.stepUp.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("resetData.stepUp.body")
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            VStack(spacing: HLSpace.sm) {
+        HLCard("resetData.stepUp.title") {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                Text("resetData.stepUp.body")
+                    .hlText(.factLabel)
+                    .fixedSize(horizontal: false, vertical: true)
                 HLButton(
-                    String(localized: "resetData.stepUp.openButton"),
-                    icon: "safari",
-                    variant: .primary,
-                    size: .compact
+                    "resetData.stepUp.openButton",
+                    systemImage: HLRowIndicator.externalSymbol,
+                    variant: .primary
                 ) {
                     openURL(webURL)
                 }
                 .accessibilityIdentifier(Self.stepUpOpenButtonIdentifier)
-
-                HLButton(String(localized: "Cancel"), variant: .secondary, size: .regular) {
-                    dismiss()
-                }
             }
         }
-        .padding(HLSpace.md)
-        .background(HLAccent.userBrandTint.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
     }
 
-    // MARK: - Error banner
+    // MARK: - Error
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.octagon.fill")
-                .foregroundStyle(HLColor.statusBad)
-            Text("resetData.failed \(message)")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.primary)
-        }
-        .padding(HLSpace.md)
-        .background(HLColor.statusBad.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+        HLFormErrorText(String(localized: "resetData.failed \(message)"))
+            .font(.hlCaption)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Action

@@ -20,11 +20,6 @@ public enum HLSpace {
     public static let sm: CGFloat = 8
     /// 12pt — Mittlerer Gap (Form-Field-Stacks, Card-internal).
     public static let md: CGFloat = 12
-    /// 14pt — Settings-Card-internal Padding (W6-4): zwischen `md` (12) und
-    /// `lg` (16), bewusst eng damit eine zweizeilige Settings-Karte weniger
-    /// Vertikalraum frisst, ohne den Divider zu quetschen. Benannter Sub-Grid-
-    /// Token (wie `chip`), ersetzt den ehemaligen `HLSpacePB.cardInset`.
-    public static let cardInset: CGFloat = 14
     /// 16pt — HIG-default Edge-Inset, Card-Padding-Standard.
     public static let lg: CGFloat = 16
     /// 20pt — Section-Top-Gap (legacy, weiterhin in Onboarding aktiv).
@@ -64,7 +59,7 @@ public enum HLRadius {
     public static let xl: CGFloat = 22
     public static let xxl: CGFloat = 28
 
-    // MARK: - Semantic v0.4.0 aliases (HIG-aligned per component)
+    // MARK: - Semantic aliases (HIG-aligned per component)
 
     //
     // The numeric scale above stays — these are *named* radii callers should

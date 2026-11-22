@@ -1,6 +1,6 @@
 import Foundation
 
-/// 1.2 V5 — `POST /api/insights/generate`, split out of
+/// `POST /api/insights/generate`, split out of
 /// `DashboardRepository.swift` (file-length rule) together with its
 /// rate-limit discipline.
 extension InsightsRepository {
@@ -23,7 +23,7 @@ extension InsightsRepository {
     /// **Idempotency-Key:** required (server expects). `APIClient.send` already
     /// supplies one for every POST.
     ///
-    /// **1.2 V5 — rate-limit discipline** (production 2026-10-07..09: bursts of
+    /// **Rate-limit discipline** (production 2026-10-07..09: bursts of
     /// four 429s within six seconds from 1.1.1, `insights.briefing.budget_exceeded`):
     /// - no in-request retry (`maxRetries: 0`): a generation is the most
     ///   expensive call the app makes, and a 429 without `Retry-After` used to

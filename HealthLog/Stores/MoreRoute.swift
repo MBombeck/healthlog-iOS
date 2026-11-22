@@ -1,6 +1,6 @@
 import Foundation
 
-/// #153 follow-up (SET-ROUTE) — typed `morePath` payload for the rows of
+/// #153 follow-up — typed `morePath` payload for the rows of
 /// the Mehr tab itself, resolved in `MoreScreen`.
 ///
 /// The privacy shield replaces the whole window while the scene is not active,
@@ -14,6 +14,9 @@ enum MoreRoute: Hashable {
     case aboutMe
     case labs
     case illness
+    /// The seizure diary (server v1.48.0), offered only while the server
+    /// says the `seizures` module is on.
+    case seizures
     case documents
     case nutrients
     case environment
@@ -22,7 +25,9 @@ enum MoreRoute: Hashable {
     case achievements
     case workouts
     case measurements
-    /// LIFE (1.5.0) — pushed from "About me" when the server has
+    /// The timeline: lanes and values on one time axis.
+    case timeline
+    /// Pushed from "About me" when the server has
     /// `features.lifeCircumstances`.
     case lifeCircumstances
 }

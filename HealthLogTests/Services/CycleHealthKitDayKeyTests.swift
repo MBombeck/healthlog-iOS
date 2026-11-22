@@ -9,7 +9,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **#115 1.5 — a cycle sample's day, and its `cycle-hk:<day>` id.**
+    /// **A cycle sample's day, and its `cycle-hk:<day>` id.**
     ///
     /// The server keys cycle days in the account zone and upserts HealthKit day
     /// logs on `(userId, source, externalId)`, with one row per `(userId, date)`

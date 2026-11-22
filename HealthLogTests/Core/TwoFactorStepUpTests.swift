@@ -1,4 +1,4 @@
-// #57 — native 2FA management over the step-up elevation contract.
+// Native 2FA management over the step-up elevation contract.
 //
 // These tests pin the wire contract against the REAL `APIClient` over a stub
 // URLSession (per PROJECT_GUIDE.md — no mock server), plus the pure pieces (body
@@ -407,7 +407,7 @@
 
             private final class StubAnchor: ASPresentationAnchorProvider, @unchecked Sendable {
                 @MainActor func anchor() -> ASPresentationAnchor {
-                    ASPresentationAnchor()
+                    SceneAnchorProvider.windowlessAnchor()
                 }
             }
 

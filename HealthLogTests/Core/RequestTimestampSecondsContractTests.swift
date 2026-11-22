@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #140 — from server v1.43 every date-time in a request body or query must
+/// From server v1.43 every date-time in a request body or query must
 /// carry seconds (`2026-10-15T06:15Z` is refused with 422, `2026-10-15T06:15:00Z`
 /// is accepted on every server version).
 ///

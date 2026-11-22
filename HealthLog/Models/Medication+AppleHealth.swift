@@ -19,8 +19,8 @@ public extension Medication {
     /// every manual dose-logging affordance so a dose is never double-counted
     /// against the Apple Health source of truth. `true` for app-managed meds.
     var allowsManualDoseLogging: Bool {
-        // v1.39.1 (#1033) — a medication kept as a record offers no intake
-        // buttons either: nothing about it is tracked. v1.39.4 (#1040) — nor
+        // v1.39.1 — a medication kept as a record offers no intake
+        // buttons either: nothing about it is tracked. v1.39.4 — nor
         // does one the server calls not actionable today (an ended course).
         !isAppleHealthMirrored && offersIntakeActions
     }
@@ -29,7 +29,7 @@ public extension Medication {
     /// upsert (the server GET/POST responses don't echo `externalSource`, so the
     /// importer is the authority on which med it mirrored).
     func withAppleHealthProvenance(externalId: String?) -> Medication {
-        // MED (1.5.0): a copy, not a rebuild, so no `var` field is lost.
+        // A copy, not a rebuild, so no `var` field is lost.
         var copy = self
         copy.externalSource = IntakeSource.appleHealth.wireValue
         copy.externalId = externalId ?? self.externalId

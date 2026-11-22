@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// v0.5.5 W-MED — pin the diagnostics snapshot builder.
+    /// Pin the diagnostics snapshot builder.
     ///
     /// The screen consumes a `Snapshot` derived from
     /// `UNUserNotificationCenter`'s three async queries. Those queries

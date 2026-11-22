@@ -35,7 +35,7 @@ public struct InsightsLayout: Codable, Sendable, Equatable {
     /// v1.15.11 layout v2 — the overview's section-level customization
     /// (`wellness-scores`, `daily-briefing`, …).
     ///
-    /// **Parity Build 4 · 4.5:** iOS now renders and edits these too — see
+    /// iOS now renders and edits these too — see
     /// `InsightsLayoutSections.swift` for the catalogue, the defaults-merging
     /// `resolvedSections` read view, and the `reorderingSections` /
     /// `togglingSectionVisibility` mutation helpers. Before that they were a
@@ -43,7 +43,7 @@ public struct InsightsLayout: Codable, Sendable, Equatable {
     ///
     /// The stored array is still held VERBATIM (unknown future ids included);
     /// resolution happens on read. iOS used to MUST round-trip it as a
-    /// workaround, but that is GONE (GH #19): server v1.16.13/1.16.14 now
+    /// workaround, but that is GONE: server v1.16.13/1.16.14 now
     /// MERGE-preserves the stored sections on a PUT that omits the field, so a
     /// tiles-only iOS PUT no longer resets the web arrangement. `nil` = "never
     /// saw a v2 GET" (fresh install / legacy cache) and is simply sent as-is.
@@ -52,7 +52,7 @@ public struct InsightsLayout: Codable, Sendable, Equatable {
     /// `nil` never serializes as an explicit `"sections": null`.
     public let sections: [InsightsLayoutSection]?
     public let tiles: [InsightsLayoutTile]
-    /// CU-20 (#69) concurrency token — decode-only, see ``OptimisticWriteBody``.
+    /// CU-20 concurrency token — decode-only, see ``OptimisticWriteBody``.
     public let updatedAt: String?
 
     /// `INSIGHTS_LAYOUT_VERSION` literal the iOS client emits for layouts it
@@ -214,13 +214,13 @@ public enum InsightsLayoutTileId {
     public static let visceralFat = "visceral-fat"
     public static let leanBodyMass = "lean-body-mass"
     public static let activeEnergy = "active-energy"
-    /// v0152 I2 — the daily-step-count Insights slug. The Home dashboard renders a
+    /// The daily-step-count Insights slug. The Home dashboard renders a
     /// distinct `MetricKind.steps` tile (steps ≠ `active-energy`/kcal), but no
     /// Insights subpage existed for it, so the Home steps tile tapped into nowhere
     /// (`selectInsightsMetric(.steps)` no-op'd — `.steps` had no slug). This slug
     /// maps `.steps` end-to-end (`InsightsTabSlug.slugToKind`).
     ///
-    /// **Parity Build 4 / 4.1 — the tail-append workaround is gone.** The "server
+    /// **The tail-append workaround is gone.** The "server
     /// layout doesn't carry a steps tile" premise the append rested on has not
     /// been true since web v1.12: `steps` is a first-class `SUB_PAGE_METRIC` key
     /// (`src/lib/insights/sub-page-metric.ts:85`), so it is part of
@@ -234,7 +234,7 @@ public enum InsightsLayoutTileId {
     public static let workouts = "workouts"
     public static let flightsClimbed = "flights-climbed"
     public static let walkingDistance = "walking-distance"
-    /// v0.11 W28d — wired end-to-end: maps to `MetricKind.walkingSteadiness`
+    /// Wired end-to-end: maps to `MetricKind.walkingSteadiness`
     /// (`appleWalkingSteadiness`, a 0–100 % fall-risk mobility quantity) via
     /// the HK registry + `InsightsTabSlug.slugToKind`. Renders a real activity-
     /// cluster pill once the user has ≥1 steadiness sample.
@@ -251,7 +251,7 @@ public enum InsightsLayoutTileId {
     public static let vascularAge = "vascular-age"
     public static let environmentalAudio = "environmental-audio"
     public static let headphoneAudio = "headphone-audio"
-    /// v0.11 W28b — server-accepted, and since audit B-4 (2026-09-10) it has an
+    /// Server-accepted, and since audit B-4 (2026-09-10) it has an
     /// iOS `MetricKind` too (`audioExposureEvent`, the 77th server
     /// `MeasurementType`), so the strip pill it round-tripped without is now
     /// reachable when the account has rows.
@@ -261,12 +261,12 @@ public enum InsightsLayoutTileId {
     public static let skinTemperature = "skin-temperature"
     public static let mood = "mood"
     public static let medications = "medications"
-    /// W-B189 (#23) — the server-computed recovery sub-page slug (web
+    /// The server-computed recovery sub-page slug (web
     /// `/insights/recovery`, server v1.17.1). A composite special page (strain /
     /// training-load / autonomic-charge + heart-and-energy family), NOT a single
     /// chartable `MetricKind`.
     ///
-    /// **Parity Build 4 — deliberately NOT in ``serverKnownIds``.** The doc here
+    /// **Deliberately NOT in ``serverKnownIds``.** The doc here
     /// used to claim it was ("included in `serverKnownIds` so the layout PUT
     /// round-trips it"); it never was, and it must not become one. `recovery` is a
     /// routed page (`src/app/insights/recovery/`) but NOT a `SUB_PAGE_METRIC` key,
@@ -278,7 +278,7 @@ public enum InsightsLayoutTileId {
     /// (`insights-tab-strip.tsx:540-548`).
     public static let recovery = "recovery"
 
-    // MARK: - Parity Build 4 / 4.1 — the v1.25 clinical slugs
+    // MARK: - The v1.25 clinical slugs
 
     /// v1.25 web slugs (`sub-page-metric.ts:64,78,79,111`) whose `MetricKind` and
     /// Dashboard tile already shipped on iOS but which carried **no slug**, so
@@ -291,7 +291,7 @@ public enum InsightsLayoutTileId {
     public static let waistToHeight = "waist-to-height"
     public static let gripStrength = "grip-strength"
 
-    // MARK: - v0.13.1 IC — v1.10.0 web-parity additive metric slugs
+    // MARK: - v1.10.0 web-parity additive metric slugs
 
     /// `cardio-fitness` → `MetricKind.vo2Max`. The enum case + descriptor + a
     /// Dashboard tile already existed; only the slug was missing, so VO₂ max
@@ -305,7 +305,7 @@ public enum InsightsLayoutTileId {
     public static let cardioRecovery = "cardio-recovery"
     public static let wristTemperature = "wrist-temperature"
 
-    /// v0141 W-DATAPARITY (P4) — the v1.29 `nutrients` sub-page slug
+    /// The v1.29 `nutrients` sub-page slug
     /// (`sub-page-metric.ts:149` → `SUB_PAGE_SLUGS` → `INSIGHTS_TILE_IDS`). No
     /// chartable iOS `MetricKind` yet (no strip pill), but it MUST be in
     /// ``serverKnownIds`` so `filteringForServer()` stops dropping the nutrients
@@ -317,15 +317,15 @@ public enum InsightsLayoutTileId {
     /// filters unknown ids out of its wire payload defensively so an iOS-only
     /// future tile can never wedge the endpoint.
     ///
-    /// v0.11 W28b — widened from the narrow 14-id set to the full
+    /// Widened from the narrow 14-id set to the full
     /// `overview` + 37-slug universe the server's layout enum now accepts
     /// (`v0.11-server-to-ios-insights-layout-enum-WIDENED.md`). The layout enum
     /// and the metric universe now stay in lockstep with the server by
     /// construction. `audio-events` is accepted here so a persisted layout
     /// round-trips, even though it has no chartable `MetricKind` (and thus no
     /// strip pill) — `audioExposureEvent` is a HealthKit category/event type,
-    /// not a continuous series (W28d). `walking-steadiness` now DOES map to a
-    /// chartable kind (W28d).
+    /// not a continuous series. `walking-steadiness` now DOES map to a
+    /// chartable kind.
     public static let serverKnownIds: Set<String> = [
         overview, bloodPressure, pulse, oxygen, bodyTemperature, respiratoryRate,
         weight, bmi, bodyWater, boneMass, fatFreeMass, fatMass, muscleMass,
@@ -334,19 +334,19 @@ public enum InsightsLayoutTileId {
         doubleSupportTime, stepLength, walkingSpeed, sleep, restingPulse, hrv,
         pulseWaveVelocity, vascularAge, environmentalAudio, headphoneAudio,
         audioEvents, daylight, bloodGlucose, skinTemperature, mood, medications,
-        // v0.13.1 IC — v1.10.0 additive slugs (server `INSIGHTS_TILE_IDS` =
+        // v1.10.0 additive slugs (server `INSIGHTS_TILE_IDS` =
         // `overview` + `SUB_PAGE_SLUGS`, which now includes all eight). All
         // except `cardio-fitness` map to a brand-new `MetricKind`; the layout
         // PUT round-trips them since the server's enum accepts them.
         cardioFitness, falls, sixMinuteWalk, stairAscentSpeed, stairDescentSpeed,
         breathingDisturbances, cardioRecovery, wristTemperature,
-        // Parity Build 4 / 4.1 — `steps` (a `SUB_PAGE_METRIC` key since web
+        // `steps` (a `SUB_PAGE_METRIC` key since web
         // v1.12) plus the four v1.25 clinical slugs. All five are in the server's
         // `INSIGHTS_TILE_IDS`, so they PUT cleanly; keeping `steps` out was what
         // made `filteringForServer()` silently drop the operator's Steps
         // order/visibility choice on every write.
         steps, pain, waist, waistToHeight, gripStrength,
-        // v0141 W-DATAPARITY (P4) — `nutrients` (a v1.29 `SUB_PAGE_METRIC` key in
+        // `nutrients` (a v1.29 `SUB_PAGE_METRIC` key in
         // `INSIGHTS_TILE_IDS`); omitting it dropped the tile on every PUT (old `steps` bug).
         nutrients
         // NOTE: `recovery` is deliberately NOT here — it is a routed web page but
@@ -406,7 +406,7 @@ public enum InsightsLayoutTileId {
         catalogueTypeToServerId[type]
     }
 
-    // MARK: - W-WIDGET-DEEPLINK (v0152) — canonical kind ⇄ slug map
+    // MARK: - Canonical kind ⇄ slug map
 
     /// **The single source of truth mapping a chartable `MetricKind` to its
     /// kebab Insights layout slug** (e.g. `.weight` → `"weight"`,
@@ -451,7 +451,7 @@ public enum InsightsLayoutTileId {
         .vascularAge: vascularAge,
         .audioExposureEnvironment: environmentalAudio,
         .audioExposureHeadphone: headphoneAudio,
-        // Audit B-4 — the slug existed before the kind did.
+        // The slug existed before the kind did.
         .audioExposureEvent: audioEvents,
         .timeInDaylight: daylight,
         .glucose: bloodGlucose,
@@ -464,7 +464,7 @@ public enum InsightsLayoutTileId {
         .breathingDisturbances: breathingDisturbances,
         .cardioRecovery: cardioRecovery,
         .wristTemperature: wristTemperature,
-        // Parity Build 4 / 4.1 — the four v1.25 clinical kinds. Each already had
+        // The four v1.25 clinical kinds. Each already had
         // a `MetricKind` + a Dashboard tile; without these rows the tile was a
         // dead tap (audit 02-insights §B).
         .painNRS: pain,
@@ -524,7 +524,7 @@ public extension InsightsLayout {
         InsightsLayoutTile(id: InsightsLayoutTileId.bodyTemperature, visible: false, order: 11),
         InsightsLayoutTile(id: InsightsLayoutTileId.hrv, visible: false, order: 12),
         InsightsLayoutTile(id: InsightsLayoutTileId.workouts, visible: false, order: 13),
-        // Parity Build 4 / 4.1 — `steps` plus the four v1.25 clinical slugs. Each
+        // `steps` plus the four v1.25 clinical slugs. Each
         // ships a Dashboard tile whose tap deep-links into Insights, so the
         // BOOTSTRAP layout (used before the first GET completes, and offline) has
         // to enumerate them or the deep link parks a slug no pager page exists
@@ -552,7 +552,7 @@ public extension InsightsLayout {
         tiles.sorted { $0.order < $1.order }
     }
 
-    /// v0.14.1 — the strip-customise model: every tile, sorted by `order`,
+    /// The strip-customise model: every tile, sorted by `order`,
     /// EXCLUDING the mandatory `overview` row. "Übersicht" is always the first,
     /// non-hideable pill (see `InsightsTabSelection.ordered`), so it does not
     /// appear as a reorderable/hideable row in the customise sheet. The screen
@@ -568,7 +568,7 @@ public extension InsightsLayout {
     /// the partial visible-only order omits) keep their relative sequence after
     /// the listed entries.
     ///
-    /// A2 (v0.8.2 W1a) — `remaining` is seeded from the tiles sorted by `order`
+    /// `remaining` is seeded from the tiles sorted by `order`
     /// (NOT the raw array order), so the hidden tail preserves its `order`-
     /// relative sequence regardless of how the decoded server array happened to
     /// be ordered. Keeps the AddTileSheet hidden-tile gallery stable.
@@ -615,7 +615,7 @@ public extension InsightsLayout {
     /// addition still round-trips through a later PUT instead of being
     /// silently dropped on the next write. `sections` pass through VERBATIM —
     /// no filter, no renumber — they are the web client's customization and
-    /// the iOS contract is a byte-faithful echo (A1).
+    /// the iOS contract is a byte-faithful echo.
     func reconciled(knownIds: Set<String> = InsightsLayoutTileId.serverKnownIds) -> InsightsLayout {
         let ordered = orderedTiles
         let known = ordered.filter { knownIds.contains($0.id) }

@@ -5,9 +5,9 @@ import SwiftUI
 /// One calm caption control ("Sources" + `text.book.closed`) under a medical
 /// statement. Tapping opens ``HLInfoSheet`` with the topic's method and
 /// references (``HLInfoContent/sources(_:)``); inside a sheet's own stack it
-/// pushes that page instead. Fail-closed like
-/// ``HLLearnMoreLink``: a topic with neither references nor a methodology text
-/// renders nothing, so a surface can never show a dead "Sources" button.
+/// pushes that page instead. Fail-closed: a topic with neither references nor
+/// a methodology text renders nothing, so a surface can never show a dead
+/// "Sources" button.
 struct HLSourcesLink: View {
     enum Style {
         case caption
@@ -39,7 +39,7 @@ struct HLSourcesLink: View {
     var body: some View {
         if Self.isRenderable(topic) {
             if insideSheetStack {
-                // 1.4 B2 — inside a sheet the page is pushed into the sheet's
+                // Inside a sheet the page is pushed into the sheet's
                 // own stack: never a second sheet on top of a sheet.
                 NavigationLink {
                     HLInfoPage(content: .sources(topic))
@@ -73,8 +73,7 @@ struct HLSourcesLink: View {
             }
             .font(.hlCaption)
             .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+            .modifier(SourcesLinkHitArea())
         case let .captionText(text):
             HStack(spacing: HLSpace.xxs) {
                 Text(verbatim: text)
@@ -84,8 +83,7 @@ struct HLSourcesLink: View {
             }
             .font(.hlCaption)
             .foregroundStyle(HLText.tertiary)
-            .frame(minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+            .modifier(SourcesLinkHitArea())
         }
     }
 }
@@ -100,5 +98,21 @@ private struct SourcesLinkTraits: ViewModifier {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("sources.link.a11y"))
             .accessibilityIdentifier(HLSourcesLink.identifier(for: topic))
+    }
+}
+
+/// The caption keeps its own height in the card, so the card's foot is not
+/// 16 pt deeper than its head; the tap area still reaches the 44 pt minimum
+/// around it.
+private struct SourcesLinkHitArea: ViewModifier {
+    /// Padding above and below the caption line.
+    static let padding: CGFloat = HLSpace.xs
+    /// How far the tap area reaches past the padded line on each side.
+    static let reach: CGFloat = HLSpace.md
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.vertical, Self.padding)
+            .contentShape(Rectangle().inset(by: -Self.reach))
     }
 }

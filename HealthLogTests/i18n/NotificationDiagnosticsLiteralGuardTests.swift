@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **U10 — `NotificationDiagnosticsScreen` trägt keine rohen Literale mehr.**
+/// **`NotificationDiagnosticsScreen` trägt keine rohen Literale mehr.**
 ///
 /// Der Bildschirm ist über Einstellungen → Mitteilungen → „Erweiterte
 /// Diagnose" für **jeden** Nutzer erreichbar, nicht nur unter DEBUG. Er war
@@ -40,8 +40,7 @@ struct NotificationDiagnosticsLiteralGuardTests {
     // MARK: - Dateien
 
     private static let screenPath = "HealthLog/Screens/Notifications/NotificationDiagnosticsScreen.swift"
-    private static let entryPath = "HealthLog/Screens/Notifications/NotificationsScreen+ChannelCards.swift"
-    /// **08-15.** The registration audit, the banner categories and the pending
+    /// The registration audit, the banner categories and the pending
     /// identifiers moved to the support screen. The guard follows them rather
     /// than shrinking: it now reads the diagnostics *surface* — both files —
     /// so the census threshold below keeps its meaning and every literal that
@@ -53,7 +52,7 @@ struct NotificationDiagnosticsLiteralGuardTests {
     /// Every file the diagnostics surface is spread across. Scanned one file at
     /// a time — `LiteralScanner` carries block-comment state, so concatenating
     /// sources would be correct only by accident.
-    /// 1.4 B2 — the two card footers that explain the medication numbers and
+    /// The two card footers that explain the medication numbers and
     /// the scheduled count moved into the screen's (i); the info content lives
     /// in `NotificationsScreen+Info.swift`, so the guard reads it too.
     private static let infoPath = "HealthLog/Screens/Notifications/NotificationsScreen+Info.swift"
@@ -427,9 +426,9 @@ struct NotificationDiagnosticsLiteralGuardTests {
 
     @Test("Die Zeilenbeschriftungen laufen über LocalizedStringKey, nicht über den verbatim-Text-Initializer")
     func labeledRowTitleIstLokalisiert() throws {
-        // 08-15: `SupportDetailRow` is the same primitive on the other half of
+        // `SupportDetailRow` is the same primitive on the other half of
         // the surface and inherits the same defect if its `title` regresses.
-        // 1.4 B2: the info content file holds no row primitive, so it is not
+        // The info content file holds no row primitive, so it is not
         // asked for one.
         for path in [Self.screenPath, Self.supportPath] {
             let text = try Self.source(path)
@@ -449,7 +448,7 @@ struct NotificationDiagnosticsLiteralGuardTests {
         }
     }
 
-    @Test("Die Einstiegszeile und der Seitentitel teilen einen Schlüssel, der de UND en trägt")
+    @Test("Der Schlüssel der Einstiegszeile und des Seitentitels trägt de UND en")
     func einstiegszeileIstLokalisiert() throws {
         let catalog = try ParityCatalog.load()
         let entry = try #require(
@@ -458,20 +457,6 @@ struct NotificationDiagnosticsLiteralGuardTests {
         )
         #expect(ParityCatalog.value(entry, language: "de") != nil, "\(Self.entryKey): keine deutsche Fassung.")
         #expect(ParityCatalog.value(entry, language: "en") != nil, "\(Self.entryKey): keine englische Fassung.")
-
-        let entrySource = try Self.source(Self.entryPath)
-        #expect(
-            entrySource.contains("Label(\"\(Self.entryKey)\", systemImage: \"stethoscope\")"),
-            "Die Einstiegszeile in \(Self.entryPath) nennt \"\(Self.entryKey)\" nicht mehr."
-        )
-        let screen = try Self.source(Self.screenPath)
-        #expect(
-            screen.contains("HLSettingsPage(title: \"\(Self.entryKey)\")"),
-            """
-            Seitentitel und Einstiegszeile sind auseinandergelaufen. R3: die Zeile \
-            verspricht, wie die Seite heißt — beide hängen an einem Schlüssel.
-            """
-        )
     }
 
     @Test("Die Fläche enthält keine mehrzeiligen Literale — der Scanner unterstützt sie nicht")

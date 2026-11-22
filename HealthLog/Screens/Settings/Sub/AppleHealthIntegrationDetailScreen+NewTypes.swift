@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **HK-NEW (1.5)** — the quiet way back to the new Apple Health read types
+/// The quiet way back to the new Apple Health read types
 /// at the foot of the type list.
 ///
 /// The dashboard card (`HealthKitNewReadTypesCard`) explains them once. After
@@ -16,26 +16,19 @@ struct AppleHealthNewReadTypesLink: View {
 
     var body: some View {
         Group {
-            if !pending.isEmpty {
-                Button {
+            if isRequesting {
+                // In the link's place and height while iOS asks.
+                HLInlineProgress()
+                    .frame(maxWidth: .infinity, minHeight: HLLinkButton.hitHeight)
+            } else if !pending.isEmpty {
+                HLLinkButton("settings.applehealth.newTypes.link") {
                     Task {
                         isRequesting = true
                         await readiness.requestAnnouncedReadAuthorization(ignoringFlags: true)
                         isRequesting = false
                         await refresh()
                     }
-                } label: {
-                    HStack(spacing: HLSpace.xxs) {
-                        Text("settings.applehealth.newTypes.link")
-                        if isRequesting {
-                            ProgressView().controlSize(.mini)
-                        }
-                    }
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isRequesting)
                 .accessibilityHint(Text(HealthKitNewReadTypesCard.body(for: pending)))
                 .accessibilityIdentifier("settings.integrations.appleHealth.newTypes")
             }

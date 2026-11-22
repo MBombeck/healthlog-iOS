@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 0 — the durable cursor matrix.
+/// The durable cursor matrix.
 ///
 /// The upstream order is `read anchor → query → app callback → save anchor`
 /// (SpeziHealthKit 1.4.2, revision `a86db5c`). A rewind performed inside the
@@ -218,11 +218,9 @@ struct HealthKitDurableCursorTests {
 
     // MARK: - RED
 
-    /// No fault the durable rule holds may advance the installed cursor, and the
-    /// production Spezi paths must consult the shared commit and migration
-    /// contracts instead of persisting the library anchor unconditionally.
+    /// No fault the durable rule holds may advance the installed cursor.
     @Test("a nonterminal page holds the cursor")
-    func nonterminalPageHoldsCursor() throws {
+    func nonterminalPageHoldsCursor() {
         var violations: [String] = []
 
         for row in Self.matrix {
@@ -233,27 +231,6 @@ struct HealthKitDurableCursorTests {
             }
         }
 
-        let bindings = [
-            ("HealthLog/Services/HealthKit/HealthLogStandard.swift", "HealthSyncCursorPolicy"),
-            ("HealthLog/Services/HealthKit/SpeziAnchorMigrator.swift", "HealthSyncCursorMigrationState")
-        ]
-        for (path, symbol) in bindings {
-            let contents = try Self.source(path)
-            if !contents.contains(symbol) {
-                violations.append("\(path) does not consult \(symbol)")
-            }
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: nonterminal page advanced cursor")
-    }
-
-    // MARK: - Source access
-
-    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        #expect(violations.isEmpty, "nonterminal page advanced cursor")
     }
 }

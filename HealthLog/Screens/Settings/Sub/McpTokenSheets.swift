@@ -4,7 +4,7 @@ import SwiftUI
     import UniformTypeIdentifiers
 #endif
 
-/// Mint sheet for an MCP connector token (Build 2 / 2.7).
+/// Mint sheet for an MCP connector token.
 ///
 /// Two inputs only, matching the server's closed contract: a name and the
 /// read / read-write scope choice (`z.enum(["read", "read_write"])`). Read is
@@ -17,9 +17,17 @@ struct McpTokenMintSheet: View {
     @State private var scope: McpTokenScope = .read
 
     var body: some View {
-        NavigationStack {
-            HLSettingsPage(title: "New connector token") {
-                HLSettingsCard(icon: "tag", title: "Name") {
+        HLSheetScaffold(
+            "New connector token",
+            action: .confirm("Create", isEnabled: !trimmedName.isEmpty) {
+                await store.mintToken(name: name, scope: scope)
+            },
+            isDirty: !trimmedName.isEmpty,
+            isBusy: store.isMinting,
+            confirmIdentifier: "settings.mcp.mint.submit"
+        ) {
+            HLPage {
+                HLCard("Name") {
                     TextField(String(localized: "e.g. My health dashboard"), text: $name)
                         .textFieldStyle(.plain)
                         .font(.hlSubhead)
@@ -28,52 +36,37 @@ struct McpTokenMintSheet: View {
                         .accessibilityIdentifier("settings.mcp.mint.name")
                 }
 
-                // R19 — Heimat des Schreibzugriffs-Umfangs: hier wird der Scope
+                // Heimat des Schreibzugriffs-Umfangs: hier wird der Scope
                 // gewählt, und die Zeile unter dem Picker sagt pro Fall, was er
-                // bedeutet. 1.4 B2-c: der Footer über die „normale API" ist
+                // bedeutet. Der Footer über die „normale API" ist
                 // weg, die Zeile reicht.
-                HLSettingsCard(
-                    icon: "key",
-                    title: "Access"
-                ) {
-                    Picker(String(localized: "Access"), selection: $scope) {
+                HLCard("Access") {
+                    HLAdaptiveSegmentedPicker(
+                        "Access",
+                        selection: $scope,
+                        labels: ["Read only", "Read and write"]
+                    ) {
                         Text("Read only").tag(McpTokenScope.read)
                         Text("Read and write").tag(McpTokenScope.readWrite)
                     }
-                    .pickerStyle(.segmented)
                     .accessibilityIdentifier("settings.mcp.mint.scope")
 
                     Text(scopeExplanation)
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.note)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let error = store.error {
                     Text(error)
                         .font(.hlFootnote)
-                        .foregroundStyle(HLColor.statusBad)
+                        .foregroundStyle(StepUpRetry.messageTint(for: error))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .navigationTitle("New connector token")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        Task { await mint() }
-                    }
-                    .disabled(trimmedName.isEmpty || store.isMinting)
-                    .accessibilityIdentifier("settings.mcp.mint.submit")
-                }
-            }
-            // R2 / #115 A3 — a mint the server wants a fresh proof for:
+            // A mint the server wants a fresh proof for:
             // confirm, then mint again with the elevation. SEC — on a server
             // that reads the proof the store asks before the first attempt.
-            // POLISH-C (C1) — an account that turns out to hold nothing to
+            // An account that turns out to hold nothing to
             // prove (no factor, no passkey) mints on the token instead.
             .stepUpConfirmation(
                 store.stepUp,
@@ -113,67 +106,38 @@ struct McpTokenMintSheet: View {
 struct McpTokenRevealSheet: View {
     let store: McpStore
 
-    @Environment(\.dismiss) private var dismiss
     @State private var didCopy = false
 
     var body: some View {
-        NavigationStack {
-            HLSettingsPage(title: "Your new token") {
+        HLSheetScaffold("Your new token", action: .done()) {
+            HLPage {
                 if let fresh = store.freshToken {
-                    // R19 — DIE Heimat der „nur einmal sichtbar"-Zusage. 1.4
+                    // DIE Heimat der „nur einmal sichtbar"-Zusage. 1.4
                     // B2-c: der Kartentitel sagt sie, der Footer, der sie
                     // wiederholte, ist weg.
-                    HLSettingsCard(
-                        icon: "exclamationmark.triangle",
-                        title: "Shown once"
-                    ) {
-                        Text(verbatim: fresh.token)
-                            .font(.hlFootnote.monospaced())
-                            .foregroundStyle(HLText.primary)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                    HLCard("Shown once") {
+                        // A hyphen inside the token would be typed along.
+                        HLIdentifierText(fresh.token, style: .footnote, monospaced: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(HLSpace.md)
-                            .background(
-                                RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                                    .fill(HLSurface.secondary)
-                            )
                             .accessibilityIdentifier("settings.mcp.reveal.token")
 
-                        Button {
+                        HLRowButton {
                             copy(fresh.token)
                         } label: {
-                            HStack(spacing: HLSpace.md) {
-                                Text(didCopy ? "Copied" : "Copy token")
-                                    .font(.hlSubhead.weight(.semibold))
-                                    .foregroundStyle(HLText.primary)
-                                Spacer()
-                                Image(systemName: didCopy ? "checkmark.circle.fill" : "doc.on.doc")
-                                    .font(.hlIcon(HLIconSize.sm))
-                                    .foregroundStyle(didCopy ? HLColor.statusOK : HLText.tertiary)
-                            }
-                            .contentShape(Rectangle())
+                            HLRow(
+                                didCopy ? "Copied" : "Copy token",
+                                accessory: .symbol(didCopy ? "checkmark" : "doc.on.doc")
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .hlPressable()
                         .accessibilityIdentifier("settings.mcp.reveal.copy")
                     }
 
                     if let expiresAt = fresh.expiresAt {
-                        HLSettingsCard(icon: "clock", title: "Expires") {
+                        HLCard("Expires") {
                             Text(verbatim: HLDateFormat.date(expiresAt, style: .abbreviated))
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                         }
                     }
-                }
-            }
-            .navigationTitle("Your new token")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .accessibilityIdentifier("settings.mcp.reveal.done")
                 }
             }
         }

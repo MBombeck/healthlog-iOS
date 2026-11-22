@@ -11,7 +11,6 @@ import XCTest
 /// sweep. Only runs when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
     func test_16a_areaMedications() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-area-meds"])
         tab("pills.fill")
         shotToEnd("16-meds-list")
@@ -37,9 +36,10 @@ extension QASweepScreenshotsTest {
             settle(2)
             dropKeyboard()
             shotToEnd("16-meds-add")
-            let advanced = app.descendants(matching: .any).matching(NSPredicate(
-                format: "label == %@ OR label == %@", "Advanced options", "Erweiterte Optionen"
-            )).firstMatch
+            let advanced = element("med.add.advanced")
+            for _ in 0 ..< 10 where !(advanced.exists && advanced.isHittable) {
+                scrollDown()
+            }
             if tap(advanced, "advanced options") {
                 settle(1.5)
                 shotToEnd("16-meds-add-advanced")
@@ -78,8 +78,7 @@ extension QASweepScreenshotsTest {
     }
 
     private func intakeSheets() {
-        let log = app.tabBars.buttons.containing(.image, identifier: "plus.circle.fill").firstMatch
-        guard tap(log, "Log tab") else { return }
+        guard tapLogTab() else { return }
         settle(2)
         guard tap(element("capture.picker.row.medication"), "capture row medication") else { return }
         settle(2.5)
@@ -94,12 +93,11 @@ extension QASweepScreenshotsTest {
     }
 
     func test_16b_areaMoodAndMentalHealth() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-area-meds"])
         openDeepLink("healthlog://insights/mood")
         settle(6)
         scrollUpToTop()
-        // B4-z — the mood chart sits under the middle drag and takes it as a
+        // The mood chart sits under the middle drag and takes it as a
         // scrub; the page is walked from the right gutter.
         scrollColumn = 0.98
         shotToEnd("16-mood-page")
@@ -152,24 +150,23 @@ extension QASweepScreenshotsTest {
     }
 
     func test_16c_areaCycle() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-area-meds", "-hl.settings.cycleTracking.optIn", "YES"])
-        // 1.4 B4 — the cycle opt-in can raise a second Health sheet right
+        // The cycle opt-in can raise a second Health sheet right
         // after the first (the late read types); the tab bar is behind both.
-        // B4-z: under load the second sheet arrives late, so wait until the
+        // Under load the second sheet arrives late, so wait until the
         // tab bar is reachable again instead of three quick tries.
-        let more = app.tabBars.buttons.containing(.image, identifier: "ellipsis").firstMatch
+        let more = ShellNavigator.button(symbol: "ellipsis", in: app)
         for _ in 0 ..< 8 {
-            dismissHealthAuthorization()
+            answerHealthAccess()
             settle(1.5)
             if more.exists, more.isHittable { break }
         }
         tab("ellipsis")
-        dismissHealthAuthorization()
+        answerHealthAccess()
         if let cycle = probe("more.row.cycle") {
             cycle.tap()
             settle(4)
-            dismissHealthAuthorization()
+            answerHealthAccess()
             shotToEnd("16-cycle-home")
             scrollUpToTop()
             if tap(element("cycle.home.advancedSettings"), "cycle settings") {
@@ -178,8 +175,7 @@ extension QASweepScreenshotsTest {
                 dismissSheet()
             }
             infoSheet("cycle.info", "16-cycle-info")
-            let log = app.tabBars.buttons.containing(.image, identifier: "plus.circle.fill").firstMatch
-            if tap(log, "Log tab"), tap(element("capture.picker.row.cycle"), "capture row cycle") {
+            if tapLogTab(), tap(element("capture.picker.row.cycle"), "capture row cycle") {
                 settle(2.5)
                 shotToEnd("16-cycle-capture")
                 dismissSheet()
@@ -191,7 +187,6 @@ extension QASweepScreenshotsTest {
     }
 
     func test_16d_areaIllnessAndNotifications() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-area-meds"])
         tab("ellipsis")
         if let illness = probe("more.row.illness") {
@@ -208,7 +203,7 @@ extension QASweepScreenshotsTest {
                 goBack()
             }
             scrollUpToTop()
-            if tap(element("illness.toolbar.insights"), "illness insights") {
+            if tap(element("illness.toolbar.more"), "illness more"), tap(element("illness.toolbar.insights"), "illness insights") {
                 settle(3)
                 shot("16-illness-insights")
                 goBack()
@@ -250,7 +245,7 @@ extension QASweepScreenshotsTest {
         }
     }
 
-    /// 1.4 B4-z — the two illness sheets whose German titles sit close to the
+    /// The two illness sheets whose German titles sit close to the
     /// width between "Abbrechen" and "Speichern" ("Neue Episode", "Tag
     /// eintragen"); no walk had opened them before.
     private func illnessSheet(opening identifier: String, _ name: String) {

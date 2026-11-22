@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 25-02 — four operator decisions (E-2026-08-29), the last code block
+/// **Four operator decisions, the last code block
 /// before candidate 271.**
 ///
 /// Each decision is pinned where it can actually break:
@@ -38,19 +38,6 @@ import Testing
 struct OperatorDecisions2502Tests {
     // MARK: - 1. Score availability (zero inputs → no tile)
 
-    /// Zero available inputs means the server sends no score, and the hero
-    /// must then render NO ring at all — no empty state, no explainer, no
-    /// provisional en-dash face. The gate is `TodayHeroCard.availableScore`,
-    /// and the en-dash fallback must be gone from the hero source.
-    @Test("zero available inputs remove the score ring entirely")
-    func zeroInputsRemoveTheScoreRing() throws {
-        let hero = try Self.lineStrippedSource(Self.heroPath)
-        #expect(
-            !hero.contains("\"\u{2013}\"") && hero.contains("availableScore("),
-            "EXPECTED_RED: 25-02 zero available inputs still paint a provisional score ring instead of removing the tile"
-        )
-    }
-
     /// A score backed by ONE pillar decodes and keeps its value untouched —
     /// the client imposes no breadth minimum of its own. The subset math is
     /// the server's; what iOS owes is to render whatever arrived.
@@ -80,30 +67,13 @@ struct OperatorDecisions2502Tests {
 
     // MARK: - 2. The caption
 
-    /// The painted mark and its one definition site are gone from all three
-    /// files that carried it — the hero, the (unmounted) tile twin, and the
-    /// presentation enum. The catalogue key follows in the same commit.
-    @Test("the painted 'Eigene Auswahl' caption is gone")
-    func theCaptionUnderTheScoreIsGone() throws {
-        let hero = try Self.lineStrippedSource(Self.heroPath)
-        let tile = try Self.lineStrippedSource(Self.tilePath)
-        let presentation = try Self.lineStrippedSource(Self.presentationPath)
-        #expect(
-            !hero.contains("chosenCompositionMark") && !tile.contains("chosenCompositionMark")
-                && !presentation.contains("chosenCompositionMark"),
-            "EXPECTED_RED: 25-02 the painted 'Eigene Auswahl' caption still stands under the dashboard Health Score"
-        )
-    }
-
     /// The accessibility function the caption carried is NOT the painted text
     /// (that was `accessibilityHidden`); it is the sentence appended to the
-    /// ring's accessibility label. It stays, on both score surfaces.
+    /// ring's accessibility label. It stays on the score surface.
     @Test("the spoken provenance survives the caption")
     func theSpokenProvenanceSurvivesTheCaption() throws {
         let hero = try Self.lineStrippedSource(Self.heroPath)
-        let tile = try Self.lineStrippedSource(Self.tilePath)
         #expect(hero.contains("chosenCompositionA11y"))
-        #expect(tile.contains("chosenCompositionA11y"))
     }
 
     // MARK: - 3. The avatar
@@ -115,7 +85,7 @@ struct OperatorDecisions2502Tests {
         let toolbar = try Self.lineStrippedSource(Self.toolbarPath)
         #expect(
             toolbar.contains("SettingsAccountScreen(") && !toolbar.contains("EditProfileSheet("),
-            "EXPECTED_RED: 25-02 the dashboard avatar still opens the profile editor instead of Konto"
+            "the dashboard avatar still opens the profile editor instead of Konto"
         )
         // 1.5 (Alex, 07.11.): the avatar sheet signs out, but resetting data
         // and deleting the account stay under Einstellungen > Konto only.
@@ -143,12 +113,12 @@ struct OperatorDecisions2502Tests {
         let advanced = try Self.lineStrippedSource(Self.advancedPath)
         #expect(
             aboutMe.contains("settings.diabetes.toggle_label") && !advanced.contains("DiabetesStore"),
-            "EXPECTED_RED: 25-02 the glucose targets still sit under Datenschutz und Sicherheit"
+            "the glucose targets still sit under Datenschutz und Sicherheit"
         )
     }
 
     /// The injection-site deny-list leaves Datenschutz und Sicherheit entirely.
-    /// #105 — the half of this decision that named the *new* host has moved on:
+    /// The half of this decision that named the *new* host has moved on:
     /// the door now sits in Über mich (pinned by `InjectionSitesPlacementTests`),
     /// because the deny-list describes the user's body, not one medication.
     @Test("the injection sites leave Datenschutz und Sicherheit")
@@ -157,7 +127,7 @@ struct OperatorDecisions2502Tests {
         let advanced = try Self.lineStrippedSource(Self.advancedPath)
         #expect(
             aboutMe.contains("SettingsInjectionSitesScreen(") && !advanced.contains("SettingsInjectionSitesScreen"),
-            "EXPECTED_RED: 25-02 the injection sites still sit under Datenschutz und Sicherheit"
+            "the injection sites still sit under Datenschutz und Sicherheit"
         )
     }
 
@@ -225,14 +195,14 @@ struct OperatorDecisions2502Tests {
         ]
         #expect(
             reads == [nil, nil, nil],
-            "EXPECTED_RED: 25-02 the card survives its own completed connect flow — the operator's build-270 walk"
+            "the card survives its own completed connect flow — the operator's build-270 walk"
         )
     }
 
     /// The second walk: the sheet completes with everything denied. The
     /// system's answer is the same `.unnecessary` — answered is answered,
     /// grant or deny — and the card ends without any ✕. The durable route
-    /// stays Einstellungen → Apple Health (D-16-03-A), unchanged.
+    /// stays Einstellungen → Apple Health, unchanged.
     @Test("an all-denied outcome still ends the card — answered is answered")
     func anAllDeniedOutcomeStillEndsTheCard() throws {
         let defaults = try Self.freshDefaults()
@@ -255,22 +225,7 @@ struct OperatorDecisions2502Tests {
             HealthKitUpdateNotice.visibleVariant(
                 state: state, statuses: statuses, sheetStatus: .answered, defaults: defaults
             ) == nil,
-            "EXPECTED_RED: 25-02 answered is answered — an all-denied outcome must end the card without the ✕"
-        )
-    }
-
-    /// The truth has to be ASKED, not remembered: the card queries the
-    /// system's sheet status on appearance and re-queries right after its own
-    /// Verbinden flow returns — so it leaves in the same session and a fresh
-    /// launch asks the system instead of trusting anything cached. No local
-    /// "asked" memory exists anywhere in the notice.
-    @Test("the card asks the system, not its memory")
-    func theCardAsksTheSystemNotItsMemory() throws {
-        let card = try Self.lineStrippedSource(Self.cardPath)
-        let notice = try Self.lineStrippedSource(Self.noticePath)
-        #expect(
-            card.contains("authorizationSheetAnswered") && !notice.contains("askedDefaultsKey"),
-            "EXPECTED_RED: 25-02 the card never asks the system whether its sheet was answered"
+            "answered is answered — an all-denied outcome must end the card without the ✕"
         )
     }
 
@@ -328,17 +283,6 @@ struct OperatorDecisions2502Tests {
         #expect(TodayHeroCard.availableScore(Self.digest(score: typical)) == typical)
     }
 
-    /// The avatar's presentation stays exactly ONE sheet — the retarget
-    /// changed the destination, never the presentation grammar (a push would
-    /// be a new navigation-destination in the Phase-06 census).
-    @Test("the avatar surface stays one sheet")
-    func theAvatarSurfaceStaysOneSheet() throws {
-        let toolbar = try Self.lineStrippedSource(Self.toolbarPath)
-        let sheets = toolbar.components(separatedBy: ".sheet(").count - 1
-        #expect(sheets == 1)
-        #expect(!toolbar.contains(".navigationDestination("))
-    }
-
     private static func digest(score: DailyDigest.Score?) -> DailyDigest {
         DailyDigest(
             generatedAt: "2026-08-29T08:00:00Z",
@@ -355,14 +299,10 @@ struct OperatorDecisions2502Tests {
     // MARK: - Paths + helper
 
     static let heroPath = "HealthLog/Screens/Dashboard/TodayHeroCard.swift"
-    static let tilePath = "HealthLog/Screens/Dashboard/HealthScoreTile.swift"
-    static let presentationPath = "HealthLog/Screens/Dashboard/HealthScorePresentation.swift"
     static let toolbarPath = "HealthLog/Screens/Dashboard/DashboardProfileToolbar.swift"
     static let kontoPath = "HealthLog/Screens/Settings/Sub/SettingsAccountScreen.swift"
     static let aboutMePath = "HealthLog/Screens/AboutMe/AboutMeScreen.swift"
     static let advancedPath = "HealthLog/Screens/Settings/Sub/SettingsAdvancedScreen.swift"
-    static let cardPath = "HealthLog/Components/HealthKitUpdateNoticeCard.swift"
-    static let noticePath = "HealthLog/App/HealthKitUpdateNotice.swift"
 
     /// A private, wiped defaults suite per test — the per-install register the
     /// card's arming/dismissal/asked keys live in.

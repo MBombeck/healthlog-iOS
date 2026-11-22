@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **H2 (1.1.0) — the delta caption's German reads as German.**
+/// **The delta caption's German reads as German.**
 ///
 /// The QA sweep photographed "+0,2 % ggü. monat davor" on every metric page:
 /// the suffix lowercased the range's display name, which in German is a noun.

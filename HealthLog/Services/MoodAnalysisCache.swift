@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// **Phase 09 / plan 09-04 — where the Mood analysis runs, and how often.**
+/// **Where the Mood analysis runs, and how often.**
 ///
 /// An `actor` is taken here for the same reason 09-03 took one for the export
 /// and widget writes: not primarily to serialize, but because it has an executor
@@ -121,7 +121,8 @@ actor MoodAnalysisCache {
                     ),
                     resident: hit.insights
                 ),
-                trend: hit.trend
+                trend: hit.trend,
+                trendSeries: hit.trendSeries
             )
         }
         if let existing = inFlight[key] {
@@ -157,14 +158,16 @@ actor MoodAnalysisCache {
             enrichment: key.enrichment,
             windowDays: key.periodDays
         )
+        // The trend line plots nameable levels only; an entry
+        // without one is a gap, never a fabricated point.
+        let trend = MoodEntry.scored(scoped)
+            .sorted { $0.entry.recordedAt < $1.entry.recordedAt }
+            .map { MoodTrendChart.Entry(date: $0.entry.recordedAt, score: $0.score) }
         return MoodAnalysisSnapshot(
             key: key,
             insights: engine.insights(request),
-            // Audit B-4 — the trend line plots nameable levels only; an entry
-            // without one is a gap, never a fabricated point.
-            trend: MoodEntry.scored(scoped)
-                .sorted { $0.entry.recordedAt < $1.entry.recordedAt }
-                .map { MoodTrendChart.Entry(date: $0.entry.recordedAt, score: $0.score) }
+            trend: trend,
+            trendSeries: MoodTrendSeries(entries: trend, calendar: key.calendar)
         )
     }
 

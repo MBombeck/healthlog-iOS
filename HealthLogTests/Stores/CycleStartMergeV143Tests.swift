@@ -205,7 +205,7 @@ struct CycleStartMergeV143Tests {
 
     // MARK: - Delete: Prefer + 200 or 204
 
-    @Test("Deletes ask for the outcome and read 200 with the restored start")
+    @Test("The replayed day-log delete asks for the outcome and reads 200 with the restored start")
     func deleteWithRepresentation() async throws {
         let session = MockURLProtocolSession()
         defer { session.invalidate() }
@@ -215,12 +215,11 @@ struct CycleStartMergeV143Tests {
             return Self.respond(request, 200, Self.deleteOutcome)
         }
         let repo = try makeRepository(session)
-        let outcome = try await repo.deleteCycle(id: "cyc-0914")
+        try await repo.replayDeleteDayLog(id: "dl-0914", idempotencyKey: "idem-dl-0914")
+        #expect(ledger.requests.map(\.prefer) == ["return=representation"])
+        let outcome = CycleDeleteOutcome.decode(Data(Self.deleteOutcome.utf8))
         #expect(outcome.removedCycleId == "cyc-0914")
         #expect(outcome.restored == [CycleRestoredStart(cycleId: "cyc-0917", startDate: "2026-09-17")])
-        let dayLogOutcome = try await repo.deleteDayLog(id: "dl-0914")
-        #expect(dayLogOutcome.restored.count == 1)
-        #expect(ledger.requests.map(\.prefer) == ["return=representation", "return=representation"])
         #expect(CycleStartNotice.restored(outcome.restored)?.kind == .restored(["2026-09-17"]))
     }
 
@@ -234,12 +233,8 @@ struct CycleStartMergeV143Tests {
             return Self.respond(request, 204, nil)
         }
         let repo = try makeRepository(session)
-        #expect(try await repo.deleteCycle(id: "cyc-0914") == .unchanged)
-        #expect(try await repo.deleteDayLog(id: "dl-0914") == .unchanged)
         try await repo.replayDeleteDayLog(id: "dl-0914", idempotencyKey: "idem-dl-0914")
         #expect(ledger.requests.map(\.line) == [
-            "DELETE /api/cycle/cycles/cyc-0914",
-            "DELETE /api/cycle/day-logs/dl-0914",
             "DELETE /api/cycle/day-logs/dl-0914"
         ])
         #expect(CycleStartNotice.restored([]) == nil)

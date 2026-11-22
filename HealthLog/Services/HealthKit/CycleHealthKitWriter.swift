@@ -35,8 +35,7 @@ import Foundation
     /// `HKCategorySample` init — an out-of-range codepoint also raises the same
     /// uncatchable exception. Invalid values are logged + skipped, never written.
     ///
-    /// Gated behind `FeatureFlag.cycleTracking` — only constructed once the gate
-    /// passes. iOS 18+; silent no-op on older OS.
+    /// Only constructed once `CycleGate` passes.
     actor CycleHealthKitWriter {
         private let store: any CycleHealthSampleStore
 
@@ -60,7 +59,6 @@ import Foundation
         ///   a menstrual cycle (period start) — feeds the REQUIRED
         ///   `HKMetadataKeyMenstrualCycleStart` flag on the flow sample.
         func write(_ dayLog: CycleDayLogDTO, isCycleStart: Bool) async throws {
-            guard #available(iOS 18.0, *) else { return }
             // Echo guard — never push a HealthKit-origin row back into HealthKit.
             guard dayLog.source == "MANUAL" else { return }
 
@@ -81,7 +79,7 @@ import Foundation
             ]
 
             let samples = Self.buildSamples(for: dayLog, isCycleStart: isCycleStart, date: date, metadata: metadata)
-            // #115 B6 — an edit REPLACES the day's mirror. The server upserts the
+            // An edit REPLACES the day's mirror. The server upserts the
             // day under the same row id, so the previous save's samples carry the
             // same `HKMetadataKeyExternalUUID`; without this every edit stacked
             // another full set of samples onto the day in Apple Health. Runs even
@@ -97,7 +95,6 @@ import Foundation
         /// app's sample that happens to carry the same external UUID stays
         /// (``isOwnMirror(metadata:isFromThisApp:dayLogID:)``).
         func delete(dayLogID: String) async throws {
-            guard #available(iOS 18.0, *) else { return }
             let own = try await store.ownMirrorSamples(dayLogID: dayLogID)
             if !own.isEmpty { try await store.delete(own) }
         }
@@ -120,7 +117,6 @@ import Foundation
         /// `HKCategorySample` init is exactly where HealthKit raises for missing
         /// menstrual-cycle-start metadata or out-of-range values, so the tests
         /// pinning this function exercise the real crash path.
-        @available(iOS 18.0, *)
         static func buildSamples(
             for dayLog: CycleDayLogDTO,
             isCycleStart: Bool,
@@ -134,7 +130,6 @@ import Foundation
             return samples
         }
 
-        @available(iOS 18.0, *)
         private static func flowSamples(
             _ dayLog: CycleDayLogDTO,
             isCycleStart: Bool,
@@ -157,7 +152,6 @@ import Foundation
             ).map { [$0] } ?? []
         }
 
-        @available(iOS 18.0, *)
         private static func enumSamples(_ dayLog: CycleDayLogDTO, date: Date, metadata: [String: Any]) -> [HKCategorySample] {
             var out: [HKCategorySample] = []
             if let test = dayLog.ovulationTestValue {
@@ -183,7 +177,6 @@ import Foundation
             return out
         }
 
-        @available(iOS 18.0, *)
         private static func sexualActivitySamples(
             _ dayLog: CycleDayLogDTO,
             date: Date,
@@ -202,7 +195,6 @@ import Foundation
             ).map { [$0] } ?? []
         }
 
-        @available(iOS 18.0, *)
         private static func symptomSamples(_ dayLog: CycleDayLogDTO, date: Date, metadata: [String: Any]) -> [HKCategorySample] {
             var out: [HKCategorySample] = []
             for symptom in dayLog.symptoms {
@@ -224,7 +216,6 @@ import Foundation
             return out
         }
 
-        @available(iOS 18.0, *)
         private static func append(
             _ out: inout [HKCategorySample],
             _ identifier: String,
@@ -243,7 +234,6 @@ import Foundation
         /// `HKCategorySample` init raises an uncatchable `NSInvalidArgument-`
         /// `Exception` for out-of-range values, so this gate is what keeps a bad
         /// mapping from crashing the app.
-        @available(iOS 18.0, *)
         private static func makeSample(
             identifier: String,
             value: Int,
@@ -262,7 +252,7 @@ import Foundation
             return HKCategorySample(type: type, value: value, start: date, end: date, metadata: metadata)
         }
 
-        /// **#115 B5 — the instant a server day is written to Health at: noon of
+        /// **The instant a server day is written to Health at: noon of
         /// that day in the ACCOUNT zone.**
         ///
         /// `dayLog.date` is a day the server cut in the account zone. It was
@@ -301,7 +291,6 @@ import Foundation
         let store: HKHealthStore
 
         func ownMirrorSamples(dayLogID: String) async throws -> [HKSample] {
-            guard #available(iOS 18.0, *) else { return [] }
             let predicate = HKQuery.predicateForObjects(
                 withMetadataKey: HKMetadataKeyExternalUUID,
                 allowedValues: [dayLogID]

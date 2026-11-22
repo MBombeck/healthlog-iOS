@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.8.1 WD — avatar-persist fix.**
+/// **Avatar-persist fix.**
 ///
 /// Locks the merge that makes an uploaded avatar survive a profile-driven
 /// reload. The server returns `avatarUrl` ONLY on `GET /api/auth/me` —
@@ -141,7 +141,7 @@ struct SettingsStoreAvatarMergeTests {
     }
 }
 
-/// **v0.8.1 WD** — repository-level contract for the new `/auth/me` avatar read.
+/// Repository-level contract for the new `/auth/me` avatar read.
 @Suite("SettingsRepository.authMeAvatarURL", .serialized, .mockURLSession)
 struct SettingsRepositoryAuthMeTests {
     private func makeRepo() -> SettingsRepository {

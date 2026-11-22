@@ -29,7 +29,7 @@ enum DocumentFormat {
     /// Anchors a date-only string at noon UTC so the calendar day never drifts.
     static func mediumDate(_ raw: String) -> String {
         guard let date = parse(raw) else { return raw }
-        return mediumFormatter.string(from: date)
+        return HLDateFormat.date(date)
     }
 
     /// The `YYYY-MM-DD` filing-date key for a document (documentDate if set, else
@@ -83,13 +83,6 @@ enum DocumentFormat {
             ?? ISO8601DateFormatter.plain.date(from: raw)
             ?? dayOnlyFormatter.date(from: raw + "T12:00:00Z")
     }
-
-    private static let mediumFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .none
-        return f
-    }()
 
     private nonisolated(unsafe) static let dayOnlyFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

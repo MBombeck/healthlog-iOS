@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **R1 — editing a medication keeps its category (server v1.39.4 #1041,
+/// **Editing a medication keeps its category (server v1.39.4 #1041,
 /// still open on v1.39.6, point 3).**
 ///
 /// The server's category list is `BLOOD_PRESSURE, VITAMIN, SUPPLEMENT,

@@ -12,7 +12,7 @@ import SwiftData
 /// the proven `OutboxStore` pattern (ADR-011 + swift-concurrency skill).
 @ModelActor
 public actor SWRCache {
-    /// **21-02 — the read primitive. Fetch only; the payload is NOT decoded here.**
+    /// **The read primitive. Fetch only; the payload is NOT decoded here.**
     ///
     /// Returns the stored bytes plus the row's write instant, and `nil` for a
     /// missing row or a row whose `schemaVersion` no longer matches (dropped
@@ -150,12 +150,12 @@ public actor SWRCache {
     /// users who churn through many series-day combinations. Returns the
     /// number of rows dropped (caller can log).
     ///
-    /// **AUD-8 L-4** — uses SwiftData's batch-delete predicate
+    /// Uses SwiftData's batch-delete predicate
     /// (`delete(model:where:)`) instead of fetch-all-then-per-row-delete, so a
     /// large expired set is dropped without materialising every row into memory.
     @discardableResult
     public func sweepOlderThan(_ maxAge: TimeInterval, now: Date = .now) throws -> Int {
-        // 21-01 — a sweep is a member of the same foreground pass as every
+        // A sweep is a member of the same foreground pass as every
         // surface's first read AND runs on the same serial executor, so its
         // cost is charged to whichever first paint is queued behind it. Timed
         // so that cost stops being an argument and becomes a number.
@@ -172,7 +172,7 @@ public actor SWRCache {
         }
     }
 
-    /// **AUD-8 H-1** — hard row-count cap. Evicts the OLDEST rows beyond
+    /// Hard row-count cap. Evicts the OLDEST rows beyond
     /// `maxRows` (least-recently-written first, by `updatedAt`) so the cache
     /// SQLite can never grow unbounded for a power user who opens many
     /// metric/day/period combinations — the budget guard the age-sweep alone
@@ -181,10 +181,10 @@ public actor SWRCache {
     ///
     /// Returns the number of rows evicted. No-op (returns 0) when at/below the
     /// cap. Uses a batch-delete keyed on a cutoff `updatedAt` so the eviction is
-    /// one SQLite statement, not N per-row deletes (AUD-8 L-4).
+    /// one SQLite statement, not N per-row deletes.
     @discardableResult
     public func sweepKeepingNewest(maxRows: Int) throws -> Int {
-        // 21-01 — timed for the same reason as `sweepOlderThan`. The early
+        // Timed for the same reason as `sweepOlderThan`. The early
         // `return 0` exits are inside the interval on purpose: a sweep that
         // decides to do nothing still took the executor to decide it, and a
         // first paint queued behind that decision still waited for it.

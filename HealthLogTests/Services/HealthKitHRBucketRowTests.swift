@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// W-HR-BUCKET-UPLOAD / GH #34 — the locked 10-minute-HR `stats:` externalId +
+/// The locked 10-minute-HR `stats:` externalId +
 /// value/valueMin/valueMax contract.
 @Suite("HealthKitHRBucketRow — locked externalId + value/min/max contract")
 struct HealthKitHRBucketRowTests {

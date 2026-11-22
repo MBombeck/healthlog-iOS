@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// Build 272 — the "Sign in with Passkey" primary CTA must only be offered
+/// The "Sign in with Passkey" primary CTA must only be offered
 /// where the native ceremony can actually run. In the distributed build no
 /// relying-party host is configured, so every server is "self-hosted" for the
 /// passkey seam; a primary button whose tap only re-reveals an already open

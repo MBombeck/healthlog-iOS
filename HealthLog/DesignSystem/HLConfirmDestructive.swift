@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **R13-A1 — die eine zentrierte, ankerlose Form für jede destruktive Rückfrage.**
+/// **Die eine zentrierte, ankerlose Form für jede destruktive Rückfrage.**
 ///
 /// Der Betreiber hat destruktive Bestätigungen „generell zentriert und
 /// ordentlich designt" verlangt. *Generell* heißt app-weit: nicht die drei
@@ -9,8 +9,7 @@ import SwiftUI
 /// ## Warum die Form ein `alert` ist und kein `confirmationDialog`
 ///
 /// Zentriert **und** ankerlos ist auf dem iPhone genau eine System-Präsentation.
-/// Ein `confirmationDialog` ist per Konstruktion ein Anker — unter iOS 18–25 ein
-/// Aktionsblatt an der Unterkante, unter iOS 26 eine Blase an der
+/// Ein `confirmationDialog` ist per Konstruktion ein Anker — eine Blase an der
 /// Interaktionsquelle — und kann „zentriert" gar nicht liefern.
 ///
 /// Genau daran ist **b174** gescheitert. Der Fix dazu ist nicht fremd, sondern

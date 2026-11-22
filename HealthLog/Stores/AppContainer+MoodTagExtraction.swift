@@ -1,10 +1,10 @@
 import Foundation
 
-// MARK: - D-2 mood-tag-extraction wiring
+// MARK: - Mood-tag-extraction wiring
 
 extension AppContainer {
     /// Constructs `MoodStore` with the on-device tag-extraction service
-    /// (D-2) reading the live AI capability gate on every call (#115 · 0.2:
+    /// reading the live AI capability gate on every call (#115 · 0.2:
     /// `statusText.onDeviceAllowed`) — same pattern as
     /// `OnDeviceBriefingService` / `TrendObservationsService`.
     ///

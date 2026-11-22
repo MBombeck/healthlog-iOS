@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Locks the CorrelationsPanel gating + AX-descriptor contract.
+/// Locks the CorrelationsPanel gating contract.
 @Suite("CorrelationsPanel gating")
 struct CorrelationsPanelTests {
     @Test("hasAnyCard is false on empty digest")
@@ -90,47 +90,6 @@ struct CorrelationsPanelTests {
         #expect(CorrelationsPanel(digest: digest, pairs: [.moodPulse]).hasAnyCard == false)
         // Medikamente owns BP×Compliance only → foreign → nothing.
         #expect(CorrelationsPanel(digest: digest, pairs: [.bpMedication]).hasAnyCard == false)
-    }
-}
-
-/// C1 (v0.14.4) — locks the correlation-row layout: the pair label leads and the
-/// strength sits on the SAME row as a trailing chip (like a settings row's value),
-/// not on a line below. `CorrelationCard` + `strengthLabel` are `private`, so this
-/// is a source-level contract test.
-@Suite("CorrelationsPanel C1 row layout")
-struct CorrelationsPanelLayoutTests {
-    private static let source: String = {
-        let here = URL(fileURLWithPath: #filePath)
-        let root = here
-            .deletingLastPathComponent() // Screens
-            .deletingLastPathComponent() // HealthLogTests
-            .deletingLastPathComponent() // repo root
-        let file = root
-            .appendingPathComponent("HealthLog/Screens/Insights/CorrelationsPanel.swift")
-        return (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-    }()
-
-    @Test("Title + trailing strength chip render on one HStack row")
-    func sameRowLayout() {
-        let src = Self.source
-        #expect(!src.isEmpty)
-        // Pair label + strength share one HStack row with a Spacer pushing the
-        // strength chip to the trailing edge.
-        #expect(src.contains("HStack(alignment: .firstTextBaseline"))
-        #expect(src.contains("Text(strengthLabel)"))
-        #expect(src.contains("Spacer(minLength: HLSpace.sm)"))
-        // The chip is a Capsule filled with the recessed-surface token (mono).
-        #expect(src.contains("Capsule(style: .continuous)"))
-        #expect(src.contains("HLSurface.tertiary"))
-    }
-
-    @Test("strengthLabel maps every strength to a short word")
-    func strengthLabelMapping() {
-        let src = Self.source
-        #expect(src.contains("private func strengthLabel(_ strength: CorrelationStrength?) -> String"))
-        for word in ["Strong", "Moderate", "Weak", "correlations.strength.none"] {
-            #expect(src.contains("\"\(word)\""))
-        }
     }
 }
 

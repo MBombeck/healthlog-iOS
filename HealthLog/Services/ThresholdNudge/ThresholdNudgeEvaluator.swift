@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-THRESHOLD-NUDGE (v0.15.2) — the pure, MDR-safe out-of-range nudge decision.**
+/// **The pure, MDR-safe out-of-range nudge decision.**
 ///
 /// This is the single, regulatory-sensitive place that decides whether a calm,
 /// retrospective nudge should be surfaced for a just-logged reading. It is a

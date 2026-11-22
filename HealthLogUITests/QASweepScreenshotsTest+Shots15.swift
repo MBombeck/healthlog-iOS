@@ -1,6 +1,6 @@
 import XCTest
 
-/// **SHOTS (1.5.0) — the surfaces no earlier walk photographed whole.**
+/// **The surfaces no earlier walk photographed whole.**
 ///
 /// `test_24a` is the blood pressure page with everything 1.5 can put on it at
 /// once (lab line, part of day, usual range, time of day), its part-of-day
@@ -66,7 +66,7 @@ extension QASweepScreenshotsTest {
         }
     }
 
-    /// LAB-DOC: one reading from the chronological list, then the add sheet
+    /// One reading from the chronological list, then the add sheet
     /// with the "No unit" switch off and on. A fresh launch, so a sheet the
     /// marker walk left open cannot block it.
     func test_24c_labReadingAndAdd() {
@@ -88,7 +88,7 @@ extension QASweepScreenshotsTest {
             note("24c: sort switch not found")
         }
         scrollUpToTop()
-        guard tap(element("labs.toolbar.add"), "labs add menu"), tap(element("labs.menu.add"), "add result") else { return }
+        guard tap(element("labs.toolbar.add"), "add result") else { return }
         settle(2)
         shot("24b-labs-add-top\(size)")
         let toggle = element("labs.unit.none")
@@ -105,17 +105,11 @@ extension QASweepScreenshotsTest {
         }
     }
 
-    /// LAB-DOC: a scanned report whose read stopped before the end.
+    /// A scanned report whose read stopped before the end.
     func test_24d_documentIncomplete() {
         let size = isXXL ? "-xxl" : ""
         boot(extra: ["-uitest-lab-doc", "-hl.healthkit.serverVersion", "1.47.0"])
-        tab("ellipsis")
-        guard let documents = probe("more.row.documents") else {
-            note("24d: More row not present: documents")
-            return
-        }
-        documents.tap()
-        settle(3)
+        guard openArea("documents") else { return }
         shot("24b-docs-list\(size)")
         guard tap(app.staticTexts["Laborbefund Oktober"].firstMatch, "incomplete document") else { return }
         settle(4)
@@ -126,14 +120,7 @@ extension QASweepScreenshotsTest {
 
     private func openLabs() -> Bool {
         boot(extra: ["-uitest-lab-doc", "-hl.healthkit.serverVersion", "1.47.0"])
-        tab("ellipsis")
-        guard let labs = probe("more.row.labs") else {
-            note("24b: More row not present: labs")
-            return false
-        }
-        labs.tap()
-        settle(3)
-        return true
+        return openArea("labs")
     }
 
     /// The first element with this identifier that is on screen, scrolling

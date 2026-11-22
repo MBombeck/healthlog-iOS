@@ -1,6 +1,6 @@
 import XCTest
 
-/// **H3 — auth-journey coverage (audit-v0162).**
+/// **Auth-journey coverage.**
 ///
 /// The nine existing `HealthLogUITests` all boot pre-authenticated via
 /// `-uitest-hermetic`, so login / MFA / logout had ZERO end-to-end coverage and
@@ -91,16 +91,19 @@ final class AuthJourneyUITest: XCTestCase {
     @MainActor
     private func skipOnboardingTailToDashboard(_ app: XCUIApplication) {
         let homeTab = tabBarButton(app, symbol: "house.fill")
-        tapRequiredOnboardingStep(
-            app.buttons["onboarding.healthKit.skip"],
-            next: app.buttons["onboarding.notifications.skip"],
-            timeout: 25,
-            app: app
-        )
+        // The pad has no HealthKit step; its route starts at notifications.
+        if OnboardingTail.offersHealthKitStep {
+            tapRequiredOnboardingStep(
+                app.buttons["onboarding.healthKit.skip"],
+                next: app.buttons["onboarding.notifications.skip"],
+                timeout: 25,
+                app: app
+            )
+        }
         tapRequiredOnboardingStep(
             app.buttons["onboarding.notifications.skip"],
             next: app.buttons["onboarding.aiSource.skip"],
-            timeout: 15,
+            timeout: 25,
             app: app
         )
         tapRequiredOnboardingStep(
@@ -128,7 +131,7 @@ final class AuthJourneyUITest: XCTestCase {
         XCTAssertTrue(greetingAppeared, "Login did not reach the authenticated Dashboard shell")
     }
 
-    /// **08-23.** The other half of the post-authentication route: an account
+    /// The other half of the post-authentication route: an account
     /// the server already calls complete goes straight to the shell.
     ///
     /// This is not the tail walk with its assertions removed — it is the
@@ -141,7 +144,7 @@ final class AuthJourneyUITest: XCTestCase {
     /// pass vacuously either: the shell landmark and the greeting still have to
     /// arrive.
     ///
-    /// **Amended by 16-01 (K10), deliberately.** The clause it raced for was
+    /// **Amended by 16-01, deliberately.** The clause it raced for was
     /// "the optional tail did not appear", and `onboarding.healthKit.skip` was
     /// its witness. That witness stopped being the right one: HealthKit
     /// authorization belongs to the handset, not to the account, and this run
@@ -154,12 +157,19 @@ final class AuthJourneyUITest: XCTestCase {
     @MainActor
     private func awaitShellWithoutOptionalSetup(_ app: XCUIApplication) {
         let homeTab = tabBarButton(app, symbol: "house.fill")
-        // 16-01 — the device-local head this handset genuinely owes. Walking it
+        // The device-local head this handset genuinely owes. Walking it
         // is not a weakening: skipping both steps asserts nothing about the
         // account-level tail, which is what the race below still measures.
         let healthKitStep = app.buttons["onboarding.healthKit.skip"]
-        if healthKitStep.waitForExistence(timeout: 30) {
-            // D-09-16-D — the same sheet-aware wait the tail walk uses. An
+        if !OnboardingTail.offersHealthKitStep {
+            // The pad's route starts at notifications.
+            let notifications = app.buttons["onboarding.notifications.skip"]
+            if notifications.waitForExistence(timeout: 30) {
+                _ = waitUntilOnboardingControlHittable(notifications, app: app)
+                notifications.tap()
+            }
+        } else if healthKitStep.waitForExistence(timeout: 30) {
+            // The same sheet-aware wait the tail walk uses. An
             // occluded button reports itself hittable, so this is not optional.
             _ = waitUntilOnboardingControlHittable(healthKitStep, app: app)
             healthKitStep.tap()
@@ -240,7 +250,7 @@ final class AuthJourneyUITest: XCTestCase {
     /// or a SpringBoard interruption. Its delayed timing varies by runtime: it
     /// can cover HealthKit immediately or appear one step later on Notifications.
     ///
-    /// **22-02 (D-09-16-D)** — the detection, the bounded dismissal and the
+    /// The detection, the bounded dismissal and the
     /// refusals moved to `Support/SystemSheetDismissal.swift`, which also logs
     /// `ui-gate-dismissed-system-sheet label=…` so a release-gate log can tell
     /// "the sheet never appeared" from "the sheet appeared and was handled".
@@ -289,14 +299,14 @@ final class AuthJourneyUITest: XCTestCase {
         return !app.sheets.firstMatch.exists && element.isHittable
     }
 
-    /// **CU-06.** Resolve a tab-bar button by the SF Symbol it renders.
+    /// Resolve a tab-bar button by the SF Symbol it renders.
     ///
     /// This suite used to key the tab-bar landmarks off `shell.tab.<id>`
     /// accessibility identifiers set on the `Tab`s in `AuthenticatedShell`. Those
     /// identifiers never reached the accessibility tree — a `TabContent` forwards
     /// an accessibility *label* to its bar button but drops an *identifier*, so
     /// the buttons carry nothing but their localized label and every
-    /// `tabBars.buttons["shell.tab.…"]` query missed. Both quarantines of these
+    /// tab-bar button query for `shell.tab.…` missed. Both quarantines of these
     /// two tests were that miss, misread as simulator flakiness.
     ///
     /// The symbol name IS forwarded (`Image, …, identifier: 'ellipsis'`) and is
@@ -306,10 +316,10 @@ final class AuthJourneyUITest: XCTestCase {
     /// "snapshot contract" for the bar.
     @MainActor
     private func tabBarButton(_ app: XCUIApplication, symbol: String) -> XCUIElement {
-        app.tabBars.buttons.containing(.image, identifier: symbol).firstMatch
+        ShellNavigator.barButton(symbol: symbol, in: app)
     }
 
-    /// **CU-06.** Give an element that already *exists* a moment to become
+    /// Give an element that already *exists* a moment to become
     /// tappable before falling back to scrolling.
     ///
     /// Onboarding steps animate in, so `isHittable` is routinely still `false`
@@ -338,7 +348,7 @@ final class AuthJourneyUITest: XCTestCase {
     /// Each tap is required to be hittable and to reveal its declared successor;
     /// existence alone is not accepted as a transition.
     ///
-    /// **08-23 — the scenario is a precondition, not a label.** Until Phase 8
+    /// **The scenario is a precondition, not a label.** Until Phase 8
     /// this case booted the default fixture and reached the tail regardless,
     /// because the post-authentication route consulted nothing. 08-08 made the
     /// server's `onboardingTourCompleted` load-bearing, and the default
@@ -406,7 +416,7 @@ final class AuthJourneyUITest: XCTestCase {
         XCTAssertFalse(app.textFields["mfa.codeField"].exists, "The MFA sheet should be dismissed on a dead ticket")
     }
 
-    /// **08-23 — this case keeps the default (complete) account deliberately.**
+    /// **This case keeps the default (complete) account deliberately.**
     ///
     /// It used to walk the same five-step tail as
     /// ``testPasswordLoginWithHealthKitDeniedReachesShell()`` and failed the
@@ -455,7 +465,7 @@ final class AuthJourneyUITest: XCTestCase {
 
         let moreTab = tabBarButton(app, symbol: "ellipsis")
         XCTAssertTrue(moreTab.waitForExistence(timeout: 15), "More tab missing")
-        moreTab.tap()
+        AdaptiveShell.open(.more, in: app, button: moreTab, until: app.buttons["more.toolbar.gear"])
 
         let gear = app.buttons["more.toolbar.gear"]
         XCTAssertTrue(gear.waitForExistence(timeout: 15), "Settings gear missing on More")
@@ -493,7 +503,7 @@ final class AuthJourneyUITest: XCTestCase {
         let moreTabAppeared = moreTab.waitForExistence(timeout: 15)
         if !moreTabAppeared { attachFailureDiagnostics(app: app, label: "logout-more-tab-missing") }
         XCTAssertTrue(moreTabAppeared, "More tab missing")
-        moreTab.tap()
+        AdaptiveShell.open(.more, in: app, button: moreTab, until: app.buttons["more.toolbar.gear"])
 
         let gear = app.buttons["more.toolbar.gear"]
         XCTAssertTrue(gear.waitForExistence(timeout: 15), "Settings gear missing on More")
@@ -516,7 +526,7 @@ final class AuthJourneyUITest: XCTestCase {
         XCTAssertTrue(welcomeAppeared, "Logout should return to the onboarding welcome screen")
     }
 
-    /// **08-23.** A sign-out is a two-step interaction now, and the first step
+    /// A sign-out is a two-step interaction now, and the first step
     /// is the product working rather than an obstacle.
     ///
     /// 08-09 put one native destructive confirmation in front of every
@@ -566,7 +576,7 @@ final class AuthJourneyUITest: XCTestCase {
         // Addressed by identifier and scoped to the dialog. `Abmelden` labels
         // both the row that opens the confirmation and the button that answers
         // it, so an app-wide label query would find the row and call it an
-        // answer (08-09).
+        // answer.
         //
         // `.firstMatch` is load-bearing and was measured: SwiftUI publishes the
         // dialog action as a `Button` nested inside a `Button` carrying the

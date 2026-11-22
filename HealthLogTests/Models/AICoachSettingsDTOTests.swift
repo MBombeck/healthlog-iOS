@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Build 6 / Item 6.6 — Coach/AI privacy DTO contract.**
+/// **Coach/AI privacy DTO contract.**
 ///
 /// Pins the two server-owned flags' wire shapes (`documentsAutoAiRead`,
 /// `insightsPrivacyMode`/`privacyMode`) as pure decode/roundtrip units — no

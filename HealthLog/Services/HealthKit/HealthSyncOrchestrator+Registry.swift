@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 4 — the capability registry, and the reason it is a compiler
+// The capability registry, and the reason it is a compiler
 // problem rather than a review problem.
 //
 // The registry is total by construction in three independent ways, and all
@@ -48,7 +48,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
 
     // One arm per capability: the exhaustive binding switch IS the contract
     // (rule 2 above), so its complexity grows by one with every capability.
-    // MIRROR (1.5) took it from twelve arms to thirteen.
+    // MIRROR (1.5) took it from twelve arms to thirteen, the Health Records
+    // labs (1.7) to fourteen.
     // swiftlint:disable:next cyclomatic_complexity
     init(
         speziSampleCollection: @escaping Run,
@@ -62,7 +63,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
         cycleImport: @escaping Run,
         heartHealthEvents: @escaping Run,
         outboxDrain: @escaping Run,
-        serverMirror: @escaping Run
+        serverMirror: @escaping Run,
+        clinicalLabRecords: @escaping Run
     ) {
         var built: [HealthSyncCapability: HealthSyncCapabilityAdapter] = [:]
         for capability in HealthSyncCapability.allCases {
@@ -80,6 +82,7 @@ struct HealthSyncCapabilityRegistry: Sendable {
                 case .heartHealthEvents: heartHealthEvents
                 case .outboxDrain: outboxDrain
                 case .serverMirror: serverMirror
+                case .clinicalLabRecords: clinicalLabRecords
                 }
             built[capability] = HealthSyncCapabilityAdapter(
                 capability: capability,
@@ -107,7 +110,8 @@ struct HealthSyncCapabilityRegistry: Sendable {
             cycleImport: { _ in .unsupported(.cycleImport) },
             heartHealthEvents: { _ in .unsupported(.heartHealthEvents) },
             outboxDrain: { _ in .unsupported(.outboxDrain) },
-            serverMirror: { _ in .unsupported(.serverMirror) }
+            serverMirror: { _ in .unsupported(.serverMirror) },
+            clinicalLabRecords: { _ in .unsupported(.clinicalLabRecords) }
         )
     }
 
@@ -172,10 +176,10 @@ struct HealthSyncCapabilityRegistry: Sendable {
     /// that was held during this pass becomes an outbox row, and draining after
     /// the importers gives that row its first replay in the same wake.
     ///
-    /// **V1 (1.2)** — the two `stats:` aggregates lead. Each is a handful of
+    /// The two `stats:` aggregates lead. Each is a handful of
     /// HealthKit statistics queries and one request per day, while the sample
     /// collection walks thirty-five types; behind it, a short wake expired
-    /// before the day totals and pulse buckets were ever reached (#66).
+    /// before the day totals and pulse buckets were ever reached.
     func orderedPlan(_ planned: Set<HealthSyncCapability>) -> [HealthSyncCapability] {
         let leading = Self.leadingAggregates.filter { planned.contains($0) }
         let middle = HealthSyncCapability.allCases.filter {
@@ -200,7 +204,9 @@ struct HealthSyncCapabilityRegistry: Sendable {
             .sharedUpload
         // MIRROR (1.5) — the server mirror reads one list page and writes into
         // Apple Health; it never posts through the batch uploader.
-        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .serverMirror:
+        // The Health Records labs post to their own route.
+        case .ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .serverMirror,
+             .clinicalLabRecords:
             .independent
         }
     }

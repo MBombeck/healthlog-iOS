@@ -3,7 +3,7 @@ import Foundation
     import HealthKit
 #endif
 
-/// HK-NEW (1.5) — which State of Mind samples go up as `STATE_OF_MIND_VALENCE`.
+/// Which State of Mind samples go up as `STATE_OF_MIND_VALENCE`.
 ///
 /// **Two ways in, one per sample.** Since v0.10 the mood import
 /// (`MoodStateOfMindImporter`, the "Mit Apple Health synchronisieren" toggle)

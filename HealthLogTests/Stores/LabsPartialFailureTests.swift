@@ -7,7 +7,7 @@
 // dashboard was taught to survive and the Labs screen never was.
 //
 // Drives the REAL store over the REAL `APIClient` on a session-scoped
-// `MockURLProtocolSession` (09-13). 13-03's unconditional `defer` on this store
+// `MockURLProtocolSession`. 13-03's unconditional `defer` on this store
 // is adjacency, not subject: every case here also asserts the flags came down.
 
 // swiftlint:disable force_unwrapping
@@ -103,7 +103,7 @@
 
             #expect(
                 store.labs.count == 1,
-                "EXPECTED_RED: a failed biomarker catalog discards the successful labs result"
+                "a failed biomarker catalog discards the successful labs result"
             )
             #expect(store.labs.first?.analyte == "Ferritin")
             #expect(store.total == 1)

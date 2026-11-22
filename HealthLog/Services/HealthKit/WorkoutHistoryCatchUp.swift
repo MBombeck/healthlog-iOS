@@ -3,7 +3,7 @@ import Foundation
 #if canImport(HealthKit)
     import HealthKit
 
-    /// **#17 — newest workouts first, history catch-up within a budget.**
+    /// **Newest workouts first, history catch-up within a budget.**
     ///
     /// The direct importer used to take exactly one anchored page per pass.
     /// A fresh anchor starts at the oldest workout, so with a long Apple Watch
@@ -25,6 +25,15 @@ import Foundation
         /// 100 stay well under the server's 60 batches/min/user limit for
         /// `POST /api/workouts/batch`, which the HR backfill shares.
         static let maxPagesPerPass = 25
+
+        /// Page size of the backlog count (D5 #6). The count used to read the
+        /// whole remainder in one unlimited anchored query, which held every
+        /// remaining `HKWorkout` (with its activities) in memory at once, in a
+        /// BGProcessing wake. Counting page by page holds one page at a time.
+        static let countPageLimit = 250
+        /// Upper bound on count pages: 200 × 250 = 50 000 workouts. Past it the
+        /// estimate is a floor, which the next behind pass corrects.
+        static let maxCountPages = 200
 
         /// The recent window: workouts that started in the last 14 days, at
         /// most one series-bearing batch (10) per pass. Fourteen days covers

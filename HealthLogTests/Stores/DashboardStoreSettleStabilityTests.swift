@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **W-TILEHOTFIX (v0.6.2) — pin the set-once `fanOutSettledAt` contract.**
+/// **Pin the set-once `fanOutSettledAt` contract.**
 ///
 /// Operator on v0.6.1.28 build 68 (2026-05-24): "im Home die Dinge, wenn ich
 /// von einer anderen Karte komme, immer Kurzkacheln dargestellt werden, die

@@ -2,13 +2,13 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B6 — the mood history's Custom range opens on the account's days.**
+/// **The mood history's Custom range opens on the account's days.**
 ///
 /// Choosing "Custom" pre-filled "the last 29 days" from `Calendar.current` and
 /// `.now` in the phone's zone. For a phone east of the account the range ended
 /// on the phone's tomorrow and started a day late; the server reads `from`/`to`
 /// in the account zone. The default is now cut in the profile zone, like the
-/// fixed presets (#115 1.5).
+/// fixed presets.
 @Suite("#115 B6 — mood history custom range in the profile zone")
 struct MoodHistoryCustomRangeProfileDayTests {
     private func instant(_ iso: String) throws -> Date {

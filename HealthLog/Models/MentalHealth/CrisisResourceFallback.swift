@@ -7,27 +7,27 @@ import Foundation
 // POST response — that is the authoritative source and is rendered when present.
 // But a positive item-9 must NEVER go unsignposted, so the client ALSO bundles
 // every set of the server's `src/lib/mental-health/crisis-resources.ts`
-// (verbatim, server tag v1.46.6) and resolves one when:
+// (verbatim, server tag v1.47.2) and resolves one when:
 //
 //   - the upload fails / is offline (no 201 → no server `crisis`), OR
 //   - the server fails the request or omits `crisis` despite `item9Flagged`
 //     (deploy skew / older server), OR
 //   - a flagged history row is re-opened (history never carries the set).
 //
-// ``forLocale(_:)`` is a line-for-line copy of `crisisResourcesForLocale`,
-// including its `replace("_", "-")`, which in JavaScript replaces the FIRST
-// underscore only. The store sends and resolves ``AppLanguage/regionTag``
-// (`de-AT`, `nl-BE`, `en-US`, `en-PT`), so the fallback lands on the same set
-// the server would have sent: 142 in Austria, 1813 in Belgium, 988 in the US,
-// the international set for an English interface in Portugal (never the
-// Brazilian lines alone). The NAMES are CLIENT i18n
-// (`mentalHealth.crisisResource.<id>.name`, de, en and nl from the server's
+// ``forLocale(_:)`` is a line-for-line copy of `crisisResourcesForLocale`:
+// the region subtag decides first, whatever the language, then the bare
+// country code, then the language. The store sends and resolves
+// ``AppLanguage/regionTag`` (`de-AT`, `nl-BE`, `en-US`, `ko-KR`), so the
+// fallback lands on the same set the server would have sent: 142 in Austria,
+// 1813 in Belgium, 988 in the US, 109 in South Korea, Portugal's lines for an
+// English interface in Portugal (never the Brazilian lines alone). The NAMES
+// are CLIENT i18n (`mentalHealth.crisisResource.<id>.name`, from the server's
 // `messages/*.json`); only the contact lines + emergency numbers are literal
 // here.
 //
 // ⚠️ MAINTENANCE: these phone numbers / URLs are a clinical-safety surface. They
 // duplicate server-owned data and must be kept in lockstep with
-// `crisis-resources.ts` (`CrisisResourceFallbackLockstepTests` pins v1.46.6).
+// `crisis-resources.ts` (`CrisisResourceFallbackLockstepTests` pins v1.47.2).
 // Stale numbers are a hazard.
 public enum CrisisResourceFallback {
     /// International fallback (default, incl. plain "en") — emergency 112.
@@ -152,6 +152,16 @@ public enum CrisisResourceFallback {
         ]
     )
 
+    /// South Korea (region "kr", and Korean without a region) — the national
+    /// suicide prevention line 109. Emergency 119.
+    static let southKorea = CrisisResourceSet(
+        emergencyNumber: "119",
+        resources: [
+            CrisisResource(id: "suicidePrevention109", contacts: ["109"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
     /// Dutch with no region signal ("nl", "nl-SR", …): both countries' lines,
     /// then the worldwide directory once (server `NL_BE`).
     static let dutchSpeaking = CrisisResourceSet(
@@ -161,25 +171,47 @@ public enum CrisisResourceFallback {
             + [CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])]
     )
 
+    /// Country sets reached by a region subtag, whatever the language
+    /// (server `BY_REGION`).
+    static let byRegion: [String: CrisisResourceSet] = [
+        "at": austria,
+        "be": belgium,
+        "br": brazil,
+        "ch": switzerland,
+        "de": germany,
+        "kr": southKorea,
+        "nl": netherlands,
+        "pt": portugal,
+        "us": unitedStates
+    ]
+
+    /// The first two-letter subtag after the language ("en-be" gives "be",
+    /// "zh-hant-tw" gives "tw"), or `nil` for a bare language code.
+    static func regionSubtag(_ tag: String) -> String? {
+        for part in tag.split(separator: "-", omittingEmptySubsequences: false).dropFirst()
+            where part.count == 2 && part.allSatisfy({ $0 >= "a" && $0 <= "z" })
+        {
+            return String(part)
+        }
+        return nil
+    }
+
     /// Resolve a bundled set from a locale string, line for line the server's
-    /// `crisisResourcesForLocale` (v1.46.6). Always returns SOMETHING
+    /// `crisisResourcesForLocale` (v1.47.2). Always returns SOMETHING
     /// actionable (never `nil`).
     public static func forLocale(_ locale: String?) -> CrisisResourceSet {
-        var lc = (locale ?? "").lowercased()
-        // JavaScript `String.replace("_", "-")` replaces the first match only.
-        if let underscore = lc.range(of: "_") {
-            lc.replaceSubrange(underscore, with: "-")
-        }
-        if lc == "de-at" || lc == "at" { return austria }
-        if lc == "de-ch" || lc == "ch" { return switzerland }
-        if lc.hasPrefix("de") { return germanSpeaking }
-        if lc.hasPrefix("en-us") || lc == "us" { return unitedStates }
-        if lc == "br" { return brazil }
-        if lc == "pt-pt" { return portugal }
-        if lc == "pt" || lc.hasPrefix("pt-") { return portugueseSpeaking }
-        if lc == "nl-nl" { return netherlands }
-        if lc == "nl-be" || lc == "be" { return belgium }
-        if lc == "nl" || lc.hasPrefix("nl-") { return dutchSpeaking }
+        let lc = (locale ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+        // The web's folded Portuguese bundle, not a region signal.
+        if lc == "pt-br" { return portugueseSpeaking }
+        if let region = regionSubtag(lc), let set = byRegion[region] { return set }
+        if ["at", "ch", "us", "br", "be", "kr"].contains(lc), let set = byRegion[lc] { return set }
+        let language = lc.split(separator: "-", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        if language == "de" { return germanSpeaking }
+        if language == "pt" { return portugueseSpeaking }
+        if language == "nl" { return dutchSpeaking }
+        if language == "ko" { return southKorea }
         return international
     }
 }

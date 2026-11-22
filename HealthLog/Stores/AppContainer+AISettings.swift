@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Build 6 / Item 6.6 — Coach/AI privacy settings wiring
+// MARK: - Coach/AI privacy settings wiring
 
 //
 // The Coach/AI privacy flags (`documentsAutoAiRead`, `insightsPrivacyMode`) are
@@ -23,7 +23,7 @@ public extension AppContainer {
         if let existing = AICoachSettingsBox.shared.store(for: self) {
             return existing
         }
-        // Build 9 (9.2) — inject `moduleGate` so a disable-coach toggle can
+        // Inject `moduleGate` so a disable-coach toggle can
         // optimistically flip the `coach` module surface without a `/me` refresh.
         let created = AICoachSettingsStore(
             repo: AICoachSettingsRepository(api: api),

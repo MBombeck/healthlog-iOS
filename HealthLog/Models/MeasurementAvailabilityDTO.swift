@@ -1,8 +1,8 @@
 import Foundation
 
-// Availability slice (v0.13.1 IC).
+// Availability slice.
 //
-// Reine Verschiebung aus `MeasurementDTO.swift` (CU-18): die Datei lief über
+// Reine Verschiebung aus `MeasurementDTO.swift`: die Datei lief über
 // das 1000-Zeilen-Budget, dieser Block ist der thematisch eigenständigste.
 // Kein Verhaltens- oder Signatur-Unterschied.
 

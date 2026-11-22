@@ -6,7 +6,7 @@ import Testing
 /// Bundle anchor for the committed b267 store fixture.
 final class B267FixtureAnchor {}
 
-/// **Phase 21 (21-02) — the update path, from a real pre-change artifact.**
+/// **The update path, from a real pre-change artifact.**
 ///
 /// Users update; they do not reinstall. So the question this suite answers is
 /// not "does the cache round-trip" — `SWRCacheTests` already answers that —

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-TZ-MED (v0.15.2) — Verlauf glyph track buckets on the profile zone.**
+/// **Verlauf glyph track buckets on the profile zone.**
 ///
 /// `MedicationDetailStore.verlaufGlyphs()` reduces each server dose-history row
 /// into a calendar day for the 14/90-day glyph track. Pre-fix that bucketing
@@ -16,7 +16,7 @@ import Testing
 /// explicit `calendar` still overrides (unit-test escape hatch + non-regression
 /// for `device == profile`), and that a nil/unknown profile zone falls back to
 /// the device TZ without crashing. Mirrors the assertion style of
-/// `ComplianceReconcilerProfileTZTests` (HOME-5 DOSE-SAFETY).
+/// `ComplianceReconcilerProfileTZTests`.
 @MainActor
 @Suite("MedicationDetailStore — profile-tz Verlauf bucketing (W-TZ-MED)")
 struct MedicationDetailStoreProfileTZTests {

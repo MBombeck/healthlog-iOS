@@ -43,7 +43,7 @@ public final class OutboxOperation {
     /// via `LogSanitizer.redact`.
     public var lastError: String?
 
-    /// **v0.13 WS — cross-user outbox binding (Medium security).** The
+    /// **Cross-user outbox binding (Medium security).** The
     /// `KeychainKey.userID` of the user who was signed in when this row was
     /// enqueued. Replay only fires a row whose owner matches the *currently*
     /// signed-in user; a foreign-owned row is dead-lettered, never POSTed
@@ -72,7 +72,7 @@ public final class OutboxOperation {
     /// the row is live. Used only for triage / a future diagnostics surface.
     public var deadLetteredAt: Date?
 
-    /// **Audit B-2 — the server already took this write.** Stamped by the replay
+    /// **The server already took this write.** Stamped by the replay
     /// service the instant a dispatch succeeds, BEFORE the row is removed, so a
     /// remove that fails (SQLite busy, app-group lock, kill) can no longer let
     /// the operation reach the wire a second time: the next drain sees the flag,
@@ -82,7 +82,7 @@ public final class OutboxOperation {
     /// `deadLettered`); legacy rows hydrate as `false`.
     public var delivered: Bool = false
 
-    /// **v0.16.2 audit-v0162 H-4 — optimistic→server id remap key.** For a PHI
+    /// **Optimistic→server id remap key.** For a PHI
     /// records/labs write this carries the ENTITY id the op concerns: a `create`
     /// stamps the `optimistic-<uuid>` id its store minted; a dependent
     /// `update`/`delete` stamps the id it targets (which equals that optimistic

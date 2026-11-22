@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14 b146 — pins the `insights.metric.<rawvalue>.description` keys added
+/// Pins the `insights.metric.<rawvalue>.description` keys added
 /// so the previously-blank metric pages (the IC additive kinds + bodyFat / steps
 /// / vo2Max / walking-steadiness) render real copy. `InsightsMetricScreen`
 /// self-suppresses the description slot when the key resolves back to itself
@@ -10,7 +10,7 @@ import Testing
 /// This suite is the regression anchor: every key MUST carry a non-empty value
 /// in BOTH `en` and `de`, and the DE value MUST differ from the EN source.
 ///
-/// **W-CLEANUP-MISC (v0.15):** `insights.metric.sixMinuteWalkTestDistance.description`
+/// `insights.metric.sixMinuteWalkTestDistance.description`
 /// was dropped from this list and the catalog. `.sixMinuteWalk` carries a full
 /// `insights.subPage.explainer.sixMinuteWalk{Title,Body}` pair, so
 /// `descriptionText` resolves the explainer copy and returns before ever reaching

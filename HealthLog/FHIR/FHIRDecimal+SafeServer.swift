@@ -5,7 +5,7 @@
 //  Crash-/corruption-safe construction of a FHIR `Decimal` from a server- or
 //  HealthKit-supplied `Double`. Mirrors `Int(safeServer:)` (Util/Int+SafeServer.swift)
 //  for the FHIR-export path — the one place the existing finite-guard discipline
-//  was not extended (AUD-4 M1).
+//  was not extended.
 //
 
 import Foundation
@@ -15,7 +15,7 @@ public extension FHIRDecimal {
     /// Crash-/corruption-safe construction of a `FHIRDecimal` from a server-
     /// supplied `Double`.
     ///
-    /// **Why this exists (AUD-4 M1):** measurement scalars decode unsanitised
+    /// **Why this exists:** measurement scalars decode unsanitised
     /// from the server / HealthKit. A `1e400` → `+inf`, a server divide-by-zero
     /// `NaN`, or a junk HK sample reaching `FHIRDecimal(floatLiteral:)` →
     /// `Decimal(floatLiteral:)` produces a **garbage/undefined Decimal** for a

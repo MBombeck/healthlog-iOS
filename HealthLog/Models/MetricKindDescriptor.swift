@@ -20,7 +20,7 @@ public struct MetricKindDescriptor: Sendable {
     public let kind: MetricKind
     /// Apple SF Symbol identifier — used by every tile + list row.
     public let sfSymbol: String
-    /// Theme-2.0 (T2-2): collapsed to `HLSurface.secondary` for every kind —
+    /// Theme-2.0: collapsed to `HLSurface.secondary` for every kind —
     /// the previous per-category Dracula tint (red Vitals / orange Activity /
     /// cyan Body / purple Sleep / grey Other) is gone. Icon foreground +
     /// sparkline now resolve to `HLText.*` tokens directly in the tile (chrome
@@ -116,7 +116,7 @@ public struct MetricKindDescriptor: Sendable {
         case durationHM
         /// Grouped integer with thousands separator (steps).
         case groupedInteger
-        /// W-B189 (#23) — SIGNED 1-fraction-digit value with an explicit `+`/`−`
+        /// SIGNED 1-fraction-digit value with an explicit `+`/`−`
         /// prefix, used by `bodyTemperatureDeviation` (Oura's signed °C offset
         /// from baseline). The value is a DEVIATION, not an absolute reading, so
         /// it MUST carry its sign: `+0.3` shows `+0.3`, `−0.2` shows `−0.2`,

@@ -10,10 +10,10 @@ extension AppContainer {
     /// `AppContainer` (this just feeds them) so call-sites are unchanged.
     struct IntegrationStoresBundle {
         let passkeyManagement: PasskeyManagementStore
-        /// Parity 2.2 — active sessions. Grouped with the passkey store because
+        /// Active sessions. Grouped with the passkey store because
         /// both back the same account-security surface.
         let sessions: SessionsStore
-        /// Parity 2.3 — forced second-factor enrolment gate.
+        /// Forced second-factor enrolment gate.
         let mfaEnrollmentGate: MfaEnrollmentGateStore
         let withings: WithingsIntegrationStore
         let whoop: WhoopIntegrationStore
@@ -83,7 +83,7 @@ extension AppContainer {
             fitbit: FitbitIntegrationStore(repo: fitbitRepo),
             strava: StravaIntegrationStore(repo: stravaRepo),
             nightscout: NightscoutIntegrationStore(repo: nightscoutRepo),
-            // v0.8.0 W11 — avatar store. `refreshProfile` re-loads the user
+            // Avatar store. `refreshProfile` re-loads the user
             // profile after an upload / delete so the new `avatarUrl` (with the
             // flipped `?v=` cache-buster) propagates to the display surfaces.
             avatar: AvatarStore(

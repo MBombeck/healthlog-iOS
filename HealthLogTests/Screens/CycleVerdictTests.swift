@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Z1 (#72) — the overdue state, and how long a stored verdict may be shown.**
+/// **The overdue state, and how long a stored verdict may be shown.**
 ///
 /// Supersedes `CycleLateStateTests`. That suite pinned a CLIENT judgement: it
 /// asserted that "later than usual" was decided on the device by comparing today

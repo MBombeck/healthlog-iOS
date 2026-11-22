@@ -14,7 +14,7 @@ import Foundation
 // swiftlint:disable force_unwrapping type_body_length
 import Testing
 
-/// The isolation contract for ``MockURLProtocolSession`` (Plan 09-10, issue #82).
+/// The isolation contract for ``MockURLProtocolSession``.
 ///
 /// The property under test is that *my* request is answered by *my* handler,
 /// even while another live session has installed a different one — and that
@@ -171,7 +171,7 @@ struct MockURLProtocolIsolationTests {
         // expected reason to appear exactly once.
         #expect(
             wrongForA == 0,
-            "EXPECTED_RED: MockURLProtocol handler is still process-global"
+            "MockURLProtocol handler is still process-global"
         )
         #expect(wrongForB == 0)
         #expect(firstAnswerToA == "A" || firstAnswerToA == "B")
@@ -284,7 +284,7 @@ struct MockURLProtocolIsolationTests {
         #expect(viaHost == "SESSION")
     }
 
-    // MARK: - Plan 09-13 — the client every migration target actually uses
+    // MARK: - The client every migration target actually uses
 
     /// The transport seam a migrated suite adopts, spelled exactly once here so
     /// this suite proves the same shape 09-11 and 09-12 will write: the base URL
@@ -330,7 +330,7 @@ struct MockURLProtocolIsolationTests {
 
         #expect(
             observed == "SESSION-ROUTED",
-            "EXPECTED_RED: a real APIClient was not routed to its own session, observed \(observed)"
+            "a real APIClient was not routed to its own session, observed \(observed)"
         )
     }
 

@@ -1,15 +1,14 @@
 import SwiftUI
 
-/// **POLISH-C (C7)** — the one-word alcohol answer asked before AUDIT-C
+/// The one-word alcohol answer asked before AUDIT-C
 /// (`ALCOHOL_PATTERN`), shown in the alcohol section as the web does
 /// (`audit-c-panel.tsx`, v1.47.0): "Earlier answer: Weekly", one line on what
-/// it is, and a bin that asks in place before the answer leaves the record.
+/// it is, and a bin that asks before the answer leaves the record.
 /// The wording is the server's `records.life.auditC.legacy*`.
 struct AuditCLegacyRow: View {
     let revision: AnamnesisFactRevision
     let store: LifeCircumstancesStore
     @Bindable var model: AuditCModel
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The answer in this kind's own words (`NONE` reads "I don't drink
     /// alcohol", not a bare "None").
@@ -34,67 +33,25 @@ struct AuditCLegacyRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("life.auditC.legacy")
-                Button {
-                    withHLAnimation(.easeInOut(duration: 0.2)) { model.askLegacyRemoval() }
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(HLColor.statusBad)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                HLDeleteButton(
+                    "life.auditC.legacy.remove",
+                    form: .icon,
+                    action: .confirmed(
+                        title: "life.auditC.legacy.removeConfirmTitle",
+                        message: "life.auditC.legacy.removeConfirmBody",
+                        word: "life.auditC.legacy.remove"
+                    ) {
+                        model.askLegacyRemoval()
+                        await model.removeLegacy(store: store)
+                    }
+                )
                 .disabled(model.isRemovingLegacy)
-                .accessibilityLabel(Text("life.auditC.legacy.remove"))
                 .accessibilityIdentifier("life.auditC.legacy.remove")
             }
-            if model.isConfirmingLegacyRemoval {
-                confirmation
+            if model.isConfirmingLegacyRemoval, let error = model.legacyRemoveError {
+                HLFormErrorText(error)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var confirmation: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("life.auditC.legacy.removeConfirmTitle")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Text("life.auditC.legacy.removeConfirmBody")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let error = model.legacyRemoveError {
-                HLFormErrorText(error)
-            }
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
-                : AnyLayout(HStackLayout(spacing: HLSpace.lg))
-            layout {
-                Button(role: .destructive) {
-                    Task { await model.removeLegacy(store: store) }
-                } label: {
-                    Text("life.auditC.legacy.remove")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(HLColor.statusBad)
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("life.auditC.legacy.confirm")
-                Button {
-                    withHLAnimation(.easeInOut(duration: 0.2)) { model.isConfirmingLegacyRemoval = false }
-                } label: {
-                    Text("Cancel")
-                        .foregroundStyle(.tint)
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("life.auditC.legacy.cancel")
-                if model.isRemovingLegacy {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            .font(.hlSubhead)
-            .buttonStyle(.plain)
-            .disabled(model.isRemovingLegacy)
-        }
-        .padding(.leading, HLSpace.sm)
     }
 }

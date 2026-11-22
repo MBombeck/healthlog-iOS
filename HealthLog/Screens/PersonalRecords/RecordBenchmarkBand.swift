@@ -11,7 +11,7 @@ import Foundation
 /// and judges nothing: there is no "favourable" or "worse" here, only where
 /// the record sits against the two edges the server sent.
 ///
-/// The band converts with the record itself (#115 P2): when the benchmark is
+/// The band converts with the record itself: when the benchmark is
 /// in the record's own unit, both take the record's account transform, so an
 /// imperial account reads grip strength in lb on the value and the band
 /// alike. A benchmark in any other unit is not drawn: the app cannot place a
@@ -103,6 +103,6 @@ struct RecordBenchmarkBand: Equatable, Sendable {
     }
 
     static func format(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0 ... 1)))
+        HLValueFormat.number(value, fractionDigits: 0 ... 1)
     }
 }

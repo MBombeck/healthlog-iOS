@@ -72,36 +72,20 @@ struct HLMaterialBackgroundTests {
         #expect(red == 0)
     }
 
-    // MARK: - 08-04 — the same policy, now ahead of Liquid Glass availability
+    // MARK: - The same policy, now ahead of Liquid Glass availability
 
-    /// The defect this closes is an *ordering*, so the test is written as one:
-    /// all four combinations of the two inputs, with the preference winning both
-    /// times it is set. A test that only checked `resolve(true, false)` would
-    /// pass against the very code that shipped the bug — availability-first
-    /// branching is only visible when glass IS available.
-    @Test("Reduce Transparency outranks glass availability in all four combinations")
-    func preferenceIsDecidedBeforeAvailability() {
-        #expect(HLSurfaceOpacity.resolve(reduceTransparency: true, glassAvailable: true) == .opaque)
-        #expect(HLSurfaceOpacity.resolve(reduceTransparency: true, glassAvailable: false) == .opaque)
-        #expect(HLSurfaceOpacity.resolve(reduceTransparency: false, glassAvailable: true) == .glass)
-        #expect(HLSurfaceOpacity.resolve(reduceTransparency: false, glassAvailable: false) == .material)
-    }
-
-    /// The preference must never resolve to a translucent case, whatever the
-    /// availability answer is — stated over the enum rather than over the two
-    /// literals above so a fourth `Resolution` case cannot be added past it.
-    @Test("no availability answer lets the preference resolve to a translucent surface")
-    func preferenceNeverResolvesTranslucent() {
-        for available in [true, false] {
-            let resolved = HLSurfaceOpacity.resolve(reduceTransparency: true, glassAvailable: available)
-            #expect(resolved == .opaque, "glassAvailable=\(available) escaped the preference")
-        }
-        #expect(HLSurfaceOpacity.Resolution.allCases.count == 3, "restate this contract if the vocabulary grows")
+    /// The preference is the only input left, and it must win: on, the
+    /// surface is opaque; off, it is glass.
+    @Test("Reduce Transparency resolves to the opaque surface, otherwise glass")
+    func preferenceDecidesTheSurface() {
+        #expect(HLSurfaceOpacity.resolve(reduceTransparency: true) == .opaque)
+        #expect(HLSurfaceOpacity.resolve(reduceTransparency: false) == .glass)
+        #expect(HLSurfaceOpacity.Resolution.allCases.count == 2, "restate this contract if the vocabulary grows")
     }
 
     /// The glass helper's own painting seam, driven exactly like
     /// `HLMaterialBackground.resolved` — the preference paints the opaque
-    /// fallback, and the fallback is the *same* fill the iOS 18–25 path uses.
+    /// fallback.
     @Test("the glass surface paints its opaque fallback under Reduce Transparency")
     func glassSurfacePaintsFallbackUnderReduceTransparency() throws {
         let painted = try glassPixelCount(reduceTransparency: true)

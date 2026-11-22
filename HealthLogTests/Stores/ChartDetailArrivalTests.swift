@@ -1,4 +1,4 @@
-// 14-01 (A2) — the value and the chart must arrive together.
+// The value and the chart must arrive together.
 //
 // The operator's A2 is "Zahlenwerte kommen deutlich später als ihre Grafik".
 // On a series-backed metric detail the store publishes the series first
@@ -40,7 +40,7 @@
         /// machine cannot turn it red.
         private nonisolated static let hangGuard: TimeInterval = 30
 
-        /// FLAKES (1.3.0) — parks the insight roundtrips until the test has
+        /// Parks the insight roundtrips until the test has
         /// observed what it came to observe. Opening is one-way, so both
         /// insight requests (and any retry) pass once it is open; the wait is
         /// bounded so a red run cannot wedge the URL-loading thread.
@@ -206,7 +206,7 @@
         /// headline's raw-latest refinement landed two requests late, above the
         /// chart, pushing it down.
         ///
-        /// **FLAKES (1.3.0) — proved by order, not by the wall clock.** This used
+        /// **Proved by order, not by the wall clock.** This used
         /// to park the insights for 0.3 s and require the value in the same
         /// main-actor turn the chart first became renderable in, inside a 3 s
         /// poll. Under load the measurements page can answer a few milliseconds
@@ -236,7 +236,7 @@
             }
             #expect(
                 valueSettledBeforeInsights,
-                "EXPECTED_RED: the headline value waits for the two insight roundtrips"
+                "the headline value waits for the two insight roundtrips"
             )
             // ...and with the chart: the series is published first, so when the
             // value is there the chart is already renderable.

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#108 / #115 1.4 — one chart screen, one glucose unit.**
+/// **One chart screen, one glucose unit.**
 ///
 /// `GET /api/measurements/series` converts glucose into the ACCOUNT's unit and
 /// stamps it on the payload (`MeasurementsSeriesResponse.unit`, server v1.39.0:

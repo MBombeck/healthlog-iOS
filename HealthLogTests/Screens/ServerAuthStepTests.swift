@@ -5,7 +5,7 @@ import Testing
 /// Auth-step routing and configured-server policy contracts.
 @Suite("ServerAuthStep configured server", .serialized)
 struct ServerAuthStepTests {
-    // MARK: - parity 2.9 — pre-login privacy link targets the CONFIGURED server
+    // MARK: - Pre-login privacy link targets the CONFIGURED server
 
     // The forgot-password tests that lived here are gone with the affordance
     // itself: `<base>/forgot-password` is not a route the server app serves
@@ -42,7 +42,7 @@ struct ServerAuthStepTests {
         #expect(url.path == "/privacy")
     }
 
-    // MARK: - #65 — web-handoff gate
+    // MARK: - Web-handoff gate
 
     @Test("prefersWebHandoff — the demo host keeps the native form (scripted review login)")
     @MainActor
@@ -87,7 +87,7 @@ struct ServerAuthStepTests {
         #expect(ServerAuthStep.prefersWebHandoff(keychain: nil) == false)
     }
 
-    // MARK: - Phase 09 / plan 09-03 — the pure helpers and the value snapshot agree
+    // MARK: - The pure helpers and the value snapshot agree
 
     /// The four screens render from ``ConfiguredServerSnapshot`` now, while these
     /// `keychain:`-injected helpers are retained for the link tests above. Two

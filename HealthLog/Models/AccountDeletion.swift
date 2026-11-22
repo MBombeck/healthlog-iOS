@@ -123,7 +123,7 @@ enum AccountDeletionPolicy: Equatable, Sendable {
 /// the interface language.
 enum AccountDeletionCopy {
     static func dateText(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month(.wide).year().locale(AppLanguage.current.formattingLocale))
+        date.formatted(.dateTime.day().month(.abbreviated).year().locale(AppLanguage.current.formattingLocale))
     }
 
     /// Sign-in refused because the account is locked for deletion.

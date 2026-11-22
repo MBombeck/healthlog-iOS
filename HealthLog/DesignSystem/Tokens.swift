@@ -20,16 +20,11 @@ public enum HLColor {
 
     // MARK: - Ink (refined graphite for data-ink on light surfaces)
 
-    /// Refined-graphite data-ink for chart lines + ring strokes on light
-    /// surfaces. v0.14 light-mode walk: charts + rings previously resolved to
-    /// `HLText.primary` — Apple-label parity, but dense data-ink read
-    /// near-black/harsh on white. v0.14.11 light-theme redesign ("Warmes
-    /// Papier"): the light slot is now a warm graphite `#454138` (≈9.6:1 on
-    /// the `#FAF8F5` card) — clearly softer than the text ink so charts read
-    /// "edel" rather than stark. **Text stays on `HLText.primary`** for
-    /// label-parity contrast — only data-ink moves here. Dark mode keeps
-    /// `#EBEBF5` (identical to `TextPrimaryMono` dark) so dark contrast is
-    /// unchanged.
+    /// Refined-graphite data-ink for chart lines + ring strokes. Dense
+    /// data-ink in the text colour reads harsh on light surfaces, so the light
+    /// slot is a warm graphite `#454138` (≈9.6:1 on the `#FAF8F5` card), softer
+    /// than the text ink. **Text stays on `HLText.primary`**; only data-ink
+    /// uses this. Dark mode uses `#EBEBF5`, the same as `TextPrimaryMono`.
     public static let inkGraphite = Color("InkGraphite", bundle: .main)
 
     /// Solid dark scrim/pill fill that always carries WHITE foreground (undo
@@ -45,7 +40,7 @@ public enum HLColor {
     // MARK: - AI-hero brand moment (the ONE sanctioned chroma-free white/black)
 
     //
-    // FW1-C (M6): the Coach "Ask the Coach" hero card + collapsed coin paint a
+    // The Coach "Ask the Coach" hero card + collapsed coin paint a
     // deliberate AI-brand moment — pure WHITE foreground on a near-BLACK
     // ink-gradient scrim, in BOTH appearances (the gradient does not invert; an
     // AI moment that flips to black-on-white in light mode loses the "premium
@@ -66,7 +61,7 @@ public enum HLColor {
     /// by design (the AI moment does not invert in light mode).
     public static let aiHeroScrim = Color.black
 
-    /// v0.14.3 B1 — the sanctioned COLOURFUL Coach-hero gradient. The operator
+    /// The sanctioned COLOURFUL Coach-hero gradient. The operator
     /// brief explicitly wants the Coach tile to read as a real, vivid "hero"
     /// (purple → amber), the ONE chromatic exception to the monochrome doctrine
     /// (alongside `aiHeroInk`/`aiHeroScrim`). Appearance-invariant — the AI
@@ -102,10 +97,10 @@ public enum HLColor {
     /// Appearance-invariant by design.
     public static let recordHeroScrim = Color.black
 
-    // MARK: - Wellness-score convergent gradients (v0.14.4 FW-WELL)
+    // MARK: - Wellness-score convergent gradients
 
     //
-    // v0.14.4 FW-WELL — the FOUR top wellness-score cards ("Deine
+    // The FOUR top wellness-score cards ("Deine
     // Gesundheitswerte": Tagesform / Schlaf-Score / Tagesbelastung /
     // Cardio-Fitness) each carry a per-card diagonal `LinearGradient` Verlauf.
     // This is a SANCTIONED chromatic exception to the monochrome doctrine
@@ -128,7 +123,7 @@ public enum HLColor {
     /// gradients read identically light + dark, like the Coach hero).
     public static let wellnessGradientLight = Color(hex: 0xFBF5EC) // warm beige near-white
 
-    /// **v0.14.10 §1 — the DARK convergent base of every wellness-score gradient.**
+    /// **The DARK convergent base of every wellness-score gradient.**
     ///
     /// The operator flagged the prior light-blended tiles as "zu hell, sehr weiß
     /// und bold" / washed out. The gradient direction is now REVERSED: each
@@ -140,12 +135,12 @@ public enum HLColor {
     /// dark field. Appearance-invariant so the tiles read identically light + dark.
     public static let wellnessGradientDark = Color(hex: 0x23262F) // tinted near-black card base
 
-    /// v0.14.10 §1 — a faint WHITE radial lift under the ring/label lockup on the
+    /// A faint WHITE radial lift under the ring/label lockup on the
     /// now-DARK wellness tiles. Adds a subtle premium glow without lightening the
     /// tile. Hoisted here (DesignSystem) so the screen code stays raw-colour-free.
     public static let wellnessTileGlow = Color.white.opacity(0.06)
 
-    /// v0.14.10 §1 — the subtle hairline border on the dark wellness tiles (was a
+    /// The subtle hairline border on the dark wellness tiles (was a
     /// warm-beige edge tuned for the old light tiles; now a faint white edge that
     /// reads as a card rim on the near-black field).
     public static let wellnessTileBorder = Color.white.opacity(0.10)
@@ -157,7 +152,7 @@ public enum HLColor {
     public static let wellnessSchlafHue = Color(hex: 0x1E3A8A) // dark blue (→ light → beige via shared light end)
     public static let wellnessBelastungHue = Color(hex: 0x6D4AC4) // purple (NOT red)
     public static let wellnessCardioHue = Color(hex: 0x0E8C82) // teal-green (distinct from Tagesform)
-    /// v0.14.9 §3 — Erholung/Recovery: warm honey-yellow into beige. The
+    /// Erholung/Recovery: warm honey-yellow into beige. The
     /// terracotta (`#E07A5F`) read as reddish ("Erholung hat nichts mit Rot zu
     /// tun"); honey-yellow reads calm + restorative, stays in the warm
     /// convergent-gradient family, and is clearly apart from Schlaf-blue +
@@ -166,10 +161,10 @@ public enum HLColor {
     /// v0.14.8 Item-2 — Belastungs-Stress: muted clay-rose, same warm family as
     /// Recovery but pulled apart so the two tiles aren't identical.
     public static let wellnessStressHue = Color(hex: 0xC65B5B) // muted clay-rose
-    /// v0.14.9 §2 — Vascular age (re-frame promoted to a years-delta ring tile):
+    /// Vascular age (re-frame promoted to a years-delta ring tile):
     /// soft violet, distinct from Belastung-purple but the same cool family.
     public static let wellnessVascularHue = Color(hex: 0x9A6BC4) // soft violet
-    /// v0.14.9 §2 — HRV balance (band re-frame promoted to a ring tile): calm
+    /// HRV balance (band re-frame promoted to a ring tile): calm
     /// steel-blue, clearly cooler/greyer than the Schlaf navy so the two read apart.
     public static let wellnessHrvBalanceHue = Color(hex: 0x4A8FB0) // calm steel-blue
 
@@ -266,7 +261,7 @@ public enum HLColor {
     public static let statusWarn = Color("StatusWarn", bundle: .main)
     public static let statusBad = Color("StatusBad", bundle: .main)
 
-    /// **v0.14.1 ITEM-B — sanctioned skip-signal dark-orange.**
+    /// **Sanctioned skip-signal dark-orange.**
     ///
     /// The intake-confirm border-beam (`HLBorderBeam`) is monochrome silver
     /// for "Genommen". The "Überspringen" sweep is the SAME beam but tinted a
@@ -321,7 +316,7 @@ public enum HLColor {
     //     — locks every descriptor's `tint` field to the mono card surface.
 }
 
-/// **v0.14.4 FW-WELL — pure descriptor for the convergent wellness gradients.**
+/// **Pure descriptor for the convergent wellness gradients.**
 ///
 /// Maps each of the four wellness-score cards to its saturated OUTER-corner hue
 /// and the INNER corner that holds the shared light end (`HLColor
@@ -335,10 +330,10 @@ public enum WellnessGradient: Sendable, CaseIterable {
     case schlaf // top-right → light corner bottom-leading
     case belastung // bottom-left → light corner top-trailing
     case cardio // bottom-right → light corner top-leading
-    case recovery // v0.14.9 §3 — Erholung, warm honey-yellow → beige
+    case recovery // Erholung, warm honey-yellow → beige
     case stress // v0.14.8 Item-2 — Stress, muted clay-rose → beige
-    case vascular // v0.14.9 §2 — Vascular age (years-delta ring), soft violet → beige
-    case hrvBalance // v0.14.9 §2 — HRV balance (band ring), calm steel-blue → beige
+    case vascular // Vascular age (years-delta ring), soft violet → beige
+    case hrvBalance // HRV balance (band ring), calm steel-blue → beige
 
     /// Which corner of the card holds the SHARED light end (the grid-centre
     /// corner). The saturated hue lives at the diagonally OPPOSITE outer corner.
@@ -371,7 +366,7 @@ public enum WellnessGradient: Sendable, CaseIterable {
         // still converge into the shared beige field.
         case .recovery: .bottomTrailing
         case .stress: .bottomLeading
-        // v0.14.9 §2 — the two newly-promoted re-frames sit in the lower grid
+        // The two newly-promoted re-frames sit in the lower grid
         // rows; mirror the inner-corner convergence so all light corners still
         // meet at the grid centre.
         case .vascular: .topTrailing
@@ -411,7 +406,7 @@ public enum WellnessGradient: Sendable, CaseIterable {
         }
     }
 
-    /// **v0.14.10 §1 — gradient direction REVERSED toward the dark base.**
+    /// **Gradient direction REVERSED toward the dark base.**
     ///
     /// The prior pass blended each hue ~45% toward the warm LIGHT end, which the
     /// operator flagged as "zu hell, sehr weiß und bold" / washed out. The blend
@@ -432,7 +427,7 @@ public enum WellnessGradient: Sendable, CaseIterable {
 
     /// The convergent `LinearGradient`: the TINTED-DARK `hue` at the outer corner,
     /// blending through a mid stop to the shared near-black `wellnessGradientDark`
-    /// at the inner grid-centre corner. v0.14.10 §1 — direction flipped from the
+    /// at the inner grid-centre corner. Direction flipped from the
     /// old hue→light sweep to hue→dark so the tiles sit in the app's near-black
     /// monochrome tone with only a subtle warm hue; white ring stays legible.
     public var linearGradient: LinearGradient {
@@ -508,10 +503,10 @@ public enum HLIconSize {
     /// 28pt — hero glyph (empty-state medallions, card-hero symbols).
     public static let hero: CGFloat = 28
     /// 36pt — display glyph (onboarding-step heroes, detail-screen medallions).
-    /// Audit-01 H2: collapses the former 32/36pt ad-hoc cluster.
+    /// Collapses the former 32/36pt ad-hoc cluster.
     public static let display: CGFloat = 36
     /// 56pt — cover glyph (privacy cover, lock overlay, loading screen,
-    /// full-screen import heroes). Audit-01 H2: collapses the former
+    /// full-screen import heroes). Collapses the former
     /// 48/56/80pt ad-hoc cluster — the LARGEST sanctioned glyph size.
     public static let cover: CGFloat = 56
 

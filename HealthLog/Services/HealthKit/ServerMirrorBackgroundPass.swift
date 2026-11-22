@@ -1,6 +1,6 @@
 import Foundation
 
-// MIRROR (1.5, public #28, #152) — the server→Apple-Health mirror in the
+// The server→Apple-Health mirror in the
 // background.
 //
 // Up to 1.4 the mirror ran only when `MeasurementsStore` loaded a fresh page,
@@ -89,7 +89,6 @@ enum ServerMirrorBackgroundPass {
         var writer: (any BoundedServerMirrorWriting)?
         /// `KnownServerVersion.isAtLeast(minimumServerVersion)`; unknown is no.
         var serverIsNewEnough: @Sendable () -> Bool
-        var isStandalone: @Sendable () -> Bool
         /// The signed-in account, captured once; `nil` when nobody is admitted.
         var lease: @Sendable () -> AuthenticatedSessionLease?
         var now: @Sendable () -> Date = { Date() }
@@ -100,7 +99,7 @@ enum ServerMirrorBackgroundPass {
         guard let source = environment.source, let writer = environment.writer else {
             return .unsupported(.serverMirror)
         }
-        guard !environment.isStandalone(), environment.serverIsNewEnough() else { return .disabled(.serverMirror) }
+        guard environment.serverIsNewEnough() else { return .disabled(.serverMirror) }
         guard let lease = environment.lease() else { return .refused(.serverMirror, .notAdmitted) }
         if Task.isCancelled { return .cancelled(.serverMirror) }
         if context.isExpired() { return .expired(.serverMirror) }

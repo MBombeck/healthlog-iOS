@@ -5,7 +5,7 @@ import Testing
 /// W6a standardization-sweep invariants (STANDARDS §3, §4, §8).
 ///
 /// These lock the decisions the standardization wave made so a later edit
-/// can't silently re-fragment the card radius, drop the `cardInset` token, or
+/// can't silently re-fragment the card radius or
 /// re-introduce a hardcoded German "J" into the EN-source range vocabulary.
 ///
 /// The range-label assertions resolve against the explicit `en.lproj` /
@@ -18,7 +18,7 @@ struct W6aStandardizationTests {
 
     @Test("Canonical card radius is 20 and the legacy tighter values are gone")
     func canonicalCardRadius() {
-        // HLCard + HLSettingsCard both route through HLRadius.card now (W6-2).
+        // Every card routes through HLRadius.card.
         #expect(HLRadius.card == 20)
         // The semantic alias is what cards must use — not the raw `lg` (18) or
         // `sm` (10) the cards used to hard-code.
@@ -26,18 +26,6 @@ struct W6aStandardizationTests {
         #expect(HLRadius.sm == 10)
         #expect(HLRadius.card != HLRadius.lg)
         #expect(HLRadius.card != HLRadius.sm)
-    }
-
-    // MARK: - §4 ONE spacing grid (cardInset is a named HLSpace token)
-
-    @Test("HLSpace.cardInset replaces the retired HLSpacePB namespace at 14pt")
-    func cardInsetTokenPresent() {
-        // W6-4: the Settings-card 14pt inset now lives on the global grid as a
-        // named sub-grid token (like `chip`), not a private HLSpacePB enum.
-        #expect(HLSpace.cardInset == 14)
-        // Sits between md (12) and lg (16), as documented.
-        #expect(HLSpace.md < HLSpace.cardInset)
-        #expect(HLSpace.cardInset < HLSpace.lg)
     }
 
     // MARK: - §8 ONE range vocabulary (single-letter Apple-Health set)
@@ -65,17 +53,12 @@ struct W6aStandardizationTests {
         #expect(ChartDetailStore.Range.sixMonths.label == "6M")
     }
 
-    // MARK: - Mood documented deviation (§8 allows it)
+    // MARK: - Mood takes the one period set
 
-    @Test("Mood period keeps its wider spelled-out vocabulary (documented EN)")
-    func moodDeviationIntact() throws {
-        // Mood deliberately keeps the spelled-out 30d/90d/1y set — 90d has no
-        // single-letter Apple-Health equivalent (W6-5 documented deviation).
-        // Asserted in EN so the spelled-out source labels are deterministic.
-        let en = try Self.lprojBundle(language: "en")
-        #expect(en.localizedString(forKey: "30d", value: "MISSING", table: nil) == "30d")
-        #expect(en.localizedString(forKey: "90d", value: "MISSING", table: nil) == "90d")
-        #expect(en.localizedString(forKey: "1y", value: "MISSING", table: nil) == "1y")
+    @Test("Mood period is the app's one period set, no wider vocabulary of its own")
+    func moodUsesTheOnePeriodSet() {
+        #expect(MoodPeriod.allCases == HLTimeRange.allCases)
+        #expect(MoodPeriod.allCases.map(\.label) == HLTimeRange.allCases.map(\.label))
     }
 
     // MARK: - Helpers

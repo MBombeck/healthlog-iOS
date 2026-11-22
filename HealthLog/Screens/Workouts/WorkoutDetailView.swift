@@ -2,9 +2,9 @@ import Charts
 import MapKit
 import SwiftUI
 
-/// v0.5.3-F3 — Workout-Detail-Surface.
+/// Workout-Detail-Surface.
 ///
-/// v0.5.4-SP5 — extended with HR-time-series chart + GPS-route map.
+/// Extended with HR-time-series chart + GPS-route map.
 ///
 /// Zeigt Stats des kanonischen Workouts (Dauer, Distanz, Avg/Max HR,
 /// Kalorien, Quelle) plus, wenn vorhanden:
@@ -25,10 +25,6 @@ struct WorkoutDetailView: View {
 
     @Environment(WorkoutsStore.self) private var store
 
-    /// Audit-01 H3 — the hero duration keeps its 36pt visual weight at the
-    /// default setting but now scales with Dynamic Type.
-    @ScaledMetric(relativeTo: .largeTitle) private var durationSize: CGFloat = 36
-
     /// Aufgelöste Detail-Quelle: bevorzugt das frisch geladene
     /// `store.detail`, fällt auf die übergebene Liste-Row zurück solange
     /// der Detail-Round-Trip noch in-flight ist. So bleibt der Screen
@@ -45,46 +41,40 @@ struct WorkoutDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                heroCard
-                statsGrid
-                metadataSection
-                hrZoneSection
-                hrChartSection
-                splitsSection
-                sportContextSection
-                routeMapSection
-                sourceCard
-            }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.lg)
+        HLPage {
+            heroCard
+            statsGrid
+            metadataSection
+            performanceSection
+            hrZoneSection
+            hrChartSection
+            splitsSection
+            sportContextSection
+            routeMapSection
+            sourceCard
         }
-        .hlScreenBackground()
-        .hlScrollEdgeSoft()
-        .navigationTitle(LocalizedStringKey(WorkoutFormatter.sportTitle(resolved.sportType)))
+        .navigationTitle(WorkoutFormatter.sportTitle(resolved.sportType))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workout.id) {
             await store.loadDetail(id: workout.id)
         }
     }
 
+    /// The page's one key figure: the duration, the date under it. The sport
+    /// is the navigation title and is not repeated here.
     private var heroCard: some View {
-        HLCard(style: .elevated) {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                if let start = resolved.startedAt {
-                    Text(Self.heroDateFormatter.string(from: start))
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
-                }
-                Text(WorkoutFormatter.sportTitle(resolved.sportType))
-                    .font(.hlTitle1)
-                    .foregroundStyle(HLText.primary)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 if let duration = WorkoutFormatter.duration(resolved.durationSec) {
+                    // A stopwatch length ("1:02:03") has no `HLUnit`, so it
+                    // takes the hero value role directly.
                     Text(duration)
-                        .font(.hlMetric(durationSize))
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.heroValue)
                         .accessibilityLabel(Text("Dauer \(duration)"))
+                }
+                if let start = resolved.startedAt {
+                    Text(HLDateFormat.dateTime(start, style: .complete))
+                        .hlText(.pageSubtitle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,46 +87,30 @@ struct WorkoutDetailView: View {
             GridItem(.flexible(), spacing: HLSpace.md)
         ], spacing: HLSpace.md) {
             if let distance = resolved.distanceM, distance > 0 {
+                let reading = WorkoutFormatter.distanceReading(metres: distance)
                 StatTile(
                     label: "Distance",
-                    value: WorkoutFormatter.distanceLabel(metres: distance),
+                    value: reading.value,
+                    unit: reading.unit,
+                    fractionDigits: reading.fractionDigits,
                     icon: "ruler"
                 )
             }
             if let kcal = resolved.activeEnergyKcal, kcal > 0 {
-                StatTile(
-                    label: "workout.stat.calories",
-                    value: "\(Int(kcal.rounded())) kcal",
-                    icon: "flame.fill"
-                )
+                StatTile(label: "workout.stat.calories", value: kcal, unit: .kilocalories, icon: "flame.fill")
             }
             if let avg = resolved.avgHr, avg > 0 {
-                StatTile(
-                    label: "workout.stat.avgHeartRate",
-                    value: "\(Int(avg.rounded())) bpm",
-                    icon: "heart.fill"
-                )
+                StatTile(label: "workout.stat.avgHeartRate", value: avg, unit: .beatsPerMinute, icon: "heart.fill")
             }
             if let max = resolved.maxHr, max > 0 {
-                StatTile(
-                    label: "workout.stat.maxHeartRate",
-                    value: "\(Int(max.rounded())) bpm",
-                    icon: "bolt.heart.fill"
-                )
+                StatTile(label: "workout.stat.maxHeartRate", value: max, unit: .beatsPerMinute, icon: "bolt.heart.fill")
             }
             if let steps = resolved.stepCount, steps > 0 {
-                StatTile(
-                    label: "Steps",
-                    value: "\(steps)",
-                    icon: "shoeprints.fill"
-                )
+                // The label already says "steps"; the figure stands alone.
+                StatTile(label: "Steps", value: Double(steps), unit: .plain, icon: "shoeprints.fill")
             }
             if let elev = resolved.elevationM, elev > 0 {
-                StatTile(
-                    label: "Höhenmeter",
-                    value: "\(Int(elev.rounded())) m",
-                    icon: "mountain.2.fill"
-                )
+                StatTile(label: "Höhenmeter", value: elev, unit: .meters, icon: "mountain.2.fill")
             }
         }
     }
@@ -155,25 +129,13 @@ struct WorkoutDetailView: View {
                 GridItem(.flexible(), spacing: HLSpace.md)
             ], spacing: HLSpace.md) {
                 if let strain = meta.whoopWorkoutStrain, strain > 0 {
-                    StatTile(
-                        label: "Strain",
-                        value: HLNumberFormat.decimal(strain, fractionDigits: 1),
-                        icon: "bolt.fill"
-                    )
+                    StatTile(label: "Strain", value: strain, unit: .plain, fractionDigits: 1 ... 1, icon: "bolt.fill")
                 }
                 if let altitude = meta.altitudeGainMeter, altitude > 0 {
-                    StatTile(
-                        label: "Höhenmeter",
-                        value: "\(Int(altitude.rounded())) m",
-                        icon: "mountain.2.fill"
-                    )
+                    StatTile(label: "Höhenmeter", value: altitude, unit: .meters, icon: "mountain.2.fill")
                 }
                 if let percent = Self.normalizedPercent(meta.percentRecorded) {
-                    StatTile(
-                        label: "Aufgezeichnet",
-                        value: HLNumberFormat.percent(Int(percent.rounded())),
-                        icon: "waveform.path.ecg"
-                    )
+                    StatTile(label: "Aufgezeichnet", value: percent, unit: .percent, icon: "waveform.path.ecg")
                 }
             }
         }
@@ -195,7 +157,7 @@ struct WorkoutDetailView: View {
         return raw <= 1 ? raw * 100 : raw
     }
 
-    // MARK: - HR-zone section (W-B182)
+    // MARK: - HR-zone section
 
     /// Time-in-HR-zone bar. Prefers the server-resolved `zones` object (7.8 —
     /// covers both the WHOOP device path and the computed %HRmax `tanaka` fold);
@@ -206,63 +168,54 @@ struct WorkoutDetailView: View {
     private var hrZoneSection: some View {
         let zones = Self.resolvedZones(from: resolved)
         if !zones.isEmpty {
-            HLCard(style: .elevated) {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("Heart-rate zones")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-                    HRZoneBar(zones: zones)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HLCard("Heart-rate zones") {
+                HRZoneBar(zones: zones)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    // MARK: - HR chart section (v0.5.4-SP5)
+    // MARK: - HR chart section
 
     @ViewBuilder
     private var hrChartSection: some View {
-        if let series = store.detailHRSeries, !series.isEmpty {
-            HLCard(style: .elevated) {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("Heart rate")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-                    HRChart(samples: series, avg: resolved.avgHr, max: resolved.maxHr)
-                        .frame(height: HLChartStyle.heightRegular)
-                        .accessibilityLabel(Self.hrAccessibilityLabel(samples: series))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        // Only this workout's curve: the store is shared, and the curve it
+        // holds may still be the previous workout's while this one loads.
+        if let curve = store.hrCurve(for: workout.id), !curve.samples.isEmpty {
+            HLCard("Heart rate") {
+                HRChart(curve: curve, avg: resolved.avgHr, max: resolved.maxHr)
+                    .frame(height: HLChartStyle.heightRegular)
+                    .accessibilityLabel(Self.hrAccessibilityLabel(curve: curve))
             }
         }
     }
 
     /// Builds an a11y summary like "Heart rate, 412 data points, from 96 to
     /// 178 bpm." so VoiceOver users get a description instead of drowning in
-    /// the chart axis. L1 — catalog copy (was a fixed German sentence).
+    /// the chart axis. Catalog copy (was a fixed German sentence).
     static func hrAccessibilityLabel(samples: [WorkoutHRSample]) -> String {
-        guard !samples.isEmpty else { return String(localized: "workout.hr.a11y.unavailable") }
-        let min = Int((samples.map(\.bpm).min() ?? 0).rounded())
-        let max = Int((samples.map(\.bpm).max() ?? 0).rounded())
-        return String(localized: "workout.hr.a11y.summary \(samples.count) \(min) \(max)")
+        hrAccessibilityLabel(curve: WorkoutHRCurve(workoutID: "", samples: samples))
     }
 
-    // MARK: - Route map section (v0.5.4-SP5)
+    /// The summary over the FULL series: count, minimum and maximum come from
+    /// every sample, not from the thinned copy the chart plots.
+    static func hrAccessibilityLabel(curve: WorkoutHRCurve) -> String {
+        guard !curve.samples.isEmpty else { return String(localized: "workout.hr.a11y.unavailable") }
+        let min = Int(curve.minimumBPM.rounded())
+        let max = Int(curve.maximumBPM.rounded())
+        return String(localized: "workout.hr.a11y.summary \(curve.samples.count) \(min) \(max)")
+    }
+
+    // MARK: - Route map section
 
     @ViewBuilder
     private var routeMapSection: some View {
         if let coords = Self.routeCoordinates(from: resolved.route), coords.count >= 2 {
-            HLCard(style: .elevated) {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("Distance")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-                    RouteMap(coordinates: coords)
-                        .frame(height: HLChartStyle.heightRegular)
-                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-                        .accessibilityLabel(Self.routeAccessibilityLabel(count: coords.count))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HLCard("Distance") {
+                RouteMap(coordinates: coords)
+                    .frame(height: HLChartStyle.heightRegular)
+                    .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+                    .accessibilityLabel(Self.routeAccessibilityLabel(count: coords.count))
             }
         }
     }
@@ -290,21 +243,10 @@ struct WorkoutDetailView: View {
     // MARK: - Source card
 
     private var sourceCard: some View {
-        HLSettingsCard(
-            icon: "antenna.radiowaves.left.and.right",
-            title: "workouts.detail.source.title"
-        ) {
-            // 1.4 B2 — the source only; the raw external ID was developer
+        HLCard("workouts.detail.source.title") {
+            // The source only; the raw external ID was developer
             // information.
-            HStack {
-                Text("Data source")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                Spacer()
-                Text(WorkoutDetailView.sourceLabel(resolved.source))
-                    .font(.hlBody.weight(.medium))
-                    .foregroundStyle(HLText.primary)
-            }
+            HLFactRow("Data source", value: WorkoutDetailView.sourceLabel(resolved.source))
         }
     }
 
@@ -323,25 +265,15 @@ struct WorkoutDetailView: View {
             ? String(localized: "Manual")
             : SourcePriorityRow.displayLabel(forSource: raw)
     }
-
-    private static let heroDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        // Build 8 (8.6): follow the running UI locale instead of a hard `de_DE`
-        // pin, so an English build renders an English full date instead of a
-        // forced-German one. The string carries no German prefix, so no catalog
-        // key is needed.
-        f.locale = Locale.current
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
 }
 
 // MARK: - Stat tile
 
 private struct StatTile: View {
     let label: LocalizedStringKey
-    let value: String
+    let value: Double
+    let unit: HLUnit
+    var fractionDigits: ClosedRange<Int> = 0 ... 0
     let icon: String
 
     var body: some View {
@@ -352,13 +284,9 @@ private struct StatTile: View {
                         .font(.hlIcon(HLIconSize.rowAction))
                         .foregroundStyle(HLText.secondary)
                     Text(label)
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.tileLabel)
                 }
-                Text(value)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
+                HLValueText(value, unit: unit, size: .compact, fractionDigits: fractionDigits)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -373,11 +301,21 @@ private struct StatTile: View {
 /// dashboard's tonal-mono surface. Avg + Max overlays use dashed
 /// RuleMarks (Theme-2.0 §C — no AreaMarks, no solid fills).
 struct HRChart: View {
+    /// The thinned series the chart draws (at most `LTTB.seriesPlotThreshold`).
     let samples: [WorkoutHRSample]
+    /// How many raw samples the curve has; the audio graph summary names it.
+    let sampleCount: Int
     let avg: Double?
     let max: Double?
 
-    /// v0.11 — canonical scrub-to-read (AUDIT-FINAL §H1): touch the trace to
+    init(curve: WorkoutHRCurve, avg: Double?, max: Double?) {
+        samples = curve.plotted
+        sampleCount = curve.samples.count
+        self.avg = avg
+        self.max = max
+    }
+
+    /// Canonical scrub-to-read (AUDIT-FINAL §H1): touch the trace to
     /// read bpm-at-time, identical to every other chart.
     @State private var selectedDate: Date?
 
@@ -390,7 +328,7 @@ struct HRChart: View {
                 )
                 .interpolationMethod(.monotone)
                 .foregroundStyle(HLChartTints.series)
-                .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                .lineStyle(StrokeStyle(lineWidth: HLChartStyle.lineWidth, lineCap: .round, lineJoin: .round))
             }
             if let avg, avg > 0 {
                 RuleMark(y: .value("Average", avg))
@@ -415,50 +353,37 @@ struct HRChart: View {
                 value: \.bpm
             ) { sample in
                 HLScrubCallout(
-                    title: sample.timestamp.formatted(.dateTime.hour().minute()),
+                    title: HLTimeFormat.time(sample.timestamp),
                     value: "\(Int(sample.bpm.rounded()))",
                     unit: "bpm"
                 )
             }
         }
-        // M2 — route the axis grid through the canonical `HLChartGrid` tokens
-        // (was `HLColor.separator` opacities) so the workout HR chart's axes
-        // match every other chart's hairline-mono treatment.
-        .chartYAxis {
-            AxisMarks(position: .leading) { _ in
-                AxisGridLine()
-                    .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisTick().foregroundStyle(HLText.tertiary)
-                AxisValueLabel()
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
-        // 1.4 B4 — the app's one date-axis rule (time of day for a session).
-        .chartXAxis { ChartDateAxis.marks(for: samples.map(\.timestamp)) }
+        // The shared axes: values on the left with the unit, the app's one
+        // date-axis rule below (time of day for a session).
+        .hlChartAxes(dates: samples.map(\.timestamp), unit: String(localized: "bpm"))
         .hlChartScrub($selectedDate) { date in
             guard let nearest = HLChartScrubber.nearest(to: date, in: samples, date: \.timestamp) else { return nil }
-            return String(localized: "\(nearest.timestamp.formatted(.dateTime.hour().minute())): \(Int(nearest.bpm.rounded())) bpm")
+            return String(localized: "\(HLTimeFormat.time(nearest.timestamp)): \(Int(nearest.bpm.rounded())) bpm")
         }
-        // v0.5.4 — ChartAXCoverageTests gate: every Chart must wire an
+        // ChartAXCoverageTests gate: every Chart must wire an
         // `AXChartDescriptor` so VoiceOver can audio-graph the series.
         .accessibilityChartDescriptor(HLChartDescriptor(makeAXDescriptor()))
     }
 
     private func makeAXDescriptor() -> AXChartDescriptor {
-        let timeFormatter = Date.FormatStyle(date: .omitted, time: .shortened)
         let points = samples.map { sample in
             (
                 x: sample.timestamp.timeIntervalSince1970,
                 y: sample.bpm,
-                xLabel: timeFormatter.format(sample.timestamp)
+                xLabel: HLTimeFormat.time(sample.timestamp)
             )
         }
         let summary: String = {
             if samples.isEmpty {
                 return String(localized: "No heart rate data")
             }
-            let count = samples.count
+            let count = sampleCount
             if let avg, avg > 0 {
                 return String(
                     localized: "workout.hr.chart.summary \(count) \(Int(avg.rounded()))"

@@ -32,7 +32,7 @@ import Testing
 /// error-write, the reset. Re-running the live call here would
 /// double the simulator-flakiness surface for no extra coverage.
 ///
-/// **22-02 (D-14-04-A) — and yet, until this plan, it did.** Seven cases
+/// **And yet, until this plan, it did.** Seven cases
 /// constructed a bare `LocalLLMService()` and awaited a turn, so on a gate
 /// simulator with an eligible model every one of them drove the REAL on-device
 /// runtime: ~132 s under load, with an outcome the case could not predict. Each
@@ -90,7 +90,7 @@ struct CoachConversationStoreTests {
         #expect(store.lastError == nil)
     }
 
-    // MARK: - 22-02 (D-14-04-A) — three outcomes, three assertions
+    // MARK: - Three outcomes, three assertions
 
     /// Outcome 1 of 3: an answer. Deterministic because the reply is seeded,
     /// not because the device happened to be eligible.
@@ -148,7 +148,7 @@ struct CoachConversationStoreTests {
         try #require(
             CoachConversationStore.emptyGenerationOutcome(didRenderAnything: false) != nil,
             """
-            EXPECTED_RED: an on-device turn whose stream rendered nothing ends with the user message \
+            an on-device turn whose stream rendered nothing ends with the user message \
             alone and lastError nil, which reads exactly like a deliberate non-answer
             """
         )
@@ -166,7 +166,7 @@ struct CoachConversationStoreTests {
         try #require(
             source.contains("emptyGenerationOutcome(didRenderAnything:"),
             """
-            EXPECTED_RED: CoachConversationStore's on-device turn never consults the empty-generation \
+            CoachConversationStore's on-device turn never consults the empty-generation \
             decision, so the third outcome stays silent in the arm it actually happens in
             """
         )
@@ -190,7 +190,7 @@ struct CoachConversationStoreTests {
 
         await store.respondToLastUserTurn(prompt: prompt)
 
-        // 22-02 — deterministic: the seeded arm answers, so exactly one
+        // Deterministic: the seeded arm answers, so exactly one
         // assistant turn is added and no second user entry appears. The
         // either/or this case used to carry existed only because the outcome
         // depended on the device the gate happened to run on.
@@ -254,7 +254,7 @@ struct CoachConversationStoreTests {
         #expect(composed.contains("UNVERHANDELBAR"))
     }
 
-    // MARK: - v0.6.1 F6 — double-response guard
+    // MARK: - Double-response guard
 
     @Test("programmaticSendInFlight starts false and stays false outside send")
     func programmaticSendInFlightDefault() {
@@ -317,7 +317,7 @@ struct CoachConversationStoreTests {
         #expect(store.programmaticSendInFlight == false)
     }
 
-    /// **22-02** — this case used to assert `counter.count <= 2`, which is true
+    /// This case used to assert `counter.count <= 2`, which is true
     /// at zero and therefore said nothing on the runtimes where the early
     /// return fired. Driven through the server arm it can assert the honest,
     /// privacy-relevant fact instead: a SERVER turn composes NO client-side
@@ -341,7 +341,7 @@ struct CoachConversationStoreTests {
         #expect(store.chat.count == 4, "both turns landed")
     }
 
-    // MARK: - The seam (22-02 / D-14-04-A)
+    // MARK: - The seam
 
     /// What the seeded arm answers with. Three shapes, because a coach turn has
     /// three outcomes — see the outcome cases above.
@@ -434,7 +434,7 @@ private struct CoachSeededSSEClient: APIClientProtocol {
 @MainActor
 final class ProviderCallCounter {
     private(set) var count: Int = 0
-    /// 22-02 — the invocation ledger, so a case can assert "never consulted"
+    /// The invocation ledger, so a case can assert "never consulted"
     /// without comparing a count to zero (SwiftLint `empty_count` is an ERROR
     /// in this repo, and the release lint gate is fail-closed on errors).
     private(set) var invocations: [Int] = []

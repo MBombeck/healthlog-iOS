@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **1.4 B1 — the detail chart says „Noch keine Daten" only when it is true.**
+/// **The detail chart says „Noch keine Daten" only when it is true.**
 ///
 /// R2 1.4 item 8: `ChartCard` fell back to „Noch keine Daten" three seconds into
 /// a load that had not finished, and after a failed one. ``ChartCardPhase`` is

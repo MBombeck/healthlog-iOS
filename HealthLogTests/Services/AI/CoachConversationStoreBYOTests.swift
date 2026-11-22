@@ -8,7 +8,7 @@ import Testing
     import SpeziChat
 #endif
 
-/// v0.13 W4 — Coach BYO-key arm routing. With `aiMode == .byoKey` (a granted +
+/// Coach BYO-key arm routing. With `aiMode == .byoKey` (a granted +
 /// stored key) the store must route the turn through the BYO arm
 /// (`BYOLLMService.generate`) and surface the provider's text on the same
 /// `chat` / `isResponding` / `lastError` consumer surface. On a `BYOLLMError`

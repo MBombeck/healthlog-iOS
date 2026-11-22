@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Build 273 — the coach composer carries a persistent, visible statement that
+/// The coach composer carries a persistent, visible statement that
 /// its answers are generated and fallible (App Review 1.2 / 5.1.1: generated
 /// content must be identifiable; the first-launch disclaimer alone is one
 /// screen the reviewer may never reopen).
@@ -40,7 +40,7 @@ struct CoachAIGeneratedNoteTests {
         #expect(en.localizedCaseInsensitiveContains("wrong"))
         #expect(de.localizedCaseInsensitiveContains("KI-generiert"))
         #expect(de.localizedCaseInsensitiveContains("falsch"))
-        // R11 — the sentence the 1.4.1 rejection asked for, in both languages.
+        // The sentence the 1.4.1 rejection asked for, in both languages.
         #expect(en.localizedCaseInsensitiveContains("not medical advice"))
         #expect(de.contains("kein medizinischer Rat"))
         #expect(en.count <= 90 && de.count <= 100, "one footnote line")

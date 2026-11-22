@@ -105,12 +105,11 @@
             func attachUploader(_: MeasurementBatchUploader) async {}
             func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
             func setInitialBackfillCutoff(_: Date?) async {}
-            func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
         }
 
         // MARK: - No-Op-Erkennung
 
-        /// **H1 — warum der Hinweis beim Betreiber ausblieb.**
+        /// **Warum der Hinweis beim Betreiber ausblieb.**
         ///
         /// Der Betreiber tippt „Mit Apple Health verbinden“, das System-Blatt
         /// blitzt auf und schließt sich sofort wieder. Die App erkennt das über
@@ -248,7 +247,7 @@
 
         // MARK: - Farbe: was welcher Zustand sagen soll
 
-        /// **H1 — Rot nur, wo der Nutzer handeln muss.**
+        /// **Rot nur, wo der Nutzer handeln muss.**
         ///
         /// Vorher leitete jede Fläche ihren Pill-Fall selbst aus `state` ab:
         /// `SettingsIntegrationsScreen` malte `.partiallyGranted` unbesehen rot,
@@ -381,7 +380,7 @@
 
         // MARK: - Transparenzfläche: angefragt ≠ erlaubt
 
-        /// **H1 — „Ich kann nicht sehen was freigegeben ist oder so.“**
+        /// **„Ich kann nicht sehen was freigegeben ist oder so.“**
         ///
         /// Die Transparenzseite listete, was die App *anfragt*. Diese Tests
         /// nageln fest, dass die fehlenden Typen dort sichtbar werden — mit

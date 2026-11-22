@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Settings → Security — the account-protection hub.
 ///
-/// **2FA management is now native (#57).** Since server v1.32.3 the second-factor
+/// **2FA management is now native.** Since server v1.32.3 the second-factor
 /// management routes accept a Bearer token that presents a single-use **step-up
 /// elevation** in the `X-Step-Up` header, so a native client can enrol TOTP,
 /// rotate recovery codes, and manage security keys without a browser. The card
@@ -25,12 +25,12 @@ import SwiftUI
 /// „drei Karten, drei bis fünf Formen für dasselbe Versprechen": Passwort war
 /// ein vollbreiter 48-pt-Knopf, Passkeys eine handgebaute 20-pt-Chevron-Zeile,
 /// Zwei-Faktor wechselte die Form je Zustand. §2 des Standards entscheidet
-/// zugunsten der Zeile (R8): jede der drei Karten trägt jetzt genau **eine**
+/// zugunsten der Zeile: jede der drei Karten trägt jetzt genau **eine**
 /// `HLSettingsActionRow`, das Trailing-Glyph kommt vom `presents:`-Vertrag
-/// (R10), und das Gerüst ist `HLSettingsPage` statt des handgebauten
+/// (R10), und das Gerüst ist `HLPage` statt des handgebauten
 /// `ScrollView` (R12, Gerüst B→A).
 struct SettingsSecurityScreen: View {
-    /// POLISH-C (C2) — see ``SettingsAccountScreen``: values on the More
+    /// See ``SettingsAccountScreen``: values on the More
     /// stack, view pushes in the avatar sheet's own stack.
     private let routesByValue: Bool
 
@@ -39,20 +39,27 @@ struct SettingsSecurityScreen: View {
     }
 
     @Environment(AccountSecurityStore.self) private var store
-    @Environment(SyncModeStore.self) private var syncMode
     @Environment(\.appContainer) private var container
     @Environment(\.openURL) private var openURL
     @State private var showChangePassword = false
 
     var body: some View {
-        HLSettingsPage(title: "settings.security.title") {
-            passwordCard
-            passkeysCard
-            twoFactorCard
-            // 1.5 (Alex, 07.11.) — who is signed in belongs with how they
-            // sign in. Moved here from Konto; a server action, so paired only.
-            if !syncMode.isStandalone {
-                sessionsCard
+        HLPage {
+            // How you sign in and who is signed in, as rows of one card: four
+            // cards of one row each read as four topics. Two-factor sign-in is
+            // a row with its state as the value once the state is known.
+            HLCard(layout: .rows) {
+                passwordRow
+                passkeysRow
+                if case let .loaded(status) = store.twoFactor {
+                    twoFactorRow(status)
+                }
+                // 1.5 (Alex, 07.11.) — who is signed in belongs with how they
+                // sign in. Moved here from Konto.
+                sessionsRow
+            }
+            if !store.twoFactor.isLoaded {
+                twoFactorCard
             }
         }
         .navigationTitle("settings.security.title")
@@ -63,67 +70,90 @@ struct SettingsSecurityScreen: View {
         .task { await store.loadTwoFactor() }
     }
 
-    /// Parity 2.2 — active sessions (from Konto since 1.5). Title and row say
-    /// it, no subtitle (1.4 B2-c).
-    private var sessionsCard: some View {
-        HLSettingsCard {
-            Group {
-                if routesByValue {
-                    HLSettingsActionRow(title: "sessions.title", presents: .push, value: SettingsRoute.sessions)
-                } else {
-                    HLSettingsActionRow(title: "sessions.title", presents: .push) {
-                        SessionsScreen()
-                    }
+    /// Active sessions (from Konto since 1.5). Title and row say
+    /// it, no subtitle.
+    private var sessionsRow: some View {
+        Group {
+            if routesByValue {
+                HLSettingsActionRow(title: "sessions.title", presents: .push, value: SettingsRoute.sessions)
+            } else {
+                HLSettingsActionRow(title: "sessions.title", presents: .push) {
+                    SessionsScreen()
                 }
             }
-            .accessibilityIdentifier("settings.security.sessionsRow")
         }
+        .accessibilityIdentifier("settings.security.sessionsRow")
     }
 
     /// R2/R5 — der frühere Subtitle („Ersetze dein aktuelles Passwort durch ein
     /// neues.") formulierte die Zeile darunter um und fällt damit die
     /// Abdeck-Probe: Kartentitel + Zeile bedienen sich unverändert.
-    /// 1.4 B4 — one row, one heading: "Passwort ändern" says it.
-    private var passwordCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(
-                title: "settings.security.password.cta",
-                presents: .sheet
-            ) {
-                showChangePassword = true
-            }
-            .accessibilityIdentifier("settings.security.changePasswordRow")
+    /// One row, one heading: "Passwort ändern" says it.
+    private var passwordRow: some View {
+        HLSettingsActionRow(
+            title: "settings.security.password.cta",
+            presents: .sheet
+        ) {
+            showChangePassword = true
         }
+        .accessibilityIdentifier("settings.security.changePasswordRow")
     }
 
     /// R3/R9 (Audit-Gruppe „Hier verwaltest du Passwort / Passkeys / 2FA") —
     /// der Subtitle war ein Copy-Paste-Griff nach `settings.security.subtitle`
     /// und beschrieb den ganzen Hub statt dieser Karte. Seine Heimat ist die
     /// Konto-Karte, die hierher führt.
-    /// 1.4 B4 — one row, one heading: the row names its screen.
-    private var passkeysCard: some View {
-        HLSettingsCard {
-            Group {
-                if routesByValue {
-                    HLSettingsActionRow(title: "settings.passkeys.title", presents: .push, value: SettingsRoute.passkeys)
-                } else {
-                    HLSettingsActionRow(title: "settings.passkeys.title", presents: .push) {
-                        PasskeyManagementScreen()
-                    }
+    /// One row, one heading: the row names its screen.
+    private var passkeysRow: some View {
+        Group {
+            if routesByValue {
+                HLSettingsActionRow(title: "settings.passkeys.title", presents: .push, value: SettingsRoute.passkeys)
+            } else {
+                HLSettingsActionRow(title: "settings.passkeys.title", presents: .push) {
+                    PasskeyManagementScreen()
                 }
             }
-            .accessibilityIdentifier("settings.security.passkeysRow")
         }
+        .accessibilityIdentifier("settings.security.passkeysRow")
+    }
+
+    /// Two-factor sign-in as a row: its state is the value ("Off"), the
+    /// recovery codes left are the detail, the row opens the management
+    /// page. The status line under a card title repeated the title.
+    private func twoFactorRow(_ status: MfaStatus) -> some View {
+        let subtitle: LocalizedStringKey? = status.totp.enabled
+            ? "settings.security.twoFactor.recoveryRemaining \(status.recoveryCodesRemaining)"
+            : nil
+        let state = HLSettingsRowValueText(value: String(localized: status.totp.enabled
+                ? "settings.security.twoFactor.state.on"
+                : "settings.security.twoFactor.state.off"))
+        return Group {
+            if routesByValue {
+                HLSettingsActionRow(
+                    title: "settings.security.twoFactor.title",
+                    subtitle: subtitle,
+                    presents: .push,
+                    value: SettingsRoute.twoFactor,
+                    trailing: { state }
+                )
+            } else {
+                HLSettingsActionRow(
+                    title: "settings.security.twoFactor.title",
+                    subtitle: subtitle,
+                    presents: .push,
+                    trailing: { state },
+                    destination: { TwoFactorManagementScreen() }
+                )
+            }
+        }
+        .accessibilityIdentifier("settings.security.twoFactorManageRow")
     }
 
     /// Real status now — no more "status unknown" guess. Drives the native flows
     /// when the server supports them, and jumps to the web security page on an
     /// older instance.
     private var twoFactorCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "settings.security.twoFactor.title"
-        ) {
+        HLCard("settings.security.twoFactor.title") {
             twoFactorContent
         }
     }
@@ -139,8 +169,7 @@ struct SettingsSecurityScreen: View {
             HStack(spacing: HLSpace.sm) {
                 ProgressView()
                 Text("settings.security.twoFactor.loading")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("settings.security.twoFactorNote")
@@ -155,9 +184,9 @@ struct SettingsSecurityScreen: View {
                 .foregroundStyle(HLColor.statusBad)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("settings.security.twoFactorNote")
-            // R9 — „Erneut versuchen" ist app-weit `.secondary`.
+            // „Erneut versuchen" ist app-weit `.secondary`.
             HLButton(
-                String(localized: "settings.security.twoFactor.retry"),
+                "settings.security.twoFactor.retry",
                 variant: .secondary,
                 action: { Task { await store.loadTwoFactor() } }
             )
@@ -184,12 +213,10 @@ struct SettingsSecurityScreen: View {
                 Text(status.totp.enabled
                     ? "settings.security.twoFactor.on"
                     : "settings.security.twoFactor.off")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 if status.totp.enabled {
                     Text("settings.security.twoFactor.recoveryRemaining \(status.recoveryCodesRemaining)")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                 }
             }
             Spacer(minLength: 0)
@@ -204,7 +231,7 @@ struct SettingsSecurityScreen: View {
             presents: .external
         ) {
             // Ohne eingerichteten Server gibt es keine Kontoflaeche zu oeffnen.
-            // 09-03 — aus dem Server-Schnappschuss, nicht aus dem Keychain.
+            // Aus dem Server-Schnappschuss, nicht aus dem Keychain.
             if let url = (container?.configuredServer ?? .bundleFallback).accountSecurityURL {
                 openURL(url)
             }
@@ -227,5 +254,14 @@ enum AccountSecurityWebLink {
     /// Kontofläche, auf die man verlinken könnte.
     static func url(keychain: KeychainStoring?) -> URL? {
         ConfiguredServerSnapshot.resolve(keychain: keychain).accountSecurityURL
+    }
+}
+
+private extension AccountSecurityStore.TwoFactorState {
+    /// Whether the state is known, so two-factor sign-in stands as a row of
+    /// the sign-in card instead of in a card of its own.
+    var isLoaded: Bool {
+        if case .loaded = self { return true }
+        return false
     }
 }

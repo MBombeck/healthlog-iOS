@@ -1,0 +1,5 @@
+# actionlint configuration (run in .github/workflows/hygiene.yml).
+self-hosted-runner:
+  # The Mac mini runners mini-dev and mini-public (docs/runbook.md).
+  labels:
+    - healthlog-mini

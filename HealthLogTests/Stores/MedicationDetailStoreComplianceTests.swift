@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable type_body_length
 
-/// **v0.6.1.2 Y4 — MedicationDetailStore compliance + verlauf tests.**
+/// **MedicationDetailStore compliance + verlauf tests.**
 ///
 /// `complianceSummary()` and `verlaufGlyphs()` are the per-detail-
 /// screen analogues of `MedicationsStore.complianceSnapshot`. Both
@@ -67,7 +67,7 @@ struct MedicationDetailStoreComplianceTests {
         #expect(glyphs[0] == .noSchedule)
     }
 
-    // MARK: - v0.6.2.3 B1 — server-canonical payload consumption
+    // MARK: - Server-canonical payload consumption
 
     @Test("W45 — Verlauf glyphs are derived from loaded intakes (table parity)")
     func verlaufFromLoadedIntakes() throws {
@@ -154,9 +154,9 @@ struct MedicationDetailStoreComplianceTests {
         #expect(glyphs[12] == .noSchedule)
     }
 
-    // MARK: - v0.6.2.8 — weekly cadence guard against server totalExpected bug
+    // MARK: - Weekly cadence guard against server totalExpected bug
 
-    // MARK: - v0.10 W-Meds-A2 — v1.7.0 SB-SCHED-2 capability gate
+    // MARK: - v1.7.0 SB-SCHED-2 capability gate
 
     @Test("W45 — server due=false suppresses an off-day even when the local schedule fires daily")
     func v170VerlaufSuppressesNonDue() throws {
@@ -206,7 +206,7 @@ struct MedicationDetailStoreComplianceTests {
         #expect(glyphs[10] == .noSchedule) // three days ago (empty + due=false → suppressed)
     }
 
-    // MARK: - B15 — user-tz day-key (Berlin) must resolve, not dash
+    // MARK: - User-tz day-key (Berlin) must resolve, not dash
 
     @Test("B15 — Berlin user: taken day resolves to .onTime, not a UTC-off-by-one dash")
     func berlinDayKeyResolves() throws {
@@ -258,7 +258,7 @@ struct MedicationDetailStoreComplianceTests {
         )
         #expect(payload.isV170Capable)
 
-        // W45 — the glyph comes from the loaded intake (the table's truth), not
+        // The glyph comes from the loaded intake (the table's truth), not
         // the server bucket. A taken-today intake renders `.onTime`; the Berlin
         // tz still matters because the day-bucketing of the intake must land on
         // the same local day the track iterates.
@@ -282,9 +282,9 @@ struct MedicationDetailStoreComplianceTests {
         #expect(glyphs.last == .onTime)
     }
 
-    // MARK: - W10 M5 — engine-0 must not fall back to the inflated server grid
+    // MARK: - Engine-0 must not fall back to the inflated server grid
 
-    // MARK: - W42 — degenerate server window must not clobber the loaded history
+    // MARK: - Degenerate server window must not clobber the loaded history
 
     // MARK: - Helpers
 

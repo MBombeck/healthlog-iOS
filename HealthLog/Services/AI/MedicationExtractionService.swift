@@ -49,14 +49,14 @@ public struct MedicationExtractionOutcome: Sendable {
 /// diagnostic, causal, drug-level), the outcome is `.fallback(.safetyRefused)`
 /// and the caller falls back to the lexical heuristic.
 ///
-/// **Availability:** the public type compiles on iOS 18+ so callers don't
-/// need `#available` guards. The runtime path that actually invokes
-/// FoundationModels is gated by `#available(iOS 26.0, *)`. On older OS /
+/// **Availability:** callers don't need availability guards. The path that
+/// actually invokes FoundationModels sits behind `#if canImport(FoundationModels)`
+/// and checks `SystemLanguageModel.default.availability`. On
 /// non-Apple-Intelligence devices the outcome maps to
 /// `.fallback(.deviceIneligible)` (or one of the more specific reasons)
 /// and the caller invokes `MedicationDraftHeuristic.extract(_:)` directly.
 public actor MedicationExtractionService {
-    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// The server-resolved AI capabilities (`/api/auth/me` `ai`).
     /// This service runs only while `.medicationExtract` allows on-device work
     /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
     /// never consults anything a previous build persisted.
@@ -99,18 +99,13 @@ public actor MedicationExtractionService {
         }
 
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                return await extractUsingFoundationModels(rawText: trimmed, locale: locale)
-            } else {
-                return .fallback(.deviceIneligible)
-            }
+            return await extractUsingFoundationModels(rawText: trimmed, locale: locale)
         #else
             return .fallback(.frameworkUnavailable)
         #endif
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func extractUsingFoundationModels(
             rawText: String,
             locale: Locale
@@ -159,7 +154,6 @@ public actor MedicationExtractionService {
             }
         }
 
-        @available(iOS 26.0, *)
         private func mapAvailabilityReason(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> MedicationExtractionOutcome
             .FallbackReason
         {
@@ -179,16 +173,14 @@ public actor MedicationExtractionService {
 
 #if canImport(FoundationModels)
     /// `@Generable` mirror of `MedicationDraft`. Lives behind the
-    /// `canImport(FoundationModels)` + `@available(iOS 26.0, *)` gate
-    /// because Apple's macro requires both. Converted to the always-available
-    /// POD shell via `toMedicationDraft()`.
+    /// `canImport(FoundationModels)` gate because Apple's macro requires
+    /// the framework. Converted to the always-available POD shell via `toMedicationDraft()`.
     ///
     /// Every field is a verbatim copy of package text and is shown to the
     /// user as-is, so the guides ask for the package's own wording and never
     /// a translation. They are language-neutral English with German, Dutch
     /// and English examples: the previous German-only examples nudged the
     /// model towards German forms ("Tablette") on a Dutch pack ("tablet").
-    @available(iOS 26.0, *)
     @Generable
     struct GenerableMedicationDraft {
         @Guide(
@@ -283,21 +275,56 @@ enum MedicationExtractionPrompt {
             Wenn ein Feld nicht eindeutig erkennbar ist, lass es leer. \
             Schließe NICHT auf die Indikation, den Anwendungszweck oder die klinische Wirkung.
             """
+        case .ko:
+            """
+            약 포장 사진의 OCR 텍스트:
+            \"\"\"
+            \(rawText)
+            \"\"\"
+
+            뽑을 항목: 제품명, 함량, 제형, 제조사 단서. \
+            OCR 텍스트에 글자 그대로 나오는 부분만 쓰고, 아무것도 번역하지 마라. \
+            항목이 분명하게 보이지 않으면 비워 둔다. \
+            약의 용도, 적응증, 임상적 효과는 추론하지 마라.
+            """
+        case .es:
+            spanishPrompt(rawText: rawText)
         }
+    }
+
+    /// The Spanish prompt, outside ``build(rawText:locale:)`` to keep that function short.
+    private static func spanishPrompt(rawText: String) -> String {
+        """
+        Transcripción OCR de una foto del envase de un medicamento:
+        \"\"\"
+        \(rawText)
+        \"\"\"
+
+        Extrae: nombre del producto, concentración, forma farmacéutica, pista del fabricante. \
+        Usa SOLO fragmentos que aparezcan literalmente en la transcripción, y no traduzcas nada. \
+        Si un campo no se reconoce con claridad, déjalo vacío. \
+        NO deduzcas para qué sirve el medicamento, cuál es su indicación ni su efecto clínico.
+        """
     }
 
     /// The system-instruction text for one interface language. Outside the
     /// `FoundationModels` gate so tests can pin every language's guardrails.
     ///
     /// Unlike the prose surfaces, no block asks for output "in" a language:
-    /// every field is a verbatim copy of the package text, so the Dutch block
-    /// says "translate nothing" where the others say "verbatim".
+    /// every field is a verbatim copy of the package text, so the Dutch,
+    /// Korean and Spanish blocks say "translate nothing" where the others say
+    /// "verbatim".
     static func instructionText(for language: AppLanguage) -> String {
-        language.pick(de: germanInstructions, en: englishInstructions, nl: dutchInstructions)
+        language.pick(
+            de: germanInstructions,
+            en: englishInstructions,
+            nl: dutchInstructions,
+            ko: koreanInstructions,
+            es: spanishInstructions
+        )
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         static func instructions(locale: Locale) -> Instructions {
             let text = instructionText(for: AppLanguage.resolve(locale))
             return Instructions {
@@ -352,6 +379,36 @@ enum MedicationExtractionPrompt {
     - Als een veld niet duidelijk herkenbaar is, laat het leeg.
 
     STIJL: lexicaal, niet adviserend. Je bent een kopieerfunctie, geen arts.
+    """
+
+    private static let koreanInstructions = """
+    너는 건강 기록 앱의 어휘 추출 도구다. \
+    너의 유일한 일은 OCR 텍스트에서 항목 네 개를 그대로 옮겨 적는 것이다: 제품명, 함량, 제형, 제조사 단서.
+
+    절대 원칙:
+    - OCR 텍스트에 글자 그대로 나오는 부분만 출력하고, 아무것도 번역하지 않는다.
+    - 약 이름을 지어내거나 바꿔 쓰지 않는다.
+    - 약이 무슨 작용을 하는지 설명하지 않는다.
+    - 진단하지 않고, 예측하지 않고, 처방하지 않는다.
+    - 질환, 증상, 적응증을 언급하지 않는다.
+    - 항목이 분명하게 보이지 않으면 비워 둔다.
+
+    문체: 조언이 아니라 어휘 추출. 너는 의사가 아니라 옮겨 적는 기능이다.
+    """
+
+    private static let spanishInstructions = """
+    Eres una herramienta de extracción léxica para una app de diario de salud. \
+    Tu única tarea: copiar cuatro campos de una transcripción OCR: nombre del producto, concentración, forma farmacéutica, pista del fabricante.
+
+    NO NEGOCIABLE:
+    - Devuelve solo fragmentos que aparezcan literalmente en la transcripción, y no traduzcas nada.
+    - Nunca inventes ni reformules el nombre de un medicamento.
+    - Nunca expliques lo que hace el medicamento.
+    - No des ningún diagnóstico, no hagas predicciones y no recetes nada.
+    - No nombres ninguna afección, síntoma o indicación.
+    - Si un campo no se reconoce con claridad, déjalo vacío.
+
+    ESTILO: léxico, no de consejo. Eres una función de copia, no un médico.
     """
 }
 

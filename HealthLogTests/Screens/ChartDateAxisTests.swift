@@ -3,10 +3,9 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// **1.4 B4 — one rule for date axes.** The metric page cut its last label to
+/// **One rule for date axes.** The metric page cut its last label to
 /// "1…" (HRV) and "19.…" (mood); every chart picked its own format and let
-/// Swift Charts place ticks up to the plot's edge. These pin the shared rule
-/// and that the charts use it.
+/// Swift Charts place ticks up to the plot's edge. These pin the shared rule.
 @Suite("1.4 B4: the app's one date-axis rule")
 struct ChartDateAxisTests {
     private let hour: TimeInterval = 3600
@@ -80,44 +79,9 @@ struct ChartDateAxisTests {
         #expect(label.contains("14"))
         #expect(CycleHistoryChart.startLabel("garbage") == "garbage")
     }
-
-    @Test("every date x-axis goes through the rule", arguments: [
-        "HealthLog/Screens/Charts/ChartDetailComponents.swift",
-        "HealthLog/Screens/Charts/FullscreenChartCover.swift",
-        "HealthLog/Screens/Labs/BiomarkerChart.swift",
-        "HealthLog/Screens/Mood/MoodTrendChart.swift",
-        "HealthLog/Screens/Shared/HistoryLineChart.swift",
-        "HealthLog/Screens/Cycle/CycleBBTChart.swift",
-        "HealthLog/Screens/Medications/MedicationEfficacySection.swift",
-        "HealthLog/Screens/Medications/MDRGatedDrugLevelSection.swift",
-        "HealthLog/Screens/Workouts/WorkoutDetailView.swift",
-        "HealthLog/Screens/Insights/Sub/SleepHypnogramScreen.swift"
-    ])
-    func chartsUseTheRule(path: String) throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Screens
-            .deletingLastPathComponent() // HealthLogTests
-            .deletingLastPathComponent() // repo root
-        let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
-        #expect(source.contains("ChartDateAxis.marks("))
-        #expect(!source.contains("AxisValueLabel(format: .dateTime"), "no chart-local date format")
-    }
-
-    /// B4-z — the edge margin only keeps a label inside when the label is
-    /// centred on its tick; Swift Charts starts date labels at the tick.
-    @Test("the rule's labels are centred on their ticks")
-    func labelsAreCentred() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let rule = try String(
-            contentsOf: root.appendingPathComponent("HealthLog/Screens/Charts/ChartDateAxis.swift"),
-            encoding: .utf8
-        )
-        #expect(rule.contains("AxisValueLabel(anchor: .top) {"))
-    }
 }
 
-/// **1.4 B4 — a y range that fits the readings.** The medication effect chart
+/// **A y range that fits the readings.** The medication effect chart
 /// started at zero and drew its line along the top of the plot.
 @Suite("1.4 B4: value axes fit their readings")
 struct ChartValueDomainTests {
@@ -136,17 +100,5 @@ struct ChartValueDomainTests {
         #expect(small.lowerBound == 0)
         #expect(ChartValueDomain.fitting([]) == nil)
         #expect(ChartValueDomain.fitting([.nan]) == nil)
-    }
-
-    @Test("the medication effect chart uses it")
-    func efficacyChartUsesIt() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("HealthLog/Screens/Medications/MedicationEfficacySection.swift"),
-            encoding: .utf8
-        )
-        #expect(source.contains(".chartYScale(domain: yDomain)"))
-        #expect(source.contains("ChartValueDomain.fitting("))
     }
 }

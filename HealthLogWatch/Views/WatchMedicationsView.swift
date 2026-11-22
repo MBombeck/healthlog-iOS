@@ -9,17 +9,25 @@ struct WatchMedicationsView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Today")
+            // Re-rendered at midnight and when the snapshot ages out, so a screen
+            // left open never offers yesterday's doses as today's.
+            let now = Date()
+            TimelineView(.explicit([now] + client.snapshot.todayBoundaries(after: now))) { context in
+                content(now: context.date)
+            }
+            .navigationTitle("Today")
         }
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(now: Date) -> some View {
         if !client.hasReceived {
             WatchMessageState(title: "Syncing…", systemImage: "arrow.triangle.2.circlepath")
         } else if !client.signedIn {
             WatchMessageState(title: "Sign in on your iPhone", systemImage: "iphone")
+        } else if client.snapshot.isStaleForToday(now: now) {
+            // Yesterday's doses must not read as today's, nor be tappable.
+            WatchMessageState(title: "Open HealthLog on your iPhone", systemImage: "iphone")
         } else {
             List {
                 complianceHeader
@@ -34,7 +42,7 @@ struct WatchMedicationsView: View {
                     }
                 }
                 if !takenDoses.isEmpty {
-                    Section("Taken") {
+                    Section(MedicationDosePhase.taken.title) {
                         ForEach(takenDoses) { dose in
                             DoseRow(dose: dose, takenStyle: true, actionState: client.intakeActions[dose.id])
                         }
@@ -46,10 +54,14 @@ struct WatchMedicationsView: View {
                 isPresented: choiceBinding,
                 titleVisibility: .visible
             ) {
+                // Term list (#191): actions as verbs, the snooze with the
+                // account's span the phone sent.
                 if let dose = pendingChoice {
-                    Button("Taken") { client.markIntake(dose, status: .taken) }
-                    Button("Later") { client.markIntake(dose, status: .snoozed) }
-                    Button("Skipped", role: .destructive) { client.markIntake(dose, status: .skipped) }
+                    Button(MedicationDoseWords.take) { client.markIntake(dose, status: .taken) }
+                    Button(MedicationDoseWords.snooze(minutes: client.snapshot.snoozeMinutes)) {
+                        client.markIntake(dose, status: .snoozed)
+                    }
+                    Button(MedicationDoseWords.skip, role: .destructive) { client.markIntake(dose, status: .skipped) }
                 }
             }
         }
@@ -65,6 +77,7 @@ struct WatchMedicationsView: View {
     private var complianceHeader: some View {
         HStack {
             Text("\(client.snapshot.takenCount) of \(client.snapshot.scheduledCount) taken")
+                .privacySensitive()
                 .font(.hlCaption)
                 .foregroundStyle(
                     client.snapshot.scheduledCount > 0 && client.snapshot.complianceFraction >= 1
@@ -100,11 +113,12 @@ private struct DoseRow: View {
     var actionState: WatchConnectivityClient.ActionState?
 
     var body: some View {
-        HStack(spacing: HLSpace.sm) {
+        HStack(spacing: WatchMetrics.rowSpacing) {
             Image(systemName: takenStyle ? "checkmark.circle.fill" : (dose.isInjection ? "syringe" : "pills"))
                 .font(.body)
                 .foregroundStyle(takenStyle ? LAColor.success : LAColor.text)
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: WatchMetrics.rowIconSide, height: WatchMetrics.rowIconSide)
+            VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(dose.medicationName)
                     .font(.hlBody)
                     .foregroundStyle(LAColor.text)
@@ -120,6 +134,9 @@ private struct DoseRow: View {
                 .foregroundStyle(LAColor.textSecondary)
                 .lineLimit(1)
             }
+            // Name, dose and time are redacted with the wrist down (Always
+            // On), like the complications.
+            .privacySensitive()
             Spacer(minLength: 0)
             statusGlyph
         }
@@ -129,8 +146,8 @@ private struct DoseRow: View {
     @ViewBuilder
     private var statusLabel: some View {
         switch actionState {
-        case .queued: Text("· will sync")
-        case .failed: Text("· not saved")
+        case .queued: Text("(will sync)")
+        case .failed: Text("(not saved)")
         default: EmptyView()
         }
     }

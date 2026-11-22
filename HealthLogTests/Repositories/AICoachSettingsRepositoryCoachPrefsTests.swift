@@ -175,7 +175,7 @@ struct AICoachSettingsRepositoryCoachPrefsTests {
         #expect(json["dataClusters"] == nil)
     }
 
-    // MARK: - #115 R3 — server v1.39.4 `followUpChips`
+    // MARK: - Server v1.39.4 `followUpChips`
 
     /// Server v1.39.4 added `followUpChips` to coach-prefs: absent means on,
     /// only `false` turns the Coach's follow-up chips off, and `PUT` replaces

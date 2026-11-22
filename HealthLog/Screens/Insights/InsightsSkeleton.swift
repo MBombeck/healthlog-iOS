@@ -13,10 +13,10 @@ import SwiftUI
 /// skeleton-vs-live gate splits the body into two computed branches.
 struct InsightsSkeletonContent: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             // HealthScore hero — 92pt ring + score/caption capsules.
             HLCard {
-                HStack(spacing: HLSpace.lg) {
+                HStack(spacing: HLLayout.cardGap) {
                     HLSkeleton(.circle, width: 92, height: 92)
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         HLSkeleton(.capsule, width: 140, height: 14)
@@ -67,7 +67,7 @@ struct InsightsSkeletonContent: View {
     }
 }
 
-/// 1.4 B2 — the score tiles while the server still computes them: two tiles in
+/// The score tiles while the server still computes them: two tiles in
 /// the grid's shape, a ring and a label each. VoiceOver hears the one sentence
 /// the loose caption used to show.
 struct InsightsScoreCardsSkeleton: View {

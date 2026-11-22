@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Moved out of `HLSettingsRow.swift` (SET-ROUTE) to keep that file under the
+// Moved out of `HLSettingsRow.swift` to keep that file under the
 // 600-line `file_length` budget after the push-by-value initializer. Pure move.
 
 public extension HLSettingsActionRow where Trailing == EmptyView {

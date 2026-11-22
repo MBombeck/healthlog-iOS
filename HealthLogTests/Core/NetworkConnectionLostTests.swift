@@ -4,7 +4,7 @@
 // progress; `.notConnectedToInternet` means nothing could be sent. Up to 1.3
 // both became `HLError.offline`, so A1's "sent, unconfirmed" window (S3) never
 // saw a dropped connection. `.network(.connectionLost)` existed but was never
-// produced. Both still hold a HealthKit page instead of parking it (A2).
+// produced. Both still hold a HealthKit page instead of parking it.
 
 // swiftlint:disable force_unwrapping
 

@@ -22,7 +22,10 @@ import Foundation
 /// **Rule 16 switch.** `supportsLocale(_:)` is FoundationModels API (iOS 26).
 /// ``asksModelForLanguage`` is the shipped default. It is `true` because
 /// `OnDeviceLanguageGateSimulatorTests` calls the real API on the iOS 27.2
-/// simulator and gets the same answer every run: de, en and nl supported.
+/// simulator and gets the same answer every run: de, en, nl and ko supported.
+/// Spanish (es) is a language Apple's model lists; the same suite covers it
+/// through `AppLanguage.allCases` and must be green on the simulator before
+/// it ships.
 /// With the switch off the gate keeps 1.4 behaviour (German and English run,
 /// every newer language stays off).
 enum OnDeviceLanguageGate {
@@ -48,7 +51,7 @@ enum OnDeviceLanguageGate {
     static func ranOnDeviceBeforeTheGate(_ language: AppLanguage) -> Bool {
         switch language {
         case .de, .en: true
-        case .nl: false
+        case .nl, .ko, .es: false
         }
     }
 
@@ -61,7 +64,6 @@ enum OnDeviceLanguageGate {
     #if canImport(FoundationModels)
         /// The gate for a prompt `locale`, resolved through ``AppLanguage``
         /// exactly like the prompt builders resolve it.
-        @available(iOS 26.0, *)
         static func allows(locale: Locale, model: SystemLanguageModel = .default) -> Bool {
             let language = AppLanguage.resolve(locale)
             let answer: Bool? = asksModelForLanguage ? model.supportsLocale(modelLocale(for: language)) : nil

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 MOVE (#133)** — the `dawarich` entry of `GET /api/integrations/status`,
+/// The `dawarich` entry of `GET /api/integrations/status`,
 /// for its row in Settings › Integrations. Read for display only: whether it
 /// is connected and its ``ConnectionHealth``. Every other provider in the
 /// envelope is skipped here, an entry that does not decode is skipped rather

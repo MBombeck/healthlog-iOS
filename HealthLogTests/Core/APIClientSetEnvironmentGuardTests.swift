@@ -69,7 +69,7 @@ struct APIClientSetEnvironmentGuardTests {
         )
     }
 
-    /// **R1 — die Ersteinrichtung ist kein Hostwechsel.**
+    /// **Die Ersteinrichtung ist kein Hostwechsel.**
     ///
     /// Der Waechter oben schuetzt eine laufende Sitzung gegen einen
     /// Host-WECHSEL. Ohne bisherige Adresse gibt es keinen vorherigen Host —
@@ -104,7 +104,7 @@ struct APIClientSetEnvironmentGuardTests {
         )
     }
 
-    /// #153 — an unchanged address is no host change. 1.4 refused it with
+    /// An unchanged address is no host change. 1.4 refused it with
     /// a token present, so changed access headers waited for a relaunch (and
     /// DEBUG asserted). No test hook here: it must not assert either.
     @Test("Same address with a token present is accepted (#153)")

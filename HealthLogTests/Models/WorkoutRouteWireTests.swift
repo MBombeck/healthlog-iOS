@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 ROUTES (#149)** — the route on the wire: the server's thinning
+/// The route on the wire: the server's thinning
 /// rule, the schema bounds, the chunking under the 5 MB body ceiling, the
 /// round trip into the workout detail, and an outbox payload of 1.4.1.
 @Suite("ROUTES — workout route wire format")

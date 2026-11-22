@@ -6,7 +6,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **1.4 B3 — the recovery family from `GET /api/analytics?slice=summaries`.**
+/// **The recovery family from `GET /api/analytics?slice=summaries`.**
 ///
 /// What the page may show is decided here, and three rules carry it:
 /// - only a type with a reading in the last 30 days belongs to the family
@@ -160,7 +160,7 @@ struct RecoveryInsightsRepositoryTests {
         ]
         summaries["HEART_RATE_VARIABILITY"] = .init(count: 400, latest: 44, mean: 45, avg30: sdnn)
         #expect(RecoveryInsightsRepository.hrvShowsRMSSD(in: summaries) == showsRMSSD)
-        // 1.4 B4 — an account that never had SDNN shows its RMSSD on the HRV
+        // An account that never had SDNN shows its RMSSD on the HRV
         // page whether or not the last reading is recent: there is no SDNN
         // series the page could show instead.
         summaries["HEART_RATE_VARIABILITY"] = nil
@@ -244,7 +244,7 @@ struct RecoveryInsightsRepositoryTests {
     }
 }
 
-/// **1.4 B3 — the store: family, trend lines, HRV measure, honest failure.**
+/// **The store: family, trend lines, HRV measure, honest failure.**
 @MainActor
 @Suite("RecoveryInsightsStore — trend lines and the HRV measure (1.4 B3)", .serialized, .mockURLSession)
 struct RecoveryInsightsStoreTests {

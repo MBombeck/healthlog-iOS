@@ -1,47 +1,39 @@
 import SwiftUI
-#if canImport(UIKit)
-    import UIKit
-#endif
 
 public struct HLButton: View {
-    /// **UI-Standard R9 / E2.** Ziel sind drei Varianten mit klaren Anlässen:
+    /// Three variants with clear occasions:
     ///
-    /// - `.primary` — höchstens **eine** pro Screen: die abschließende
-    ///   Commit-Aktion eines Flows („Verbinden", „Import ausführen", „Speichern"
-    ///   am Formularende).
-    /// - `.secondary` — nachgeordnete Vollbreiten-Aktion neben einer `.primary`,
-    ///   und der einheitliche Fehler-Retry („Erneut versuchen").
-    /// - `.destructive` — destruktives Commit auf dem Bestätigungs-Screen.
-    ///   Nie auf dem Screen, der nur dorthin führt.
+    /// - `.primary`: at most one per screen, the action that completes a flow.
+    /// - `.secondary`: a full-width action beside a primary one, and the retry
+    ///   of an error state.
+    /// - `.destructive`: the destructive commit on the screen that confirms it.
+    ///   The outline of the secondary button with red words and a red symbol.
+    ///   It has no red surface: a destructive action is not drawn as the
+    ///   emphasised main action.
     ///
-    /// `.outline` ist in W0 gelöscht (Übersetzung laut R9 eins zu eins nach
-    /// `.secondary`). `.ghost` und `.restrained` leben noch, weil ihre
-    /// R9-Übersetzung **keine** mechanische ist: je nach Fundstelle wird daraus
-    /// eine `HLSettingsActionRow` (wenn es eine Zeile in einer Karte war) oder
-    /// `.secondary` (wenn es eine echte Vollbreiten-Aktion war). Diese
-    /// Entscheidung trifft die Arbeitseinheit, die die Fläche besitzt (U1–U7);
-    /// bis dahin hält der schrumpfende Zähler `hl_button_legacy_variant` in
-    /// `UIStandardBaselineTests` den Bestand fest — er kann nur kleiner werden.
-    public enum Variant {
+    /// ``standard`` lists them. ``retired`` lists the two that still draw for
+    /// existing call sites and take no new ones: what was `.ghost` becomes an
+    /// ``HLLinkButton``, what was `.restrained` becomes `.secondary` or a row.
+    public enum Variant: CaseIterable, Sendable {
         case primary
         case secondary
+        /// Retired. Use ``HLLinkButton``.
         case ghost
         case destructive
-        /// v0.15.2 W-BUTTONS — restrained primary action. The operator
-        /// flagged the full-`.tint`-fill `.primary` CTA as "too prominent /
-        /// creepy" on in-card surfaces (Vorsorge "Jetzt messen", full-backup
-        /// "Export erstellen", Settings saves). `.restrained` is the canonical
-        /// twin of `ActiveMedicationRow.monochromeActionButton` — the
-        /// "Genommen"/"Übersprungen" pair the operator likes: NO fill, a 1pt
-        /// `HLText.tertiary` hairline, a monochrome `HLText.secondary` label,
-        /// and the compact 44pt HIG height. It is a *primary* action that
-        /// reads calm, not a big white slab. Use it for in-card / in-list
-        /// commit actions; keep `.primary` for full-screen flow CTAs
-        /// (onboarding) and `.destructive` for danger.
+        /// Retired. No fill, a hairline, a monochrome label, 44 pt high: the
+        /// calm in-card action. Use `.secondary` or a row instead.
         case restrained
+
+        /// The variants a screen chooses from.
+        public static let standard: [Variant] = [.primary, .secondary, .destructive]
+        /// Variants kept only for call sites that have not moved yet.
+        public static let retired: [Variant] = [.ghost, .restrained]
     }
 
-    public enum Size {
+    /// Height classes of the older initialisers. New code passes no size: a
+    /// button is ``HLLayout/buttonHeight`` high, and onboarding asks for its
+    /// larger one with `hlOnboardingSize()`.
+    public enum Size: Sendable {
         case regular
         case compact
         case large
@@ -72,14 +64,14 @@ public struct HLButton: View {
         minHeight: 44
     )
 
-    private let title: String
-    /// v0.14.1 W-I18N: whether `title` is a pre-rendered dynamic string that
-    /// must be painted verbatim (medication/provider name, an interpolated
-    /// count, any server value) rather than treated as a catalog key. The
-    /// standard initializer localizes `title` via `LocalizedStringKey`; the
-    /// `HLButton(verbatim:)` initializer sets this so already-resolved
-    /// runtime text is never fed back through a second catalog lookup.
-    private let isTitleVerbatim: Bool
+    /// The label, shared by the visible button and VoiceOver. Resolved through
+    /// the catalog by the key initialisers and taken as it is by
+    /// `HLButton(verbatim:)`, so runtime text never gets a second lookup.
+    private let titleText: Text
+    /// The same title as plain words, where they can be known: the largest
+    /// sizes wrap it between words only (``HLWholeWordText``). `nil` for a
+    /// `Text` title.
+    private var titleWords: String?
     private let icon: String?
     private let variant: Variant
     private let size: Size
@@ -96,14 +88,6 @@ public struct HLButton: View {
         destination != nil
     }
 
-    @Environment(\.isEnabled) private var isEnabled
-
-    /// v0.6.0.5 REG-BTN clamp: the foreground / outline / hairline computations
-    /// resolve the canvas surface per appearance so a `.weiss`-on-dark or
-    /// `.schwarz`-on-light pick falls back to `HLText.primary` instead of
-    /// collapsing into the canvas.
-    @Environment(\.colorScheme) private var colorScheme
-
     /// v0.5.5.1 haptic migration: replaces the legacy
     /// `UIImpactFeedbackGenerator(style: .light).impactOccurred()` with
     /// iOS 17+'s declarative `.sensoryFeedback(.selection, trigger:)`.
@@ -111,6 +95,73 @@ public struct HLButton: View {
     /// Reduce-Motion / per-app haptic settings, so the migration drops
     /// the UIKit dependency from the standard button tap.
     @State private var tapCount: Int = 0
+
+    /// The standard button: a catalog key, an optional symbol, one of the
+    /// three variants. Height, radius, font and colours are not the caller's.
+    public init(
+        _ title: LocalizedStringKey,
+        systemImage: String? = nil,
+        variant: Variant = .primary,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        titleText = Text(title)
+        titleWords = HLLocalizedKey.string(title)
+        icon = systemImage
+        self.variant = variant
+        size = .regular
+        self.isLoading = isLoading
+        self.action = action
+        destination = nil
+    }
+
+    /// The standard button for a title that exists only at run time: a name
+    /// the user typed, a figure with its unit.
+    public init(
+        _ title: Text,
+        systemImage: String? = nil,
+        variant: Variant = .primary,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        titleText = title
+        icon = systemImage
+        self.variant = variant
+        size = .regular
+        self.isLoading = isLoading
+        self.action = action
+        destination = nil
+    }
+
+    /// The standard button as a push: it is the `NavigationLink` itself and
+    /// puts `destination` onto the enclosing stack, so the page around it
+    /// keeps no presenter for it. Name the closure: an unnamed one after
+    /// the call reads as an action.
+    public init(
+        _ title: LocalizedStringKey,
+        systemImage: String? = nil,
+        variant: Variant = .primary,
+        destination: () -> some View
+    ) {
+        self.init(Text(title), systemImage: systemImage, variant: variant, destination: destination)
+        titleWords = HLLocalizedKey.string(title)
+    }
+
+    /// The push for a title that exists only at run time.
+    public init(
+        _ title: Text,
+        systemImage: String? = nil,
+        variant: Variant = .primary,
+        destination: () -> some View
+    ) {
+        titleText = title
+        icon = systemImage
+        self.variant = variant
+        size = .regular
+        isLoading = false
+        action = {}
+        self.destination = AnyView(destination())
+    }
 
     /// Standard initializer — `title` is treated as a **localization key**
     /// and resolved through the string catalog at render time via
@@ -126,8 +177,8 @@ public struct HLButton: View {
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) {
-        self.title = title
-        isTitleVerbatim = false
+        titleText = Text(LocalizedStringKey(title))
+        titleWords = HLLocalizedKey.string(forKey: title)
         self.icon = icon
         self.variant = variant
         self.size = size
@@ -148,8 +199,8 @@ public struct HLButton: View {
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) {
-        self.title = title
-        isTitleVerbatim = true
+        titleText = Text(verbatim: title)
+        titleWords = title
         self.icon = icon
         self.variant = variant
         self.size = size
@@ -170,8 +221,8 @@ public struct HLButton: View {
         size: Size = .regular,
         destination: () -> some View
     ) {
-        self.title = title
-        isTitleVerbatim = false
+        titleText = Text(LocalizedStringKey(title))
+        titleWords = HLLocalizedKey.string(forKey: title)
         self.icon = icon
         self.variant = variant
         self.size = size
@@ -195,54 +246,14 @@ public struct HLButton: View {
         }
     }
 
-    private var label: some View {
-        HStack(spacing: HLSpace.sm) {
-            if isLoading {
-                // ProgressView's .tint(Color?) overload requires a
-                // concrete Color, not a ShapeStyle — for variants that
-                // wear white labels we pass white explicitly; for
-                // accent-coloured labels (.secondary) we
-                // omit `.tint` so the inherited `.tint(...)` from the
-                // parent environment paints the spinner.
-                if let spinnerTint {
-                    ProgressView().controlSize(.small).tint(spinnerTint)
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-            } else if let icon {
-                Image(systemName: icon)
-            }
-            titleText.font(font)
-        }
-        .frame(minHeight: minHeight)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, HLSpace.lg)
-        .background(background)
-        .foregroundStyle(textForegroundStyle)
-        .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-        .overlay {
-            // v0.6.0.5 REG-BTN: universal 1pt hairline keeps every
-            // variant visually framed in both appearances, including
-            // ghost / secondary on canvas where the fill is transparent.
-            // R9: der Sonderfall mit eigener 1,5-pt-Kontur ist entfallen —
-            // die Variante ging eins zu eins in `.secondary` auf.
-            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                .strokeBorder(HLText.tertiary.opacity(0.25), lineWidth: 1)
-        }
-        .opacity(isEnabled ? 1 : 0.5)
-        .scaleEffect(isLoading ? 0.99 : 1)
-        .hlAnimation(.easeOut(duration: 0.12), value: isLoading)
+    private var label: HLButtonLabel {
+        HLButtonLabel(title: titleText, words: titleWords, icon: icon, variant: variant, size: size, isLoading: isLoading)
     }
 
-    /// The label `Text` — localized through `LocalizedStringKey` for the
-    /// standard initializer, or painted verbatim for `HLButton(verbatim:)`.
-    /// Shared by the visible label and the accessibility label so both stay
-    /// in lockstep. `LocalizedStringKey(runtimeString)` performs a catalog
-    /// lookup, so a dotted key resolves to its translation and a plain
-    /// literal echoes itself when it has no catalog entry.
-    private var titleText: Text {
-        isTitleVerbatim ? Text(verbatim: title) : Text(LocalizedStringKey(title))
-    }
+    /// Smallest scale a title shrinks to before it may wrap.
+    static let titleMinimumScale: CGFloat = 0.8
+    /// Lines a title of several words may take once it wraps.
+    static let wrappedTitleLines = 3
 
     private func triggerHaptic() {
         guard !isLoading else { return }
@@ -250,116 +261,26 @@ public struct HLButton: View {
         action()
     }
 
-    private var minHeight: CGFloat {
-        // W-BUTTONS: `.restrained` always renders at the calm compact 44pt
-        // HIG floor regardless of the passed `size`, so an accidental
-        // `size: .large` can never re-inflate it back into the "creepy"
-        // slab the operator flagged.
-        if variant == .restrained { return 44 }
+    /// The height of a button. A retired `.restrained` button stays at the
+    /// hit-target floor whatever size it is given, so it cannot grow back
+    /// into a slab.
+    public nonisolated static func height(
+        variant: Variant = .primary,
+        size: Size = .regular,
+        onboarding: Bool = false
+    ) -> CGFloat {
+        if variant == .restrained { return restrainedContract.minHeight }
+        if onboarding { return HLLayout.onboardingButtonHeight }
         switch size {
-        case .compact: return 44 // HIG-Mindestmaß
-        case .regular: return 48
-        case .large: return 56
-        }
-    }
-
-    private var font: Font {
-        // W-BUTTONS: pin `.restrained` to `.hlSubhead` — the exact weight of
-        // the `monochromeActionButton` label, and never larger than a section
-        // heading (B1: typography must be ≤ heading).
-        if variant == .restrained { return .hlSubhead }
-        switch size {
-        case .compact: return .hlSubhead
-        case .regular: return .hlHeadline
-        case .large: return .hlTitle3
-        }
-    }
-
-    /// Primary CTAs paint a flat `.tint` fill; the scene-root `.tint` is the
-    /// monochrome ink `HLText.primary`, so every `HLButton(.primary)` fills
-    /// with the mono ink. Secondary reads transparent + outlined-on-press;
-    /// destructive stays anchored to `HLColor.statusBad` because the danger
-    /// semantic must not user-tune.
-    private var background: AnyShapeStyle {
-        switch variant {
-        case .primary:
-            AnyShapeStyle(.tint)
-        case .secondary, .ghost, .restrained:
-            AnyShapeStyle(Color.clear)
-        case .destructive:
-            AnyShapeStyle(HLColor.statusBad)
-        }
-    }
-
-    /// Secondary buttons paint the monochrome ink `HLText.primary`
-    /// as label color (no fill). The primary variant's fill is
-    /// the mono ink too, so its foreground flips to `systemBackground` in dark
-    /// mode (see `primaryForegroundColor`). Destructive stays anchored to
-    /// `Color.white` because `HLColor.statusBad` is a fixed Dracula red.
-    private var textForegroundStyle: AnyShapeStyle {
-        switch variant {
-        case .primary:
-            AnyShapeStyle(primaryForegroundColor)
-        case .destructive:
-            AnyShapeStyle(Color.white)
-        case .secondary:
-            // v0.17 monochrome: secondary labels paint the mono ink
-            // (`HLText.primary` never collapses against `HLSurface.primary`).
-            AnyShapeStyle(HLText.primary)
-        case .ghost:
-            AnyShapeStyle(HLText.primary)
-        case .restrained:
-            // W-BUTTONS: monochrome label — NEVER the user's accent pick.
-            // Mirrors `ActiveMedicationRow.monochromeActionButton`'s
-            // `HLText.secondary` so the restrained CTA reads identically to
-            // the "Genommen"/"Übersprungen" pair.
-            AnyShapeStyle(HLText.secondary)
-        }
-    }
-
-    /// Resolves the primary-variant foreground against the monochrome ink
-    /// fill. The `.primary` background paints `AnyShapeStyle(.tint)`, and the
-    /// scene-root `.tint` is `HLText.primary`. `Color.white` reads cleanly on
-    /// the near-black light-mode ink but collapses on the near-white dark-mode
-    /// ink, so the foreground flips to `systemBackground` (the ink's inverse)
-    /// whenever white-on-ink sinks below the WCAG AA text ratio.
-    private var primaryForegroundColor: Color {
-        #if canImport(UIKit)
-            let fillUI = UIColor(HLText.primary)
-                .resolvedColor(with: UITraitCollection(
-                    userInterfaceStyle: colorScheme == .dark ? .dark : .light
-                ))
-            let ratio = HLContrastClamp.contrastRatio(
-                foreground: .white,
-                background: fillUI
-            )
-            if ratio < HLContrastClamp.wcagAATextRatio {
-                return Color(uiColor: .systemBackground)
-            }
-        #endif
-        return Color.white
-    }
-
-    /// Concrete spinner tint for variants where we can't defer to the
-    /// inherited `.tint(...)` — primary / destructive paint white labels
-    /// so the spinner must read on the dark CTA fill; ghost reads as
-    /// primary text. Returns nil when the inherited `.tint` is the right
-    /// answer (secondary — accent on transparent). v0.5.2-R1:
-    /// primary mirrors `primaryForegroundColor` so the spinner stays in
-    /// the same colour as the label it's replacing.
-    private var spinnerTint: Color? {
-        switch variant {
-        case .primary: primaryForegroundColor
-        case .destructive: .white
-        case .secondary: nil
-        case .ghost: HLText.primary
-        case .restrained: HLText.secondary
+        case .compact: return HLHitTarget.minimum
+        case .regular: return HLLayout.buttonHeight
+        case .large: return HLLayout.onboardingButtonHeight
         }
     }
 }
 
 private struct PressedScaleStyle: ButtonStyle {
-    // M3 (QOL-AUDIT): gate the press micro-shrink on Reduce Motion to match
+    // Gate the press micro-shrink on Reduce Motion to match
     // `HLPressableButtonStyle.scale(for:)`. The haptic/opacity stay; only the
     // 0.97 scale jump is suppressed so the two canonical press primitives no
     // longer diverge.
@@ -372,15 +293,51 @@ private struct PressedScaleStyle: ButtonStyle {
     }
 }
 
-#Preview("HLButton") {
-    VStack(spacing: HLSpace.md) {
-        HLButton("Primary", icon: "checkmark", variant: .primary) {}
-        HLButton("Restrained", icon: "checkmark", variant: .restrained) {}
-        HLButton("Secondary", variant: .secondary) {}
-        HLButton("Ghost", variant: .ghost) {}
-        HLButton("Destructive", icon: "trash", variant: .destructive) {}
-        HLButton("Lade", variant: .primary, isLoading: true) {}
+private struct HLButtonOnboardingSizeKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// `true` where buttons take the larger onboarding height.
+    var hlButtonOnboardingSize: Bool {
+        get { self[HLButtonOnboardingSizeKey.self] }
+        set { self[HLButtonOnboardingSizeKey.self] = newValue }
     }
-    .padding()
-    .background(HLSurface.primary)
+}
+
+public extension View {
+    /// Gives the buttons below the larger onboarding height. Onboarding is
+    /// the one place that uses it.
+    func hlOnboardingSize() -> some View {
+        environment(\.hlButtonOnboardingSize, true)
+    }
+}
+
+#Preview("HLButton, light") {
+    HLButtonPreview()
+        .preferredColorScheme(.light)
+}
+
+#Preview("HLButton, dark") {
+    HLButtonPreview()
+        .preferredColorScheme(.dark)
+}
+
+#Preview("HLButton, largest type") {
+    HLButtonPreview()
+        .dynamicTypeSize(.accessibility5)
+}
+
+private struct HLButtonPreview: View {
+    var body: some View {
+        HLPage {
+            HLButton(HLControlWord.save.key, systemImage: "checkmark") {}
+            HLButton(HLControlWord.retry.key, variant: .secondary) {}
+            HLButton(HLControlWord.delete.key, systemImage: "trash", variant: .destructive) {}
+            HLButton(HLControlWord.save.key, isLoading: true) {}
+            HLButton(HLControlWord.add.key) {}
+                .hlOnboardingSize()
+            HLLinkButton("Edit") {}
+        }
+    }
 }

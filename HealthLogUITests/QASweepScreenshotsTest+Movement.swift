@@ -19,7 +19,6 @@ extension QASweepScreenshotsTest {
             stepBack()
             showMovement(name)
         }
-        guard !isXXL else { return }
         goBack()
         tab("ellipsis")
         guard tap(app.buttons["more.toolbar.gear"], "settings gear") else { return }
@@ -40,7 +39,6 @@ extension QASweepScreenshotsTest {
 
     /// The sweep's own server, no Dawarich: the "before" picture.
     func test_21_movementBefore() {
-        guard !isXXL else { return }
         boot()
         guard openEnvironment() else { return }
         shotToEnd("21-move-before")

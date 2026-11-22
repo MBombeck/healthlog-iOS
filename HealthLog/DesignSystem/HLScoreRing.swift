@@ -102,14 +102,14 @@ public struct HLScoreRing: View {
     /// so the recessed track stays subtly visible on the appearance-invariant
     /// beige card in both schemes.
     private let trackColorOverride: Color?
-    /// v0.14.1 — explicit centre-value colour override. `nil` keeps the default
+    /// Explicit centre-value colour override. `nil` keeps the default
     /// `HLText.primary` (dark-mode-flipping). Same inversion class as the fill:
     /// the wellness score cards pass a scheme-STABLE ink
     /// (`HLColor.wellnessRingInk`) because the beige gradient card is
     /// appearance-invariant, so the default near-white dark-mode "72" would
     /// wash out on it.
     private let centreValueColorOverride: Color?
-    /// v0.14.1 — explicit centre-label (band word, e.g. "Bereit") colour
+    /// Explicit centre-label (band word, e.g. "Bereit") colour
     /// override. `nil` keeps the default `HLText.secondary`. Paired with
     /// `centreValueColorOverride` so the label stays legible (at a slightly
     /// lower opacity for hierarchy) on the appearance-invariant beige card.
@@ -138,6 +138,16 @@ public struct HLScoreRing: View {
     /// so the hero number grows with the Large setting instead of shrinking in
     /// the ring.
     @ScaledMetric(relativeTo: .title) private var fontRatio: CGFloat = 0.22
+    /// The compact value role at the reader's text size (17 pt at Large):
+    /// the least the centre value is set in, so it never reads smaller than
+    /// the label under the ring.
+    @ScaledMetric(relativeTo: .body) private var compactValueSize: CGFloat = 17
+
+    /// The centre value's size: it grows with the ring, but never below the
+    /// compact value role. Pure, so the floor is tested without a host.
+    nonisolated static func centreValueSize(side: CGFloat, scaledRatio: CGFloat, compactSize: CGFloat) -> CGFloat {
+        max(compactSize, side * scaledRatio)
+    }
 
     /// Centre-value scale floor. A 2-digit number sits at full size; the floor
     /// only engages for the widest 3-digit centre value ("100") so it fits on
@@ -258,7 +268,7 @@ public struct HLScoreRing: View {
             parts.append(signal.accessibilityWord)
         }
         if parts.isEmpty {
-            // Catalog key `%lld percent` (EN + DE), rounded (F1) — no-value fallback.
+            // Catalog key `%lld percent` (EN + DE), rounded — no-value fallback.
             let percent = HLNumberFormat.percentValue(ofFraction: fraction)
             return String(localized: "\(percent) percent", comment: "Ring a11y value fallback, e.g. \"60 percent\"")
         }
@@ -269,7 +279,7 @@ public struct HLScoreRing: View {
         VStack(spacing: HLSpace.xxs) {
             if let value {
                 Text(value)
-                    .font(.hlMetric(side * fontRatio))
+                    .font(.hlMetric(Self.centreValueSize(side: side, scaledRatio: fontRatio, compactSize: compactValueSize)))
                     .foregroundStyle(centreValueColorOverride ?? HLText.primary)
                     .monospacedDigit()
                     // A 3-digit score ("100") otherwise wraps to two lines inside
@@ -284,10 +294,7 @@ public struct HLScoreRing: View {
                     .hlAnimation(.snappy(duration: 0.25), value: value)
             }
             if let label {
-                Text(label)
-                    .font(.hlCaption)
-                    .foregroundStyle(centreLabelColorOverride ?? HLText.secondary)
-                    .multilineTextAlignment(.center)
+                HLScoreRingCaption(label: label, color: centreLabelColorOverride ?? HLText.secondary)
             }
         }
         // Keep the centre stack clear of the stroke + gauge gap.
@@ -465,6 +472,35 @@ public struct HLScoreRing: View {
             default: nil
             }
         }
+    }
+}
+
+/// The small word under a ring's value.
+///
+/// The ring keeps its size at every text size, and so does the word in its
+/// centre, like the value above it: it cannot wrap and must not be
+/// hyphenated. It stays on one line, keeps the size it has at the standard
+/// text size (``largestTypeSize``) and shrinks down to ``minimumScale`` when
+/// it is wider than the ring's centre. A larger word would leave a long one
+/// cut off and push a short one onto the stroke; the ring's spoken label
+/// carries the word at every size.
+struct HLScoreRingCaption: View {
+    /// Where the word stops growing with the text size.
+    static let largestTypeSize: DynamicTypeSize = .large
+    /// How far the word may shrink, the floor of the caption in ``HLRing``.
+    nonisolated static let minimumScale: CGFloat = HLRing.labelMinimumScale
+
+    let label: String
+    let color: Color
+
+    var body: some View {
+        Text(label)
+            .font(.hlCaption)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(Self.minimumScale)
+            .allowsTightening(true)
+            .dynamicTypeSize(...Self.largestTypeSize)
     }
 }
 

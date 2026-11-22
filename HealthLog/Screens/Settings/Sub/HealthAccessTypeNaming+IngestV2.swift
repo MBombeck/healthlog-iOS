@@ -1,0 +1,61 @@
+import Foundation
+
+/// Names of the Apple Health ingest v2 types on the transparency page and in
+/// the "new types" card; the table beside `keyByIdentifier` so the screen's
+/// own file does not grow. The eleven cycle symptoms keep their cycle names
+/// in that table.
+extension HealthAccessTypeNaming {
+    static let ingestV2KeyByIdentifier: [String: LocalizedStringResource] = [
+        "HKCategoryTypeIdentifierHypertensionEvent": "health.permissions.type.hypertensionEvent",
+        "HKCategoryTypeIdentifierLowCardioFitnessEvent": "health.permissions.type.lowCardioFitnessEvent",
+        "HKCategoryTypeIdentifierMenopausalState": "health.permissions.type.menopausalState",
+        "HKCategoryTypeIdentifierBleedingAfterMenopause": "health.permissions.type.bleedingAfterMenopause",
+        "HKScoredAssessmentTypeIdentifierPHQ9": "health.permissions.type.phq9",
+        "HKScoredAssessmentTypeIdentifierGAD7": "health.permissions.type.gad7",
+        "HKQuantityTypeIdentifierInsulinDelivery": "health.permissions.type.insulinDelivery",
+        "HKQuantityTypeIdentifierInhalerUsage": "health.permissions.type.inhalerUsage",
+        "HKQuantityTypeIdentifierForcedExpiratoryVolume1": "health.permissions.type.forcedExpiratoryVolume1",
+        "HKQuantityTypeIdentifierForcedVitalCapacity": "health.permissions.type.forcedVitalCapacity",
+        "HKQuantityTypeIdentifierPeakExpiratoryFlowRate": "health.permissions.type.peakExpiratoryFlowRate",
+        "HKQuantityTypeIdentifierWorkoutEffortScore": "health.permissions.type.workoutEffortScore",
+        "HKQuantityTypeIdentifierEstimatedWorkoutEffortScore": "health.permissions.type.estimatedWorkoutEffortScore",
+        "HKQuantityTypeIdentifierPhysicalEffort": "health.permissions.type.physicalEffort",
+        "HKQuantityTypeIdentifierDistanceCycling": "health.permissions.type.distanceCycling",
+        "HKQuantityTypeIdentifierRunningSpeed": "health.permissions.type.runningSpeed",
+        "HKQuantityTypeIdentifierRunningPower": "health.permissions.type.runningPower",
+        "HKQuantityTypeIdentifierRunningGroundContactTime": "health.permissions.type.runningGroundContactTime",
+        "HKQuantityTypeIdentifierRunningVerticalOscillation": "health.permissions.type.runningVerticalOscillation",
+        "HKQuantityTypeIdentifierRunningStrideLength": "health.permissions.type.runningStrideLength",
+        "HKQuantityTypeIdentifierDistanceRowing": "health.permissions.type.distanceRowing",
+        "HKQuantityTypeIdentifierRowingSpeed": "health.permissions.type.rowingSpeed",
+        "HKQuantityTypeIdentifierBasalBodyTemperature": "health.permissions.type.basalBodyTemperature",
+        "HKCategoryTypeIdentifierBladderIncontinence": "health.permissions.type.symptom.bladderIncontinence",
+        "HKCategoryTypeIdentifierChestTightnessOrPain": "health.permissions.type.symptom.chestTightnessOrPain",
+        "HKCategoryTypeIdentifierChills": "health.permissions.type.symptom.chills",
+        "HKCategoryTypeIdentifierConstipation": "health.permissions.type.symptom.constipation",
+        "HKCategoryTypeIdentifierCoughing": "health.permissions.type.symptom.coughing",
+        "HKCategoryTypeIdentifierDiarrhea": "health.permissions.type.symptom.diarrhea",
+        "HKCategoryTypeIdentifierDizziness": "health.permissions.type.symptom.dizziness",
+        "HKCategoryTypeIdentifierDrySkin": "health.permissions.type.symptom.drySkin",
+        "HKCategoryTypeIdentifierFainting": "health.permissions.type.symptom.fainting",
+        "HKCategoryTypeIdentifierFever": "health.permissions.type.symptom.fever",
+        "HKCategoryTypeIdentifierGeneralizedBodyAche": "health.permissions.type.symptom.generalizedBodyAche",
+        "HKCategoryTypeIdentifierHairLoss": "health.permissions.type.symptom.hairLoss",
+        "HKCategoryTypeIdentifierHeartburn": "health.permissions.type.symptom.heartburn",
+        "HKCategoryTypeIdentifierHotFlashes": "health.permissions.type.symptom.hotFlashes",
+        "HKCategoryTypeIdentifierLossOfSmell": "health.permissions.type.symptom.lossOfSmell",
+        "HKCategoryTypeIdentifierLossOfTaste": "health.permissions.type.symptom.lossOfTaste",
+        "HKCategoryTypeIdentifierMemoryLapse": "health.permissions.type.symptom.memoryLapse",
+        "HKCategoryTypeIdentifierNightSweats": "health.permissions.type.symptom.nightSweats",
+        "HKCategoryTypeIdentifierPelvicPain": "health.permissions.type.symptom.pelvicPain",
+        "HKCategoryTypeIdentifierRapidPoundingOrFlutteringHeartbeat": "health.permissions.type.symptom.rapidPoundingOrFlutteringHeartbeat",
+        "HKCategoryTypeIdentifierRunnyNose": "health.permissions.type.symptom.runnyNose",
+        "HKCategoryTypeIdentifierShortnessOfBreath": "health.permissions.type.symptom.shortnessOfBreath",
+        "HKCategoryTypeIdentifierSinusCongestion": "health.permissions.type.symptom.sinusCongestion",
+        "HKCategoryTypeIdentifierSkippedHeartbeat": "health.permissions.type.symptom.skippedHeartbeat",
+        "HKCategoryTypeIdentifierSoreThroat": "health.permissions.type.symptom.soreThroat",
+        "HKCategoryTypeIdentifierVaginalDryness": "health.permissions.type.symptom.vaginalDryness",
+        "HKCategoryTypeIdentifierVomiting": "health.permissions.type.symptom.vomiting",
+        "HKCategoryTypeIdentifierWheezing": "health.permissions.type.symptom.wheezing"
+    ]
+}

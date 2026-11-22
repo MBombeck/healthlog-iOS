@@ -1,6 +1,6 @@
 import Foundation
 
-/// MIRROR (1.5, #152, server #1272) — the server's own answer to "does the
+/// The server's own answer to "does the
 /// app write this reading into Apple Health".
 ///
 /// Since server 1.46.0 every stored measurement row carries `appleHealthMirror`

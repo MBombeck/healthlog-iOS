@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping file_length type_body_length
 
-/// **1.5 MOVE (#133)** — movement from Dawarich under Environment: the wire
+/// Movement from Dawarich under Environment: the wire
 /// contract of `GET /api/dawarich/status`, the `movement` block of
 /// `GET /api/day/{date}` and the `dawarich` entry of `GET /api/integrations/status`
 /// (server with and without each), the section state (not connected, no

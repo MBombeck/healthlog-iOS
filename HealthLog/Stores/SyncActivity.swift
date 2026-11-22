@@ -3,7 +3,7 @@ import Foundation
     import UIKit
 #endif
 
-// U1 (#16) — the vocabulary of the one sync-activity source.
+// The vocabulary of the one sync-activity source.
 //
 // Before this file, "when did this device last sync" had one writer: the
 // pull-to-refresh handshake (`SyncStateStore.lastHandshakeAt`). Apple Health
@@ -53,7 +53,7 @@ public struct SyncActivity: Sendable, Equatable, Codable {
     }
 }
 
-/// The states that need attention. A healthy account has none. INT-L (1.1.1):
+/// The states that need attention. A healthy account has none. INT-L:
 /// each one shows as its own calm glyph in the slot next to the avatar (see
 /// ``SyncSlotGlyph``), no longer as a badge on the avatar.
 public enum SyncAttention: Sendable, Equatable {
@@ -123,7 +123,7 @@ public enum SyncIndicatorGlyph: Sendable, Equatable {
     }
 }
 
-/// INT-L (1.1.1) — **the one slot next to the avatar.** The avatar carries no
+/// **The one slot next to the avatar.** The avatar carries no
 /// badge any more; whatever the slot shows is tappable and opens the sync
 /// status panel. A running sync and its checkmark beat win, because they are
 /// about to answer the question; once the beat is over, an attention state

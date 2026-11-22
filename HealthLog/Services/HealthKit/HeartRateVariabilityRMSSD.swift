@@ -89,25 +89,39 @@ enum HealthKitServerTypeGate {
         for identifier in HealthKitServer144Types.registryIdentifiers {
             map[identifier] = HealthKitServer144Types.minimumServerVersion
         }
+        map[HealthKitBasalEnergy.identifier] = HealthKitBasalEnergy.minimumServerVersion
+        map.merge(AppleHealthIngestTypes.minimumServerVersionByIdentifier) { current, _ in current }
         return map
     }()
 
     /// `true` when the configured server is known to store `identifier`.
     ///
-    /// HK-NEW (1.5): a server that publishes `acceptedTypes`
+    /// A server that publishes `acceptedTypes`
     /// (``HealthKitAcceptedTypes``) decides on its own; without the field the
     /// table decides: a deferred type never, a type with a minimum version
     /// from that version on, every other type always.
     static func serverAccepts(_ identifier: String, defaults: UserDefaults = .standard) -> Bool {
+        // 1.49.0 opens the cycling, running and rowing types by capability.
+        if AppleHealthIngestQuantityTypes.trainingIdentifiers.contains(identifier),
+           KnownServerVersion.hasCapability(AppleHealthIngestQuantityTypes.trainingCapability, defaults: defaults)
+        {
+            return true
+        }
+        if AppleHealthIngestQuantityTypes.effortIdentifiers.contains(identifier),
+           KnownServerVersion.hasCapability(AppleHealthIngestQuantityTypes.effortCapability, defaults: defaults)
+        {
+            return true
+        }
         if let accepted = HealthKitAcceptedTypes.recorded(defaults: defaults) {
             return accepted.contains(HealthKitServer144Types.wireIdentifier(forRegistry: identifier))
         }
         if HealthKitAcceptedTypes.deferredIdentifiers.contains(identifier) { return false }
+        if AppleHealthIngestTypes.publishedOnlyIdentifiers.contains(identifier) { return false }
         guard let minimum = minimumServerVersionByIdentifier[identifier] else { return true }
         return KnownServerVersion.isAtLeast(minimum, defaults: defaults)
     }
 
-    /// Records the version a `GET /api/version` probe answered. INT-N: this is
+    /// Records the version a `GET /api/version` probe answered. This is
     /// the app's only write of the server version; `SyncTriggerContext` reads
     /// the same record for `syncTrigger: manual`.
     static func record(_ info: ServerVersionInfo, defaults: UserDefaults = .standard) {

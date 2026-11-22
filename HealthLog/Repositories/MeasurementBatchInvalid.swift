@@ -1,6 +1,6 @@
 import Foundation
 
-// E1 — `measurement.batch.invalid` (server v1.39.1).
+// `measurement.batch.invalid` (server v1.39.1).
 //
 // Up to v1.39.0 `POST /api/measurements/batch` answered a body that failed its
 // schema with a 422 and no code. The app could not tell that from any other

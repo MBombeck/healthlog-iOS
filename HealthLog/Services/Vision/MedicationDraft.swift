@@ -10,8 +10,8 @@ import Foundation
 /// extended to extraction).
 ///
 /// **Provenance tracking:** `source` records which path produced the draft
-/// so callers + tests can branch on "heuristic-only" (iOS 18-25) vs
-/// "FoundationModels-assisted" (iOS 26+). The MDR safety filter runs on
+/// so callers + tests can branch on "heuristic-only" vs
+/// "FoundationModels-assisted". The MDR safety filter runs on
 /// the latter; the former is purely lexical and carries no AI-generated
 /// language so the filter is moot.
 public struct MedicationDraft: Sendable, Equatable {
@@ -56,7 +56,7 @@ public struct MedicationDraft: Sendable, Equatable {
 
 /// Heuristic OCR-text → `MedicationDraft` extractor.
 ///
-/// **iOS 18-25 path.** No AI involved. Pure lexical analysis of the OCR
+/// **Fallback path.** No AI involved. Pure lexical analysis of the OCR
 /// transcript:
 ///
 /// 1. **Name guess** — the longest alpha-token line that is not a known
@@ -161,8 +161,12 @@ public enum MedicationDraftHeuristic {
     /// answer here (an empty own list is a valid, deliberate answer).
     static func doseFormLexicon(for language: AppLanguage) -> [String] {
         switch language {
-        case .de, .en: doseFormKeywords + dutchDoseFormKeywords
-        case .nl: dutchDoseFormKeywords + doseFormKeywords
+        case .de, .en: doseFormKeywords + dutchDoseFormKeywords + spanishDoseFormKeywords
+        case .nl: dutchDoseFormKeywords + doseFormKeywords + spanishDoseFormKeywords
+        // No Korean lexicon yet: the German, English and Dutch keywords still
+        // catch the Latin dose forms a Korean pack prints next to the Hangul.
+        case .ko: doseFormKeywords + dutchDoseFormKeywords + spanishDoseFormKeywords
+        case .es: spanishDoseFormKeywords + doseFormKeywords + dutchDoseFormKeywords
         }
     }
 
@@ -217,6 +221,22 @@ public enum MedicationDraftHeuristic {
         "Zetpil"
     ]
 
+    /// The Spanish dose forms a Spanish or Latin American pack prints. Single
+    /// words only: a pack prints the plural ("comprimidos recubiertos"), and
+    /// only the singular stem is a substring of it. None of them is a
+    /// substring of a German or Dutch keyword or the other way round.
+    static let spanishDoseFormKeywords: [String] = [
+        "Comprimido",
+        "Cápsula",
+        "Inyectable",
+        "Gotas",
+        "Jarabe",
+        "Pomada",
+        "Parche",
+        "Inhalación",
+        "Supositorio"
+    ]
+
     /// Corporate suffixes that hint a manufacturer line (DE-primary, EN and
     /// NL secondary).
     static let manufacturerSuffixes: [String] = [
@@ -235,7 +255,11 @@ public enum MedicationDraftHeuristic {
         "B.V.",
         "BV",
         "N.V.",
-        "NV"
+        "NV",
+        // Spanish company forms.
+        "S.A.",
+        "S.L.",
+        "S.L.U."
     ]
 
     /// Lexical noise: dose-strength + lot-number + expiry-date prefixes
@@ -259,6 +283,13 @@ public enum MedicationDraftHeuristic {
         "RVG",
         "Partij",
         "Houdbaar",
-        "Apotheek"
+        "Apotheek",
+        // Spanish pack metadata: the active substance line, the batch, the
+        // expiry line and the national code.
+        "Principio activo",
+        "Lote",
+        "Cad.",
+        "Caducidad",
+        "C.N."
     ]
 }

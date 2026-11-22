@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#108 / #115 1.4 — the glucose unit follows the account.**
+/// **The glucose unit follows the account.**
 ///
 /// Server v1.39.0: `/api/auth/me` carries the raw `User.glucoseUnit` column
 /// (`user.glucoseUnit ?? null`, `src/app/api/auth/me/route.ts`), `null`
