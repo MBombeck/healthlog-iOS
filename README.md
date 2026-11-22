@@ -249,4 +249,4 @@ HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICEN
   <a href="https://github.com/MBombeck/healthlog-iOS/issues">Issues</a>
 </p>
 
-Support the project: [♥ Sponsor on GitHub](https://github.com/sponsors/MBombeck)
+Support the project: [♥ Sponsor on GitHub](https://github.com/sponsors/MBombeck) or [buy me a coffee](https://buymeacoffee.com/mbombeck)
