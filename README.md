@@ -248,3 +248,5 @@ HealthLog iOS is licensed under the [PolyForm Noncommercial License 1.0.0](LICEN
   <a href="https://testflight.apple.com/join/bucuTBpa">TestFlight</a>&ensp;|&ensp;
   <a href="https://github.com/MBombeck/healthlog-iOS/issues">Issues</a>
 </p>
+
+Support the project: [♥ Sponsor on GitHub](https://github.com/sponsors/MBombeck)
