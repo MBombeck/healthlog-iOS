@@ -43,8 +43,10 @@ jobs:
     # cold-cache path headroom. 2026-09-08: the suite is 8,600 tests now — a
     # cold run measured 15 min build + 44 min tests and was cancelled at the
     # 60-minute limit with 7,790 tests green; 120 leaves room for the SPM
-    # core build after the tests.
-    timeout-minutes: 120
+    # core build after the tests. 2026-11-23: the hosted xcode-27 runner
+    # (public repo, forks) is about 2.5x slower: 23 min build + 48 min tests,
+    # then the Release link gate ran past the 120-minute limit; it gets 240.
+    timeout-minutes: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 240 || 120 }}
 
     steps:
       - uses: actions/checkout@v4
