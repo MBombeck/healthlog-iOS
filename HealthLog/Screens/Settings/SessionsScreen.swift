@@ -3,7 +3,7 @@ import SwiftUI
 /// Settings → Account → "Active sessions" (parity item 2.2). Port of the web
 /// `security-sessions-card.tsx:139-189`: one row per active session with the
 /// coarse device label, the masked IP + resolved location, the last-active
-/// stamp and the current-session marker; swipe to revoke one; a footer action
+/// stamp and the current-session marker; swipe to revoke one (asked first); a footer action
 /// to sign out everywhere.
 ///
 /// **v1.38.11 — the consequence copy follows the server.** "Sign out
@@ -21,8 +21,6 @@ import SwiftUI
 /// is the lever which actually reaches native devices.
 struct SessionsScreen: View {
     @Environment(SessionsStore.self) private var store
-    @State private var pendingRevokeID: String?
-    @State private var showSignOutAllConfirm: Bool = false
     @State private var refreshTick: Int = 0
 
     var body: some View {
@@ -30,10 +28,9 @@ struct SessionsScreen: View {
             sessionsSection
             signOutEverywhereSection
         }
-        // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).
-        .hlScrollEdgeSoft()
+        .hlPageMargins()
         .navigationTitle("sessions.title")
-        // SET-V2-C (C-3) — sub-screen canon is `.inline`.
+        // Sub-screen canon is `.inline`.
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.load() }
         .refreshable {
@@ -41,58 +38,20 @@ struct SessionsScreen: View {
             refreshTick &+= 1
         }
         .sensoryFeedback(.success, trigger: refreshTick)
-        .hlConfirmDestructive(
-            Text("sessions.revoke.confirmTitle"),
-            isPresented: Binding(
-                get: { pendingRevokeID != nil },
-                set: { if !$0 { pendingRevokeID = nil } }
-            ),
-            message: Text("sessions.revoke.confirmBody"),
-            confirm: Text(String(localized: "sessions.revoke.confirmAction")),
-            cancel: Text(String(localized: "Cancel")),
-            onCancel: { pendingRevokeID = nil },
-            action: {
-                if let id = pendingRevokeID {
-                    Task { await revoke(id: id) }
-                }
-            }
-        )
-        .hlConfirmDestructive(
-            Text("sessions.signOutAll.confirmTitle"),
-            isPresented: $showSignOutAllConfirm,
-            // v1.38.11 — the consequence differs by server build: from
-            // v1.38.11 the calling device is spared, below it the same call
-            // also drops this phone's refresh token. Never promise "except
-            // this device" on a server that does not honour it.
-            message: Text(SignOutEverywhereCopy.confirmBody(store)),
-            confirm: Text(String(localized: "sessions.signOutAll.confirmAction")),
-            cancel: Text(String(localized: "Cancel")),
-            action: {
-                Task { await store.revokeOthers() }
-            }
-        )
-        .alert(
+        .hlAcknowledgeAlert(
             "sessions.signOutAll.doneTitle",
-            isPresented: Binding(
-                get: { store.lastRevokedOthersCount != nil },
-                set: { if !$0 { store.clearRevokedOthersConfirmation() } }
+            item: Binding(
+                get: { store.lastRevokedOthersCount },
+                set: { if $0 == nil { store.clearRevokedOthersConfirmation() } }
             )
-        ) {
-            Button(String(localized: "OK")) { store.clearRevokedOthersConfirmation() }
-        } message: {
+        ) { _ in
             SignOutEverywhereCopy.doneMessage(store)
         }
-        .alert(
+        .hlAcknowledgeAlert(
             "Error",
-            isPresented: Binding(
-                get: { store.error != nil },
-                set: { if !$0 { store.clearError() } }
-            ),
-            presenting: store.error
-        ) { _ in
-            Button(String(localized: "OK")) { store.clearError() }
-        } message: { err in
-            Text(err.localizedDescription)
+            item: Binding(get: { store.error }, set: { if $0 == nil { store.clearError() } })
+        ) { err in
+            Text(err.userFacingDescription)
         }
     }
 
@@ -110,59 +69,43 @@ struct SessionsScreen: View {
                 }
             }
         } header: {
-            // 1.4 B2-c — the header says what the list holds (browser
+            // The header says what the list holds (browser
             // sign-ins), so an empty list on an app-only account reads as an
             // answer, not a defect. It replaces the header that repeated the
             // navigation title and the empty state's second sentence.
-            Text("sessions.section.browser")
+            HLSectionHeader("sessions.section.browser")
         }
+        .hlFormRowSurface()
     }
 
     private var emptyState: some View {
-        Text("sessions.empty.title")
-            .font(.hlBody)
-            .foregroundStyle(HLText.secondary)
+        HLEmptyNote("sessions.empty.title")
             .accessibilityIdentifier("sessions.emptyState")
     }
 
+    /// Device, then place and last activity in one line; the current
+    /// session says so as the row's status, the revoke shows as progress.
     private func sessionRow(_ session: SessionEntry) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(spacing: HLSpace.sm) {
-                Text(session.device)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if session.isCurrent {
-                    Text("sessions.row.current")
-                        .font(.hlCaption2.weight(.semibold))
-                        .padding(.horizontal, HLSpace.sm)
-                        .padding(.vertical, HLSpace.xxs)
-                        .background(HLAccent.userBrandTint.opacity(0.12))
-                        .clipShape(Capsule())
-                        .accessibilityIdentifier("sessions.row.currentBadge")
-                }
-                Spacer(minLength: 0)
-                if store.revokingID == session.id {
-                    ProgressView()
-                }
+        HLRowLayout(
+            title: Text(verbatim: session.device),
+            subtitle: HLRowDetail.text([session.locationLine, activityCaption(for: session)])
+        ) {
+            if store.revokingID == session.id {
+                ProgressView()
+            } else if session.isCurrent {
+                HLRowValue(
+                    value: nil,
+                    status: HLRowStatus(String(localized: "sessions.row.current"), tone: .success)
+                )
             }
-
-            if let locationLine = session.locationLine {
-                Text(locationLine)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-            }
-
-            Text(activityCaption(for: session))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+        } leading: {
+            EmptyView()
         }
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                pendingRevokeID = session.id
-            } label: {
-                Label(String(localized: "sessions.revoke.action"), systemImage: "xmark.circle")
-            }
-        }
+        // Revoking ends a sign-in and deletes no entry: the ladder asks with
+        // the action's own word and sign instead of "Delete".
+        .hlSwipeDelete(SettingsRevokeAction.session {
+            await store.revoke(id: session.id)
+        })
         .accessibilityIdentifier("sessions.row")
     }
 
@@ -178,7 +121,7 @@ struct SessionsScreen: View {
     private var signOutEverywhereSection: some View {
         @Bindable var store = store
         return Section {
-            // R2 / #115 A7 — only where the server ends share links at all.
+            // Only where the server ends share links at all.
             if store.endsConnectionsAndLinks {
                 HLSettingsToggleRow(
                     title: "sessions.signOutAll.keepShareLinks",
@@ -188,31 +131,30 @@ struct SessionsScreen: View {
                     accessibilityID: "sessions.signOutAll.keepShareLinks"
                 )
             }
-            Button(role: .destructive) {
-                showSignOutAllConfirm = true
-            } label: {
-                HStack {
-                    Label(
-                        String(localized: "sessions.signOutAll.action"),
-                        systemImage: "rectangle.portrait.and.arrow.right"
-                    )
-                    Spacer(minLength: 0)
-                    if store.isRevokingOthers {
-                        ProgressView()
-                    }
+            // The consequence differs by server build: from v1.38.11 the
+            // calling device is spared, below it the same call also drops this
+            // phone's refresh token. Never promise "except this device" on a
+            // server that does not honour it.
+            HLDeleteButton(
+                "sessions.signOutAll.action",
+                form: .row,
+                action: .confirmed(
+                    title: "sessions.signOutAll.confirmTitle",
+                    message: SignOutEverywhereCopy.confirmBody(store),
+                    word: "sessions.signOutAll.confirmAction",
+                    symbol: "rectangle.portrait.and.arrow.right"
+                ) {
+                    await store.revokeOthers()
                 }
-            }
+            )
             .disabled(store.isRevokingOthers)
             .accessibilityIdentifier("sessions.signOutAllButton")
-        } footer: {
-            // R12 — Fußnoten-Tinte in Listen-Gerüsten ist `HLText.secondary`.
+            // What signing out everywhere ends, inside the card under the
+            // action it explains.
             Text(SignOutEverywhereCopy.footer(store))
-                .foregroundStyle(HLText.secondary)
+                .hlText(.note)
+                .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private func revoke(id: String) async {
-        await store.revoke(id: id)
-        pendingRevokeID = nil
+        .hlFormRowSurface()
     }
 }

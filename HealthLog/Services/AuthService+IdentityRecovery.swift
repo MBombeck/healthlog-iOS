@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 24 / plan 24-01 — the repair half.
+// The repair half.
 //
 // The guard in `persist` stops NEW poisonings. It repairs nobody who already
 // has the empty string in their Keychain, and that set is not hypothetical: it

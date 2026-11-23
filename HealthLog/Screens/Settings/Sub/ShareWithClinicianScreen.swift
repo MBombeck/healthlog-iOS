@@ -4,7 +4,7 @@ import SwiftUI
 /// clinician share-links (server v1.12.1 B1). A share-link is a scoped,
 /// time-limited, revocable link the user hands a doctor; the doctor opens the
 /// rendered health-record view on the web. What the link exposes is the v2
-/// selection the user picks while minting (CU-12); the never-built FHIR-API
+/// selection the user picks while minting; the never-built FHIR-API
 /// affordance is gone.
 ///
 /// **Retired links (migration 0275).** The v1.32.39 selection migration revoked
@@ -14,40 +14,22 @@ import SwiftUI
 /// link looked exactly like a live one. ``retiredCard`` names the state and
 /// offers the only real recovery: mint a replacement. It is not a renewal, and
 /// the copy must not pretend otherwise.
-///
-/// Server-only surface: gates on `BackendAvailability.hasServer` (standalone →
-/// the calm `HLCloudDerivedPlaceholder`, never a dead button), mirroring the
-/// per-domain CSV exports.
 struct ShareWithClinicianScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: ShareLinkStore?
 
     var body: some View {
-        HLSettingsPage(title: "Share with clinician") {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "clinician sharing"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-            }
+        HLPage {
+            connectedBody
         }
         .navigationTitle("Share with clinician")
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2-c — how links work, and what a replacement for a retired link
+        // How links work, and what a replacement for a retired link
         // means, is the screen's one (i) instead of two text blocks.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: info, accessibilityIdentifier: "settings.shareLinks.info")
-            }
-        }
+        .hlPageActions([.info(info, identifier: "settings.shareLinks.info")])
         .task {
-            guard backend.hasServer, store == nil, let api = container?.api else { return }
+            guard store == nil, let api = container?.api else { return }
             let s = ShareLinkStore(
                 repo: ShareLinkRepository(api: api),
                 capabilities: ServerCapabilitiesRepository(api: api)
@@ -91,7 +73,7 @@ struct ShareWithClinicianScreen: View {
         )
     }
 
-    /// **18-03 — this screen no longer mints anything.**
+    /// **This screen no longer mints anything.**
     ///
     /// Creating a link asks *what* and *for how long* and *in which form*, and
     /// those are the unified surface's three questions. Keeping a second
@@ -109,9 +91,9 @@ struct ShareWithClinicianScreen: View {
     /// oder geteilt werden. Die Klasse-D-Zusage verliert damit nichts an
     /// Stärke, sie steht nur noch an ihrer Heimat (R3/R19).
     private func createCard(store: ShareLinkStore) -> some View {
-        // 1.4 B2-c — no subtitle: it described the next screen. 1.4 B4 —
+        // No subtitle: it described the next screen. 1.4 B4 —
         // one row, one heading: "Neuer Freigabe-Link" with its chevron.
-        HLSettingsCard {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSettingsActionRow(
                     title: "New share link",
@@ -136,12 +118,11 @@ struct ShareWithClinicianScreen: View {
     /// stays revoked, the new one carries a new token **and** a new passphrase,
     /// and the recipient needs both again.
     private func retiredCard(store: ShareLinkStore) -> some View {
-        HLSettingsCard(
-            icon: "exclamationmark.triangle",
-            title: "shareLink.retired.title",
+        HLCard(
+            "shareLink.retired.title",
             subtitle: "shareLink.retired.subtitle"
         ) {
-            // R19 / privacy-review (U6, G5) — Subtitle und Body sagten dasselbe
+            // R19 / privacy-review — Subtitle und Body sagten dasselbe
             // in kurz und lang, direkt untereinander. Der Subtitle benennt den
             // Zustand („bei einem Server-Update zurückgezogen"); die
             // vollständige Erklärung — neues Token, neue Passphrase, beide
@@ -149,24 +130,17 @@ struct ShareWithClinicianScreen: View {
             // Preambel des Erstellen-Sheets, also dort, wo der Ersatz-Link
             // tatsächlich entsteht. Keine Aussage geht verloren.
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // 1.4 B2-c — the unabridged statement (a replacement carries a
+                // The unabridged statement (a replacement carries a
                 // NEW token and a NEW passphrase, the recipient needs both
                 // again) is in the screen's (i) while retired links exist;
                 // the card keeps the state and the action.
                 ForEach(store.retiredLinks) { link in
-                    HStack(spacing: HLSpace.md) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Text(link.label)
-                            .font(.hlSubhead.weight(.semibold))
-                            .foregroundStyle(HLText.primary)
-                        Spacer()
-                        NavigationLink {
+                            .hlText(.rowTitle)
+                        HLLinkButton("shareLink.retired.action", alignment: .leading, destination: {
                             UnifiedSharingScreen(preselectedForm: .link)
-                        } label: {
-                            Text("shareLink.retired.action")
-                                .font(.hlFootnote.weight(.semibold))
-                                .foregroundStyle(HLColor.statusWarn)
-                        }
-                        .buttonStyle(.plain)
+                        })
                         .accessibilityIdentifier("settings.shareLinks.retired.remint")
                     }
                 }
@@ -175,29 +149,24 @@ struct ShareWithClinicianScreen: View {
     }
 
     private func linksCard(store: ShareLinkStore) -> some View {
-        // R19 / privacy-review (U6, G2) — dieser Subtitle war wörtlich die
+        // R19 / privacy-review — dieser Subtitle war wörtlich die
         // dritte Zeile der Info-Karte darunter („Widerrufe jeden Link
         // jederzeit, um den Zugriff sofort zu beenden."). Die Aussage bleibt
         // zweifach: erklärend in der Info-Karte und — unverkürzt — im
         // Bestätigungsdialog des Widerrufs, dem Ort der Handlung.
-        HLSettingsCard(
-            icon: "list.bullet.rectangle",
-            title: "Active links"
-        ) {
+        HLCard("Active links") {
             if store.isLoading, store.links.isEmpty {
                 HStack { Spacer()
                     ProgressView().controlSize(.small)
                     Spacer()
                 }
             } else if store.activeLinks.isEmpty {
-                Text("No active share links.")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("No active share links.")
             } else {
                 VStack(spacing: HLSpace.md) {
                     ForEach(store.activeLinks) { link in
                         ShareLinkRow(link: link) {
-                            Task { await store.revoke(id: link.id) }
+                            await store.revoke(id: link.id)
                         }
                     }
                 }
@@ -210,43 +179,27 @@ struct ShareWithClinicianScreen: View {
 
 private struct ShareLinkRow: View {
     let link: ShareLinkDTO
-    let onRevoke: () -> Void
-
-    @State private var confirmRevoke = false
+    let onRevoke: @MainActor () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                Text(link.label)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                Spacer()
-                Button(role: .destructive) {
-                    confirmRevoke = true
-                } label: {
-                    Text("Revoke")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLColor.statusBad)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("settings.shareLinks.revoke")
-            }
+            Text(link.label)
+                .hlText(.rowTitle)
             HStack(spacing: HLSpace.md) {
                 Label(expiryText, systemImage: "clock")
                 Label("\(link.accessCount)", systemImage: "eye")
             }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
+            // Revoking ends the doctor's access and deletes no entry: the
+            // ladder asks with the action's own words.
+            HLDeleteButton(
+                "Revoke",
+                form: .row,
+                action: SettingsRevokeAction.shareLink(perform: onRevoke)
+            )
+            .accessibilityIdentifier("settings.shareLinks.revoke")
         }
         .padding(.vertical, HLSpace.xs)
-        .hlConfirmDestructive(
-            Text("Revoke this share link?"),
-            isPresented: $confirmRevoke,
-            message: Text("The doctor will lose access immediately. This can't be undone."),
-            confirm: Text("Revoke link"),
-            cancel: Text("Cancel"),
-            action: onRevoke
-        )
     }
 
     private var expiryText: String {

@@ -53,35 +53,40 @@ struct HLSettingsToggleRow: View {
     var accessibilityID: String?
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(title)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let description {
-                    Text(description)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        // Title and switch share one line; the description runs the full
+        // width beneath both, like a footer in the system's Settings. Beside
+        // the switch it stood in a narrow column, and the card's other
+        // switches put it underneath: two layouts for one kind of row. The
+        // whole row is one VoiceOver element: title and description read as
+        // the switch's label.
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            HLRowLayout(
+                title: Text(title),
+                subtitle: nil,
+                indicator: .hidden,
+                configuration: .toggle,
+                leading: { EmptyView() },
+                trailing: {
+                    HStack(spacing: HLSpace.md) {
+                        if isBusy {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .accessibilityHidden(true)
+                        }
+                        Toggle("", isOn: $isOn)
+                            .labelsHidden()
+                            .disabled(!isEnabled)
+                            .modifier(OptionalAXIdentifier(identifier: accessibilityID))
+                    }
                 }
+            )
+            if let description {
+                Text(description)
+                    .hlText(.rowSubtitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // The text block wins the available width over the fixed-size
-            // switch — this is what kills the "1/3 width + wide gap" collapse.
-            .layoutPriority(1)
-            if isBusy {
-                ProgressView()
-                    .controlSize(.mini)
-                    .accessibilityHidden(true)
-            }
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .disabled(!isEnabled)
-                .modifier(OptionalAXIdentifier(identifier: accessibilityID))
         }
-        // The whole row is one VoiceOver element: the title + description read
-        // as the toggle's label, with the switch's own value/trait.
         .accessibilityElement(children: .combine)
     }
 }
@@ -105,7 +110,7 @@ private struct OptionalAXIdentifier: ViewModifier {
     @Previewable @State var research = false
     @Previewable @State var compact = true
     return VStack(spacing: HLSpace.lg) {
-        // R11 / E4 — das Primitive liefert KEINEN Inhalt. Die Preview zeigt
+        // Das Primitive liefert KEINEN Inhalt. Die Preview zeigt
         // deshalb Platzhaltertext, nicht den früheren Forschungsmodus-Satz
         // (der als eingebauter Default-Text gelesen wurde und an genau einer
         // Aufrufstelle wortgleich dupliziert war).

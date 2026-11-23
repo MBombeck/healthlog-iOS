@@ -15,7 +15,7 @@ import Testing
 ///   session URLCache so PHI JSON does not outlive the signed-in user.
 @Suite("APIClient security fixes (audit C1 / H1)")
 struct APIClientSecurityFixesTests {
-    // MARK: - C1 — non-pinned paths get system default validation, not a blanket accept
+    // MARK: - Non-pinned paths get system default validation, not a blanket accept
 
     @Test("Pinning disabled → system default trust validation (never a blanket accept)")
     func pinningDisabledUsesSystemDefault() {

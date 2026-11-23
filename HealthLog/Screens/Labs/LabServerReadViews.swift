@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// LAB-OCR — the switch on the scan chooser that sends this scan to the
+/// The switch on the scan chooser that sends this scan to the
 /// server. Off on every scan; the line under it says what goes out.
 struct LabServerReadToggle: View {
     @Bindable var flow: LabServerScanFlow
@@ -31,21 +31,19 @@ struct LabScanProcessingView: View {
         VStack(spacing: HLSpace.md) {
             ProgressView()
             Text(isServerRead ? "labs.ocr.processing" : "labs.scan.processing")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .multilineTextAlignment(.center)
             if isServerRead {
                 if isSlow {
                     Text("labs.ocr.processing.slow")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .multilineTextAlignment(.center)
                 }
                 HLButton("labs.ocr.cancel", variant: .secondary, action: onCancel)
                     .accessibilityIdentifier("labs.ocr.cancel")
             }
         }
-        .padding(HLSpace.lg)
+        .padding(HLLayout.pageMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: isServerRead) {
             isSlow = false

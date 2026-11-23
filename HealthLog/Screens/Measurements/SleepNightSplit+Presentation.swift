@@ -31,8 +31,7 @@ struct SleepSplitCaption: View {
     var body: some View {
         if let line = split?.breakdownLine {
             Text(line)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
         }
     }
 }

@@ -80,58 +80,137 @@ public enum RangeBandTone: Sendable, Equatable {
     }
 }
 
-/// The 8 pt status-toned rail under one header line: target band, percentage.
-/// Verbatim of `BPStatusCard.bpInTargetBar` so BP and every ranged tile read
-/// identically (handbook cross-screen consistency).
+/// The measures of the one in-target rail.
+public enum HLRangeBandMetrics {
+    /// Height of the rail.
+    public static let railHeight: CGFloat = 8
+    /// Corner radius of the rail. Tighter than the token grid on purpose: an
+    /// 8 pt rail reads cleaner with a 4 pt round.
+    public static let cornerRadius: CGFloat = 4
+    /// The empty part of the rail.
+    public static var trackTone: Color {
+        HLColor.backgroundEleva
+    }
+}
+
+/// **The one in-target rail of the app.** An 8 pt status-toned rail under one
+/// line: what is measured on the left, the share in the band on the right.
+///
+/// Two headings, one rail:
+/// - `RangeBandRow(band:)` names the band ("Ziel 71 bis 74 kg"), as on a tile
+///   on Heute.
+/// - `RangeBandRow(share:window:)` names the share ("Im Zielbereich (30 T)"),
+///   as in the status card of a metric page, where the band stands elsewhere.
+///
+/// The fill and the percentage share the tone of ``RangeBand/tone(pct:)``
+/// (from 80 % good, from 50 % watch, below that bad).
 public struct RangeBandRow: View {
-    let band: RangeBand
-    /// v0.10.0 — animate the fill width when the in-range % updates; static
-    /// under reduce-motion (R2 §6.6).
+    /// What the line above the rail says.
+    public enum Heading: Equatable, Sendable {
+        /// The band itself.
+        case band(RangeBand)
+        /// "In range", with the window the share is measured over.
+        case share(pct: Int, window: String?)
+    }
+
+    let heading: Heading
+    /// Animate the fill width when the in-range % updates; static
+    /// under reduce-motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(band: RangeBand) {
-        self.band = band
+        heading = .band(band)
+    }
+
+    /// The rail headed by "In range" and the window ("30 T"), for a page that
+    /// shows the band elsewhere. `pct` is clamped to 0…100 on render.
+    public init(share pct: Int, window: String? = nil) {
+        heading = .share(pct: pct, window: window)
+    }
+
+    /// The share inside the band, clamped to 0…100.
+    var pct: Int {
+        switch heading {
+        case let .band(band): min(100, max(0, band.pctInRange))
+        case let .share(pct, _): min(100, max(0, pct))
+        }
+    }
+
+    /// The words left of the percentage.
+    var title: String {
+        switch heading {
+        case let .band(band): return band.targetLine
+        case let .share(_, window):
+            let base = String(localized: "In range")
+            guard let window else { return base }
+            return "\(base) (\(window))"
+        }
+    }
+
+    /// What VoiceOver reads for the whole row.
+    var spokenText: String {
+        switch heading {
+        case .band:
+            return String(localized: "\(pct) of 30 days in target range")
+        case let .share(_, window):
+            guard let window else { return String(localized: "\(pct) percent of measurements in range") }
+            return String(localized: "\(pct) percent of measurements in range over \(window)")
+        }
+    }
+
+    /// From the accessibility sizes on the share stands under the words, so
+    /// the band they name ("Ziel 61,9 bis 64 kg") is never cut.
+    nonisolated static func stacks(at typeSize: DynamicTypeSize) -> Bool {
+        typeSize.isAccessibilitySize
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+    }
+
+    private func shareText(_ tone: Color) -> some View {
+        Text(HLNumberFormat.percent(pct))
+            .font(.hlCaption.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(tone)
     }
 
     public var body: some View {
-        let pct = min(100, max(0, band.pctInRange))
-        let tone = RangeBand.tone(pct: band.pctInRange).color
+        let tone = RangeBand.tone(pct: pct).color
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            // 1.4 B2 — one line: the band and the share of days inside it.
-            // "Im Zielbereich" above and "Ziel 71 bis 74 kg" below the rail
-            // said the same thing twice.
-            HStack {
-                Text(band.targetLine)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .lineLimit(1)
-                Spacer()
-                Text(HLNumberFormat.percent(pct))
-                    .font(.hlCaption.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(tone)
+            if Self.stacks(at: dynamicTypeSize) {
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    titleText.fixedSize(horizontal: false, vertical: true)
+                    shareText(tone)
+                }
+            } else {
+                HStack {
+                    titleText.lineLimit(1)
+                    Spacer()
+                    shareText(tone)
+                }
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    // DRIFT-8 — share the ONE empty-track token + corner radius
-                    // with `InsightsInTargetBar` so every Insights percentage rail
-                    // reads as one family.
-                    RoundedRectangle(cornerRadius: InsightsInTargetBar.cornerRadius)
-                        .fill(InsightsInTargetBar.trackTone)
-                        .frame(height: InsightsInTargetBar.railHeight)
-                    RoundedRectangle(cornerRadius: InsightsInTargetBar.cornerRadius)
+                    RoundedRectangle(cornerRadius: HLRangeBandMetrics.cornerRadius)
+                        .fill(HLRangeBandMetrics.trackTone)
+                        .frame(height: HLRangeBandMetrics.railHeight)
+                    RoundedRectangle(cornerRadius: HLRangeBandMetrics.cornerRadius)
                         .fill(tone)
                         .frame(
                             width: geo.size.width * RangeBand.fillFraction(pct: pct),
-                            height: InsightsInTargetBar.railHeight
+                            height: HLRangeBandMetrics.railHeight
                         )
                         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: pct)
                 }
             }
-            .frame(height: InsightsInTargetBar.railHeight)
+            .frame(height: HLRangeBandMetrics.railHeight)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "\(pct) of 30 days in target range"))
+        .accessibilityLabel(Text(verbatim: spokenText))
     }
 }
 
@@ -140,6 +219,7 @@ public struct RangeBandRow: View {
         RangeBandRow(band: RangeBand(lowerLabel: "71", upperLabel: "74", unit: "kg", pctInRange: 88))
         RangeBandRow(band: RangeBand(lowerLabel: "120/70", upperLabel: "129/79", unit: "mmHg", pctInRange: 62))
         RangeBandRow(band: RangeBand(lowerLabel: "60", upperLabel: "70", unit: "bpm", pctInRange: 34))
+        RangeBandRow(share: 84, window: "90 T")
     }
     .padding()
     .background(HLSurface.secondary)

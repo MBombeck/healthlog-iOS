@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// A2 (1.4, R3 S6) — without a server, the history walk holds instead of
+    /// Without a server, the history walk holds instead of
     /// filling the outbox.
     ///
     /// Up to 1.3.0 an offline phone, or an uploader in its backoff, parked

@@ -1,7 +1,7 @@
 import Foundation
 
 /// `GET | PUT /api/auth/me/report-selection` — the owner's saved report
-/// profile (CU-01).
+/// profile.
 ///
 /// ```
 /// GET  → { "profile": SavedReportProfile | null }

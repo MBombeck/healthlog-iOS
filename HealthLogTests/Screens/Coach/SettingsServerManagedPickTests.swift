@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **RCA-coach-ai (v0.15.1) — the server-managed External-AI "dead pick".**
+/// **RCA-coach-ai — the server-managed External-AI "dead pick".**
 ///
 /// Operator symptom (real device): Settings shows *External AI* selected, yet the
 /// Coach FAB + Insights coach surfaces are nowhere and Coach answers stay
@@ -126,7 +126,7 @@ struct SettingsServerManagedPickTests {
         #expect(store.aiMode == .online)
     }
 
-    // MARK: - 4. Routing: the server arm wins for an EXTERNAL-AI user (v0152 C3)
+    // MARK: - 4. Routing: the server arm wins for an EXTERNAL-AI user
 
     /// The production `prefersServerArm` closure (`AppContainer+SpeziLLM`). Mirrors
     /// the wiring exactly so the routing contract is pinned against the real store
@@ -137,7 +137,7 @@ struct SettingsServerManagedPickTests {
         { store.aiMode == .online || store.isOnlineIntentPending }
     }
 
-    /// **v0152 W-COACH-CLEANUP (C3) — the b198 felt regression.** The operator
+    /// **The b198 felt regression.** The operator
     /// selected External AI but the coach answered on-device. Root cause: while the
     /// server-managed grant was pending (`aiMode == .none`, intent pending), the
     /// b198 on-device-reach surfacing answered him LOCALLY. The fix prefers the

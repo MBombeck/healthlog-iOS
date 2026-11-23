@@ -5,7 +5,7 @@ import Foundation
     @testable import HealthLog
 #endif
 
-/// #114 / #115 · 0.2 — capability states in the exact shape server v1.39
+/// Capability states in the exact shape server v1.39
 /// resolves them (`src/lib/ai/capabilities/types.ts`: `reason` is null exactly
 /// when `available`; `onDeviceAllowed` is true only for `no_provider` and
 /// `consent_required`).
@@ -34,6 +34,24 @@ enum AICaps {
     /// A fixed reader: every capability available, with `overrides` applied.
     static func reader(_ overrides: [AICapabilityKey: AICapabilityState] = [:]) -> FixedAICapabilities {
         FixedAICapabilities(block(overrides))
+    }
+}
+
+/// A fixed capability map: the block's states, or every capability legacy
+/// when there is no block.
+struct FixedAICapabilities: AICapabilityReading {
+    private let block: AIAccountBlock?
+
+    init(_ block: AIAccountBlock?) {
+        self.block = block
+    }
+
+    func state(_ key: AICapabilityKey) -> AICapabilityState {
+        block?.state(key) ?? .legacy
+    }
+
+    var reportsCapabilities: Bool {
+        block != nil
     }
 }
 

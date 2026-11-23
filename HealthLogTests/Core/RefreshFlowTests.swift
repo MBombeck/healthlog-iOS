@@ -149,7 +149,7 @@ struct RefreshFlowTests {
 
     @Test("401-cascade gating: TRANSIENT refresh failure must NOT log the user out")
     func transientRefreshDoesNotLogout() async {
-        // The 401-cascade protection (v0.10.0): a refresh that fails for a
+        // The 401-cascade protection: a refresh that fails for a
         // transient reason (offline / 5xx / rate-limit) returns `.transient`.
         // The request fails THIS once, but the session is left intact —
         // `onUnauthorized` must NOT fire. Pre-v0.10.0 this path nuked the

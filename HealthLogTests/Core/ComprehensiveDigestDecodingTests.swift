@@ -248,7 +248,7 @@ struct ComprehensiveDigestDecodingTests {
         }
     }
 
-    /// v0.7.0 W-API-RENDER — an unrecognised BMI token must decode to
+    /// An unrecognised BMI token must decode to
     /// `.unknown`, NOT the prior medically-misleading `.normal` fallback.
     /// A server typo or a new WHO sub-band has to surface as "Unbekannt"
     /// rather than a false-reassuring green "Normalgewicht" chip.
@@ -262,7 +262,7 @@ struct ComprehensiveDigestDecodingTests {
         }
     }
 
-    /// v0.7.0 W-API-RENDER — same contract for BP: an unknown ESH token is
+    /// Same contract for BP: an unknown ESH token is
     /// `.unknown`, never the dangerous `.normal` default on a hypertension
     /// surface.
     @Test("BP classification maps unknown tokens to .unknown, never .normal")

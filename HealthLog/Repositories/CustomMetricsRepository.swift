@@ -136,20 +136,17 @@ public actor CustomMetricsRepository {
     @discardableResult
     public func createMetric(_ body: CustomMetricCreate) async throws -> CustomMetricDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createCustomMetric,
+            payload: OutboxQueue.Payloads.CreateCustomMetric(body: body),
+            key: key
+        ) { [self] in
             let req: APIRequest<CustomMetricDTO> = try .post(
                 "/api/custom-metrics", body: body, idempotencyKey: key
             )
             let created = try await api.send(req)
             await invalidate()
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .createCustomMetric,
-                payload: OutboxQueue.Payloads.CreateCustomMetric(body: body),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -171,20 +168,17 @@ public actor CustomMetricsRepository {
     @discardableResult
     public func updateMetric(id: String, _ patch: CustomMetricPatch) async throws -> CustomMetricDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateCustomMetric,
+            payload: OutboxQueue.Payloads.UpdateCustomMetric(id: id, patch: patch),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<CustomMetricDTO> = try .patch(
                 "/api/custom-metrics/\(id)", body: patch, idempotencyKey: key
             )
             let updated = try await api.send(req)
             await invalidate()
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .updateCustomMetric,
-                payload: OutboxQueue.Payloads.UpdateCustomMetric(id: id, patch: patch),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -202,19 +196,16 @@ public actor CustomMetricsRepository {
     /// restore endpoint, so the client offers no undo-restore (unlike labs).
     public func deleteMetric(id: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(
+            .deleteCustomMetric,
+            payload: OutboxQueue.Payloads.DeleteCustomMetric(id: id),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<DeletedFlagResponse> = .delete(
                 "/api/custom-metrics/\(id)", idempotencyKey: key
             )
             _ = try await api.send(req)
             await invalidate()
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .deleteCustomMetric,
-                payload: OutboxQueue.Payloads.DeleteCustomMetric(id: id),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -234,20 +225,17 @@ public actor CustomMetricsRepository {
     @discardableResult
     public func createEntry(metricID: String, _ body: CustomMetricEntryCreate) async throws -> CustomMetricEntryDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createCustomMetricEntry,
+            payload: OutboxQueue.Payloads.CreateCustomMetricEntry(metricID: metricID, body: body),
+            key: key, clientEntityId: metricID
+        ) { [self] in
             let req: APIRequest<CustomMetricEntryDTO> = try .post(
                 "/api/custom-metrics/\(metricID)/entries", body: body, idempotencyKey: key
             )
             let created = try await api.send(req)
             await invalidate()
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .createCustomMetricEntry,
-                payload: OutboxQueue.Payloads.CreateCustomMetricEntry(metricID: metricID, body: body),
-                key: key, clientEntityId: metricID
-            )
-            throw err
         }
     }
 
@@ -274,22 +262,19 @@ public actor CustomMetricsRepository {
         _ patch: CustomMetricEntryPatch
     ) async throws -> CustomMetricEntryDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateCustomMetricEntry,
+            payload: OutboxQueue.Payloads.UpdateCustomMetricEntry(
+                metricID: metricID, entryID: entryID, patch: patch
+            ),
+            key: key, clientEntityId: entryID
+        ) { [self] in
             let req: APIRequest<CustomMetricEntryDTO> = try .patch(
                 "/api/custom-metrics/\(metricID)/entries/\(entryID)", body: patch, idempotencyKey: key
             )
             let updated = try await api.send(req)
             await invalidate()
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .updateCustomMetricEntry,
-                payload: OutboxQueue.Payloads.UpdateCustomMetricEntry(
-                    metricID: metricID, entryID: entryID, patch: patch
-                ),
-                key: key, clientEntityId: entryID
-            )
-            throw err
         }
     }
 
@@ -313,19 +298,16 @@ public actor CustomMetricsRepository {
     /// promise an undo.
     public func deleteEntry(metricID: String, entryID: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(
+            .deleteCustomMetricEntry,
+            payload: OutboxQueue.Payloads.DeleteCustomMetricEntry(metricID: metricID, entryID: entryID),
+            key: key, clientEntityId: entryID
+        ) { [self] in
             let req: APIRequest<DeletedFlagResponse> = .delete(
                 "/api/custom-metrics/\(metricID)/entries/\(entryID)", idempotencyKey: key
             )
             _ = try await api.send(req)
             await invalidate()
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .deleteCustomMetricEntry,
-                payload: OutboxQueue.Payloads.DeleteCustomMetricEntry(metricID: metricID, entryID: entryID),
-                key: key, clientEntityId: entryID
-            )
-            throw err
         }
     }
 
@@ -349,32 +331,21 @@ public actor CustomMetricsRepository {
         await swr?.invalidate([.customMetrics])
     }
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
-        clientEntityId: String? = nil
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(
-                kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
-            ))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Custom-metrics outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        clientEntityId: String? = nil,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(
+            kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
+        )
+        return try await outbox.writeAhead(op, send: send)
     }
 }

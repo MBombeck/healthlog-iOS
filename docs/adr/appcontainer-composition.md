@@ -69,8 +69,6 @@ have to preserve it across type boundaries (interleaved, not layered):
   stores — a clean "repos here / stores there" split is impossible.
 - The PR-snapshot box (`personalRecordsSnapshotBox`) is created early, captured
   by `MeasurementsStore`, then bound late once `serverStatsStores` exists.
-- `earlyFeatureFlagsStore` is built ahead of position for MoodStore wiring, then
-  assigned to `featureFlagsStore` later.
 - `unauthorizedRef` is reset inside the cascade;
   `notificationClearOnLogoutHook` is defaulted in init and swapped by tests.
 - `wireLogoutHooks` is deferred to the END of init because the cascade hooks
@@ -88,7 +86,6 @@ have to preserve it across type boundaries (interleaved, not layered):
   `DashboardStore` reads.
 
 ### Repositories
-- `featureFlagsRepo` — F-1; see `featureFlagsStore`.
 - `glp1LocalRepo` — T-5 GLP-1 detail stack: local-only SwiftData repo for
   titration ladder, side-effects logbook, pen inventory, injection-site picker.
   Parallel to the server-backed `medicationsRepo`; no replay-loop wiring until a
@@ -188,13 +185,9 @@ have to preserve it across type boundaries (interleaved, not layered):
   disabled (the BGTask sweep alone never fires in that case).
 
 ### Stores (PHI-bearing slice — these stay flat for the Mirror sweep)
-- `syncModeStore` — `.standalone` (local-only) vs `.paired` (server-backed). Set
-  during onboarding, flippable via Settings → "Mit Server verbinden".
-- `backendAvailability` — R4 §3.1 groundwork: single capability surface folding
-  sync-mode + auth + reachability into one observable that views/stores consult
-  instead of hard-reading `SyncModeStore.isStandalone`. Paired-path invariant:
-  every flag returns `true` on a normal paired+authed install (zero behaviour
-  change). The seam v0.11 standalone hangs off.
+- `backendAvailability` — single capability surface folding auth, reachability
+  and "is a server address stored" into one observable that views and stores
+  consult instead of reading `AuthStore.phase` and `Reachability` directly.
 - `insightsLayoutStore` — v0.8.0 W10 server-first Insights tile layout store.
 - `deliveryPreferencesStore` — v0.9.0 RA3 unified per-medication delivery
   preferences (Live Activity + AlarmKit critical alarm) with a "Dieses Gerät /
@@ -271,8 +264,6 @@ have to preserve it across type boundaries (interleaved, not layered):
   `@Observable` stores.
 - `avatarStore` — v0.8.0 W11 self-hosted avatar display + upload store.
 - `hkReadinessStore` — HK-readiness self-check store (F7 / v0.4.1).
-- `featureFlagsStore` — F-1 / R5 + D-1: flag cache + on-device assistant services
-  (see `AppContainer+FeatureFlags`).
 - `serverStatsStores` — V052-A7.
 - `undoCoordinator` — shared undo affordance: surfaces the transient
   `Rückgängig`-pill for destructive store paths (measurement / mood deletes,

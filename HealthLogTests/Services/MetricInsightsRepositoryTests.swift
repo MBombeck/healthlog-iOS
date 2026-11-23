@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-// MARK: - CU-07 — route scoping
+// MARK: - Route scoping
 
 /// The only routes `MetricInsightsRepository` can reach: the dedicated
 /// `…-status` assessments, the generic `metric-status` route, and the
@@ -23,7 +23,7 @@ private func isMetricInsightsRoute(_ request: URLRequest) -> Bool {
     return path.hasSuffix("-status") || path == "/api/insights/comprehensive"
 }
 
-// MARK: - Task #50 — preparing→poll→ready assessment lifecycle
+// MARK: - Preparing→poll→ready assessment lifecycle
 
 /// Locks the Task #50 fix: the per-metric assessment is served
 /// stale-while-revalidate (a cold cache returns `preparing:true, text:null` and
@@ -172,7 +172,7 @@ struct MetricInsightsAssessmentPollingTests {
     }
 }
 
-/// PB1 Reconcile (H1) — locks the new consent-gate contract on the
+/// PB1 Reconcile — locks the new consent-gate contract on the
 /// per-metric "Befunde" path. Previously `MetricInsightsRepository.fetch`
 /// hit `/api/insights/{metric}-status` unconditionally, even though the
 /// server runs an LLM call when a provider is configured. App Store
@@ -259,7 +259,7 @@ struct MetricInsightsRepositoryTests {
         #expect(requestCount == 0, "no endpoint mapping ⇒ no request fired (cheaper than 404 retry)")
     }
 
-    // MARK: - v0.11 W28a — generic metric-status route
+    // MARK: - Generic metric-status route
 
     @Test("a generic-registry kind hits /api/insights/metric-status with the metric id")
     func genericKindHitsMetricStatusRoute() async throws {
@@ -339,7 +339,7 @@ struct MetricInsightsRepositoryTests {
         #expect(MetricInsightsRepository.metricStatusIDTable[.bmi] == nil)
     }
 
-    // MARK: - v0.11 W46 — un-gated assessment read (web-mirror Insights page)
+    // MARK: - Un-gated assessment read (web-mirror Insights page)
 
     @Test("fetchAssessment fires the request and decodes even when the consent gate is closed")
     func fetchAssessmentBypassesClosedConsentGate() async throws {
@@ -426,7 +426,7 @@ struct MetricInsightsRepositoryTests {
         #expect(result == nil)
     }
 
-    // MARK: - v0.7.0 W-API-RENDER — per-metric summary
+    // MARK: - Per-metric summary
 
     @Test("summary(metric:) extracts the metric's MetricSummary from the comprehensive digest")
     func summaryExtractsFromComprehensive() async throws {

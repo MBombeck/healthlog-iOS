@@ -22,7 +22,7 @@ struct LabEntryDraft: Equatable {
     var selectedBiomarkerID: String?
     var analyte: String = ""
     var unit: String = ""
-    /// #160 — "No unit" belongs to the analyte, so it resets with it.
+    /// "No unit" belongs to the analyte, so it resets with it.
     var noUnit = false
     /// The NUMERIC field's raw text (locale-parsed at save time).
     var valueText: String = ""

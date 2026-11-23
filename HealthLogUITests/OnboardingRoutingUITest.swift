@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 16 Plan 01 — K10, walked end to end on a fresh device.**
+/// **K10, walked end to end on a fresh device.**
 ///
 /// The walkthrough's complaint was not "a step is broken". It was that a step
 /// the app has was never offered: the operator's new install signed into an
@@ -37,7 +37,7 @@ final class OnboardingRoutingUITest: XCTestCase {
         )
         submitLogin(app)
 
-        // K10 — the ask that never happened. A device that has never shown the
+        // The ask that never happened. A device that has never shown the
         // system sheet is asked for it, whatever the account flag says.
         let connect = app.buttons["onboarding.healthKit.connect"]
         let asked = connect.waitForExistence(timeout: 30)

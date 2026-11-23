@@ -118,7 +118,7 @@ struct ComplianceHeatmapSectionTests {
         )
     }
 
-    // MARK: - #13 — zero-bucket padding must not satisfy the gate
+    // MARK: - Zero-bucket padding must not satisfy the gate
 
     @Test("Server-style zero buckets (scheduled == 0, taken == 0) do not count as history")
     func zeroBucketsFailGate() throws {
@@ -169,7 +169,7 @@ struct ComplianceHeatmapSectionTests {
         )
     }
 
-    // MARK: - #13 — operator-selectable window
+    // MARK: - Operator-selectable window
 
     @Test("Window options are exactly 4 / 8 / 12 / 26 weeks")
     func windowOptions() {

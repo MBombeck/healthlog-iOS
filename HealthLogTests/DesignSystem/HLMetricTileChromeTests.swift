@@ -11,7 +11,7 @@ import Testing
 /// the variants render to a non-zero image through the shared primitives, and
 /// (b) the load-bearing adverse-trend → colour-signal mapping the glyph reads.
 ///
-/// The Insights variant (`HLMetricTile`) is gone (#115 B7): it was only built
+/// The Insights variant (`HLMetricTile`) is gone: it was only built
 /// by the never-mounted target grid and long-tail block, and it drew a
 /// favourable change as an up arrow whatever the real direction was.
 @MainActor
@@ -29,7 +29,7 @@ struct HLMetricTileChromeTests {
     @Test("HLTileHeaderRow renders glyph + title + trailing accessory")
     func headerRowRenders() {
         let row = HLTileHeaderRow(icon: "scalemass", title: Text("Weight")) {
-            HLTileTrendGlyph(symbolName: "arrow.down", isAdverse: false)
+            Image(systemName: "arrow.down")
         }
         #expect(renders(row, height: 40))
     }
@@ -37,14 +37,6 @@ struct HLMetricTileChromeTests {
     @Test("HLTileSparkline renders the mono series row")
     func sparklineRenders() {
         #expect(renders(HLTileSparkline(values: [1, 2, 3, 2, 4]), height: 40))
-    }
-
-    @Test("HLTileTrendGlyph suppresses entirely on a nil symbol")
-    func trendGlyphSuppresses() {
-        // An unknown trend passes nil → the glyph renders nothing. The host
-        // still composes (empty view is valid), so we assert no crash + a
-        // rendered host frame.
-        #expect(renders(HLTileTrendGlyph(symbolName: nil, isAdverse: false), height: 20))
     }
 
     // MARK: - Variant rendering (Dashboard tile + Sleep composite)

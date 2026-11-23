@@ -11,7 +11,7 @@ import SwiftUI
 /// with "Background" or "Foreground" next to it, without anybody pressing
 /// "Sync all", is the evidence the server team asked for.
 ///
-/// **W5 (1.3.0)** — this is a local record and now says so. A type with no
+/// This is a local record and now says so. A type with no
 /// upload here ("none sent from this iPhone yet") can still have reached the
 /// server as single readings, so each row carries the server's own line for
 /// the same type underneath.
@@ -21,25 +21,21 @@ extension SettingsHKSyncDiagnosticsScreen {
         + [HealthKitHRBucketRow.hkIdentifier]
 
     var statsUploadCard: some View {
-        // 1.4 B2-c — how to read the rows is in the (i).
-        HLSettingsCard(
-            icon: "sum",
-            title: "settings.hkdiag.stats.title"
-        ) {
+        // How to read the rows is in the (i).
+        HLCard("settings.hkdiag.stats.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 let nothingSent = Self.nothingSent(statsUploadLog)
                 if statsUploadLog?.lastSweep != nil || !nothingSent {
                     statRow(label: "settings.hkdiag.stats.last_sweep", value: statsEventLabel(statsUploadLog?.lastSweep))
                 }
-                // 1.4 B4 — when this iPhone has sent none of them, one sentence
+                // When this iPhone has sent none of them, one sentence
                 // for the card instead of the same "none sent from this
                 // iPhone yet" on all six rows. A type the server has its own
                 // line for still shows that line.
                 if nothingSent {
-                    Text("settings.hkdiag.stats.none_sent_all")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // Whole words: plain text broke "Tages-/werte".
+                    HLWholeWordText(String(localized: "settings.hkdiag.stats.none_sent_all"), font: .hlSubhead)
+                        .hlText(.factLabel)
                         .accessibilityIdentifier("settings.hkdiag.stats.noneSent")
                 }
                 ForEach(Self.statsUploadIdentifiers, id: \.self) { identifier in
@@ -60,7 +56,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            // W5 — the server's word for the same type, so "none
+                            // The server's word for the same type, so "none
                             // sent from this iPhone" and "received 5 hours ago" read
                             // as two facts, not a contradiction (pulse can arrive as
                             // single readings).
@@ -91,13 +87,13 @@ extension SettingsHKSyncDiagnosticsScreen {
         return "\(relativeOrNever(entry.at)), \(trigger)"
     }
 
-    /// 1.4 B4 — true when this iPhone has sent none of the listed types yet:
+    /// True when this iPhone has sent none of the listed types yet:
     /// the card then says so once instead of on every row.
     static func nothingSent(_ log: HealthKitStatsUploadLog?) -> Bool {
         statsUploadIdentifiers.allSatisfy { log?.uploads[$0] == nil }
     }
 
-    /// W5 — "New value sent 5 minutes ago, Background", or "None sent from
+    /// "New value sent 5 minutes ago, Background", or "None sent from
     /// this iPhone yet": a local record, and it says so.
     static func statsSentLabel(_ entry: HealthKitStatsUploadLog.Entry?) -> String {
         guard let entry else { return String(localized: "settings.hkdiag.stats.none_sent") }
@@ -106,7 +102,7 @@ extension SettingsHKSyncDiagnosticsScreen {
         return String(localized: "settings.hkdiag.stats.sent \(when) \(trigger)")
     }
 
-    /// W5 — "Server: last checked 5 hours ago (Background)" for the same type,
+    /// "Server: last checked 5 hours ago (Background)" for the same type,
     /// or `nil` when the server has no row for it (or no receipt fields).
     static func statsServerLine(_ identifier: String, freshness: [MetricFreshness]?) -> String? {
         guard let row = ServerFreshnessFacts.row(forHealthKitIdentifier: identifier, in: freshness),

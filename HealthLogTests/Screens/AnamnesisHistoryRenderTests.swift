@@ -3,7 +3,7 @@ import Foundation
 import SnapshotTesting
 import Testing
 
-/// **CU-32 — Render-Beweis für den Verlauf.**
+/// **Render-Beweis für den Verlauf.**
 ///
 /// Hauspraxis: nicht der Pixel-Snapshot, sondern der **Zustandsdeskriptor**,
 /// der den Render-Pfad speist (`MedicationsRowSnapshotTests`-Idiom) — SDK-Drift

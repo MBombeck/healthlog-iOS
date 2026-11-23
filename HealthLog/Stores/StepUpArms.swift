@@ -1,6 +1,6 @@
 import Foundation
 
-/// SEC (1.5, #151) — which ways of confirming the step-up sheet offers.
+/// Which ways of confirming the step-up sheet offers.
 ///
 /// Two inputs decided this until 1.4: whether the route wants a second factor
 /// (then no password) and whether the account has an authenticator (then a

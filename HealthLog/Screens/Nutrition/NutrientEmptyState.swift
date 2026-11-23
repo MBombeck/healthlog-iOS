@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **N2 — the honest empty state of the nutrient surface.**
+/// **The honest empty state of the nutrient surface.**
 ///
 /// The surface had exactly one thing to say when it held no rows: „Sobald Apple
 /// Health Vitamin-, Mineralstoff- oder Wasserdaten liefert, erscheinen hier die
@@ -105,8 +105,9 @@ enum NutrientEmptyState: String, Equatable, CaseIterable {
 /// Owns the enable-CTA so the „Nährstoffe einschalten" button really flips the
 /// module and runs the same authorization + sync the switchboard runs — the
 /// reader lands on a working surface, not on the switchboard with one more thing
-/// to figure out.
-struct NutrientEmptyStateView: View {
+/// to figure out. It draws HLEmptyState; the type only owns the enable action
+/// behind its button.
+struct NutrientEmptyStateView: View { // swiftlint:disable:this hl_no_local_state_view
     let state: NutrientEmptyState
     /// The window `GET /api/nutrients` checked, named at the end of the
     /// message ("Geprüft wurden die letzten 7 Tage."). `nil` leaves it out.
@@ -125,8 +126,8 @@ struct NutrientEmptyStateView: View {
             ) {
                 if descriptor.primaryAction == .enableModule, let actionKey = descriptor.actionKey {
                     HLButton(
-                        actionKey,
-                        icon: "checkmark.circle",
+                        LocalizedStringKey(actionKey),
+                        systemImage: "checkmark.circle",
                         variant: .secondary,
                         isLoading: isEnabling
                     ) {

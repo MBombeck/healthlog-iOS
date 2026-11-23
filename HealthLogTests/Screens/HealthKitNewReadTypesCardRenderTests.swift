@@ -7,7 +7,7 @@
     import Testing
     import UIKit
 
-    /// **HK-NEW (1.5)** — the new-types card renders light and dark, and at
+    /// The new-types card renders light and dark, and at
     /// the largest accessibility text size, in the run's language. With
     /// `HKNEW_RENDER_DIR` set (pass `TEST_RUNNER_HKNEW_RENDER_DIR` to
     /// xcodebuild) the pictures go to that folder, never into the checkout.
@@ -31,7 +31,7 @@
 
         @Test("the settings link label reads as a quiet caption link")
         func settingsLink() throws {
-            let link = HLSettingsCard(icon: "list.bullet.rectangle.fill", title: "Apple Health data types") {
+            let link = HLCard("Apple Health data types") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     Text("settings.applehealth.newTypes.link")
                         .font(.hlCaption)
@@ -54,6 +54,8 @@
             .padding(HLSpace.md)
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(
             _ view: some View,
             name: String,

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// REG-10 — the medication detail screen sorts intake history by
+/// The medication detail screen sorts intake history by
 /// `scheduledFor desc` at the view layer. Server returns rows ordered
 /// by `takenAt desc`; rows with `takenAt == nil` (past-due-pending)
 /// drift out of chronological order under that ordering and surface

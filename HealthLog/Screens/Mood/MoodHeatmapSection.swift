@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// v0.10.0 W-Mood-A — the mood "GitHub Ding" (DESIGN-B §1).
+/// The mood "GitHub Ding".
 ///
 /// Adapts `ComplianceHeatmapSection` verbatim in structure — same fixed 12×7
 /// matrix, weekday-label column, honesty gates, accessibility seam — and swaps
 /// only the per-cell datum (daily-avg mood bucket) and the fill palette (a
 /// single-hue `HLText.primary` opacity ramp, NOT the compliance status colors:
-/// mood has no missed/taken valence, DESIGN-A §2.3). A **Year-in-Pixels** mode
-/// (DESIGN-B §1.7) expands to a full-year `RectangleMark` grid on toggle.
+/// mood has no missed/taken valence, DESIGN-A §2.3). A **Year-in-Pixels** grid
+/// takes over for the year and the whole history.
 ///
 /// Honesty gates: a tiny 14-day pre-roll (so a one-dot device doesn't read as
 /// broken) + all-empty hint. Color = signal only; the cells are the
@@ -18,17 +18,12 @@ struct MoodHeatmapSection: View {
     let dailyAverages: [MoodDailyAverage]
     /// Optional cell-tap callback → host opens that day.
     var onSelectDay: ((Date) -> Void)?
-    /// v0.14.4 E1 — when set, the pixel grid is driven by the PAGE's bottom range
-    /// control (single source of truth) instead of its own "12 weeks | Year"
-    /// toggle. The Insights Mood page passes its `MoodPeriod` here so changing the
-    /// floating range re-renders the grid for exactly that window; the internal
-    /// toggle is then hidden. `nil` (the More → Stimmung host) keeps the legacy
-    /// self-owned toggle.
+    /// The page's period. The grid follows the page's one period control and
+    /// has no switch of its own; `nil` (a host without a period) draws the
+    /// canonical twelve weeks.
     var period: MoodPeriod?
-
-    @State private var mode: Mode = .twelveWeeks
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// v0.13 WP — at accessibility text sizes the sub-10pt weekday micro-labels
+    /// At accessibility text sizes the sub-10pt weekday micro-labels
     /// are illegible and can't scale (the cells are fixed-size). Hide the whole
     /// label column instead of pinning a tiny font; the grid still reads as a
     /// calendar and the cells carry the accessible per-day values.
@@ -43,26 +38,31 @@ struct MoodHeatmapSection: View {
     private nonisolated static let weeks = 12
     private nonisolated static let daysPerWeek = 7
 
-    /// v0.14.4 E1 — the grid mode in effect: page-driven when a `period` is
-    /// supplied (year lens → year grid, otherwise the compact week grid), else
-    /// the operator's own toggle.
+    /// The grid mode in effect.
     private var effectiveMode: Mode {
-        guard let period else { return mode }
-        return period == .year ? .year : .twelveWeeks
+        Self.mode(forPeriod: period)
     }
 
-    /// v0.14.4 E1 — column count of the compact grid. When page-driven, the
-    /// window length sets it (30d → 5 weeks, 90d → 13 weeks); otherwise the
-    /// canonical 12.
+    /// Pure period → grid rule: the year and the whole history draw the
+    /// year-in-pixels grid, every shorter window the week grid.
+    nonisolated static func mode(forPeriod period: MoodPeriod?) -> Mode {
+        switch period {
+        case .year, .all: .year
+        case .day, .week, .month, .sixMonths, .none: .twelveWeeks
+        }
+    }
+
+    /// Column count of the compact grid: the window length in whole weeks
+    /// (M → 5, 6M → 26); without a period the canonical 12.
     private var compactWeeks: Int {
         Self.compactWeeks(forPeriod: period)
     }
 
-    /// Pure period → compact-grid week-count rule (E1). Exposed for the unit test:
+    /// Pure period → compact-grid week-count rule. Exposed for the unit test:
     /// a page-driven window sizes the grid to exactly that window (rounded up to
-    /// whole weeks); `nil` / `.year` fall back to the canonical 12.
+    /// whole weeks); `nil` and the year-grid periods fall back to the canonical 12.
     nonisolated static func compactWeeks(forPeriod period: MoodPeriod?) -> Int {
-        guard let period, period != .year else { return weeks }
+        guard let period, mode(forPeriod: period) == .twelveWeeks else { return weeks }
         return Int((Double(period.rawValue) / Double(daysPerWeek)).rounded(.up))
     }
 
@@ -74,14 +74,18 @@ struct MoodHeatmapSection: View {
     /// genuine zero-entries case.
     private nonisolated static let minHistoryDays = 14
     private static let cellSize: CGFloat = 10
+    /// The widest a week column of the short grid grows: on a wide page the
+    /// weeks stay a compact block beside their weekday letters instead of
+    /// spreading a few dots across the whole width.
+    static let weekColumnMaxWidth: CGFloat = 28
     private static let cellSpacing: CGFloat = HLSpace.xxs
 
     /// Locale-aware Mon-first weekday labels (ported from compliance).
     private nonisolated static let weekdayLabels: [String] = {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        let veryShort: [String] = formatter.veryShortWeekdaySymbols ?? []
-        let short: [String] = formatter.shortWeekdaySymbols ?? []
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = .autoupdatingCurrent
+        let veryShort = calendar.veryShortWeekdaySymbols
+        let short = calendar.shortWeekdaySymbols
         let raw: [String] = veryShort.count == 7 ? veryShort : short
         guard raw.count == 7 else { return Array(repeating: "", count: 7) }
         return [raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[0]]
@@ -100,8 +104,8 @@ struct MoodHeatmapSection: View {
 
     var body: some View {
         if !hasEnoughHistory || bucketByDay.isEmpty {
-            // 14-day pre-roll gate — hide only on brand-new devices (B13).
-            // 1.4 B2: a window without a single scored day is absent too,
+            // 14-day pre-roll gate — hide only on brand-new devices.
+            // A window without a single scored day is absent too,
             // rather than a heading over "log your mood on the Capture tab".
             EmptyView()
         } else {
@@ -115,6 +119,7 @@ struct MoodHeatmapSection: View {
                 }
                 legend
             }
+            .moodSectionGap(after: HLSpace.sm)
             .opacity(appeared || reduceMotion ? 1 : 0)
             .onAppear {
                 guard !reduceMotion else { appeared = true
@@ -125,78 +130,18 @@ struct MoodHeatmapSection: View {
         }
     }
 
-    // MARK: - Header (title + Ø caption + mode toggle)
+    // MARK: - Header (title + Ø caption)
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            // v0.14.7 D — the heatmap heading now uses the canonical Insights
-            // section header (`InsightsSectionHeader`, sentence-case headline,
-            // `HLText.primary`), IDENTICAL to the sibling "Mood today" / "Trend"
-            // headings in `MoodAnalysisContent`. It previously used
-            // `HLSectionLabel` (uppercase-tracked, secondary, footnote) — the
-            // app-wide label role the doctrine explicitly bars inside Insights —
-            // so the pixel section stood out as the wrong size/weight.
-            //
-            // The redundant range label ("Mood — 30 days / … / last year") was
-            // dropped: the bottom period selector is the single source of truth
-            // for the window, and the sibling sections carry no such suffix.
-            InsightsSectionHeader(headerTitle, flush: true)
-            Spacer(minLength: HLSpace.xs)
+        // The window is named by the page's period control, not by the
+        // heading, and the grid has no switch of its own.
+        HLSectionHeader("Mood calendar", rank: .area) {
             if !meanLabel.isEmpty {
                 Text(meanLabel)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .monospacedDigit()
             }
-            // v0.14.4 E1 — the self-owned toggle is hidden when the page range
-            // drives the grid (single source of truth = the floating control).
-            if period == nil {
-                modeToggle
-            }
         }
-    }
-
-    /// The pixel-grid heading. Range-free — the active window is owned by the
-    /// page's period selector (page-driven) or the inline mode toggle (More host),
-    /// so the heading no longer restates it.
-    private var headerTitle: LocalizedStringKey {
-        "Mood calendar"
-    }
-
-    /// Visible "12 weeks | Year" pill pair (B14: the old dim ink glyph was
-    /// undiscoverable). Monochrome — selected pill = filled ink, unselected =
-    /// outline — so it stays calm but obviously switchable. Each pill keeps a
-    /// ≥44 pt tap target while the visible chip stays compact.
-    private var modeToggle: some View {
-        HStack(spacing: HLSpace.xxs) {
-            modePill(Text("12 weeks"), isSelected: mode == .twelveWeeks, target: .twelveWeeks)
-            modePill(Text("Year"), isSelected: mode == .year, target: .year)
-        }
-        .accessibilityElement(children: .contain)
-    }
-
-    private func modePill(_ label: Text, isSelected: Bool, target: Mode) -> some View {
-        Button {
-            guard mode != target else { return }
-            withAnimation(reduceMotion ? nil : HLMotion.spring) { mode = target }
-        } label: {
-            label
-                .font(.hlCaption2.weight(.semibold))
-                .foregroundStyle(isSelected ? HLSurface.primary : HLText.secondary)
-                .padding(.horizontal, HLSpace.xs)
-                .padding(.vertical, HLSpace.xxs)
-                .background {
-                    Capsule()
-                        .fill(isSelected ? HLText.primary : Color.clear)
-                        .overlay {
-                            Capsule().strokeBorder(HLText.primary.opacity(isSelected ? 0 : 0.20), lineWidth: 1)
-                        }
-                }
-                .frame(minHeight: 44)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - 12-week grid (ported compliance layout)
@@ -215,7 +160,7 @@ struct MoodHeatmapSection: View {
                     HStack(spacing: Self.cellSpacing) {
                         ForEach(0 ..< compactWeeks, id: \.self) { column in
                             cell(for: day(forRow: row, column: column))
-                                .frame(maxWidth: .infinity)
+                                .frame(maxWidth: Self.weekColumnMaxWidth)
                         }
                     }
                 }
@@ -224,7 +169,7 @@ struct MoodHeatmapSection: View {
         }
     }
 
-    // MARK: - Year-in-Pixels grid (DESIGN-B §1.7)
+    // MARK: - Year-in-Pixels grid
 
     /// A 7-row × 53-column "Year in Pixels" grid (GitHub layout) sharing the
     /// §1.2 bucketer + §1.3 ramp. Hand-laid as fixed cells (not `RectangleMark`)
@@ -235,7 +180,7 @@ struct MoodHeatmapSection: View {
         return HStack(alignment: .top, spacing: HLSpace.xs) {
             if dynamicTypeSize < .accessibility1 {
                 VStack(alignment: .trailing, spacing: 1) {
-                    // 1.4 B4 — a 6 pt row cannot hold a legible letter, so the
+                    // A 6 pt row cannot hold a legible letter, so the
                     // year grid names every other day (Mo, Mi, Fr, So) and lets
                     // each label use the empty row beside it.
                     ForEach(0 ..< Self.daysPerWeek, id: \.self) { row in
@@ -257,7 +202,7 @@ struct MoodHeatmapSection: View {
         }
     }
 
-    /// 1.4 B4 — the weekday letters at the smallest system text style
+    /// The weekday letters at the smallest system text style
     /// (caption 2, 11 pt) instead of 9 and 7 pt. The grid cells keep their
     /// size, so the label is held at that size up to the largest standard text
     /// size; from the accessibility sizes on, the column is hidden as before.
@@ -318,7 +263,7 @@ struct MoodHeatmapSection: View {
         // the honest read for a no-entry day).
         if let date, bucket != nil, let onSelectDay {
             Button { onSelectDay(date) } label: { circle }
-                .buttonStyle(.plain)
+                .buttonStyle(.hlRow)
                 .accessibilityHint(Text("Double-tap to open"))
         } else {
             circle
@@ -388,12 +333,12 @@ struct MoodHeatmapSection: View {
     private var meanLabel: String {
         guard !dailyAverages.isEmpty else { return "" }
         let mean = dailyAverages.map(\.average).reduce(0, +) / Double(dailyAverages.count)
-        return String(localized: "Ø \(mean.formatted(.number.precision(.fractionLength(1))))")
+        return String(localized: "Ø \(HLValueFormat.number(mean, fractionDigits: 1 ... 1))")
     }
 
     private func accessibilityLabel(for date: Date?, bucket: Int?) -> Text {
         guard let date else { return Text(verbatim: "") }
-        let dateStr = date.formatted(.dateTime.day().month())
+        let dateStr = HLDateFormat.dayMonth(date)
         if let bucket {
             return Text("\(dateStr): \(MoodCopy.levelLabel(bucket))")
         }
@@ -411,15 +356,20 @@ enum MoodHeatmapPalette {
         return max(1, min(5, Int(avg.rounded())))
     }
 
+    /// Opacity of each level on the single-hue `HLText.primary` ramp. The
+    /// lowest level starts at 0.5 so even the worst day keeps 3:1 against
+    /// the light page; at 0.22 it nearly vanished (1.45:1).
+    static let levelOpacities: [Double] = [0.5, 0.62, 0.74, 0.87, 1.0]
+    /// The day without an entry: an inert baseline, not a level.
+    static let emptyOpacity = 0.08
+
     /// Single-hue `HLText.primary` opacity ramp. `nil` → inert empty baseline.
+    static func opacity(forBucket bucket: Int?) -> Double {
+        guard let bucket, (1 ... 5).contains(bucket) else { return emptyOpacity }
+        return levelOpacities[bucket - 1]
+    }
+
     static func fill(forBucket bucket: Int?) -> Color {
-        switch bucket {
-        case 1: HLText.primary.opacity(0.22)
-        case 2: HLText.primary.opacity(0.40)
-        case 3: HLText.primary.opacity(0.58)
-        case 4: HLText.primary.opacity(0.78)
-        case 5: HLText.primary.opacity(1.0)
-        default: HLText.primary.opacity(0.08) // empty
-        }
+        HLText.primary.opacity(opacity(forBucket: bucket))
     }
 }

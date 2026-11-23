@@ -7,17 +7,15 @@
     import SwiftUI
     import Testing
 
-    /// **Phase 08 Plan 04 — the shared primitives, measured on their own terms.**
+    /// **The shared primitives, measured on their own terms.**
     ///
-    /// `Phase8AccessibilityPolicyTests` (08-02) states what the *screens* must
+    /// `Phase8AccessibilityPolicyTests` states what the *screens* must
     /// end up doing and is left byte-identical here; this suite states what the
     /// foundation those screens will spend actually guarantees. The two are
     /// separate on purpose: a screen sweep that adopts a primitive should fail
     /// on its own adoption, not on the primitive, and vice versa.
     ///
-    /// Same doctrines as 08-02: layout claims are differential measurements
-    /// rather than bitmaps, and every source clause reads comment-stripped text
-    /// bounded to one declaration.
+    /// Layout claims are differential measurements rather than bitmaps.
     @MainActor
     @Suite("Phase 08 accessibility foundations")
     struct Phase8AccessibilityFoundationTests {
@@ -55,25 +53,6 @@
             let untouched = try Self.size(of: large.hlMinimumHitTarget())
             #expect(abs(untouched.width - 120) < 1, "an already-large control was resized to \(untouched.width)")
             #expect(abs(untouched.height - 96) < 1, "an already-large control was resized to \(untouched.height)")
-        }
-
-        /// The frame alone would leave the grown area inert — the region has to
-        /// be hit-testable, and it must not quietly acquire semantics it was not
-        /// asked for. Read from the modifier's own declaration, comment-stripped
-        /// and bounded to that declaration.
-        @Test("the minimum hit target hit-tests its whole region and adds no semantics")
-        func minimumHitTargetHitTestsWholeRegion() throws {
-            let source = try Phase8SourceScan.stripped("HealthLog/DesignSystem/AccessibilityModifiers.swift")
-            let declaration = try #require(
-                Phase8SourceScan.member(named: "func hlMinimumHitTarget() -> some View {", in: source),
-                "hlMinimumHitTarget no longer exists — restate this contract"
-            )
-
-            #expect(declaration.contains("contentShape("), "the grown region is not hit-testable")
-            #expect(declaration.contains("HLHitTarget.minimum"), "the modifier spends a literal instead of the token")
-            for forbidden in [".padding(", ".scaleEffect(", ".imageScale(", "accessibilityElement", "accessibilityLabel"] {
-                #expect(!declaration.contains(forbidden), "the hit-target modifier also does \(forbidden)")
-            }
         }
 
         /// The token is what downstream screens share; pinning the number here

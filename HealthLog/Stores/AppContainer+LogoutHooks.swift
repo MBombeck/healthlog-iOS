@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 // MARK: - Logout / unauthorized hook wiring
 
@@ -13,7 +14,7 @@ extension AppContainer {
             invalidate: {
                 registry.invalidate()
             },
-            // 06-05 — quiescence is real now: awaits every registered
+            // Quiescence is real now: awaits every registered
             // owned-task cancel-and-drain seam of the composition.
             awaitQuiescence: { [weak self] in
                 await self?.drainAuthenticatedSessionWork()
@@ -24,10 +25,10 @@ extension AppContainer {
         )
     }
 
-    /// Wires sharing recovery plus the four sign-out seams onto the already-built `authStore` +
+    /// Wires sharing recovery plus the sign-out seams onto the already-built `authStore` +
     /// `unauthorizedRef`: the 401→`handleUnauthorized` bridge, the
-    /// account-deletion cleanup hook, the user-initiated post-logout hook, and
-    /// the adopt-on-pair upload hook. All four route through the shared
+    /// account-deletion cleanup hook and the user-initiated post-logout hook.
+    /// All of them route through the shared
     /// `performFullLocalLogout(reason:)` cascade so every logout path wipes the
     /// SAME surface.
     ///
@@ -51,7 +52,7 @@ extension AppContainer {
 
         // 401 → AuthStore.handleUnauthorized() bridge.
         //
-        // v0.7.0 W-LOGOUT (NEW-H-1): the cascade body now lives in
+        // The cascade body now lives in
         // `AppContainer.performFullLocalLogout(reason: .tokenExpired)` so
         // all four logout paths (user-tap / 401 / account-delete / switch-
         // server) wipe the SAME surface. The bridge only retains the
@@ -60,7 +61,7 @@ extension AppContainer {
         // live in HealthLogCore and don't have AppContainer visibility.
         let storeForBridge = authStore
         unauthorizedRef.set { [weak self, weak storeForBridge] in
-            // 06-05 — eligibility probe FIRST, without publishing anything.
+            // Eligibility probe FIRST, without publishing anything.
             // Only an active session (`.authenticated` / `.authenticating`)
             // with no deletion reconciliation owning the account boundary is
             // torn down. A web-deletion reconciliation's stronger
@@ -91,7 +92,7 @@ extension AppContainer {
         // NACH dem erfolgreichen Server-DELETE + Keychain-Wipe aufgerufen,
         // aber VOR dem Phase-Wechsel auf `.unauthenticated`.
         //
-        // v0.7.0 W-LOGOUT (NEW-H-1): consolidated to
+        // Consolidated to
         // `performFullLocalLogout(reason: .accountDeleted)`. The helper
         // adds the outbox + GLP-1 wipe (the only delete-specific extras)
         // on top of the shared cleanup. Pre-v0.7.0 this hook was missing
@@ -102,7 +103,7 @@ extension AppContainer {
             await self?.performFullLocalLogout(reason: .accountDeleted)
         }
 
-        // v0.7.0 W-LOGOUT (NEW-H-1): user-initiated sign-out also routes
+        // User-initiated sign-out also routes
         // through the shared cascade. Pre-v0.7.0 this path only ran the
         // `AuthService.onLogoutCleanup` HK-anchor wipe — the on-device AI
         // caches, avatar PNG, Coach SwiftData transcript, and outbox
@@ -110,12 +111,7 @@ extension AppContainer {
         authStore.onPostLogoutHook = { [weak self] in
             await self?.performFullLocalLogout(reason: .userInitiated)
         }
-        // v0.11 W4 — adopt-on-pair upload (wiring in `AppContainer+AdoptUpload`).
-        authStore.adoptUploadHook = Self.makeAdoptUploadHook(
-            api: apiClient,
-            localRepo: localRepo,
-            medicationsStore: medicationsStore
-        )
+        Self.wireReplayAfterSignIn(authStore: authStore, replay: outboxReplay)
     }
 
     /// Clears only data surfaces admitted by APIClient's selected-record route
@@ -143,6 +139,7 @@ extension AppContainer {
             labsStore,
             customMetricsStore,
             illnessStore,
+            seizuresStore,
             documentsStore,
             allergiesStore,
             familyHistoryStore,
@@ -154,5 +151,34 @@ extension AppContainer {
         serverStatsStores.clearOnLogout()
         OnDeviceBriefingCache.shared.clearOnLogout()
         TrendObservationCache.shared.clearOnLogout()
+    }
+}
+
+extension AppContainer {
+    /// A sign-in drains the outbox at once. The server has just answered the
+    /// login, so the pass needs no reachability probe of its own.
+    @MainActor
+    static func wireReplayAfterSignIn(authStore: AuthStore, replay: OutboxReplayService) {
+        authStore.onSignedInHook = { await replay.runAfterSignIn() }
+    }
+}
+
+/// **The owner-bound sign-out wipes that need a later store.**
+///
+/// Both sign-out hooks (`AuthService` for a tap and a deletion, `AuthStore`
+/// for a 401) receive the leaving account's id, but the first is built with
+/// the core infrastructure, before the HealthKit stores exist. The container
+/// fills this slot once they do; both hooks run it.
+final class OwnerPartitionCleanup: Sendable {
+    typealias Work = @Sendable (String) async -> Void
+    private let work = Mutex<Work?>(nil)
+
+    func install(_ work: @escaping Work) {
+        self.work.withLock { $0 = work }
+    }
+
+    func run(previousUserID: String?) async {
+        guard let previousUserID, let work = work.withLock({ $0 }) else { return }
+        await work(previousUserID)
     }
 }

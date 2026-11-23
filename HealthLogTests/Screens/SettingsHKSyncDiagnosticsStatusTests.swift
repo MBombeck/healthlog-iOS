@@ -9,7 +9,7 @@
     /// Pins the FIX-2 contract: the HK sync diagnostics status classification no
     /// longer false-flags daily-stats (cumulative) kinds as "stuck".
     ///
-    /// Before the fix, a cumulative kind under `enableDailyStats` looked like
+    /// Before the fix, a cumulative kind looked like
     /// `samplesRead > 0 && samplesUploaded == 0` (the gate drops the foreign
     /// samples after reading them) while the REAL upload went up the HK-STATS
     /// path and bumped `statsPostedTotal`. The old `read > 0 && uploaded == 0`
@@ -40,7 +40,7 @@
             #expect(r.status(now: now) != .stalled)
         }
 
-        /// #113 — this case used to be pinned as `.healthy`: five rows read, none
+        /// This case used to be pinned as `.healthy`: five rows read, none
         /// stored, anchor moved. That is exactly how a type whose every reading
         /// the server refused showed "OK" for a month. An anchor move is proof
         /// only when nothing read is unaccounted for.

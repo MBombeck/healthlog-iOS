@@ -7,7 +7,7 @@ import Testing
     import SpeziChat
 #endif
 
-/// **A360 (v0156)** — coverage for the three coach upgrades that consume the
+/// Coverage for the three coach upgrades that consume the
 /// server's v1.21.0 work:
 ///   1. `ChatRequestBody` encodes the `scope` ({ sources, window }) + `prefill`.
 ///   2. The server-arm path consumes the SSE stream PROGRESSIVELY — tokens are

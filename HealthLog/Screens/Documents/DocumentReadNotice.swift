@@ -1,6 +1,6 @@
 import Foundation
 
-/// #151 — why the automatic read of a document did not produce a summary,
+/// Why the automatic read of a document did not produce a summary,
 /// said in one calm sentence where the "being read" spinner would otherwise
 /// stand. Each case is something the person cannot fix by waiting on this
 /// screen, so none of them spins.

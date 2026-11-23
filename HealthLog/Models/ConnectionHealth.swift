@@ -1,6 +1,6 @@
 import Foundation
 
-/// #139 — the server's unified connection state (`ConnectionHealth`, since
+/// The server's unified connection state (`ConnectionHealth`, since
 /// server v1.42.4).
 ///
 /// Every integration status read carries it: `GET /api/integrations/status`

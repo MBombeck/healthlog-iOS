@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Parity 2.1 — Settings → Security.**
+/// **Settings → Security.**
 ///
 /// Covers the pure parts of the security surface: the two request bodies, the
 /// local password gate, the passkey-name normalisation, and — the one with real
@@ -147,7 +147,7 @@ struct AccountSecurityContractTests {
 
     /// The headline regression guard. `POST /api/auth/password` returns a bare
     /// 401 for a wrong current password; misreading it as step-up would send a
-    /// user who made a typo off to the web app. B5 (1.4): it reads as the wrong
+    /// user who made a typo off to the web app. It reads as the wrong
     /// current password, in the person's language.
     @Test("A 401 with NO error code is an ordinary auth failure, not step-up")
     func codelessUnauthorizedIsNotStepUp() {

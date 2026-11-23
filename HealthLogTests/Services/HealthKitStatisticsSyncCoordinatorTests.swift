@@ -33,7 +33,7 @@ import Testing
             #expect(next == HealthKitStatisticsSyncSummary(posted: 0, reposted: 0, skipped: 1, failed: 0))
         }
 
-        /// **Restated (Phase 07 / Plan 07-04).** This was `tallyingFailure`,
+        /// **Restated.** This was `tallyingFailure`,
         /// which only bumped a counter. A failure is now two facts, not one:
         /// how many rows were not terminally accepted, and whether they survive
         /// a relaunch. Only the second decides whether the sweep may call the
@@ -68,9 +68,6 @@ import Testing
         func heldPassIsNotComplete() {
             #expect(!HealthKitStatisticsSyncSummary.held.isComplete)
             #expect(HealthKitStatisticsSyncSummary.held.totalExecuted == 0)
-            // The flag being off is a different statement: there is no history
-            // this path owes, so the pass is complete in itself.
-            #expect(HealthKitStatisticsSyncSummary.disabled.isComplete)
         }
 
         @Test("totalExecuted sums all four counters")
@@ -79,26 +76,7 @@ import Testing
             #expect(summary.totalExecuted == 11)
         }
 
-        // MARK: - Feature-flag gate
-
-        @Test("sync() short-circuits when feature flag is OFF")
-        func syncShortCircuitsWhenFlagOff() async throws {
-            let cache = try HealthKitDailyStatsCache(modelContainer: HealthKitDailyStatsCache.makeInMemory())
-            let stub = HKStatsStubAPIClient()
-            let flags = HKStatsStubFeatureFlags(enableDailyStats: false)
-            let coordinator = HealthKitStatisticsSyncCoordinator(
-                statisticsService: HealthKitStatisticsService(),
-                cache: cache,
-                uploader: Self.uploader(api: stub),
-                featureFlags: flags
-            )
-            let summary = await coordinator.sync(lookbackDays: 1)
-            #expect(summary.totalExecuted == 0)
-            #expect(summary.isComplete, "the flag being off owes no history")
-            #expect(await stub.requestCount() == 0, "No HTTP calls should fire when gate is OFF")
-        }
-
-        // MARK: - Admission gate (Phase 07 / Plan 07-04)
+        // MARK: - Admission gate
 
         @Test("sync() refuses outright when no account can be admitted")
         func syncRefusesWithoutAnAdmittedAccount() async throws {
@@ -108,7 +86,6 @@ import Testing
                 statisticsService: HealthKitStatisticsService(),
                 cache: cache,
                 uploader: Self.uploader(api: stub),
-                featureFlags: HKStatsStubFeatureFlags(enableDailyStats: true),
                 admission: { throw HealthSyncLeaseRefusal.unavailableAuthentication }
             )
             let summary = await coordinator.sync(lookbackDays: 1)
@@ -131,8 +108,7 @@ import Testing
             let coordinator = HealthKitStatisticsSyncCoordinator(
                 statisticsService: HealthKitStatisticsService(),
                 cache: cache,
-                uploader: Self.uploader(api: HKStatsStubAPIClient()),
-                featureFlags: HKStatsStubFeatureFlags(enableDailyStats: true)
+                uploader: Self.uploader(api: HKStatsStubAPIClient())
             )
             let swept = await coordinator.sweepCacheOlderThan(60, now: Date())
             #expect(swept == 0)
@@ -186,16 +162,6 @@ import Testing
         func download(_ request: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
             requests.append(request.path)
             throw HLError.network(.other("HKStatsStubAPIClient download"))
-        }
-    }
-
-    struct HKStatsStubFeatureFlags: FeatureFlagsServicing {
-        let enableDailyStats: Bool
-        func isEnabled(_ flag: FeatureFlag) -> Bool {
-            switch flag {
-            case .enableDailyStats: enableDailyStats
-            default: true
-            }
         }
     }
 

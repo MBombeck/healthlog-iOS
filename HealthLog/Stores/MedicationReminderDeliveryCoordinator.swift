@@ -1,6 +1,6 @@
 import Foundation
 
-/// **N1 — keeps `notificationPrefs.medication.clientManaged` true to this device.**
+/// **Keeps `notificationPrefs.medication.clientManaged` true to this device.**
 ///
 /// Inputs, all already produced elsewhere:
 /// - the account's server state, off the `/api/auth/me` read the settings
@@ -8,7 +8,10 @@ import Foundation
 ///   tagged with the lease it was read under;
 /// - the medication list after every load or edit (the same snapshot the local
 ///   planner reconciles from), tagged with the account it belongs to;
-/// - the notification permission, read when an evaluation runs.
+/// - the notification permission, read when an evaluation runs;
+/// - whether this device plans local reminders at all
+///   (``ReminderDevicePolicy``): an iPad next to an active iPhone does not, so
+///   it never claims and gives back a claim it holds.
 ///
 /// Output: at most one `PATCH /api/auth/me/notification-prefs`, and only when
 /// ``MedicationReminderDeliveryPolicy`` says the server's value is wrong for
@@ -43,6 +46,12 @@ final class MedicationReminderDeliveryCoordinator {
     private let notificationsAuthorized: AuthorizationProbe
     private let writeClaim: ClaimWriter
     private let releaseOnSignOut: SignOutRelease
+    private let plansLocally: @MainActor () -> Bool
+    private let otherPhoneIsActive: @MainActor () -> Bool
+
+    /// #179 — this device's own delivery, after every evaluation that could
+    /// decide it. `POST /api/devices` reports it per device.
+    var onDeviceDelivery: (@MainActor (DeviceMedicationDeliveryReport) -> Void)?
 
     private var server: ServerReading?
     private var medications: MedicationsReading?
@@ -53,8 +62,12 @@ final class MedicationReminderDeliveryCoordinator {
         defaults: UserDefaults,
         notificationsAuthorized: @escaping AuthorizationProbe,
         writeClaim: @escaping ClaimWriter,
-        releaseOnSignOut: @escaping SignOutRelease
+        releaseOnSignOut: @escaping SignOutRelease,
+        plansLocally: @escaping @MainActor () -> Bool = { true },
+        otherPhoneIsActive: @escaping @MainActor () -> Bool = { false }
     ) {
+        self.plansLocally = plansLocally
+        self.otherPhoneIsActive = otherPhoneIsActive
         marker = MedicationReminderClaimMarker(defaults: defaults)
         self.notificationsAuthorized = notificationsAuthorized
         self.writeClaim = writeClaim
@@ -73,6 +86,12 @@ final class MedicationReminderDeliveryCoordinator {
     func noteMedications(_ medications: [Medication], ownerID: String?) {
         guard let ownerID, !ownerID.isEmpty else { return }
         self.medications = MedicationsReading(ownerID: ownerID, medications: medications)
+        scheduleEvaluation()
+    }
+
+    /// The device decision flipped (an iPad stopped or started planning):
+    /// decide again from the readings already held.
+    func noteLocalPlanningChanged() {
         scheduleEvaluation()
     }
 
@@ -145,13 +164,17 @@ final class MedicationReminderDeliveryCoordinator {
               latest.lease.ownerID == lease.ownerID,
               let latestMeds = medications, latestMeds.ownerID == lease.ownerID else { return }
         let owner = lease.ownerID
+        let local = plansLocally()
+        let delivers = local && MedicationReminderDeliveryPolicy.deliversLocally(
+            notificationsAuthorized: authorized,
+            medications: latestMeds.medications
+        )
+        onDeviceDelivery?(DeviceMedicationDeliveryReport.decide(plansLocally: local, deliversLocally: delivers))
         let decision = MedicationReminderDeliveryPolicy.decide(
             server: latest.state,
-            deliversLocally: MedicationReminderDeliveryPolicy.deliversLocally(
-                notificationsAuthorized: authorized,
-                medications: latestMeds.medications
-            ),
-            claimedHere: marker.isClaimed(by: owner)
+            deliversLocally: delivers,
+            claimedHere: marker.isClaimed(by: owner),
+            otherPhoneDelivers: otherPhoneIsActive()
         )
         switch decision {
         case .none:

@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// v0.11 W28c — the Insights **Workouts** special page (web `/insights/workouts`).
+/// The Insights **Workouts** special page (web `/insights/workouts`).
 ///
 /// A deduped recent-workout list (the server runs the Apple Watch + Withings
 /// cross-source merge before it lands here). Each row is the same `WorkoutRow`
@@ -11,11 +11,10 @@ import SwiftUI
 /// container's shared NavigationStack. The page reads `WorkoutsStore` directly.
 ///
 /// **Lives inside the Insights pager.** Owns no `NavigationStack` (the container
-/// does). Its inner `ScrollView` reports its offset to `InsightsStripVisibility`
-/// for hide-on-scroll; the page wrapper pins it `.containerRelativeFrame(.horizontal)`
-/// ONLY (the W44 contract).
+/// does). The page wrapper pins it `.containerRelativeFrame(.horizontal)` ONLY
+/// (the W44 contract).
 ///
-/// **Paging (#19):** the sub-line shows the server's `meta.total` ("50 of 730
+/// **Paging:** the sub-line shows the server's `meta.total` ("50 of 730
 /// workouts" while pages are outstanding), the rows sit in a lazy stack, and
 /// the next page is requested when the scroll position comes within one
 /// screen of the end, until `meta.total` is reached.
@@ -25,71 +24,86 @@ import SwiftUI
 /// `ContentUnavailableView`, never a dead box.
 struct InsightsWorkoutsPage: View {
     @Environment(WorkoutsStore.self) private var store
-    @Environment(InsightsStripVisibility.self) private var stripVisibility
     @Environment(HKReadinessStore.self) private var hkReadiness
+    @Environment(\.deviceProfile) private var deviceProfile
 
-    /// W-B182 — true while the manual "sync from Apple Health" pull is in flight.
+    /// True while the manual "sync from Apple Health" pull is in flight.
     @State private var isSyncing = false
 
     var body: some View {
-        Group {
-            if store.workouts.isEmpty {
-                emptyState
-            } else {
-                content
-            }
-        }
-        .background(HLSurface.primary.ignoresSafeArea())
+        content
     }
 
-    private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                // v0.13.1 UX-D8/D2 — canonical per-page header (large title +
-                // sub-line + equal-circle trailing slot), IDENTICAL anatomy to
-                // the metric pages so the header doesn't jump across the pager.
-                // Workouts has no per-page gear/coach target, so the trailing
-                // slot is empty (no dead affordance) — only the shape unifies.
-                InsightsPageHeader(
-                    "Workouts",
-                    subtitle: LocalizedStringKey(subtitle),
-                    subtitleAccessibilityLabel: WorkoutsListSummary.headerAccessibilityLabel(for: store),
-                    accessibilityIdentifierSuffix: "workouts"
-                )
+    /// The (i) of the page. No coach circle yet: a page may not add a sheet
+    /// of its own outside the frozen presentation census.
+    private var headerActions: HLTabHeaderActions {
+        HLTabHeaderActions([
+            .info(InsightsSpecialPageInfo.workouts(), identifier: "insights.workouts.info")
+        ])
+    }
 
+    /// In the Insights pager the head is pinned above the strip.
+    @Environment(\.insightsInPager) private var inPager
+
+    /// The page's head: pinned above the strip in the pager, at the top
+    /// of the content elsewhere. In the pager the count line moves into the
+    /// content, so every head of the pager is one line high.
+    private func pageHeader(withSubtitle: Bool) -> some View {
+        HLTabHeader(
+            "Workouts",
+            subtitle: withSubtitle && !store.workouts.isEmpty ? LocalizedStringKey(subtitle) : nil,
+            titleIdentifier: "insights.page.header.title.workouts",
+            subtitleAccessibilityLabel: Text(verbatim: WorkoutsListSummary.headerAccessibilityLabel(for: store)),
+            actions: headerActions
+        )
+    }
+
+    /// The page stands in every state, so the title does not jump when the
+    /// workouts arrive; without any the empty state sits in the free area.
+    private var content: some View {
+        HLPage {
+            // Canonical per-page header, the same anatomy as the metric pages
+            // so the header does not jump across the pager. The sub-line
+            // stays: it says how much of the history has loaded.
+            if inPager {
+                if !store.workouts.isEmpty {
+                    Text(subtitle)
+                        .hlText(.pageSubtitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(Text(verbatim: WorkoutsListSummary.headerAccessibilityLabel(for: store)))
+                }
+            } else {
+                pageHeader(withSubtitle: true)
+            }
+            HLStateContainer(store.workouts.isEmpty ? .empty : .loaded) {
+                EmptyView()
+            } empty: {
+                emptyState
+            } content: {
                 HLCard {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(store.workouts.enumerated()), id: \.element.id) { index, workout in
+                    LazyVStack(spacing: HLSpace.sm) {
+                        ForEach(store.workouts, id: \.id) { workout in
                             NavigationLink {
                                 WorkoutDetailView(workout: workout)
                             } label: {
                                 WorkoutRow(workout: workout)
+                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            // A data row: the whole row presses, no chevron.
+                            .buttonStyle(.hlRow)
                             .accessibilityIdentifier("insights.workouts.row.\(workout.id)")
-                            if index < store.workouts.count - 1 {
-                                Divider().overlay(HLColor.separator)
-                            }
                         }
                     }
                 }
 
                 WorkoutsPagingFooter()
 
-                // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
+                // Canonical sync-status footer (same
                 // primitive as Dashboard/Insights, self-suppressing).
                 HLSyncStatusFooter(screenLoading: store.isLoading)
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            geometry.contentOffset.y
-        } action: { _, newOffset in
-            stripVisibility.report(offset: newOffset)
-        }
-        // #19 — a ScrollView has no lazy end-of-list row to hang the trigger
+        // A ScrollView has no lazy end-of-list row to hang the trigger
         // on, so the scroll geometry is the trigger: coming within one screen
         // of the end asks for the next page. It fires on the false → true edge;
         // the appended rows push the end away again, and the store ignores a
@@ -99,22 +113,23 @@ struct InsightsWorkoutsPage: View {
         } action: { _, nearEnd in
             if nearEnd { Task { await store.loadNextPage() } }
         }
-        .hlScrollEdgeSoft()
-        // W-B184 — WHOOP-style pull-to-refresh (custom glyph + checkmark + one
+        // WHOOP-style pull-to-refresh (custom glyph + checkmark + one
         // success haptic; the handshake driving the checkmark runs in the modifier).
         .hlPullToRefresh { await store.refresh() }
+        // In the pager the head stands fixed at the top, over the strip.
+        .insightsPageHead(enabled: inPager) { pageHeader(withSubtitle: false) }
     }
 
     /// Localized, plural-aware count line ("730 workouts" / "50 of 730
     /// workouts"). Resolved to a `String` here (then handed to the header as a
     /// verbatim key) so the plural catalog entry `insights.workoutsCount` does
-    /// the inflection. #19 — the number is the server's `meta.total`, not the
+    /// the inflection. The number is the server's `meta.total`, not the
     /// size of the loaded page.
     private var subtitle: String {
         WorkoutsListSummary.headerText(for: store)
     }
 
-    /// #19 — within one container height of the end of the content.
+    /// Within one container height of the end of the content.
     static func isNearEnd(_ geometry: ScrollGeometry) -> Bool {
         isNearEnd(
             offsetY: geometry.contentOffset.y,
@@ -128,7 +143,7 @@ struct InsightsWorkoutsPage: View {
         return offsetY + containerHeight * 2 >= contentHeight
     }
 
-    /// W-B182 — calm empty-state with an explicit "sync from Apple Health"
+    /// Calm empty-state with an explicit "sync from Apple Health"
     /// recovery path. Because Apple never reports a workout-READ grant, a denial
     /// is invisible; the importer cannot tell "no workouts" from "read denied".
     /// This affordance re-requests authorization + force-pulls, and (if the list
@@ -136,35 +151,30 @@ struct InsightsWorkoutsPage: View {
     /// can flip the per-type toggle themselves — the only path Apple leaves once
     /// a read type is determined.
     private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: HLSpace.lg) {
-                // 1.4 B4 — one lockup, one action: the sync that pulls the
-                // workouts in (it asks for the read permission first). The
-                // second "Open Apple Health" button below it is gone; the
-                // permission lives in Settings like every other Health read.
-                HLEmptyState(
-                    icon: "figure.run",
-                    title: "No workouts yet",
-                    message: "Workouts appear here as soon as Apple Watch or another source reports one."
+        // One lockup, one action: the sync that pulls the workouts in (it asks
+        // for the read permission first). The second "Open Apple Health"
+        // button is gone; the permission lives in Settings like every other
+        // Health read.
+        HLEmptyState(
+            icon: "figure.run",
+            // The same words as the Workouts list under More.
+            title: LocalizedStringKey(WorkoutsScreen.Layout.emptyTitle),
+            message: LocalizedStringKey(WorkoutsScreen.Layout.emptySubtitle)
+        ) {
+            // A device that reads no HealthKit (the iPad) has nothing to sync.
+            if HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).offersAuthorization {
+                HLButton(
+                    "Sync from Apple Health",
+                    systemImage: "heart.text.square",
+                    variant: .secondary,
+                    isLoading: isSyncing
                 ) {
-                    HLButton(
-                        String(localized: "Sync from Apple Health"),
-                        icon: "heart.text.square",
-                        variant: .secondary,
-                        isLoading: isSyncing
-                    ) {
-                        Task { await syncFromAppleHealth() }
-                    }
-                    .disabled(isSyncing)
-                    .accessibilityIdentifier("insights.workouts.empty.sync")
+                    Task { await syncFromAppleHealth() }
                 }
+                .disabled(isSyncing)
+                .accessibilityIdentifier("insights.workouts.empty.sync")
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, HLSpace.xl)
-            .padding(.top, HLSpace.xxxl)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .refreshable { await store.refresh() }
         .accessibilityIdentifier("insights.workouts.empty")
     }
 

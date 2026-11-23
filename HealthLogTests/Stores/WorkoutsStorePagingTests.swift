@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #19 — the Workouts list loaded one page of 50 and stopped there; the
+/// The Workouts list loaded one page of 50 and stopped there; the
 /// server's `meta.total` was decoded but never used.
 ///
 /// These cases drive the real `WorkoutsStore` → `WorkoutsRepository` →

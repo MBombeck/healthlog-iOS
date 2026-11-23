@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.10.0 W-Widget-2Tap** — coverage for the Home-screen next-dose
+/// Coverage for the Home-screen next-dose
 /// widget's two-step "Genommen" confirm.
 ///
 /// Two load-bearing contracts, mirrored from the Live Activity:
@@ -44,6 +44,7 @@ struct MarkNextDoseFromWidgetIntentTests {
     private func clearOverride() {
         IntentDependencies.testOverride = nil
         MarkNextDoseFromWidgetIntent.pendingStoreOverride = nil
+        MarkNextDoseFromWidgetIntent.externalTakeLogOverride = nil
     }
 
     /// A pending-confirm store backed by a throwaway temp file so each test
@@ -94,81 +95,91 @@ struct MarkNextDoseFromWidgetIntentTests {
         #expect(store.read() == nil)
     }
 
-    // MARK: - Intent two-step
+    // MARK: - Intent: one tap (#188 (7))
 
-    @Test("FIRST tap only arms — no POST, no Outbox write")
-    func firstTapNeverWrites() async throws {
+    @Test("A single tap records the intake, clears a legacy marker and offers undo")
+    func singleTapRecords() async throws {
         let (api, outbox) = try installOverride(signedIn: true, apiBehaviour: .succeed)
         let (store, url) = tempPendingStore()
+        let logURL = FileManager.default.temporaryDirectory.appendingPathComponent("ext-\(UUID().uuidString).json")
         MarkNextDoseFromWidgetIntent.pendingStoreOverride = store
+        MarkNextDoseFromWidgetIntent.externalTakeLogOverride = ExternalTakeLog(url: logURL)
         defer {
             clearOverride()
             try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: logURL)
         }
 
         let slot = Date(timeIntervalSince1970: 1_799_999_000)
-        let intent = MarkNextDoseFromWidgetIntent(
-            medicationId: "med-1",
-            medicationName: "Vitamin D",
-            scheduledForEpoch: slot.timeIntervalSince1970
-        )
-        _ = try await intent.perform()
-
-        // Armed, but NOTHING recorded.
-        #expect(store.armed(for: "med-1"))
-        #expect(await api.sentPaths.isEmpty)
-        #expect(await outbox.snapshot.isEmpty)
-    }
-
-    @Test("SECOND tap (armed) records the intake and clears the marker")
-    func secondTapRecords() async throws {
-        let (api, outbox) = try installOverride(signedIn: true, apiBehaviour: .succeed)
-        let (store, url) = tempPendingStore()
-        MarkNextDoseFromWidgetIntent.pendingStoreOverride = store
-        defer {
-            clearOverride()
-            try? FileManager.default.removeItem(at: url)
-        }
-
-        let slot = Date(timeIntervalSince1970: 1_799_999_000)
-        // Pre-arm (as if the first tap landed).
+        // Update path: an older build armed the confirm.
         try store.arm(medicationId: "med-1", scheduledFor: slot)
-
-        let intent = MarkNextDoseFromWidgetIntent(
+        _ = try await MarkNextDoseFromWidgetIntent(
             medicationId: "med-1",
             medicationName: "Vitamin D",
             scheduledForEpoch: slot.timeIntervalSince1970
-        )
-        _ = try await intent.perform()
+        ).perform()
 
-        // Recorded via the bulk endpoint + marker cleared.
         #expect(await api.sentPaths == ["/api/medications/intake/bulk"])
         #expect(store.read() == nil)
         #expect(await outbox.snapshot.isEmpty)
+        let logged = ExternalTakeLog(url: logURL).read()
+        #expect(logged.map(\.medicationId) == ["med-1"])
+        #expect(logged.first?.source == .widget)
+        #expect(logged.first?.scheduledFor == slot)
+        // R1 (1): bound to the row the server wrote and the tap's own key.
+        #expect(logged.first?.rowID == "i-1")
+        #expect(logged.first?.idempotencyKey?.isEmpty == false)
     }
 
-    @Test("signed out → arms but never writes even on the second tap")
+    @Test("R1 (1): a slot the pill box took already is not offered for undo")
+    func alreadyTakenOffersNoUndo() async throws {
+        let (api, outbox) = try installOverride(signedIn: true, apiBehaviour: .alreadyTaken)
+        let (store, url) = tempPendingStore()
+        let logURL = FileManager.default.temporaryDirectory.appendingPathComponent("ext-\(UUID().uuidString).json")
+        MarkNextDoseFromWidgetIntent.pendingStoreOverride = store
+        MarkNextDoseFromWidgetIntent.externalTakeLogOverride = ExternalTakeLog(url: logURL)
+        defer {
+            clearOverride()
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: logURL)
+        }
+
+        let slot = Date(timeIntervalSince1970: 1_799_999_000)
+        _ = try await MarkNextDoseFromWidgetIntent(
+            medicationId: "med-1",
+            medicationName: "Vitamin D",
+            scheduledForEpoch: slot.timeIntervalSince1970
+        ).perform()
+
+        #expect(await api.sentPaths == ["/api/medications/intake/bulk"])
+        #expect(await outbox.snapshot.isEmpty)
+        // Before the fix the take was noted and the undo matched the pill
+        // box's row by slot alone.
+        #expect(ExternalTakeLog(url: logURL).read().isEmpty)
+    }
+
+    @Test("signed out → never writes and offers no undo")
     func signedOutNeverWrites() async throws {
         let (api, outbox) = try installOverride(signedIn: false, apiBehaviour: .succeed)
         let (store, url) = tempPendingStore()
+        let logURL = FileManager.default.temporaryDirectory.appendingPathComponent("ext-\(UUID().uuidString).json")
         MarkNextDoseFromWidgetIntent.pendingStoreOverride = store
+        MarkNextDoseFromWidgetIntent.externalTakeLogOverride = ExternalTakeLog(url: logURL)
         defer {
             clearOverride()
             try? FileManager.default.removeItem(at: url)
         }
 
         let slot = Date(timeIntervalSince1970: 1_799_999_000)
-        try store.arm(medicationId: "med-1", scheduledFor: slot)
-
-        let intent = MarkNextDoseFromWidgetIntent(
+        _ = try await MarkNextDoseFromWidgetIntent(
             medicationId: "med-1",
             medicationName: "Vitamin D",
             scheduledForEpoch: slot.timeIntervalSince1970
-        )
-        _ = try await intent.perform()
+        ).perform()
 
         #expect(await api.sentPaths.isEmpty)
         #expect(await outbox.snapshot.isEmpty)
+        #expect(ExternalTakeLog(url: logURL).read().isEmpty)
     }
 }
 
@@ -182,6 +193,7 @@ private actor IntentStubAPIClient: APIClientProtocol {
     enum Behaviour {
         case succeed
         case offline
+        case alreadyTaken
     }
 
     private let behaviour: Behaviour
@@ -199,6 +211,12 @@ private actor IntentStubAPIClient: APIClientProtocol {
         case .succeed:
             let json = """
             {"processed":1,"inserted":1,"duplicates":0,"entries":[{"index":0,"status":"taken","id":"i-1","reason":null}]}
+            """
+            return try JSONDecoder.hlDefault.decode(T.self, from: Data(json.utf8))
+        case .alreadyTaken:
+            let json = """
+            {"processed":1,"inserted":0,"duplicates":0,"entries":[{"index":0,"status":"alreadyTaken",\
+            "intake":{"id":"box-row","syncVersion":4},"takenAt":"2027-01-15T07:12:00Z","takenVia":"INTEGRATION"}]}
             """
             return try JSONDecoder.hlDefault.decode(T.self, from: Data(json.utf8))
         }

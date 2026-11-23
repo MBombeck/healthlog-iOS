@@ -19,22 +19,26 @@
     /// `CompleteHealthSyncCompositionTests`, and PROJECT_GUIDE.md states the same
     /// number. Adding or removing a type means changing all three together.
     ///
-    /// **1.2 / V4 — one OS-gated member.** HRV as RMSSD exists from iOS 27 on
+    /// **One OS-gated member.** HRV as RMSSD exists from iOS 27 on
     /// (see ``HeartRateVariabilityRMSSD``). It joins the set only where the
     /// running system resolves the type, so the contract is 36 on iOS 26 and
     /// older and 37 on iOS 27 and later; the fixed literal holds 36 since
     /// B5 (1.4) added waist circumference.
     ///
-    /// **HK-NEW (1.5) — six server-gated members** (``HealthKitServer144Types``),
-    /// so the literal holds 42. They are collected only where the configured
-    /// server maps them (`AppOwnedHealthCollectionCoordinator.serverCollectable`).
+    /// **Twenty-one server-gated members**: the six of ``HealthKitServer144Types``,
+    /// resting energy (``HealthKitBasalEnergy``) and the fourteen per-sample
+    /// 1.7 quantity types of ``AppleHealthIngestQuantityTypes`` (insulin,
+    /// inhaler and spirometry; effort; running form and rowing speed), so the
+    /// literal holds 57. Cycling and rowing distance are day totals and go
+    /// through the statistics sync instead. They are collected only where the configured server maps them
+    /// (`AppOwnedHealthCollectionCoordinator.serverCollectable`).
     enum HealthLogSampleTypeRegistry {
         /// How many server-bound sample types the fixed literal below holds.
         ///
         /// Declared separately from the set so a duplicated or dropped line in the
         /// literal below fails a test instead of quietly changing what the app
         /// syncs.
-        static let baseExpectedCount = 42
+        static let baseExpectedCount = 57
 
         /// Exactly how many server-bound sample types the app collects on the
         /// running system: the fixed literal plus the OS-gated types this
@@ -65,7 +69,7 @@
                 HKQuantityTypeIdentifier.bodyMass.rawValue,
                 HKQuantityTypeIdentifier.bodyFatPercentage.rawValue,
                 HKQuantityTypeIdentifier.bodyTemperature.rawValue,
-                // B5 (1.4) — waist circumference, server `WAIST_CIRCUMFERENCE`
+                // Waist circumference, server `WAIST_CIRCUMFERENCE`
                 // since v1.25.0 (sent in metres, stored in centimetres).
                 HKQuantityTypeIdentifier.waistCircumference.rawValue,
                 HKQuantityTypeIdentifier.bloodPressureSystolic.rawValue,
@@ -85,13 +89,13 @@
                 HKQuantityTypeIdentifier.walkingAsymmetryPercentage.rawValue,
                 HKQuantityTypeIdentifier.walkingStepLength.rawValue,
                 HKQuantityTypeIdentifier.walkingDoubleSupportPercentage.rawValue,
-                // W28d — Apple walking-steadiness fall-risk classifier (0–100 %).
+                // Apple walking-steadiness fall-risk classifier (0–100 %).
                 HKQuantityTypeIdentifier.appleWalkingSteadiness.rawValue,
                 HKQuantityTypeIdentifier.bodyMassIndex.rawValue,
                 HKCategoryTypeIdentifier.sleepAnalysis.rawValue,
                 HKQuantityTypeIdentifier.environmentalAudioExposure.rawValue,
                 HKQuantityTypeIdentifier.headphoneAudioExposure.rawValue,
-                // W-HKREAD — nine additive HealthKit quantity signals the
+                // Nine additive HealthKit quantity signals the
                 // server maps end-to-end (server v1.10.0). Collected via the
                 // Spezi `CollectSamples` path; registered here so the anchor
                 // migrator + the read-coverage tests recognise them.
@@ -109,10 +113,15 @@
             // across SDK levels even when the symbol is unavailable so we
             // can list it directly without an availability guard.
             identifiers.insert("HKQuantityTypeIdentifierTimeInDaylight")
-            // HK-NEW (1.5) — server v1.44: exercise and stand minutes, stand
+            // Server v1.44: exercise and stand minutes, stand
             // hours, mindful sessions, State of Mind (as valence) and AFib
             // burden. State of Mind by its run-time identifier, the cursor key.
             identifiers.formUnion(HealthKitServer144Types.registryIdentifiers)
+            // Server v1.47.1: resting energy, a day total like active energy.
+            identifiers.insert(HealthKitBasalEnergy.identifier)
+            // 1.7: insulin, inhaler, spirometry (server 1.48.2), effort
+            // (HealthLog#1416) and the training types (HealthLog#1415).
+            identifiers.formUnion(AppleHealthIngestQuantityTypes.sampleIdentifiers)
             return identifiers
         }()
 

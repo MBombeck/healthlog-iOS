@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **Audit v0162 FORM-1 — canonical unsaved-changes guard for editor sheets.**
+/// **Canonical unsaved-changes guard for editor sheets.**
 ///
 /// Before this, `interactiveDismissDisabled` was gated only on `isSaving` (or
 /// missing entirely on the Labs/Records editors), so a swipe-down on a filled
@@ -33,9 +33,19 @@ struct HLDiscardGuard: ViewModifier {
     /// Invoked when the operator confirms the discard — the caller dismisses.
     let onDiscard: () -> Void
 
+    /// Optional so previews and tests without a router still render.
+    @Environment(AppRouter.self) private var router: AppRouter?
+    @Environment(\.dismiss) private var dismiss
+
     func body(content: Content) -> some View {
         content
             .interactiveDismissDisabled(isDirty || isSaving)
+            // A link from outside the app closes a form that holds nothing
+            // yet, so its destination is not hidden under the sheet. One with
+            // unsaved input stays: the link must not throw away an entry.
+            .onChange(of: router?.deepLinkArrivalCount) { _, _ in
+                if Self.closesForDeepLink(isDirty: isDirty, isSaving: isSaving) { dismiss() }
+            }
             .hlConfirmDestructive(
                 Text("form.discard.confirm.title"),
                 isPresented: $isPresented,
@@ -44,6 +54,12 @@ struct HLDiscardGuard: ViewModifier {
                 cancel: Text("form.discard.confirm.keep"),
                 action: onDiscard
             )
+    }
+}
+
+extension HLDiscardGuard {
+    nonisolated static func closesForDeepLink(isDirty: Bool, isSaving: Bool) -> Bool {
+        !isDirty && !isSaving
     }
 }
 

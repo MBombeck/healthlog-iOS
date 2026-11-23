@@ -54,7 +54,7 @@
                 if current.isFinished { return .finished }
                 if Task.isCancelled { return .cancelled }
 
-                // A2 (1.4, R3 S6) — progress is a page whose rows were taken.
+                // Progress is a page whose rows were taken.
                 // An empty live page, a held page and one parked in the outbox
                 // are not; until 1.3.0 they all were, so a catch-up without a
                 // server never paused.

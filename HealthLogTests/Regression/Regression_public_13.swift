@@ -9,7 +9,7 @@
     /// asked for, RMSSD.**
     ///
     /// #13 against the server's own list: the keys of `APPLE_HEALTH_TYPE_MAP` at
-    /// server v1.47.0, checked in as a fixture. The server looks a batch row up
+    /// server v1.47.1, checked in as a fixture. The server looks a batch row up
     /// by exactly that string, so the test compares the NAME ON THE WIRE, not
     /// the type: every type the server maps is asked for under a name it
     /// knows, and every type the app sends goes out under one.
@@ -37,9 +37,9 @@
         private static func serverNames(file: String = #filePath) throws -> Set<String> {
             let url = URL(fileURLWithPath: file)
                 .deletingLastPathComponent()
-                .appendingPathComponent("Fixtures/server-v1.47.0-apple-health-type-map.json")
+                .appendingPathComponent("Fixtures/server-v1.47.1-apple-health-type-map.json")
             let names = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: url)).identifiers
-            #expect(names.count == 50, "the fixture is the v1.47.0 list; refresh it with the server tag")
+            #expect(names.count == 51, "the fixture is the v1.47.1 list; refresh it with the server tag")
             return Set(names)
         }
 
@@ -63,7 +63,10 @@
             // Workouts and ECGs have routes of their own (`/api/workouts/batch`,
             // `/api/ecg`) and never reach the measurement batch.
             let ownRoutes: Set<String> = [HKObjectType.workoutType().identifier, HKObjectType.electrocardiogramType().identifier]
-            let unknown = try Self.askedWireNames.subtracting(ownRoutes).subtracting(Self.serverNames())
+            // The 1.7 quantity types are mapped from 1.48.2 and 1.49.0, after
+            // this fixture, and are collected only once the server says so.
+            let later = Set(AppleHealthIngestQuantityTypes.allIdentifiers)
+            let unknown = try Self.askedWireNames.subtracting(ownRoutes).subtracting(later).subtracting(Self.serverNames())
             #expect(unknown.isEmpty, "sent under a name the server does not map: \(unknown.sorted())")
         }
 

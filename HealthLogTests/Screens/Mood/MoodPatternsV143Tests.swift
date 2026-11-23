@@ -66,7 +66,7 @@ struct MoodPatternsV143Tests {
         #expect(cards.map(\.id) == ["weekend", "best_weekday", "delayed_tag:alcohol"])
         #expect(cards[0].basedOn == String(localized: "mood.patterns.days \(30) \(74)"))
         #expect(cards[0].strength == String(localized: "mood.patterns.strength.strong"))
-        // 1.4 B2 — strength and basis share the chip; no sentence under the row.
+        // Strength and basis share the chip; no sentence under the row.
         #expect(cards[0].chip == "\(String(localized: "mood.patterns.strength.strong")), \(cards[0].basedOn)")
         #expect(cards[0].chip.contains("30") && cards[0].chip.contains("74"))
     }

@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **A5 (1.4, R3 S4)** — a reading deleted in Apple Health leaves the server.
+    /// A reading deleted in Apple Health leaves the server.
     ///
     /// Since Phase 07 the app-owned collector only counted `deletedObjects` and
     /// moved its anchor past them, so a wrong weight or blood pressure deleted

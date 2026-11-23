@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 08 Wave 0 — the vocabulary a post-authentication route is decided
+/// **The vocabulary a post-authentication route is decided
 /// in. Contract only: nothing here resolves, routes, or mutates.**
 ///
 /// Today the app has no post-authentication route at all. Every successful
@@ -32,7 +32,7 @@ public enum PostAuthenticationRoute: String, Sendable, Hashable, CaseIterable {
     case retryCompletionLookup
 }
 
-/// **Phase 16 Plan 01 — what this DEVICE can say about its own local setup.**
+/// **What this DEVICE can say about its own local setup.**
 ///
 /// Kept separate from ``PostAuthenticationRoute`` because it answers a
 /// different question about a different resource. The route above is decided
@@ -57,7 +57,7 @@ public enum DeviceLocalSetupState: String, Sendable, Hashable, CaseIterable {
     case unknown
 }
 
-/// **Phase 16 Plan 01 — how much of setup an authenticated user still owes.**
+/// **How much of setup an authenticated user still owes.**
 ///
 /// The 08-08 skip was right for the steps it was built for and wrong for the
 /// two it also swallowed. This is the distinction it lacked: the account-level
@@ -101,7 +101,7 @@ public struct PostAuthenticationRouteInput: Sendable, Hashable {
 
     /// What the server said about setup completion on this authentication tick.
     ///
-    /// 25-03 (GH #1) — "what the server said" is derived from the whole `/me`
+    /// "what the server said" is derived from the whole `/me`
     /// row by ``OnboardingTourStore/classifySetupCompletion(_:)``: the tour
     /// marker is a fast path, and the account's own evidence (the web
     /// wizard's completion record, profile substance) completes too. The
@@ -169,7 +169,7 @@ public struct PostAuthenticationRouteInput: Sendable, Hashable {
     }
 }
 
-/// **Phase 08 Wave 1 — the decision.** Pure, total, and account-safe: no store,
+/// **The decision.** Pure, total, and account-safe: no store,
 /// no `UserDefaults`, no clock, no network. Every cell of the Wave-0 matrix has
 /// exactly one answer here, and the answers are the ones that file froze.
 ///
@@ -226,7 +226,7 @@ public enum PostAuthenticationRouteResolver {
         return .setup
     }
 
-    /// **Phase 16 Plan 01 (K10) — the second half of the decision.**
+    /// **The second half of the decision.**
     ///
     /// The account-level answer alone cannot decide what a user is shown,
     /// because one of the things setup does is per device. This narrows the

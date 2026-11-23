@@ -198,7 +198,7 @@ struct LabUnitTests {
         #expect(bare.code == nil)
     }
 
-    // MARK: - POLISH-A (F-LAB-1, F-LAB-2, F-SUPP-1)
+    // MARK: - POLISH-A
 
     @Test("the statistics row of a ratio prints no unit; a real unit stays")
     func statsUnitOfARatio() {

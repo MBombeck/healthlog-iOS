@@ -20,7 +20,7 @@ import PackageDescription
 
 let package = Package(
     name: "HealthLogCore",
-    platforms: [.iOS(.v18), .macOS(.v15)],
+    platforms: [.iOS("26.0"), .macOS(.v15)],
     products: [
         .library(name: "HealthLogCore", targets: ["HealthLogCore"])
     ],
@@ -88,6 +88,8 @@ let package = Package(
                 // file-backed upload requirement; without it Core would
                 // fall back to the protocol's throwing default.
                 "Services/APIClient+FileUpload.swift",
+                // D5 #2 — the shared `/api/auth/me` snapshot `send` reads through.
+                "Services/APIClient+AuthMeSnapshot.swift",
                 // B5 (1.4) — which 401s surface instead of signing out.
                 "Services/APIClient+CredentialCheck.swift",
                 "Services/APIClient+HealthProbe.swift",
@@ -114,6 +116,9 @@ let package = Package(
                 // 1.5 KONTO — the account deletion path, moved out of
                 // `AuthService.swift`; Foundation only.
                 "Services/AuthService+Account.swift",
+                // D3 #2: sign-out deletes the device's own row first; called
+                // from `AuthService.swift`; Foundation only.
+                "Services/AuthService+DeviceRow.swift",
                 "Services/OidcStatus.swift",
                 // 09-15 — `EcgRepository` and `WorkoutsRepository` (both in the
                 // wholesale-globbed `Repositories/`) build their routes from
@@ -129,7 +134,6 @@ let package = Package(
                 "Services/CoachStreamTimeoutPolicy.swift",
                 "Services/DoctorReportService.swift",
                 "Services/DoctorReportTmpSweeper.swift",
-                "Services/FeatureFlagsService.swift",
                 "Services/IdempotencyKey.swift",
                 "Services/KeychainStore.swift",
                 // #115 / 0.3 — the per-account partition token the refusal
@@ -157,6 +161,9 @@ let package = Package(
                 "Services/OidcPKCE.swift",
                 // SWR + Outbox repositories — plattform-frei.
                 "Repositories",
+                // #191 — the medication capability flags `ServerFeatures`
+                // decodes; Foundation-only, shared with the extensions.
+                "WidgetShared/MedicationServerContract.swift",
                 // SwiftData/Keychain caches — plattform-frei.
                 "Cache",
                 "Sync",

@@ -27,44 +27,16 @@ extension ServerFreshnessFacts {
 struct ServerFreshnessRow: View {
     let row: MetricFreshness
     let seenText: String
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// The type, when its newest reading was taken, and the facts in one
+    /// line under it (absent on older servers: a fact the server does not
+    /// send is no part); a stale type says so under the time.
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            // POLISH-C (F-SYNC-1) — at an accessibility text size the time
-            // goes under the type instead of being cut ("vor 12 St…").
-            if dynamicTypeSize.isAccessibilitySize {
-                typeText
-                    .fixedSize(horizontal: false, vertical: true)
-                seenLabel
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                    typeText
-                    Spacer(minLength: HLSpace.sm)
-                    seenLabel
-                        .lineLimit(1)
-                }
-            }
-            // Absent on older servers: a fact the server does not send is no line.
-            ForEach(ServerFreshnessFacts(row: row).detailLines, id: \.self) { line in
-                Text(verbatim: line)
-                    .font(.hlCaption2)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var typeText: some View {
-        Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type))
-            .font(.hlCaption)
-            .foregroundStyle(HLText.primary)
-    }
-
-    private var seenLabel: some View {
-        Text(seenText)
-            .font(.hlCaption.monospacedDigit())
-            .foregroundStyle(row.stale ? HLColor.statusWarn : HLText.tertiary)
+        HLRow(
+            title: Text(HKSyncDiagnosticsVocabulary.freshnessType(row.type)),
+            detail: HLRowDetail.text(ServerFreshnessFacts(row: row).detailLines),
+            value: Text(verbatim: seenText),
+            status: row.stale ? HLRowStatus(String(localized: "overdue"), tone: .warning) : nil
+        )
     }
 }

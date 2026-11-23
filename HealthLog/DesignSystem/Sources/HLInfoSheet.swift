@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.4 B2 — what a screen's (i) explains.**
+/// **What a screen's (i) explains.**
 ///
 /// One value per screen, built by the screen: what the screen shows ("Was ist
 /// das?"), one section per card that has its own method or terms, the
@@ -126,29 +126,35 @@ extension View {
     }
 }
 
-/// The info sheet: ``HLInfoPage`` in its own stack, with "Fertig".
+/// The info sheet: ``HLInfoPage`` in the sheet scaffold. It only shows
+/// something, so it has the close cross at the leading edge and nothing to
+/// confirm, like every other sheet that only shows (``HLSheetAction/none``).
 struct HLInfoSheet: View {
     let content: HLInfoContent
-    @Environment(\.dismiss) private var dismiss
+
+    /// The scaffold's action: close only.
+    static let action: HLSheetAction = .none
+
+    /// Height of the page's scrolling content; `0` until it measured itself.
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
-        NavigationStack {
+        // As tall as the text: two short cards never open a full-height sheet.
+        HLSheetScaffold(verbatim: content.title, size: .content(measuredHeight: contentHeight), action: Self.action) {
             HLInfoPage(content: content)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
+                .hlSheetContentHeight($contentHeight)
         }
-        .hlSheetPresentation(.form)
-        .presentationBackground(HLColor.surface)
     }
 }
 
 /// The page itself: sheet content, or pushed as is into a sheet's own stack.
-/// Links open in Safari, never in an in-app web view (A360-3).
+/// Links open in Safari, never in an in-app web view.
 struct HLInfoPage: View {
     let content: HLInfoContent
+
+    /// The sign of a link that leaves the app (Safari): the bare arrow, never
+    /// the boxed one, and never the trend arrow's job.
+    static let externalSymbol = "arrow.up.right"
 
     var body: some View {
         ScrollView {
@@ -186,7 +192,9 @@ struct HLInfoPage: View {
 
     private func sectionCard(title: String, paragraphs: [String]) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel(verbatim: title)
+            Text(verbatim: title)
+                .hlText(.cardTitle)
+                .accessibilityAddTraits(.isHeader)
             ForEach(paragraphs, id: \.self) { paragraph in
                 Text(paragraph)
                     .font(.hlBody)
@@ -196,7 +204,7 @@ struct HLInfoPage: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(HLSpace.lg)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+        .hlCardSurface()
     }
 
     /// **1.0.3 (App Review 1.4.1, audit row 6)** — the way on from the
@@ -218,7 +226,7 @@ struct HLInfoPage: View {
     /// The public guide for the topic, the sheet's last stop.
     private func learnMoreRow(_ guide: HLLearnGuide) -> some View {
         Link(destination: guide.localizedURL) {
-            rowLabel(systemImage: "book", trailing: "arrow.up.right") {
+            rowLabel(systemImage: "book", trailing: Self.externalSymbol) {
                 Text("common.learnMore")
             }
         }
@@ -250,7 +258,9 @@ struct HLInfoPage: View {
 
     private var referencesCard: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            HLSectionLabel("sources.sheet.referencesTitle")
+            Text("sources.sheet.referencesTitle")
+                .hlText(.cardTitle)
+                .accessibilityAddTraits(.isHeader)
             ForEach(content.references) { source in
                 HLSourceRow(name: source.name, year: source.year, caveatKey: source.caveatKey, url: source.url)
             }
@@ -260,7 +270,7 @@ struct HLInfoPage: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(HLSpace.lg)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+        .hlCardSurface()
     }
 }
 
@@ -271,7 +281,7 @@ private struct RowChrome: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, HLSpace.lg)
             .padding(.vertical, HLSpace.sm)
-            .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+            .hlCardSurface()
     }
 }
 
@@ -283,7 +293,7 @@ struct HLSourceRow: View {
     let caveatKey: String?
     let url: URL
 
-    /// 1.4 B4 — the year beside the name, unless the name already carries it
+    /// The year beside the name, unless the name already carries it
     /// ("ESH 2023", "Kroenke 2001 (PHQ-9)"): those rows read "ESH 2023 2023".
     nonisolated static func visibleYear(name: String, year: Int?) -> Int? {
         guard let year, !name.contains(String(year)) else { return nil }
@@ -298,8 +308,8 @@ struct HLSourceRow: View {
                         Text(verbatim: name)
                             .font(.hlSubhead.weight(.semibold))
                             .foregroundStyle(HLText.primary)
-                            // 1.4 B2 — a long name wraps left-aligned, like
-                            // its caveat (M1), not centred inside the Link.
+                            // A long name wraps left-aligned, like
+                            // its caveat, not centred inside the Link.
                             .multilineTextAlignment(.leading)
                         if let year = Self.visibleYear(name: name, year: year) {
                             Text(verbatim: String(year))
@@ -312,14 +322,14 @@ struct HLSourceRow: View {
                         Text(LocalizedStringKey(caveatKey))
                             .font(.hlCaption)
                             .foregroundStyle(HLText.secondary)
-                            // M1 — a `Text` inside a `Link` label centres its
+                            // A `Text` inside a `Link` label centres its
                             // wrapped lines by default; caveats are prose.
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: HLSpace.sm)
-                Image(systemName: "arrow.up.right.square")
+                Image(systemName: HLInfoPage.externalSymbol)
                     .font(.hlIcon(HLIconSize.sm))
                     .foregroundStyle(.tint)
                     .accessibilityHidden(true)

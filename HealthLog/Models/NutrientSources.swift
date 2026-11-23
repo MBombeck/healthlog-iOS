@@ -1,6 +1,6 @@
 import Foundation
 
-// SUPP (1.5.0, #131): where a nutrient amount came from, and the upper
+// Where a nutrient amount came from, and the upper
 // intake level the server compares it with (v1.43). Both are the server's:
 // the app splits nothing itself, sets no limit of its own and shows the limit
 // only on the server's `aboveUpperLimit` verdict.

@@ -9,10 +9,58 @@ import SwiftUI
 struct IllnessInsightsScreen: View {
     let store: IllnessStore
 
+    /// What the screen shows. A failed request with nothing to show is an
+    /// error with a retry, never "no analysis yet", and the first request
+    /// shows its loading state instead of the empty one.
+    enum Phase: Equatable {
+        case loading
+        case failed
+        case empty
+        case loaded
+    }
+
+    nonisolated static func phase(
+        hasEpisodes: Bool,
+        hasLoaded: Bool,
+        isLoading: Bool,
+        loadFailed: Bool
+    ) -> Phase {
+        if hasEpisodes { return .loaded }
+        if !hasLoaded || isLoading { return .loading }
+        return loadFailed ? .failed : .empty
+    }
+
+    private var loadPhase: HLLoadPhase {
+        switch phase {
+        case .loading: .loading
+        case .failed: .error(retry: { await load() })
+        case .empty: .empty
+        case .loaded: .loaded
+        }
+    }
+
+    private var phase: Phase {
+        Self.phase(
+            hasEpisodes: (store.insights?.episodeCount ?? 0) > 0,
+            hasLoaded: store.hasLoadedInsights,
+            isLoading: store.isLoadingInsights,
+            loadFailed: store.insightsError != nil
+        )
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                if let insights = store.insights, insights.episodeCount > 0 {
+        HLPage {
+            HLStateContainer(loadPhase) {
+                HLCard {
+                    VStack(alignment: .leading, spacing: HLSpace.sm) {
+                        HLSkeleton(.capsule, width: 200, height: 20)
+                        HLSkeleton(.capsule, width: 140, height: 14)
+                    }
+                }
+            } empty: {
+                HLEmptyState(icon: "chart.bar.xaxis", title: "illness.insights.empty.title")
+            } content: {
+                if let insights = store.insights {
                     summaryCard(insights)
                     if !insights.byType.isEmpty {
                         byTypeCard(insights)
@@ -20,105 +68,78 @@ struct IllnessInsightsScreen: View {
                     if !insights.byMonth.isEmpty {
                         byMonthCard(insights)
                     }
-                    // UI-Standard R15 (U1) — die pauschale Fußzeile
-                    // `illness.insights.retrospectiveDisclaimer` ist ersatzlos
-                    // entfallen. Der Bildschirm heißt „Rückblick", jede Karte
-                    // zählt Vergangenes; der Satz sagte nichts, was die Zahlen
-                    // darüber nicht schon sagen.
-                } else {
-                    emptyState
                 }
             }
-            .padding(HLSpace.lg)
         }
-        .hlScreenBackground()
+        // A refresh that fails over a summary keeps the summary and says so.
+        .hlErrorBannerOverlay(error: phase == .loaded ? store.insightsError : nil) {
+            Task { await load() }
+        }
         .navigationTitle(Text("illness.insights.title"))
-        .navigationBarTitleDisplayMode(.large)
-        .task { await store.loadInsights(includeRecoveryGap: true) }
-        .refreshable { await store.loadInsights(includeRecoveryGap: true) }
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        await store.loadInsights(includeRecoveryGap: true)
     }
 
     private func summaryCard(_ insights: IllnessInsightsDTO) -> some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                let sickTemplate = String(localized: "illness.insights.sickCount")
-                Text(String(format: sickTemplate, insights.episodeCount))
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
-                if let gap = insights.typicalRecoveryGapDays {
-                    let gapValue = gap.formatted(.number.precision(.fractionLength(0 ... 1)))
-                    let gapTemplate = String(localized: "illness.insights.typicalGap")
-                    Text(String(format: gapTemplate, gapValue))
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    // v1.21.0: name the metric that is typically last to settle
-                    // across episodes (server's `gapDriverType`). Render-only.
-                    if let driver = typicalGapDriverText(insights.gapDriverType) {
-                        Text(driver)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                // 1.4 B2 — below the server's floor the gap is simply absent;
-                // no line says it is withheld.
-                let resolvedTemplate = String(localized: "illness.insights.resolvedCount")
-                Text(String(format: resolvedTemplate, insights.resolvedCount, insights.episodeCount))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                // 1.0.3 (App Review 1.4.1, audit row 17) — the typical recovery
-                // gap is the screen's one medical-shaped figure, so the method
-                // behind it is cited in the card that states it (1.4 B2: at
-                // its foot, not between the cards).
-                HLSourcesLink(topic: .illnessRecovery)
+        HLCard("Overview") {
+            HLStatGrid(cells: Self.summaryCells(insights))
+            // v1.21.0: name the metric that is typically last to settle
+            // across episodes (server's `gapDriverType`). Render-only.
+            if insights.typicalRecoveryGapDays != nil, let driver = typicalGapDriverText(insights.gapDriverType) {
+                Text(driver)
+                    .hlText(.rowSubtitle)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            // 1.0.3 (App Review 1.4.1, audit row 17): the typical recovery
+            // gap is the screen's one medical-shaped figure, so the method
+            // behind it is cited in the card that states it.
+            HLSourcesLink(topic: .illnessRecovery)
         }
     }
 
+    /// The summary's key figures in the statistic raster: episodes, resolved,
+    /// and the typical recovery gap where the server shares one. Below the
+    /// server's floor the gap is simply absent; no cell says it is withheld.
+    static func summaryCells(_ insights: IllnessInsightsDTO) -> [HLStatCell] {
+        var cells = [
+            HLStatCell(
+                label: String(localized: "illness.insights.stat.episodes"),
+                value: HLValueFormat.number(Double(insights.episodeCount), fractionDigits: 0 ... 0)
+            ),
+            HLStatCell(
+                label: String(localized: "illness.status.resolved"),
+                value: HLValueFormat.number(Double(insights.resolvedCount), fractionDigits: 0 ... 0)
+            )
+        ]
+        if let gap = insights.typicalRecoveryGapDays {
+            cells.append(HLStatCell(
+                label: String(localized: "illness.correlation.recoveryGap.title"),
+                value: HLValueFormat.number(gap, fractionDigits: 0 ... 1),
+                unit: String(localized: "illness.insights.stat.days")
+            ))
+        }
+        return cells
+    }
+
     private func byTypeCard(_ insights: IllnessInsightsDTO) -> some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // 1.4 B4 — the canonical label instead of a hand-set footnote.
-                HLSectionLabel("illness.insights.byType.title")
-                ForEach(sortedPairs(insights.byType), id: \.0) { key, count in
-                    HStack {
-                        Text(typeLabel(key))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                        Spacer()
-                        Text(verbatim: "\(count)")
-                            .font(.hlSubhead.monospacedDigit())
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
+        HLCard("illness.insights.byType.title", layout: .rows) {
+            ForEach(sortedPairs(insights.byType), id: \.0) { key, count in
+                HLRow(title: Text(verbatim: typeLabel(key)), value: Text(count, format: .number))
             }
         }
     }
 
     private func byMonthCard(_ insights: IllnessInsightsDTO) -> some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("illness.insights.byMonth.title")
-                ForEach(sortedPairs(insights.byMonth, descending: true), id: \.0) { key, count in
-                    HStack {
-                        Text(verbatim: Self.monthLabel(key))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                        Spacer()
-                        Text(verbatim: "\(count)")
-                            .font(.hlSubhead.monospacedDigit())
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
+        HLCard("illness.insights.byMonth.title", layout: .rows) {
+            ForEach(sortedPairs(insights.byMonth, descending: true), id: \.0) { key, count in
+                HLRow(title: Text(verbatim: Self.monthLabel(key)), value: Text(count, format: .number))
             }
         }
-    }
-
-    /// 1.4 B2 — the lockup on the page itself, not in a ghost card, and
-    /// without the sentence promising a summary later.
-    private var emptyState: some View {
-        HLEmptyState(icon: "chart.bar.xaxis", title: "illness.insights.empty.title")
-            .padding(.top, HLSpace.xxl)
     }
 
     /// Sort `{key: count}` by count desc, then key asc; `descending` sorts by
@@ -132,22 +153,13 @@ struct IllnessInsightsScreen: View {
         }
     }
 
-    /// 1.4 B4 — the server keys the tally by month (`"2026-10"`); the row reads
+    /// The server keys the tally by month (`"2026-10"`); the row reads
     /// it as a month in words ("Oktober 2026"). A key that is not a month keeps
     /// itself rather than vanish.
     static func monthLabel(_ key: String, locale: Locale = .autoupdatingCurrent) -> String {
-        let parser = DateFormatter()
-        parser.calendar = Calendar(identifier: .gregorian)
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM"
-        guard let month = parser.date(from: key) else { return key }
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = locale
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.setLocalizedDateFormatFromTemplate("MMMMyyyy")
-        return formatter.string(from: month)
+        guard key.split(separator: "-").count == 2,
+              let month = ProfileDay.anchor(forKey: key + "-01") else { return key }
+        return HLDateFormat.monthYear(month, locale: locale, calendar: ProfileDay.utcCalendar)
     }
 
     private func typeLabel(_ key: String) -> String {
@@ -168,7 +180,7 @@ struct IllnessInsightsScreen: View {
             return String(localized: "illness.insights.typicalGap.driver.symptom")
         }
         let template = String(localized: "illness.insights.typicalGap.driver")
-        // 1.4 B4 — the name sits mid-sentence: English writes it in lower case
+        // The name sits mid-sentence: English writes it in lower case
         // ("Across episodes, resting heart rate tends..."), German keeps the noun.
         let label = IllnessVitalLabel.label(for: type)
         let keepsCapital = AppLanguage.current == .de

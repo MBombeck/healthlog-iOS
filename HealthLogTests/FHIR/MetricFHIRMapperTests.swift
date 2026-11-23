@@ -17,7 +17,7 @@ import Testing
 struct MetricFHIRMapperTests {
     // MARK: - Completeness
 
-    /// v0.14.6 — the three WHOOP-native aggregates (`averageHeartRate`,
+    /// The three WHOOP-native aggregates (`averageHeartRate`,
     /// `maxHeartRate`, `sleepDisturbanceCount`) have **no clean FHIR mapping**
     /// by design: avg/max HR over a day/session would mis-read as a spot heart
     /// rate, and sleep-disturbance count has no standard LOINC. `mapping(for:)`
@@ -43,19 +43,22 @@ struct MetricFHIRMapperTests {
         // can stand behind; it is never FHIR-exported. Adding it here keeps the
         // FHIR-mapped count invariant (allCases +1, unmapped +1 → 51 unchanged).
         .mood,
-        // Audit B-4 — the audio-exposure EVENT is a fired notification with no
+        // The audio-exposure EVENT is a fired notification with no
         // quantity to code (its five sibling events are unmapped for the same
         // reason), and `.unknown` is a reading this build cannot name, so no
         // LOINC could be stood behind. Both keep the count invariant.
         .audioExposureEvent, .unknown,
-        // #162 — the four Garmin types are vendor-scaled scores and a load
+        // The four Garmin types are vendor-scaled scores and a load
         // with no LOINC to stand behind, exported like the WHOOP scores: not.
         .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
-        // POLISH-A A5 (1.5) — of the six server-v1.44 Apple Health types only
+        // Of the six server-v1.44 Apple Health types only
         // the state-of-mind valence stays unexported: the server's table has no
         // code for it (`loinc: null`), and a self-rated valence has no LOINC.
         // The other five carry their HealthKit identifier like the server.
-        .stateOfMindValence
+        .stateOfMindValence,
+        // Shown, not exported: blood ketones, resting energy and the three
+        // room-climate readings have no FHIR mapping in the app yet.
+        .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity
     ]
 
     @Test("Every MetricKind has a non-nil mapping")
@@ -76,21 +79,21 @@ struct MetricFHIRMapperTests {
     func allMappingsCount() {
         let fhirMappedCount = MetricKind.allCases.count - Self.unmappedWHOOPKinds.count
         #expect(MetricFHIRMapper.allMappings.count == fhirMappedCount)
-        // v0.11 W21 — +8 web-parity body-composition + cardio kinds (was 26).
-        // v0.11 reconcile (F3) — +1 (fatMass) → 35.
-        // v0.11 W28d — +1 (walkingSteadiness) → 36.
-        // v0.13.1 IC — +7 v1.10.0 additive HealthKit signals → 43.
-        // v0.14.6 — the three WHOOP-native kinds map to nil → still 43.
-        // v0.14.1 W-REGFIX — +4 v1.17.1 source-fixed render-only signals
+        // +8 web-parity body-composition + cardio kinds (was 26).
+        // v0.11 reconcile — +1 (fatMass) → 35.
+        // +1 (walkingSteadiness) → 36.
+        // +7 v1.10.0 additive HealthKit signals → 43.
+        // The three WHOOP-native kinds map to nil → still 43.
+        // +4 v1.17.1 source-fixed render-only signals
         // (ansCharge / cardioLoad / sleepScore / bodyTemperatureDeviation) map
         // to a custom HealthLog CodeSystem (FHIR export stays complete) → 47.
-        // v0158 — +4 v1.25 clinical types, all FHIR-mapped (pain LOINC 72514-3,
+        // +4 v1.25 clinical types, all FHIR-mapped (pain LOINC 72514-3,
         // waist LOINC 8280-0, grip + waist-to-height custom HealthLog codes) → 51.
         // Build 3 / item 3.3 — +21 decoder catch-up kinds, ALL of them
         // deliberately unmapped (see `unmappedWHOOPKinds`) → still 51.
-        // Audit B-4 — +2 kinds (audio-exposure event, unknown), both unmapped
+        // +2 kinds (audio-exposure event, unknown), both unmapped
         // → still 51. A clinical export never gains a code we invented.
-        // POLISH-A A5 — +5 server-v1.44 Apple Health types on the HealthKit
+        // +5 server-v1.44 Apple Health types on the HealthKit
         // CodeSystem, byte-aligned with the server's FHIR table → 56.
         #expect(MetricFHIRMapper.allMappings.count == 56)
     }
@@ -144,10 +147,10 @@ struct MetricFHIRMapperTests {
         #expect(mapping.glucoseContext == .afterMeal)
     }
 
-    @Test("Glucose context-specific mapping: beforeMeal also uses 1558-6 (pre-prandial)")
-    func glucoseBeforeMeal() {
-        let mapping = MetricFHIRMapper.glucoseMapping(context: .beforeMeal)
-        #expect(mapping.loinc.code == "1558-6")
+    @Test("Glucose context-specific mapping: random uses 2339-0 (random glucose)")
+    func glucoseRandom() {
+        let mapping = MetricFHIRMapper.glucoseMapping(context: .random)
+        #expect(mapping.loinc.code == "2339-0")
     }
 
     @Test("Glucose context-specific mapping: bedtime falls back to 2339-0 (random)")
@@ -326,7 +329,7 @@ struct MetricFHIRMapperTests {
         }
     }
 
-    // MARK: - Server v1.44 Apple Health types (POLISH-A A5)
+    // MARK: - Server v1.44 Apple Health types
 
     /// The server's FHIR rows for the six v1.44 types (`signals/registry.ts`,
     /// `fhir`, v1.47.0). None has a LOINC term that means the same thing: the

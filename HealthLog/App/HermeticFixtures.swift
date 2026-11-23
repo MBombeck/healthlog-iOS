@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **W-HERMETIC-E2E (v0152).** Deterministic JSON fixtures served by
+    /// Deterministic JSON fixtures served by
     /// ``HermeticURLProtocol``. Keyed by request path prefix.
     ///
     /// Design: rich fixtures for the LOAD-BEARING surfaces the seven UITest
@@ -27,13 +27,13 @@
             {
                 return marketing
             }
-            // 1.1.0 — the QA-sweep readings, only under `-uitest-sweep`.
+            // The QA-sweep readings, only under `-uitest-sweep`.
             if HermeticUITestSupport.isSweepOverlayActive,
                let sweep = SweepFixtures.response(forPath: path, method: method, query: query)
             {
                 return sweep
             }
-            // Scenario fixtures — the scenario-keyed answers come first and only
+            // The scenario-keyed answers come first and only
             // exist while `-uitest-phase8 <scenario>` is on the command line.
             // Outside a Phase-8 UI test this returns `nil` on every path and the
             // original table below is reached unchanged.
@@ -51,7 +51,7 @@
         }
 
         private static func defaultResponse(forPath path: String, method: String) -> (status: Int, body: Data) {
-            // H3 auth-journey (audit-v0162) — the real login + MFA-verify
+            // Auth journey — the real login + MFA-verify
             // endpoints, steered by launch args. Extracted so the main router's
             // cyclomatic complexity stays inside the lint budget. Checked FIRST
             // (these paths never overlap the `/api/auth/me` prefix below); only
@@ -59,7 +59,7 @@
             if let authResponse = authResponse(forPath: path) { return authResponse }
             // Newest-first prefix match. Order matters for the `/api/insights`
             // family (specific before the family default).
-            // 18-03 — the sharing family, extracted for the same reason the
+            // The sharing family, extracted for the same reason the
             // auth family is: three more branches here would put the router
             // over its cyclomatic budget. Checked before `/api/auth/me`,
             // because the report-selection route sits under that prefix.
@@ -72,7 +72,7 @@
             if path.hasPrefix("/api/cycle") { return ok(emptyArrayOrObject(forPath: path)) }
             if path.hasPrefix("/api/insights") { return ok(emptyArrayOrObject(forPath: path)) }
             if path.hasPrefix("/api/health") { return ok("{\"status\":\"ok\"}") }
-            // 13-04 — `WebHandoffLogin.minimumServerVersion` is 1.32.11; under
+            // `WebHandoffLogin.minimumServerVersion` is 1.32.11; under
             // `-uitest-weblogin` the fixture server is comfortably past it,
             // exactly like the operator's instance. Scoped to that argument on
             // purpose: serving it by default would put the browser CTA in front
@@ -110,7 +110,7 @@
                 return ok(sessionJSON)
             }
             if path.hasPrefix("/api/auth/registration-status") { return ok(registrationStatusJSON) }
-            // 13-04 — the second route the web-handoff availability gate reads,
+            // The second route the web-handoff availability gate reads,
             // scoped to `-uitest-weblogin` for the reason given on the version
             // route above. A well-configured instance: the login route answers
             // on its own origin. The dead-end classification has eleven unit
@@ -142,10 +142,24 @@
         /// the status routes (`+Integrations`): `nil` elsewhere, ONE branch.
         private static func overlayResponse(forPath path: String, method m: String) -> (status: Int, body: Data)? {
             CitationFixtures.response(forPath: path, method: m) ?? KontoFixtures.response(forPath: path)
-                ?? sharingResponse(forPath: path, method: m)
+                ?? sharingResponse(forPath: path, method: m) ?? moodWriteResponse(forPath: path, method: m)
         }
 
-        /// **18-03 — the sharing family.** The unified sharing journey needs a
+        /// A logged mood comes back as the one entry the server created. The
+        /// permissive `{}` default cannot decode as `MoodEntry`, so every mood
+        /// capture in the hermetic world failed with a read error.
+        static func moodWriteResponse(forPath path: String, method: String) -> (status: Int, body: Data)? {
+            guard method == "POST", path == "/api/mood-entries" else { return nil }
+            return ok(createdMoodEntryJSON)
+        }
+
+        static var createdMoodEntryJSON: String {
+            let loggedAt = ISO8601DateFormatter().string(from: .now)
+            return #"{"id":"hermetic-mood-new","mood":"GUT","tags":[],"tagKeys":[],"#
+                + #""moodLoggedAt":"\#(loggedAt)","source":"MANUAL","ratedFactors":[]}"#
+        }
+
+        /// **The sharing family.** The unified sharing journey needs a
         /// real `share.leaves` vocabulary and a mintable link; both used to fall
         /// through to the permissive empty default, which renders the honest
         /// "your server served no selection list" state — correct, and useless
@@ -177,7 +191,19 @@
         /// and a resolved-empty read says nothing (statement nil).
         private static func emptyArrayOrObject(forPath path: String) -> String {
             if path.hasPrefix("/api/analytics") { return #"{"summaries":{}}"# }
-            let listSuffixes = ["all", "cycles", "calendar", "day-logs", "cards", "episodes", "achievements", "passkeys", "devices"]
+            let listSuffixes = [
+                "all",
+                "cycles",
+                "calendar",
+                "day-logs",
+                "cards",
+                "episodes",
+                "achievements",
+                "passkeys",
+                "devices",
+                "allergies",
+                "family-history"
+            ]
             if listSuffixes.contains(where: { path.hasSuffix($0) }) { return "[]" }
             return "{}"
         }
@@ -242,7 +268,7 @@
         { "registrationEnabled": false }
         """
 
-        /// 13-04 — `GET /api/version`, wrapped in the server envelope
+        /// `GET /api/version`, wrapped in the server envelope
         /// `ServerVersionInfo` decodes through.
         private static let serverVersionJSON = """
         { "data": { "version": "1.37.20" }, "error": null }
@@ -255,11 +281,15 @@
         /// flag. `onboardingTourCompleted: true` so the user is not re-dropped
         /// into setup.
         ///
-        /// Audit A-7 — both module halves are present and EMPTY: an empty
+        /// Both module halves are present and EMPTY: an empty
         /// `modules` map resolves every key default-ON (same as the absent map
         /// this fixture carried before), and the empty `moduleAccess` beside it
         /// keeps the invariant while giving the gate a v1.38.15-shaped payload
         /// to load.
+        ///
+        /// `unitPreference` rides along as every server sends it. Without it
+        /// the app keeps the unit an earlier launch adopted, so one imperial
+        /// run left every later run of the simulator in lb and °F.
         private static let meJSON = """
         {
           "id": "hermetic-user",
@@ -270,6 +300,7 @@
           "disclaimerAcknowledgedAt": "2024-01-01T00:00:00.000Z",
           "onboardingTourCompleted": true,
           "moodReminderEnabled": false,
+          "unitPreference": "metric",
           "modules": {},
           "moduleAccess": {}
         }
@@ -277,7 +308,7 @@
 
         /// `/api/auth/me/modules` — all modules ON (the gate fails open anyway).
         ///
-        /// Audit A-7 — `moduleAccess` rides along, empty like `modules`: every
+        /// `moduleAccess` rides along, empty like `modules`: every
         /// key is absent from BOTH halves, which is the invariant
         /// (`modules[key] == (moduleAccess[key] == "enabled")`) trivially held
         /// and exactly what the fixtures enabled before. The journeys keep
@@ -391,7 +422,7 @@
 
     // MARK: - Phase 08 scenario fixtures
 
-    /// **Scenario fixtures.** The scenario-keyed half of the hermetic backend.
+    /// The scenario-keyed half of the hermetic backend.
     ///
     /// Every answer here is owned by exactly one launch scenario, so a UI RED
     /// can state the shape of the world it needs instead of arranging it by
@@ -426,9 +457,9 @@
                 // The optional profile write is refused, so the step's own
                 // failure surface is exercised alongside its missing validation.
                 // The step is reached through the setup tail, so this scenario
-                // also has to say the setup is outstanding (08-08).
+                // also has to say the setup is outstanding.
                 if let outstanding = outstandingSetup(forPath: path) { return outstanding }
-                // **08-10 — the refusal named a route the app never calls.**
+                // **The refusal named a route the app never calls.**
                 // `BaselineProfileStep` writes through `SettingsStore` →
                 // `DashboardRepository.patchProfile`, which is
                 // `PATCH /api/user/profile`; `/api/auth/profile` is the *web*
@@ -445,7 +476,7 @@
             case .returningLoginIncomplete:
                 return outstandingSetup(forPath: path)
             case .insightsAccessibility:
-                // 08-11 — only the derived BATCH route, which is the one the
+                // Only the derived BATCH route, which is the one the
                 // overview's score grid reads (`DerivedInsightsStore` →
                 // `DerivedMetricsRepository.fetchBatch`). Everything else,
                 // including the rest of `/api/insights`, keeps the permissive
@@ -460,7 +491,7 @@
 
         /// `/api/auth/me` for an account whose setup is genuinely unfinished.
         ///
-        /// **08-08.** Identical to the default row except for one field, and that
+        /// Identical to the default row except for one field, and that
         /// field is now load-bearing: the post-authentication route reads it, so
         /// a case that needs the optional tail has to say so instead of relying
         /// on the flow to walk it regardless. Every other route falls through.
@@ -536,7 +567,7 @@
          {"id":"doc-beta","ok":false,"error":"notFound"}]},"error":null}
         """#
 
-        /// **08-11.** `/api/insights/derived/batch` — four `status: ok` wellness
+        /// `/api/insights/derived/batch` — four `status: ok` wellness
         /// scores, which is what the Insights overview's score grid renders as
         /// ring tiles. Four (not two) so a one-column fallback is unambiguous:
         /// at an accessibility text size the grid must be four rows where the
@@ -580,7 +611,7 @@
         private static let profileWritePaths = ["/api/user/profile", "/api/auth/profile"]
 
         /// The default `/api/auth/me` row with the one field that decides the
-        /// post-authentication route flipped to `false` (08-08). Everything else
+        /// post-authentication route flipped to `false`. Everything else
         /// — the acknowledged disclaimer above all — is identical, so a case
         /// using this scenario differs from the default boot in exactly one
         /// stated way.

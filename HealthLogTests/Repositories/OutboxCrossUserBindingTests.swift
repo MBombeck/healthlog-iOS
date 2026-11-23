@@ -9,7 +9,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping force_try
 
-/// **v0.13 WS Item 1 — cross-user outbox binding (Medium security).**
+/// **Cross-user outbox binding (Medium security).**
 ///
 /// On a shared device a queued write owned by User A survives A's sign-out
 /// (the `.userInitiated`/`.tokenExpired` paths keep the outbox + cipher key).
@@ -114,7 +114,7 @@ struct OutboxCrossUserBindingTests {
         await replay.runOnce()
 
         // The leak is closed: the server was NEVER hit for A's row under B.
-        // Build 273 — and the row is RETAINED for A rather than deleted: the
+        // And the row is RETAINED for A rather than deleted: the
         // .userInitiated/.tokenExpired logouts keep the outbox precisely so A's
         // queued health writes still exist when A signs back in. Deleting them
         // on B's sign-in destroyed the data the retention was for.
@@ -195,7 +195,7 @@ struct OutboxCrossUserBindingTests {
         #expect(await outbox.snapshot.isEmpty, "successful same-user replay removes the row")
     }
 
-    // MARK: - Legacy nil-owner is quarantined, not adopted (Phase 07)
+    // MARK: - Legacy nil-owner is quarantined, not adopted
 
     /// **Phase 07 inverts the v0.13 transitional rule this test used to pin.**
     ///

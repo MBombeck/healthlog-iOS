@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// H1 (v0.11 W26) — MeasureSheet last-used + recent-kinds MRU contract.
+/// MeasureSheet last-used + recent-kinds MRU contract.
 ///
 /// Pure parse/serialize/push logic (no network, no SwiftUI), so a plain
 /// unit suite is the right shape. Locks: newest-first ordering, de-dupe on

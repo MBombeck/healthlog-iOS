@@ -41,7 +41,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     public let line: String
     /// Bounded 0–3 rail items, never padded (defensively re-bounded in `rail`).
     public let worthALook: [DailyPriorityItem]
-    /// **#114 / #115 · 0.2 — the three AI capabilities the digest carries text
+    /// **The three AI capabilities the digest carries text
     /// or a card for** (server v1.39, required there): `briefing` (the lead and
     /// the top signal), `coach` (the Coach check-in card) and `reactionLines`.
     /// `nil` on an older server — then nothing is masked. Everything else in the
@@ -66,22 +66,30 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     /// **v1.40 `restMode`** — present while an illness episode is active.
     /// Decoded tolerantly; no surface in 1.2.
     public let restMode: RestMode?
+    /// **#176 (v1.48) `languages`** — which language the texts are in.
+    /// `nil` on an older server: then every text renders as sent.
+    public let languages: TextLanguages?
 
     /// v1.40 — the resolved Today lead. `source` is carried raw
     /// (`reaction` / `briefing` / `signal`).
     public struct Lead: Codable, Sendable, Equatable {
         public let text: String
         public let source: String
+        /// #176 (v1.48) — the language the text is in; `nil` for a text older
+        /// than v1.48 or from an older server.
+        public let language: String?
 
-        public init(text: String, source: String) {
+        public init(text: String, source: String, language: String? = nil) {
             self.text = text
             self.source = source
+            self.language = language
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
             source = try c.decodeIfPresent(String.self, forKey: .source) ?? ""
+            language = try? c.decodeIfPresent(String.self, forKey: .language)
         }
     }
 
@@ -91,16 +99,20 @@ public struct DailyDigest: Codable, Sendable, Equatable {
     public struct SignalLine: Codable, Sendable, Equatable {
         public let headline: String?
         public let delta: String?
+        /// #176 (v1.48) — the language of the line; `nil` when unknown.
+        public let language: String?
 
-        public init(headline: String?, delta: String?) {
+        public init(headline: String?, delta: String?, language: String? = nil) {
             self.headline = headline
             self.delta = delta
+            self.language = language
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             headline = try? c.decodeIfPresent(String.self, forKey: .headline)
             delta = try? c.decodeIfPresent(String.self, forKey: .delta)
+            language = try? c.decodeIfPresent(String.self, forKey: .language)
         }
     }
 
@@ -260,7 +272,8 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         lead: Delivered<Lead> = .absent,
         signalLine: Delivered<SignalLine> = .absent,
         today: [TodayFact] = [],
-        restMode: RestMode? = nil
+        restMode: RestMode? = nil,
+        languages: TextLanguages? = nil
     ) {
         self.generatedAt = generatedAt
         self.phase = phase
@@ -277,6 +290,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         deliversSignalLine = signalLine.isDelivered
         self.today = today
         self.restMode = restMode
+        self.languages = languages
     }
 
     /// A field a newer server always sends (possibly as null) and an older one
@@ -298,7 +312,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case generatedAt, phase, sleepPending, score, topSignal, briefingLead, line, worthALook, ai
-        case lead, signalLine, today, restMode
+        case lead, signalLine, today, restMode, languages
     }
 
     public init(from decoder: Decoder) throws {
@@ -320,6 +334,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         signalLine = try? c.decodeIfPresent(SignalLine.self, forKey: .signalLine)
         today = (try? c.decodeLossyArray(TodayFact.self, forKey: .today)) ?? []
         restMode = try? c.decodeIfPresent(RestMode.self, forKey: .restMode)
+        languages = try? c.decodeIfPresent(TextLanguages.self, forKey: .languages)
     }
 
     /// Written by hand so a delivered null survives a round trip as null
@@ -343,6 +358,7 @@ public struct DailyDigest: Codable, Sendable, Equatable {
         }
         try c.encode(today, forKey: .today)
         try c.encodeIfPresent(restMode, forKey: .restMode)
+        try c.encodeIfPresent(languages, forKey: .languages)
     }
 }
 
@@ -354,7 +370,7 @@ public extension DailyDigest {
         phase != "final"
     }
 
-    /// #115 · 0.2 — whether model-written briefing text (the lead and the top
+    /// Whether model-written briefing text (the lead and the top
     /// signal) may be shown. The server already nulls both while `briefing` is
     /// unavailable; this keeps a body that says otherwise from painting them.
     var showsBriefingText: Bool {
@@ -367,16 +383,21 @@ public extension DailyDigest {
     /// **1.2 (v1.40)** — a server that resolves the lead itself (`lead.text`)
     /// is rendered as delivered. An older server without the field, or a null
     /// lead, keeps the previous chain.
+    ///
+    /// **#176 (v1.48)** — a text in another language than the interface is
+    /// passed over: the resolved lead by its `language`, the briefing lead by
+    /// `languages.briefing`, the line by `languages.response`. When none is
+    /// left the app says its own sentence (``ownLeadFallback``). A text whose
+    /// language is not stated (older server, text older than v1.48) renders
+    /// as before.
     var lead: String {
-        if let resolved = admittedResolvedLead { return resolved.text }
-        if showsBriefingText, let briefingLead, !briefingLead.isEmpty { return briefingLead }
-        return line
+        lead(for: .current)
     }
 
     /// The server-resolved lead, unless it is empty or model text whose
     /// capability the same body says is unavailable (the server nulls it
     /// then; this covers a body that says otherwise).
-    private var admittedResolvedLead: Lead? {
+    var admittedResolvedLead: Lead? {
         guard let resolvedLead, !resolvedLead.text.isEmpty else { return nil }
         switch resolvedLead.source {
         case "briefing": return showsBriefingText ? resolvedLead : nil
@@ -390,19 +411,16 @@ public extension DailyDigest {
     /// line. Only a body without the field (an older server) falls back to
     /// building the line from ``visibleTopSignal`` (headline + delta). `nil`
     /// means the hero shows no line.
+    ///
+    /// **#176 (v1.48)** — a line in another language than the interface is
+    /// left out; the app has no wording of its own for a server signal.
     var signalText: String? {
-        guard showsBriefingText else { return nil }
-        if deliversSignalLine {
-            guard let signalLine else { return nil }
-            return Self.joinSignal(headline: signalLine.headline, delta: signalLine.delta)
-        }
-        guard let signal = visibleTopSignal, !signal.headline.isEmpty else { return nil }
-        return Self.joinSignal(headline: signal.headline, delta: signal.delta)
+        signalText(for: .current)
     }
 
     /// `headline` and `delta`, either one alone, verbatim; joined with a comma
     /// (the visible punctuation gate rules out the web's middle dot).
-    private static func joinSignal(headline: String?, delta: String?) -> String? {
+    static func joinSignal(headline: String?, delta: String?) -> String? {
         let parts = [headline, delta].compactMap { part -> String? in
             guard let part, !part.isEmpty else { return nil }
             return part
@@ -433,7 +451,7 @@ public extension DailyDigest {
     /// Defensive re-bound of the rail to the documented 0–3 ceiling — the
     /// server never pads past it, but the hero never renders a fourth card.
     ///
-    /// #115 · 0.2 — the Coach check-in card opens the Coach, so it is dropped
+    /// The Coach check-in card opens the Coach, so it is dropped
     /// while the digest says `coach` is unavailable (the server does not build
     /// it then; this covers a body that still carries one).
     var rail: [DailyPriorityItem] {
@@ -554,7 +572,7 @@ public extension DailyPriorityItem {
     /// Dismiss is offered ONLY on the observational kinds, and only once the
     /// server has stamped an `itemKey` — the actionable kinds never carry one.
     ///
-    /// CU-30 — `same_time_baseline` is the fourth dismissible kind
+    /// `same_time_baseline` is the fourth dismissible kind
     /// (`priority-item.ts:60-65`). Its key is
     /// `same_time_baseline:<YYYY-MM-DD>:<MeasurementType>` and deliberately
     /// carries NO hour: the card's figures move through the day, and an hourly

@@ -1,4 +1,4 @@
-// SEC (1.5, #151) — a connector token is never minted without a fresh
+// A connector token is never minted without a fresh
 // step-up elevation from an account that can give one. POLISH-C (C1, dev
 // #163 B1): which accounts that is follows the server's
 // `elevation-if-enrolled` rule, never the server version.
@@ -242,7 +242,7 @@
             #expect(store.error == StepUpRetry.requiredMessage)
         }
 
-        // MARK: - Which accounts bring a proof (POLISH-C C1, #163 B1)
+        // MARK: - Which accounts bring a proof
 
         @MainActor
         @Test("an account without factor or passkey mints on the token, and still asks when refused")

@@ -7,7 +7,7 @@
     import SwiftUI
     import Testing
 
-    /// **Phase 09 / plan 09-04 — the Mood analysis, stated in counts.**
+    /// **The Mood analysis, stated in counts.**
     ///
     /// The frozen budgets this plan's flows carry are a 1 ms cache hit, a 50 ms
     /// cold analysis and a 5 ms main-thread ceiling. All three are durations, and
@@ -70,7 +70,7 @@
             showsRecentSection: Bool = true
         ) -> some View {
             MoodAnalysisContent(
-                period: .days30,
+                period: .month,
                 editing: .constant(nil),
                 showFullHistory: .constant(false),
                 showsRecentSection: showsRecentSection,
@@ -175,7 +175,7 @@
             #expect(neverOnMain, "\(ledger.mainThreadComputeCount) analyses ran on the thread that draws")
             #expect(
                 renderComputedOncePerKey && repeatComputedNothing && burstCoalesced && neverOnMain,
-                "EXPECTED_RED: Mood render recomputed an existing analysis key"
+                "Mood render recomputed an existing analysis key"
             )
         }
 
@@ -249,7 +249,7 @@
             #expect(rejectsCancelled, "a cancelled analysis published")
             #expect(
                 bounded && keepsNewest && dropsOldest && rejectsStale && rejectsCancelled,
-                "EXPECTED_RED: Mood cache published stale or exceeded four keys"
+                "Mood cache published stale or exceeded four keys"
             )
         }
 
@@ -329,7 +329,7 @@
 
                 let windowedKey = Self.key(.windowed, periodDays: 30, revision: 1, dayStart: dayStart, calendar: calendar)
                 let windowed = await cache.snapshot(for: windowedKey, entries: entries, engine: .live)
-                let slice = MoodPeriod.days30.filter(entries, now: dayStart, calendar: calendar)
+                let slice = MoodPeriod.month.filter(entries, now: dayStart, calendar: calendar)
                 #expect(
                     windowed.insights == MoodInsights.compute(entries: slice, now: dayStart, calendar: calendar),
                     "\(depth.label): the windowed analysis moved"

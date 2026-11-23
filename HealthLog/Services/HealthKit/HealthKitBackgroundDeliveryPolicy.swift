@@ -1,63 +1,33 @@
 import Foundation
 
-/// Per-type background-delivery policy for the SpeziHealthKit collectors
-/// (`HealthLogSpeziDelegate.configuration`).
+/// Which sample types wake the app in the background.
 ///
-/// **Why this exists (W2 energy fix).** SpeziHealthKit's `CollectSamples`
-/// exposes only a `continueInBackground: Bool` — there is **no per-type
-/// frequency parameter**. Internally it always arms background delivery with
-/// `enableBackgroundDelivery(for:frequency: .immediate)`. The pre-Spezi
-/// pipeline used `HKObserverQuery.enableBackgroundDelivery(...,
-/// frequency: .hourly)` for cumulative / low-urgency types; that throttle was
-/// lost in the Spezi migration, so every one of the ~27 collectors registered
-/// `continueInBackground: true` and could wake the app at `.immediate` cadence
-/// — including slowly-changing types that have nothing useful to upload
-/// between foreground sessions.
+/// `AppOwnedHealthCollectionCoordinator.observedTypeIdentifiers` arms an
+/// `HKObserverQuery` with `enableBackgroundDelivery(.immediate)` for exactly
+/// the types this policy marks; every other type is pull-only and syncs on the
+/// next foreground, processing or app-refresh pass (the battery posture).
 ///
-/// Since the only lever Spezi gives us is the boolean, the classification is:
-/// - **Vital-signs** → `continueInBackground: true`. Low-latency delivery is
-///   the point (a new resting-HR / SpO₂ / blood-pressure / glucose reading
-///   should sync promptly). `.immediate` is the right behavior for them.
-/// - **R3 aggressive-cadence promotions** (``aggressiveCadenceIdentifiers``) →
-///   `continueInBackground: true`. `heartRate`, `stepCount`, and
-///   `sleepAnalysis` were lifted onto real background delivery by an explicit
-///   operator decision (reception over battery). `heartRate` in particular had
-///   been demoted in v0.14; that demotion is deliberately reversed here.
-/// - **Cumulative + low-urgency** → `continueInBackground: false`. No
-///   background observer is armed; the type syncs on the next foreground
-///   sweep or the `BGProcessingTask` wake. This is the practical equivalent
-///   of the old `.hourly` intent: no high-frequency wakeups for data that
-///   changes slowly or arrives in batches (energy, mass, audio exposure, …).
+/// - Vital signs: low volume, time-sensitive.
+/// - Aggressive cadence: heart rate, steps and sleep, by operator decision
+///   (reception over battery).
+/// - Sparse readings: a smart scale's weight and body fat.
+/// - Low urgency: cumulative and slowly changing types, never woken for.
 ///
-/// **Battery posture.** The R3 promotions add background wakeups (heaviest:
-/// 24/7 Watch heart-rate) and therefore cost more energy than the prior
-/// posture. That is a conscious operator trade-off ("besserer Empfang,
-/// Batterie zweitrangig"), documented at ``aggressiveCadenceIdentifiers``.
-///
-/// The classification is keyed on raw HK identifier strings so it stays
-/// HealthKit-import-free and the W2 tests can assert it without a HealthKit
-/// store. The delegate calls ``continuesInBackground(for:)`` to drive each
-/// `CollectSamples`, keeping the policy a single auditable source of truth
-/// rather than a per-call boolean literal.
+/// Keyed on raw identifier strings so it stays HealthKit-import-free and the
+/// tests can assert it without a store.
 public enum HealthKitBackgroundDeliveryPolicy {
     /// Vital-sign identifiers that warrant immediate background delivery.
     /// A new reading from any of these should wake the app and sync promptly.
     ///
-    /// **v0.14 energy decision (audit #1) — SUPERSEDED for `heartRate` by the
-    /// R3 aggressive-cadence operator decision (see
-    /// ``aggressiveCadenceIdentifiers``).** In v0.14 `heartRate` was demoted out
-    /// of the background set: a Watch worn 24/7 streams HR continuously, so
-    /// `.immediate` HR delivery was the single biggest background wake / battery
-    /// source. That demotion is now *lifted* — the operator explicitly chose
-    /// reception over battery (R3). `heartRate` no longer lives here in the
-    /// literal "vital sign" set (it isn't clinically a vital sign), but joins
-    /// the automatic/background set via ``aggressiveCadenceIdentifiers`` so the
-    /// `.immediate` HR wake path is back on. `restingHeartRate`, SpO₂
-    /// (`OxygenSaturation`), blood pressure, and body temperature, and glucose
-    /// were never demoted and stay here — genuinely time-sensitive, low-volume.
+    /// `heartRate` is not in this set (it is not clinically a vital sign); it
+    /// joins the background set through ``aggressiveCadenceIdentifiers``,
+    /// because the operator chose reception over battery even though a Watch
+    /// worn 24/7 streams HR continuously. `restingHeartRate`, SpO₂
+    /// (`OxygenSaturation`), blood pressure, body temperature and glucose are
+    /// here: time-sensitive and low-volume.
     public static let vitalSignIdentifiers: Set<String> = [
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
-        // 1.2 / V4 — RMSSD (iOS 27) is delivered like SDNN. It only arms where
+        // RMSSD (iOS 27) is delivered like SDNN. It only arms where
         // the registry holds it, i.e. where the system resolves the type.
         "HKQuantityTypeIdentifierHeartRateVariabilityRMSSD",
         "HKQuantityTypeIdentifierRestingHeartRate",
@@ -96,20 +66,26 @@ public enum HealthKitBackgroundDeliveryPolicy {
         "HKCategoryTypeIdentifierSleepAnalysis"
     ]
 
+    /// Sparse readings a person takes on purpose: a smart scale's weight and
+    /// body fat. A handful a day at most, so waking for each costs little, and
+    /// without a wake a morning weigh-in waited until the app was opened.
+    public static let sparseReadingIdentifiers: Set<String> = [
+        "HKQuantityTypeIdentifierBodyMass",
+        "HKQuantityTypeIdentifierBodyFatPercentage"
+    ]
+
     /// Cumulative / low-urgency identifiers that should NOT wake the app in
     /// the background. They sync on the next foreground / `BGProcessingTask`
-    /// sweep. Includes the remaining cumulative types plus mass, body-fat,
-    /// VO₂, audio exposure, and time-in-daylight.
+    /// sweep. Includes the remaining cumulative types plus VO₂, audio
+    /// exposure, and time-in-daylight.
     ///
-    /// **R3:** `heartRate`, `stepCount`, and `sleepAnalysis` were moved OUT of
+    /// `heartRate`, `stepCount`, and `sleepAnalysis` were moved OUT of
     /// this set into ``aggressiveCadenceIdentifiers`` — see there for the
     /// operator rationale + battery trade-off.
     public static let lowUrgencyIdentifiers: Set<String> = [
         "HKQuantityTypeIdentifierActiveEnergyBurned",
         "HKQuantityTypeIdentifierFlightsClimbed",
         "HKQuantityTypeIdentifierDistanceWalkingRunning",
-        "HKQuantityTypeIdentifierBodyMass",
-        "HKQuantityTypeIdentifierBodyFatPercentage",
         "HKQuantityTypeIdentifierVO2Max",
         "HKQuantityTypeIdentifierEnvironmentalAudioExposure",
         "HKQuantityTypeIdentifierHeadphoneAudioExposure",
@@ -124,7 +100,7 @@ public enum HealthKitBackgroundDeliveryPolicy {
     /// and ``startsAutomatically(for:)`` are both keyed on this set so the two
     /// levers can never drift apart.
     public static let automaticBackgroundIdentifiers: Set<String> =
-        vitalSignIdentifiers.union(aggressiveCadenceIdentifiers)
+        vitalSignIdentifiers.union(aggressiveCadenceIdentifiers).union(sparseReadingIdentifiers)
 
     /// `true` when the collector for `identifier` should set
     /// `continueInBackground: true` — the vital-signs plus the R3

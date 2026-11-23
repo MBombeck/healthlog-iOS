@@ -32,7 +32,7 @@ import Testing
 /// through `Bundle.localizedString`, which would hide exactly this drift.
 @Suite("CU-26 — Copy entspricht dem Server-Verhalten v1.34.x")
 struct ServerBehaviourCopyTruthTests {
-    // MARK: - B1 — client-managed suppresses APNs only
+    // MARK: - Client-managed suppresses APNs only
 
     /// The relay channels the v1.33.1 gate stopped suppressing. The footer has
     /// to name them, because a user who used the switch as a blanket mute is
@@ -108,7 +108,7 @@ struct ServerBehaviourCopyTruthTests {
         #expect(en != "Reminders", "EN label reads as an opt-in while the switch suppresses")
     }
 
-    // MARK: - B5 — dashboard reset keeps more than it used to
+    // MARK: - Dashboard reset keeps more than it used to
 
     @Test("Dashboard-Reset-Copy verspricht nur Reihenfolge + Sichtbarkeit")
     func dashboardResetCopyPromisesOnlyOrderAndVisibility() throws {
@@ -136,7 +136,7 @@ struct ServerBehaviourCopyTruthTests {
         }
     }
 
-    // MARK: - B4 / B6 — catalog-wide sweeps for claims iOS must not make
+    // MARK: - Catalog-wide sweeps for claims iOS must not make
 
     /// Phrases that would contradict a server behaviour iOS deliberately does
     /// not mirror. Each is absent today; the sweep keeps re-introduction from

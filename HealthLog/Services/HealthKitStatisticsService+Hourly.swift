@@ -3,7 +3,7 @@ import Foundation
 #if canImport(HealthKit)
     import HealthKit
 
-    /// **X4 (1.3, #138 / #77)** — the hourly read behind the same-time
+    /// The hourly read behind the same-time
     /// baseline. The same statistics machinery as the day totals, with one-hour
     /// intervals anchored on the start of the day in the account's zone (the
     /// one ``dayAnchorCalendar`` reads), so every bucket starts on a whole local

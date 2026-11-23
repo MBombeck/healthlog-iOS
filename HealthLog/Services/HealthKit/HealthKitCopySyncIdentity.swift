@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    /// **A6 (1.4)** — how a HealthLog copy in Apple Health keeps naming its
+    /// How a HealthLog copy in Apple Health keeps naming its
     /// server row after the person deletes it there.
     ///
     /// A deleted object keeps exactly two metadata keys,

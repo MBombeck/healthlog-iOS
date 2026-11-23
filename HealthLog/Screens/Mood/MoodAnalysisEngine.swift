@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 Wave 0 — the measured Mood-analysis boundary.**
+/// **The measured Mood-analysis boundary.**
 ///
 /// `MoodAnalysisContent` used to call `MoodInsights.compute` directly from two
 /// computed properties, which meant there was no place to stand: no way to count
@@ -45,7 +45,7 @@ struct MoodAnalysisEngine: Sendable {
     /// what actually happened, and carries only the categorical size of the
     /// history — never a score, never a note, never an entry.
     ///
-    /// **Plan 09-04 — the `resident` parameter.** A keyed cache knows the answer
+    /// **The `resident` parameter.** A keyed cache knows the answer
     /// is already in hand *before* it asks the engine, and knowing it is exactly
     /// what makes `mood-analysis.hit` reachable without computing anything. When
     /// `resident` is supplied the seam opens the hit interval and returns it; the
@@ -69,7 +69,7 @@ struct MoodAnalysisEngine: Sendable {
 /// the full-history spine the heatmap needs, because they are different keys
 /// even when they happen to hold the same entries.
 ///
-/// **Plan 09-04** added `now`, `calendar` and `enrichment`. They were implicit
+/// Added `now`, `calendar` and `enrichment`. They were implicit
 /// before — `MoodInsights.compute` read `Date.now` and `Calendar.current` from
 /// its own defaults on every call — and an implicit input cannot be a cache key.
 /// The defaults reproduce the pre-09-04 call exactly, so `MoodAnalysisRequest`'s
@@ -78,7 +78,7 @@ struct MoodAnalysisRequest: Sendable {
     enum Scope: String, Sendable, Hashable {
         /// The slice the period control selects.
         case windowed
-        /// The whole history, decoupled from the period control (B18).
+        /// The whole history, decoupled from the period control.
         case fullHistory
     }
 
@@ -90,7 +90,7 @@ struct MoodAnalysisRequest: Sendable {
     let calendar: Calendar
     /// The authoritative `/api/mood/analytics` override, when the caller has one.
     let enrichment: MoodAnalyticsEnrichment?
-    /// #115 · 1.3 — the period window, so the server's day means are cut to
+    /// The period window, so the server's day means are cut to
     /// the same slice as the entries. `nil` = full history.
     let windowDays: Int?
 

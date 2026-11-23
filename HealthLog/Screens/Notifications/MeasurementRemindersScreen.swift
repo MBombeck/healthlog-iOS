@@ -14,7 +14,7 @@ import SwiftUI
 /// "Manage reminders" link). Built lazily off `container.api` + `container.swr`
 /// like the parent's `NotificationsStore`.
 struct MeasurementRemindersScreen: View {
-    /// v0.15 W-FRONTDOORS — the manage screen now reads the app-wide store
+    /// The manage screen now reads the app-wide store
     /// (promoted to `AppContainer.measurementRemindersStore`) so it shares one
     /// SWR-deduped load with the Home Vorsorge tile. The previous view-local
     /// `@State` store double-fetched against the tile and never participated in
@@ -24,17 +24,12 @@ struct MeasurementRemindersScreen: View {
     @State private var showingCreate = false
     /// The reminder being edited, presented via `.sheet(item:)` in edit mode.
     @State private var editingReminder: MeasurementReminderRow?
-    /// Parity 1.8a — the reminder pending deletion, gating the destructive
-    /// action behind a confirm. Vorsorge was the last destructive surface that
-    /// deleted straight out of the kebab; meds already confirm (archive dialog,
-    /// container dialog) and web shows an `AlertDialog`
-    /// (`vorsorge-section.tsx:950-969`).
-    @State private var pendingDelete: MeasurementReminderRow?
-    /// b244 — the reminder whose detail sheet is open (tap opens history + details).
+    /// The reminder whose detail sheet is open (tap opens history + details).
     @State private var detailRow: MeasurementReminderRow?
 
     var body: some View {
-        HLSettingsPage(title: "reminders.manage.title") {
+        HLPage {
+            SectionRootHeader("reminders.manage.title")
             NextVisitSection { content(store: store) } // VISIT — "Nächster Termin" above, only while booked
             // 1.0.3 (1.4.1) — where the screening cadences come from. 1.4 B4:
             // only under reminders; the empty state states nothing to cite.
@@ -43,30 +38,25 @@ struct MeasurementRemindersScreen: View {
             }
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
-        .navigationTitle("reminders.manage.title")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingCreate = true
-                } label: {
-                    Label("reminders.create.action", systemImage: "plus")
-                }
-                .accessibilityIdentifier("MeasurementRemindersScreen.create")
+        // Inline when pushed; as a sidebar tab the page heads itself.
+        .hlSectionRootTitle(Text("reminders.manage.title"))
+        .hlPageActions([
+            .add(label: "reminders.create.action", identifier: "MeasurementRemindersScreen.create") {
+                showingCreate = true
             }
-        }
+        ])
         .task { await store.load() }
-        .refreshable { await store.load(force: true) }
+        .hlRefresh(in: .list) { await store.load(force: true) }
         .sheet(isPresented: $showingCreate) {
             MeasurementReminderCreateSheet { body in
-                await store.create(body)
+                await MeasurementReminderCreateSheet.outcome(store.create(body), store: store)
             }
         }
         .sheet(item: $editingReminder) { row in
             MeasurementReminderCreateSheet(
                 editing: row,
-                onCreate: { _ in false },
-                onUpdate: { id, patch in await store.update(id: id, patch: patch) }
+                onCreate: { _ in .unknown("") },
+                onUpdate: { await MeasurementReminderCreateSheet.outcome(store.update(id: $0, patch: $1), store: store) }
             )
         }
         .sheet(item: $detailRow) { row in
@@ -78,33 +68,12 @@ struct MeasurementRemindersScreen: View {
                 onMarkDone: { Task { await store.complete(id: row.id) } }
             )
         }
-        .hlConfirmDestructive(
-            Text("reminders.delete.confirm.title"),
-            isPresented: Binding(
-                get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } }
-            ),
-            message: Text("reminders.delete.confirm.body"),
-            confirm: Text("reminders.action.delete"),
-            cancel: Text("Cancel"),
-            onCancel: { pendingDelete = nil },
-            action: {
-                if let row = pendingDelete {
-                    pendingDelete = nil
-                    Task { await store.delete(id: row.id) }
-                }
-            }
-        )
-        .alert(
+        // A reminder card's delete asks here, on the page.
+        .hlDeleteConfirmation()
+        .hlAcknowledgeAlert(
             "Error",
-            isPresented: Binding(
-                get: { store.error != nil },
-                set: { if !$0 { store.error = nil } }
-            ),
-            presenting: store.error
-        ) { _ in
-            Button("OK") { store.error = nil }
-        } message: { err in
+            item: Binding(get: { store.error }, set: { if $0 == nil { store.error = nil } })
+        ) { err in
             Text(err.userFacingDescription)
         }
     }
@@ -121,7 +90,7 @@ struct MeasurementRemindersScreen: View {
             // (measure-now vs mark-done). No status-driven card tint — the calm
             // dark look stays; due state reads through the action button only.
             //
-            // F5 (b197) — the repetitive "due dates are server-computed" footer
+            // The repetitive "due dates are server-computed" footer
             // stays removed; reminders auto-satisfy server-side.
             VStack(spacing: HLSpace.md) {
                 // G1 (2026-08-22) — the aggregate adherence header („4 von 4 im
@@ -135,19 +104,24 @@ struct MeasurementRemindersScreen: View {
                 ForEach(store.reminders) { row in
                     VorsorgeReminderCardView(
                         row: row,
-                        // G2 — the tile needs the store for its own skip/snooze
+                        // The tile needs the store for its own skip/snooze
                         // pair; the same store, the same methods and the same
                         // learned 404 gate the detail sheet uses.
                         store: store,
                         onMeasure: { kind in router.requestMeasure(prefill: kind) },
-                        // #42 — a screening reminder (PHQ9/GAD7/WHO5) opens the
+                        // A screening reminder (PHQ9/GAD7/WHO5) opens the
                         // mental-health check-in surface, not a numeric form.
                         onCheckIn: { router.requestMentalWellbeingCheckIn() },
                         onMarkDone: { Task { await store.complete(id: row.id) } },
                         onEdit: { editingReminder = row },
-                        // Parity 1.8a — arm the confirm, never delete inline.
-                        onDelete: { pendingDelete = row },
-                        // b244 — the header/body tap opens the detail sheet.
+                        // Parity 1.8a — it asks first, never deletes inline.
+                        delete: .confirmed(
+                            title: "reminders.delete.confirm.title",
+                            message: "reminders.delete.confirm.body"
+                        ) {
+                            _ = await store.delete(id: row.id)
+                        },
+                        // The header/body tap opens the detail sheet.
                         onOpenDetail: { detailRow = row }
                     )
                 }
@@ -155,22 +129,21 @@ struct MeasurementRemindersScreen: View {
         }
     }
 
-    /// 1.4 B4 — the app's one empty-state lockup, on the page rather than in
-    /// a card titled "Erinnerungen" over a line saying there are none. The one
-    /// action stays the tile-action shape this page uses (no `HLButton` here,
-    /// `VorsorgeMedicationTileParityTests`).
+    /// The app's one empty-state lockup, on the page rather than in
+    /// a card titled "Erinnerungen" over a line saying there are none. It has
+    /// no button: the plus in the bar is the one way to add a reminder.
     @ViewBuilder
     private func emptyCard(loading: Bool) -> some View {
         if loading {
             ProgressView()
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, HLSpace.lg)
+                .padding(.vertical, HLLayout.cardInset)
         } else {
+            // The one action creates the first reminder where the eye
+            // already is; the plus in the bar stays.
             HLEmptyState(icon: "calendar.badge.clock", title: "reminders.empty.title") {
-                HLTileActionButton("reminders.create.action", icon: "plus") {
-                    showingCreate = true
-                }
-                .accessibilityIdentifier("MeasurementRemindersScreen.emptyCreate")
+                HLButton("reminders.create.action", systemImage: "plus", variant: .secondary) { showingCreate = true }
+                    .accessibilityIdentifier("MeasurementRemindersScreen.empty.create")
             }
             .accessibilityIdentifier("MeasurementRemindersScreen.empty")
         }
@@ -183,7 +156,7 @@ struct MeasurementRemindersScreen: View {
 /// mirror of the web `vorsorge-section.tsx` `VorsorgeCard` (v1.18.2):
 ///
 /// - **Header:** the reminder name + the cadence chip ("Every N days" / Custom)
-///   directly beside it, with a kebab (Edit / Delete) trailing.
+///   directly beside it; Edit and Delete sit in the card's context menu.
 /// - **Origin/state badges:** Vorsorge vs Coach provenance, plus a "disabled"
 ///   pill when the reminder is off.
 /// - **Next/last block:** "Next due" (relative, calm wording) + "Last done"
@@ -199,19 +172,19 @@ struct MeasurementRemindersScreen: View {
 ///   NEUTRAL; only the button takes the prominent tone when due.
 struct VorsorgeReminderCardView: View {
     let row: MeasurementReminderRow
-    /// **G2** — the tile's own skip/snooze pair calls the store directly, the
+    /// The tile's own skip/snooze pair calls the store directly, the
     /// same way the detail sheet does. Handing the store down rather than four
     /// more closures keeps ONE implementation of the accepted cycle actions
     /// (`VorsorgeReminderLedgerActions`), which is the whole lesson of the
     /// mirrored-tile drift this plan closes.
     let store: MeasurementRemindersStore
     let onMeasure: (MetricKind) -> Void
-    /// #42 — start the mental-health check-in (screening reminders).
+    /// Start the mental-health check-in (screening reminders).
     let onCheckIn: () -> Void
     let onMarkDone: () -> Void
     let onEdit: () -> Void
-    let onDelete: () -> Void
-    /// b244 — the header/body tap opens the detail sheet (history + details),
+    let delete: HLDeleteAction
+    /// The header/body tap opens the detail sheet (history + details),
     /// mirroring the mental-health card's `onOpenDetail`. Kebab + primary button
     /// stay their own targets.
     let onOpenDetail: () -> Void
@@ -223,7 +196,7 @@ struct VorsorgeReminderCardView: View {
     var body: some View {
         // FW-VORSORGE (b210, corrected 2026-08-23) — the card mirrors
         // `MedicationCard`'s anatomy: the same `HLCard` chrome, the same
-        // `HLSpace.md` inter-block rhythm, a `.hlTitle3` header, a monochrome
+        // `HLSpace.md` inter-block rhythm, a headline header, a monochrome
         // category-pill treatment (`metaRow`), and a schedule block that matches
         // the med `ScheduleLine`.
         //
@@ -238,9 +211,9 @@ struct VorsorgeReminderCardView: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 header
-                // b244 — the meta + Next/Last + strip region is one tap target
+                // The meta + Next/Last + strip region is one tap target
                 // that opens the detail sheet (like the mental-health card's
-                // header tap). The kebab (in `header`) and the primary button
+                // header tap). The primary button
                 // below stay separate 44-pt targets.
                 Button(action: onOpenDetail) {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
@@ -249,18 +222,17 @@ struct VorsorgeReminderCardView: View {
                         VorsorgeTrendStripView(measurementType: row.measurementType)
                         if let ends = endsOnLine {
                             Text(ends)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.tertiary)
+                                .hlText(.footnote)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hlRow)
                 .accessibilityHint(Text("vorsorge.card.openDetail.hint"))
                 .accessibilityIdentifier("vorsorge.card.openDetail.\(row.id)")
                 primaryButton
-                // G2 — Überspringen and Snoozen at TILE level, not sheet-only.
+                // Überspringen and Snoozen at TILE level, not sheet-only.
                 // The operator's „Skip/Snooze funktionieren ordentlich" meant
                 // reachable the way the medication tile's pair is reachable:
                 // without opening anything. Same type as the detail sheet mounts,
@@ -274,56 +246,32 @@ struct VorsorgeReminderCardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .contain)
-        // QA-b198 Design-M4: the visible kebab Menu in `header` already exposes
-        // Edit/Delete; a duplicate hidden `.contextMenu` with the identical
-        // actions was redundant (two affordances for one thing) — dropped.
-    }
-
-    /// FW-VORSORGE — single-row header, mirroring `MedicationCard.header`: the
-    /// title at `.hlTitle3` (one line, shrink-to-fit like the med name) with the
-    /// trailing kebab. The type + cadence pills moved out to `metaRow` so they
-    /// sit on their own line with the med card's category-pill placement.
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            // b244 — the title is also a tap target for the detail sheet (like
-            // the mental-health card's header text button).
-            Button(action: onOpenDetail) {
-                // 1.4 B4 — a long title wraps instead of shrinking to 70 %.
-                Text(headerTitle)
-                    .font(.hlTitle3)
-                    .foregroundStyle(row.enabled ? HLText.primary : HLText.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .multilineTextAlignment(.leading)
-                    .contentShape(Rectangle())
+        // Edit and Delete live in the card's context menu, as on every row in
+        // a card: one way to them, no own "more" button in the head.
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("reminders.action.edit", systemImage: "pencil")
             }
-            .buttonStyle(.plain)
-            Spacer(minLength: HLSpace.sm)
-            Menu {
-                Button(action: onEdit) {
-                    Label("reminders.action.edit", systemImage: "pencil")
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Label("reminders.action.delete", systemImage: "trash")
-                }
-            } label: {
-                // FW-VORSORGE (b215) — match `MedicationCard`'s header
-                // `IconButton` exactly: the `.hlIcon(HLIconSize.rowAction)` glyph
-                // (15pt) inside a full 44×44 HIG hit target, so the trailing
-                // affordance carries the SAME weight + tap size as the med card's
-                // history/edit icons instead of the prior undersized 16pt frame.
-                Image(systemName: "ellipsis")
-                    .font(.hlIcon(HLIconSize.rowAction))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text("vorsorge.card.more"))
-            .accessibilityIdentifier("vorsorge.card.kebab")
+            HLDeleteMenuItem(delete)
         }
     }
 
-    /// FW-VORSORGE — meta pill row on its own line below the header, mirroring the
+    /// The reminder's name, as an object card names its object: 17 semibold,
+    /// up to two lines. It is also a tap target for the detail sheet.
+    private var header: some View {
+        Button(action: onOpenDetail) {
+            Text(headerTitle)
+                .hlText(.objectName, status: row.enabled ? HLText.primary : HLText.secondary)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hlRow)
+    }
+
+    /// Meta pill row on its own line below the header, mirroring the
     /// med card's `categoryPill` placement + `HLSpace.md` gap. Type + cadence use
     /// the SAME monochrome capsule treatment as `MedicationCard.categoryPill`
     /// (`HLSurface.tertiary` fill, `.hlCaption` semibold, `HLText.secondary`); the
@@ -358,7 +306,7 @@ struct VorsorgeReminderCardView: View {
         if let until = row.snoozedUntil, VorsorgeCard.isSnoozed(row) {
             metaPill(String(
                 format: String(localized: "vorsorge.card.snoozedUntil"),
-                until.formatted(.dateTime.day().month())
+                HLDateFormat.dayMonth(until)
             ))
         }
         if VorsorgeCard.hasSkippedCurrentCycle(row) {
@@ -369,15 +317,10 @@ struct VorsorgeReminderCardView: View {
         }
     }
 
-    /// Monochrome capsule identical to `MedicationCard.categoryPill` so the med
-    /// + Vorsorge card families share one pill treatment.
+    /// The same mark as the medication card's category, so both card
+    /// families share one.
     private func metaPill(_ text: String) -> some View {
-        Text(text)
-            .font(.hlCaption.weight(.semibold))
-            .foregroundStyle(HLText.secondary)
-            .padding(.horizontal, HLSpace.sm)
-            .padding(.vertical, HLSpace.xs)
-            .background(HLSurface.tertiary, in: Capsule())
+        HLBadge(text)
     }
 
     /// Row-1 title: the user Bezeichnung, or the type label when no label
@@ -394,42 +337,27 @@ struct VorsorgeReminderCardView: View {
     private var typeBadgeText: String? {
         guard row.measurementType?.isEmpty == false else { return nil }
         guard let resolved = VorsorgeCard.resolvedLabel(for: row) else { return nil }
-        return MeasurementReminderType.label(for: row.measurementType, fallback: resolved)
+        return Self.badge(MeasurementReminderType.label(for: row.measurementType, fallback: resolved), title: resolved)
+    }
+
+    /// The type badge, unless it says what the title already says: a label
+    /// the person typed as the type's own name ("Taillenumfang" over
+    /// "Taillenumfang") is one name, not two.
+    nonisolated static func badge(_ typeLabel: String, title: String) -> String? {
+        let same = typeLabel.trimmingCharacters(in: .whitespaces)
+            .compare(title.trimmingCharacters(in: .whitespaces), options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        return same ? nil : typeLabel
     }
 
     /// Next-due (relative, calm wording) + last-done block — both render-only.
     ///
-    /// FW-VORSORGE (b215) — the schedule block now mirrors `MedicationCard`'s
-    /// `ScheduleLine` 1:1: an `HStack(spacing: HLSpace.sm)` per row, a `.hlSubhead`
-    /// secondary label, and a `.hlSubhead` **`HLText.primary`** value that
-    /// right-aligns. The last-done value was lifted from the quieter secondary
-    /// tone to `HLText.primary` so it reads at the SAME weight as the med card's
-    /// "Letzte Einnahme" value (the med card renders both schedule values in
-    /// primary) — the parity the operator flagged as "colors feel off". "Nächster
-    /// Termin" stays relative via `DueBucket`; "Zuletzt erledigt" is relative too
-    /// ("heute"/"gestern", absolute fallback).
+    /// Fact rows like the medication card's schedule: label secondary, value
+    /// primary on the right, at AX sizes the value under its label instead of
+    /// a column of syllables ("Nächs-/ter Ter-/min").
     private var nextLastBlock: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Text("vorsorge.card.nextDue")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Text(dueText)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .multilineTextAlignment(.trailing)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Text("vorsorge.card.lastDone")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Text(lastDoneText)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                    .multilineTextAlignment(.trailing)
-            }
+        HLFactGroup {
+            HLFactRow(label: Text("vorsorge.card.nextDue"), value: Text(dueText))
+            HLFactRow(label: Text("vorsorge.card.lastDone"), value: Text(lastDoneText))
         }
     }
 
@@ -443,35 +371,37 @@ struct VorsorgeReminderCardView: View {
     /// 44 pt/`.hlSubhead`/monochrome to 48 pt/`.hlHeadline`/`HLText.primary`
     /// without anything noticing.
     ///
-    /// There is no mirror any more. `HLTileActionButton` is the one carrier
+    /// There is no mirror any more. `HLTileActions` is the one carrier
     /// R9/E2-A1 names, the medication tile renders from the same type, and
     /// `VorsorgeMedicationTileParityTests` fails — with the history in its
     /// message — if either surface leaves it alone.
-    @ViewBuilder
     private var primaryButton: some View {
+        HLTileActions([primaryItem])
+    }
+
+    /// One action, still a tile row: it stands over the skip and snooze pair
+    /// and keeps that pair's height and ink.
+    private var primaryItem: HLTileAction.Item {
         switch primaryAction {
         case let .measure(kind):
-            HLTileActionButton("vorsorge.card.measureNow", icon: "plus") {
+            HLTileAction.Item("vorsorge.card.measureNow", icon: "plus", identifier: "vorsorge.card.measureNow") {
                 onMeasure(kind)
             }
-            .accessibilityIdentifier("vorsorge.card.measureNow")
         case .checkIn:
-            // #42 — screening reminder (PHQ9/GAD7/WHO5): the score is derived,
+            // Screening reminder (PHQ9/GAD7/WHO5): the score is derived,
             // so the action starts the mental-health check-in rather than a
-            // numeric capture form. Same button family as the others.
-            HLTileActionButton("vorsorge.card.checkIn", icon: "brain.head.profile") {
+            // numeric capture form.
+            HLTileAction.Item("vorsorge.card.checkIn", icon: "brain.head.profile", identifier: "vorsorge.card.checkIn") {
                 onCheckIn()
             }
-            .accessibilityIdentifier("vorsorge.card.checkIn")
         case .markDone:
-            HLTileActionButton("vorsorge.card.markDone", icon: "checkmark") {
+            HLTileAction.Item("vorsorge.card.markDone", icon: "checkmark", identifier: "vorsorge.card.markDone") {
                 onMarkDone()
             }
-            .accessibilityIdentifier("vorsorge.card.markDone")
         }
     }
 
-    /// VR1 — the badge band below the header now only carries the Coach
+    /// The badge band below the header now only carries the Coach
     /// provenance pill and the disabled state. The generic "Vorsorge" pill was
     /// dropped (it was redundant on a screen that is already all Vorsorge); type
     /// + cadence moved into the header's row 2.
@@ -482,7 +412,7 @@ struct VorsorgeReminderCardView: View {
     }
 
     /// Provenance pill — Coach (suggestion) only. The generic Vorsorge pill was
-    /// removed (VR1); `.vorsorge` / `.unknown` render nothing here.
+    /// removed; `.vorsorge` / `.unknown` render nothing here.
     @ViewBuilder
     private var originBadge: some View {
         switch row.origin {
@@ -519,7 +449,7 @@ struct VorsorgeReminderCardView: View {
         guard let ends = row.endsOn else { return nil }
         return String(
             format: String(localized: "reminders.endsOn.label"),
-            ends.formatted(.dateTime.day().month().year())
+            HLDateFormat.date(ends, style: .abbreviated)
         )
     }
 }
@@ -560,6 +490,13 @@ enum MeasurementReminderType {
         "WAIST_CIRCUMFERENCE": "reminder.type.waistCircumference"
     ]
 
+    /// Types a server reminder may target that the app shows but never offers
+    /// in the create sheet: it cannot record them, and an older server would
+    /// reject them. Kept apart from `keysByWire` because that table is `catalog`.
+    private static let displayOnlyKeysByWire: [String: String] = [
+        "BLOOD_KETONES": "reminder.type.bloodKetones"
+    ]
+
     /// Server-derived mental-wellbeing score reminders route to the check-in,
     /// never to numeric manual entry. Raw tokens preserve forward compatibility
     /// with the DTO while this set names the four currently supported screeners.
@@ -575,10 +512,10 @@ enum MeasurementReminderType {
 
     static func label(for raw: String?, fallback: String) -> String {
         guard let raw, !raw.isEmpty else { return fallback }
-        if let key = keysByWire.first(where: { $0.key == raw })?.value {
+        if let key = keysByWire.first(where: { $0.key == raw })?.value ?? displayOnlyKeysByWire[raw] {
             return String(localized: String.LocalizationValue(key))
         }
-        // F3 (v0153) — forward-compat for a server enum widening. The earlier
+        // Forward-compat for a server enum widening. The earlier
         // path title-cased the raw wire value ("SOME_NEW_TYPE" → "Some New
         // Type"), which renders an English-looking label to a German user (the
         // same English-title-casing W3 removed from the notification labels).

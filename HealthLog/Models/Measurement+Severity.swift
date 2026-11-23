@@ -1,6 +1,6 @@
 import Foundation
 
-// Moved out of `Measurement.swift` unchanged (HK-NEW, 1.5) so that file stays
+// Moved out of `Measurement.swift` unchanged so that file stays
 // under its baselined length while the server-v1.44 kinds join `MetricKind`.
 
 public extension Measurement {

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B188 — accessibility-string localization regression anchor.**
+/// **Accessibility-string localization regression anchor.**
 ///
 /// The b187 a11y audit (`AUDIT-A11Y-b187.md`, finding L1) flagged a set of
 /// accessibility labels that were passed to `.accessibilityLabel(_:)` as bare
@@ -28,8 +28,6 @@ struct A11yStringKeysTests {
         "Remove time",
         // MedicationsScreen — loading skeleton.
         "Loading medications",
-        // HealthScoreTile — loading skeleton.
-        "Health Score loading",
         // CadencePicker — weekday group label.
         "med.schedule.weekday.group.label"
     ]

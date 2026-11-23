@@ -76,7 +76,10 @@ extension QASweepScreenshotsTest {
             "-uitest-disable-biometric-lock",
             "-uitest-konto-deletion-pending"
         ]
-        if env["HL_SWEEP_APPEARANCE"] == "light" {
+        if isXXL {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", xxlCategory]
+        }
+        if isLightAppearance {
             app.launchArguments += HermeticAppearance.lightArguments
         }
         app.launch()

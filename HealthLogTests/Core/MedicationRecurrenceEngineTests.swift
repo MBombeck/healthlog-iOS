@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping type_body_length file_length
 
-/// **v0.10 R1 §3.2 — parity oracle for `MedicationRecurrenceEngine`.**
+/// **Parity oracle for `MedicationRecurrenceEngine`.**
 ///
 /// Ports the server's `recurrence.test.ts` vectors verbatim where possible so
 /// the iOS engine stays a faithful mirror of the canonical server engine. Any
@@ -189,7 +189,7 @@ struct MedicationRecurrenceEngineTests {
         #expect(Self.berlinDay(slots[0].at) == Self.berlinDay(expected))
     }
 
-    /// R1 — the server has emitted the FIRST rolling dose on the start day
+    /// The server has emitted the FIRST rolling dose on the start day
     /// itself since v1.8.5 ("a rolling first dose is due on startsOn",
     /// `recurrence-timezones.test.ts` at v1.39.3); the `+ N` cadence only starts
     /// once an intake is logged. This case used to pin `startsOn + 7`.
@@ -472,7 +472,7 @@ struct MedicationRecurrenceEngineTests {
     /// count put the restart on 06-28.
     @Test("cyclic 3-on/1-off: off-week is silent, on-weeks fire daily")
     func cyclicThreeOnOneOff() {
-        // 09-14 — the anchor is no longer an associated value of the cadence.
+        // The anchor is no longer an associated value of the cadence.
         // The phase is counted from the context's `startsOn`, which is the same
         // 2026-06-01 this case always passed, so every expected day is unchanged.
         let slots = run(

@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Phase 07 / Plan 07-04 — the exact, reason-aware acceptance gate.
+/// The exact, reason-aware acceptance gate.
 ///
 /// Every assertion here is about one question: does this posted index carry
 /// evidence strong enough to move a cursor that can never be rewound? The gate
@@ -80,7 +80,7 @@ struct MeasurementBatchAcceptanceTests {
     @Test("every documented skip reason is terminal")
     func allowlistedSkipReasonsAreTerminal() {
         let allowlist = MeasurementBatchAcceptance.Policy.deployedMeasurementRoute.terminalSkipReasons
-        // X4 (1.3) — plus the three hour-bucket reasons of server v1.43.
+        // Plus the three hour-bucket reasons of server v1.43.
         #expect(allowlist == [
             MeasurementBatchAcceptance.Reason.unmappableIdentifier,
             MeasurementBatchAcceptance.Reason.valueOutOfRange,

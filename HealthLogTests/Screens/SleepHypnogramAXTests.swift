@@ -7,7 +7,7 @@
     @testable import HealthLog
     import Testing
 
-    /// A11Y (audit-v0162 §5) — the measured-hypnogram VoiceOver descriptor.
+    /// A11Y — the measured-hypnogram VoiceOver descriptor.
     ///
     /// The chart carried ONE flat `.accessibilityLabel` before; the descriptor
     /// now exposes one discrete data point per stage segment so VoiceOver walks

@@ -75,7 +75,7 @@ struct RecordsRepositoryTests {
         let dto = try JSONDecoder.hlDefault.decode(AllergyDTO.self, from: json)
         #expect(dto.category == .other)
         #expect(dto.type == .allergy)
-        // C1: present-but-unknown stays unknown — never a stated grade or status.
+        // Present-but-unknown stays unknown — never a stated grade or status.
         #expect(dto.severity == .unknown)
         #expect(dto.status == .unknown)
     }

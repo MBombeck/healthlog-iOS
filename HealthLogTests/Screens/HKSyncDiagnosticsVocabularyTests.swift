@@ -5,7 +5,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **K1 — die Sync-Diagnose zeigt Wörter, keine Bezeichner.**
+    /// **Die Sync-Diagnose zeigt Wörter, keine Bezeichner.**
     ///
     /// H2 fotografierte „foreground", „healthKitQuery", „failed" und
     /// „coldActivation" auf dem Bildschirm. Jede interne Aufzählung, die der

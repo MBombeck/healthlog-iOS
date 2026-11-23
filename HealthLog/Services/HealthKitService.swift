@@ -20,18 +20,18 @@ import Foundation
 
     /// Facade exposing HK auth + write-back + utility statics for the
     /// HealthLog app target. The per-sample observer pipeline
-    /// (`HKAnchoredObjectQuery`) was moved to SpeziHealthKit in v0.5.5
-    /// (W-A5 trim); Spezi's `HealthLogStandard` is now the authoritative
-    /// receiver of all HK-stream events for the 16 sample types the app
-    /// reads, and SpeziLocalStorage owns the live anchor store post the
-    /// W-A3 anchor migrator handover. The facade still owns: HK auth +
-    /// status batching (consumed by `HKReadinessStore` +
-    /// `HealthKitPermissionStep`); the default Read/Write type-sets; the
-    /// BF-5 write-back path (`HealthKit/HealthKitService+Write.swift`)
+    /// (`HKAnchoredObjectQuery`) lives in SpeziHealthKit; Spezi's
+    /// `HealthLogStandard` is the authoritative receiver of all HK-stream
+    /// events for the 16 sample types the app reads, and SpeziLocalStorage
+    /// owns the live anchor store after the anchor migrator handover. The
+    /// facade still owns: HK auth + status batching (consumed by
+    /// `HKReadinessStore` + `HealthKitPermissionStep`); the default
+    /// Read/Write type-sets; the write-back path
+    /// (`HealthKit/HealthKitService+Write.swift`)
     /// and `writeMoodEntry(_:)`; the utility statics (`partitionToken`,
     /// `clearAnchors`, `uploadAndDecide`); logout-time legacy anchor-key
     /// wipe via `clearAnchors(for:in:)` (keys read-only-historic now,
-    /// retained per PB12 rollback safety); and no-op shims for
+    /// retained for rollback safety); and no-op shims for
     /// `startBackgroundDeliveries()` + `runOneShotAnchorSweep()` so
     /// `MeasurementsStore`'s `AnyHealthKitWriter` extension keeps
     /// compiling unchanged — that extension is the only remaining caller
@@ -52,32 +52,12 @@ import Foundation
         public let store: HKHealthStore
         let keychain: KeychainStoring
         private let bundleID: String
-        /// Optional FeatureFlags-Service stash. Post-W-A5 + v0.5.6
-        /// dead-shim-sweep no runtime path on this actor reads from it;
-        /// the property remains as the storage backing
-        /// `attachFeatureFlags(_:)` so the protocol seam stays
-        /// satisfiable. The call-site in `AppContainer.init` keeps
-        /// invoking the setter idempotently — that wiring is preserved
-        /// because flipping the legacy observer pipeline back on would
-        /// reinstate a per-sample reader against this property.
-        private var featureFlags: (any FeatureFlagsServicing)?
-
-        /// Setter-injection for the feature-flags reader. Idempotent;
-        /// safe to call multiple times (each call overwrites). Post-W-A5
-        /// the live reader is no longer consumed by a per-sample path —
-        /// the call-site stays in `AppContainer.init` to preserve the
-        /// rollback contract.
-        public func attachFeatureFlags(_ featureFlags: (any FeatureFlagsServicing)?) {
-            self.featureFlags = featureFlags
-        }
-
-        /// **Phase 07 / plan 07-05** — the account the opt-in State-of-Mind
+        /// The account the opt-in State-of-Mind
         /// importer sweeps under, and the owner-partitioned cursor store its
         /// anchor is committed through.
         ///
-        /// Setter-injection for the same reason `attachFeatureFlags(_:)` is: the
-        /// composition root owns the Phase-06 lease registry and this actor is
-        /// constructed before it. Rebuilding the importer on binding is
+        /// Setter-injection because the composition root owns the Phase-06
+        /// lease registry and this actor is constructed before it. Rebuilding the importer on binding is
         /// deliberate — one built before the binding admits nothing and would
         /// refuse every sweep.
         private var healthSyncAdmission: HealthSyncImporterAdmission?
@@ -96,7 +76,7 @@ import Foundation
             let restart = moodImporterInputs
             await moodImporter?.stop()
             moodImporter = nil
-            // Plan 07-06 — the cycle and heart-event importers have the same
+            // The cycle and heart-event importers have the same
             // window, and the heart-event one is worse: it is always-on, so a
             // cold launch reaches it before the composition root binds anything.
             let restartCycle = cycleImporterInputs
@@ -117,7 +97,7 @@ import Foundation
             }
         }
 
-        /// **Phase 07 / plan 07-06** — the durable landing place for a heart-event
+        /// The durable landing place for a heart-event
         /// page the server did not terminally accept.
         ///
         /// Setter-injection for the same reason the admission is: the composition
@@ -130,6 +110,27 @@ import Foundation
             await eventImporter?.stop()
             eventImporter = nil
             guard let restartEvents, queue != nil else { return }
+            await startEventImport(userID: restartEvents.userID)
+        }
+
+        /// The outbox as bound now, for importers that ask for it late.
+        func currentHealthSyncRetryQueue() -> OutboxQueue? {
+            healthSyncRetryQueue
+        }
+
+        /// The module question of the ingest-v2 units; `nil` keeps them unread.
+        private var ingestModuleProbe: (@Sendable (ModuleKey) async -> Bool)?
+
+        /// Binds the module question and rebuilds a live event importer with it.
+        public func attachIngestModuleProbe(_ probe: (@Sendable (ModuleKey) async -> Bool)?) async {
+            ingestModuleProbe = probe
+            let restartEvents = eventImporterInputs
+            // Take the old importer out before the suspension: a start that
+            // lands meanwhile builds a new one, and only the old one is stopped.
+            let previous = eventImporter
+            eventImporter = nil
+            await previous?.stop()
+            guard let restartEvents, eventImporter == nil else { return }
             await startEventImport(userID: restartEvents.userID)
         }
 
@@ -158,12 +159,12 @@ import Foundation
         /// channels).
         private var deletionReconciler: MeasurementDeletionReconciler?
 
-        /// S1 — server ids a measurement write on this actor has claimed (see
+        /// Server ids a measurement write on this actor has claimed (see
         /// `HealthKitServerMirrorPlanner`); the create-time write and the mirror
         /// never both write the same row.
         var serverMirrorClaims: Set<String> = []
 
-        /// **B5 (1.4)** — where the person's per-type direction comes from
+        /// Where the person's per-type direction comes from
         /// (``HealthKitWriteBackPolicy``). `nil` until the composition root
         /// attaches it: then nothing restricts the writes, as before 1.4.
         var writeBackPolicyProvider: (@Sendable () async -> HealthKitWriteBackPolicy?)?
@@ -212,7 +213,7 @@ import Foundation
             try await store.requestAuthorization(toShare: write, read: read)
         }
 
-        /// **25-02 (E-2026-08-29 #5)** — the sheet-status question behind the
+        /// The sheet-status question behind the
         /// update-notice card's detection rule. Continuation over the callback
         /// API (available since iOS 12). The completion's error case surfaces
         /// as `.unknown`, which callers treat as "cannot answer" and fall back
@@ -244,21 +245,18 @@ import Foundation
         // protocol still declares the method on this actor; the extension
         // satisfies it.
 
-        /// Bidirectional mood-sync (S4 / QA6 #2). Mirrors a MoodEntry into
+        /// Bidirectional mood-sync. Mirrors a MoodEntry into
         /// HKStateOfMindSample so the user's stimmung shows up in the
         /// system Health app alongside other mood-aware integrations
-        /// (Journal, Mindfulness). iOS 18+ — silent no-op on older OS,
-        /// kept guarded so we can keep iOS 17 in deployment-target window
-        /// if Spezi-migration pushes us back.
+        /// (Journal, Mindfulness).
         public func writeMoodEntry(_ entry: MoodEntry) async throws {
-            guard #available(iOS 18.0, *) else { return }
-            // **Audit B-4 — an entry whose level this build cannot name is never
+            // **An entry whose level this build cannot name is never
             // mirrored into Apple Health.** The mirror writes a VALENCE, and
             // there is no valence for the sentinel; writing a middling one would
             // put a mood the person never expressed into the system Health app,
             // where other apps read it.
             guard let score = entry.score else { return }
-            // HK-NEW (1.5) — the origin marker lets the valence loop guard
+            // The origin marker lets the valence loop guard
             // (`StateOfMindValencePolicy`) know this sample even without its source.
             let metadata: [String: Any] = [
                 HKMetadataKeyExternalUUID: entry.id,
@@ -268,7 +266,7 @@ import Foundation
             // Score 1..5 → HKStateOfMind.Valence -1.0 ... 1.0 via the shared
             // mapping (let `valenceClassification` derive — never set manually).
             let valence = MoodStateOfMindMapping.valence(forScore: score)
-            // v0.10.0 W-Mood-B — `.dailyMood` (was `.momentaryEmotion`):
+            // `.dailyMood` (was `.momentaryEmotion`):
             // HealthLog mood is a check-in about how the user feels overall,
             // which is the semantic match + renders in Health's "Mood" track.
             let sample = HKStateOfMind(
@@ -282,7 +280,7 @@ import Foundation
             try await store.save(sample)
         }
 
-        /// **v0.10.0 W-Mood-B** — request read+share auth for State of Mind
+        /// Request read+share auth for State of Mind
         /// only.
         ///
         /// **16-03 / decision E2 — the type is now in
@@ -291,16 +289,13 @@ import Foundation
         /// the path a user takes who declined the first sheet and later turns
         /// the Settings toggle on. Without the permission the existing write
         /// silently no-ops (`HKErrorAuthorizationDenied` swallowed by `try?` in
-        /// `MoodStore`), which is why it is asked for at all. iOS 18+ — no-op on
-        /// older OS, though the deployment target is 18.0 so that guard is
-        /// belt-and-braces.
+        /// `MoodStore`), which is why it is asked for at all.
         public func requestMoodAuthorization() async throws {
-            guard #available(iOS 18.0, *) else { return }
             let type = HKObjectType.stateOfMindType()
             try await store.requestAuthorization(toShare: [type], read: [type])
         }
 
-        /// v0.10.0 W-Mood-B — owns the State-of-Mind import observer so its
+        /// Owns the State-of-Mind import observer so its
         /// lifecycle (start/stop) is actor-isolated alongside `store`.
         private var moodImporter: MoodStateOfMindImporter?
 
@@ -312,7 +307,6 @@ import Foundation
         /// Start (or no-op if already running) the foreign-State-of-Mind →
         /// HealthLog mood importer.
         func startStateOfMindImport(repo: MoodRepository, userID: String?) async {
-            guard #available(iOS 18.0, *) else { return }
             moodImporterInputs = (repo, userID)
             if moodImporter == nil {
                 moodImporter = MoodStateOfMindImporter(
@@ -330,7 +324,6 @@ import Foundation
         /// read. If this call creates the importer, `start()` already performs
         /// that read; an existing importer receives the explicit refresh.
         func refreshStateOfMindImport(repo: MoodRepository, userID: String?) async {
-            guard #available(iOS 18.0, *) else { return }
             if moodImporter == nil {
                 await startStateOfMindImport(repo: repo, userID: userID)
             } else {
@@ -348,7 +341,7 @@ import Foundation
             moodImporterInputs = nil
         }
 
-        /// **v0.10.0 W10 M2 — reset the per-user import anchor, then stop.**
+        /// **Reset the per-user import anchor, then stop.**
         ///
         /// Called on logout / user-change so the next user starts from a clean
         /// anchor (the importer holds the just-logged-out user's per-user anchor
@@ -377,7 +370,6 @@ import Foundation
         /// Start (or no-op if already running) the foreign-reproductive-sample →
         /// HealthLog cycle importer. Caller gates on `CycleGate`.
         func startCycleImport(repo: CycleRepository, userID: String?) async {
-            guard #available(iOS 18.0, *) else { return }
             cycleImporterInputs = (repo, userID)
             if cycleImporter == nil {
                 cycleImporter = CycleHealthKitImporter(
@@ -385,22 +377,21 @@ import Foundation
                     repo: repo,
                     userID: userID,
                     admission: healthSyncAdmission?.provider(for: .cycle),
-                    cursors: healthSyncCursors
+                    cursors: healthSyncCursors,
+                    retryQueue: { [weak self] in await self?.currentHealthSyncRetryQueue() }
                 )
             }
             await cycleImporter?.start()
         }
 
-        /// **Phase 07 / plan 07-07** — ensure the importer exists, then force one
+        /// Ensure the importer exists, then force one
         /// bounded anchored read of every reproductive type and report the
         /// worst-of disposition across them.
         ///
         /// If this call creates the importer, `start()` already performs that
         /// read and its own disposition is the answer; an existing importer
-        /// receives the explicit refresh. Below iOS 18 there is no importer to
-        /// build, and the answer is `unsupported` rather than a silent success.
+        /// receives the explicit refresh.
         func refreshCycleImportSweep(repo: CycleRepository, userID: String?) async -> HealthSyncImportOutcome {
-            guard #available(iOS 18.0, *) else { return .unsupported }
             if cycleImporter == nil {
                 cycleImporterInputs = (repo, userID)
                 cycleImporter = CycleHealthKitImporter(
@@ -408,7 +399,8 @@ import Foundation
                     repo: repo,
                     userID: userID,
                     admission: healthSyncAdmission?.provider(for: .cycle),
-                    cursors: healthSyncCursors
+                    cursors: healthSyncCursors,
+                    retryQueue: { [weak self] in await self?.currentHealthSyncRetryQueue() }
                 )
                 guard let disposition = await cycleImporter?.start() else { return .unsupported }
                 return HealthSyncImportOutcome(disposition: disposition)
@@ -436,7 +428,7 @@ import Foundation
             cycleImporterInputs = nil
         }
 
-        // MARK: - Workouts (v1.15 W-WORKOUT)
+        // MARK: - Workouts
 
         /// Owns the workout import observer (lifecycle actor-isolated alongside
         /// `store`). The mapping is in the pure `WorkoutHealthKitMapping`.
@@ -465,7 +457,7 @@ import Foundation
                 userID: userID,
                 onIngest: onIngest
             ) else { return }
-            // W-B184 — the workout-read re-auth migration forces a full re-sweep
+            // The workout-read re-auth migration forces a full re-sweep
             // for returning users. Clear the persisted anchor first so the next
             // sweep backfills the whole history (a pre-b182 build may have
             // advanced the anchor over an empty, read-unauthorized sweep, which
@@ -484,7 +476,7 @@ import Foundation
             }
             await importer.start()
 
-            // GH #86 — lifecycle-owned rather than detached: logout/account
+            // Lifecycle-owned rather than detached: logout/account
             // replacement can cancel and await every suspended query/upload
             // before clearing the captured user's state.
             startWorkoutHRBackfillIfNeeded(repo: repo, userID: userID, maxChunks: 4)
@@ -791,12 +783,12 @@ import Foundation
             workoutImporter = nil
             workoutImporterLease = nil
             workoutImporterPartition = nil
-            // GH #86 — drop the sweep too so a re-login rebuilds it against the
+            // Drop the sweep too so a re-login rebuilds it against the
             // new user's partition.
             workoutHRBackfillSweep = nil
         }
 
-        // MARK: - Heart-health + mobility EVENTS (W-HKREAD)
+        // MARK: - Heart-health + mobility EVENTS
 
         /// Owns the categorical-EVENT importer (irregular-rhythm, high/low-HR,
         /// walking-steadiness, sleep-apnea, audio-exposure events). Always-on
@@ -823,13 +815,14 @@ import Foundation
                     userID: userID,
                     admission: healthSyncAdmission?.provider(for: .heartEvent),
                     cursors: healthSyncCursors,
-                    retry: healthSyncRetryQueue
+                    retry: healthSyncRetryQueue,
+                    moduleProbe: ingestModuleProbe
                 )
             }
             await eventImporter?.start()
         }
 
-        /// **Phase 07 / plan 07-07** — ensure the event importer exists, then
+        /// Ensure the event importer exists, then
         /// force one bounded anchored read of every event type and report the
         /// worst-of disposition across them.
         ///
@@ -849,7 +842,8 @@ import Foundation
                     userID: userID,
                     admission: healthSyncAdmission?.provider(for: .heartEvent),
                     cursors: healthSyncCursors,
-                    retry: healthSyncRetryQueue
+                    retry: healthSyncRetryQueue,
+                    moduleProbe: ingestModuleProbe
                 )
                 guard let disposition = await eventImporter?.start() else { return .unsupported }
                 return HealthSyncImportOutcome(disposition: disposition)
@@ -887,60 +881,15 @@ import Foundation
 
         // MARK: - Background-Delivery + Anchor-Sweep (post-W-A5 no-op shims)
 
-        /// Pre-W-A5 this method registered an `HKObserverQuery` +
-        /// `enableBackgroundDelivery` per legacy default type. Post-W-A5
-        /// the SpeziHealthKit `CollectSamples` declarations in
-        /// `HealthLogSpeziDelegate.configuration` own that responsibility
-        /// — they call `HKHealthStore.startBackgroundDelivery` internally
-        /// when `continueInBackground: true` is set. The shim stays so the
-        /// `HealthKitServiceProtocol` + `AnyHealthKitWriter.activateBackground-
-        /// Deliveries` contract continues to resolve from
-        /// `BackgroundSyncCoordinator.activateHealthKitBackgroundDeliveries`
-        /// (Foreground-bootstrap path) and the onboarding-permission
-        /// re-authorization path in `HKReadinessStore.requestAuthorization`
-        /// without breaking either call-site.
-        public func startBackgroundDeliveries() async throws {
-            // No-op — SpeziHealthKit owns the per-sample observer pipeline
-            // post-W-A5. Kept callable for protocol conformance.
-        }
+        /// Kept for `HealthKitServiceProtocol`; does nothing. Observers and
+        /// background delivery belong to `AnchoredHealthSampleCollector` and the
+        /// dedicated importers, which arm them in their first admitted pass.
+        public func startBackgroundDeliveries() async throws {}
 
-        /// Pre-W-A5 this method ran a one-shot `HKAnchoredObjectQuery`
-        /// sweep across every default background-delivery type as the
-        /// `BGProcessingTask` wakeup payload. Post-W-A5 the SpeziHealthKit
-        /// `CollectSamples` declarations own anchor-sweep responsibility
-        /// — each collector internally manages its own
-        /// `HKAnchoredObjectQuery` + anchor persistence (in
-        /// SpeziLocalStorage). The BGProcessingTask still wakes the
-        /// process for the "guaranteed sync even if HK didn't push us"
-        /// guarantee, but the active work post-wake now lives in Spezi's
-        /// automatic-with-background collectors which the system resumes
-        /// as part of the same background-runtime tick.
-        ///
-        /// **W-B182 — no longer a no-op.** The `continueInBackground: false`
-        /// collectors are now declared `start: .manual`
-        /// (`HealthLogSpeziDelegate.configuration`), so they pull nothing until
-        /// `HealthKit.triggerDataSourceCollection()` is actively called. This
-        /// method drives that trigger via ``SpeziCollectionTrigger`` — re-arming
-        /// (or re-firing) every manual collector from its persisted anchor on
-        /// each `BGProcessingTask` wake (`BackgroundSyncCoordinator.handleBGTask`
-        /// → `runBackgroundSyncPass`) and each manual "Jetzt syncen"
-        /// (`HKReadinessStore.triggerManualSync` → `runBackgroundSyncPass`). The
-        /// foreground `.active` path triggers it directly in `RootView`. This is
-        /// the compensating mechanism for the W2 battery posture (the bulk of
-        /// types arm no `.immediate` background delivery; this active pull keeps
-        /// them constant instead).
-        ///
-        /// The six vital-sign collectors stay `start: .automatic` + background,
-        /// so they are untouched by this trigger (they wake the app themselves).
-        /// **Phase 07 / plan 07-09** — this arms the manual collectors and does
-        /// not start a pass. It used to call `SpeziCollectionTrigger.trigger(source:
-        /// .background)`, which both armed the collectors *and* ran a whole
-        /// `.processing` pass — so a wake that also fanned out to statistics,
-        /// ECG and workouts ran those twice. `AppContainer.runHealthSyncPass`
-        /// now arms through here and then runs exactly one plan.
-        public func runOneShotAnchorSweep() async {
-            await SpeziCollectionTrigger.armManualCollectors()
-        }
+        /// Kept for `HealthKitServiceProtocol`; does nothing. It used to arm
+        /// SpeziHealthKit's manual collectors, and none is registered any more:
+        /// every wake collects through the one orchestrated pass instead.
+        public func runOneShotAnchorSweep() async {}
 
         // MARK: - Auth-Failure Mitigation (F8 hotfix v0.4.1.1)
 
@@ -953,7 +902,7 @@ import Foundation
         /// calls it after every successful re-authorization to keep the
         /// re-registration contract intact.
         public func resetAuthDisabledTypes() {
-            // No-op — observer pipeline removed in W-A5.
+            // No-op — there is no observer pipeline in this facade.
         }
 
         // MARK: - Anchor key utilities (logout sweep + migrator lookup)
@@ -971,14 +920,12 @@ import Foundation
             store: HKHealthStore = HKHealthStore(),
             keychain: KeychainStoring,
             bundleID: String,
-            defaults: sending UserDefaults = .standard,
-            featureFlags: FeatureFlagsServicing? = nil
+            defaults: sending UserDefaults = .standard
         ) {
             self.store = store
             self.keychain = keychain
             self.bundleID = bundleID
             workoutDefaultsBox = WorkoutDefaultsBox(defaults)
-            self.featureFlags = featureFlags
             workoutSyncDependencies = WorkoutSyncDependencies()
         }
 
@@ -987,14 +934,12 @@ import Foundation
             keychain: KeychainStoring,
             bundleID: String,
             defaultsSuiteName: String,
-            featureFlags: FeatureFlagsServicing? = nil,
             workoutSyncDependencies: WorkoutSyncDependencies
         ) {
             self.store = store
             self.keychain = keychain
             self.bundleID = bundleID
             workoutDefaultsBox = WorkoutDefaultsBox(suiteName: defaultsSuiteName)
-            self.featureFlags = featureFlags
             self.workoutSyncDependencies = workoutSyncDependencies
         }
     }

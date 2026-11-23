@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.14.1 — strip-customise contract: the operator can reorder the Insights
+/// Strip-customise contract: the operator can reorder the Insights
 /// top tab-strip + show/hide individual metric tabs, and "Übersicht" stays the
 /// mandatory, always-first pill. Pure value-type math over `InsightsLayout` +
 /// `InsightsTabSelection.ordered` — no view, no store.

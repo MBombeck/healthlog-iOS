@@ -239,7 +239,7 @@ struct AIInsightResponseDecodingTests {
         #expect(response.providerLabel == nil)
     }
 
-    /// v0.7.0 W-API-RENDER — typed Recommendation decoding. Schema drift
+    /// Typed Recommendation decoding. Schema drift
     /// (type mismatch on a known field) must never coalesce into an empty
     /// recommendation card.
     ///

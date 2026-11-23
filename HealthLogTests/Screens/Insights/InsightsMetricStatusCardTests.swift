@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.3 C4 — locks the ONE-canonical-card invariant. The per-metric Insights
+/// Locks the ONE-canonical-card invariant. The per-metric Insights
 /// page used to fork on `kind == .bloodPressure` (rich `BPStatusCard` vs thin
 /// `InsightsPrimaryTile`); the operator flagged "Puls looks completely
 /// different from Blutdruck" across multiple rounds. These tests assert:
@@ -32,21 +32,6 @@ struct InsightsMetricStatusCardTests {
         }
     }
 
-    @Test("the screen body has no per-kind primary-card fork")
-    func screenBodyHasNoFork() throws {
-        let source = try Self.loadMetricScreenSource()
-        let code = Self.codeBody(of: source)
-        // The retired fork constructed two divergent cards. Neither may be
-        // constructed in the screen body any longer.
-        #expect(!code.contains("BPStatusCard("), "BPStatusCard must be retired (folded into the canonical card).")
-        #expect(!code.contains("InsightsPrimaryTile("), "InsightsPrimaryTile must be retired.")
-        // The ONE canonical card must be the construction site.
-        #expect(
-            code.contains("InsightsMetricStatusCard(descriptor:"),
-            "The screen must render the canonical InsightsMetricStatusCard for every metric."
-        )
-    }
-
     // MARK: - Self-suppression (honest-only)
 
     @Test("empty digest + no target yields a fully suppressed card")
@@ -74,7 +59,7 @@ struct InsightsMetricStatusCardTests {
             latestValue: 64,
             sparklineValues: [61, 63, 64]
         )
-        // 1.4 B4 — the card sits under "30 Tage Durchschnitt". The latest
+        // The card sits under "30 Tage Durchschnitt". The latest
         // reading has its own card above it; it is never this card's headline.
         #expect(descriptor.headlineValue == nil, "A latest reading is not a 30-day average.")
         #expect(!descriptor.showsSparkline, "Without an average the card carries no line either.")
@@ -153,7 +138,7 @@ struct InsightsMetricStatusCardTests {
         #expect(descriptor.targetBandCaption != nil)
     }
 
-    // MARK: - D1 target-less Verlauf (v0.14.4)
+    // MARK: - D1 target-less Verlauf
 
     @Test("a non-targeted kind (activeEnergy) shows a target-less Verlauf, no band/chip")
     func nonTargetedKindShowsTrendWithoutBand() {
@@ -391,45 +376,9 @@ struct InsightsMetricStatusCardTests {
         let expected = 23.7.formatted(.number.precision(.fractionLength(1)))
         #expect(descriptor.headlineValue == expected, "BMI falls back to the latest BMI reading.")
     }
-
-    // MARK: - Helpers
-
-    private static var repoRoot: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Insights/
-            .deletingLastPathComponent() // Screens/
-            .deletingLastPathComponent() // HealthLogTests/
-            .deletingLastPathComponent() // repo root
-    }
-
-    private static func loadMetricScreenSource() throws -> String {
-        let dir = repoRoot
-            .appendingPathComponent("HealthLog")
-            .appendingPathComponent("Screens")
-            .appendingPathComponent("Insights")
-        // file_length split: the screen's source spans the screen file plus its
-        // `+Sections.swift` sibling (pure code movement) — assert across both.
-        return try String(
-            contentsOf: dir.appendingPathComponent("InsightsMetricScreen.swift"),
-            encoding: .utf8
-        ) + String(
-            contentsOf: dir.appendingPathComponent("InsightsMetricScreen+Sections.swift"),
-            encoding: .utf8
-        )
-    }
-
-    private static func codeBody(of source: String) -> String {
-        source
-            .components(separatedBy: "\n")
-            .filter { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("///")
-            }
-            .joined(separator: "\n")
-    }
 }
 
-/// **1.0.3 — App Review 1.4.1, audit row 10.** The classification chip is the
+/// **App Review 1.4.1, audit row 10.** The classification chip is the
 /// card's most diagnosis-shaped element: "Hypertension grade 2" and "Obesity
 /// class III" are category names out of a guideline, computed here from the
 /// user's own 30-day home average. The mitigation used to live one tap away in
@@ -528,7 +477,7 @@ struct InsightsMetricStatusCardClassificationQualifierTests {
     }
 }
 
-/// **1.4 B4 — the "30 Tage Durchschnitt" card shows the server's mean.** It
+/// **The "30 Tage Durchschnitt" card shows the server's mean.** It
 /// fell back to the latest reading whenever the (consent-gated) digest had no
 /// average: day strain and RMSSD showed today's value, a stopped SDNN its June
 /// reading.

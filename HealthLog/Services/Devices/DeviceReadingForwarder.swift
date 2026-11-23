@@ -262,7 +262,7 @@
             /// output, no clock, no UUID generation (the `stem` is the
             /// only external dependency).
             ///
-            /// **Validation (v0.6.0.6):** physiological-range + finite
+            /// **Validation:** physiological-range + finite
             /// checks are applied before re-stamp + DTO build. A
             /// malfunctioning or attacker-controlled cuff that emits
             /// `sys=0/dia=999`, NaN, or `sys < dia` must NOT reach HK or

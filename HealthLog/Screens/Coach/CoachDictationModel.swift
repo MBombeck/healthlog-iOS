@@ -1,282 +1,235 @@
 import AVFoundation
 import Foundation
-import Speech
 import SwiftUI
 
 /// **Coach voice dictation (web-parity v1.18.7).**
 ///
-/// Drives the mic affordance in the AskCoach composer: requests microphone +
-/// speech-recognition permission, runs a live `SFSpeechRecognizer` session over
-/// the device microphone, and streams the running transcription into a bound
-/// draft. The user reviews the transcribed text and sends through the normal
-/// composer path — dictation never auto-sends.
+/// Drives the mic in the AskCoach composer: asks for microphone and speech
+/// permission, runs a live on-device recognition session and streams the
+/// running transcription into a bound draft. The user reviews the text and
+/// sends through the normal composer path; dictation never auto-sends.
 ///
-/// **Privacy / on-device (hard contract).** Health-conversation audio must
-/// never leave the phone. On-device recognition is therefore a *requirement*,
-/// not a preference: the mic is shown only when the recognizer reports
-/// `supportsOnDeviceRecognition` (`availability == .available`), and a
-/// server-only recognizer is gated to `.unsupported` so the mic is never offered
-/// — we never fall back to Apple's speech servers for this surface. As
-/// defence-in-depth `requiresOnDeviceRecognition` is then forced `true`
-/// unconditionally on the request, and `start` re-checks the on-device gate (so
-/// an availability flip cannot open a transmitting session). Nothing is
-/// persisted. (Audit b198 H-1: the earlier "set only when supported" logic could
-/// transmit on a server-only locale — fixed by the gate + unconditional flag.)
+/// **Privacy (hard contract).** Health-conversation audio never leaves the
+/// phone. The mic is offered only when the recognizer supports on-device
+/// recognition, the request forces it, and there is no fallback to Apple's
+/// speech servers. Nothing is persisted.
 ///
-/// **Lifecycle.** `@MainActor @Observable`; the audio engine + recognition task
-/// are torn down on `stop()` and on `deinit`-equivalent (`stop()` is idempotent).
-/// The model holds no `@unchecked Sendable` state — all mutable members are
-/// touched only on the main actor.
+/// **Every tap has a visible answer.** A tap shows the active disc at once
+/// (`phase == .starting`), and every way a start can fail ends in a named
+/// ``CoachDictationHint`` the composer shows above the field. The recognizer
+/// sits behind ``CoachSpeechRecognizing`` so each of those paths is testable.
 @MainActor
 @Observable
 final class CoachDictationModel {
-    /// High-level availability of the dictation affordance on this device.
+    /// What the device can do at all, decided when the sheet opens.
     enum Availability: Equatable {
-        /// Recognizer exists for the locale, is reachable, AND supports
-        /// **on-device** recognition — mic can be shown. On-device support is a
-        /// hard requirement (not a preference): the privacy contract is that
-        /// health-conversation audio never leaves the phone, so a server-only
-        /// recognizer is treated as `.unsupported`, not `.available`.
+        /// An on-device recognizer exists for the locale: the mic is shown.
         case available
-        /// No recognizer for the current locale, speech recognition is
-        /// restricted on the device, OR the recognizer does not support
-        /// on-device transcription — hide the mic entirely (we never fall back
-        /// to Apple's speech servers for this surface).
+        /// No recognizer, or one that would need the network: the mic is
+        /// hidden. Only ever set at creation, never after a failed tap.
         case unsupported
-        /// The user denied microphone or speech-recognition permission — show a
-        /// disabled mic that routes to Settings on tap.
+        /// Microphone or speech permission was refused: the slashed mic
+        /// routes to Settings.
         case denied
     }
 
-    /// `true` while an audio session + recognition task are live.
-    private(set) var isRecording = false
+    enum Phase: Equatable {
+        case idle
+        /// Tapped; permissions and the audio graph are being set up.
+        case starting
+        case recording
+    }
 
-    /// Drives the mic glyph + whether tapping starts a session. Recomputed after
-    /// each permission resolution.
     private(set) var availability: Availability
+    private(set) var phase: Phase = .idle
+    /// Why the last tap did not lead to a dictation, until the next tap or
+    /// keystroke clears it.
+    private(set) var hint: CoachDictationHint?
 
-    private let recognizer: SFSpeechRecognizer?
-    private let audioEngine = AVAudioEngine()
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
+    /// `true` while the audio session and recognition task are live.
+    var isRecording: Bool {
+        phase == .recording
+    }
 
-    /// The draft text that existed when the session started, so streamed partial
+    /// `true` from the tap until the session ends: the mic shows its active disc.
+    var isActive: Bool {
+        phase != .idle
+    }
+
+    private let recognizer: any CoachSpeechRecognizing
+
+    /// The draft that existed when the session started, so streamed partial
     /// results are appended after it rather than replacing prior typing.
     private var baselineText = ""
+    /// Whether this session has already written text into the draft.
+    private var receivedText = false
 
-    init(locale: Locale = .current) {
-        let recognizer = SFSpeechRecognizer(locale: locale)
+    init(recognizer: (any CoachSpeechRecognizing)? = nil) {
+        let recognizer = recognizer ?? Self.makeRecognizer()
         self.recognizer = recognizer
-        // On-device support is required, not preferred — a server-only
-        // recognizer would stream mic audio off-device, which this surface must
-        // never do. Gate the mic to `.unsupported` in that case.
-        availability = Self.isOnDeviceReady(recognizer) ? .available : .unsupported
+        availability = recognizer.supportsOnDeviceRecognition ? .available : .unsupported
     }
 
-    /// `true` only when the recognizer exists, is reachable, AND can transcribe
-    /// fully on-device. The single source of truth for the on-device gate.
-    private static func isOnDeviceReady(_ recognizer: SFSpeechRecognizer?) -> Bool {
-        guard let recognizer else { return false }
-        return recognizer.isAvailable && recognizer.supportsOnDeviceRecognition
+    private static func makeRecognizer() -> any CoachSpeechRecognizing {
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uitest-coach-dictation") {
+                return CoachDictationUITestRecognizer()
+            }
+        #endif
+        return CoachSpeechRecognizer(locale: .current)
     }
 
-    /// Pre-`installTap` validity check for the input node's format. `installTap`
-    /// asserts `IsFormatSampleRateAndChannelCountValid` and traps with an
-    /// uncatchable ObjC exception when the route is still settling and the
-    /// format has a zero sample-rate / channel-count. Calling this first lets
-    /// `start()` refuse gracefully instead of crashing. Exposed (not private) so
-    /// the guard branch is unit-testable without an audio engine — the headless
-    /// test host cannot start `AVAudioEngine`.
+    /// Pre-`installTap` validity check for the input node's format.
+    /// `installTap` traps with an uncatchable exception on a zero sample rate
+    /// or channel count, which happens while the input route is still
+    /// settling; the recognizer refuses instead.
     nonisolated static func isTapFormatValid(_ format: AVAudioFormat) -> Bool {
         format.sampleRate > 0 && format.channelCount > 0
     }
 
     // MARK: - Public API
 
-    /// Toggle a dictation session, transcribing into `draft`. Requests the two
-    /// permissions on first use. Safe to call repeatedly; a second tap while
-    /// recording stops the session and keeps whatever was transcribed.
+    /// Start a session, or stop the running one and keep what was transcribed.
     func toggle(into draft: Binding<String>) {
-        if isRecording {
+        if isActive {
             stop()
         } else {
-            Task { await start(into: draft) }
+            beginStarting()
+            Task { await run(into: draft) }
         }
     }
 
     /// Stop the session and tear down the audio graph. Idempotent.
     func stop() {
-        guard isRecording || task != nil else { return }
-        teardown()
+        guard isActive else { return }
+        phase = .idle
+        recognizer.stop()
     }
 
-    /// **M-1 (v0153) — unconditional teardown.** Tears down the audio graph +
-    /// recognition request AND deactivates the AVAudioSession, regardless of
-    /// `isRecording`. The `start()` refuse (format-guard) and `catch` paths fire
-    /// AFTER `configureAudioSession()` has already activated the session but
-    /// BEFORE `isRecording = true`; calling `stop()` there short-circuits on its
-    /// `guard isRecording || task != nil`, leaving the session ducking other
-    /// audio and `self.request` dangling. Those paths call this directly so the
-    /// session is always released. Safe to call repeatedly — every step is
-    /// idempotent.
-    private func teardown() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        request?.endAudio()
-        task?.cancel()
-        task = nil
-        request = nil
-        isRecording = false
-        deactivateAudioSession()
+    func clearHint() {
+        hint = nil
     }
 
     // MARK: - Start
 
-    private func start(into draft: Binding<String>) async {
-        guard let recognizer, Self.isOnDeviceReady(recognizer) else {
-            // Re-check at start time: availability can flip (recognizer comes /
-            // goes). If on-device is not possible, refuse rather than transmit.
-            availability = .unsupported
+    private func beginStarting() {
+        hint = nil
+        phase = .starting
+    }
+
+    /// A start that can be awaited (tests); `toggle` is the tap.
+    func start(into draft: Binding<String>) async {
+        beginStarting()
+        await run(into: draft)
+    }
+
+    private func run(into draft: Binding<String>) async {
+        // Stopped again before the task ran.
+        guard phase == .starting else { return }
+        // Re-checked at the tap: a recognizer can exist and still not be
+        // ready (offline model missing, Siri and Dictation off).
+        guard recognizer.isReadyForOnDeviceRecognition else {
+            fail(.unavailable, error: nil)
             return
         }
-        guard await ensurePermissions() else {
+        guard await recognizer.requestAuthorization() else {
+            phase = .idle
             availability = .denied
             return
         }
+        // Stopped again while the permission prompt was up.
+        guard phase == .starting else { return }
         availability = .available
-
         baselineText = draft.wrappedValue
-
+        receivedText = false
         do {
-            try configureAudioSession()
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.shouldReportPartialResults = true
-            // Defence-in-depth: force on-device transcription unconditionally so
-            // mic audio never reaches Apple's speech servers, even if the
-            // availability gate above were ever bypassed. The `start` guard has
-            // already confirmed `supportsOnDeviceRecognition`, so this cannot
-            // make an otherwise-valid session fail.
-            request.requiresOnDeviceRecognition = true
-            self.request = request
-
-            let inputNode = audioEngine.inputNode
-            // Read the tap format from the **input** node AFTER the session is
-            // active (not `outputFormat`) — and guard it before installing the
-            // tap. `installTap(format:)` asserts `IsFormatSampleRateAndChannelCountValid`
-            // and traps with an uncatchable ObjC `NSException` (NOT a Swift error,
-            // so the `catch` below can't intercept it) when the format has a
-            // zero sample-rate / channel-count. That happens when the hardware
-            // input route is still settling right after `setActive(true)`. Turn
-            // the would-be crash into a graceful refuse-and-teardown.
-            let format = inputNode.inputFormat(forBus: 0)
-            guard Self.isTapFormatValid(format) else {
-                HLLog.ui
-                    .warning(
-                        "Coach dictation: input format not ready (sampleRate/channelCount == 0) — refusing rather than trapping installTap."
-                    )
-                // M-1: `isRecording` is still false here (set only after the
-                // engine starts), so `stop()` would short-circuit and leave the
-                // just-activated session ducking other audio. Tear down directly.
-                teardown()
-                availability = .unsupported
-                return
-            }
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
-                request?.append(buffer)
-            }
-            audioEngine.prepare()
-            try audioEngine.start()
-            isRecording = true
-
-            task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-                // The recognizer's `@Sendable` callback runs off the main actor.
-                // Capture only `Sendable` values (the transcription String + a
-                // finished flag), then hop to the main actor to mutate model
-                // state — no `assumeIsolated` painkiller.
-                let transcription = result?.bestTranscription.formattedString
-                let didFail = error != nil
-                let isFinal = result?.isFinal ?? false
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if let transcription {
-                        apply(transcription: transcription, to: draft)
-                    }
-                    if didFail || isFinal {
-                        finish(didFail: didFail)
-                    }
+            try recognizer.start(
+                onTranscription: { [weak self] text in
+                    self?.apply(transcription: text, to: draft)
+                },
+                onFinish: { [weak self] error in
+                    self?.finish(error: error)
                 }
-            }
+            )
+            phase = .recording
         } catch {
-            HLLog.ui.warning("Coach dictation failed to start: \(LogSanitizer.redact(String(describing: error)))")
-            // M-1: `configureAudioSession()` may have already activated the
-            // session before the throw (and `isRecording` is still false), so
-            // `stop()` would short-circuit. Tear down unconditionally.
-            teardown()
+            recognizer.stop()
+            fail(Self.hint(forStartError: error), error: error)
         }
+    }
+
+    /// Which hint a failed start shows.
+    nonisolated static func hint(forStartError error: any Error) -> CoachDictationHint {
+        switch error {
+        case CoachSpeechStartError.recognizerNotReady: return .unavailable
+        case CoachSpeechStartError.invalidInputFormat: return .micBusy
+        default: break
+        }
+        let nsError = error as NSError
+        let busyCodes = [
+            AVAudioSession.ErrorCode.isBusy.rawValue,
+            AVAudioSession.ErrorCode.cannotInterruptOthers.rawValue,
+            AVAudioSession.ErrorCode.insufficientPriority.rawValue
+        ]
+        if nsError.domain == NSOSStatusErrorDomain, busyCodes.contains(nsError.code) { return .micBusy }
+        return .startFailed
     }
 
     // MARK: - Streaming
 
     private func apply(transcription: String, to draft: Binding<String>) {
+        guard isActive else { return }
         let separator = baselineText.isEmpty || baselineText.hasSuffix(" ") ? "" : " "
         draft.wrappedValue = baselineText + separator + transcription
+        receivedText = true
     }
 
-    private func finish(didFail: Bool) {
-        // A user-initiated cancel surfaces as a failure too; only log when a
-        // session was genuinely live (we tear ours down via `stop()`).
-        if didFail, isRecording {
-            HLLog.ui.warning("Coach dictation ended with a recognition error.")
-        }
-        stop()
-    }
-
-    // MARK: - Permissions
-
-    /// Resolves both microphone + speech-recognition authorization, returning
-    /// `true` only when BOTH are granted.
-    private func ensurePermissions() async -> Bool {
-        let micGranted = await requestMicrophonePermission()
-        guard micGranted else { return false }
-        let speechStatus = await requestSpeechAuthorization()
-        return speechStatus == .authorized
-    }
-
-    private func requestMicrophonePermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission { granted in
-                continuation.resume(returning: granted)
-            }
+    /// The recognition ended on its own (final result or error). An error
+    /// before any text arrived is a failed start; after text it ends quietly
+    /// and the text stays.
+    private func finish(error: (any Error)?) {
+        // Our own `stop()` already went idle; its cancel callback is not news.
+        guard isActive else { return }
+        phase = .idle
+        recognizer.stop()
+        if let error, !receivedText {
+            fail(.startFailed, error: error)
         }
     }
 
-    private func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
+    private func fail(_ reason: CoachDictationHint, error: (any Error)?) {
+        phase = .idle
+        hint = reason
+        let nsError = error.map { $0 as NSError }
+        let domain = nsError?.domain ?? "none"
+        let code = nsError?.code ?? 0
+        HLLog.ui.warning("Coach dictation did not start: \(reason.logName) (\(domain) \(code))")
+    }
+}
+
+/// Why a tap on the mic did not lead to a dictation. Shown as one quiet line
+/// above the composer.
+enum CoachDictationHint: Equatable {
+    /// The on-device recognizer is not ready on this device right now.
+    case unavailable
+    /// Anything else at or right after the start.
+    case startFailed
+    /// The input format was not ready or another app holds the audio session.
+    case micBusy
+
+    var text: String {
+        switch self {
+        case .unavailable: String(localized: "coach.dictation.hint.unavailable")
+        case .startFailed: String(localized: "coach.dictation.hint.startFailed")
+        case .micBusy: String(localized: "coach.dictation.hint.micBusy")
         }
     }
 
-    // MARK: - Audio session
-
-    private func configureAudioSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        // Mode `.default` (not `.measurement`): `.measurement` disables input
-        // processing/AGC and forces a hardware-route change that re-negotiates
-        // the input node's format asynchronously — which is what left the tap
-        // format at sampleRate 0 and trapped `installTap` (the C5 crash).
-        // Apple's own speech-recognition sample uses the default record mode for
-        // dictation; we match it.
-        try session.setCategory(.record, mode: .default, options: .duckOthers)
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
-    }
-
-    private func deactivateAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            HLLog.ui.debug("Coach dictation audio session deactivate failed: \(LogSanitizer.redact(String(describing: error)))")
+    var logName: String {
+        switch self {
+        case .unavailable: "unavailable"
+        case .startFailed: "startFailed"
+        case .micBusy: "micBusy"
         }
     }
 }

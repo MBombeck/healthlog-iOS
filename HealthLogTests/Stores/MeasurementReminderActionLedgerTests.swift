@@ -9,7 +9,7 @@ import Testing
 
 // MARK: - ROUTE-07 (v1.37.20) — server-authoritative actions and ledger
 
-/// **Plan 08-22 — the store half of the accepted skip / snooze / history surface.**
+/// **The store half of the accepted skip / snooze / history surface.**
 ///
 /// Written as an `extension` rather than as more members of the suite body for
 /// the reason 08-19 recorded one file over: the original suite body is already
@@ -55,41 +55,6 @@ extension MeasurementRemindersStoreTests {
             snoozedUntil: Date(timeIntervalSince1970: 1_850_000_000),
             lastSkippedAt: Date(timeIntervalSince1970: 1_750_000_000),
             skipCount: 4
-        )
-    }
-
-    /// **EXPECTED_RED (08-22): the store has no server-authoritative action or
-    /// ledger surface, and it still rebuilds a reminder row field-by-field.**
-    ///
-    /// Compile-clean on purpose: it reads the store as *text* and probes the
-    /// live instance through `Mirror`, so it states the absent surface without
-    /// naming a symbol that does not exist yet. The typed behavioural cases that
-    /// prove each path arrive with the implementation.
-    @Test("08-22 marker: skip, snooze and the ledger have no store consumer")
-    func storeHasNoServerAuthoritativeActionSurface() throws {
-        let source = try Phase8SourceScan.stripped("HealthLog/Stores/MeasurementRemindersStore.swift")
-        let store = MeasurementRemindersStore(repo: MeasurementReminderRepository(api: StubAPIClient()))
-        let properties = Set(Mirror(reflecting: store).children.compactMap(\.label))
-
-        var violations: [String] = []
-        if source.contains("MeasurementReminderRow(") {
-            violations.append(
-                "MeasurementRemindersStore rebuilds a MeasurementReminderRow field-by-field; "
-                    + "a rebuild silently drops every field appended after it was written"
-            )
-        }
-        for call in ["repo.skip(", "repo.snooze(", "repo.history("] where !source.contains(call) {
-            violations.append("MeasurementRemindersStore never calls \(call)")
-        }
-        for property in ["ledgers", "pendingAction", "unsupportedActions"]
-            where !properties.contains(where: { $0.contains(property) })
-        {
-            violations.append("MeasurementRemindersStore exposes no `\(property)` state")
-        }
-
-        #expect(
-            violations.isEmpty,
-            "EXPECTED_RED: accepted reminder actions and history have no store consumer. PHASE8-VIOLATIONS 08-22-store: \(violations)"
         )
     }
 

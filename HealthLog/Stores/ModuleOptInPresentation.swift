@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Audit A-7 — how a user-switchable module's OFF surface should read.**
+/// **How a user-switchable module's OFF surface should read.**
 ///
 /// Labs, Illness and Documents are modules the person owns, so a switched-off
 /// surface offers an enable call-to-action rather than the operator-gated
@@ -23,7 +23,7 @@ public enum ModuleOptInPresentation: Equatable, Sendable {
     /// Render the server's reason instead, with no switch.
     case explain(String)
 
-    /// Audit A-7 — the whole rule, pure and testable without a view.
+    /// The whole rule, pure and testable without a view.
     ///
     /// Keyed on ``ModuleAccessState/offersSwitch``, the same predicate the
     /// settings switchboard uses, so the two surfaces cannot drift apart: a
@@ -35,7 +35,7 @@ public enum ModuleOptInPresentation: Equatable, Sendable {
 }
 
 public extension ModuleGate {
-    /// Audit A-7 — how this module's off surface should read.
+    /// How this module's off surface should read.
     ///
     /// Reads the RECONCILED state (fix round 1), so a stale reason beside a
     /// boolean that contradicts it cannot lock a person out of their own opt-in

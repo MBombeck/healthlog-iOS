@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.8.3 W-D — surfaces the four "collected-but-undisplayed" activity
+/// Surfaces the four "collected-but-undisplayed" activity
 /// aggregates the app already syncs to the server but never rendered:
 /// `activeEnergy`, `flightsClimbed`, `distanceWalkingRunning`,
 /// `timeInDaylight` (R6 metric-coverage audit). All four are server-

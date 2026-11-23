@@ -1,7 +1,8 @@
 import AppIntents
 import Foundation
+import WidgetKit
 
-/// **v0.8.4 WWIDGET-3** — "Nächste Dosis – Genommen" control intent.
+/// "Nächste Dosis – Genommen" control intent.
 ///
 /// Bound to the Control Center / Lock-Screen / Action-Button
 /// ``MarkNextDoseControl``. One tap marks the *next due dose* taken without
@@ -37,6 +38,12 @@ struct MarkNextDoseTakenIntent: AppIntent {
     /// 6 strict concurrency — no `nonisolated(unsafe)` painkiller.
     @MainActor static var snapshotStoreOverride: WidgetSnapshotStore?
 
+    /// Test seam for the outcome marker the widget reads.
+    @MainActor static var outcomeStoreOverride: WidgetDoseOutcomeStore?
+
+    /// Test seam for the clock the freshness check reads.
+    @MainActor static var nowOverride: Date?
+
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let deps = IntentDependencies.resolve()
@@ -45,22 +52,91 @@ struct MarkNextDoseTakenIntent: AppIntent {
         }
 
         let store = Self.snapshotStoreOverride ?? WidgetSnapshotStore()
-        guard let nextDose = store.read()?.nextDose else {
-            return .result(dialog: IntentCopy.noDoseDue)
+        let outcomes = Self.outcomeStoreOverride ?? WidgetDoseOutcomeStore()
+        let now = Self.nowOverride ?? Date()
+        let decision = Self.decide(
+            snapshot: store.read(),
+            outcome: outcomes.read(),
+            now: now
+        )
+        let nextDose: WidgetSnapshot.NextDose
+        switch decision {
+        case .noDose: return .result(dialog: IntentCopy.noDoseDue)
+        case .stale: return .result(dialog: IntentCopy.snapshotStale)
+        case .alreadyRecorded: return .result(dialog: IntentCopy.alreadyRecorded)
+        case let .record(dose): nextDose = dose
         }
 
+        // Booked on the dose's slot, like the widget button, so the server
+        // lands it on that slot instead of guessing one from the tap time.
+        var failure: Error?
         do {
             try await deps.medicationsRepo.recordFromReminder(
                 medicationId: nextDose.medicationId,
-                scheduledFor: Date(),
+                scheduledFor: nextDose.scheduledAt,
                 status: .taken
             )
+        } catch {
+            failure = error
+        }
+        outcomes.record(
+            medicationId: nextDose.medicationId,
+            scheduledFor: nextDose.scheduledAt,
+            kind: WidgetDoseOutcomeStore.kind(signedIn: true, error: failure),
+            now: now
+        )
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetKind.nextDose)
+        guard let failure else {
             return .result(dialog: IntentDialog(Self.confirmation(medicationName: nextDose.medicationName)))
-        } catch let error as HLError where error.shouldPersistToOutbox {
+        }
+        if let already = failure as? MedicationAlreadyTaken {
+            return .result(dialog: IntentDialog(stringLiteral: already.message)) // #189 (6)
+        }
+        if let error = failure as? HLError, error.shouldPersistToOutbox {
             // Durably enqueued (incl. a transient-refresh 401) — saved, not lost.
             return .result(dialog: IntentCopy.queued(after: error))
-        } catch {
-            return .result(dialog: IntentCopy.writeFailed)
+        }
+        return .result(dialog: IntentCopy.writeFailed)
+    }
+
+    /// What one tap on the control does.
+    enum Decision: Equatable {
+        case noDose
+        /// The snapshot is older than the widget's own next-dose cutoff.
+        case stale
+        /// A widget or control tap already saved this slot.
+        case alreadyRecorded
+        case record(WidgetSnapshot.NextDose)
+    }
+
+    /// Pure rule: the same freshness cutoff the widget applies before it shows
+    /// its button, and no second write for a slot a tap already saved.
+    static func decide(
+        snapshot: WidgetSnapshot?,
+        outcome: WidgetDoseOutcomeStore.Outcome?,
+        now: Date
+    ) -> Decision {
+        guard let snapshot, let dose = snapshot.nextDose else { return .noDose }
+        guard !WidgetTimelinePolicy.isNextDoseUntrusted(
+            generatedAt: snapshot.generatedAt,
+            scheduledAt: dose.scheduledAt,
+            now: now
+        ) else {
+            return .stale
+        }
+        // #189 (1): taken elsewhere, as the confirmation push recorded.
+        if ResolvedDoseLedger().contains(
+            medicationId: dose.medicationId,
+            slotAt: dose.scheduledAt,
+            recordedAfter: snapshot.generatedAt
+        ) {
+            return .alreadyRecorded
+        }
+        switch WidgetDoseOutcomeStore.applicableKind(
+            outcome, to: dose, snapshotGeneratedAt: snapshot.generatedAt, now: now
+        ) {
+        case .recorded, .queued: return .alreadyRecorded
+        case .notSaved, nil: return .record(dose)
         }
     }
 

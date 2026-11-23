@@ -638,7 +638,7 @@ struct LabsOCRTests {
         #expect(LabServerScanFlow.failure(for: HLError.offline) == .server(.offline))
     }
 
-    // MARK: - Upload grace (POLISH-A A4)
+    // MARK: - Upload grace
 
     @Test("The upload runs inside a grace window that ends once; the read goes on as before")
     func uploadInsideGraceWindow() async throws {

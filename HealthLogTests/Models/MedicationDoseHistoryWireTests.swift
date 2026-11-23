@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W3-MEDCONTRACT (v0.14.8) — dose-history ledger wire shape.**
+/// **Dose-history ledger wire shape.**
 ///
 /// Locks the decode of `GET /api/medications/{id}/dose-history` against the
 /// server's serialisation (`SerializedDoseHistoryRow` in

@@ -9,7 +9,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **Phase 07 / plan 07-06 — what a heart-event page is allowed to prove.**
+    /// **What a heart-event page is allowed to prove.**
     ///
     /// The query half of the sweep needs an authorized `HKHealthStore`, which a
     /// unit test does not have. Every rule this plan adds lives on the other side

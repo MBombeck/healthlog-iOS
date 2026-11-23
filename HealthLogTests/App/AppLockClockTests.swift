@@ -1,4 +1,4 @@
-// J1 / F3 — when the biometric app lock is due.
+// When the biometric app lock is due.
 
 #if !SWIFT_PACKAGE
 
@@ -94,13 +94,6 @@
             #expect(!auth(&clock, .authenticated(user), lockEnabled: true))
         }
 
-        @Test("standalone onboarding in this process: no lock either")
-        func noLockAfterStandaloneOnboarding() {
-            var clock = AppLockClock()
-            #expect(!auth(&clock, .unauthenticated, lockEnabled: true))
-            #expect(!auth(&clock, .standalone, lockEnabled: true))
-        }
-
         @Test("a background trip during onboarding does not lock the first foreground after sign-in")
         func onboardingBackgroundDoesNotCarryOver() {
             var clock = AppLockClock()
@@ -131,12 +124,6 @@
             #expect(!auth(&clock, .unknown, lockEnabled: true))
             #expect(auth(&clock, .authenticated(user), lockEnabled: true))
             #expect(!auth(&clock, .authenticated(user), lockEnabled: true))
-        }
-
-        @Test("update path: cold launch in standalone mode still locks")
-        func coldLaunchStandaloneLocks() {
-            var clock = AppLockClock()
-            #expect(auth(&clock, .standalone, lockEnabled: true))
         }
     }
 

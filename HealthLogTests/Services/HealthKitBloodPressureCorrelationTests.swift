@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **T4 / public #15** — "the measurement of blood pressure isn't synced to
+    /// "the measurement of blood pressure isn't synced to
     /// Apple Health". Every build up to 290 saved a manual blood pressure as two
     /// LOOSE quantity samples (systolic, diastolic). Apple Health presents blood
     /// pressure only as an `HKCorrelation` of type `.bloodPressure`, so the

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Build 273 — the persist path and the per-key write generation (A9), split
+/// The persist path and the per-key write generation, split
 /// out of the actor file so its type body stays under the length rule.
 extension SWRCoordinator {
     func writeGeneration(_ key: CacheKey) -> Int {
@@ -19,7 +19,7 @@ extension SWRCoordinator {
     ) async throws -> T {
         let generation = writeGeneration(key)
         let fresh = try await fetch()
-        // A9 — a write-through or invalidate landed while this fetch was in
+        // A write-through or invalidate landed while this fetch was in
         // flight; the fetched payload is older than the disk. Hand the value to
         // the caller, but do not persist it.
         guard generation == writeGeneration(key) else {
@@ -40,7 +40,7 @@ extension SWRCoordinator {
             )
             return fresh
         }
-        // W-PERF-SWR C2 — encode on the actor (cheap, keeps `fresh` off the
+        // Encode on the actor (cheap, keeps `fresh` off the
         // detached closure's Sendable surface), then persist on a detached
         // low-priority task so the on-screen repaint isn't blocked by the
         // SwiftData `save()` flush. Errors are logged inside the task, never

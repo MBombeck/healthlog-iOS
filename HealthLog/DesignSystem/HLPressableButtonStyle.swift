@@ -30,12 +30,38 @@ import SwiftUI
 public struct HLPressableButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init() {}
+    /// What the pointer does over the surface.
+    public enum Hover: Equatable, Sendable {
+        /// The surface is highlighted in place, in the label's own shape: a
+        /// capsule or round control declares it with
+        /// `contentShape(.hoverEffect, …)`, a row keeps its rectangle. The
+        /// default, since most pressable things are controls and rows.
+        case highlight
+        /// The surface rises in the card's rounded shape, as a surface with a
+        /// background of its own does under the iPad pointer. Only for cards
+        /// and tiles; a lifted row would tear out of its card.
+        case lift
+    }
+
+    let hover: Hover
+
+    public init(hover: Hover = .highlight) {
+        self.hover = hover
+    }
+
+    /// The system effect for ``Hover``.
+    static func effect(_ hover: Hover) -> HoverEffect {
+        switch hover {
+        case .lift: .lift
+        case .highlight: .highlight
+        }
+    }
 
     public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        hoverShaped(configuration.label)
+            .hoverEffect(Self.effect(hover))
             .scaleEffect(scale(for: configuration.isPressed))
-            // v0.12 W3-9 — Apple's two-stage settle. The down-edge stays a
+            // Apple's two-stage settle. The down-edge stays a
             // crisp 16 ms snap (instant compression feels responsive), but the
             // release-edge now rides a soft `.spring(response:0.3,
             // damping:0.7)` so the surface settles back to rest with a gentle
@@ -56,17 +82,43 @@ public struct HLPressableButtonStyle: ButtonStyle {
 
     private func scale(for isPressed: Bool) -> CGFloat {
         guard !reduceMotion else { return 1.0 }
-        return isPressed ? 0.97 : 1.0
+        guard isPressed else { return 1.0 }
+        return hover == .lift ? Self.cardPressedScale : 0.97
     }
 
-    /// Two-stage settle (W3-9): crisp 16 ms compression on touch-down, soft
+    /// How far a card or tile gives under the finger. A touch deeper than a
+    /// control, so a large surface reads as something with weight.
+    static let cardPressedScale: CGFloat = 0.965
+
+    /// Two-stage settle: crisp 16 ms compression on touch-down, soft
     /// spring overshoot on release. `nil` under Reduce Motion (no scale
     /// animation; `scale(for:)` stays pinned to 1.0).
+    /// A lifted card takes the card's rounded shape for the pointer; a
+    /// highlight keeps the shape the label brings.
+    @ViewBuilder
+    private func hoverShaped(_ label: Configuration.Label) -> some View {
+        switch hover {
+        case .lift:
+            label.contentShape(.hoverEffect, RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
+        case .highlight:
+            label
+        }
+    }
+
     private func pressAnimation(isPressed: Bool) -> Animation? {
         guard !reduceMotion else { return nil }
-        return isPressed
-            ? .snappy(duration: 0.016)
-            : .spring(response: 0.3, dampingFraction: 0.7)
+        switch hover {
+        case .lift:
+            // A card sinks in over a moment and comes back up slowly, settled,
+            // instead of snapping: the press feels like weight, not a switch.
+            return isPressed
+                ? .easeOut(duration: 0.14)
+                : .spring(response: 0.45, dampingFraction: 0.78)
+        case .highlight:
+            return isPressed
+                ? .snappy(duration: 0.016)
+                : .spring(response: 0.3, dampingFraction: 0.7)
+        }
     }
 }
 
@@ -74,7 +126,10 @@ public extension View {
     /// Convenience for `buttonStyle(HLPressableButtonStyle())` —
     /// matches the read-flow of the Apple-style chained modifier and
     /// makes call-sites greppable.
-    func hlPressable() -> some View {
-        buttonStyle(HLPressableButtonStyle())
+    ///
+    /// `hover` is `.highlight` for controls and rows; a tappable card or tile
+    /// passes `.lift`.
+    func hlPressable(hover: HLPressableButtonStyle.Hover = .highlight) -> some View {
+        buttonStyle(HLPressableButtonStyle(hover: hover))
     }
 }

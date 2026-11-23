@@ -25,7 +25,7 @@ struct WatchMeasureKindMeta: Identifiable {
     let defaultValue: Double
     /// For blood pressure: the diastolic field metadata. `nil` for scalar kinds.
     var diastolic: Field?
-    /// #115 B5 — for glucose: the account unit the crown dials in. The value is
+    /// For glucose: the account unit the crown dials in. The value is
     /// converted to canonical mg/dL before it leaves the wrist. `nil` otherwise.
     var glucoseUnit: WatchGlucoseUnit?
 
@@ -38,7 +38,7 @@ struct WatchMeasureKindMeta: Identifiable {
     /// `LocalizedStringKey` isn't `Sendable`; the only readers are SwiftUI
     /// view bodies (already MainActor-isolated).
     ///
-    /// #115 B5 — glucose dials in the account's unit (from the phone's
+    /// Glucose dials in the account's unit (from the phone's
     /// snapshot); every other kind is fixed.
     @MainActor static func all(glucoseUnit: WatchGlucoseUnit) -> [WatchMeasureKindMeta] {
         [weight, bloodPressure, glucose(in: glucoseUnit), pulse]
@@ -126,6 +126,7 @@ struct WatchMeasureView: View {
                     } icon: {
                         Image(systemName: meta.systemImage)
                             .foregroundStyle(LAColor.text)
+                            .frame(width: WatchMetrics.rowIconSide, height: WatchMetrics.rowIconSide)
                     }
                 }
             }
@@ -164,6 +165,7 @@ struct WatchMeasureEntryView: View {
                     .foregroundStyle(LAColor.textSecondary)
 
                 Text(displayValue)
+                    .privacySensitive()
                     .font(.hlLargeTitle)
                     .foregroundStyle(LAColor.text)
                     .monospacedDigit()
@@ -262,7 +264,7 @@ struct WatchMeasureEntryView: View {
         if isBloodPressure {
             client.logMeasurement(kind: meta.kind, value: value, secondary: diastolic)
         } else {
-            // #115 B5 — the wire is canonical mg/dL whatever the wrist dialled.
+            // The wire is canonical mg/dL whatever the wrist dialled.
             let canonical = meta.glucoseUnit?.canonicalMgdL(fromDisplayed: value) ?? value
             client.logMeasurement(kind: meta.kind, value: canonical)
         }

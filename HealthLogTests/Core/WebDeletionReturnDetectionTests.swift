@@ -1,4 +1,4 @@
-// #37/#38 Privacy H3 (audit-v0162) — MFA web-deletion return detection.
+// #37/#38 Privacy H3 — MFA web-deletion return detection.
 //
 // An MFA-enrolled user cannot delete in-app (the fresh-MFA step-up is
 // cookie-only), so `DeleteAccountScreen` routes them to the web account page.
@@ -59,7 +59,7 @@
         /// Holds a mock `/api/auth/me` response in flight so a test can replace
         /// the authenticated account before the original owner's probe resumes.
         ///
-        /// #5 — the gate opens ONCE and then stays open. Replacing the session
+        /// The gate opens ONCE and then stays open. Replacing the session
         /// mid-flight is exactly the "superseded bearer" case, so the client now
         /// re-sends the probe once with the bearer the Keychain actually holds;
         /// a gate that only ever admitted one request parked that retry on a

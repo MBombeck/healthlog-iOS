@@ -5,8 +5,8 @@ import SwiftUI
 #endif
 
 /// Standalone sheet that captures a photo of a medication package, runs
-/// on-device OCR, asks Apple FoundationModels (iOS 26+) or the lexical
-/// heuristic (iOS 18-25) to extract a `MedicationDraft`, and hands the
+/// on-device OCR, asks Apple FoundationModels or, as the fallback, the
+/// lexical heuristic to extract a `MedicationDraft`, and hands the
 /// confirmed draft back to the caller via an async callback.
 ///
 /// **Touch-disjoint with T-3 (AddMedicationSheet):** this sheet does NOT
@@ -37,7 +37,7 @@ import SwiftUI
 /// intra-file inconsistency. Tracked separately from the Lab-OCR reconciliation.
 public struct PhotoOfMedSheet: View {
     /// Callback fired when the user taps "Übernehmen". Receives the
-    /// MDR-filtered (iOS 26+) or heuristic-extracted (iOS 18-25)
+    /// MDR-filtered (FoundationModels) or heuristic-extracted (fallback)
     /// `MedicationDraft`. Async so callers can await form-prefill.
     public let onConfirm: (MedicationDraft) async -> Void
 
@@ -53,14 +53,10 @@ public struct PhotoOfMedSheet: View {
     }
 
     public var body: some View {
-        NavigationStack {
+        // A sheet of steps: close leads out, the preview's own pair accepts
+        // or retakes.
+        HLSheetScaffold("Photograph medication") {
             content
-                .navigationTitle(Text("Photograph medication"))
-                .navigationBarTitleDisplayMode(.inline)
-            // v0.6.1 Y2 — Home-Compliance pattern: drop the
-            // 'Abbrechen' cancellationAction. Drag-down dismisses;
-            // the preview-card 'Foto neu' / 'Übernehmen' pair still
-            // owns the explicit accept/retake flow.
         }
         #if canImport(UIKit) && canImport(VisionKit)
         .fullScreenCover(isPresented: $showScanner) {
@@ -98,59 +94,25 @@ public struct PhotoOfMedSheet: View {
     // MARK: - Sub-views
 
     private var sourcePicker: some View {
-        VStack(spacing: HLSpace.xxl) {
-            Spacer()
-            Image(systemName: "pill.fill")
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(
-                    size: 56
-                )) // Empty-state hero medallion glyph — intentionally off the HLIconSize scale (>hero/28pt), decorative with no
-                // accompanying scaling text.
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            Text("Choose photo")
-                .font(.hlTitle2.weight(.semibold))
-            Text(
-                "Photograph the front of a medication package — name and dose are read on-device. The photo never leaves your iPhone."
-            )
-            .font(.hlCallout)
-            .foregroundStyle(HLText.secondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
+        HLEmptyState(
+            icon: "pill.fill",
+            title: "Choose photo",
+            message: "Photograph the front of a medication package — name and dose are read on-device. The photo never leaves your iPhone."
+        ) {
             VStack(spacing: HLSpace.md) {
                 #if canImport(UIKit) && canImport(VisionKit)
                     if DocumentScannerView.isSupported {
-                        Button {
+                        HLButton("Capture with camera", systemImage: "camera.fill") {
                             showScanner = true
-                        } label: {
-                            Label(
-                                title: { Text("Capture with camera") },
-                                icon: { Image(systemName: "camera.fill") }
-                            )
-                            .frame(maxWidth: .infinity)
                         }
-                        .hlGlassButtonStyle()
-                        .controlSize(.large)
                     }
                 #endif
-                PhotosPicker(
-                    selection: $pickerSelection,
-                    matching: .images,
-                    photoLibrary: .shared(),
-                    label: {
-                        Label(
-                            title: { Text("Choose from library") },
-                            icon: { Image(systemName: "photo.fill") }
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                )
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                // The picker brings its own button, so it takes only the label.
+                PhotosPicker(selection: $pickerSelection, matching: .images, photoLibrary: .shared()) {
+                    HLButtonLabel("Choose from library", systemImage: "photo.fill", variant: .secondary)
+                }
+                .hlPressable()
             }
-            .padding(.horizontal)
-            Spacer()
         }
         .padding()
         .onChange(of: pickerSelection) { _, newValue in
@@ -161,60 +123,36 @@ public struct PhotoOfMedSheet: View {
     }
 
     private var processingView: some View {
-        VStack(spacing: HLSpace.lg) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Reading photo …")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
+        HLInlineProgress("Reading photo …")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func previewCard(draft: MedicationDraft) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    HLSectionLabel("Detected medication")
+                    HLCardLabel("Detected medication")
                     Text(draft.name)
-                        .font(.hlTitle2.weight(.semibold))
+                        .font(.hlHeadline)
                 }
-                if let dose = draft.doseStrength {
-                    LabeledContent {
-                        Text(dose).font(.body.monospacedDigit())
-                    } label: {
-                        Text("Dose strength")
+                HLFactGroup {
+                    if let dose = draft.doseStrength {
+                        HLFactRow("Dose strength", value: dose)
+                    }
+                    if let form = draft.doseForm {
+                        HLFactRow("Dose form", value: form)
+                    }
+                    if let manufacturer = draft.manufacturerHint {
+                        HLFactRow("Manufacturer", value: manufacturer)
                     }
                 }
-                if let form = draft.doseForm {
-                    LabeledContent { Text(form) } label: { Text("Dose form") }
-                }
-                if let manufacturer = draft.manufacturerHint {
-                    LabeledContent { Text(manufacturer) } label: { Text("Manufacturer") }
-                }
-                Divider()
-                // 1.4 B2 — the next step is the form itself; no line announces it.
-                HStack(spacing: HLSpace.md) {
-                    Button(action: retake, label: {
-                        Label(
-                            title: { Text("Retake") },
-                            icon: { Image(systemName: "arrow.uturn.backward") }
-                        )
-                        .frame(maxWidth: .infinity)
-                    })
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-
-                    Button(action: { Task { await confirm(draft: draft) } }, label: {
-                        Label(
-                            title: { Text("Use") },
-                            icon: { Image(systemName: "checkmark") }
-                        )
-                        .frame(maxWidth: .infinity)
-                    })
-                    .hlGlassButtonStyle()
-                    .controlSize(.large)
+                // The next step is the form itself; no line announces it.
+                HLButtonPair {
+                    HLButton("Use", systemImage: "checkmark") {
+                        Task { await confirm(draft: draft) }
+                    }
+                } secondary: {
+                    HLButton("Retake", systemImage: "arrow.uturn.backward", variant: .secondary, action: retake)
                 }
             }
             .padding()
@@ -223,29 +161,8 @@ public struct PhotoOfMedSheet: View {
     }
 
     private func errorView(message: LocalizedStringKey) -> some View {
-        VStack(spacing: HLSpace.lg) {
-            Image(systemName: "exclamationmark.triangle")
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(
-                    size: 48
-                )) // Error-state hero medallion glyph — intentionally off the HLIconSize scale (>hero/28pt), decorative with no
-                // accompanying scaling text.
-                .foregroundStyle(HLColor.statusWarn)
-            Text("Could not extract")
-                .font(.hlTitle3.weight(.semibold))
-            Text(message)
-                .font(.hlCallout)
-                .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal)
-            Button(action: retake, label: {
-                Text("Retake")
-                    .frame(maxWidth: .infinity)
-            })
-            .hlGlassButtonStyle()
-            .controlSize(.large)
-            .padding(.horizontal)
+        HLEmptyState(icon: "exclamationmark.triangle", title: "Could not extract", message: message) {
+            HLButton("Retake", systemImage: "arrow.uturn.backward", variant: .secondary, action: retake)
         }
         .padding()
     }
@@ -291,9 +208,9 @@ public struct PhotoOfMedSheet: View {
 
     #if canImport(UIKit)
         /// Runs OCR → extraction pipeline on a UIImage.
-        /// On iOS 26+ devices with Apple Intelligence available, prefers the
+        /// On devices with Apple Intelligence available, prefers the
         /// FoundationModels tandem; on a fallback reason routes to the
-        /// heuristic. The heuristic is also the path on iOS 18-25.
+        /// heuristic.
         @MainActor
         private func runPipeline(on image: UIImage) async {
             do {

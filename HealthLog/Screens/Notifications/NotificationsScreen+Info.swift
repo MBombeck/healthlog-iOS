@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.4 B2 — what the notification screens' (i) explains.**
+/// **What the notification screens' (i) explains.**
 ///
 /// The Focus filter used to be a card of text between the settings, and the
 /// webhook formats a paragraph under their picker; the advanced diagnostics

@@ -17,7 +17,7 @@ import Testing
 /// generation-guarded apply seam `consumeIntakes` uses, captured under the
 /// generation an in-flight load would have held. The guard must drop it.
 ///
-/// ## 22-02 (D-15-03-A) — the clock is injected, not observed
+/// ## 22-02 — the clock is injected, not observed
 ///
 /// This suite anchored on a bare `Date()` and scheduled its fixture dose five
 /// minutes before it, while `derivedTodayIntakes` computes today's window from
@@ -87,7 +87,7 @@ struct MedicationsStoreGhostDoseH3Tests {
         let repo = MedicationsRepository(api: api, outbox: outbox)
         let store = MedicationsStore(repo: repo)
 
-        // 22-02 (D-15-03-A) — one reference instant, one zone, everything below
+        // One reference instant, one zone, everything below
         // derived from them. `now` is still a real instant (the store's window
         // filter reads the wall clock); what the injection fixes is WHERE the
         // day boundary sits relative to it.

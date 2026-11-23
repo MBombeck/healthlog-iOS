@@ -10,7 +10,7 @@ public final class AchievementsStore {
 
     private let repo: AchievementsRepository
 
-    /// A2-M4 — appear-revalidation freshness gate (60s TTL).
+    /// Appear-revalidation freshness gate (60s TTL).
     @ObservationIgnored private var revalidationGate = RevalidationGate(ttl: 60)
 
     public init(repo: AchievementsRepository) {
@@ -62,7 +62,7 @@ public final class AchievementsStore {
         }
     }
 
-    /// A2-M4 — appear-revalidation entry point: reload when empty (cold) OR
+    /// Appear-revalidation entry point: reload when empty (cold) OR
     /// stale (partial-then-stale), no-op inside the freshness window.
     public func revalidateIfStale() async {
         if achievements.isEmpty || revalidationGate.isStale() {

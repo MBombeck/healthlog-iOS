@@ -7,7 +7,7 @@
     import Synchronization
     import Testing
 
-    /// **1.5 ROUTES (#149)** — route reads and the workout upload.
+    /// Route reads and the workout upload.
     ///
     /// The acceptance list of the plan, against the real importer page and the
     /// real `WorkoutsRepository` wire path: switch off means no route read and

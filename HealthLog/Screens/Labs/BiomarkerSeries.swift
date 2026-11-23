@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0154 LR-REDO — pure value helpers backing the Insights-class biomarker
+/// Pure value helpers backing the Insights-class biomarker
 /// detail page. Everything here is a derivation of the already-loaded
 /// `LabsStore.labs` (`[LabResultDTO]`) — no new server endpoint, no recompute of
 /// any server verdict. A per-biomarker series is a filter of that list; the
@@ -12,23 +12,10 @@ import Foundation
 /// reference band uses the server-resolved `referenceLow`/`referenceHigh` only as
 /// a calm visual rail (never a red alarm).
 enum BiomarkerSeries {
-    /// Time-window selector for the detail page — mirrors `ChartDetailStore.Range`
-    /// vocabulary (Tag / Woche / Monat / Jahr) so the muscle memory carries over
-    /// from the Insights metric page. `rawValue` is the window size in days and
-    /// doubles as the `windowed(...)` cutoff. `.all` carries the full history span.
-    enum LabsRange: Int, CaseIterable, Identifiable, Hashable {
-        case day = 1
-        case week = 7
-        case month = 30
-        case year = 365
-        /// "Alle Daten" — a span wide enough to cover any realistic lab history
-        /// (matches `ChartDetailStore.Range.all`).
-        case all = 3650
-
-        var id: Int {
-            rawValue
-        }
-    }
+    /// The detail page's window: the app's one period set (T, W, M, 6M, J,
+    /// Alle). `rawValue` is the window in days and doubles as the `windowed`
+    /// cutoff; `.all` passes every reading through.
+    typealias LabsRange = HLTimeRange
 
     /// All rows for a single analyte name (the "by type" identity), newest-first.
     /// Pure filter of the loaded list — no recompute. An empty `analyte` never
@@ -63,9 +50,18 @@ enum BiomarkerSeries {
             return rows
         }
         return rows.filter { row in
-            guard let date = LabsDateFormat.parse(row.takenAt) else { return true }
+            guard let date = LabsDateFormat.readingDate(row.takenAt) else { return true }
             return date >= cutoff
         }
+    }
+
+    /// The period a marker page opens on: the app's standard when it already
+    /// holds two values to draw, else the next wider period that does, else
+    /// every reading. A marker measured twice months apart never opens on an
+    /// empty chart.
+    static func openingRange(for rows: [LabResultDTO], now: Date = .now) -> LabsRange {
+        let candidates = LabsRange.allCases.filter { $0.rawValue >= LabsRange.standard.rawValue && $0 != .all }
+        return candidates.first { valueBearing(windowed(rows, range: $0, now: now)).count >= 2 } ?? .all
     }
 
     /// Rows that carry a NUMERIC reading. Any value math / plot must run over
@@ -74,7 +70,7 @@ enum BiomarkerSeries {
     /// makes. The list views keep every row so the user still sees the reading
     /// exists; only the derivations exclude them.
     ///
-    /// Item 1.5 — this now also excludes QUALITATIVE rows (`valueText` set,
+    /// This now also excludes QUALITATIVE rows (`valueText` set,
     /// `value == nil`). "negativ" has no position on a numeric axis; before the
     /// `Double?` change such a row decoded to `0` and was plotted.
     static func valueBearing(_ rows: [LabResultDTO]) -> [LabResultDTO] {
@@ -100,6 +96,13 @@ enum BiomarkerSeries {
         return SeriesStats(mean: mean, min: min, max: max, stdDev: variance.squareRoot(), count: values.count)
     }
 
+    /// The statistics the marker page shows: only from two numeric readings
+    /// on, since one reading would print the same figure in every cell.
+    static func pageStats(for rows: [LabResultDTO]) -> SeriesStats? {
+        guard let stats = stats(for: rows), stats.count >= 2 else { return nil }
+        return stats
+    }
+
     /// Median over the rows' values — reuses the pure, `nonisolated`
     /// `ChartDetailStore.median(of:)` so the math is identical to the Insights
     /// page. `valueIsAbsent` rows are excluded so a phantom `0` never skews the
@@ -107,31 +110,46 @@ enum BiomarkerSeries {
     static func median(for rows: [LabResultDTO]) -> Double? {
         ChartDetailStore.median(of: numericValues(rows))
     }
-}
 
-// MARK: - HLRangeOption conformance
-
-/// Adopt the canonical `HLRangeOption` so the labs detail page drives the same
-/// `HLFloatingPeriodControl` every chart uses. Apple-Health single-letter
-/// vocabulary (T / W / M / J) sourced from localized labels.
-extension BiomarkerSeries.LabsRange: HLRangeOption {
-    var label: String {
-        switch self {
-        case .day: String(localized: "labs.range.day.short")
-        case .week: String(localized: "labs.range.week.short")
-        case .month: String(localized: "labs.range.month.short")
-        case .year: String(localized: "labs.range.year.short")
-        case .all: String(localized: "labs.range.all.short")
+    /// The statistic cells of the detail page: Min, Ø, Max and, when there is
+    /// one, the median, in the order of the reference metric page.
+    static func statCells(stats: SeriesStats, median: Double?, unit: String) -> [HLStatCell] {
+        func format(_ value: Double) -> String {
+            HLValueFormat.number(value, fractionDigits: 0 ... 1)
         }
+        var cells = [
+            HLStatCell(label: String(localized: "Min"), value: format(stats.min), unit: unit),
+            HLStatCell(label: String(localized: "chart.stat.mean"), value: format(stats.mean), unit: unit),
+            HLStatCell(label: String(localized: "Max"), value: format(stats.max), unit: unit)
+        ]
+        if let median {
+            cells.append(HLStatCell(label: String(localized: "chart.stat.median"), value: format(median), unit: unit))
+        }
+        return cells
     }
 
-    var rangeAccessibilityLabel: String {
-        switch self {
-        case .day: String(localized: "labs.range.day")
-        case .week: String(localized: "labs.range.week")
-        case .month: String(localized: "labs.range.month")
-        case .year: String(localized: "labs.range.year")
-        case .all: String(localized: "labs.range.all")
+    /// The reference range as a fact ("10 to 50 U/l", "≥ 4.5"), `nil` without
+    /// any bound. The unity "1" is never printed after a number.
+    static func referenceText(low: Double?, high: Double?, unit: String) -> String? {
+        func num(_ value: Double) -> String {
+            HLValueFormat.number(value, fractionDigits: 0 ... 2)
         }
+        let bare: String? = switch (low, high) {
+        case let (low?, high?): HLNumberFormat.range(num(low), num(high))
+        case let (low?, nil): "≥ \(num(low))"
+        case let (nil, high?): "≤ \(num(high))"
+        case (nil, nil): nil
+        }
+        guard let bare else { return nil }
+        return LabUnit.appending(unit, to: bare)
+    }
+
+    /// How many readings the server judged inside their range, out of all it
+    /// judged. Readings without a range do not count; `nil` when none was
+    /// judged.
+    static func inRangeShare(_ rows: [LabResultDTO]) -> (inRange: Int, judged: Int)? {
+        let judged = rows.filter { $0.rangeStatus != .unknown }
+        guard !judged.isEmpty else { return nil }
+        return (judged.count(where: { $0.rangeStatus == .inRange }), judged.count)
     }
 }

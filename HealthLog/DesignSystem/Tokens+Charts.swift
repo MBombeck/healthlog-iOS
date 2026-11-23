@@ -5,7 +5,7 @@ import SwiftUI
 public enum HLChartStyle {
     public static let lineWidth: CGFloat = 2
     public static let pointSize: CGFloat = 6
-    /// **1.4 B4 — the app's two chart heights.** Before this there were
+    /// **The app's two chart heights.** Before this there were
     /// eleven, set by hand per chart (32 to 280 pt). Every chart now takes one
     /// of these; the full-screen chart fills its screen.
     ///
@@ -85,13 +85,13 @@ public enum HLChartTints {
     /// Dashed threshold overlay — hard upper bound (hypertensive systolic,
     /// fever, etc.). Red signals "out of safe range — clinical attention".
     /// Routes through `statusBad` so the dashed rule de-neons on white in
-    /// light mode while keeping the Dracula red in dark (W-LIGHT v0.8.0).
+    /// light mode while keeping the Dracula red in dark.
     public static let thresholdHigh = HLColor.statusBad
 
     /// Dashed threshold overlay — hard lower bound (bradycardia, hypotensive
     /// diastolic, etc.). Green signals "below safe range — clinical attention".
     /// Routes through `statusOK`; the dashed stroke + axis context
-    /// disambiguate it from a solid status pill (W-LIGHT v0.8.0).
+    /// disambiguate it from a solid status pill.
     public static let thresholdLow = HLColor.statusOK
 }
 
@@ -119,13 +119,13 @@ public enum HLChartGrid {
     /// LineMark (2pt) so it doesn't shout over the data.
     public static let thresholdWidth: CGFloat = 1.5
 
-    /// **v0.14.3 §A2 (FW-HOME) — Home-tile series stroke width.**
+    /// **v0.14.3 §A2 — Home-tile series stroke width.**
     /// The Dashboard mini-chart (`HLTileMetricChart`) renders one calm,
     /// uniform line across EVERY tile (Blutdruck, Schritte, Puls, Gewicht, …)
     /// so the Home surface reads as a single quiet material — matching the
     /// calm graphite of the medication-compliance primitive
     /// (`HLComplianceBar` / `ComplianceBand.good` = `HLText.primary` graphite).
-    /// v0.14.7 A1 — pinned to `HLChartStyle.lineWidth` (2.0), the EXACT stroke the
+    /// Pinned to `HLChartStyle.lineWidth` (2.0), the EXACT stroke the
     /// medication-compliance `HLSparkline` and the Insights detail chart use, so
     /// every Home tile reads identically to the compliance line the operator
     /// anchored on. (It briefly went to 2.1 in v0.14.6 FW-QUICK, which read

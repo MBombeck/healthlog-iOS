@@ -1,12 +1,12 @@
 import Foundation
 
-// MARK: - v1.7.0 schedule-type discriminator (W10-PIN)
+// MARK: - v1.7.0 schedule-type discriminator
 
 /// Server's authoritative cadence discriminator (v1.7.0 `scheduleType`).
 /// `SCHEDULED` (calendar/rolling/legacy), `PRN` (as-needed), `CYCLIC`
 /// (on/off-weeks). Required and non-nullable on the published output schema.
 ///
-/// **Audit B-4 — forward-compatible, and no longer by claiming SCHEDULED.**
+/// **Forward-compatible, and no longer by claiming SCHEDULED.**
 /// The decode never threw, so no row was ever lost here; what it did instead
 /// was answer `.scheduled` for a tag nobody had read, and `.scheduled` is a
 /// statement ("this is a calendar/rolling/legacy cadence") rather than an
@@ -27,7 +27,7 @@ public enum ScheduleType: String, Codable, Sendable, Hashable {
     /// phase anchor is the medication's `startsOn ?? createdAt`, not a
     /// per-schedule field.
     case cyclic = "CYCLIC"
-    /// Audit B-4 — decode-only sentinel for a cadence tag this build cannot
+    /// Decode-only sentinel for a cadence tag this build cannot
     /// name. Dispatches exactly like ``scheduled`` (field presence decides) and
     /// is never sent.
     case unknown = "__UNKNOWN__"
@@ -36,7 +36,7 @@ public enum ScheduleType: String, Codable, Sendable, Hashable {
     // `MedicationEnums+Unknown.swift`, beside the container-type sentinel.
 }
 
-// MARK: - v1.5 Cadence model (R1 §3.1)
+// MARK: - Cadence model (server v1.5)
 
 /// Mirror of the server's 8 wizard cadence kinds
 /// (`src/components/medications/scheduling/types.ts` + `CadencePicker.tsx`).
@@ -72,7 +72,7 @@ public enum Cadence: Sendable, Hashable, Codable {
     /// / M weeks off. Within on-weeks the entry's `timesOfDay` fire every day;
     /// off-weeks are silent. Compliance + nextOccurrence honour the off-weeks.
     ///
-    /// **09-14 — there is no anchor here, and that is the fix.** The phase is
+    /// **There is no anchor here, and that is the fix.** The phase is
     /// counted from the MEDICATION's `startsOn ?? createdAt`, snapped to the
     /// Sunday-rooted week — the server's own rule
     /// (`src/lib/medications/scheduling/recurrence.ts:246`), which iOS's engine
@@ -93,7 +93,7 @@ public enum Cadence: Sendable, Hashable, Codable {
         case .daily:
             false
         case let .legacy(days, intervalWeeks):
-            // W42 — a full 7-day legacy set fires every calendar day (daily),
+            // A full 7-day legacy set fires every calendar day (daily),
             // mirror `MedicationSchedule.isWeeklyCadence`: weekly needs a PROPER
             // subset (1..6) or a multi-week interval.
             intervalWeeks > 1 || ((days.map { !$0.isEmpty && $0.count < 7 }) ?? false)
@@ -108,7 +108,7 @@ public enum Cadence: Sendable, Hashable, Codable {
 /// web wizard mints (`FREQ`, `INTERVAL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`,
 /// plus `COUNT` / `UNTIL` pass-through). Mirrors the `RRULE_PROPS` regex in
 /// `src/lib/validations/medication.ts`. Decode for the read path; encode for
-/// the write path (W-Meds-B).
+/// the write path.
 public enum RRULE {
     /// RFC-5545 BYDAY weekday tokens, indexed by our `Weekday` raw value
     /// (Sun = 0 … Sat = 6).
@@ -237,13 +237,13 @@ public struct ScheduleEntry: Sendable, Hashable, Codable {
     /// (`windowEnd - windowStart`) when `reminderGraceMinutes` is nil.
     public let windowStart: TimeOfDay
     public let windowEnd: TimeOfDay?
-    /// v1.15.18 per-dose on-time windows (W3-MEDCONTRACT, v0.14.8) —
+    /// v1.15.18 per-dose on-time windows —
     /// carried non-lossily so the schedule-edit RMW path can echo them
     /// back on a `schedules` REPLACE (the server resets omitted windows to
     /// NULL) and so the detail Plan section can display the band. `nil` →
     /// server default (±1 h derivation).
     public let doseWindows: [MedicationDoseWindowDTO]?
-    /// **v1.37.10 (#219) — the user's RAW per-slot inventory-units override.**
+    /// **v1.37.10 — the user's RAW per-slot inventory-units override.**
     /// `nil` means "inherit the medication-level `unitsPerDose`", and that is a
     /// choice in its own right: an edit surface that rebuilds this from the
     /// resolved figure below would promote inheritance into an explicit
@@ -303,7 +303,7 @@ public struct ScheduleEntry: Sendable, Hashable, Codable {
     /// schedule flagged as-needed never projects, even if it still carries a
     /// stale `rrule`/`rollingIntervalDays`. Cyclic on/off-weeks are the next tier.
     ///
-    /// **09-14:** `scheduleType` is **required and non-nullable** on the accepted
+    /// `scheduleType` is **required and non-nullable** on the accepted
     /// `MedicationScheduleOutput`, so on a real read it is the only dispatch
     /// input that exists. The old PRN field-presence fallback read a
     /// schedule-level `asNeeded` the output schema does not publish (and the
@@ -377,7 +377,7 @@ public struct MedicationSchedule: Codable, Sendable, Hashable {
     /// week).
     public let intervalWeeks: Int
 
-    /// **v0.10 R1 — non-lossy per-schedule entries.** One element per server
+    /// **Non-lossy per-schedule entries.** One element per server
     /// `MedicationSchedule` row, each carrying its full cadence (rolling /
     /// RRULE / legacy), times-of-day, grace, and label/dose overrides. The
     /// recurrence engine routes through this; the legacy `times`/`weekdays`/
@@ -532,7 +532,7 @@ public struct MedicationSchedule: Codable, Sendable, Hashable {
         return firingDays * times.count
     }
 
-    /// **v0.10 R1 §3.9 — cadence-correct expected-dose count via the engine.**
+    /// **Cadence-correct expected-dose count via the engine.**
     ///
     /// The legacy `expectedDoses(from:to:)` above counts `times.count` per
     /// firing day using `fires(on:)`, which only understands weekday +
@@ -564,7 +564,7 @@ public struct MedicationSchedule: Codable, Sendable, Hashable {
     /// (`ActiveMedicationRow`) and the detail glyph track (`VerlaufGlyphTrack`)
     /// so the two surfaces never drift (Cross-screen Consistency Check).
     ///
-    /// **W42 (v0.11) fix:** a weekday set covering ALL seven days encodes "every
+    /// **W42 fix:** a weekday set covering ALL seven days encodes "every
     /// calendar day" (some server rows serialise a daily med as
     /// `daysOfWeek = "0,1,2,3,4,5,6"`). That is a DAILY cadence, not a weekly
     /// one — the prior `(weekdays?.count ?? 0) > 0` flagged it weekly, collapsing

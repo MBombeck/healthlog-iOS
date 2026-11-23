@@ -57,13 +57,18 @@
             return Harness(store: store, service: service, defaults: defaults, user: user)
         }
 
-        @Test("the five resolve on this system and are the announced late types")
+        @Test("the five resolve on this system and are announced beside resting energy, which waits for v1.47.1")
         func fiveAnnounced() throws {
             #expect(Self.five.count == 5)
             let h = try Self.harness141()
             let announced = h.store.lateReadTypes().filter(\.announced)
-            #expect(Set(announced.compactMap(\.type)) == Self.five)
-            #expect(!announced.map(\.serverAccepts).contains(false))
+            // 1.7 adds the ingest-v2 types (symptoms, heart events,
+            // assessments) to the same announced set; none is accepted here.
+            let ingestV2 = Set(AppleHealthIngestTypes.allIdentifiers
+                .compactMap(AppleHealthIngestHKTypes.sampleType(for:)) as [HKObjectType])
+            #expect(Set(announced.compactMap(\.type)) == Self.five.union([HKQuantityType(.basalEnergyBurned)]).union(ingestV2))
+            // Server 1.47.0 maps the five, not yet resting energy.
+            #expect(Set(announced.filter(\.serverAccepts).compactMap(\.type)) == Self.five)
             #expect(h.store.lateReadTypes().filter { !$0.announced }.count == 2) // RMSSD, waist
         }
 
@@ -135,7 +140,7 @@
             #expect(!pending.contains(HealthKitServer144Types.afibBurden))
         }
 
-        @Test("a new install gets them in onboarding: no card, the flags are set without asking")
+        @Test("a new install gets them in onboarding: no card, and no flag is set without a question")
         func newInstall() async throws {
             let h = try Self.harness141(requestedBefore: false)
             #expect(await h.store.pendingAnnouncedReadTypes().isEmpty)
@@ -143,7 +148,7 @@
             for identifier in HealthKitServer144Types.lateReadIdentifiers {
                 let key = HKReadinessStore.announcedReadRequestedKeyPrefix(for: identifier)
                     + HKReadinessStore.partitionToken(for: h.user)
-                #expect(h.defaults.bool(forKey: key))
+                #expect(!h.defaults.bool(forKey: key))
             }
         }
 

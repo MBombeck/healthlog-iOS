@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Sleep hypnogram detail (#124) — stage bands across one night, backed by
+/// Sleep hypnogram detail — stage bands across one night, backed by
 /// `GET /api/sleep/night?date=YYYY-MM-DD` (``SleepNightRepository``).
 ///
 /// Layout, top→bottom:
@@ -25,17 +25,13 @@ struct SleepHypnogramScreen: View {
     ///     most-recent night (v0.14.3 E1 — the default entry passes `nil` so
     ///     the load never depends on a device-tz day-key that misses the
     ///     server's wake-day/server-tz night key).
-    ///   - initialNight: render/preview seed — W-SLEEP (v0.14.8). When set, the
+    ///   - initialNight: render/preview seed — W-SLEEP. When set, the
     ///     screen paints this night immediately; the `.task` load still runs
     ///     when a repository is available (app), and is a no-op in test/preview
     ///     hosts without an `appContainer`.
     init(date: Date? = nil, initialNight: SleepNightDTO? = nil) {
         _dayKey = State(initialValue: date.map { SleepNightRepository.dayKey(for: $0) })
-        _night = State(initialValue: initialNight)
-        _isLoading = State(initialValue: initialNight == nil)
-        // Seed the navigation anchor so test/preview hosts (no repository →
-        // no latest-load) still show the night header for the seeded night.
-        _latestDayKey = State(initialValue: initialNight.flatMap(Self.anchorDayKey(for:)))
+        _loader = State(initialValue: SleepHypnogramLoader(initialNight: initialNight))
     }
 
     @Environment(\.appContainer) private var appContainer
@@ -43,38 +39,45 @@ struct SleepHypnogramScreen: View {
     /// The displayed wake-day key (`YYYY-MM-DD`), `nil` = server's latest
     /// night. ←/→ navigation rewrites this; `.task(id:)` reloads on change.
     @State private var dayKey: String?
-    /// The LATEST night's day-key, resolved from the first no-date load —
-    /// the right edge of the navigation (no browsing into the future).
-    @State private var latestDayKey: String?
-    @State private var night: SleepNightDTO?
-    @State private var isLoading: Bool
-    @State private var loadError = false
+    /// Night, spinner, error and the latest anchor; one load owns them at a
+    /// time (see ``SleepHypnogramLoader``).
+    @State private var loader: SleepHypnogramLoader
+
+    private var night: SleepNightDTO? {
+        loader.night
+    }
+
+    private var isLoading: Bool {
+        loader.isLoading
+    }
+
+    private var loadError: Bool {
+        loader.loadError
+    }
+
+    private var latestDayKey: String? {
+        loader.latestDayKey
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                nightNavigationHeader
-                switch Self.content(for: night, isLoading: isLoading) {
-                case .loading:
-                    loadingState
-                case let .night(session):
-                    summaryRow(for: session)
-                    hypnogramCard(for: session)
-                    legend(for: session)
-                    napsSection
-                case .napsOnly:
-                    // #146 — a date with naps but no main night shows the
-                    // naps, not "no sleep data for this night".
-                    napsSection
-                case .empty:
-                    emptyState
-                }
+        HLPage {
+            nightNavigationHeader
+            switch Self.content(for: night, isLoading: isLoading) {
+            case .loading:
+                loadingState
+            case let .night(session):
+                summaryRow(for: session)
+                hypnogramCard(for: session)
+                legend(for: session)
+                napsSection
+            case .napsOnly:
+                // A date with naps but no main night shows the
+                // naps, not "no sleep data for this night".
+                napsSection
+            case .empty:
+                emptyState
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.xxxxl)
         }
-        .background(HLSurface.primary.ignoresSafeArea())
         .navigationTitle(Text("sleep.hypnogram.title"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: dayKey) { await load() }
@@ -83,33 +86,13 @@ struct SleepHypnogramScreen: View {
     // MARK: - Load (SWR per day-key — W-B180)
 
     private func load() async {
-        guard let repo = appContainer?.sleepNightRepo else {
-            isLoading = false
-            return
-        }
-        loadError = false
-        // Stale half: paint a previously seen night instantly (no spinner)…
-        if let cached = await repo.cachedNight(forDayKey: dayKey) {
-            night = cached
-            isLoading = false
-        } else {
-            isLoading = true
-            night = nil
-        }
-        defer { isLoading = false }
-        // …revalidate half: always refresh against the server.
-        do {
-            let fresh = try await repo.night(forDayKey: dayKey)
-            night = fresh
-            if dayKey == nil, let anchor = Self.anchorDayKey(for: fresh) {
-                latestDayKey = anchor
-            }
-        } catch {
-            if night == nil { loadError = true }
-        }
+        await loader.load(
+            dayKey: dayKey,
+            from: appContainer.map { SleepNightSource(repository: $0.sleepNightRepo) }
+        )
     }
 
-    // MARK: - Night navigation (W-B180)
+    // MARK: - Night navigation
 
     /// The day-key currently on screen — the explicit navigation target, or
     /// the latest night's resolved key while showing the default entry.
@@ -136,7 +119,7 @@ struct SleepHypnogramScreen: View {
     private func summaryRow(for session: SleepSession) -> some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // Parity 4.7 — the night's LOCAL WAKE DAY, resolved through the
+                // The night's LOCAL WAKE DAY, resolved through the
                 // same ``SleepNightDay`` authority the navigation header above
                 // uses. This line used to render `session.start` (the bedtime
                 // INSTANT) in the device zone while the header printed the
@@ -144,8 +127,7 @@ struct SleepHypnogramScreen: View {
                 // routinely did — name one night with two different dates.
                 if let day = SleepNightDay.displayDate(for: session) {
                     Text(day, format: SleepNightDay.labelStyle())
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: HLSpace.md) {
                     summaryStat("sleep.summary.inBed", value: durationText(session.inBedMinutes))
@@ -154,6 +136,11 @@ struct SleepHypnogramScreen: View {
                     summaryStat("sleep.summary.awakenings", value: countText(session.awakenings))
                 }
                 SleepSourceDiscrepancyNote(session: session)
+                if let zoneNote = Self.zoneNote(for: session) {
+                    Text(zoneNote)
+                        .hlText(.note)
+                        .accessibilityIdentifier("sleep.hypnogram.zone")
+                }
             }
         }
     }
@@ -161,10 +148,12 @@ struct SleepHypnogramScreen: View {
     private func summaryStat(_ titleKey: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(titleKey)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
+            // A grid cell: the compact value size of `HLValueText`. The
+            // value is a formatted duration or clock time, so the text sets
+            // that font itself.
             Text(value)
-                .font(.hlMetric(.title3))
+                .font(HLValueSize.compact.numberFont)
                 .foregroundStyle(HLText.primary)
                 .monospacedDigit()
         }
@@ -173,12 +162,11 @@ struct SleepHypnogramScreen: View {
 
     // MARK: - Hypnogram
 
+    @ViewBuilder
     private func hypnogramCard(for session: SleepSession) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            InsightsSectionHeader("sleep.hypnogram.section")
-            HLCard {
-                hypnogramBody(for: session)
-            }
+        HLSectionHeader("sleep.hypnogram.section", rank: .area)
+        HLCard {
+            hypnogramBody(for: session)
         }
     }
 
@@ -205,16 +193,13 @@ struct SleepHypnogramScreen: View {
     @ViewBuilder
     private func hypnogramBody(for session: SleepSession) -> some View {
         if session.segments.isEmpty {
-            Text("sleep.hypnogram.noSegments")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HLEmptyNote("sleep.hypnogram.noSegments")
         } else if session.reconstructed {
             // Server-reconstructed (WHOOP / Polar): the segments are an ordered
             // composition of per-stage TOTALS, not measured onsets. Show the
             // honest distribution band + an approximate caption — never the
             // fake lane timeline.
-            // 1.4 B2 — the distribution's own caption already says the source
+            // The distribution's own caption already says the source
             // delivers stage totals only; a second "approximate" line under it
             // said the same.
             summaryDistribution(for: session)
@@ -233,7 +218,7 @@ struct SleepHypnogramScreen: View {
             hypnogramChart(for: session)
                 .frame(height: HLChartStyle.heightRegular)
                 .accessibilityLabel(Text("sleep.hypnogram.a11y"))
-                // A11Y (audit-v0162 §5) — a proper chart descriptor so VoiceOver
+                // A11Y — a proper chart descriptor so VoiceOver
                 // reads each sleep phase + its clock span (via the audio-graph
                 // rotor), not just the one flat "Hypnogramm der Schlafphasen"
                 // phrase the lone `.accessibilityLabel` used to be. Reuses the
@@ -246,7 +231,7 @@ struct SleepHypnogramScreen: View {
 
     @ViewBuilder
     private func hypnogramChart(for session: SleepSession) -> some View {
-        // Apple-Health-Stil (W-B180): the x axis IS the night — pinned to the
+        // Apple-Health-Stil: the x axis IS the night — pinned to the
         // bed span (session start … end). The TOP lane shows "Im Bett" as the
         // whole span; the stage lanes below carry the segments at their REAL
         // von-bis positions, ordered by depth so DEEP sits at the bottom.
@@ -273,7 +258,7 @@ struct SleepHypnogramScreen: View {
                     yEnd: .value("LaneEnd", lanePosition(for: segment.stage, in: lanes) + 1)
                 )
                 // Each stage carries its muted-pastel category color so the
-                // phases are distinguishable at a glance (W-SLEEPHYP).
+                // phases are distinguishable at a glance.
                 .foregroundStyle(color(for: segment.stage))
             }
         }
@@ -286,15 +271,14 @@ struct SleepHypnogramScreen: View {
                     if index >= 0, index < laneCount {
                         AxisValueLabel {
                             Text(laneLabel(at: index, lanes: lanes))
-                                .font(.hlCaption2)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowSubtitle)
                         }
                     }
                 }
             }
         }
-        // 1.4 B4 — the app's one date-axis rule (time of day for a night).
-        .chartXAxis { ChartDateAxis.marks(for: [session.start, session.end]) }
+        // The app's one date-axis rule (time of day for a night).
+        .chartXAxis { ChartDateAxis.marks(for: [session.start, session.end], timeZone: Self.displayZone(for: session)) }
     }
 
     /// Lane label, bottom→top: the deep-most stage at index 0, the shallow
@@ -304,7 +288,7 @@ struct SleepHypnogramScreen: View {
         return lanes[lanes.count - 1 - index].displayKey
     }
 
-    // MARK: - Summary-shaped fallback (W-B180)
+    // MARK: - Summary-shaped fallback
 
     /// Proportional per-stage distribution for nights whose source only
     /// delivers stage totals (no within-night timing): one monochrome band,
@@ -321,14 +305,18 @@ struct SleepHypnogramScreen: View {
                     }
                 }
             }
-            .frame(height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm))
+            // A bar strip, not a chart: it stands at the cell size of the
+            // app's other strips (mood heatmap, comparison band).
+            .frame(height: Self.distributionStripHeight)
+            .clipShape(RoundedRectangle(cornerRadius: HLRangeBandMetrics.cornerRadius))
             .accessibilityHidden(true) // legend + footnote carry the values
             Text("sleep.hypnogram.summaryOnly")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
         }
     }
+
+    /// Height of the stage-share strip: the 10 pt cell of a bar strip.
+    static let distributionStripHeight: CGFloat = 10
 
     // MARK: - Legend
 
@@ -341,7 +329,7 @@ struct SleepHypnogramScreen: View {
                     stageRows(Array(stages), session: session)
                     // 1.0.3 (App Review 1.4.1, audit row 17) — the stage names
                     // and the way a night is cut into them are AASM scoring,
-                    // not HealthLog's own vocabulary. 1.4 B2: at the foot of
+                    // not HealthLog's own vocabulary. At the foot of
                     // the card that names the stages, not loose under the page.
                     HLSourcesLink(topic: .sleepRhythm)
                 }
@@ -361,8 +349,7 @@ struct SleepHypnogramScreen: View {
                 Spacer()
                 if let minutes = session.stages[stage] {
                     Text(durationText(minutes))
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.note)
                         .monospacedDigit()
                 }
             }
@@ -374,25 +361,17 @@ struct SleepHypnogramScreen: View {
     @ViewBuilder
     private var napsSection: some View {
         if let naps = night?.naps, !naps.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("sleep.naps.section")
-                HLCard {
-                    VStack(alignment: .leading, spacing: HLSpace.md) {
-                        ForEach(Array(naps.enumerated()), id: \.offset) { _, nap in
-                            HStack {
-                                // 1.4 B2 — the section is titled "Nickerchen";
-                                // each row does not need to say it again.
-                                Text(napTimeRange(for: nap))
-                                    .font(.hlFootnote)
-                                    .foregroundStyle(HLText.primary)
-                                    .monospacedDigit()
-                                Spacer()
-                                Text(durationText(nap.asleepMinutes ?? nap.inBedMinutes))
-                                    .font(.hlMetric(.callout))
-                                    .foregroundStyle(HLText.primary)
-                                    .monospacedDigit()
-                            }
-                        }
+            Group {
+                HLSectionHeader("sleep.naps.section", rank: .area)
+                // One row per nap: the time span as the title, the sleep
+                // it held as the value. The section names them "Nickerchen",
+                // so the rows do not say it again.
+                HLCard(layout: .rows) {
+                    ForEach(Array(naps.enumerated()), id: \.offset) { _, nap in
+                        HLRow(
+                            title: Text(napTimeRange(for: nap)),
+                            value: Text(durationText(nap.asleepMinutes ?? nap.inBedMinutes))
+                        )
                     }
                 }
             }
@@ -406,28 +385,20 @@ struct SleepHypnogramScreen: View {
             HStack(spacing: HLSpace.sm) {
                 ProgressView()
                 Text("sleep.hypnogram.loading")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.note)
             }
             .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, HLSpace.lg)
+            .padding(.vertical, HLLayout.cardInset)
         }
     }
 
+    /// No night to show: the page's own empty lockup, without a card.
     private var emptyState: some View {
-        HLCard {
-            VStack(spacing: HLSpace.sm) {
-                Image(systemName: "moon.zzz")
-                    .font(.hlTitle1)
-                    .foregroundStyle(HLText.tertiary)
-                Text(loadError ? "sleep.hypnogram.error" : "sleep.hypnogram.empty")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, HLSpace.xl)
-        }
+        HLEmptyState(
+            icon: "moon.zzz",
+            title: loadError ? "sleep.hypnogram.error" : "sleep.hypnogram.empty"
+        )
+        .accessibilityIdentifier("sleep.hypnogram.empty")
     }
 
     // MARK: - Phase palette (W-SLEEPHYP — muted-pastel category colors)
@@ -470,7 +441,7 @@ struct SleepHypnogramScreen: View {
 
     // MARK: - Formatting
 
-    /// Parity 4.7 — delegates to the shared ``SleepDurationFormat`` so the
+    /// Delegates to the shared ``SleepDurationFormat`` so the
     /// hypnogram, the rhythm cards and the composition chart all spell a
     /// duration identically.
     private func durationText(_ minutes: Int?) -> String {
@@ -483,12 +454,11 @@ struct SleepHypnogramScreen: View {
     }
 
     private func bedtimeText(for session: SleepSession) -> String {
-        session.start.formatted(.dateTime.hour().minute())
+        Self.clock(session.start, in: Self.displayZone(for: session))
     }
 
     private func napTimeRange(for nap: SleepSession) -> String {
-        let start = nap.start.formatted(.dateTime.hour().minute())
-        let end = nap.end.formatted(.dateTime.hour().minute())
-        return HLNumberFormat.range(start, end)
+        let zone = Self.displayZone(for: nap)
+        return HLNumberFormat.range(Self.clock(nap.start, in: zone), Self.clock(nap.end, in: zone))
     }
 }

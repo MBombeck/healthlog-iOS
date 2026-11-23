@@ -101,7 +101,7 @@ public struct HealthKitHRBucketRow: Sendable, Equatable {
 #if canImport(HealthKit)
 
     /// The two calls a bounded HealthKit query needs, behind a seam so a test
-    /// can play a health store that never answers (SYNC-HR, #159).
+    /// can play a health store that never answers.
     public protocol HealthKitQueryExecuting: Sendable {
         func execute(_ query: HKQuery)
         func stop(_ query: HKQuery)
@@ -235,7 +235,7 @@ public struct HealthKitHRBucketRow: Sendable, Equatable {
         }
     }
 
-    /// One HealthKit query's answer, delivered exactly once (SYNC-HR).
+    /// One HealthKit query's answer, delivered exactly once.
     ///
     /// The first of four events wins: the query's callback, the time limit,
     /// the awaiting task's cancellation, or a cancellation that arrived before

@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #19 — the count line, the end-of-list row and the Insights scroll trigger.
+/// The count line, the end-of-list row and the Insights scroll trigger.
 /// The header used to read "50 workouts" for a user with 730: the page size
 /// dressed up as a total.
 @Suite("#19 Workouts paging — header, footer, trigger")
@@ -49,7 +49,7 @@ struct WorkoutsPagingPresentationTests {
             #expect(ParityCatalog.value(entry, language: "en") == values.en)
             #expect(ParityCatalog.value(entry, language: "de") == values.de)
         }
-        // 1.4 B2 — the list's end shows nothing, so `workouts.paging.end` left the catalog.
+        // The list's end shows nothing, so `workouts.paging.end` left the catalog.
         for key in ["workouts.paging.loading", "workouts.paging.failed"] {
             let entry = try #require(catalog.strings[key], "missing catalog key \(key)")
             #expect(ParityCatalog.value(entry, language: "en") != nil)

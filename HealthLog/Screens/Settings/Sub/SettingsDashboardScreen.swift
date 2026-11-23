@@ -27,26 +27,23 @@ import SwiftUI
 /// renders chrome. See `Tokens.swift` `HLTint` for the now-legacy
 /// enum and `Stores/SettingsStore.swift` for the persisted property.
 struct SettingsDashboardScreen: View {
-    // v0141 — the hero score-ring picker moved here from the dashboard (only the
+    // The hero score-ring picker moved here from the dashboard (only the
     // ENTRY POINT moved; selection still persists via the widgets PUT).
     @Environment(DashboardLayoutStore.self) private var layoutStore
     @State private var showHeroRings = false
-    // CU-34 — the Today hero-item picker lives on the same screen as the ring
+    // The Today hero-item picker lives on the same screen as the ring
     // picker: both answer "what shows at the top of Today", and both persist
     // through the same widgets PUT.
     @State private var showHeroItems = false
 
     var body: some View {
-        HLSettingsPage(title: "Appearance") {
+        HLPage {
             SettingsPersonalizationCard()
-            // v0.14.1 (#134) — the Units card moved OUT of Appearance into the
+            // The Units card moved OUT of Appearance into the
             // PROFILE area (`SettingsAccountScreen`). Display units (kg/lb,
             // mmHg, mg/dL) are a personal-preference attribute of the user, not
             // a look-and-feel setting, so they belong next to the profile.
-            layoutCard
-            heroRingsCard
-            heroItemsCard
-            insightsCustomizationCard
+            customizeCard
         }
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
@@ -58,7 +55,6 @@ struct SettingsDashboardScreen: View {
                 Task { await layoutStore.setScoreRings(selected: chosen, heroOrder: order) }
             }
             .hlSheetPresentation(.standard)
-            .presentationBackground(HLColor.surface)
         }
         .sheet(isPresented: $showHeroItems) {
             HeroItemKindSelectionSheet(
@@ -66,8 +62,6 @@ struct SettingsDashboardScreen: View {
             ) { chosen in
                 Task { await layoutStore.setEnabledHeroItemKinds(chosen) }
             }
-            .hlSheetPresentation(.standard)
-            .presentationBackground(HLColor.surface)
         }
         .task {
             // Cheap on hot launch (SWR returns cache); ensures the picker
@@ -76,95 +70,34 @@ struct SettingsDashboardScreen: View {
         }
     }
 
-    /// UI-Standard R1/R2 — der Karten-Subtitle ist gefallen. Er sagte
-    /// „Standard: alle Kacheln sichtbar. Hier ausblenden oder umsortieren." —
-    /// eine Voreinstellungs-Ansage plus eine Bedien-Nacherzählung, beide auf
-    /// der R2-Verbotsliste. Die Zielseite zeigt „Angeheftet"/„Ausgeblendet"
-    /// als eigene Abschnitte und trägt die Aussage damit zustandsabhängig (R3).
-    ///
-    /// 1.4 B4 — one row, one heading, on all four cards of this page: the
-    /// row names its screen or sheet and carries the subtitle where there is one.
-    private var layoutCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(title: "Customize tiles", presents: .push) {
+    /// Everything this page lets the person arrange, as rows of one card:
+    /// four cards with one row each read like four topics. Each row names
+    /// its screen or sheet with the word that screen uses for itself, and
+    /// keeps a detail line only where it says a limit or a place (rings: up
+    /// to three, for the Insights; highlights: what fills "Worth a look").
+    private var customizeCard: some View {
+        HLCard("settings.appearance.customize.title", layout: .rows) {
+            HLSettingsActionRow(title: "settings.appearance.dashboardTiles", presents: .push) {
                 DashboardCustomizationScreen()
             }
             .accessibilityIdentifier("settings.dashboard.customizeRow")
-        }
-    }
-
-    /// Score-ring picker entry. Opens the shared ``ScoreRingSelectionSheet``;
-    /// the choice persists via `DashboardLayoutStore.setScoreRings(...)`
-    /// (widgets PUT).
-    ///
-    /// **Parity Build 4 · 4.3 — copy fix.** This card used to be titled "Hero
-    /// rings" and promised the scores would appear "at the top of your
-    /// dashboard". That surface no longer exists as described: the rings render
-    /// on the dashboard hero AND (new in Build 4) drive the Insights score
-    /// cards, and the picker now also sets their ORDER. The old copy sold a
-    /// destination the user could not find, which is why the setting read as
-    /// doing nothing. The title/subtitle now name both surfaces honestly.
-    ///
-    /// **UI-Standard R2 — dieser Subtitle bleibt bewusst stehen.** Er trägt
-    /// eine harte Grenze („bis zu drei") und eine nicht sichtbare Folge (die
-    /// Auswahl wirkt auf die Insights). Beides sind R2-Kategorien, keine
-    /// Umformulierung des Titels.
-    ///
-    /// **1.4 B1:** Die Startseite ist aus dem Satz gefallen. Dort stehen die
-    /// Ringe seit `acb44cb70` nicht mehr, und der Reihenfolge-Editor im Sheet
-    /// ist mit ihnen gegangen.
-    private var heroRingsCard: some View {
-        HLSettingsCard {
-            // R10 — die Zeile öffnet ein Sheet, also `pencil` statt Chevron.
             HLSettingsActionRow(
                 title: "Score rings",
-                subtitle: "Pick up to three scores for Insights. They appear in the order you pick them.",
+                subtitle: "settings.dashboard.heroRings.subtitle",
                 presents: .sheet
             ) {
                 showHeroRings = true
             }
             .accessibilityIdentifier("settings.dashboard.heroRingsRow")
-        }
-    }
-
-    /// **CU-34 (Brief C6) — the Today hero-item picker entry.** Opens
-    /// ``HeroItemKindSelectionSheet``; the choice persists via
-    /// `DashboardLayoutStore.setEnabledHeroItemKinds(_:)` (widgets PUT, the
-    /// only save that sends `enabledHeroItemKinds`).
-    ///
-    /// Sits directly under the ring picker because both configure the same
-    /// place — the top of Today — and the subtitle names the section heading the
-    /// user actually sees there ("Worth a look"), so the setting is findable
-    /// from the surface it changes.
-    private var heroItemsCard: some View {
-        HLSettingsCard {
-            // R10 — Sheet, also `pencil`. R3: derselbe Satz stand bis U5 auch
-            // im Sheet selbst; er lebt jetzt nur noch hier, vor der Entscheidung.
             HLSettingsActionRow(
                 title: "Today highlights",
-                subtitle: "Choose which item types can appear under Worth a look on Today.",
+                subtitle: "settings.dashboard.heroItems.subtitle",
                 presents: .sheet
             ) {
                 showHeroItems = true
             }
             .accessibilityIdentifier("settings.dashboard.heroItemsRow")
-        }
-    }
-
-    /// v0.8.0 W7 W1/C1 — Insights-tile customization, moved here from
-    /// the overloaded "Assistant & Insights" screen. Both the dashboard
-    /// tiles (above) and the Insights tiles are "what shows on which
-    /// grid" — a display/layout concern that belongs under Appearance,
-    /// not next to the server AI provider keys. Pushes the same
-    /// `SettingsInsightsCustomizationScreen` destination the AI screen
-    /// used; tile state is `@AppStorage`-backed so no store rewiring.
-    ///
-    /// UI-Standard R2 — der Subtitle („Wähle, welche Insights-Kacheln
-    /// erscheinen und in welcher Reihenfolge.") formulierte den Kartentitel um
-    /// und ist ersatzlos gefallen.
-    private var insightsCustomizationCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(title: "Customize Insights tiles", presents: .push) {
+            HLSettingsActionRow(title: "settings.appearance.insightsTabs", presents: .push) {
                 SettingsInsightsCustomizationScreen()
             }
             .accessibilityIdentifier("settings.dashboard.insightsCustomizeRow")
@@ -182,15 +115,13 @@ struct SettingsPersonalizationCard: View {
     @Environment(SettingsStore.self) private var store
 
     var body: some View {
-        HLSettingsCard(
-            icon: "paintpalette.fill",
-            title: "Personalization"
-        ) {
+        HLCard("Personalization") {
+            // The page is already called Appearance; the row says what it picks.
             stackedPickerRow(
-                label: "Appearance",
+                label: "settings.dashboard.colorScheme",
                 identifier: "settings.dashboard.appearancePicker"
             ) {
-                Picker(String(localized: "Appearance"), selection: bindable(\.appearance)) {
+                Picker(String(localized: "settings.dashboard.colorScheme"), selection: bindable(\.appearance)) {
                     ForEach(AppearanceMode.allCases) { mode in
                         Text(LocalizedStringKey(mode.label)).tag(mode)
                     }
@@ -199,7 +130,7 @@ struct SettingsPersonalizationCard: View {
                 .labelsHidden()
             }
 
-            // #13 — compliance-heatmap window length. Lives here because the
+            // Compliance-heatmap window length. Lives here because the
             // heatmap footprint is a look-and-feel concern (how much history
             // the Medications/Insights grid paints), matching the operator's
             // "Settings → Erscheinungsbild" placement ask. Monochrome menu
@@ -236,12 +167,18 @@ struct SettingsPersonalizationCard: View {
         identifier: String,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        let control = content()
+        // At the accessibility sizes the picker moves under its label:
+        // beside it, „Dunkel" broke into „Du / n- / kel" and ran into the
+        // row below.
+        return HLAdaptiveStack(alignment: .firstTextBaseline) { stacked in
             Text(label)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Spacer(minLength: HLSpace.md)
-            content()
+                .hlText(.rowTitle)
+                .fixedSize(horizontal: false, vertical: true)
+            if !stacked {
+                Spacer(minLength: HLSpace.md)
+            }
+            control
         }
         .accessibilityIdentifier(identifier)
     }

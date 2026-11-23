@@ -13,7 +13,7 @@ import Foundation
 /// server-default layer is a no-op stub (`NoServerDeliveryDefaults`), so
 /// the effective value is purely the local override — i.e. behaviour is
 /// identical to the pre-v0.9.0 `LiveActivityPreferences`. When the server
-/// fields land (SB-LA-1 / SB-AK-1) the stub is swapped for the real repo
+/// fields land the stub is swapped for the real repo
 /// and the "Alle Geräte" scope lights up with **no View / call-site
 /// change**.
 public enum DeliveryChannel: String, Codable, Sendable, CaseIterable, Hashable {

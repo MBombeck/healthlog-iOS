@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **A6 (1.4)** — a HealthLog copy the person deletes in Apple Health stays
+    /// A HealthLog copy the person deletes in Apple Health stays
     /// deleted there.
     ///
     /// The server mirror's tombstones were only ever filled from metadata a

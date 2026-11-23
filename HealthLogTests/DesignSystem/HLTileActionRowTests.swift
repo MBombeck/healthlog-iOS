@@ -5,7 +5,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **K1 — tile actions stack before a label breaks.**
+    /// **Tile actions stack before a label breaks.**
     ///
     /// The case H2 photographed on the iPhone SE is the one this suite is
     /// named after: the two labels fit the card *by sum*, so an `HStack` (or

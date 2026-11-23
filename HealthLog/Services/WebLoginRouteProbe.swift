@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - The route
 
-/// #65 — the native web-handoff login entry, as a route rather than a string
+/// The native web-handoff login entry, as a route rather than a string
 /// in two places.
 ///
 /// `WebLoginNativeFlow.loginURL` (app target) forwards to this. The probe below
@@ -30,7 +30,7 @@ public enum WebLoginRoute {
 
 // MARK: - What the probe can find
 
-/// **13-02.** What the app knows about the server's web-handoff login route
+/// What the app knows about the server's web-handoff login route
 /// after asking it — a statement about *reachability*, not about a version
 /// number.
 public enum WebLoginRouteStatus: Sendable, Equatable {
@@ -73,7 +73,7 @@ public enum WebLoginRouteStatus: Sendable, Equatable {
     }
 }
 
-/// **13-02.** Is a redirect target somewhere this device could ever reach?
+/// Is a redirect target somewhere this device could ever reach?
 ///
 /// The rule is deliberately narrow. It does **not** say "different host is
 /// suspicious" — a redirect to an identity provider is normal. It says: a
@@ -113,7 +113,7 @@ public enum WebLoginRedirectPolicy {
 
 // MARK: - The probe
 
-/// **13-02.** The capability the availability gate needs: ask the login route
+/// The capability the availability gate needs: ask the login route
 /// where it leads, and classify the answer.
 ///
 /// Declared as its own protocol rather than as bare `APIClientProtocol`

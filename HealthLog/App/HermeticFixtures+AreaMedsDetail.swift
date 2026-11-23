@@ -52,6 +52,13 @@
                 return (200, Data(#"{"doseChanges":[],"recentIntakes":[]}"#.utf8))
             case "efficacy" where id == lisinoprilID:
                 return (200, Data(efficacyJSON.utf8))
+            // An empty side-effect logbook and supply list, in the server's
+            // list shape. The shared default `[]` decodes as neither, and the
+            // logbook's failure put the red banner over every GLP-1 detail.
+            case "side-effects":
+                return (200, Data(#"{"data":{"items":[],"meta":{"total":0}},"error":null}"#.utf8))
+            case "inventory":
+                return (200, Data(#"{"data":{"items":[],"summary":null,"meta":{"total":0}},"error":null}"#.utf8))
             default:
                 return nil
             }
@@ -149,7 +156,7 @@
 
         /// `GET /api/medications/intake?scope=today` — today's rows, taken only
         /// once their time has passed.
-        private static func todayIntakes() -> [[String: Any]] {
+        static func todayIntakes() -> [[String: Any]] {
             let calendar = Calendar.current
             let now = Date.now
             return [lisinoprilID, naproxenID, trulicityID].flatMap { id -> [[String: Any]] in
@@ -253,7 +260,8 @@
         /// a little lower in the weeks after the start than before it.
         static var efficacyJSON: String {
             let label = AppLanguage.current.pick(
-                de: "Systolischer Blutdruck", en: "Systolic blood pressure", nl: "Systolische bloeddruk"
+                de: "Systolischer Blutdruck", en: "Systolic blood pressure", nl: "Systolische bloeddruk",
+                ko: "수축기 혈압", es: "Presión arterial sistólica"
             )
             let before = [141, 139, 140, 138, 137, 139]
             let after = [135, 133, 131, 132, 130, 129, 130, 128]

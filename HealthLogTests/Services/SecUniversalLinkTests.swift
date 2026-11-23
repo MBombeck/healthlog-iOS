@@ -1,4 +1,4 @@
-// SEC (1.5, #151) — the native SSO return: `https` for a host the build
+// The native SSO return: `https` for a host the build
 // associates with and whose server announced the path, the custom scheme with
 // PKCE for every other host (every released server today).
 //
@@ -197,7 +197,7 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 

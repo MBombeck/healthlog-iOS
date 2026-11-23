@@ -33,7 +33,7 @@ public actor RefreshCoordinator {
     private var inFlight: Task<RefreshOutcome, Never>?
     private var lastRefreshedAt: Date?
 
-    /// #5 — `graceWindow`/`now` sind Parameter geworden, damit das Fenster
+    /// `graceWindow`/`now` sind Parameter geworden, damit das Fenster
     /// (siehe Punkt 4 oben) an einer injizierten Uhr *geprüft* statt in einem
     /// Test verschlafen wird. Die Defaults sind die Produktionswerte; das
     /// Composition-Root ruft weiterhin nur `RefreshCoordinator(auth:)`.
@@ -45,7 +45,7 @@ public actor RefreshCoordinator {
         self.init(refresh: { await auth.refresh() }, graceWindow: graceWindow, now: now)
     }
 
-    /// #5 — Test-Naht: derselbe Koordinator über einer Closure statt über dem
+    /// Test-Naht: derselbe Koordinator über einer Closure statt über dem
     /// echten ``AuthService``, damit `RefreshCoordinatorGraceTests` zählen
     /// kann, wie oft tatsächlich rotiert wurde.
     init(
@@ -61,7 +61,7 @@ public actor RefreshCoordinator {
     /// Idempotent: parallele Aufrufe sehen denselben in-flight Task. Liefert
     /// das dreiwertige ``RefreshOutcome`` (refreshed / authFailure / transient).
     ///
-    /// #5 — Nachlaufende Anrufer innerhalb von ``graceWindow`` Sekunden nach
+    /// Nachlaufende Anrufer innerhalb von ``graceWindow`` Sekunden nach
     /// einer erfolgreichen Rotation bekommen ``RefreshOutcome/refreshed`` ohne
     /// eigene Rotation: der Schlüsselbund hält bereits eine frische Session,
     /// und ein zweiter Umlauf würde genau die Tokens revoken, die die eben
@@ -72,7 +72,7 @@ public actor RefreshCoordinator {
             return await inFlight.value
         }
         if let lastRefreshedAt, now().timeIntervalSince(lastRefreshedAt) < graceWindow {
-            // #5 — a straggler arriving right after a rotation must not rotate again.
+            // A straggler arriving right after a rotation must not rotate again.
             return .refreshed
         }
         let task = Task<RefreshOutcome, Never> { [refresh] in

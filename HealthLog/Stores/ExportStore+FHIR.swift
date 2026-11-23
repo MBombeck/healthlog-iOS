@@ -1,24 +1,27 @@
 import Foundation
 import ModelsR4
 
-/// audit-v0162 — the ModelsR4-typed FHIR helpers live in this extension so the
+/// The ModelsR4-typed FHIR helpers live in this extension so the
 /// `@Observable ExportStore` declaration file need not `import ModelsR4`: that
 /// module exports an `Observation` type which shadows the `Observation`
 /// framework the `@Observable` macro expands against (build error
 /// "'Observable' is not a member type of class 'ModelsR4.Observation'").
 extension ExportStore {
     /// Emit the local FHIR bundle JSON for the report period + additive clinical
-    /// blocks. `nil` if the local emitter or encode throws. `nonisolated static`
-    /// so it is a pure function, unit-testable from a `@MainActor` test without a
-    /// store instance. `@MainActor` because `DoctorReportSpecBuilder.build` is
-    /// main-actor-isolated.
-    @MainActor static func makeLocalBundleJSON(
+    /// blocks. `nil` if the local emitter or encode throws. A pure function of
+    /// its `Sendable` inputs, unit-testable without a store instance.
+    ///
+    /// `@concurrent` (D5 #10): only the snapshot is taken on the main actor.
+    /// The spec build, the ModelsR4 bundle and the pretty-printed, key-sorted
+    /// encode of a long period used to run there too and could stall the
+    /// interface; they now run on the cooperative pool.
+    @concurrent nonisolated static func makeLocalBundleJSON(
         periodDays: Int,
         snapshot: DoctorReportSpecBuilder.Snapshot,
         generatedAt end: Date,
         labs: DoctorReportSpec.LabsBlock?,
         illnesses: DoctorReportSpec.IllnessBlock?
-    ) -> Data? {
+    ) async -> Data? {
         let calendar = Calendar.current
         let start = calendar.date(byAdding: .day, value: -periodDays, to: end) ?? end
         let base = DoctorReportSpecBuilder.build(

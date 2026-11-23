@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Task #53 — the onboarding AI-source step. ONE clean screen presenting the
+/// The onboarding AI-source step. ONE clean screen presenting the
 /// same mode- + capability-aware choice the user gets in Settings → Assistant
 /// (None / On-device / External AI / Own key, gated by operating mode +
 /// on-device capability), built on the shared `AISourceChoicePicker` so the two
@@ -10,7 +10,7 @@ import SwiftUI
 /// External AI (`.online`) **when the server has an AI provider configured AND
 /// the `.online` card is actually selectable** — see `applyDefaultSelection` /
 /// `shouldDefaultToOnline`. Otherwise the privacy-first **None** default holds
-/// (no provider, standalone, or a disabled `.online` card). A returning user's
+/// (no provider, or a disabled `.online` card). A returning user's
 /// explicit prior choice always wins.
 ///
 /// Onboarding semantics differ slightly from Settings: the `.online` and
@@ -23,7 +23,7 @@ import SwiftUI
 /// dead button, never an empty box.
 ///
 /// Design (PROJECT_GUIDE.md Marathon + monochrome doctrine): calm header, the shared
-/// picker, a reduce-motion-gated staggered entrance matching `ModeSelectionStep`,
+/// picker, a reduce-motion-gated staggered entrance,
 /// a "Continue" CTA + a "Skip" ghost. Zero glass on the content cards.
 struct AISourceStep: View {
     let onNext: () -> Void
@@ -31,9 +31,6 @@ struct AISourceStep: View {
 
     @Environment(\.appContainer) private var container
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// v0.13 W3 — operating mode (2nd matrix axis). In standalone the External
-    /// AI card is dropped — a standalone install has no server provider.
-    @Environment(BackendAvailability.self) private var backend
     @Environment(\.scenePhase) private var scenePhase
 
     /// Local working selection so the cards reflect the tap instantly; the
@@ -83,24 +80,23 @@ struct AISourceStep: View {
             .padding(.top, HLSpace.xxl)
         }
         .background(HLColor.background)
-        .safeAreaInset(edge: .bottom) {
+        // The pinned call to action rides the system's bottom bar, as on the
+        // welcome and Apple Health steps.
+        .hlBottomBar {
             VStack(spacing: HLSpace.sm) {
                 HLButton(String(localized: "Continue"), variant: .primary, size: .large) {
                     commit(selection)
                     onNext()
                 }
                 .accessibilityIdentifier("onboarding.aiSource.continue")
-                HLButton(String(localized: "Later"), variant: .ghost) {
+                HLLinkButton("Later") {
                     onSkip()
                 }
                 .accessibilityIdentifier("onboarding.aiSource.skip")
             }
-            .padding(.horizontal, HLSpace.xl)
-            .padding(.bottom, HLSpace.xxxl)
-            .background(HLColor.background)
         }
         .onChange(of: scenePhase) { _, phase in
-            // v0.13 W3 — re-probe on-device availability when the user comes
+            // Re-probe on-device availability when the user comes
             // back from System Settings (e.g. just enabled Apple Intelligence)
             // so a disabled On-device card unlocks live, no relaunch.
             if phase == .active { container?.localLLMService.refresh() }
@@ -118,13 +114,11 @@ struct AISourceStep: View {
         }
     }
 
-    /// v0.13 W3 — the mode- + capability-aware option list. Standalone drops
-    /// the External AI card; on-device is capability-gated (hidden when
-    /// permanently incapable, shown disabled-with-reason when recoverable).
-    /// `.byoKey` is offered in both modes (mode-invariant — client-side).
+    /// The capability-aware option list. On-device is
+    /// capability-gated (hidden when permanently incapable, shown
+    /// disabled-with-reason when recoverable).
     private var offeredOptions: [AISourceOption] {
         AISourceOptions.offered(
-            operatingMode: backend.mode,
             onDeviceAvailability: container?.onDeviceAIAvailability ?? .unsupported
         )
     }
@@ -157,7 +151,7 @@ struct AISourceStep: View {
     /// per-provider consent yet, so we set expectations honestly instead of
     /// firing a doomed prompt.
     private var onlineFollowUpNote: some View {
-        // 1.4 B4 — the sentence alone; the info symbol beside it looked
+        // The sentence alone; the info symbol beside it looked
         // tappable and did nothing (one (i) per screen).
         Text(
             String(
@@ -170,12 +164,12 @@ struct AISourceStep: View {
         .padding(.top, HLSpace.xs)
     }
 
-    /// v0.13 W4 — shown only when "Own key" is selected. Onboarding stays LEAN:
+    /// Shown only when "Own key" is selected. Onboarding stays LEAN:
     /// it records the intent (`setAIMode(.byoKey)` via `commit`) and points the
     /// user at the canonical key-entry path in Settings. Honest (real intent +
     /// clear next step), not a dead-end — mirrors the online follow-up note.
     private var byoKeyFollowUpNote: some View {
-        // 1.4 B4 — the sentence alone; the info symbol beside it looked
+        // The sentence alone; the info symbol beside it looked
         // tappable and did nothing (one (i) per screen).
         Text(
             String(
@@ -203,7 +197,7 @@ struct AISourceStep: View {
     ///    same `commit(.online)` path a tap uses (records intent only; the
     ///    consent grant still finishes in Settings — that contract is unchanged).
     /// 3. **Else** the privacy-first `.none` default holds (no provider, or
-    ///    `.online` not offered/disabled — standalone, dead card, etc.).
+    ///    `.online` not offered/disabled — dead card, etc.).
     private func applyDefaultSelection() {
         // (1) Honour an explicit prior choice untouched.
         if let existing = container?.aiMode, existing != .none {

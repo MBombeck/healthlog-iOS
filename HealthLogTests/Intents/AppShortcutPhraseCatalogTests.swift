@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 SIRI-L10N** — Siri and Shortcuts read App Shortcut phrases only from
+/// Siri and Shortcuts read App Shortcut phrases only from
 /// `AppShortcuts.xcstrings`, never from `Localizable.xcstrings`. Until 1.5 the
 /// phrases sat in `Localizable` as `%@` keys, so the built
 /// `Metadata.appintents/root.ssu.yaml` gave the German corpus the English

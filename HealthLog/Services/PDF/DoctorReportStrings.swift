@@ -1,6 +1,6 @@
 import Foundation
 
-/// **L10N-REPORT (1.5) — the doctor report's labels are a translation table.**
+/// **The doctor report's labels are a translation table.**
 ///
 /// Every fixed word the local PDF prints lives in
 /// `HealthLog/Resources/DoctorReport.xcstrings` and is read with the bundle of
@@ -92,7 +92,7 @@ enum DoctorReportStrings {
         return value == missingMarker ? kind.displayName : value
     }
 
-    /// POLISH-A F-PDF-3 — a mood tag in the report language. A stored tag is
+    /// A mood tag in the report language. A stored tag is
     /// a catalog key (`tired`, `slept_well`, `factor_stress`); its label comes
     /// from the app catalog's table for that language, the same words the
     /// mood screen shows. A custom tag (`custom:<id>`) carries no label here

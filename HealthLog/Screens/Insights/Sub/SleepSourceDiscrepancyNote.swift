@@ -26,8 +26,7 @@ struct SleepSourceDiscrepancyNote: View {
                 } icon: {
                     Image(systemName: "exclamationmark.triangle")
                 }
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .labelStyle(.titleAndIcon)
                 Text(Self.detail(discrepancy))
                     .font(.hlCaption2)

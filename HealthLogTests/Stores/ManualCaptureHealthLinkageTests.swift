@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **S1 / public #11** — the create-time Apple-Health write must carry the
+    /// The create-time Apple-Health write must carry the
     /// server id the list (and so the server→Health mirror) will see, or the
     /// mirror writes the same reading a second time now that `.manual` rows are
     /// mirrored.
@@ -63,7 +63,7 @@
         func captureWritesListID() async throws {
             let hk = MockHealthKitWriter()
             let repo = try await MeasurementsRepository(api: bloodPressureAPI(), outbox: OutboxQueue(inMemory: true))
-            let store = MeasurementsStore(repo: repo, healthKit: hk, isStandalone: { false })
+            let store = MeasurementsStore(repo: repo, healthKit: hk)
 
             let ok = await store.capture(kind: .bloodPressure, value: .bloodPressure(systolic: 116, diastolic: 86), note: nil)
 
@@ -89,7 +89,7 @@
             await api.setHandler { _ in throw HLError.offline }
             let hk = MockHealthKitWriter()
             let repo = try MeasurementsRepository(api: api, outbox: OutboxQueue(inMemory: true))
-            let store = MeasurementsStore(repo: repo, healthKit: hk, isStandalone: { false })
+            let store = MeasurementsStore(repo: repo, healthKit: hk)
 
             let outcome = await store.captureReturningOutcome(kind: .weight, value: .scalar(81.2), note: nil)
 

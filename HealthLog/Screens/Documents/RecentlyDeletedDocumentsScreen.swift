@@ -2,9 +2,9 @@ import SwiftUI
 
 /// **Recently deleted (#151, server v1.46.0).** The deleted documents the
 /// daily purge has not removed yet, newest deletion first: title, when it was
-/// deleted, when it goes for good, and per row "Restore" and "Delete now".
-/// "Delete now" asks in place (the frozen presentation inventory admits no new
-/// dialog), a restored document is back in the vault list at once.
+/// deleted, when it goes for good; "Restore" and "Delete now" on the swipe
+/// and in the context menu. "Delete now" asks first through the delete
+/// ladder, a restored document is back in the vault list at once.
 ///
 /// Reached only through ``RecentlyDeletedDocumentsLink`` under the vault list,
 /// which shows while the server counts at least one deleted document. Inside
@@ -13,7 +13,6 @@ import SwiftUI
 struct RecentlyDeletedDocumentsScreen: View {
     let vault: DocumentsStore
     @State private var model: DocumentsTrashStore?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
@@ -30,6 +29,7 @@ struct RecentlyDeletedDocumentsScreen: View {
                     empty: { emptyRows },
                     content: { if let model { loadedRows(model) } }
                 )
+                .hlPageMargins()
             }
         }
         .navigationTitle(Text("documents.trash.title"))
@@ -68,18 +68,16 @@ struct RecentlyDeletedDocumentsScreen: View {
     private func loadedRows(_ model: DocumentsTrashStore) -> some View {
         if let message = model.outcome {
             Section { outcomeBanner(message, model: model) }
+                .hlFormRowSurface()
         }
         Section {
             ForEach(model.rows) { row in
-                DeletedDocumentRow(
-                    row: row,
-                    model: model,
-                    stacked: dynamicTypeSize.isAccessibilitySize
-                )
+                DeletedDocumentRow(row: row, model: model)
             }
         } footer: {
             footer(model)
         }
+        .hlFormRowSurface()
     }
 
     private func footer(_ model: DocumentsTrashStore) -> some View {
@@ -103,8 +101,8 @@ struct RecentlyDeletedDocumentsScreen: View {
                 .font(.hlCaption)
                 .foregroundStyle(HLText.primary)
             Spacer(minLength: HLSpace.sm)
-            Button("documents.outcome.dismiss") { model.acknowledgeOutcome() }
-                .font(.hlCaption)
+            HLLinkButton("documents.outcome.dismiss", alignment: .leading) { model.acknowledgeOutcome() }
+                .fixedSize()
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("documents.trash.outcome")
@@ -113,129 +111,72 @@ struct RecentlyDeletedDocumentsScreen: View {
 
 // MARK: - Row
 
-/// One deleted document: what it is, when it was deleted, when it goes for
-/// good, and its two actions. "Delete now" turns the action line into the
-/// question with its own destructive button and a cancel.
+/// One deleted document as a data row: what it is, and when it was deleted
+/// and goes for good in one detail line. Restoring and deleting for good sit
+/// on the swipe and in the context menu, like every other row; two full
+/// buttons under each entry made this the loudest list of the app. "Delete
+/// now" removes it for good, so it asks first.
 private struct DeletedDocumentRow: View {
     let row: DeletedDocument
     let model: DocumentsTrashStore
-    let stacked: Bool
-
-    private var isConfirming: Bool {
-        model.confirmingPurgeID == row.id
-    }
 
     private var isBusy: Bool {
         model.busyIDs.contains(row.id)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Image(systemName: DocumentKindMeta.icon(row.kind))
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(HLText.secondary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(verbatim: row.resolvedTitle ?? String(localized: "documents.card.untitled"))
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.primary)
-                    ForEach(DeletedDocumentRowDates.lines(for: row), id: \.self) { line in
-                        Text(verbatim: line)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
-            }
-            .accessibilityElement(children: .combine)
-            if isConfirming {
-                confirmation
-            } else {
-                actions
-            }
+        HLRow(
+            title: Text(verbatim: row.resolvedTitle ?? String(localized: "documents.card.untitled")),
+            detail: HLRowDetail.text(DeletedDocumentRowDates.lines(for: row))
+        ) {
+            HLRowGlyph(symbol: DocumentKindMeta.icon(row.kind))
         }
-        .padding(.vertical, HLSpace.xxs)
-        .accessibilityElement(children: .contain)
+        .opacity(isBusy ? 0.5 : 1)
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("documents.trash.row.\(row.id)")
-    }
-
-    @ViewBuilder
-    private var actions: some View {
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
-            : AnyLayout(HStackLayout(spacing: HLSpace.lg))
-        layout {
-            Button {
-                Task { await model.restore(row) }
-            } label: {
-                Label("documents.trash.restore", systemImage: "arrow.uturn.backward")
-                    .foregroundStyle(.tint)
-            }
-            .accessibilityIdentifier("documents.trash.restore.\(row.id)")
-            Button(role: .destructive) {
-                model.confirmingPurgeID = row.id
-            } label: {
-                Label("documents.trash.purge", systemImage: "trash")
-                    .foregroundStyle(HLColor.statusBad)
-            }
-            .accessibilityIdentifier("documents.trash.purge.\(row.id)")
-            if isBusy {
-                ProgressView().controlSize(.small)
-            }
+        .hlSwipeDelete(purge) {
+            restoreButton
+                .tint(HLAccent.userBrandTint)
         }
-        .font(.hlSubhead)
-        .buttonStyle(.plain)
+        .contextMenu {
+            restoreButton
+            HLDeleteMenuItem(purge)
+        }
+        .hlDeleteConfirmation()
         .disabled(isBusy)
     }
 
-    private var confirmation: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("documents.trash.purgeConfirmTitle")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Text("documents.trash.purgeConfirmBody")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            let layout = stacked
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
-                : AnyLayout(HStackLayout(spacing: HLSpace.lg))
-            layout {
-                Button(role: .destructive) {
-                    Task { await model.purge(row) }
-                } label: {
-                    Text("documents.trash.purgeConfirm")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(HLColor.statusBad)
-                }
-                .accessibilityIdentifier("documents.trash.purge.confirm.\(row.id)")
-                Button {
-                    model.confirmingPurgeID = nil
-                } label: {
-                    Text("illness.action.cancel").foregroundStyle(.tint)
-                }
-                .accessibilityIdentifier("documents.trash.purge.cancel.\(row.id)")
-                if isBusy {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            .font(.hlSubhead)
-            .buttonStyle(.plain)
-            .disabled(isBusy)
+    private var restoreButton: some View {
+        Button {
+            Task { await model.restore(row) }
+        } label: {
+            Label("documents.trash.restore", systemImage: "arrow.uturn.backward")
         }
+        .accessibilityIdentifier("documents.trash.restore.\(row.id)")
+    }
+
+    private var purge: HLDeleteAction {
+        .confirmed(
+            title: "documents.trash.purgeConfirmTitle",
+            message: "documents.trash.purgeConfirmBody",
+            word: "documents.trash.purgeConfirm"
+        ) { await model.purge(row) }
     }
 }
 
-/// "Deleted on …" and "Removed for good on …" for a row, each only when the
-/// server sent a readable date.
+/// "Gelöscht am 4. Nov., wird am 4. Dez. entfernt" for a row: two parts of
+/// one sentence, each only when the server sent a readable date. The year
+/// shows only outside the current one.
 enum DeletedDocumentRowDates {
-    static func lines(for row: DeletedDocument) -> [String] {
+    static func lines(for row: DeletedDocument, now: Date = .now) -> [String] {
         var lines: [String] = []
-        if let deletedAt = row.deletedAt, DocumentFormat.instant(deletedAt) != nil {
-            lines.append(String(format: String(localized: "documents.trash.deletedOn"), DocumentFormat.mediumDate(deletedAt)))
+        if let deletedAt = row.deletedAt, let date = DocumentFormat.instant(deletedAt) {
+            lines.append(String(format: String(localized: "documents.trash.deletedOn.part"), HLDateFormat.dayMonth(date, relativeTo: now)))
         }
-        if let purgeAt = row.purgeAt, DocumentFormat.instant(purgeAt) != nil {
-            lines.append(String(format: String(localized: "documents.trash.removesOn"), DocumentFormat.mediumDate(purgeAt)))
+        if let purgeAt = row.purgeAt, let date = DocumentFormat.instant(purgeAt) {
+            let part = String(format: String(localized: "documents.trash.removesOn.part"), HLDateFormat.dayMonth(date, relativeTo: now))
+            // Alone, the second part starts the line.
+            lines.append(lines.isEmpty ? part.prefix(1).localizedUppercase + part.dropFirst() : part)
         }
         return lines
     }
@@ -256,22 +197,13 @@ struct RecentlyDeletedDocumentsLink: View {
     }
 
     var body: some View {
-        NavigationLink {
-            RecentlyDeletedDocumentsScreen(vault: vault)
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "trash")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-                Text(String(format: String(localized: "documents.trash.entryLabel"), count))
-                    .font(.hlSubhead.weight(.semibold))
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        // The count is already in words; as a key it finds no entry and
+        // stands as it is.
+        HLLinkButton(
+            LocalizedStringKey(String(format: String(localized: "documents.trash.entryLabel"), count)),
+            systemImage: "trash",
+            destination: { RecentlyDeletedDocumentsScreen(vault: vault) }
+        )
         .accessibilityIdentifier("documents.trash.link")
     }
 }

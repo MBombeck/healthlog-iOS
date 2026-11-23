@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// A2 (1.4, R3 3.2, R-A7, R-A8) — the history walk stops sending what the
+    /// The history walk stops sending what the
     /// server already holds.
     ///
     /// Production, 1.3.0 on the operator's phone: 92 600 rows in 62 hours, 78
@@ -26,14 +26,22 @@
             let store: SimulatedHealthStore
         }
 
+        /// `serverOldest`: the oldest reading the server says it holds (#10).
+        /// `.some(nil)` leaves it unknown; the default is the oldest row.
         private static func setUp(
             type: String = Self.type,
-            rows: [SimulatedHealthStore.Row]
+            rows: [SimulatedHealthStore.Row],
+            serverOldest: Date?? = .none
         ) async throws -> Setup {
             let registry = AuthenticatedSessionLeaseRegistry()
             let lease = try CollectorFixture.makeLease(registry: registry)
             let cursors = SplitFixture.cursors(CollectorCursorBacking())
             let key = try await SplitFixture.replayingKey(cursors, type: type, lease: lease)
+            let oldest: Date? = serverOldest ?? rows.map(\.start).min()
+            if let oldest {
+                _ = try await cursors.establishSplit(for: key, cutoff: .distantPast, requiring: lease)
+                _ = await cursors.updateSplit(for: key, requiring: lease) { $0.serverOldestReading = oldest }
+            }
             return Setup(
                 registry: registry,
                 lease: lease,
@@ -71,10 +79,11 @@
             let result = await Self.pass(collector, setup)
 
             // Page 1 (days 1 to 100) is new, page 2 (101 to 200) straddles the
-            // boundary, pages 3, 4 and 5 are folded through: the walk stops
-            // there instead of spending the remaining eleven pages of its
+            // boundary, pages 3, 4 and 5 are folded through: the walk jumps to
+            // the server's oldest reading (#10), finds nothing older there in
+            // one more read, instead of spending the remaining pages of its
             // budget, and the ~1 000 older days are never read again.
-            #expect(setup.store.historyQueries.count == 5)
+            #expect(setup.store.historyQueries.count == 6)
             #expect(result?.history?.isFinished == true)
             let state = try #require(await setup.cursors.splitState(for: setup.key))
             #expect(state.isHistoryComplete(cutoff: .distantPast))
@@ -99,12 +108,74 @@
 
             let result = await Self.pass(collector, setup)
 
-            // 1 new, 2 straddles, 3 folded, 4 carries the hole, 5 to 7 folded.
-            #expect(setup.store.historyQueries.count == 7)
+            // 1 new, 2 straddles, 3 folded, 4 carries the hole, 5 to 7 folded,
+            // 8 reads below the server's oldest reading and finds nothing.
+            #expect(setup.store.historyQueries.count == 8)
             #expect(result?.history?.isFinished == true)
             let hole = rows.filter { $0.start >= holeOldest && $0.start <= holeNewest }.map(\.anchor)
             #expect(hole.count == 10)
             #expect(Set(hole).isSubset(of: Set(consumer.rows)))
+        }
+
+        @Test("without the server naming its oldest reading, a folded run does not end the walk (#10)")
+        func unknownServerOldestKeepsWalking() async throws {
+            let setup = try await Self.setUp(rows: SplitFixture.rows(historyDays: 3000), serverOldest: .some(nil))
+            let consumer = FoldingServerConsumer(foldedBefore: HistoryWalkA2Fixture.historyDay(150).addingTimeInterval(-1800))
+            let collector = HistoryWalkA2Fixture.collector(setup.cursors, query: setup.store, consumer: consumer)
+
+            let result = await Self.pass(collector, setup)
+
+            #expect(result?.history?.pagesCollected == HealthSyncBudget.required(for: .processing).historyPagesPerType)
+            #expect(result?.history?.isFinished == false, "below the folded years the server may hold nothing")
+        }
+
+        @Test("a folded run jumps to the server's oldest reading and the years below it still go out (#10)")
+        func foldedRunJumpsToTheServersOldest() async throws {
+            let rows = SplitFixture.rows(historyDays: 1200)
+            let oldest = HistoryWalkA2Fixture.historyDay(600)
+            let setup = try await Self.setUp(rows: rows, serverOldest: .some(oldest))
+            let boundary = HistoryWalkA2Fixture.historyDay(150).addingTimeInterval(-1800)
+            // Folded from day 150 back to the server's oldest reading; nothing below.
+            let consumer = FoldingServerConsumer { _, samples in
+                samples.count { $0.startDate < boundary && $0.startDate >= oldest }
+            }
+            let collector = HistoryWalkA2Fixture.collector(setup.cursors, query: setup.store, consumer: consumer)
+
+            await Self.pass(collector, setup)
+            await Self.pass(collector, setup)
+
+            let below = rows.filter { $0.start < oldest }.map(\.anchor)
+            #expect(below.count == 600)
+            #expect(Set(below).isSubset(of: Set(consumer.rows)), "every reading below the server's oldest is sent")
+            let skipped = rows
+                .filter { $0.start >= HistoryWalkA2Fixture.historyDay(599) && $0.start < HistoryWalkA2Fixture.historyDay(501) }
+            #expect(!skipped.isEmpty && Set(skipped.map(\.anchor)).isDisjoint(with: Set(consumer.rows)), "the folded years are not resent")
+        }
+
+        @Test("the jump target is never below the floor and never above the walk")
+        func foldedJumpTargetBounds() {
+            var state = HealthSampleSplitState(
+                version: HealthSampleSplitState.formatVersion,
+                origin: .fresh,
+                liveStart: HistoryWalkA2Fixture.historyDay(0),
+                liveCaughtUp: true,
+                historyEnd: HistoryWalkA2Fixture.historyDay(300),
+                historyEndInclusive: false,
+                replayFloor: nil,
+                replayFloorResolved: true,
+                legacyLegActive: false,
+                fullCatchUp: false,
+                updatedAt: SplitFixture.now,
+                windowFloor: nil
+            )
+            #expect(AnchoredHealthSampleCollector.foldedJumpTarget(state, cutoff: .distantPast) == nil, "unknown: no jump")
+            state.serverOldestReading = HistoryWalkA2Fixture.historyDay(600)
+            #expect(AnchoredHealthSampleCollector.foldedJumpTarget(state, cutoff: .distantPast) == HistoryWalkA2Fixture.historyDay(600))
+            state.serverOldestReading = HistoryWalkA2Fixture.historyDay(100)
+            #expect(AnchoredHealthSampleCollector.foldedJumpTarget(state, cutoff: .distantPast) == nil, "never forward")
+            let cutoff = HistoryWalkA2Fixture.historyDay(400)
+            state.serverOldestReading = HistoryWalkA2Fixture.historyDay(900)
+            #expect(AnchoredHealthSampleCollector.foldedJumpTarget(state, cutoff: cutoff) == cutoff, "never below the floor")
         }
 
         @Test("plain duplicates prove nothing about older windows: the walk goes on")
@@ -134,7 +205,7 @@
 
             let result = await Self.pass(collector, setup)
 
-            #expect(setup.store.historyQueries.count == 4)
+            #expect(setup.store.historyQueries.count == 5, "plus the read below the server's oldest reading")
             #expect(result?.history?.isFinished == true)
         }
 
@@ -153,7 +224,7 @@
             #expect(consumer.pageRoutes == [.live] + Array(repeating: .history, count: historyPages))
         }
 
-        // MARK: - Summed types (R-A8)
+        // MARK: - Summed types
 
         @Test("a summed type the statistics path owns never reads raw history, and reads complete")
         func summedTypeSkipsHistory() async throws {

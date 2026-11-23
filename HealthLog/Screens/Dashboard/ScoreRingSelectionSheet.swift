@@ -9,7 +9,7 @@ import SwiftUI
 /// PUT with the preserve-when-absent contract). The server RESOLVES today's
 /// value per ring; this sheet only records the choice.
 ///
-/// **1.4 B1 — the order section is gone.** Parity Build 4 · 4.8 added a
+/// **The order section is gone.** Parity Build 4 · 4.8 added a
 /// move-up/move-down list over ``HeroRingID`` for the hero row on the
 /// dashboard. That row no longer exists anywhere: iOS moved the rings to
 /// Insights (`acb44cb70`), and the web hero dropped its ring cluster in
@@ -30,7 +30,6 @@ struct ScoreRingSelectionSheet: View {
     /// Called with the new selection + hero order when the user saves.
     let onSave: ([ScoreRingID], [HeroRingID]) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     /// Working selection — ORDERED (append-on-select): the pick sequence is the
     /// order the Insights cards render in.
     @State private var selection: [ScoreRingID]
@@ -58,39 +57,27 @@ struct ScoreRingSelectionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.md) {
-                    Text(String(
-                        localized: "Pick up to \(ScoreRingID.maxSelected) scores to feature in Insights.",
-                        comment: "Score-ring picker subtitle"
-                    ))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        HLSheetScaffold(
+            "Score rings",
+            size: .standard,
+            action: .save {
+                onSave(selection, order)
+                return true
+            },
+            isDirty: selection != initialSelection
+        ) {
+            HLPage {
+                Text(String(
+                    localized: "Pick up to \(ScoreRingID.maxSelected) scores to feature in Insights.",
+                    comment: "Score-ring picker subtitle"
+                ))
+                .hlText(.factLabel)
+                .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(spacing: HLSpace.sm) {
-                        ForEach(ScoreRingID.allCases, id: \.self) { id in
-                            row(for: id)
-                        }
+                HLCard(layout: .rows) {
+                    ForEach(ScoreRingID.allCases, id: \.self) { id in
+                        row(for: id)
                     }
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.lg)
-            }
-            .hlScreenBackground()
-            .hlScrollEdgeSoft()
-            .navigationTitle(Text(String(localized: "Score rings", comment: "Score-ring picker title")))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Done")) {
-                        onSave(selection, order)
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
                 }
             }
         }
@@ -102,38 +89,17 @@ struct ScoreRingSelectionSheet: View {
         // A non-selected row is disabled once the cap is reached — the user
         // must deselect one first (honest cap, no silent drop).
         let isDisabled = !isSelected && isAtCap
-        Button {
+        // Several scores at once: the circle at the leading edge (M3).
+        HLChoiceRow(
+            title: Text(id.label),
+            detail: Text(description(for: id)),
+            isSelected: isSelected,
+            mode: .multiple
+        ) {
             toggle(id)
-        } label: {
-            HLCard {
-                HStack(spacing: HLSpace.md) {
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text(id.label)
-                            .font(.hlSubhead.weight(.medium))
-                            .foregroundStyle(isDisabled ? HLText.tertiary : HLText.primary)
-                        Text(description(for: id))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: HLSpace.sm)
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.hlIcon(HLIconSize.md, weight: .semibold))
-                        .foregroundStyle(isSelected ? HLText.primary : HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
-            }
         }
-        .buttonStyle(.plain)
-        .hlPressable()
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.55 : 1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(id.label))
-        .accessibilityValue(Text(isSelected
-                ? String(localized: "Selected")
-                : String(localized: "Not selected")))
         .accessibilityHint(Text(isDisabled
                 ? String(localized: "Deselect a score first")
                 : String(localized: "Double-tap to toggle")))

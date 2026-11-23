@@ -5,7 +5,7 @@ import SwiftUI
 /// native `List` `.onMove` (the VoiceOver-correct, Dynamic-Type-correct
 /// reorder path that complements the in-grid drag on the Insights screen).
 ///
-/// **v0.8.0 W10 — server-first.** Persistence moved off iOS-local
+/// **Server-first.** Persistence moved off iOS-local
 /// `@AppStorage` onto `/api/insights/layout` via `InsightsLayoutStore`
 /// (optimistic write-through + Outbox replay). The visibility toggle flips
 /// `visible`; the drag reorders. Both flow to the same store the Insights
@@ -18,7 +18,7 @@ import SwiftUI
 /// Each row maps its server slug back to a localized label.
 struct SettingsInsightsCustomizationScreen: View {
     @Environment(InsightsLayoutStore.self) private var layoutStore
-    /// v0141 — per-card hide state for the Insights-overview wellness score
+    /// Per-card hide state for the Insights-overview wellness score
     /// cards (Recovery / Cardio-fitness / … cards a watch-less user can never
     /// fill). Local UI-pref; the toggles below are the "an- und abwählbar"
     /// re-enable surface for cards hidden via the card's long-press action.
@@ -27,7 +27,7 @@ struct SettingsInsightsCustomizationScreen: View {
     /// (has data) or has been explicitly hidden, so the list never shows a card
     /// the operator can't act on.
     @Environment(DerivedInsightsStore.self) private var derivedStore
-    /// Parity Build 4 · 4.3 — the server-synced ring selection, which owns the
+    /// The server-synced ring selection, which owns the
     /// three score-card ids it covers (see `scoreCardIDs`).
     /// Optional so a preview / render harness mounting this screen outside the
     /// app environment resolves to "no explicit selection" instead of trapping.
@@ -40,26 +40,21 @@ struct SettingsInsightsCustomizationScreen: View {
             scoreCardsSection
             footerSection
         }
+        .hlPageMargins()
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
-        // I-3 ITEM 6 — the top-right "Bearbeiten"/EditButton was removed. The
-        // visibility toggles persist immediately and `.onMove` drag-reorder works
-        // on an always-on inset-grouped List (long-press to lift a row) without
-        // an explicit edit mode, so the button was redundant. Reorder + toggle
-        // both flow through `InsightsLayoutStore` (server-first + Outbox) exactly
-        // as before — nothing depended on the edit-mode flag.
-        // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).
-        .hlScrollEdgeSoft()
-        .navigationTitle("Customize tab strip")
+        // No "Edit" in the bar: reordering is always on, as on the tile
+        // customisation for Today, so the handles show and a row moves with
+        // one touch. Toggles persist immediately through `InsightsLayoutStore`.
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle("settings.appearance.insightsTabs")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             // Cold-launch: hydrate the layout so the list isn't empty on a
             // fresh deep link straight into this screen.
             await layoutStore.load()
         }
-        // K1 — the banner below still presents as this overlay; this
-        // reserves its height at the top so it covers nothing (H2).
+        // The banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing.
         .hlReserveErrorBannerSpace(layoutStore.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: layoutStore.error) {
@@ -68,7 +63,7 @@ struct SettingsInsightsCustomizationScreen: View {
         }
     }
 
-    /// v0.14.1 — the strip-customise rows: every chartable-metric / special-page
+    /// The strip-customise rows: every chartable-metric / special-page
     /// tile EXCEPT `overview`. "Übersicht" is the mandatory first pill (rendered
     /// as a pinned, non-interactive header row below) and never appears here, so
     /// it can be neither hidden nor dragged out of the leading position.
@@ -90,9 +85,7 @@ struct SettingsInsightsCustomizationScreen: View {
             // present but cannot hide it or move it off the leading edge.
             overviewPinnedRow
             if orderedTiles.isEmpty {
-                Text(String(localized: "No tabs loaded yet."))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("No tabs loaded yet.")
             } else {
                 ForEach(orderedTiles) { tile in
                     toggleRow(for: tile)
@@ -100,43 +93,32 @@ struct SettingsInsightsCustomizationScreen: View {
                 .onMove(perform: moveTiles)
             }
         } header: {
-            // R12 — Abschnitts-Header eines List-Gerüsts ist der System-Default
-            // (roher `Text`, versal). Die eigene Schrift/Tinte ist gefallen.
-            Text(String(localized: "Tabs"))
+            HLSectionHeader("settings.appearance.insightsTabs.section")
         } footer: {
             // UI-Standard R3/R5 — auf diesem Screen standen drei
             // Mechanik-Footer untereinander, die alle „ziehen zum Sortieren"
             // und „ohne Daten bleibt es ausgeblendet" sagten. Der Satz hat hier
             // seine Heimat und ist auf die zwei nicht sichtbaren Folgen
             // gekürzt: Der einleitende Halbsatz wiederholte den Seitentitel,
-            // die Zieh-Anleitung war eine Bedien-Nacherzählung (R2), und
+            // die Zieh-Anleitung war eine Bedien-Nacherzählung, und
             // „Übersicht bleibt zuerst" steht bereits an der angehefteten
             // Zeile selbst.
             Text(String(
                 localized: "Hidden tabs leave the strip and their page. Tabs without data stay hidden even when enabled."
             ))
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
         }
+        .hlFormRowSurface()
     }
 
     /// The pinned, non-interactive "Übersicht" row. It carries no toggle and no
     /// drag handle, communicating that the overview tab is mandatory and always
     /// leads the strip.
     private var overviewPinnedRow: some View {
-        HStack {
-            // 1.4 B2-c — the pin says it; "always shown first" is gone.
-            Text(label(for: InsightsLayoutTileId.overview))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Spacer()
-            Image(systemName: "pin.fill")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .accessibilityHidden(true)
-        }
-        .moveDisabled(true)
-        .accessibilityIdentifier("settings.insights.row.overview.pinned")
+        // The pin says it; "always shown first" is gone.
+        HLRow(title: Text(label(for: InsightsLayoutTileId.overview)), accessory: .symbol("pin.fill"))
+            .moveDisabled(true)
+            .accessibilityIdentifier("settings.insights.row.overview.pinned")
     }
 
     // MARK: - Score cards (v0141 — per-card hide, local UI-pref)
@@ -145,7 +127,7 @@ struct SettingsInsightsCustomizationScreen: View {
     /// data) OR explicitly hidden. Ordered by the block's canonical card order so
     /// the list mirrors the on-screen grid.
     ///
-    /// **Parity Build 4 · 4.3 — one owner per card.** Once the operator has an
+    /// **One owner per card.** Once the operator has an
     /// EXPLICIT ring selection, the three ids that selection covers
     /// (`READINESS` / `SLEEP_SCORE` / `RECOVERY_SCORE`) are governed by it —
     /// server-synced, visible to web — so they are dropped from this local
@@ -176,8 +158,9 @@ struct SettingsInsightsCustomizationScreen: View {
                     scoreToggleRow(for: id)
                 }
             } header: {
-                Text(String(localized: "Score cards"))
+                HLSectionHeader("Score cards")
             }
+            .hlFormRowSurface()
             // UI-Standard R3/R4 — der Abschnitts-Footer ist ersatzlos gefallen.
             // Sein erster Satz erzählte den Schalter daneben nach, sein zweiter
             // wiederholte die „ohne Daten"-Aussage aus dem Tabs-Footer, und
@@ -193,9 +176,7 @@ struct SettingsInsightsCustomizationScreen: View {
         Toggle(isOn: scoreCardBinding(for: id)) {
             // `InsightsDerivedCopy.title(for:)` returns an already-localized
             // String, so `Text(_: String)` renders it verbatim (no re-lookup).
-            Text(InsightsDerivedCopy.title(for: id))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle(Text(InsightsDerivedCopy.title(for: id)))
         }
         .accessibilityIdentifier("settings.insights.scoreCard.\(id)")
     }
@@ -208,14 +189,19 @@ struct SettingsInsightsCustomizationScreen: View {
         )
     }
 
+    /// Resetting throws away the person's own order and choices, so it asks
+    /// first, with the word of the act instead of "Delete".
+    static func resetAction(perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(title: "Reset to defaults?", word: "Reset", symbol: "arrow.uturn.backward", perform: perform)
+    }
+
     private var footerSection: some View {
         Section {
-            Button(role: .destructive) {
-                Task { await layoutStore.resetToDefaults() }
-            } label: {
-                Label(String(localized: "Reset to default"), systemImage: "arrow.uturn.backward")
-            }
+            HLDeleteButton("Reset to default", form: .row, action: Self.resetAction {
+                await layoutStore.resetToDefaults()
+            })
         }
+        .hlFormRowSurface()
     }
 
     /// **UI-Standard R6 — die zweite der drei parallel gepflegten
@@ -228,9 +214,7 @@ struct SettingsInsightsCustomizationScreen: View {
     /// wieder an genau einer Stelle.
     private func toggleRow(for tile: InsightsLayoutTile) -> some View {
         Toggle(isOn: binding(for: tile.id)) {
-            Text(label(for: tile.id))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle(Text(label(for: tile.id)))
         }
         .accessibilityIdentifier("settings.insights.toggle.\(tile.id)")
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W3 — the per-card availability model for ``AISourceChoicePicker``.
+/// The per-card availability model for ``AISourceChoicePicker``.
 ///
 /// W1 evolved the picker from a flat `[AIMode]` to a mode-aware list. W3 makes
 /// each offered card *honest* about whether it can actually be picked right now:
@@ -10,7 +10,7 @@ import Foundation
 /// disabled (D4: hide-permanent / disable-recoverable).
 ///
 /// The decision of *which* cards are offered, and in *which* state, lives in
-/// ``AISourceOptions/offered(operatingMode:onDeviceAvailability:)`` — a pure
+/// ``AISourceOptions/offered(onDeviceAvailability:)`` — a pure
 /// function the hosts call and tests pin, deliberately kept out of the View.
 enum AISourceCardState: Equatable {
     /// The card is selectable. Tapping it commits the mode.
@@ -28,7 +28,7 @@ enum AISourceRecovery: Equatable {
     /// can turn it on. The picker renders this as a tappable "Open Settings"
     /// chip; the host owns the actual `openURL`.
     case openAppleIntelligenceSettings
-    /// v0.14.1 — route to the in-app Settings → Assistant hub so the user can
+    /// Route to the in-app Settings → Assistant hub so the user can
     /// configure a server AI provider (or BYO key). Attached to the disabled
     /// "External AI" card when no server provider is configured, so the dead-end
     /// becomes an actionable "set one up" chip instead of a silent bounce. The
@@ -52,49 +52,40 @@ struct AISourceOption: Identifiable, Equatable {
 }
 
 /// Pure, testable computation of the offered AI-source options for a given
-/// operating mode × on-device capability. Kept free of SwiftUI so the matrix
-/// logic (D2 mode axis · D4 hide-permanent / disable-recoverable) is unit-pinned
-/// rather than buried in a `body`.
+/// on-device capability. Kept free of SwiftUI so the matrix logic (D4
+/// hide-permanent / disable-recoverable) is unit-pinned rather than buried in a
+/// `body`.
 ///
-/// **`.byoKey` is offered in BOTH operating modes (v0.13 W4).** The client-side
-/// BYO-key path runs device→provider directly, so it works standalone AND
-/// server-connected — it is mode-invariant. The Settings/onboarding hosts reveal
-/// the inline key-entry card when it is picked, so it is no longer a dead-end
-/// (W4 landed the entry card + Coach transmit). The `.online` (External AI) card
-/// is still dropped in standalone — a standalone install has no server provider
-/// to route through.
+/// **`.byoKey`.** The client-side BYO-key path runs device→provider
+/// directly. The Settings/onboarding hosts reveal the inline key-entry card when
+/// it is picked, so it is no longer a dead-end (W4 landed the entry card + Coach
+/// transmit).
 enum AISourceOptions {
     /// Compute the cards to render, in display order.
     ///
-    /// - `none` is always offered (privacy-first default, every mode).
+    /// - `none` is always offered (privacy-first default).
     /// - `onDevice` is offered iff the device can ever run it: `.available`
     ///   (selectable) or recoverable (`.appleIntelligenceNotEnabled` /
     ///   `.modelNotReady`, shown disabled-with-reason). Permanent incapability
     ///   (`.deviceNotEligible` / `.unsupported`) → the card is omitted entirely.
-    /// - `online` (External AI) is offered only in `.paired` mode.
-    /// - `byoKey` ("Own key") is offered in BOTH modes (mode-invariant, W4).
+    /// - `online` (External AI) and `byoKey` ("Own key", W4) are always offered.
     static func offered(
-        operatingMode: BackendAvailability.Mode,
         onDeviceAvailability: LocalLLMService.Availability
     ) -> [AISourceOption] {
         var options: [AISourceOption] = []
 
-        // Privacy-first default — always available, every mode.
+        // Privacy-first default — always available.
         options.append(AISourceOption(mode: .none, state: .available))
 
-        // On-device — capability-gated (D4).
+        // On-device — capability-gated.
         if let onDeviceState = onDeviceCardState(for: onDeviceAvailability) {
             options.append(AISourceOption(mode: .onDevice, state: onDeviceState))
         }
 
-        // External / server AI — server-mode only (D2). Standalone has no
-        // server provider to route through, so the card is dropped.
-        if operatingMode == .paired {
-            options.append(AISourceOption(mode: .online, state: .available))
-        }
+        // External / server AI.
+        options.append(AISourceOption(mode: .online, state: .available))
 
-        // Own key (BYO, client-side device→provider) — offered in BOTH modes
-        // (mode-invariant). v0.13 W4 un-gated it: the host reveals the inline
+        // Own key (BYO, client-side device→provider). v0.13 W4 un-gated it: the host reveals the inline
         // key-entry card when picked + the Coach BYO arm transmits, so it is a
         // real path, not a dead-end. Always `.available` — capability is "do you
         // have a key", which the entry card collects; there is nothing to
@@ -104,7 +95,7 @@ enum AISourceOptions {
         return options
     }
 
-    /// v0.14.1 — the two-card option list for the AskCoach source chooser
+    /// The two-card option list for the AskCoach source chooser
     /// (`CoachSourceChoiceView`): On-device (always `.available` there — the host
     /// only shows this picker on a capable device) + External AI. External AI is
     /// `.available` only when a server provider is configured; otherwise it is
@@ -112,7 +103,7 @@ enum AISourceOptions {
     /// recovery chip routing to Settings → Assistant. This makes the no-provider
     /// dead-end unreachable in the picker rather than a path that consents to a
     /// noop and silently bounces back to the chooser. Pure + testable, mirroring
-    /// ``offered(operatingMode:onDeviceAvailability:)``.
+    /// ``offered(onDeviceAvailability:)``.
     static func coachChoice(hasServerProvider: Bool) -> [AISourceOption] {
         [
             AISourceOption(mode: .onDevice, state: .available),
@@ -120,7 +111,7 @@ enum AISourceOptions {
         ]
     }
 
-    /// v0.14.1 — the External AI card's state for the Coach chooser: available
+    /// The External AI card's state for the Coach chooser: available
     /// with a provider, disabled-with-reason (+ Assistant-settings recovery)
     /// without one.
     static func externalAICardState(hasServerProvider: Bool) -> AISourceCardState {
@@ -164,7 +155,7 @@ enum AISourceOptions {
                 recovery: nil
             )
         case .deviceNotEligible, .unsupported:
-            // Permanent on this device/OS — hide rather than tease (D4).
+            // Permanent on this device/OS — hide rather than tease.
             nil
         }
     }

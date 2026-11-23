@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **1.0.3 — App Review 1.4.1, ruling R12.** Locks the copy and the citation
+/// **App Review 1.4.1, ruling R12.** Locks the copy and the citation
 /// placements that answer audit rows 3, 10, 14 and 17.
 ///
 /// These are deliberately *source- and catalog-level* assertions rather than

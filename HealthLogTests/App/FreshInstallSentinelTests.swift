@@ -11,11 +11,11 @@ import Testing
 /// populated* is the deleted-and-reinstalled signature, and it must be acted
 /// on before anything in the launch path reads a server address.
 ///
-/// Cases 1 and 4 carry the `EXPECTED_RED` markers of 13-01: they were that
-/// plan's two lies. An ordinary relaunch keeping its server and a genuine first
+/// Cases 1 and 4 pin the two situations the first version of the rule got
+/// wrong. An ordinary relaunch keeping its server and a genuine first
 /// install recording only itself are their controls.
 ///
-/// **13-05.** The rule as 13-01 wrote it had no second premise. "No sentinel"
+/// The rule as 13-01 wrote it had no second premise. "No sentinel"
 /// is evidence of a first launch only once the sentinel has already shipped;
 /// on the build that introduces it, every installation on earth reads nil.
 /// `installOlderThanTheSentinelKeepsItsServer` is that missing case, and it is
@@ -47,7 +47,7 @@ struct FreshInstallSentinelTests {
         #expect(
             keychain.getString(forKey: KeychainKey.serverURL) == nil
                 && keychain.getString(forKey: KeychainKey.serverURLExplicitHostFingerprint) == nil,
-            "EXPECTED_RED: a deleted-and-reinstalled app still inherits the previous server address"
+            "a deleted-and-reinstalled app still inherits the previous server address"
         )
         #expect(outcome == .freshInstall(wipedInheritedServerIdentity: true))
         #expect(
@@ -78,7 +78,7 @@ struct FreshInstallSentinelTests {
         #expect(keychain.getString(forKey: KeychainKey.serverURLExplicitHostFingerprint) != nil)
     }
 
-    /// **13-05 — the update path.** The installation that has been on this
+    /// **The update path.** The installation that has been on this
     /// device all along, meeting the sentinel for the first time because the
     /// build it shipped in has just been installed *over* the previous one.
     ///
@@ -116,7 +116,7 @@ struct FreshInstallSentinelTests {
             keychain.getString(forKey: KeychainKey.serverURL) == configured.absoluteString
                 && keychain.getString(forKey: KeychainKey.serverURLExplicitHostFingerprint) != nil
                 && outcome != .freshInstall(wipedInheritedServerIdentity: true),
-            "EXPECTED_RED: the first launch of the sentinel-bearing build wipes the server address of an installation that predates the sentinel"
+            "the first launch of the sentinel-bearing build wipes the server address of an installation that predates the sentinel"
         )
         // Whichever way the decision goes, it is taken exactly once per
         // install: the sentinel is written on both branches, so the next launch
@@ -128,7 +128,7 @@ struct FreshInstallSentinelTests {
         #expect(outcome == .preexistingInstall(witness: .defaultsKeyOlderThanTheSentinel))
     }
 
-    /// **13-05 — the other witness.** The same update path, seen from a
+    /// **The other witness.** The same update path, seen from a
     /// defaults domain that happens to carry none of the four keys the rule
     /// knows by name. The container itself still remembers: some earlier launch
     /// opened a store under `Library/Application Support/HealthLog`, and that
@@ -161,7 +161,7 @@ struct FreshInstallSentinelTests {
         )
     }
 
-    /// **13-05.** When both stores can answer, the defaults domain is quoted.
+    /// When both stores can answer, the defaults domain is quoted.
     /// Not a preference between equals: it is the store the sentinel itself
     /// lives in, so it shares the sentinel's lifecycle exactly, and it is the
     /// one that survives a restore. The reported witness is evidence, so it has
@@ -199,7 +199,7 @@ struct FreshInstallSentinelTests {
         )
     }
 
-    /// **13-05 — the witness against a real file system**, because the whole
+    /// **The witness against a real file system**, because the whole
     /// rule now rests on what this type says about a directory.
     ///
     /// Three claims: an absent directory is not evidence, a present one is, and
@@ -288,7 +288,7 @@ struct FreshInstallSentinelTests {
 
         #expect(
             outcome.steps.first == .freshInstallGuard && serverURLSeenByResolve == nil,
-            "EXPECTED_RED: nothing orders the wipe before AppEnvironment.resolve"
+            "nothing orders the wipe before AppEnvironment.resolve"
         )
         #expect(outcome.steps == [.freshInstallGuard, .uiTestOverrides, .resolveEnvironment])
         #expect(outcome.environment.baseURL == nil)
@@ -299,7 +299,7 @@ struct FreshInstallSentinelTests {
 /// "no server configured" case.
 private final class FreshInstallBundleAnchor {}
 
-/// **13-05.** The filesystem half of the rule, stated rather than discovered.
+/// The filesystem half of the rule, stated rather than discovered.
 /// The real witness is exercised against a real directory in
 /// `applicationSupportWitnessReadsWithoutCreating`; everywhere else the answer
 /// is a premise of the case, because a test that let the host process's own

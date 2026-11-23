@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v1.25 (GH iOS #38) — locks the wire contracts for the three read-only
+/// v1.25 — locks the wire contracts for the three read-only
 /// "clinical signals" awareness reads (server `release/v1.25.0`):
 ///   - `GET /api/insights/health-status`       (`InsightsHealthStatusDTO`)
 ///   - `GET /api/insights/breathing-screening` (`InsightsBreathingScreeningDTO`)

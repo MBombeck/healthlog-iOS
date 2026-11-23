@@ -1,6 +1,6 @@
 import Foundation
 
-/// **LIFE (1.5.0)** — the catalog wording of every option and section.
+/// The catalog wording of every option and section.
 ///
 /// Every key is written out (no key built at runtime), so the catalog checks
 /// see each one, and the wording follows the server's `records.life.*`

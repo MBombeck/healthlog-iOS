@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// **LIFE (1.5.0), Server #1334** — "When you stopped", picked as a month.
+/// "When you stopped", picked as a month.
 ///
 /// The contract stores the quit date as `quitMonth: "YYYY-MM"`, so the app
 /// asks for exactly that: a month and a year, nothing finer, nothing typed.
 /// On the web the field was a text box that threw away every keystroke short
-/// of a whole `YYYY-MM` (Server #1334); here there is nothing to type.
+/// of a whole `YYYY-MM`; here there is nothing to type.
 ///
 /// The row shows the chosen month (or "No answer"). A tap unfolds a month
 /// wheel and a year wheel inline beneath it, the way the system date picker
@@ -32,13 +32,13 @@ struct LifeMonthPickerRow: View {
             } label: {
                 LifeAdaptiveRow(label: label) {
                     Text(verbatim: display)
-                        .font(.hlBody)
+                        .font(HLRowValue.Emphasis.setting.font)
                         .foregroundStyle(isExpanded ? HLAccent.userBrandTint : HLText.secondary)
                         .fixedSize()
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hlRow)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: label))
             .accessibilityValue(Text(verbatim: display))
@@ -47,18 +47,10 @@ struct LifeMonthPickerRow: View {
 
             if isExpanded {
                 wheels
-                Button {
+                HLLinkButton("life.noAnswer") {
                     value = nil
                     withHLAnimation(.easeInOut(duration: 0.2)) { isExpanded = false }
-                } label: {
-                    Text("life.noAnswer")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.secondary)
-                        .frame(minHeight: 44)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .accessibilityIdentifier("\(identifier).clear")
             }
         }
@@ -130,6 +122,6 @@ struct LifeMonthPickerRow: View {
 
     private var display: String {
         guard let value, let date = value.date() else { return String(localized: "life.noAnswer") }
-        return date.formatted(.dateTime.month(.wide).year().locale(locale))
+        return HLDateFormat.monthYear(date, locale: locale)
     }
 }

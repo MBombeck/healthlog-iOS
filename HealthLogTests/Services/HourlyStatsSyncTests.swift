@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **X4 (1.3, #138 / #77)** — the hourly path end to end through the
+    /// The hourly path end to end through the
     /// production coordinator: the server gate, live hours on every sweep,
     /// the `backfill` label, idempotency, bounds, and the update path from a
     /// 1.2.0 / 1.3 install whose day totals already converged.
@@ -280,7 +280,7 @@ import Testing
         func backfillWireValue() async {
             let context = SyncTriggerContext()
             await context.bind(.background) {
-                // SYNC-TRIG (1.5) — the mark is an argument of the upload, no
+                // The mark is an argument of the upload, no
                 // longer a task-local; the expectations are unchanged.
                 #expect(context.current == .background)
                 #expect(context.wireValue(backfill: true) == .background)

@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **A5 (1.4, R3 S4)** — which deletions go to the server, in what shape,
+    /// Which deletions go to the server, in what shape,
     /// and what becomes of one that cannot go at once.
     @Suite("Apple Health deletion forwarder (A5)", .serialized, .mockURLSession)
     struct HealthKitDeletionForwarderTests {
@@ -34,9 +34,41 @@
             #expect(forwarded.isDisjoint(with: HealthKitCumulativeTypeConfig.cumulativeIdentifiers))
             #expect(forwarded.isSubset(of: HealthLogSampleTypeRegistry.baseIdentifiers))
             #expect(forwarded.allSatisfy { HealthKitWireConverter.preferredUnit(for: $0) != nil }, "each is sent one row per sample")
-            // A6 — waist circumference (read since B5) is the ninth.
+            // Waist circumference (read since B5) is the ninth.
             #expect(forwarded.contains(HKQuantityTypeIdentifier.waistCircumference.rawValue))
             #expect(forwarded.count == 9)
+        }
+
+        @Test("a deletion takes a still-queued upload of the same sample out of the outbox first (#5)")
+        func deletionPrunesTheQueuedUpload() async throws {
+            let registry = AuthenticatedSessionLeaseRegistry()
+            let lease = try CollectorFixture.makeLease(registry: registry)
+            let outbox = try DeletionFixture.outbox()
+            let start = Date(timeIntervalSince1970: 1_790_000_000)
+            func weight(_ id: String) -> HealthKitBatchEntryDTO {
+                HealthKitBatchEntryDTO(
+                    hkIdentifier: DeletionFixture.weight, value: 80, unit: "kg",
+                    startDate: start, endDate: start, externalId: id
+                )
+            }
+            // The upload of W-1 failed with a 5xx and waits, beside W-2.
+            try await outbox.enqueueHealthKitBatch(
+                [weight("W-1"), weight("W-2")],
+                encoder: .hlBatch,
+                idempotencyKey: "a5-page",
+                requiringCurrentOwner: DeletionFixture.owner
+            )
+            let server = RecordingDeletionServer()
+
+            let held = await HealthSampleDeletionForwarder(server: server, queue: outbox)
+                .forward(["W-1"], ofType: DeletionFixture.weight, requiring: lease)
+
+            #expect(held == nil)
+            #expect(server.sent == [["W-1"]])
+            let queued = await outbox.snapshot.flatMap { op in
+                (try? JSONDecoder.hlDefault.decode(HealthKitBatchPayload.self, from: op.payload))?.entries.map(\.externalId) ?? []
+            }
+            #expect(queued == ["W-2"], "the deleted reading can no longer be replayed back")
         }
 
         @Test("a large deletion goes out in batches of at most 500, the route's own bound")

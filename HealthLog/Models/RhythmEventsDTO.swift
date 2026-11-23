@@ -23,7 +23,7 @@ import Foundation
 /// rather than painting an empty / alarming surface.
 ///
 /// **Server-derived (paired only).** This is a pure server read — no
-/// on-device fallback — so the card hides in standalone / no-server.
+/// on-device fallback — so the card hides without a server.
 public struct RhythmEventsDTO: Codable, Sendable, Equatable {
     public let events: [Event]
     public let hasEvents: Bool

@@ -142,7 +142,7 @@ struct FactClaimingFallbackTests {
     }
 }
 
-/// **#115 Phase 2 — vaccinations and document links (v1.39): not applicable.**
+/// **Vaccinations and document links (v1.39): not applicable.**
 ///
 /// The app lists no vaccinations (no call to `GET /api/vaccinations`), so it
 /// neither shows `renewals` nor offers a vaccination to link. What it must not

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - 15-01 (B1) — editing an intake's time
+// MARK: - Editing an intake's time
 
 /// The local half of an intake edit, plus the one entry point the history row
 /// uses. Everything here is synchronous on purpose: it runs before (or after)
@@ -13,7 +13,7 @@ public extension MedicationsStore {
     /// round-trip into the 422 the server would answer with.
     static let takenAtFutureSkew: TimeInterval = 5 * 60
 
-    /// **B1 — correct the time of an intake that was taken.**
+    /// **Correct the time of an intake that was taken.**
     ///
     /// Sends `takenAt` ALONE: the entry's status is not up for renegotiation
     /// here (`skipped` stays whatever the server holds), which is why the
@@ -60,9 +60,9 @@ public extension MedicationsStore {
         guard let index = todayIntakes.firstIndex(where: { $0.id == eventId }) else { return nil }
         let original = todayIntakes[index]
         guard let patched = Self.locallyPatched(original, with: patch) else { return nil }
-        bumpMutationGeneration() // H-3 — protect this optimistic patch
+        bumpMutationGeneration() // Protect this optimistic patch
         todayIntakes[index] = patched
-        // Y4.1 — the badge follows the optimistic patch, exactly as on the
+        // The badge follows the optimistic patch, exactly as on the
         // quick-mark path.
         onIntakesDidChange?()
         return original

@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// W-SERVER-SYNC — locks the consolidated `/api/insights/cards` contract.
+/// Locks the consolidated `/api/insights/cards` contract.
 ///
 /// The Insights screen already consumes this single endpoint (one fetch → all
 /// metric cards) instead of per-metric digest fetches; the per-metric

@@ -4,7 +4,7 @@ import SwiftUI
     import SpeziChat
 #endif
 
-/// **POLISH-COACH (v0.5.5.6) → v0.5.7 G.3** — `.large`-detent sheet
+/// **POLISH-COACH → v0.5.7 G.3** — `.large`-detent sheet
 /// presented from the `AskCoachHeroCard` on the Insights tab.
 ///
 /// **G.3 status:** the v0.5.6 "Bald verfügbar" panel is gone — the
@@ -22,8 +22,8 @@ import SwiftUI
 /// 2. `SpeziChat.ChatView($store.chat)` paints the transcript + text-input row
 ///    with a typing-indicator wired to `store.isResponding`.
 /// 3. The kill-card surfaces when `service.availability != .available`
-///    (Apple-Intelligence-off / model-not-ready / device-ineligible /
-///    pre-iOS-26) — the user never reaches a broken send path.
+///    (Apple-Intelligence-off / model-not-ready / device-ineligible) — the
+///    user never reaches a broken send path.
 ///
 /// **Why suggestion chips drive `store.send(...)` directly (not the text
 /// field):** the chips are pre-validated entry prompts — tapping fires the
@@ -38,114 +38,71 @@ import SwiftUI
 /// **G.4 hand-off:** health-context wiring happens on the
 /// `CoachConversationStore.send(_:)` path before the LocalLLMService call.
 struct AskCoachSheet: View {
-    /// v0.13 WP — optional composer seed from an Insights prompt chip; pre-fills
+    /// Optional composer seed from an Insights prompt chip; pre-fills
     /// the composer (editable, not auto-sent). `nil` for coin / hero-tap entries.
     var seed: String?
-    /// **A360 H1/H2 (v0156)** — optional metric/correlation scope from the launch
+    /// **A360 H1/H2** — optional metric/correlation scope from the launch
     /// site (per-tile "Ask the coach about this", per-metric page, mood page,
     /// correlation card). Seeded onto the store on appear so the FIRST server turn
     /// of a fresh conversation carries the wire `scope` ({ sources, window }) — the
     /// coach then knows which metric the user was looking at. `nil` for the generic
     /// FAB / hero / deep-link entries (default all-source snapshot).
     var launchScope: CoachLaunchScope?
-    /// Non-private so the `+ServerFallback` extension's `coachConsentSheet` (A6b)
-    /// can reach the container (mirrors `authStore` below).
+    /// Non-private so the `+ServerFallback` extension's `coachConsentSheet`
+    /// can reach the container.
     @Environment(\.appContainer) var appContainer
-    /// v0.11 W3 — Coach is on-device first (A). The server fallback/consent arms
-    /// exist only for a paired install; in standalone (`!hasServer`) they are
-    /// suppressed so an AI-ineligible iPhone reaches the cloud placeholder, not a
-    /// consent CTA pointing at a non-existent server. (§4 matrix: Coach (A)→(B).)
-    @Environment(BackendAvailability.self) private var backend
-    /// v0.11 W3 — shared CTA path. Non-private so the `+ServerFallback`
-    /// extension's `standalonePlaceholder` can reach it (like `welcomeLockup`).
-    @Environment(AuthStore.self) var authStore
-    /// v0.14.7 A6b — the AI-consent sheet is presented as a NESTED sheet on the
+    /// The AI-consent sheet is presented as a NESTED sheet on the
     /// Coach surface itself (local state) — see `coachConsentSheet` in
     /// `+ServerFallback`. Routing through the shell-owned `explicitPromptToken`
-    /// could not present over the already-presented Coach sheet (A6b).
+    /// could not present over the already-presented Coach sheet.
     @State var showCoachConsentSheet = false
     /// C2 (b199 walkthrough) — drives the push to the existing
     /// `CoachConversationsScreen` history list from the Coach sheet's overflow
     /// menu (previously only reachable via Settings → Coach → Past conversations).
     @State private var showPastConversations = false
-    /// v0.14.1 — the "External AI needs a server provider" step, presented when
+    /// The "External AI needs a server provider" step, presented when
     /// the user picks External AI but no server provider is configured (so the
     /// consent grant would be a noop and the chooser would silently bounce). It
     /// routes the user to Settings → Assistant to set one up. Non-private so the
     /// `+ServerFallback` extension can flip it from the consent-accept guard +
     /// the chooser CTA. See `coachProviderNeededSheet`.
     @State var showCoachProviderNeeded = false
-    /// v0.14.1 — used by `coachProviderNeededSheet` to route the operator to
+    /// Used by `coachProviderNeededSheet` to route the operator to
     /// Settings → Assistant. Non-private so the `+ServerFallback` extension can
     /// reach it.
     @Environment(AppRouter.self) var appRouter
     @Environment(\.dismiss) var dismissCoachSheet
 
     var body: some View {
-        NavigationStack {
+        // A sheet that only shows something: the close button. The overflow
+        // menu stays an ordinary bar item on the content.
+        HLSheetScaffold("Ask the coach") {
             content
-                .hlScreenBackground()
-                .navigationTitle(String(localized: "Ask the coach"))
-                .navigationBarTitleDisplayMode(.inline)
-                // 1.4 B2 — the assistant's citation pushes inside this sheet.
-                .hlSheetStack()
-                // v0.6.1 Y2 — Home-Compliance pattern: drop the
-                // 'Schließen' cancellationAction (drag-down dismisses).
-                // The `arrow.counterclockwise` reset stays — it's a
-                // functional 'Neue Unterhaltung' action, not sheet
-                // chrome.
                 // C2 (b199 walkthrough) — the full history list
                 // (`CoachConversationsScreen`) already exists but was only
                 // reachable via Settings → Coach → Past conversations. Surface it
                 // directly from the chat: an overflow menu now carries both "New
                 // conversation" (the prior reset action) and "Past conversations"
-                // (pushes the existing, tested screen). The screen self-gates to a
-                // calm placeholder in standalone (`!hasServer`), so the menu entry
-                // can show always.
+                // (pushes the existing, tested screen).
                 .navigationDestination(isPresented: $showPastConversations) {
                     CoachConversationsScreen()
                 }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button {
-                                appContainer?.coachConversationStore.reset()
-                            } label: {
-                                Label(
-                                    String(localized: "New conversation"),
-                                    systemImage: "arrow.counterclockwise"
-                                )
-                            }
-                            Button {
-                                showPastConversations = true
-                            } label: {
-                                Label(
-                                    String(localized: "coach.toolbar.pastConversations"),
-                                    systemImage: "clock.arrow.circlepath"
-                                )
-                            }
-                        } label: {
-                            // CO2 (v0154 walkthrough) — plain `ellipsis` (not
-                            // `ellipsis.circle`): the iOS-26 system toolbar glass
-                            // capsule already wraps the bar button, so a drawn
-                            // circle outline nested inside it read as an ugly
-                            // double-circle. The three dots alone sit cleanly in
-                            // the glass capsule like a normal toolbar button.
-                            Image(systemName: "ellipsis")
-                                .accessibilityLabel(String(localized: "Coach options"))
+                .hlPageActions([
+                    .more(label: "Coach options") {
+                        Button("New conversation", systemImage: "arrow.counterclockwise") {
+                            appContainer?.coachConversationStore.reset()
+                        }
+                        .disabled(appContainer == nil)
+                        Button("coach.toolbar.pastConversations", systemImage: "clock.arrow.circlepath") {
+                            showPastConversations = true
                         }
                         .disabled(appContainer == nil)
                     }
-                }
+                ])
         }
-        .hlSheetPresentation(.form)
-        // v0.6.1 Y2 — opaque HLColor.surface to match the canonical
-        // Home-Compliance sheet (the `.thinMaterial` was the
-        // hellgrau-versus-Compliance shade drift the operator flagged).
-        .presentationBackground(HLColor.surface)
-        // v0.12 W8-2 — pre-warm the hoisted on-device session as the sheet
+        // Pre-warm the hoisted on-device session as the sheet
         // appears so the first turn doesn't pay a visible cold-start. No-op on
-        // every runtime where the model isn't `.available` (pre-26, AI off,
+        // every runtime where the model isn't `.available` (AI off,
         // model downloading, device ineligible) — `prewarm()` self-guards.
         .onAppear {
             appContainer?.coachConversationStore.service.prewarm()
@@ -154,13 +111,13 @@ struct AskCoachSheet: View {
             // correlation the user was looking at. `nil` (generic FAB / hero /
             // deep-link entry) clears any stale scope from a prior scoped open.
             appContainer?.coachConversationStore.setLaunchScope(launchScope)
-            // CCH-03 — opening the Coach (from the FAB or the More-tab row) marks
+            // Opening the Coach (from the FAB or the More-tab row) marks
             // it seen: clears the unread dot optimistically + stamps the server so
             // the cleared state follows the user across devices. Single entry point
             // for every Coach surface (FAB / More / Insights chip).
             appContainer?.coachNudgeStore.markSeenOptimistically()
         }
-        // AUD-5 H2 — tear down an in-flight Coach turn when the sheet is dismissed
+        // Tear down an in-flight Coach turn when the sheet is dismissed
         // mid-stream. Without this the server SSE turn ran to its full
         // 120s-idle / 600s-ceiling budget, held the connection, wasted the
         // health-context egress the user tried to abort, and on completion mutated
@@ -170,12 +127,12 @@ struct AskCoachSheet: View {
         .onDisappear {
             appContainer?.coachConversationStore.cancelInFlightTurn()
         }
-        // v0.14.7 A6b — nested AI-consent sheet (see `coachConsentSheet` in
+        // Nested AI-consent sheet (see `coachConsentSheet` in
         // `+ServerFallback`), presented OVER the Coach sheet from this view's own
         // hierarchy because the shell can't present over an already-presented
         // sheet — the recurring "consent does nothing until app restart" bug.
         .sheet(isPresented: $showCoachConsentSheet) { coachConsentSheet }
-        // v0.14.1 — the "External AI needs a server provider" step. Presented
+        // The "External AI needs a server provider" step. Presented
         // when the user picks External AI without a configured provider, so the
         // dead-end (silent bounce to the chooser) becomes an actionable route to
         // Settings → Assistant. Lives in `+ServerFallback`.
@@ -194,29 +151,28 @@ struct AskCoachSheet: View {
             // re-routes the surface live on a mode flip (else only on restart).
             // swiftlint:disable:next redundant_discardable_let
             let _ = container.aiConsentStore.revision
-            // v0.7.1 W-COACH-FALLBACK — on-device available → on-device
+            // On-device available → on-device
             // conversation. Otherwise, if the server fallback is wired +
             // consented, run the server-backed conversation instead of
             // the kill-card. If the fallback is available but consent is
             // pending, surface a consent CTA. Only when neither path can
             // run do we fall back to the legacy unavailable surfaces.
             if let blocked = Self.coachEntryRefusal(container.aiCapabilityGate) {
-                // #115 · 0.2 — a decision (operator, record, module, the person's
+                // A decision (operator, record, module, the person's
                 // own switch) closed the Coach: say which, offer nothing to send.
                 unavailableSurface(
                     title: String(localized: "Coach unavailable"),
                     message: Self.coachRefusalCopy(blocked)
                 )
             } else if store.shouldUseBYO {
-                // v0.13 W4 — the user chose "Own key": run the conversation
-                // through their provider directly, regardless of operating mode
-                // or on-device capability. This is the standalone path that the
-                // legacy `else { standalonePlaceholder }` could not serve.
+                // The user chose "Own key": run the conversation
+                // through their provider directly, regardless of on-device
+                // capability.
                 conversationSurface(store: store)
-            } else if backend.hasServer, store.shouldUseServerFallback {
-                conversationSurface(store: store) // v0.11 AI-1: explicit-pick server arm BEFORE on-device
-            } else if backend.hasServer, store.serverFallbackNeedsConsent {
-                // v0.14.7 A6c — when the device CAN answer on-device but the user
+            } else if store.shouldUseServerFallback {
+                conversationSurface(store: store) // Explicit-pick server arm BEFORE on-device
+            } else if store.serverFallbackNeedsConsent {
+                // When the device CAN answer on-device but the user
                 // picked External AI, offer a real on-device-vs-server CHOICE
                 // (`isReady` is true exactly then) instead of the old copy that
                 // falsely claimed the iPhone had no on-device Coach. On-device pick
@@ -224,10 +180,10 @@ struct AskCoachSheet: View {
                 serverConsentSurface(
                     container: container,
                     onDeviceCapable: store.service.isReady,
-                    // v0.14.1 — gate the External AI path on a real provider so
+                    // Gate the External AI path on a real provider so
                     // the chooser can mark it unavailable + route to setup instead
                     // of opening a consent sheet that noops + silently bounces.
-                    // W-B186 COACH-1 (#24) — the server/admin-managed case has NO
+                    // The server/admin-managed case has NO
                     // per-user provider yet IS serveable; treat it as a present
                     // provider so the consent path (not "set up a provider") runs.
                     hasServerProvider: container.aiProviderStore.config?.isServerAIAvailable == true,
@@ -243,12 +199,8 @@ struct AskCoachSheet: View {
                 )
             } else if store.service.availability == .available {
                 conversationSurface(store: store)
-            } else if backend.hasServer {
-                onDeviceUnavailableSurface(availability: store.service.availability)
             } else {
-                // v0.11 W3 — standalone + on-device Coach unavailable: no server
-                // fallback exists → calm cloud placeholder (shared CTA).
-                standalonePlaceholder
+                onDeviceUnavailableSurface(availability: store.service.availability)
             }
         } else {
             // No container resolved — happens in #Preview / non-app
@@ -270,10 +222,10 @@ struct AskCoachSheet: View {
             // External AI and flagged the permanent "Answers come from your
             // server" banner over every turn as noise; the web shows no per-turn
             // arm banner either. The honest, on-demand provenance is the collapsed
-            // "what I'm looking at" disclosure under each server-arm reply (CO4),
+            // "what I'm looking at" disclosure under each server-arm reply,
             // and the calm empty-state on-device note (`privateProvenanceNote`)
             // still names the private path before the first turn.
-            // POLISH-B B1 — the welcome and the chips scroll with the
+            // The welcome and the chips scroll with the
             // transcript (`CoachTranscriptView.emptyHeader`). Above it, outside
             // any scroll view, they were a fixed block: at the accessibility
             // sizes taller than the room above the keyboard, so on iOS 26.5 the
@@ -293,12 +245,12 @@ struct AskCoachSheet: View {
     /// welcome each release".
     private func emptyStateHeader(store: CoachConversationStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xl) {
-            // v0151 ON-DEVICE-REACH — when the on-device arm is answering (the
+            // When the on-device arm is answering (the
             // private path: no server fallback, no BYO), name the privacy
             // guarantee plainly in the empty state so the first-time user — and
             // especially the privacy-first `aiMode == .none` user who can now
             // reach the coach on a capable device — knows the answer never leaves
-            // the iPhone. 1.4 B2-c: it is the welcome's one subtitle now; the
+            // the iPhone. It is the welcome's one subtitle now; the
             // generic "ask me about your data" line it stood under is gone.
             welcomeLockup(privateNote: !store.usingServerFallback && !store.usingBYO)
             suggestionChipsSection(store: store)
@@ -312,31 +264,22 @@ struct AskCoachSheet: View {
         welcomeLockup(privateNote: false)
     }
 
+    /// The Coach's one head form, shared with the onboarding and the source
+    /// choice: the empty-state lockup.
     func welcomeLockup(privateNote: Bool) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: "sparkles")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.tint)
-                Text(String(localized: "Hi! What would you like to know today?"))
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if privateNote {
-                Text(String(localized: "Answered privately on your iPhone. Your data never leaves the device."))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+        HLEmptyState(
+            icon: "sparkles",
+            title: Text(String(localized: "Hi! What would you like to know today?")),
+            message: privateNote
+                ? Text(String(localized: "Answered privately on your iPhone. Your data never leaves the device."))
+                : nil
+        )
         .accessibilityElement(children: .combine)
     }
 
     private func suggestionChipsSection(store: CoachConversationStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("Suggestions")
+            HLSectionHeader("Suggestions")
             ForEach(AskCoachSuggestion.defaults, id: \.text) { suggestion in
                 AskCoachSuggestionChip(
                     text: suggestion.text,
@@ -346,11 +289,13 @@ struct AskCoachSheet: View {
                 }
             }
         }
+        // The header keeps its 24 and 8 pt in this stack.
+        .hlContainerGap(HLSpace.sm)
     }
 
     // MARK: - Custom transcript surface
 
-    /// **F5-redux (v0.6.2.9)** — replaced the SpeziChat `ChatView`
+    /// Replaced the SpeziChat `ChatView`
     /// with a custom transcript so the user-bubble can match the
     /// assistant-bubble visual recipe (operator brief:
     /// "genau so wie das, was der Coach antwortet"). The previous fix
@@ -407,10 +352,13 @@ struct AskCoachSheet: View {
         }
         .padding(.horizontal, HLSpace.md)
         .padding(.vertical, HLSpace.sm)
-        // 08-14 — the banner sits on top of the chat surface; under Reduce
+        // The banner sits on top of the chat surface; under Reduce
         // Transparency the shared seam paints it solid instead of letting the
         // transcript read through an error message.
         .background(
+            // A transient banner floating over the chat, not a content card;
+            // ErrorBanner speaks HLError, this one the on-device model's error.
+            // swiftlint:disable:next hl_no_glass_in_content
             HLMaterialBackground(.thinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.button, style: .continuous))
         )
@@ -430,21 +378,13 @@ struct AskCoachSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HLSpace.xl) {
                 welcomeLockupReadOnly
-                HLCard(style: .ghost) {
-                    VStack(alignment: .leading, spacing: HLSpace.sm) {
-                        HStack(spacing: HLSpace.sm) {
-                            Image(systemName: "sparkles.slash")
-                                .font(.hlIcon(HLIconSize.rowAction))
-                                .foregroundStyle(.tint)
-                            Text(title)
-                                .font(.hlHeadline)
-                                .foregroundStyle(HLText.primary)
-                        }
-                        Text(message)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                // The title is already final text; the lookup finds nothing
+                // and shows it as it is.
+                HLCard(LocalizedStringKey(title), style: .outline) {
+                    Text(message)
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLText.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: HLSpace.xxxl)
@@ -478,7 +418,7 @@ struct AskCoachSheet: View {
 
     // MARK: - Helpers
 
-    /// **A360 H2 (v0156)** — a localized composer opener referencing a specific
+    /// A localized composer opener referencing a specific
     /// metric, used by the per-tile / per-metric "Ask the coach about this"
     /// launch sites so the composer pre-fills with a metric-specific question
     /// instead of opening blank. Plain prose (the chat route is EN/DE-gated and
@@ -492,7 +432,7 @@ struct AskCoachSheet: View {
         )
     }
 
-    /// **A360 H2 (v0156)** — a localized composer opener for the mood page coach.
+    /// A localized composer opener for the mood page coach.
     /// Mood has no `MetricKind` title (it is a special Insights surface), so it
     /// gets its own fixed opener.
     static var moodSeed: String {

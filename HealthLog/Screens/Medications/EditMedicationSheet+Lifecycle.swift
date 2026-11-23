@@ -16,38 +16,32 @@ extension EditMedicationSheet {
     var lifecycleSection: some View {
         Section {
             if medication.active {
-                Button {
+                HLSettingsActionRow(icon: "pause.fill", title: "med.lifecycle.pause", presents: .confirm) {
                     Task { await runLifecycle { await store.pauseMedication(id: medication.id) } }
-                } label: {
-                    Label("med.lifecycle.pause", systemImage: "pause.circle")
                 }
-                // MED (#1280): End and Start follow `canEndCourse` / `canStartCourse`;
+                // End and Start follow `canEndCourse` / `canStartCourse`;
                 // an older server offers End as before and no Start.
                 if medication.offersEndCourse {
-                    Button {
+                    HLSettingsActionRow(icon: "stop.fill", title: "med.lifecycle.end", presents: .confirm) {
                         showEndConfirm = true
-                    } label: {
-                        Label("med.lifecycle.end", systemImage: "stop.circle")
                     }
                 }
                 if medication.offersCourseStart {
-                    Button {
+                    HLSettingsActionRow(icon: "play.fill", title: "med.lifecycle.start", presents: .confirm) {
                         Task { await runLifecycle { await store.startCourse(id: medication.id) } }
-                    } label: {
-                        Label("med.lifecycle.start", systemImage: "play.circle")
                     }
                 }
             } else {
                 if let pausedAt = medication.pausedAt {
-                    LabeledContent("med.lifecycle.paused.label") {
+                    LabeledContent {
                         Text(pausedAt, style: .relative)
                             .foregroundStyle(HLText.secondary)
+                    } label: {
+                        HLRowTitle("med.lifecycle.paused.label")
                     }
                 }
-                Button {
+                HLSettingsActionRow(icon: "play.fill", title: "med.lifecycle.reactivate", presents: .confirm) {
                     Task { await runLifecycle { await store.reactivateMedication(id: medication.id) } }
-                } label: {
-                    Label("med.lifecycle.reactivate", systemImage: "play.circle")
                 }
             }
             if let lifecycleError {
@@ -55,9 +49,9 @@ extension EditMedicationSheet {
                     .font(.hlSubhead)
             }
         } header: {
-            Text("med.lifecycle.section")
+            HLSectionHeader("med.lifecycle.section")
         } footer: {
-            // 1.4 B2 — one consequence the buttons do not show: a pause does not
+            // One consequence the buttons do not show: a pause does not
             // count as missed. "Beenden" states its own in the confirmation;
             // "Reaktivieren" needs no sentence.
             if medication.active {
@@ -65,6 +59,7 @@ extension EditMedicationSheet {
                     .font(.hlCaption)
             }
         }
+        .hlFormRowSurface()
         .disabled(isProcessingLifecycle || isSaving)
         .hlConfirmDestructive(
             Text("med.lifecycle.end.confirm.title"),

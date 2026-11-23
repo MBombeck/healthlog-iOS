@@ -61,12 +61,11 @@ public enum MetricFHIRMapper {
     // present, the H.2 mapper should call `glucoseMapping(context:)`
     // to pick the more specific code.
     //
-    // App's `GlucoseContext` cases: fasting / beforeMeal / afterMeal /
-    // bedtime. Research-spec terminology (random / fasting /
-    // postprandial) maps as:
+    // App's `GlucoseContext` cases follow the server: fasting / afterMeal
+    // (POSTPRANDIAL) / random / bedtime. They map as:
     //   - .fasting       → 1558-6 (Fasting glucose, blood)
-    //   - .beforeMeal    → 1558-6 (treat as fasting / pre-prandial)
     //   - .afterMeal     → 1521-4 (Post meal glucose, blood)
+    //   - .random        → 2339-0 (Random glucose)
     //   - .bedtime       → 2339-0 (Random glucose — no LOINC for bedtime
     //                              specifically; falls back to generic)
 
@@ -90,7 +89,7 @@ public enum MetricFHIRMapper {
 
     // MARK: - Per-MetricKind mapping
 
-    // 09-08 — Phase 9 re-enabled `function_body_length` repository-wide. This
+    // Phase 9 re-enabled `function_body_length` repository-wide. This
     // body is not reducible without losing what makes it auditable: the
     // exhaustive `switch` is the compiler check that forces a newly added
     // `MetricKind` to land its LOINC/UCUM entry in the same commit. A
@@ -236,7 +235,7 @@ public enum MetricFHIRMapper {
             )
 
         case .walkingDoubleSupport:
-            // v0.7.0 — no published LOINC for "walking double support
+            // No published LOINC for "walking double support
             // percentage" yet (Apple's metric pre-dates a LOINC term);
             // we surface the HK code under the custom HealthLog CodeSystem
             // (v0.11 audit B5 — never a non-LOINC code in the loinc.org
@@ -254,7 +253,7 @@ public enum MetricFHIRMapper {
             )
 
         case .walkingSteadiness:
-            // W28d — no published LOINC for Apple's walking-steadiness
+            // No published LOINC for Apple's walking-steadiness
             // classifier; surface the HK code under the HealthKit CodeSystem
             // (same approach as `walkingDoubleSupport`) so the FHIR round-trip
             // stays addressable + clinician-reviewable.
@@ -277,7 +276,7 @@ public enum MetricFHIRMapper {
             )
 
         case .audioExposureEnvironment:
-            // v0.7.0 — no published LOINC for environmental audio exposure;
+            // No published LOINC for environmental audio exposure;
             // Apple's dBA metric pre-dates a matching LOINC term. Surface
             // the HK code under the custom HealthLog CodeSystem (v0.11 audit
             // B5) until LOINC publishes a term.
@@ -293,7 +292,7 @@ public enum MetricFHIRMapper {
             )
 
         case .audioExposureHeadphone:
-            // v0.7.0 — same placeholder rationale as the environmental sibling.
+            // Same placeholder rationale as the environmental sibling.
             MetricFHIRMapping(
                 kind: kind,
                 loinc: LOINCCode(
@@ -312,7 +311,7 @@ public enum MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "kg/m2")
             )
 
-        // v0.8.3 W-D — render-backlog activity aggregates. LOINC publishes a
+        // Render-backlog activity aggregates. LOINC publishes a
         // term for energy burned; the other three pre-date a matching LOINC,
         // so we surface the HK identifier as a clinician-reviewable placeholder
         // (same rationale as the audio-exposure pair above).
@@ -359,7 +358,7 @@ public enum MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "min")
             )
 
-        // v0.11 W21 — web-parity body-composition + cardio additions. The
+        // Web-parity body-composition + cardio additions. The
         // Withings-proprietary metrics (vascular age, visceral-fat rating) and
         // the body-composition masses pre-date a published LOINC consensus, so
         // they surface under the custom HealthLog CodeSystem rather than emit a
@@ -378,7 +377,7 @@ public enum MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "kg")
             )
 
-        // v0.11 reconcile (F3) — 9th W21 type: Withings FAT_MASS (kg).
+        // v0.11 reconcile — 9th W21 type: Withings FAT_MASS (kg).
         case .fatMass:
             MetricFHIRMapping(
                 kind: kind,
@@ -470,19 +469,19 @@ public enum MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "/min")
             )
 
-        // v0.13.1 IC / v0.14.6 / v0.14.1 W-REGFIX — the additive HealthKit /
+        // The additive HealthKit /
         // WHOOP / v1.17.1 source-fixed signals live in a dedicated helper to
         // keep this switch under the type-body-length budget (file_length
         // discipline). See `additiveSignalMapping(for:)`. The grouped case
         // delegates so the parent switch stays exhaustive at the boundary.
-        // #115 R3 — VO2 max and the walking trio are HealthKit-identifier rows
+        // VO2 max and the walking trio are HealthKit-identifier rows
         // since server v1.39.3; they live with the other HK rows in the helper.
         case .vo2Max, .walkingSpeed, .walkingAsymmetry, .walkingStepLength,
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount,
              .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types. Pain + waist carry real LOINCs,
+             // v1.25 clinical types. Pain + waist carry real LOINCs,
              // grip + waist-to-height carry custom HealthLog codes — all routed
              // through the additive-signal helper to keep this body short.
              .painNRS, .gripStrength, .waistCircumference, .waistToHeight,
@@ -499,7 +498,8 @@ public enum MetricFHIRMapper {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad:
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity:
             additiveSignalMapping(for: kind)
 
         // Build 7 / item 7.3 — mood is a subjective self-report with no LOINC we
@@ -508,7 +508,7 @@ public enum MetricFHIRMapper {
         case .mood:
             nil
 
-        // Audit B-4 — a fired notification has no quantity to code and an
+        // A fired notification has no quantity to code and an
         // unnamed kind has no LOINC anyone could stand behind. The export omits
         // both rather than inventing a code.
         case .audioExposureEvent, .unknown:
@@ -538,17 +538,17 @@ public enum MetricFHIRMapper {
         case .weight, .bloodPressure, .pulse, .bodyTemperature,
              .spo2, .restingHeartRate, .respiratoryRate, .bmi,
              .hrv, .vo2Max,
-             // v0.11 W21 — cardio + thermal web-parity additions are
+             // Cardio + thermal web-parity additions are
              // vital-sign-adjacent (walking-HR is a heart-rate observation;
              // skin temp a thermal vital; PWV / vascular age cardiovascular).
              .walkingHeartRate, .skinTemperature, .pulseWaveVelocity, .vascularAge,
-             // v0.13.1 IC — cardio recovery is a heart-rate observation; wrist
+             // Cardio recovery is a heart-rate observation; wrist
              // temperature a thermal vital (same bucket as skin temperature).
              .cardioRecovery, .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native avg/max HR are heart-rate
+             // v1.12.8 WHOOP-native avg/max HR are heart-rate
              // observations → vital signs.
              .averageHeartRate, .maxHeartRate,
-             // v0158 — waist circumference (LOINC 8280-0), grip strength + waist-
+             // Waist circumference (LOINC 8280-0), grip strength + waist-
              // to-height ratio are all `vital-signs` per the server registry
              // (`expected-measurement-loinc.json`); mirror it so the doctor-report
              // FHIR bundle category matches the server's. (L8 fix — grip strength +
@@ -557,7 +557,7 @@ public enum MetricFHIRMapper {
             .vitalSigns
         case .glucose:
             .laboratory
-        // v0158 — pain NRS is a patient-reported instrument (LOINC 72514-3,
+        // Pain NRS is a patient-reported instrument (LOINC 72514-3,
         // server FHIR category `survey`).
         case .painNRS:
             .survey
@@ -566,16 +566,16 @@ public enum MetricFHIRMapper {
              .walkingDoubleSupport, .walkingSteadiness,
              .audioExposureEnvironment, .audioExposureHeadphone,
              .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight,
-             // v0.11 W21 — body-composition masses are body-measurement findings,
+             // Body-composition masses are body-measurement findings,
              // not clinical vital signs (same bucket as body-fat / body-water).
              .fatFreeMass, .leanBodyMass, .muscleMass, .visceralFat, .fatMass,
-             // v0.13.1 IC — falls / 6MWT / stair speeds are mobility-fitness
+             // Falls / 6MWT / stair speeds are mobility-fitness
              // findings; breathing-disturbances a sleep finding → activity.
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances,
-             // v0.14.6 — sleep-disturbance count is a sleep finding → activity.
+             // Sleep-disturbance count is a sleep finding → activity.
              .sleepDisturbanceCount,
-             // v0.14.1 W-B189 — v1.17.1 source-fixed signals (#23) are derived
+             // v1.17.1 source-fixed signals are derived
              // findings (training-load / autonomic / sleep scores + a thermal
              // baseline offset), not clinical vital signs → activity. (Category
              // is unused at runtime since they aren't exported, but the switch
@@ -590,7 +590,8 @@ public enum MetricFHIRMapper {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad:
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity:
             .activity
         // Build 3 / item 3.3 — the four screener SUM scores are
         // patient-reported instruments, the same `survey` bucket `painNRS`
@@ -599,7 +600,7 @@ public enum MetricFHIRMapper {
         // `mapping(for:)` returns `nil` for mood, but the switch stays exhaustive).
         case .phq9Score, .gad7Score, .who5Score, .sciScore, .mood:
             .survey
-        // Audit B-4 — an environmental finding, and a neutral bucket for the
+        // An environmental finding, and a neutral bucket for the
         // unnamed kind. Both unused at runtime (`mapping(for:)` is `nil`).
         case .audioExposureEvent, .unknown:
             .activity
@@ -612,18 +613,17 @@ public enum MetricFHIRMapper {
     ///
     /// Mapping:
     /// - `.fasting`    → LOINC `1558-6` (Fasting glucose, serum/plasma).
-    /// - `.beforeMeal` → LOINC `1558-6` (pre-prandial treated as fasting
-    ///                  for FHIR purposes — clinician-reviewable).
     /// - `.afterMeal`  → LOINC `1521-4` (Postprandial glucose, 2h).
+    /// - `.random`     → LOINC `2339-0` (random glucose).
     /// - `.bedtime`    → LOINC `2339-0` (generic random — no
     ///                  LOINC-specific code for bedtime exists).
     public static func glucoseMapping(context: GlucoseContext) -> MetricFHIRMapping {
         let loinc: LOINCCode = switch context {
-        case .fasting, .beforeMeal:
+        case .fasting:
             glucoseFastingLOINC
         case .afterMeal:
             glucosePostprandialLOINC
-        case .bedtime:
+        case .random, .bedtime:
             glucoseRandomLOINC
         }
         return MetricFHIRMapping(

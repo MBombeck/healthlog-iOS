@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.4 B2-c — the one icon-and-sentence row.**
+/// **The one icon-and-sentence row.**
 ///
 /// Settings cards and consent sheets list short statements, each led by a
 /// small symbol: what an import does with the file, what an AI provider
@@ -10,7 +10,7 @@ import SwiftUI
 /// one icon column, one text style, top-aligned so a wrapped sentence stays
 /// beside its symbol.
 struct HLIconTextRow: View {
-    /// 1.4 B4 — the one icon column of every info row at the standard text
+    /// The one icon column of every info row at the standard text
     /// size. Rows that are not an `HLIconTextRow` (a stat with an icon, a
     /// ranked source, an info-sheet link) take it through
     /// `.hlInfoIconColumn()`, so the text edge is the same everywhere.
@@ -32,24 +32,25 @@ struct HLIconTextRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.md))
-                .foregroundStyle(HLText.secondary)
-                .hlInfoIconColumn()
-                .accessibilityHidden(true)
-            text
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
+        HLRowLayout(
+            title: text,
+            subtitle: nil,
+            indicator: .hidden,
+            configuration: .statement,
+            leading: {
+                Image(systemName: icon)
+                    .font(.hlIcon(HLIconSize.md))
+                    .foregroundStyle(HLText.secondary)
+                    .hlInfoIconColumn()
+                    .accessibilityHidden(true)
+            },
+            trailing: { EmptyView() }
+        )
     }
 }
 
 extension View {
-    /// 1.4 B4 — the info rows' one icon column, `HLIconTextRow.iconColumnWidth`.
+    /// The info rows' one icon column, `HLIconTextRow.iconColumnWidth`.
     /// The glyph in it is an `.hlIcon` size (pixel-locked like every symbol
     /// in the app), so the column does not grow with the text either: at the
     /// accessibility sizes the sentence keeps the width.

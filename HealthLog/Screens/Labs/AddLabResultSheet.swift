@@ -4,14 +4,12 @@ import SwiftUI
 /// analyte / unit / reference range are server-resolved + shown read-only) OR
 /// enters a free-text analyte / unit / range. Value + date are always required.
 struct AddLabResultSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: LabsStore
 
     @State private var selectedBiomarkerID: String?
     @State private var analyte = ""
     @State private var unit = ""
-    /// #160 — "No unit" for a free-text ratio or index (the unity `"1"`).
+    /// "No unit" for a free-text ratio or index (the unity `"1"`).
     /// ``unit`` keeps what was typed for the way back.
     @State private var noUnit = false
     /// Read once per sheet: the switch is offered from server 1.46.6 on.
@@ -20,7 +18,7 @@ struct AddLabResultSheet: View {
     /// server converts it when it knows the pair, else refuses with a reason.
     @State private var printedUnit = ""
     @State private var valueText = ""
-    /// Item 1.5 — numeric vs. qualitative result mode, mirroring the web form
+    /// Numeric vs. qualitative result mode, mirroring the web form
     /// (`lab-form.tsx:111-113`). Qualitative mode enters a result TEXT
     /// ("negativ" / "positiv" / "grenzwertig" / free text) and posts `valueText`
     /// instead of `value`.
@@ -44,12 +42,11 @@ struct AddLabResultSheet: View {
     /// "Save & next value". Drives the confirmation footer; without it a
     /// successful save is invisible, because the sheet looks the same after it.
     @State private var savedCount = 0
-    /// FORM-1 (Audit v0162) — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 (Audit v0162) — initial-focus + submit-chain across the text fields.
+    /// Drives the discard-confirmation dialog.
+    /// Initial-focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
-    /// FORM-2 — the focusable text fields, ordered analyte → unit → panel for the
+    /// The focusable text fields, ordered analyte → unit → panel for the
     /// `.submitLabel(.next)` chain (the decimal-pad value/range fields have no
     /// Return key, so they're focus targets only).
     private enum Field: Hashable {
@@ -65,7 +62,7 @@ struct AddLabResultSheet: View {
         linkedMarker != nil
     }
 
-    /// FORM-1 — the form holds unsaved edits (any content field filled or a
+    /// The form holds unsaved edits (any content field filled or a
     /// biomarker linked). A swipe-down while dirty triggers the discard guard.
     private var isDirty: Bool {
         selectedBiomarkerID != nil
@@ -80,7 +77,7 @@ struct AddLabResultSheet: View {
     }
 
     private var canSave: Bool {
-        // Item 1.5 — a qualitative row is complete with a non-empty result text
+        // A qualitative row is complete with a non-empty result text
         // and no number at all; the numeric row still needs a parseable value.
         switch resultType {
         case .numeric:
@@ -101,35 +98,28 @@ struct AddLabResultSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "labs.add.sheetTitle",
+            action: .add(isEnabled: canSave && !isSaving) { await save(keepOpen: false) },
+            isDirty: isDirty
+        ) {
             Form {
-                biomarkerSection
-                if !isLinked {
-                    freeTextSection
-                }
-                valueSection
-                noteSection
-                saveAndNextSection
-                if let saveError {
-                    Section { HLFormErrorText(saveError) }
-                }
-            }
-            .navigationTitle(Text("labs.add.sheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("labs.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
+                Group {
+                    biomarkerSection
+                    if !isLinked {
+                        freeTextSection
+                    }
+                    valueSection
+                    noteSection
+                    saveAndNextSection
+                    if let saveError {
+                        Section { HLFormErrorText(saveError) }
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("labs.action.save") {
-                        Task { await save(keepOpen: false) }
-                    }
-                    .disabled(!canSave || isSaving)
-                }
+                .hlFormRowSurface()
             }
-            // FORM-2 — seed focus onto the first manual-entry field once the
+            .hlPageMargins()
+            // Seed focus onto the first manual-entry field once the
             // sheet settles (analyte for a free-text row, value for a linked one).
             .task {
                 backdateBound = .now
@@ -137,73 +127,96 @@ struct AddLabResultSheet: View {
                 focusedField = isLinked ? .value : .analyte
             }
         }
-        // FORM-1 — block the accidental swipe-down that would silently discard a
-        // filled lab form; keep the existing in-flight save lock.
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
     }
 
     private var biomarkerSection: some View {
         Section {
-            Picker(selection: $selectedBiomarkerID) {
-                Text("labs.add.biomarker.none").tag(String?.none)
-                // Build 3 / item 3.2 — hidden markers are dropped from the
-                // picker (web parity, `lab-form.tsx:137`). Their historical
-                // results still render everywhere; only NEW entry stops
-                // offering them.
-                ForEach(store.biomarkers.selectable) { marker in
-                    Text(marker.name).tag(String?.some(marker.id))
+            // Build 3 / item 3.2 — hidden markers are dropped from the picker
+            // (web parity, `lab-form.tsx:137`). Their historical results
+            // still render everywhere; only NEW entry stops offering them.
+            HLFormPicker(
+                "labs.add.biomarker.label",
+                selection: $selectedBiomarkerID,
+                options: [String?.none] + store.biomarkers.selectable.map { String?.some($0.id) }
+            ) { id in
+                if let id, let marker = store.biomarkers.selectable.first(where: { $0.id == id }) {
+                    Text(verbatim: marker.name)
+                } else {
+                    Text("labs.add.biomarker.none")
                 }
-            } label: {
-                Text("labs.add.biomarker.label")
             }
             if let marker = linkedMarker {
-                LabeledContent("labs.add.unit", value: LabUnit.standalone(marker.unit) ?? "")
-                // #160 — a marker without a unit converts nothing, so
+                LabeledContent {
+                    Text(verbatim: LabUnit.standalone(marker.unit) ?? "")
+                } label: {
+                    HLRowTitle("labs.add.unit")
+                }
+                // A marker without a unit converts nothing, so
                 // there is no printed unit to ask for.
                 if !LabUnit.isUnity(marker.unit) {
                     TextField("labs.add.printedUnit", text: $printedUnit)
                         .accessibilityIdentifier("labs.add.printedUnit")
                 }
                 if let lower = marker.lowerBound {
-                    LabeledContent("labs.add.referenceLow", value: lower.formatted())
+                    LabeledContent {
+                        Text(verbatim: lower.formatted())
+                    } label: {
+                        HLRowTitle("labs.add.referenceLow")
+                    }
                 }
                 if let upper = marker.upperBound {
-                    LabeledContent("labs.add.referenceHigh", value: upper.formatted())
+                    LabeledContent {
+                        Text(verbatim: upper.formatted())
+                    } label: {
+                        HLRowTitle("labs.add.referenceHigh")
+                    }
                 }
             }
         } header: {
-            // 1.4 B2-c — no footer: the rows above show where unit and range
+            // No footer: the rows above show where unit and range
             // come from, and the form says the rest itself.
             Text("labs.add.biomarker.section")
         }
     }
 
+    /// Label above each field, like the marker editor: a filled field still
+    /// says what it holds.
     private var freeTextSection: some View {
         Section {
-            TextField("labs.add.analyte", text: $analyte)
-                .focused($focusedField, equals: .analyte)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .unit }
-            TextField("labs.add.unit", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
-                .focused($focusedField, equals: .unit)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .panel }
-                .disabled(noUnit)
+            LabFormField("labs.add.analyte") {
+                TextField("labs.add.analyte", text: $analyte)
+                    .focused($focusedField, equals: .analyte)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .unit }
+            }
+            // "No unit" hides the field instead of leaving an empty one.
+            if !noUnit {
+                LabFormField("labs.add.unit") {
+                    TextField("labs.unit.placeholder", text: LabUnit.fieldBinding(typed: $unit, noUnit: noUnit))
+                        .focused($focusedField, equals: .unit)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .panel }
+                }
+            }
             if offersNoUnit {
                 LabNoUnitToggle(isOn: $noUnit)
             }
-            TextField("labs.add.panel", text: $panel)
-                .focused($focusedField, equals: .panel)
-                .submitLabel(.next)
-                .onSubmit { focusedField = .value }
-            TextField("labs.add.referenceLow", text: $referenceLowText)
-                .keyboardType(.decimalPad)
-                .focused($focusedField, equals: .referenceLow)
-            TextField("labs.add.referenceHigh", text: $referenceHighText)
-                .keyboardType(.decimalPad)
-                .focused($focusedField, equals: .referenceHigh)
+            LabFormField("biomarker.editor.panel") {
+                TextField("labs.add.panel", text: $panel)
+                    .focused($focusedField, equals: .panel)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .value }
+            }
+            LabFormField("labs.add.referenceLow") {
+                TextField("labs.add.referenceLow", text: $referenceLowText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .referenceLow)
+            }
+            LabFormField("labs.add.referenceHigh") {
+                TextField("labs.add.referenceHigh", text: $referenceHighText)
+                    .keyboardType(.decimalPad)
+                    .focused($focusedField, equals: .referenceHigh)
+            }
         } header: {
             Text("labs.add.freeText.section")
         }
@@ -229,11 +242,12 @@ struct AddLabResultSheet: View {
                 LabQualitativeSuggestionChips(text: $qualitativeText)
             }
             DatePicker(
-                "labs.add.takenAt",
                 selection: $takenAt,
                 in: ...backdateBound,
                 displayedComponents: [.date, .hourAndMinute]
-            )
+            ) {
+                HLRowTitle("labs.add.takenAt")
+            }
         }
     }
 
@@ -267,21 +281,15 @@ struct AddLabResultSheet: View {
     /// tell a save landed.
     private var saveAndNextSection: some View {
         Section {
-            // 1.4 B2-c — what the button keeps is its own second line; the
+            // What the button keeps is its own second line; the
             // footer only counts what was saved.
-            Button {
+            HLSettingsActionRow(
+                icon: "plus",
+                title: "labs.add.saveAndNext",
+                subtitle: "labs.add.saveAndNext.footer",
+                presents: .confirm
+            ) {
                 Task { await save(keepOpen: true) }
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text("labs.add.saveAndNext")
-                        Text("labs.add.saveAndNext.footer")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "plus.circle")
-                }
             }
             .disabled(!canSave || isSaving)
             .accessibilityIdentifier("labs.add.saveAndNext")
@@ -302,18 +310,20 @@ struct AddLabResultSheet: View {
 
     /// - Parameter keepOpen: `true` for "Save & next value" — the sheet stays
     ///   mounted and only the row-specific fields reset. `false` dismisses.
-    private func save(keepOpen: Bool) async {
-        // Item 1.5 — exactly one of value / valueText goes on the wire, matching
+    /// Returns `true` when the sheet may close.
+    @discardableResult
+    private func save(keepOpen: Bool) async -> Bool {
+        // Exactly one of value / valueText goes on the wire, matching
         // `lab-form.tsx:173-199`. Never both, never a fabricated 0.
         let numericValue: Double?
         let qualitativeValue: String?
         switch resultType {
         case .numeric:
-            guard let parsed = parsedValue else { return }
+            guard let parsed = parsedValue else { return false }
             numericValue = parsed
             qualitativeValue = nil
         case .qualitative:
-            guard !trimmedQualitative.isEmpty else { return }
+            guard !trimmedQualitative.isEmpty else { return false }
             numericValue = nil
             qualitativeValue = trimmedQualitative
         }
@@ -350,14 +360,14 @@ struct AddLabResultSheet: View {
 
         guard await store.createLab(body) else {
             saveError = store.lastError ?? String(localized: "labs.save.failed")
-            return
+            return false
         }
         if keepOpen {
             savedCount += 1
             resetForNextValue()
-        } else {
-            dismiss()
+            return false
         }
+        return true
     }
 
     /// Clear the row-specific fields, **deliberately keeping `takenAt`.**

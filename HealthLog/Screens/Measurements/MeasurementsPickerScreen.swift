@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.2 (#136) — **Messwerte** metric-type picker.
+/// **Messwerte** metric-type picker.
 ///
 /// A clean list of the metric kinds the user has data for, grouped by the
 /// app's own taxonomy (`InsightsMetricCategory`, via `MeasurementsPickerModel`).
@@ -21,8 +21,10 @@ import SwiftUI
 /// instead of a wall of zero-data rows.
 struct MeasurementsPickerScreen: View {
     @Environment(\.appContainer) private var container
+    @Environment(AppRouter.self) private var router
+    @Environment(\.hlIsTabRoot) private var isTabRoot
 
-    /// v0.14.8 — the two browse modes. `.byType` is the existing metric-type
+    /// The two browse modes. `.byType` is the existing metric-type
     /// picker (default — nothing regresses); `.recent` is the new chronological
     /// cross-category feed (`MeasurementsChronoFeed`). Operator request: "manchmal
     /// möchte man einfach nur sehen, was die letzten Messwerte sind —
@@ -35,13 +37,15 @@ struct MeasurementsPickerScreen: View {
     @State private var mode: Mode = .byType
 
     @State private var kindsWithData: Set<MetricKind> = []
-    /// v0.14.8 — the recent cross-category rows powering the chronological feed
+    /// The recent cross-category rows powering the chronological feed
     /// (raised window so multiple kinds interleave by time). Loaded alongside the
     /// kind-availability set so switching modes never re-fetches.
     @State private var recentAll: [Measurement] = []
     @State private var isLoading: Bool = false
     @State private var lastLoadedAt: Date?
     @State private var error: HLError?
+    /// The page's width, so the switch takes the list's margins.
+    @State private var pageWidth: CGFloat?
 
     /// Cross-category feed window. Larger than the type-picker's availability
     /// probe (400) so a HealthKit power-user's high-frequency kinds don't crowd
@@ -54,6 +58,14 @@ struct MeasurementsPickerScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if isTabRoot {
+                // The header of every section root, set as the list row it
+                // is on Labs and Documents, so the switch under it stands as
+                // far below the title there as here.
+                SectionRootHeader("Measurements", inList: true)
+                    .padding(.horizontal, HLPageMargins.side(width: pageWidth))
+                    .padding(.top, HLLayout.pageTop)
+            }
             modePicker
             switch mode {
             case .byType:
@@ -69,26 +81,26 @@ struct MeasurementsPickerScreen: View {
         // (`HLSurface.primary`, #101113 dark — see `HLScreenBackground` /
         // `MoreScreen`). Align all Measurements surfaces to the same token.
         .background(HLSurface.primary)
-        .navigationTitle(Text("Measurements", comment: "Measurements picker — nav title"))
-        .navigationBarTitleDisplayMode(.large)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+        // Inline when pushed; as a sidebar tab the page heads itself.
+        .hlSectionRootTitle(Text("Measurements", comment: "Measurements picker — nav title"))
         .hlErrorBannerOverlay(error: error) {
             Task { await load() }
         }
-        .refreshable { await load() }
+        .hlRefresh(in: .list) { await load() }
         .task { await loadIfStale() }
     }
 
     /// The segmented mode switch — "Nach Typ" / "Chronologisch". Defaults to
     /// `.byType` so the existing experience is unchanged on entry.
     private var modePicker: some View {
-        Picker(selection: $mode) {
+        HLAdaptiveSegmentedPicker("Browse mode", selection: $mode, labels: ["By type", "Recent"]) {
             Text("By type").tag(Mode.byType)
             Text("Recent").tag(Mode.recent)
-        } label: {
-            Text("Browse mode")
         }
-        .pickerStyle(.segmented)
-        .padding(.horizontal, HLSpace.lg)
+        // The list's margins (`hlPageMargins`): the page margin on the phone,
+        // the reading column on a wide page.
+        .padding(.horizontal, HLPageMargins.side(width: pageWidth))
         .padding(.top, HLSpace.sm)
         .padding(.bottom, HLSpace.xs)
         .accessibilityIdentifier("measurements.picker.modeSwitch")
@@ -102,10 +114,15 @@ struct MeasurementsPickerScreen: View {
                         row(for: kind)
                     }
                 } header: {
+                    // The leading group of core kinds gets its head too, so
+                    // every group reads the same.
                     if let category = section.category {
-                        Text(category.label)
+                        HLSectionHeader(verbatim: category.label)
+                    } else {
+                        HLSectionHeader("General")
                     }
                 }
+                .hlFormRowSurface()
             }
             // Custom metrics — the user's OWN metric definitions, hung below
             // the built-in metric types exactly as the web hangs them below the
@@ -114,19 +131,25 @@ struct MeasurementsPickerScreen: View {
             // kind of thing: user-defined and outside the closed
             // `MeasurementType` system entirely.
             customMetricsSection
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same primitive
+            // Canonical sync-status footer (same primitive
             // as Dashboard/Insights, self-suppressing via empty-section footer).
             Section {} footer: {
                 HLSyncStatusFooter(screenLoading: isLoading)
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
+        .hlPageMargins()
         .hlScrollEdgeSoft()
         .overlay {
             if sections.isEmpty, !isLoading {
-                EmptyState()
+                // The title and the way to a first reading.
+                HLEmptyState(icon: "tray", title: "No measurements yet") {
+                    HLButton("Log a measurement", systemImage: "plus", variant: .secondary) {
+                        router.requestCapture()
+                    }
+                    .accessibilityIdentifier("measurements.picker.empty.log")
+                }
+                .accessibilityIdentifier("measurements.picker.empty")
             }
         }
     }
@@ -148,7 +171,16 @@ struct MeasurementsPickerScreen: View {
                 }
                 .accessibilityIdentifier("measurements.picker.customMetrics")
             }
+            .hlFormRowSurface()
         }
+    }
+
+    /// The row's unit line. A score on a fixed scale has no unit: "von 21"
+    /// alone read like a cut-off fragment, the line names the scale.
+    nonisolated static func unitLine(_ unit: String) -> String {
+        unit == String(localized: "metric.strain.ofTwentyOne")
+            ? String(localized: "measurements.picker.scale21")
+            : unit
     }
 
     @ViewBuilder
@@ -160,7 +192,10 @@ struct MeasurementsPickerScreen: View {
             HLSettingsRow(
                 icon: descriptor.sfSymbol,
                 title: LocalizedStringKey(String(localized: descriptor.title)),
-                subtitle: LocalizedStringKey(String(localized: descriptor.unitLabel))
+                // Sleep names the hour in the interface language ("Std.", "u").
+                subtitle: LocalizedStringKey(
+                    Self.unitLine(MetricDurationFormat.axisUnit(String(localized: descriptor.unitLabel), kind: kind))
+                )
             )
         }
         .accessibilityIdentifier("measurements.picker.row.\(kind.rawValue)")
@@ -170,7 +205,7 @@ struct MeasurementsPickerScreen: View {
 
     /// Derive the kinds-with-data set.
     ///
-    /// v0.14.7 B8 — **availability-source fix.** This previously derived the set
+    /// **Availability-source fix.** This previously derived the set
     /// from `recentAll(limit: 400)` alone — a last-400-rows RECENCY window, not an
     /// all-time per-kind availability map. On a HealthKit power-user whose recent
     /// rows are dominated by high-frequency kinds (steps / activeEnergy / HR), a
@@ -181,9 +216,8 @@ struct MeasurementsPickerScreen: View {
     /// ``MeasurementsRepository/availableKinds()`` (an all-time count per
     /// `MeasurementType` from `GET /api/analytics?slice=summaries`); the picker was
     /// never migrated onto it. Now we UNION the authoritative all-time server map
-    /// with the recent on-device snapshot, mirroring how Insights composes it:
-    /// `availableKinds()` returns `[]` in standalone (no `/api/*`), so the
-    /// `recentAll` union keeps the offline / HealthKit path working.
+    /// with the recent snapshot, mirroring how Insights composes it: the
+    /// `recentAll` union keeps the offline path working.
     private func load() async {
         guard let container else { return }
         isLoading = true
@@ -192,13 +226,13 @@ struct MeasurementsPickerScreen: View {
             async let serverKinds = container.measurementsRepo.availableKinds()
             async let recent = container.measurementsRepo.recentAll(limit: Self.chronoLimit)
             let recentRows = try await recent
-            // v0.14.8 — keep the full recent page for the chronological feed; the
+            // Keep the full recent page for the chronological feed; the
             // type-picker only needs the kind set derived from it.
             recentAll = recentRows
             let recentKinds = Set(recentRows.map(\.kind))
             // Server map is best-effort (all-time); never let its absence drop the
-            // on-device kinds — union so both the paired all-time set AND the
-            // standalone recency snapshot light up.
+            // recent kinds — union so both the all-time set AND the recency
+            // snapshot light up.
             let allTime = await (try? serverKinds) ?? []
             kindsWithData = allTime.union(recentKinds)
             lastLoadedAt = .now
@@ -228,29 +262,5 @@ struct MeasurementsPickerScreen: View {
         let storeError = container.measurementsStore.error
         error = storeError
         return storeError?.shouldPersistToOutbox == true
-    }
-}
-
-// MARK: - Empty state
-
-/// Calm empty state for an account with no measurements at all — not a dead
-/// box. Mirrors the `MeasurementListScreen.EmptyState` copy/glyph so the two
-/// surfaces feel like one family. 1.4 B2 — the title and the way to a first
-/// reading, no sentence explaining what a list of types is for.
-private struct EmptyState: View {
-    @Environment(AppRouter.self) private var router
-
-    var body: some View {
-        HLEmptyState(icon: "tray", title: "No measurements yet") {
-            HLButton(
-                String(localized: "Log a measurement"),
-                icon: "plus",
-                variant: .secondary
-            ) {
-                router.requestCapture()
-            }
-            .accessibilityIdentifier("measurements.picker.empty.log")
-        }
-        .accessibilityIdentifier("measurements.picker.empty")
     }
 }

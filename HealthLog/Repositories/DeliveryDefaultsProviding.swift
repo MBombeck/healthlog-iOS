@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.9.0 RA3 — server seam for per-medication delivery defaults.**
+/// **Server seam for per-medication delivery defaults.**
 ///
 /// The user-level (roaming) layer of the `DeliveryPreferences` resolution
 /// chain. Today the **only** conformer is `NoServerDeliveryDefaults`, which
@@ -41,7 +41,7 @@ public enum DeliveryDefaultsError: Error, Sendable, Equatable {
     case unsupported
 }
 
-/// **The current (v0.9.0) server seam — a no-op stub.**
+/// **The current server seam — a no-op stub.**
 ///
 /// Returns `nil` for every default lookup → the `DeliveryPreferencesStore`
 /// resolution falls through to the local override / hardcoded default, i.e.

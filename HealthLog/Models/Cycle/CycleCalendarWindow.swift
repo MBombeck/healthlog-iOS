@@ -28,7 +28,7 @@ public struct CycleCalendarWindow: Sendable, Equatable {
         )
     }
 
-    /// `YYYY-MM-DD` for "today" in the ACCOUNT zone (#115 1.5). The server
+    /// `YYYY-MM-DD` for "today" in the ACCOUNT zone. The server
     /// keys the calendar's days in the profile zone; "today" from the device
     /// zone put the window's anchor (and the grid's today ring) on a day the
     /// account is not on, for anyone whose phone and account disagree.

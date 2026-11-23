@@ -223,6 +223,32 @@
         }
 
         @MainActor
+        @Test("closing the challenge sheet backs out: the challenge and the old error go")
+        func closingTheSheetBacksOut() async {
+            let kc = InMemoryKeychain()
+            let (service, _) = makeService(kc)
+            let store = AuthStore(auth: service, keychain: kc)
+            MockURLProtocol.install { req in
+                (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Self.mfaRequiredBody)
+            }
+            await store.login(email: "u@e.co", password: "pw")
+            MockURLProtocol.install { req in
+                (
+                    HTTPURLResponse(url: req.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
+                    Data(#"{"data":null,"error":"Invalid code"}"#.utf8)
+                )
+            }
+            await store.verifyMFA(method: .totp, code: "000000")
+            #expect(store.mfaChallenge != nil)
+            #expect(store.lastError != nil)
+
+            ServerAuthStep.mfaSheetClosed(store)
+
+            #expect(store.mfaChallenge == nil, "closing clears the challenge")
+            #expect(store.lastError == nil, "the wrong-code message does not follow onto the password form")
+        }
+
+        @MainActor
         @Test("dead ticket (401 'Invalid or expired challenge') routes back to the password form")
         func deadTicketEjectsToPassword() async {
             let kc = InMemoryKeychain()

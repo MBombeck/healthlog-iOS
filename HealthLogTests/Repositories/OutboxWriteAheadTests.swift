@@ -9,7 +9,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping force_try
 
-/// W-INTEGRITY-WRITEPATH — closes the three lost-write windows on the outbox
+/// Closes the three lost-write windows on the outbox
 /// write path:
 ///   * G-1 write-ahead durability (entry persisted BEFORE send, removed on 2xx,
 ///     kept on retriable failure, removed on a non-retriable reject; one

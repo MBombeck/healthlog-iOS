@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// HK-NEW (1.5, #149) — descriptors for the six Apple Health types the
+// Descriptors for the six Apple Health types the
 // server maps since v1.44.0. Titles follow the server's `measurements.type*`
 // labels (de/en), units its `unit-map.ts`: minutes, hours, a bare valence and
 // percent. Polarity: the rings and mindful minutes are achievements like steps

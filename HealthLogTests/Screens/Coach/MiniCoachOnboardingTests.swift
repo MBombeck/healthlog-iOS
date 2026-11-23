@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Tests around the Mini-Coach onboarding contract (C5).
+/// Tests around the Mini-Coach onboarding contract.
 ///
 /// The UI itself (the `MiniCoachOnboardingSheet` view) is not unit-
 /// tested directly; what we DO lock here is the persisted-state

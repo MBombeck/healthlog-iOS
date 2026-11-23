@@ -20,7 +20,7 @@ extension LabsStore {
             panel: body.panel,
             analyte: body.analyte ?? "",
             value: body.value,
-            // Item 1.5 — carry the qualitative result into the optimistic row so
+            // Carry the qualitative result into the optimistic row so
             // an offline-queued "negativ" doesn't show as an empty measurement
             // until the next online load.
             valueText: body.valueText,

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **CU-32 — `GET|POST /api/anamnesis/facts`, `PATCH|DELETE /api/anamnesis/facts/{id}`.**
+/// **`GET|POST /api/anamnesis/facts`, `PATCH|DELETE /api/anamnesis/facts/{id}`.**
 ///
 /// Vier Operationen, drei Eigenheiten, die dieser Repository sichtbar macht,
 /// statt sie zu glätten:

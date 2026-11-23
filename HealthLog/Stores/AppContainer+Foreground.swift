@@ -1,7 +1,7 @@
 import Foundation
 
 public extension AppContainer {
-    /// v0.12 W8-8 — single coalesced entry point for the network-touching
+    /// Single coalesced entry point for the network-touching
     /// foreground revalidation. Routes the module-map refresh (which since
     /// #115 · 0.2 also carries the `ai` capability block) + APNs push
     /// re-registration through `foregroundNetworkThrottle` so rapid foreground
@@ -18,32 +18,34 @@ public extension AppContainer {
     func foregroundNetworkRevalidate(authenticated: Bool, force: Bool = false) async {
         guard authenticated else { return }
         guard foregroundNetworkThrottle.shouldRun(force: force) else { return }
-        // #30 — keep the server module map fresh on foreground. Fail-open + the
+        // Keep the server module map fresh on foreground. Fail-open + the
         // gate recompute drives CycleGate to re-resolve against the new map.
         async let modules: Void = refreshModuleGate()
-        // CCH-03 — refresh the Coach unread signal on foreground so a proactive
+        // Refresh the Coach unread signal on foreground so a proactive
         // nudge minted while backgrounded lights the dot on return. Gated +
         // SWR-deduped inside the store (coach-off / offline → no call).
         async let nudge: Void = refreshCoachNudge()
-        // audit-v0162 M-7 — re-probe `GET /api/version` so the derived-intake
+        // Re-probe `GET /api/version` so the derived-intake
         // synthesis gate tracks the server the app is actually pointed at (a
         // self-hoster upgrading mid-session, a fresh install whose verdict is
         // still unknown). Fail-quiet: an offline foreground keeps the persisted
         // last-known verdict rather than reverting to the unknown default.
         async let slots: Void = refreshMedicationSlotGate()
-        // #30 — the proactive cadence suggestions are inline-sourced (routed from
+        // The proactive cadence suggestions are inline-sourced (routed from
         // a live coach turn into `coachCadenceSuggestionsStore`), so there is no
         // foreground refresh leg — the dead `GET /api/coach/reminder-suggestions`
         // (always 404) was retired.
         #if canImport(UserNotifications) && canImport(UIKit)
             async let push: Void = notifications.registerForRemoteNotificationsIfAuthorized()
-            _ = await (modules, nudge, slots, push)
+            // #190: the relay offer and this device's relay state.
+            async let relay: Void = pushRelay.refresh()
+            _ = await (modules, nudge, slots, push, relay)
         #else
             _ = await (modules, nudge, slots)
         #endif
     }
 
-    /// audit-v0162 M-7 — refresh the "does this server materialise today's dose
+    /// Refresh the "does this server materialise today's dose
     /// slots?" verdict from the public `GET /api/version` endpoint.
     ///
     /// Fail-quiet by design: offline / unreachable / undecodable leaves the
@@ -54,14 +56,21 @@ public extension AppContainer {
     func refreshMedicationSlotGate() async {
         guard let info = try? await api.fetchServerVersion() else { return }
         medicationSlotGate.apply(info)
-        // 1.2 / V4 — the same answer decides which server-bound HealthKit
+        // #191: the medication contract opens on the `features` keys of
+        // this same answer, never on its version. Kept in the App Group for
+        // the notification extension and the widget.
+        MedicationCapabilities.record(info.medicationCapabilities)
+        RelayFeatures.record(info.features) // #191: push.live-activity-relay and the push keys
+        // The app's own keys of the same answer (`day.dose-offset`).
+        ServerFeatureKeys.record(info.features)
+        // The same answer decides which server-bound HealthKit
         // types the server can store yet (RMSSD from v1.42). Once it can, an
         // existing installation is asked once for the types that joined
         // after its first sheet (RMSSD on iOS 27, waist since B5 / 1.4).
         // It is also the one record `SyncTriggerContext` reads for V1's
         // `syncTrigger: manual` (v1.42+), so both follow the same answer.
         HealthKitServerTypeGate.record(info)
-        // HK-NEW (1.5) — the server's own list of mapped types, when it has
+        // The server's own list of mapped types, when it has
         // one, before anything is asked (cache-first: no extra request while
         // the write-back pass keeps the entry fresh).
         let settingsRepo = settingsRepo
@@ -71,7 +80,7 @@ public extension AppContainer {
         await hkReadinessStore.requestLateReadAuthorizationIfNeeded()
     }
 
-    /// **AUD-8 H-1** — foreground / cold-launch SWR-cache maintenance sweep.
+    /// Foreground / cold-launch SWR-cache maintenance sweep.
     ///
     /// The persistent SWR cache (`Application Support/HealthLog/Cache/cache.sqlite`)
     /// was bounded ONLY by `sweepOlderThan(30 d)` invoked from the BGProcessing
@@ -95,7 +104,7 @@ public extension AppContainer {
         }
     }
 
-    /// #30 — reload the server module map + recompute the cycle gate against it.
+    /// Reload the server module map + recompute the cycle gate against it.
     /// Fail-open inside `ModuleGate.load()` (a network failure leaves the
     /// last-known map / all-on default in place).
     @MainActor
@@ -104,7 +113,7 @@ public extension AppContainer {
         cycleGate.refresh()
     }
 
-    /// CCH-03 — refresh the Coach unread signal. Gated on the `coach` module
+    /// Refresh the Coach unread signal. Gated on the `coach` module
     /// (off → the store clears any stale dot, no call) and the cheap GET
     /// fail-quiets on a network error, so the same coalesced foreground path
     /// drives it. `online: true` lets the store attempt the request; an offline
@@ -118,7 +127,7 @@ public extension AppContainer {
         )
     }
 
-    /// A7-M1 — coarse foreground throttle gate for the three "cheap but
+    /// Coarse foreground throttle gate for the three "cheap but
     /// unconditional" members (HK-readiness refresh, App-Badge recompute,
     /// mood-reminder re-arm). `RootView` consults this once per `.active` so a
     /// rapid app-switcher bounce is a no-op; a genuine re-foreground after the
@@ -129,7 +138,7 @@ public extension AppContainer {
         foregroundCheapThrottle.shouldRun(force: force)
     }
 
-    /// **14-05 (D-09-06-A) — read the gate, and remember what the stamp was.**
+    /// **Read the gate, and remember what the stamp was.**
     ///
     /// Identical to ``shouldRunForegroundCheapMembers(force:)`` in every
     /// observable way — one read, one stamp, the six members stay atomic per
@@ -143,7 +152,7 @@ public extension AppContainer {
         return (foregroundCheapThrottle.shouldRun(force: force), previous)
     }
 
-    /// **14-05 (D-09-06-A) — give the window back to whoever will spend it.**
+    /// **Give the window back to whoever will spend it.**
     ///
     /// Called once, from the pass's own settle hook, when the report shows that
     /// no throttled member reached a terminal outcome. A completed pass never
@@ -153,7 +162,7 @@ public extension AppContainer {
         foregroundCheapThrottle.restore(stamp)
     }
 
-    /// A7-M2 — probe-gated foreground outbox re-drain.
+    /// Probe-gated foreground outbox re-drain.
     ///
     /// The replay loop is edge-triggered on an `NWPath` `false→true` transition
     /// that also passes `confirmedReachable()` (battery-safe, no polling). The
@@ -170,7 +179,7 @@ public extension AppContainer {
         await outboxReplay.runOnce()
     }
 
-    /// v0.12 W8-4 — wire the BGTask cache-sweep hook. Both SQLite caches grow
+    /// Wire the BGTask cache-sweep hook. Both SQLite caches grow
     /// monotonically for engaged users (`sweepOlderThan` was defined + tested
     /// but never invoked). The SWR snapshot cache keeps 30 days; the
     /// HK-daily-stats cache keeps 90 (server-state is authoritative beyond
@@ -184,7 +193,7 @@ public extension AppContainer {
         dailyStats: HealthKitDailyStatsSyncing?
     ) {
         backgroundSync.attachCacheSweepHook { [weak swr, weak dailyStats] in
-            // AUD-8 H-1 — age-sweep AND the hard row-count cap, so a power user's
+            // Age-sweep AND the hard row-count cap, so a power user's
             // SQLite stays bounded even on the BGTask path.
             let swrDropped = await swr?.foregroundMaintenanceSweep() ?? 0
             let statsDropped = await dailyStats?.sweepCacheOlderThan(90 * 24 * 60 * 60, now: .now) ?? 0
@@ -214,10 +223,17 @@ public extension AppContainer {
             // so the BGTask does not call `setTaskCompleted` before the
             // reconcile lands — the whole point of the guaranteed-sync wakeup.
             await medicationsStore?.load(force: true)
+            // 1.7: the wake may end right after; the answer must be on disk
+            // so the next cold start paints it, not the row from before.
+            await medicationsStore?.persistPendingCacheWrites()
+            // #188 (3/5): the load's intake change suspended today's critical
+            // alarm of a dose taken elsewhere; let it reach AlarmKit before
+            // the wake may end.
+            await AppContainer.criticalAlarmReconcilesSettled()
         }
     }
 
-    /// **v0.15.5 AUD-1 F4 (mood-reminder reliability)** — wire the BGTask
+    /// Wire the BGTask
     /// mood-reminder re-arm hook. On every guaranteed-sync wakeup the
     /// coordinator re-runs `NotificationService.reconcileMoodReminder` with the
     /// live toggle + "logged today?" signal + the chosen hour, so the local
@@ -255,7 +271,7 @@ public extension AppContainer {
         notifications: NotificationService?,
         settingsStore: SettingsStore?
     ) async {
-        // v0.14.1 H2 — repeating trigger; the "logged today" suppression is a
+        // Repeating trigger; the "logged today" suppression is a
         // foreground `willPresent` concern, so `moodStore` is only liveness-
         // checked here, not read for a re-arm input.
         guard moodStore != nil, let notifications, let settingsStore else { return }

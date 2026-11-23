@@ -16,12 +16,6 @@ import Observation
 /// NEVER triggers a permission prompt and NEVER reads biological sex for men —
 /// it only consults the closure, and the closure returns `.unknown` whenever
 /// HK auth was not independently granted (see `RESEARCH-cycle.md` §2).
-///
-/// **Feature-flagged off.** Until the cycle feature ships, the whole gate is
-/// hard-gated behind ``FeatureFlag/cycleTracking`` (default OFF). While the
-/// flag is off, `isCycleTrackingAvailable` is always `false` regardless of
-/// gender — so nothing surfaces. Flipping the server flag on (or the local
-/// default in a later phase) unblocks the gender-resolved behaviour.
 @MainActor
 @Observable
 public final class CycleGate {
@@ -30,8 +24,7 @@ public final class CycleGate {
     public private(set) var isCycleTrackingAvailable: Bool = false
 
     private let settings: SettingsStore
-    private let featureFlags: FeatureFlagsStore?
-    /// #30 — server-authoritative module gate. When the `modules` map is
+    /// Server-authoritative module gate. When the `modules` map is
     /// present AND carries a `cycle` key, that value WINS (server is the single
     /// source of truth). When the map is absent (older server / not loaded),
     /// the gate falls back to the local gender/opt-in resolution below — so
@@ -49,12 +42,10 @@ public final class CycleGate {
 
     public init(
         settings: SettingsStore,
-        featureFlags: FeatureFlagsStore? = nil,
         moduleGate: ModuleGate? = nil,
         biologicalSexProvider: @escaping @Sendable () async -> CycleGateResolver.BiologicalSexSignal = { .unknown }
     ) {
         self.settings = settings
-        self.featureFlags = featureFlags
         self.moduleGate = moduleGate
         self.biologicalSexProvider = biologicalSexProvider
         recompute()
@@ -75,14 +66,7 @@ public final class CycleGate {
     }
 
     private func recompute() {
-        // Hard feature gate first — invisible until the flag is on.
-        let flagOn = featureFlags?.isEnabled(.cycleTracking) ?? FeatureFlag.cycleTracking.defaultValue
-        guard flagOn else {
-            isCycleTrackingAvailable = false
-            return
-        }
-
-        // #30 — server module map WINS when present. A `cycle` key explicitly
+        // Server module map WINS when present. A `cycle` key explicitly
         // set to `false` hides the feature regardless of gender/opt-in. When
         // the map is absent (older server / not yet loaded) the local
         // gender/opt-in resolution below is the fallback — unchanged behaviour

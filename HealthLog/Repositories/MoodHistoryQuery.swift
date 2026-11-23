@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 3 — split out of `MoodRepository.swift`.
+// Split out of `MoodRepository.swift`.
 //
 // The repository file crossed the 600-line gate when the durable write outcome
 // landed on it. These five types were never the repository: they are the mood
@@ -75,7 +75,7 @@ public struct MoodHistoryQuery: Sendable, Equatable {
         return items
     }
 
-    /// #115 1.5 — `from`/`to` are day keys in the ACCOUNT zone, so the local
+    /// `from`/`to` are day keys in the ACCOUNT zone, so the local
     /// match reads them in the same calendar (``ProfileDay``).
     func matches(_ entry: MoodEntry, calendar: Calendar = ProfileDay.calendar()) -> Bool {
         if let mood, entry.mood != mood { return false }
@@ -139,7 +139,7 @@ public struct MoodHistoryFilter: Sendable, Equatable {
         self = MoodHistoryFilter()
     }
 
-    /// #115 1.5 — the trailing presets are the account's last N days: cut in
+    /// The trailing presets are the account's last N days: cut in
     /// the profile zone (``ProfileDay``), the zone the server reads `from`/`to`
     /// in, not the phone's.
     public func query(
@@ -176,7 +176,7 @@ public struct MoodHistoryFilter: Sendable, Equatable {
         )
     }
 
-    /// #115 B6 — the range the Custom period opens with: the last 29 days up to
+    /// The range the Custom period opens with: the last 29 days up to
     /// and including today, both named in the profile zone. The screen took
     /// the phone's today, so west of the account the range ended a day early.
     public static func defaultCustomRange(

@@ -111,13 +111,4 @@ struct ImportServiceTests {
         #expect(result.rows.isEmpty)
         #expect(result.dryRun == false)
     }
-
-    @Test("JSONImportResult decodes the restore stats")
-    func jsonResultDecode() throws {
-        let json = Data(#"{ "measurements": 120, "moodEntries": 30, "skipped": 5 }"#.utf8)
-        let result = try JSONDecoder.hlDefault.decode(JSONImportResult.self, from: json)
-        #expect(result.measurements == 120)
-        #expect(result.moodEntries == 30)
-        #expect(result.skipped == 5)
-    }
 }

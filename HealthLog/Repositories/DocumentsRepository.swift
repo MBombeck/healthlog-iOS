@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// A short-lived authorization for one server-mediated document-AI operation.
@@ -40,7 +39,7 @@ enum DocumentAIConsentError: Error, Sendable, Equatable {
     case consentRequired
 }
 
-/// #114 / #115 · 0.2 — the document-AI refusal families the UI words
+/// The document-AI refusal families the UI words
 /// differently (see ``DocumentsRepository/aiRefusalKind(_:)``).
 public enum DocumentAIRefusalKind: Sendable, Equatable {
     /// The operator switched reading documents off.
@@ -188,17 +187,6 @@ public actor DocumentsRepository {
         return false
     }
 
-    /// True when re-extraction was refused because at least one fact is already
-    /// APPROVED (`409`, `documents.inbound.alreadyPartlyConfirmed`).
-    public nonisolated static func isAlreadyPartlyConfirmed(_ error: Error) -> Bool {
-        if case let HLError.server(status, code, message) = error {
-            return status == 409 &&
-                (code == "documents.inbound.alreadyPartlyConfirmed" ||
-                    message.contains("alreadyPartlyConfirmed"))
-        }
-        return false
-    }
-
     /// True when extraction is unavailable because no document-scan provider is
     /// configured (`422`, `documents.inbound.providerUnsupported`). The stored
     /// document is untouched — only the enhancement failed.
@@ -211,7 +199,7 @@ public actor DocumentsRepository {
         return false
     }
 
-    /// **#114 / #115 · 0.2 — why document AI was refused**, per server code
+    /// **Why document AI was refused**, per server code
     /// (v1.39 `meta.errorCode`): `assistant.disabled.documentAi` (or the overall
     /// `assistant.disabled.enabled`), `ai.record.notPermitted`,
     /// `ai.provider.none` (and the older `documents.inbound.providerUnsupported`),
@@ -426,13 +414,6 @@ public actor DocumentsRepository {
         default:
             return .generic("HTTP \(status)")
         }
-    }
-
-    /// SHA-256 hex of the draft bytes — surfaced for local same-bytes detection /
-    /// stable idempotency if a caller wants it (the server is the authoritative
-    /// deduper). Pure + nonisolated so callers can hash without an actor hop.
-    public nonisolated static func contentSHA256(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Builds a `multipart/form-data` body with the file part + the optional text

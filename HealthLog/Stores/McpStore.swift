@@ -1,6 +1,6 @@
 import Foundation
 
-/// Drives Settings → MCP (Build 2 / 2.7): the live-connection list, the
+/// Drives Settings → MCP: the live-connection list, the
 /// connector-token list, minting, and — the reason this surface exists at all —
 /// revocation of both.
 ///
@@ -23,7 +23,7 @@ public final class McpStore {
     /// show-once sheet is presented.
     public private(set) var freshToken: ApiTokenMintResponse?
 
-    /// R2 / #115 A3 — set when the server wants a fresh proof for a mint;
+    /// Set when the server wants a fresh proof for a mint;
     /// the mint sheet asks for it and mints again. SEC — on a server that reads
     /// the proof, the store asks before the first attempt (``mintToken(name:scope:)``).
     public let stepUp: StepUpRetry
@@ -51,7 +51,7 @@ public final class McpStore {
     /// (`auth.stepup.mfa_not_enrolled`). Spent by the next mint.
     @ObservationIgnored private var proofWaived = false
 
-    /// POLISH-C (C1, #163 B1) — the server's `elevation-if-enrolled` rule
+    /// The server's `elevation-if-enrolled` rule
     /// for `POST /api/mcp/tokens`, mirrored: an account with a second factor
     /// (an authenticator or a security key) or a passkey brings a fresh
     /// proof; one without any of them (most SSO-only accounts) mints on the
@@ -268,7 +268,7 @@ public final class McpStore {
     }
 }
 
-/// Drives Settings → API tokens (Build 2 / 2.8). **List + revoke only** — the
+/// Drives Settings → API tokens. **List + revoke only** — the
 /// generic mint route was removed server-side (see ``ApiTokenRepository``), so
 /// there is deliberately no create path here.
 @MainActor

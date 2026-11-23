@@ -5,10 +5,10 @@ import Foundation
 /// `@MainActor @Observable` SWR store backing the manage-reminders screen.
 /// Holds `[MeasurementReminderRow]` (server-sorted by `nextDueAt`), serves
 /// cache-first via the `SWRCoordinator` (key `.measurementReminders`), and
-/// revalidates in the background. When no coordinator is injected (tests /
-/// standalone) it falls back to a direct `repo.list()`.
+/// revalidates in the background. When no coordinator is injected (tests) it falls
+/// back to a direct `repo.list()`.
 ///
-/// **Server-authoritative mutations (08-22).** No reminder action fabricates a
+/// **Server-authoritative mutations.** No reminder action fabricates a
 /// server-owned value. `satisfy`, `complete`, `skip` and `snooze` each leave the
 /// pre-call row exactly as the server last described it, publish which action is
 /// in flight through ``pendingAction`` so the surface can show progress instead
@@ -118,7 +118,7 @@ public final class MeasurementRemindersStore {
         }
     }
 
-    /// Direct (no-SWR) load — used in tests / standalone.
+    /// Direct (no-SWR) load — used in tests.
     private func loadDirect() async {
         isLoading = true
         defer { isLoading = false }

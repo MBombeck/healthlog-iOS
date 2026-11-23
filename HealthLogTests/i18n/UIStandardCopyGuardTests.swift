@@ -45,7 +45,7 @@ struct UIStandardCopyGuardTests {
             let phrases: [String]
             /// Optionale Regex-Phrasen (E7 kennt „Ärztin oder … Arzt").
             let phrasePatterns: [String]?
-            /// Schlüssel → Grund. Bleibt (R16).
+            /// Schlüssel → Grund. Bleibt.
             let protected: [String: String]
             /// Schlüssel → zuständige Arbeitseinheit. Muss verschwinden.
             let pending: [String: String]

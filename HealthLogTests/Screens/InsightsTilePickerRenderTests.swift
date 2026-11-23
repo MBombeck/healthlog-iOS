@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// **v0152 T1 — render proof for the sole shipped Insights tile style (P9).**
+    /// **Render proof for the sole shipped Insights tile style.**
     ///
     /// The dev tile-style picker was removed (App-Store ship blocker); P9
     /// `prismUniform` is now the only style, applied to every tile. The operator's
@@ -26,6 +26,8 @@
         /// Render a single score tile (ring + its resolved ring effect) and export
         /// to `$TILES_RENDER_DIR/<name>.png` when the env var is set. Uses the live
         /// window hierarchy draw so the additive prism/glow composites land.
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func renderTile(
             fraction: Double,
             name: String

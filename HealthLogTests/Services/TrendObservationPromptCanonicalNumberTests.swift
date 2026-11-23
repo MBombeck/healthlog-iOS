@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A360-5 M-5 — the external-AI trend prompt must embed CANONICAL (dot-decimal,
+/// The external-AI trend prompt must embed CANONICAL (dot-decimal,
 /// invariant-locale) numbers. On a German device the device-locale `String(
 /// format:)` emitted "5,5", which is ambiguous / mis-tokenised by a server-
 /// routed or external model. The prompt now pins numeric formatting to

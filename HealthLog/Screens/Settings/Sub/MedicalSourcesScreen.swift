@@ -6,66 +6,78 @@ import SwiftUI
 /// first-launch disclaimer sheet. Lists every methodology paragraph and every
 /// reference in the catalog, grouped, each with a link to the original.
 struct MedicalSourcesScreen: View {
+    /// A sidebar tab root on a regular-width window, a page pushed onto More
+    /// everywhere else.
+    @Environment(\.hlIsTabRoot) private var isTabRoot
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The methodology paragraphs that are open.
+    @State private var expandedMethods: Set<String> = []
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.xl) {
-                // 1.4 B2-c — the intro ("this page lists where every one of
-                // them comes from") is gone; the title and the cards say it.
-                // The disclaimer at the end stays (App Review 1.4.1).
-                methodsSection
-                ForEach(Group.allCases) { group in
-                    referencesSection(group)
-                }
-                learnSection
-                Text("sources.sheet.footer")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+        HLPage {
+            // As a tab root the page title is the tab header, like on every
+            // other tab; pushed, the bar names the page inline.
+            if isTabRoot {
+                HLTabHeader("sources.hub.title", titleIdentifier: "sources.hub.header.title")
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.xl)
+            // The intro ("this page lists where every one of
+            // them comes from") is gone; the title and the cards say it.
+            // The disclaimer at the end stays (App Review 1.4.1).
+            methodsSection
+            ForEach(Group.allCases) { group in
+                referencesSection(group)
+            }
+            learnSection
+            Text("sources.sheet.footer")
+                .hlText(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .hlScreenBackground()
-        .navigationTitle(Text("sources.hub.title"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle(isTabRoot ? Text(verbatim: "") : Text("sources.hub.title"))
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("sources.hub")
     }
 
-    /// R12 (`hl_no_sectionlabel_in_settings`, error severity) forbids
-    /// `HLSectionLabel` under `Screens/Settings/`: a Settings section heading is
-    /// the `HLSettingsCard` title, not the free-floating uppercase label the
-    /// brief's draft used. The card shape (background, radius, padding) below
-    /// is `HLSettingsCard`'s, not a hand-rolled one.
+    /// A Settings section heading is the `HLCard` title, not a free-floating
+    /// uppercase label. The card shape (background, radius, padding) below is
+    /// `HLCard`'s, not a hand-rolled one.
     private var methodsSection: some View {
-        HLSettingsCard(icon: "function", title: "sources.hub.methodsTitle") {
+        // The app's unfolding row (the chevron turns, in the tone of every
+        // other row's indicator) on the row grid of a row card. The system
+        // disclosure drew a dark chevron and taller rows than every other
+        // list.
+        HLCard("sources.hub.methodsTitle", layout: .rows) {
             ForEach(MedicalSourceCatalog.allMethodologyKeys, id: \.bodyKey) { entry in
-                DisclosureGroup {
-                    Text(LocalizedStringKey(entry.bodyKey))
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, HLSpace.xs)
-                } label: {
-                    Text(LocalizedStringKey(entry.titleKey))
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                        // M1 — a `Text` inside a DisclosureGroup label centres
-                        // its wrapped lines by default.
-                        .multilineTextAlignment(.leading)
-                        // Audit (minor) — a disclosure label is the tap target
-                        // for the whole row, so it carries the 44pt floor the
-                        // HIG asks of one.
-                        .frame(minHeight: 44, alignment: .leading)
+                VStack(alignment: .leading, spacing: HLSpace.xs) {
+                    HLRowButton {
+                        withAnimation(reduceMotion ? nil : .default) { toggle(entry.bodyKey) }
+                    } label: {
+                        HLRow(
+                            title: Text(LocalizedStringKey(entry.titleKey)),
+                            accessory: .expand(expandedMethods.contains(entry.bodyKey))
+                        )
+                    }
+                    .accessibilityIdentifier("sources.hub.method.\(entry.bodyKey)")
+                    if expandedMethods.contains(entry.bodyKey) {
+                        Text(LocalizedStringKey(entry.bodyKey))
+                            .hlText(.note)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .tint(HLText.secondary)
-                .accessibilityIdentifier("sources.hub.method.\(entry.bodyKey)")
             }
+        }
+    }
+
+    private func toggle(_ key: String) {
+        if expandedMethods.contains(key) {
+            expandedMethods.remove(key)
+        } else {
+            expandedMethods.insert(key)
         }
     }
 
     private func referencesSection(_ group: Group) -> some View {
         let items = MedicalSourceCatalog.all.filter { group.contains($0.id) }
-        return HLSettingsCard(icon: group.icon, title: group.titleKey) {
+        return HLCard(group.titleKey) {
             ForEach(items) { s in
                 HLSourceRow(name: s.name, year: s.year, caveatKey: s.caveatKey, url: s.url)
             }
@@ -74,9 +86,9 @@ struct MedicalSourcesScreen: View {
     }
 
     private var learnSection: some View {
-        HLSettingsCard(icon: "book", title: "sources.hub.learnTitle") {
+        HLCard("sources.hub.learnTitle") {
             ForEach(MedicalSourceCatalog.learnGuides, id: \.slug) { guide in
-                // 1.4 B4 — the title and the article in the app's language.
+                // The title and the article in the app's language.
                 HLSourceRow(name: guide.localizedTitle, year: nil, caveatKey: nil, url: guide.localizedURL)
             }
         }
@@ -124,7 +136,8 @@ struct MedicalSourcesScreen: View {
                  .whoIdf2006Glucose, .who2000Bmi, .who2011Waist, .who2020PhysicalActivity, .aasm2015AdultSleep,
                  .hirshkowitz2015NsfSleep, .cdc2024Sleep, .bts2017EmergencyOxygen, .niceNg115Copd, .rcp2017News2,
                  .escEas2019Dyslipidaemia, .eas2022Lpa, .kdigo2012Ckd, .jonklaas2014AtaThyroid, .holick2011VitaminD,
-                 .pearson2003Crp, .who2020Ferritin, .who2024Haemoglobin, .acogCo6512015, .who2018Noise, .escNaspe1996Hrv:
+                 .pearson2003Crp, .who2020Ferritin, .who2024Haemoglobin, .acogCo6512015, .who2018Noise, .escNaspe1996Hrv,
+                 .trinka2015StatusEpilepticus, .niceNg217Epilepsies, .beniczky2025IlaeSeizures, .cdcSeizureFirstAid:
                 .guidelines
             case .abimLabReferenceRanges, .harris2004Omega3Index, .matthews1985HomaIr, .efsaDrv, .aceBodyFatStandards, .vatImagingThreshold:
                 .ranges

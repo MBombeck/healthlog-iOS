@@ -1,6 +1,6 @@
 import Foundation
 
-/// **08-07 — the exact identity of the running binary.**
+/// **The exact identity of the running binary.**
 ///
 /// `CFBundleShortVersionString` and `CFBundleVersion` are two *independent*
 /// Apple-owned strings. The first is the marketing version a store listing

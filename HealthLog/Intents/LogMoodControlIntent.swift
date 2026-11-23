@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.10.0 W-Mood-B** — "Stimmung erfassen" control / Action-Button intent.
+/// "Stimmung erfassen" control / Action-Button intent.
 ///
 /// Bound to the Control Center / Lock-Screen / Action-Button mood control
 /// (``LogMoodControl``). Runs with `openAppWhenRun = true`, so a tap brings

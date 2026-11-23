@@ -15,7 +15,7 @@ import Foundation
         /// without-callback, unbekannter RP), bricht der Timeout den Flow ab
         /// und wirft, statt `isWorking` ewig auf `true` zu lassen.
         ///
-        /// v0.11 — von 60 s auf 15 s gesenkt. 60 s sind aus User-Sicht nicht
+        /// Von 60 s auf 15 s gesenkt. 60 s sind aus User-Sicht nicht
         /// von "haengt fuer immer" zu unterscheiden — der Spinner dreht eine
         /// gefuehlte Ewigkeit ohne Feedback. Eine Passkey-Assertion, die in
         /// ~15 s kein praesentierbares Credential gezeigt hat (kein passender
@@ -70,7 +70,7 @@ import Foundation
                 let box = Box()
                 let pending = Task { @MainActor in
                     _ = try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<PasskeyAssertion, Error>) in
-                        let driver = ASDriver(continuation: .assertion(cont), anchor: ASPresentationAnchor())
+                        let driver = ASDriver(continuation: .assertion(cont), anchor: SceneAnchorProvider.windowlessAnchor())
                         wire(driver: driver)
                         box.driver = driver
                     }

@@ -9,12 +9,7 @@ import Observation
 /// that path: a server-side disclaimer reset must be able to re-prompt, and
 /// keeping the server the single source of truth is what makes that possible.
 ///
-/// **Standalone path (G1): local UserDefaults flag** — standalone mode has no
-/// server, so there is no user row to stamp. The acknowledgment is persisted
-/// locally (`standaloneAckKey`). This path is only reachable when the standalone
-/// entry is enabled (`FeatureFlags.standaloneModeAvailable`).
-///
-/// **UI-Standard R15 (U1):** dieser Store trägt nur noch das blockierende Gate
+/// **UI-Standard R15:** dieser Store trägt nur noch das blockierende Gate
 /// vor der App (`RootView+DisclaimerGate`). Der v1.18.6-Zwischenschritt, seinen
 /// Zustand als `\.medicalDisclaimerAcknowledged` in die Environment zu
 /// injizieren und sechs Flächen ihre Hinweise ausblenden zu lassen, ist
@@ -39,22 +34,9 @@ public final class DisclaimerAckStore {
     public private(set) var error: HLError?
 
     private let repo: DisclaimerAckRepository
-    private let defaults: UserDefaults
 
-    /// G1 (AUDIT-ONBOARDING) — local standalone acknowledgment flag. Standalone
-    /// has NO server, so the server `disclaimerAcknowledgedAt` round-trip is
-    /// impossible; the not-a-medical-device / not-for-diagnosis disclaimer is
-    /// instead acknowledged locally and persisted here. Per-install only (no
-    /// iCloud), mirroring `SyncModeStore`'s UI-routing-prefs rationale — the
-    /// acknowledgment is a local routing decision when there is no user row to
-    /// stamp. This path is only ever exercised when the app is in standalone
-    /// mode (the entry to which is itself gated behind
-    /// `FeatureFlags.standaloneModeAvailable`); the server path is untouched.
-    public nonisolated static let standaloneAckKey = "hl.disclaimer.standaloneAckVersion"
-
-    public init(repo: DisclaimerAckRepository, defaults: UserDefaults = .standard) {
+    public init(repo: DisclaimerAckRepository) {
         self.repo = repo
-        self.defaults = defaults
     }
 
     #if DEBUG
@@ -74,7 +56,7 @@ public final class DisclaimerAckStore {
         /// Refusal wins over forcing if both are passed, so an existing test
         /// that inherits the ack flag can never be flipped by accident.
         ///
-        /// W-RECONCILE MED-1: DEBUG-gated, so neither compliance-gate override
+        /// DEBUG-gated, so neither compliance-gate override
         /// exists in a shipping (Release) build.
         static var uiTestForcedAcknowledgment: Bool? {
             let args = ProcessInfo.processInfo.arguments
@@ -127,61 +109,23 @@ public final class DisclaimerAckStore {
         }
     }
 
-    // MARK: - Standalone (local) path — G1 (AUDIT-ONBOARDING)
-
-    /// Load the local standalone acknowledgment state. Standalone has no server,
-    /// so there is no `/me` to read — the flag lives in `UserDefaults`. Never
-    /// fails (a local read can't blip), so `hasLoaded` always becomes `true`,
-    /// which is what gates the standalone disclaimer in front of the shell.
-    public func refreshStandalone() {
-        // UI-test seam — see `uiTestForcedAcknowledgment` above.
-        #if DEBUG
-            if let forced = Self.uiTestForcedAcknowledgment {
-                isAcknowledged = forced
-                hasLoaded = true
-                error = nil
-                return
-            }
-        #endif
-        error = nil
-        isAcknowledged = defaults.string(forKey: Self.standaloneAckKey) != nil
-        hasLoaded = true
-    }
-
-    /// Acknowledge the disclaimer in standalone (local) mode. Persists the copy
-    /// version to `UserDefaults` and flips `isAcknowledged` so the local gate
-    /// dismisses immediately. No network — cannot fail.
-    public func acknowledgeStandalone() {
-        guard !isAcknowledging else { return }
-        isAcknowledging = true
-        error = nil
-        defer { isAcknowledging = false }
-        defaults.set(Self.clientDisclaimerVersion, forKey: Self.standaloneAckKey)
-        isAcknowledged = true
-        hasLoaded = true
-    }
-
     public func clearOnLogout() {
         isAcknowledged = false
         hasLoaded = false
         isAcknowledging = false
         error = nil
-        // G1 — purge the local standalone flag too so a subsequent standalone
-        // user on the same install re-acknowledges (parity with the server path,
-        // where the next user re-reads their own `/me`).
-        defaults.removeObject(forKey: Self.standaloneAckKey)
     }
 
     /// Test-only — set the acknowledgment state without a network round-trip so
-    /// the logout-wipe suite can prove `clearOnLogout` purges it (DISC-02).
+    /// the logout-wipe suite can prove `clearOnLogout` purges it.
     func seedForTesting(isAcknowledged: Bool, hasLoaded: Bool) {
         self.isAcknowledged = isAcknowledged
         self.hasLoaded = hasLoaded
     }
 
-    /// G7 (AUDIT-ONBOARDING) — pure gate decision used by `RootView` to decide
+    /// Pure gate decision used by `RootView` to decide
     /// whether the medical-disclaimer must sit in FRONT of the shell. Extracted
-    /// `static` (mirroring `OnboardingFlow.stepAfterWelcome`) so the
+    /// `static` so the
     /// before-the-product gating + its fail-soft contract is unit-testable
     /// without standing up the view tree.
     ///

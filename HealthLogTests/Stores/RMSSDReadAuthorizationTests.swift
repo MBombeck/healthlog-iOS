@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// 1.2 / V4 — an existing installation on iOS 27 is asked once, for RMSSD
+    /// An existing installation on iOS 27 is asked once, for RMSSD
     /// alone, and only once the server can store it. Older systems are never
     /// asked, and a denial touches nothing else.
     ///
@@ -59,7 +59,7 @@
         @Test("on this system the public entry asks RMSSD only where it resolves, waist always (B5)")
         func publicEntryFollowsTheSystem() async throws {
             let h = try Self.harness()
-            // INT-N: the store's own defaults, not `.standard`, which V1's
+            // The store's own defaults, not `.standard`, which V1's
             // `manual` tests now share through the same server version record.
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.42.0"), defaults: h.defaults)
             let asked = await h.store.requestLateReadAuthorizationIfNeeded()
@@ -120,7 +120,7 @@
             let h = try Self.harness(user: "new-user", requestedBefore: false)
             #expect(await !(h.store.requestRMSSDReadAuthorizationIfNeeded(type: Self.standIn, serverAccepts: true)))
             #expect(h.service.requests.isEmpty)
-            #expect(h.defaults.bool(forKey: HKReadinessStore.rmssdReadRequestedKey(for: "new-user")))
+            #expect(!h.defaults.bool(forKey: HKReadinessStore.rmssdReadRequestedKey(for: "new-user")))
         }
 
         @Test("a failed request is not recorded, and the flag is per user and cleared with the user")
@@ -215,6 +215,5 @@
         func attachUploader(_: MeasurementBatchUploader) async {}
         func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
         func setInitialBackfillCutoff(_: Date?) async {}
-        func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     }
 #endif

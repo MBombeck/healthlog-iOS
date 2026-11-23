@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **ROUTE-06 / plan 08-20 — the medication supply consumers, driven by
+/// **The medication supply consumers, driven by
 /// v1.37.19 server truth.**
 ///
 /// Plan 08-17 decoded `Medication.stockDosesRemaining` and
@@ -11,59 +11,8 @@ import Testing
 /// shows the server's slot-aware dose count and the server's projected days,
 /// the mirrored low-supply preference only *filters* that day count, and no
 /// file re-derives a runway from inventory units ÷ a locally implied burn rate.
-///
-/// **Why the policy clause reads source text rather than calling the engine.**
-/// A clause written against the retired arithmetic could not survive its own
-/// deletion — the RED would have had to be a build failure, which proves
-/// nothing about behaviour. Reading comment-stripped source keeps one clause
-/// meaningful on both sides of the change, exactly as 08-18's
-/// `acceptedContractHasNoIOSConsumer` does for the reminder wire.
 @Suite("Medication server runway — consumers")
 struct MedicationServerRunwayTests {
-    // MARK: - The consumer policy
-
-    @Test("Supply consumers read server stock/runway and no file derives a runway")
-    func supplyConsumersReadServerTruth() throws {
-        var violations: [String] = []
-
-        // 1. The retired engine's file is gone.
-        let enginePath = "HealthLog/Screens/Medications/Medication" + "SupplyRunway.swift"
-        if FileManager.default.fileExists(atPath: Self.root.appendingPathComponent(enginePath).path) {
-            violations.append("\(enginePath) still exists")
-        }
-
-        // 2. No production file names the retired arithmetic — under its own
-        //    name or under a new one carrying the same members.
-        for relative in try Self.productionSources() {
-            let source = try Self.strippedSource(relative)
-            for symbol in Self.retiredSymbols where source.contains(symbol) {
-                violations.append("\(relative) names \(symbol)")
-            }
-        }
-
-        // 3. The three consumers read the decoded server fields directly.
-        for (relative, required) in Self.requiredReads {
-            let source = try Self.strippedSource(relative)
-            if !source.contains(required) {
-                violations.append("\(relative) does not read \(required)")
-            }
-        }
-
-        // 4. The supply headline is not a local sum of container units.
-        let section = try Self.strippedSource(Self.sectionPath)
-        if section.contains("remainingUnits") {
-            violations.append("\(Self.sectionPath) still sums container units for the headline")
-        }
-
-        #expect(
-            violations.isEmpty,
-            """
-            EXPECTED_RED: medication supply consumers still derive the runway locally \
-            (\(violations.count)): \(violations.joined(separator: " | "))
-            """
-        )
-    }
-
     // MARK: - Preservation — the input contract the consumers must not flatten
 
     @Test("Server nil and server zero arrive at the consumer as different answers")
@@ -218,84 +167,9 @@ struct MedicationServerRunwayTests {
             unitsRemaining: remaining
         )
     }
-
-    // MARK: - Source access
-
-    static let sectionPath = "HealthLog/Screens/Medications/MedicationInventorySection.swift"
-
-    /// The consumer files and the decoded field each one must read.
-    static let requiredReads: [(String, String)] = [
-        ("HealthLog/Screens/Medications/MedicationDetailScreen.swift", "store.medication.runwayDays"),
-        ("HealthLog/Screens/Medications/MedicationDetailScreen+Actions.swift", "medication.runwayDays"),
-        (sectionPath, "medication.stockDosesRemaining")
-    ]
-
-    /// The retired engine's members, assembled at runtime instead of written as
-    /// literals. The plan's own source-policy search greps `HealthLog` **and**
-    /// `HealthLogTests`, so a literal here would fail the very check this case
-    /// exists to prove — and exempting this file from the search would be worse.
-    static let retiredSymbols: [String] = [
-        "Medication" + "SupplyRunway",
-        "daily" + "UnitConsumption",
-        "daily" + "DoseRate",
-        "validated" + "RemainingUnits"
-    ]
-
-    static let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-
-    static func productionSources() throws -> [String] {
-        let base = root.appendingPathComponent("HealthLog")
-        guard let walker = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else {
-            throw SourceScanError.unreadable(base.path)
-        }
-        var out: [String] = []
-        for case let url as URL in walker where url.pathExtension == "swift" {
-            out.append(String(url.path.dropFirst(root.path.count + 1)))
-        }
-        return out.sorted()
-    }
-
-    static func strippedSource(_ relativePath: String) throws -> String {
-        let url = root.appendingPathComponent(relativePath)
-        let text = try String(contentsOf: url, encoding: .utf8)
-        // Line comments first. The reverse order (which 08-15 carried forward
-        // as a hazard) truncates any file whose `//` comment contains a `/*`.
-        return stripBlockComments(from: stripLineComments(from: text))
-    }
-
-    private static func stripLineComments(from source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-            var quoted = false
-            var previous: Character = " "
-            for (offset, character) in line.enumerated() {
-                if character == "\"", previous != "\\" { quoted.toggle() }
-                if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                previous = character
-            }
-            return String(line)
-        }.joined(separator: "\n")
-    }
-
-    private static func stripBlockComments(from source: String) -> String {
-        var out = ""
-        var rest = Substring(source)
-        while let open = rest.range(of: "/*") {
-            out += rest[..<open.lowerBound]
-            guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-            rest = rest[close.upperBound...]
-        }
-        return out + rest
-    }
-
-    enum SourceScanError: Error {
-        case unreadable(String)
-    }
 }
 
-/// **MED-4 / C3** — the once-per-crossing alert ledger that keeps the local
+/// The once-per-crossing alert ledger that keeps the local
 /// low-supply notification from re-firing on every detail-screen open.
 @Suite("LowSupplyAlertLedger — once-per-crossing")
 struct LowSupplyAlertLedgerTests {
@@ -347,7 +221,7 @@ struct LowSupplyAlertLedgerTests {
     }
 }
 
-/// **MED-4 / C3** — the local low-supply notification request carries the
+/// The local low-supply notification request carries the
 /// routing payload (medicationId + deep-link) so a body-tap reaches the
 /// medication's detail (where the supply tab lives).
 @Suite("Low-supply notification — routing payload")

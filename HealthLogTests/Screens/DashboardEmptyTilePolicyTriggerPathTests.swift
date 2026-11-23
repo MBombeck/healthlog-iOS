@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable file_length
 
-/// **v0.6.2.2 W-TILE-AUDIT — trigger-path invariant suite.**
+/// **Trigger-path invariant suite.**
 ///
 /// Operator on build 71 (2026-05-25, third report): "Dann refreshe ich
 /// die Seite, indem ich mit meinem Daumen runterziehe, und dann sehe ich
@@ -122,7 +122,7 @@ struct DashboardEmptyTilePolicyTriggerPathTests {
 
     /// **TRIGGER 4 — scenePhase foreground.** Background → active re-fires
     /// `store.refresh()` + `refreshTileStates()`. Anchor is set-once
-    /// (W-TILEHOTFIX) and the new synth contract is invariant of timing
+    /// and the new synth contract is invariant of timing
     /// regardless. Same as nav-pop.
     @Test("TRIGGER scenePhase-foreground: synth + .empty(.noData) → HIDDEN")
     func trigger4_scenePhaseForeground() {

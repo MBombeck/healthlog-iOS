@@ -86,7 +86,10 @@ extension OutboxQueue {
         maxAttempts: Int = OutboxReplayService.defaultMaxAttempts
     ) -> Int {
         let user = currentOwnerProvider()
-        return ops.count { $0.belongs(to: user) && $0.holdReason(maxAttempts: maxAttempts) == nil }
+        // A row whose first send is still running is not waiting for anything.
+        return ops.count {
+            !liveSendIDs.contains($0.id) && $0.belongs(to: user) && $0.holdReason(maxAttempts: maxAttempts) == nil
+        }
     }
 
     /// The signed-in account's held rows, grouped by reason (largest group
@@ -128,6 +131,22 @@ extension OutboxQueue {
             maxAttempts: maxAttempts,
             keepingMarkers: markers
         )
+        if count > 0 { await broadcast() }
+        return count
+    }
+
+    /// The rows of `owner` the store had to delete unread since the last
+    /// call, see ``OutboxStore/discardUnreadable(_:)``.
+    func takeUnreadableDiscards(ownedBy owner: String) async -> [OutboxUnreadableDiscard] {
+        await resolvedStore().takeUnreadableDiscards(ownedBy: owner)
+    }
+
+    /// See ``OutboxStore/resetAttempts(ownedBy:keepingMarkers:)``. Parked and
+    /// unconfirmed rows keep their budget, as in the update path above.
+    @discardableResult
+    func resetAttempts(ownedBy owner: String) async throws -> Int {
+        let markers = [HealthKitReplayParked.lastErrorPrefix, OutboxReplayService.unconfirmedPrefix]
+        let count = try await resolvedStore().resetAttempts(ownedBy: owner, keepingMarkers: markers)
         if count > 0 { await broadcast() }
         return count
     }

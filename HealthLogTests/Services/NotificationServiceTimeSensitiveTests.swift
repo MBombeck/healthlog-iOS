@@ -4,7 +4,7 @@ import Testing
     @testable import HealthLog
     import UserNotifications
 
-    /// v0.6.2.3 F1-NOTIF — pins the time-sensitive contract on the four
+    /// Pins the time-sensitive contract on the four
     /// surfaces that determine whether medication banners (and snoozed
     /// re-fires) break through Focus / Do Not Disturb:
     ///
@@ -22,7 +22,7 @@ import Testing
     ///    banner inherits the original priority. The regression hazard
     ///    is "snoozing = priority lost".
     /// 3. Mood-snooze re-build — `buildMoodSnoozeRequest` keeps the routine
-    ///    `.active` level (Build 273): the evening nudge is `.active` on
+    ///    `.active` level: the evening nudge is `.active` on
     ///    purpose, so a snooze must not escalate it. Historically pinned as
     ///    `.timeSensitive` "for symmetry with
     ///    the server-driven mood reminder push.
@@ -153,7 +153,7 @@ import Testing
             #expect(opts.contains(.list))
         }
 
-        // MARK: - v0150 C-M1 — urgent path is a REAL escalation (strictly louder)
+        // MARK: - Urgent path is a REAL escalation (strictly louder)
 
         /// A `.passive` routine push presents quietly (banner + list, NO sound),
         /// so a low-priority foreground arrival does not chirp. This is the
@@ -172,7 +172,7 @@ import Testing
         /// The urgent SYSTEM_ALERT set must be STRICTLY more prominent than the
         /// base presentation for a push of the SAME (quiet) level — i.e. a proper
         /// superset, not byte-identical. This is the regression guard for the
-        /// "elevation was a no-op" defect (C-M1): the urgent path force-adds
+        /// "elevation was a no-op" defect: the urgent path force-adds
         /// `.sound` even on a level the base case mutes.
         @Test("Urgent SYSTEM_ALERT is strictly more prominent than the base set at the same level")
         func urgentIsStrictlyMoreProminentThanBase() {
@@ -205,7 +205,7 @@ import Testing
             #expect(urgent.contains(.sound))
         }
 
-        // MARK: - Mood snooze re-build keeps the ROUTINE level (Build 273)
+        // MARK: - Mood snooze re-build keeps the ROUTINE level
 
         //
         // The evening mood nudge is deliberately `.active` (see
@@ -334,7 +334,7 @@ import Testing
         }
     }
 
-    // MARK: - Spezi medication-content rewrite (P0-2)
+    // MARK: - Spezi medication-content rewrite
 
     #if canImport(SpeziHealthKit) && canImport(SpeziScheduler)
         /// Spezi medication banners flow through

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - CU-21 (C1) — Server-Sicht auf die Sync-Gesundheit
+// MARK: - Server-Sicht auf die Sync-Gesundheit
 
 /// Ableitung aus `GET /api/integrations/healthkit`, die die Diagnostikfläche
 /// rendert.
@@ -15,7 +15,7 @@ import SwiftUI
 /// Vertrag pinnen kann, ohne gegen lokalisierten Text zu assertieren — gleiches
 /// Muster wie ``KindRow``.
 struct HKServerSyncHealthSummary: Equatable {
-    /// #139 — the server's unified state. When present it is the only source
+    /// The server's unified state. When present it is the only source
     /// of the verdict row; ``verdict`` (legacy `syncHealth`) answers only for a
     /// server without it.
     let health: ConnectionHealth?
@@ -77,9 +77,9 @@ struct HKServerSyncHealthSummary: Equatable {
         }
         switch kind {
         case .background, .push: return .confirmed
-        // V1 — "Sync all" is a person at the phone, not a phone that delivers alone.
+        // "Sync all" is a person at the phone, not a phone that delivers alone.
         case .foreground, .manual: return .foregroundOnly
-        // X4 — a history catch-up says nothing about who delivers; the
+        // A history catch-up says nothing about who delivers; the
         // server never stores it as the last trigger either.
         case .backfill: return .unknown
         }
@@ -123,7 +123,7 @@ struct HKServerSyncHealthSummary: Equatable {
         case .pendingFirstSync: return String(localized: "settings.hkdiag.verdict_pending_first_sync")
         case .disconnected: return String(localized: "settings.hkdiag.verdict_disconnected")
         case .unknown:
-            // K1 — ein neues Server-Wort ist ein Bezeichner, kein Satz. Es wird
+            // Ein neues Server-Wort ist ein Bezeichner, kein Satz. Es wird
             // neutral „Unbekannt" gelesen (und nicht rot gefärbt, siehe
             // `verdictTint`), statt als Rohwert im UI zu stehen.
             return HKSyncDiagnosticsVocabulary.unknown
@@ -139,7 +139,7 @@ struct HKServerSyncHealthSummary: Equatable {
     }
 
     /// Lokalisiertes Wort für den zuletzt gesehenen Auslöser; ein unbekanntes
-    /// Server-Wort liest sich neutral „Unbekannt" (K1).
+    /// Server-Wort liest sich neutral „Unbekannt".
     var triggerLabel: String {
         guard let raw = lastSyncTrigger else {
             return String(localized: "settings.hkdiag.never")
@@ -159,12 +159,9 @@ struct HKServerSyncHealthSummary: Equatable {
 extension SettingsHKSyncDiagnosticsScreen {
     /// Server-Sicht: Urteil, Auslöser, Hintergrund-Beleg, Frische pro Typ.
     var serverHealthCard: some View {
-        // 1.4 B2-c — the reading guide ("a missing type never delivered, it
+        // The reading guide ("a missing type never delivered, it
         // is not zero") and the legend of the times are in the (i).
-        HLSettingsCard(
-            icon: "antenna.radiowaves.left.and.right",
-            title: "settings.hkdiag.server_title"
-        ) {
+        HLCard("settings.hkdiag.server_title") {
             if let summary = serverSummary {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     if summary.hasServerData {
@@ -173,7 +170,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                             value: summary.autonomyLabel,
                             tint: summary.autonomyTint
                         )
-                        // W5 (#126 1.4) — right under the answer it proves:
+                        // Right under the answer it proves:
                         // opening the app moves the last trigger, never this.
                         serverStatRow(
                             label: "settings.hkdiag.server_last_background",
@@ -185,11 +182,10 @@ extension SettingsHKSyncDiagnosticsScreen {
                             value: summary.verdictLabel,
                             tint: summary.verdictTint
                         )
-                        // #139 — the reason behind the verdict, one sentence.
+                        // The reason behind the verdict, one sentence.
                         if let health = summary.health, ConnectionHealthPresentation(health: health).showsDetail {
                             Text(verbatim: ConnectionHealthPresentation(health: health).sentence)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowSubtitle)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if let since = summary.since {
@@ -205,6 +201,8 @@ extension SettingsHKSyncDiagnosticsScreen {
                             tint: HLText.secondary
                         )
                         freshnessSection(summary.freshness)
+                        // #190: the relay, when the server offers it.
+                        PushRelaySyncDiagnosticsRow()
                     } else {
                         Text("settings.hkdiag.server_no_data")
                             .font(.hlBody)
@@ -234,14 +232,9 @@ extension SettingsHKSyncDiagnosticsScreen {
     @ViewBuilder
     private func freshnessSection(_ freshness: [MetricFreshness]?) -> some View {
         if let freshness {
-            Divider().opacity(0.4)
-            Text("settings.hkdiag.freshness_title")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle("settings.hkdiag.freshness_title")
             if freshness.isEmpty {
-                Text("settings.hkdiag.freshness_empty")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("settings.hkdiag.freshness_empty")
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(freshness) { row in
@@ -251,7 +244,7 @@ extension SettingsHKSyncDiagnosticsScreen {
         }
     }
 
-    /// 1.4 B4 — the screen's one stat row: wraps in full, stacks at the
+    /// The screen's one stat row: wraps in full, stacks at the
     /// accessibility sizes (it was cut after two lines).
     private func serverStatRow(label: LocalizedStringKey, value: String, tint: Color) -> some View {
         HLSettingsStatRow(label: Text(label), value: value, tint: tint)

@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// **MED-PLUS (1.5.0, #126 3.11) — "Einnahmen automatisch erfassen" in the
+/// **"Einnahmen automatisch erfassen" in the
 /// medication editor, under "Erweitert".**
 ///
-/// A rare option, so it folds out of one row of its own section (the pattern
-/// of the add sheet's advanced options). On: the server records each scheduled
+/// A rare option, so it waits behind the centred „Erweitert" link and folds
+/// out in a card of its own beneath it, like the add sheet's options. On: the server records each scheduled
 /// dose as taken at its time, a dose the person logs or skips always wins, and
 /// no reminder goes out; under the switch "Seit …" names when it was switched
 /// on (`autoMarkTakenSince`). The save names `autoMarkTaken` only when the
@@ -24,38 +24,32 @@ struct MedicationAutoMarkTakenSection: View {
     @State private var isExpanded = false
 
     var body: some View {
-        Section {
-            Button {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { isExpanded.toggle() }
-            } label: {
-                HStack {
-                    Text("Advanced")
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
-                    Image(systemName: "chevron.down")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                        .accessibilityHidden(true)
+        // A group, so the change handler sits on the link and the card alike.
+        Group {
+            Section {
+                HLLinkButton("Advanced", isExpanded: isExpanded) {
+                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { isExpanded.toggle() }
                 }
-                .contentShape(Rectangle())
+                .accessibilityIdentifier("med.edit.advanced")
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("med.edit.advanced")
-            .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
             if isExpanded {
-                HLSettingsToggleRow(
-                    title: "med.edit.autoMarkTaken.label",
-                    description: "med.edit.autoMarkTaken.helper",
-                    isOn: $value.isOn,
-                    accessibilityID: "med.edit.autoMarkTaken"
-                )
-                if let sinceText = Self.sinceText(value: value, since: since) {
-                    Text(verbatim: sinceText)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .accessibilityIdentifier("med.edit.autoMarkTaken.since")
+                Section {
+                    HLSettingsToggleRow(
+                        title: "med.edit.autoMarkTaken.label",
+                        description: "med.edit.autoMarkTaken.helper",
+                        isOn: $value.isOn,
+                        accessibilityID: "med.edit.autoMarkTaken"
+                    )
+                    if let sinceText = Self.sinceText(value: value, since: since) {
+                        Text(verbatim: sinceText)
+                            .hlText(.rowSubtitle)
+                            .accessibilityIdentifier("med.edit.autoMarkTaken.since")
+                    }
                 }
+                .hlFormRowSurface()
             }
         }
         .onChange(of: value.server, initial: true) { _, server in

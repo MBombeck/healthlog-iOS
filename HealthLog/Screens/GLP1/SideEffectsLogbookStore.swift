@@ -3,7 +3,7 @@ import Observation
 
 /// Backing store for the side-effects logbook section.
 ///
-/// **v0.12 SP3 — server round-trip.** The local `GLP1LocalRepository` is the
+/// **Server round-trip.** The local `GLP1LocalRepository` is the
 /// optimistic on-device cache (instant render, offline-safe). When a server
 /// pairing exists (`serverRepo != nil`), every create/delete is *also* mirrored
 /// to `…/medications/[id]/side-effects` through the Outbox + idempotency-key
@@ -11,7 +11,7 @@ import Observation
 /// and on a retriable failure it lands in the Outbox and replays on
 /// reachability + foreground. On 2xx the Outbox entry clears. The server row id
 /// is back-written onto the local row so subsequent deletes target the right
-/// server log. **Standalone** (no pairing → `serverRepo == nil`) stays purely
+/// server log. Without a server repo (`serverRepo == nil`) it stays purely
 /// local: nothing is enqueued, nothing replays. Default query window is 90 days.
 @MainActor
 @Observable
@@ -22,7 +22,7 @@ public final class SideEffectsLogbookStore {
     public private(set) var isLoading: Bool = false
 
     private let repo: GLP1LocalRepository
-    /// v0.12 SP3 — `nil` in standalone (no server). Non-nil → mirror writes +
+    /// Non-nil → mirror writes +
     /// hydrate reads from the server.
     private let serverRepo: MedicationTherapyLogRepository?
     private let windowDays: Int
@@ -49,7 +49,7 @@ public final class SideEffectsLogbookStore {
                 medicationID: medicationID,
                 sinceDays: windowDays
             )
-            // Paired: reconcile against the server (cache-first, then refresh).
+            // Reconcile against the server (cache-first, then refresh).
             if let serverRepo {
                 let remote = try await serverRepo.sideEffects(
                     medicationID: medicationID, sinceDays: windowDays
@@ -63,52 +63,64 @@ public final class SideEffectsLogbookStore {
         }
     }
 
+    /// Logs a side effect. Answers `nil` once it is on the device and the
+    /// failure otherwise, so the sheet can stay open with the entry. An entry
+    /// the server refused as invalid is taken back off the device: left there
+    /// it would never sync, and saving again would log it twice.
+    @discardableResult
     public func log(
         loggedAt: Date,
         kind: SideEffectKind,
         severity: Int,
         note: String?
-    ) async {
+    ) async -> HLError? {
+        let inserted: SideEffectEntrySnapshot
         do {
-            // Optimistic local write (instant + offline-safe).
-            let inserted = try await repo.addSideEffect(
+            // Local write first (instant + offline-safe).
+            inserted = try await repo.addSideEffect(
                 medicationID: medicationID,
                 loggedAt: loggedAt,
                 kind: kind,
                 severity: severity,
                 note: note
             )
-            entries = mergeSortedDescending(existing: entries, inserted: inserted)
-            // Mirror to the server when paired (Outbox-on-failure inside the repo).
-            // Audit B-4 — the sentinel has no taxonomy entry, so there is
-            // nothing to mirror. It only ever arrives by hydrating a server row
-            // this build could not map, which means the server already holds it.
-            if let serverRepo, let entry = kind.serverEntry {
-                let body = MedicationSideEffectCreate(
-                    entry: entry,
-                    severity: SideEffectSeverityBridge.toServer(severity),
-                    occurredAt: loggedAt,
-                    notes: note
-                )
-                // A retriable error already enqueued on the Outbox — the local
-                // row stands and the server write replays. Non-retriable errors
-                // surface so the user sees a genuine failure.
-                do {
-                    let created = try await serverRepo.createSideEffect(medicationID: medicationID, body: body)
-                    try? await repo.setSideEffectServerID(localID: inserted.id, serverID: created.id)
-                } catch let err as HLError where err.shouldPersistToOutbox {
-                    // Queued for replay (incl. a transient-refresh 401 the
-                    // repo durably enqueued) — keep the optimistic row, no banner.
-                }
-            }
-        } catch let err as HLError {
-            error = err
         } catch {
-            self.error = .unknown(String(describing: error))
+            return PenInventoryStore.hlError(error)
         }
+        // Mirror to the server (Outbox-on-failure inside the repo).
+        // The sentinel has no taxonomy entry, so there is
+        // nothing to mirror. It only ever arrives by hydrating a server row
+        // this build could not map, which means the server already holds it.
+        if let serverRepo, let entry = kind.serverEntry {
+            let body = MedicationSideEffectCreate(
+                entry: entry,
+                severity: SideEffectSeverityBridge.toServer(severity),
+                occurredAt: loggedAt,
+                notes: note
+            )
+            do {
+                let created = try await serverRepo.createSideEffect(medicationID: medicationID, body: body)
+                try? await repo.setSideEffectServerID(localID: inserted.id, serverID: created.id)
+            } catch let err as HLError where err.shouldPersistToOutbox {
+                // Queued for replay (incl. a transient-refresh 401 the
+                // repo durably enqueued) — keep the local row, no banner.
+            } catch where PenInventoryStore.isFinalRejection(error) {
+                try? await repo.deleteSideEffect(id: inserted.id)
+                return PenInventoryStore.hlError(error)
+            } catch {
+                // Not a refusal of the entry (an undecodable 2xx answer, a
+                // server without the route): the entry stays, the banner says so.
+                self.error = PenInventoryStore.hlError(error)
+            }
+        }
+        entries = mergeSortedDescending(existing: entries, inserted: inserted)
+        return nil
     }
 
-    public func delete(id: String) async {
+    /// Deletes an entry. A failure lands in ``error`` for the screen's banner.
+    @discardableResult
+    public func delete(id: String) async -> Bool {
+        error = nil
         do {
             // Resolve the server id (if this row was mirrored) before the local
             // delete drops the mapping.
@@ -122,10 +134,10 @@ public final class SideEffectsLogbookStore {
                     // Queued for replay (incl. a transient-refresh 401) — no banner.
                 }
             }
-        } catch let err as HLError {
-            error = err
+            return true
         } catch {
-            self.error = .unknown(String(describing: error))
+            self.error = PenInventoryStore.hlError(error)
+            return false
         }
     }
 
@@ -144,7 +156,7 @@ public final class SideEffectsLogbookStore {
                     id: row.id,
                     medicationID: medicationID,
                     loggedAt: row.occurredAt,
-                    // Audit B-4 — was `?? .nausea`: an entry this build cannot
+                    // Was `?? .nausea`: an entry this build cannot
                     // map is the one thing it is certainly NOT, a symptom the
                     // person named.
                     kindRaw: SideEffectKind.from(serverEntry: row.entry).rawValue,
@@ -189,7 +201,7 @@ public final class SideEffectsLogbookStore {
     public var summaryByKind: [SummaryRow] {
         var counts: [SideEffectKind: (count: Int, weight: Int)] = [:]
         for entry in entries {
-            // Audit B-4 — the chips name a dominant SYMPTOM and colour it by
+            // The chips name a dominant SYMPTOM and colour it by
             // weighted severity. The sentinel is not a symptom (two rows on it
             // may be two different taxonomy entries), so it gets no chip; the
             // rows themselves stay in the day list below, labelled honestly.

@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// v0.6.0.8 — `NotificationService.LastRegistrationSnapshot` is the
+    /// `NotificationService.LastRegistrationSnapshot` is the
     /// operator-facing audit blob persisted under
     /// `dev.healthlog.app.notif.lastRegistration.v1`. These tests pin
     /// the contract the diagnostics surface relies on:
@@ -208,7 +208,7 @@ import Testing
             let api = makeAPI()
             nonisolated(unsafe) var requestCount = 0
             MockURLProtocol.install { req in
-                // CU-07: the handler is process-global — count only the
+                // The handler is process-global — count only the
                 // device-registration POST this test drives.
                 if req.targets("/api/devices") { requestCount += 1 }
                 return (Self.okResponse(req, status: 200), Data())

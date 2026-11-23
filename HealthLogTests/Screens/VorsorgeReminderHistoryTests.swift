@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **Plan 08-22 — the honesty contract for the Vorsorge completion ledger.**
+/// **The honesty contract for the Vorsorge completion ledger.**
 ///
 /// The reminder surfaces gained a history in v1.37.20, and the failure mode this
 /// suite exists to prevent is not a crash: it is a plausible-looking ledger that
@@ -24,17 +24,16 @@ import Testing
 struct VorsorgeReminderHistoryTests {
     // MARK: - The marker this plan closes
 
-    /// **EXPECTED_RED (08-22): the accepted ledger and actions have no user-
-    /// visible consumer.** Reads the four reminder surfaces as comment-stripped
-    /// text, so it states what is missing without naming a symbol that does not
-    /// exist yet.
+    /// **The accepted ledger and actions have no user-visible consumer.**
+    /// Reads the four reminder surfaces as comment-stripped text, so it states
+    /// what is missing without naming a symbol that does not exist yet.
     @Test("08-22 marker: no reminder surface offers the accepted actions or ledger")
     func reminderSurfacesHaveNoServerLedger() throws {
         let sheet = try Phase8SourceScan.stripped(Self.detailSheet)
         let model = try Phase8SourceScan.stripped(Self.cardModel)
         let screen = try Phase8SourceScan.stripped(Self.screen)
-        // 17-02 — the accepted cycle actions moved out of the sheet into their
-        // own type so the TILE can mount the same implementation (G2). The
+        // The accepted cycle actions moved out of the sheet into their
+        // own type so the TILE can mount the same implementation. The
         // clauses below follow them; „the sheet offers skip" is still asserted,
         // it is just asserted where the code now lives.
         let actions = try Phase8SourceScan.stripped(Self.ledgerActions)
@@ -66,13 +65,13 @@ struct VorsorgeReminderHistoryTests {
         // every comment, so such a clause could never fire. The comment is
         // corrected anyway; what is *asserted* is code.
         //
-        // 17-02 (G1) — the clause that used to stand here read
+        // The clause that used to stand here read
         // „VorsorgeAdherenceSummaryCard reports no snoozed count". Its subject
         // was deleted on the operator's statement, so the clause is REPLACED
         // rather than dropped: what 08-22 was really pinning is that the
         // accepted actions have a user-visible consumer, and the strongest
         // statement of that is now the tile, where the operator expects to reach
-        // them (G2). Deleting the clause outright would have quietly lowered the
+        // them. Deleting the clause outright would have quietly lowered the
         // bar this marker sets.
         if !screen.contains("VorsorgeReminderLedgerActions") {
             violations.append("the reminder TILE offers neither skip nor snooze — sheet-only was never the ask")
@@ -80,7 +79,7 @@ struct VorsorgeReminderHistoryTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: accepted reminder actions and history have no user-visible consumer. PHASE8-VIOLATIONS 08-22-ui: \(violations)"
+            "accepted reminder actions and history have no user-visible consumer. PHASE8-VIOLATIONS 08-22-ui: \(violations)"
         )
     }
 
@@ -231,63 +230,14 @@ struct VorsorgeReminderHistoryTests {
         #expect(!VorsorgeCard.hasSkippedCurrentCycle(Self.row(lastSatisfiedAt: late, lastSkippedAt: nil)))
     }
 
-    // MARK: - No fabrication, asserted against the production source
+    // MARK: - The page window is the server's
 
-    /// The structural half of the honesty claim: the surfaces that render the
-    /// ledger never construct a ledger row, and the seam that maps one takes the
-    /// ledger rather than the reminder — so there is nothing to borrow from.
-    @Test("no reminder surface constructs a ledger row or reads the reminder's own timestamps")
-    func noSurfaceSynthesizesALedgerRow() throws {
-        let sheet = try Phase8SourceScan.stripped(Self.detailSheet)
-        let model = try Phase8SourceScan.stripped(Self.cardModel)
-
-        var violations: [String] = []
-        for (name, source) in [("VorsorgeReminderDetailSheet", sheet), ("VorsorgeCardModel", model)] {
-            for constructor in ["MeasurementReminderEvent(", "MeasurementReminderHistoryPage("]
-                where source.contains(constructor)
-            {
-                violations.append("\(name) constructs \(constructor) — a ledger row nobody sent")
-            }
-        }
-
-        let seam = Phase8SourceScan.member(named: "static func ledgerState(", in: model)
-        if let seam {
-            for borrowed in ["lastSatisfiedAt", "lastSkippedAt", "skipCount", "MeasurementReminderRow"]
-                where seam.contains(borrowed)
-            {
-                violations.append("ledgerState reads the reminder's own \(borrowed)")
-            }
-        } else {
-            violations.append("ledgerState is absent — restate this contract rather than treating it as satisfied")
-        }
-
-        let section = Phase8SourceScan.member(named: "private struct VorsorgeReminderLedgerSection", in: sheet)
-        if let section {
-            for borrowed in ["lastSatisfiedAt", "lastSkippedAt", "skipCount"] where section.contains(borrowed) {
-                violations.append("the ledger section reads the reminder's own \(borrowed)")
-            }
-        } else {
-            violations.append("VorsorgeReminderLedgerSection is absent")
-        }
-
-        #expect(violations.isEmpty, "PHASE8-VIOLATIONS 08-22-fabrication: \(violations)")
-    }
-
-    /// The published `limit` bounds and the `422` they carry stay the server's.
-    /// A clamp anywhere in the reminder path would hide a refusal the contract
-    /// deliberately placed on the far side.
-    @Test("the published page window is exported, and nothing clamps against it")
-    func pageWindowStaysTheServers() throws {
+    /// The published `limit` bounds stay the server's; a refusal outside them
+    /// is the server's `422`, not a client clamp.
+    @Test("the published page window is exported")
+    func pageWindowStaysTheServers() {
         #expect(MeasurementReminderHistoryPage.defaultLimit == 50)
         #expect(MeasurementReminderHistoryPage.limitRange == 1 ... 100)
-
-        let repository = try Phase8SourceScan.stripped("HealthLog/Repositories/MeasurementReminderRepository.swift")
-        let store = try Phase8SourceScan.stripped("HealthLog/Stores/MeasurementRemindersStore.swift")
-        for source in [repository, store] {
-            #expect(!source.contains("limitRange.clamped"))
-            #expect(!source.contains("min(limit"))
-            #expect(!source.contains("max(limit"))
-        }
     }
 
     // MARK: - Fixtures

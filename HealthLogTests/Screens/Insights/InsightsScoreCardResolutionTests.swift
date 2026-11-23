@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Parity Build 4 · 4.3 — the ring selection maps to the rendered cards.**
+/// **The ring selection maps to the rendered cards.**
 ///
 /// `selectedScoreRings` is persisted server-side, but its only renderer (the
 /// dashboard hero) had been unmounted, so the setting changed nothing the user

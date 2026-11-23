@@ -1,6 +1,6 @@
 import Foundation
 
-/// SUPP (1.5.0, #131) — what the detail page says about the latest day
+/// What the detail page says about the latest day
 /// beyond its total: the split by source and, only on the server's verdict,
 /// the upper intake level with its source. Both come from the server; the
 /// day's `/daily` point wins, the overview row fills in for a server or a

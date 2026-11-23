@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-31 — how a withheld delta is told, and how the detail sheet explains
+/// **How a withheld delta is told, and how the detail sheet explains
 /// the score.**
 ///
 /// The rule under test: when the server says the delta is missing because *its

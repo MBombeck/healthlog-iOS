@@ -48,7 +48,7 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 
@@ -80,7 +80,7 @@
             let firstOutcome = await firstTask.value
             let secondOutcome = await secondTask.value
             if first.cancelCount != 1 || firstOutcome != .canceled || secondOutcome != .failed(reason: "denied") {
-                Issue.record("EXPECTED_RED: WHOOP overlap completed wrong operation")
+                Issue.record("WHOOP overlap completed wrong operation")
             }
         }
 

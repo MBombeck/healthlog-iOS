@@ -8,7 +8,7 @@ Concrete steps to get HealthLog iOS running in the Simulator. **No Apple Develop
 brew install xcodegen swiftformat swiftlint
 ```
 
-Full Xcode 16+ is required (not just Command Line Tools — Swift Testing module ships only with Xcode 16). Install from the App Store.
+Full Xcode 26 or later is required (not just Command Line Tools): the iOS deployment target is 26.0 and the project pins Xcode 27.2. Install from the App Store.
 
 ## Run
 
@@ -94,7 +94,26 @@ See `.planning/ROADMAP.md` for phase breakdown. Current state:
 
 GitHub Actions runs the CI source-contract self-test, `swiftformat --lint`, the
 fail-closed exact SwiftLint warning-baseline self-test and live gate, the i18n
-and string-catalog gates, `xcodegen`, `xcodebuild build`, `xcodebuild test`, and
-`swift build` (HealthLogCore SPM target) on every PR. The self-hosted Mac mini runner uses
-the exact Xcode 27.2 release/archive toolchain pinned in `project.yml`. See
+and string-catalog gates, the string-reference gate, the function body ledger
+and `xcodegen` on every PR. Debug is then compiled once with
+`xcodebuild build-for-testing`; the unit suite and the three release UI classes
+run from those products with `test-without-building`, so neither test step
+compiles again. A Release build for the symbol check and the HealthLogCore SPM
+build follow. The self-hosted Mac mini runner uses the exact Xcode 27.2
+release/archive toolchain pinned in `project.yml`. See
 `.github/workflows/ci.yml`.
+
+`.github/workflows/hygiene.yml` runs the checks that need no Xcode on a hosted
+Linux runner, for every push and pull request: the workflow supply-chain
+contract (`scripts/test-workflow-hygiene.sh`, actions pinned by SHA, read-only
+tokens, no self-hosted runner for forks) and actionlint, the per-binary privacy
+manifest gate (`scripts/check-privacy-manifests.py`), the third-party license
+inventory (`scripts/third-party-licenses.py --check`), the tracked-secret scan
+and gitleaks over the tree and the new commits. On `main` it also submits the
+resolved Swift packages to GitHub's dependency graph. Each script has a
+`--self-test` and runs locally as it does in CI. `.github/workflows/codeql.yml`
+adds code scanning where the repository is public.
+
+The release producer, which stays with the maintainer and is not part of
+this repository, takes the same shape: it builds Debug once, runs both test
+gates from it, archives Release once and stops before the export.

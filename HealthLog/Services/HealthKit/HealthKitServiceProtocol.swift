@@ -45,7 +45,7 @@ import Foundation
         /// again immediately, without waiting for the next cold-start.
         func resetAuthDisabledTypes() async
 
-        /// **25-02 (E-2026-08-29 #5)** —
+        /// **25-02** —
         /// `HKHealthStore.getRequestStatusForAuthorization(toShare:read:)`
         /// behind the seam: whether presenting the request sheet is still
         /// necessary for the given sets. The ONE status API that accepts READ

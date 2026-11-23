@@ -3,7 +3,7 @@ import Foundation
 // MARK: - BGTask outbox-drain wiring (Reliability M1 — audit-v0162)
 
 extension AppContainer {
-    /// **Reliability M1 (audit-v0162)** — wire the guaranteed-sync
+    /// **Reliability M1** — wire the guaranteed-sync
     /// `BGProcessingTask` so it drains the encrypted Outbox on every wakeup.
     ///
     /// Before this, the only replay triggers were: an online interface edge
@@ -41,13 +41,13 @@ extension AppContainer {
     /// get pulled toward the server between the rare `BGProcessingTask` grants —
     /// the structural fix for #66 ("reaches the server only in the foreground").
     ///
-    /// **Phase 07 / plan 07-07** gave the AppRefresh wake its own budget: it used
+    /// Gave the AppRefresh wake its own budget: it used
     /// to announce itself as `.background`, which resolved a ~30-second grant to
     /// the `BGProcessingTask` budget (eight pages per type, first history walk
     /// permitted) — the exact opposite of what
     /// `HealthSyncBudget.required(for: .appRefresh)` demands.
     ///
-    /// **Phase 07 / plan 07-09** made this one hook the coordinator's *only*
+    /// Made this one hook the coordinator's *only*
     /// HealthKit route, for all four of its triggers rather than AppRefresh
     /// alone. The coordinator names the trigger and passes its own
     /// `BGTask.expirationHandler` flag; this closure resolves the plan. Nothing

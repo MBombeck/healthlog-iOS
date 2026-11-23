@@ -36,7 +36,7 @@ public enum ScrollSpineStability {
         wasPresent != isPresent
     }
 
-    // MARK: - RCA-2: stable scroll ROOT from the first frame
+    // MARK: - Stable scroll ROOT from the first frame
 
     /// The kind of root container a screen renders in a given phase. The RCA-2 bug
     /// (`.planning/v0151-audit/RCA-nav-scroll-2.md`) is a screen whose ROOT swaps

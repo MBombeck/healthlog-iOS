@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **Phase 08 Plan 10 — what a permission request actually answered.**
+/// **What a permission request actually answered.**
 ///
 /// A permission request has three distinguishable ends and both onboarding
 /// permission steps used to collapse all of them into one call to `onNext()`:
@@ -87,7 +87,7 @@ extension OnboardingPermissionOutcome {
 ///   answer computed for the session that just ended may not decide what the
 ///   session that just started sees.
 ///
-/// The shape follows `LogoutConfirmationState` (08-09): the state is a value
+/// The shape follows `LogoutConfirmationState`: the state is a value
 /// type with the guarantee inside it, so the guarantee is testable without a
 /// simulator.
 struct OnboardingPermissionRequest: Equatable, Sendable {

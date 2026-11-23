@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// R2 / #115 A3 — "ask for proof and retry", the one answer to a proof-family
+/// "ask for proof and retry", the one answer to a proof-family
 /// refusal on a record action.
 ///
 /// Server v1.39.3 gates the actions that hand the record (or a standing

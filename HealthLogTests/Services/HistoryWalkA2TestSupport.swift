@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    // A2 (1.4) — doubles for the history suites: a server that answers like
+    // Doubles for the history suites: a server that answers like
     // v1.42+ (folded windows come back as `folded_window` duplicates), a
     // server that cannot be reached, and a store with more than one type.
 

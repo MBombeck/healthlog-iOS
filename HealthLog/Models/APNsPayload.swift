@@ -26,7 +26,7 @@ public struct APNsPayload: Sendable, Equatable {
     public let medicationId: String?
     public let scheduleId: String?
     public let scheduledFor: Date?
-    /// v1.18.6 (#32) — the Vorsorge reminder id carried by a
+    /// v1.18.6 — the Vorsorge reminder id carried by a
     /// `MEASUREMENT_REMINDER` push, so the foreground "Erledigt" action can POST
     /// `…/{id}/complete` (server-authoritative) instead of only deep-linking.
     /// Server-coord: `reminderId` must be added to the apns `IOS_METADATA_ALLOWLIST`
@@ -40,6 +40,10 @@ public struct APNsPayload: Sendable, Equatable {
     /// ``DeepLinkRoute/fromPushPath(_:)``. `nil` on the silent sync push and on
     /// every local banner.
     public let url: String?
+    /// #191 (server 1.49.0) — the `MeasurementType` a `MEASUREMENT_ANOMALY`
+    /// is about (`RESTING_HEART_RATE`), carried as `d.metric` by a sealed relay
+    /// envelope, which has no `url`. A type name, never a reading.
+    public let metric: String?
 
     public init(
         title: String?,
@@ -52,7 +56,8 @@ public struct APNsPayload: Sendable, Equatable {
         scheduleId: String? = nil,
         scheduledFor: Date? = nil,
         reminderId: String? = nil,
-        url: String? = nil
+        url: String? = nil,
+        metric: String? = nil
     ) {
         self.title = title
         self.body = body
@@ -65,6 +70,7 @@ public struct APNsPayload: Sendable, Equatable {
         self.scheduledFor = scheduledFor
         self.reminderId = reminderId
         self.url = url
+        self.metric = metric
     }
 
     /// Pure parser. Akzeptiert die rohen `userInfo`-Dictionaries, die UIKit /
@@ -98,6 +104,7 @@ public struct APNsPayload: Sendable, Equatable {
         let scheduledFor = scheduledForRaw.flatMap(Self.parseISO8601)
         let reminderId = userInfo["reminderId"] as? String
         let url = (userInfo["url"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let metric = (userInfo["metric"] as? String).flatMap { $0.isEmpty ? nil : $0 }
 
         return APNsPayload(
             title: title,
@@ -110,7 +117,8 @@ public struct APNsPayload: Sendable, Equatable {
             scheduleId: scheduleId,
             scheduledFor: scheduledFor,
             reminderId: reminderId,
-            url: url
+            url: url,
+            metric: metric
         )
     }
 

@@ -61,6 +61,13 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
     /// servers, on rows recorded before 1.46 and for a value this client does
     /// not know; those rows render as in 1.4.
     public let wording: AssessmentWording?
+    /// Server 1.49.0: `WEB`, `IOS` or `APPLE_HEALTH`, raw, as on the detail
+    /// read; `nil` on an older server.
+    public let source: String?
+    /// Server 1.49.0: the answers are not there to show (an Apple Health
+    /// score sent alone, or answers that cannot be read). `false` on an
+    /// older server.
+    public let itemsUnavailable: Bool
 
     public init(
         id: String,
@@ -73,7 +80,9 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         crisisShownAt: String?,
         takenAt: String,
         createdAt: String,
-        wording: AssessmentWording? = nil
+        wording: AssessmentWording? = nil,
+        source: String? = nil,
+        itemsUnavailable: Bool = false
     ) {
         self.id = id
         self.instrument = instrument
@@ -86,6 +95,8 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         self.takenAt = takenAt
         self.createdAt = createdAt
         self.wording = wording
+        self.source = source
+        self.itemsUnavailable = itemsUnavailable
     }
 
     public init(from decoder: Decoder) throws {
@@ -109,6 +120,15 @@ public struct MentalHealthAssessmentDTO: Codable, Sendable, Equatable, Identifia
         // Lossy: an absent, null or unknown value is "not stated", never a
         // reason to drop the row.
         wording = (try? c.decodeIfPresent(String.self, forKey: .wording)).flatMap(AssessmentWording.init(rawValue:))
+        source = (try? c.decodeIfPresent(String.self, forKey: .source)).flatMap { $0 }
+        itemsUnavailable = (try? c.decodeIfPresent(Bool.self, forKey: .itemsUnavailable)).flatMap { $0 } ?? false
+    }
+
+    /// `true` for a score that arrived from Apple Health without its
+    /// answers: the history says so instead of leaving the reader to open
+    /// the row and find nothing.
+    public var isAppleHealthScoreOnly: Bool {
+        source == "APPLE_HEALTH" && itemsUnavailable
     }
 }
 

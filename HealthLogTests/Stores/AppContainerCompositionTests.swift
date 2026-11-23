@@ -10,7 +10,7 @@
     #endif
     @testable import HealthLog
 
-    /// **v0.7.3 — AppContainer composition characterization.**
+    /// **AppContainer composition characterization.**
     ///
     /// These tests pin the *observable* composition-root behaviour for the
     /// clusters the v0.7.3 decomposition carves into focused helpers
@@ -33,7 +33,7 @@
         // MARK: - Cluster C3: repositories exposed
 
         /// Every repository the composition-root publishes must be a live,
-        /// non-nil handle after construction. The repos cluster (C3) is the
+        /// non-nil handle after construction. The repos cluster is the
         /// first carve; pinning the full public repo surface here proves the
         /// extraction keeps each handle reachable.
         @Test("all repositories are constructed and exposed")
@@ -43,7 +43,7 @@
             // Server-backed repos.
             _ = container.measurementsRepo
             _ = container.medicationsRepo
-            _ = container.aiCapabilityGate // #115 0.2 — replaces the retired featureFlagsRepo
+            _ = container.aiCapabilityGate // Replaces the retired featureFlagsRepo
             _ = container.glp1LocalRepo
             _ = container.moodRepo
             _ = container.dashboardRepo
@@ -207,7 +207,7 @@
             #expect(container.serverStatsStores.personalRecords.enrichedRecords.isEmpty)
         }
 
-        // MARK: - Cluster: CycleGate biological-sex fallback wiring (CYC-3)
+        // MARK: - Cluster: CycleGate biological-sex fallback wiring
 
         /// **CYC-3 (AUDIT-liquidglass Gap-1).** The `CycleGate.biologicalSexProvider`
         /// was DEAD — `AppContainer` built the gate without it, so it defaulted to

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.3 B1 — locks the dismissible Coach hero UI-pref on `SettingsStore`.
+/// Locks the dismissible Coach hero UI-pref on `SettingsStore`.
 ///
 /// The Insights overview Coach hero (`AskCoachHeroCard`) carries a close (x)
 /// affordance that sets `settings.coachHeroDismissed = true`. The flag is a pure

@@ -1,6 +1,6 @@
 import Foundation
 
-// CU-20 (#69) — optimistic concurrency (`baseUpdatedAt`) for the eight guarded
+// Optimistic concurrency (`baseUpdatedAt`) for the eight guarded
 // routes. Server contract verified against
 // `<server-repo>/src/lib/optimistic-lock.ts`
 // (`takeBaseToken` :51, `invalidBaseTokenError` :78, `guardedRowUpdate` :107,
@@ -89,7 +89,7 @@ public enum OptimisticConflictCode {
     public static let insightsLayout = "insights_layout_conflict"
     public static let medicationLayout = "medication_layout_conflict"
     public static let moodTagLayout = "mood_tag_layout_conflict"
-    /// v1.35.0 (GH #83) — `PATCH /api/auth/me/health-score-config`, guarding the
+    /// v1.35.0 — `PATCH /api/auth/me/health-score-config`, guarding the
     /// same `User.updatedAt` column as the seven above.
     public static let healthScoreConfig = "health_score_config_conflict"
 

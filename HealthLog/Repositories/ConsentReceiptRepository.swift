@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.10 — server-side AI **consent receipts** (server SB-10 routes,
+/// Server-side AI **consent receipts** (server SB-10 routes,
 /// `POST /api/consent/ai` + `GET/DELETE /api/consent/ai/latest`).
 ///
 /// **Why this exists (RCA W-INSIGHTSDATA Bug 2).** Server v1.12.1 enforcement
@@ -64,7 +64,7 @@ public actor ConsentReceiptRepository {
         _ = try await api.send(req)
     }
 
-    /// #143 — the server half of ONE Accept tap. `checkExisting` reads
+    /// The server half of ONE Accept tap. `checkExisting` reads
     /// `GET /api/consent/ai/latest` first and sends nothing when an active
     /// `ai_full` receipt is already on file (a server without `ai.consent`);
     /// a server that said `needed` skips that read. At most one
@@ -170,7 +170,7 @@ struct ConsentReceiptMintedDTO: Decodable {
     let receipt: ConsentReceiptDTO
 }
 
-/// #143 — what one Accept tap did on the server.
+/// What one Accept tap did on the server.
 public enum AIConsentReceiptOutcome: Equatable, Sendable {
     /// `POST /api/consent/ai` with `confirm: true` minted a receipt.
     case recorded

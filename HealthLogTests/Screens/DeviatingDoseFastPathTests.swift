@@ -41,7 +41,7 @@
 
         // MARK: - 1) the affordance exists
 
-        /// E3: the entry point lives on the Genommen CTA. A card that can be
+        /// The entry point lives on the Genommen CTA. A card that can be
         /// marked at all can be marked with a different dose.
         @Test("Die Genommen-Taste bietet die abweichende Dosis an")
         func genommenLongPressOffersDeviatingDose() {
@@ -49,7 +49,7 @@
 
             #expect(
                 actions.deviatingDose != nil,
-                "EXPECTED_RED: the CTA has no long-press affordance"
+                "the CTA has no long-press affordance"
             )
         }
 
@@ -67,14 +67,14 @@
                     medicationID: medication.id,
                     takenAt: Self.now
                 ),
-                "EXPECTED_RED: the existing dialog is not reachable from the card"
+                "the existing dialog is not reachable from the card"
             )
         }
 
         // MARK: - 3) only where a dose can be logged at all (control)
 
         /// A card with no manual dose logging — archived, or mirrored from
-        /// Apple Health, which is source-exclusive (GH #47) — offers no CTA, so
+        /// Apple Health, which is source-exclusive — offers no CTA, so
         /// it offers no long-press either.
         @Test("Karten ohne manuelle Erfassung bieten sie nicht an")
         func cardsWithoutManualLoggingOfferNothing() {
@@ -94,12 +94,12 @@
         // MARK: - 4) the context menu does not move (control)
 
         /// E3 is explicit: the deviating dose belongs on the CTA's long-press,
-        /// not in the card's context menu. That menu keeps exactly the two
-        /// items it has carried since T-3.
-        @Test("Das Kontextmenü der Karte bleibt Bearbeiten und Archivieren")
+        /// not in the card's context menu. That menu holds Bearbeiten,
+        /// Ausblenden and Archivieren, in that order.
+        @Test("Das Kontextmenü der Karte bleibt Bearbeiten, Ausblenden und Archivieren")
         func cardContextMenuIsUnchanged() {
             let actions = MedicationCardActions.resolve(medication: Self.medication(), now: Self.now)
-            #expect(actions.contextMenu == [.edit, .archive])
+            #expect(actions.contextMenu == [.history, .edit, .hide, .archive])
         }
 
         // MARK: - 5) the plain tap is untouched (control)

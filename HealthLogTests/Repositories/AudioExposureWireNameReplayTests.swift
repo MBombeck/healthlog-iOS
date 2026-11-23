@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **POLISH-B B6 (1.5, REG public #13).** Until REG, the environmental noise
+/// Until REG, the environmental noise
 /// event went out under HealthKit's run-time string
 /// `HKCategoryTypeIdentifierAudioExposureEvent`, which the server (v1.47.0)
 /// does not map. Every such row came back `unmappable_identifier`, and the

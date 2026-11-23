@@ -3,11 +3,13 @@ import Foundation
 /// Pure mapping helper — given a `Medication`, produce the form-state the
 /// `EditMedicationSheet`'s `@State` variables get pre-filled with. Extracted as
 /// `internal` for testability; the view itself calls this implicitly via
-/// `prefillOnce`. Lives in its own file (08-21) so the sheet stays under the
+/// `prefillOnce`. Lives in its own file so the sheet stays under the
 /// file-length budget after the per-slot dose fields below.
 struct EditMedicationFormState: Equatable {
     var name: String
     var dose: String
+    /// #174 — the person's own note, as served ("" for none).
+    var note: String = ""
     var times: [TimeOfDay]
     /// `nil` when the stored category is one this build has no row for — it
     /// opens as itself and an untouched save never names it (server v1.39.4).
@@ -17,7 +19,7 @@ struct EditMedicationFormState: Equatable {
     var treatmentClass: MedicationTreatmentClassOption
     var dosesPerUnitText: String
     var unitsPerDose: MedicationUnitsPerDose
-    /// **#219 — the RAW per-slot inventory-units overrides, keyed by `HH:mm`.**
+    /// **The RAW per-slot inventory-units overrides, keyed by `HH:mm`.**
     /// A slot the server left `null` is ABSENT here: inheritance is a choice in
     /// its own right and rebuilding it from the resolved figure below would
     /// promote it into an explicit override the user never made.
@@ -38,7 +40,7 @@ struct EditMedicationFormState: Equatable {
     var endsOn: Date?
     var isOneShot: Bool
     var graceMinutes: Int?
-    /// v1.39.1 (#1033) — the intake-tracking switch as the form shows it.
+    /// v1.39.1 — the intake-tracking switch as the form shows it.
     var trackIntake: Bool
     /// The server's own `trackIntake`, or `nil` when the server does not know
     /// the field (older than v1.39.1). The editor offers the switch, and ever
@@ -48,7 +50,7 @@ struct EditMedicationFormState: Equatable {
     var autoMarkTaken: MedicationAutoMarkTakenFormValue
 
     init(from served: Medication) {
-        // v1.39.1 (#1033) — a medication kept as a record is served with an
+        // v1.39.1 — a medication kept as a record is served with an
         // empty `schedules` and its stored schedule in `recordedSchedules`. The
         // form opens on the stored one: prefilling from the empty live schedule
         // would show a daily-08:00 plan the person never chose, and a schedule
@@ -58,6 +60,7 @@ struct EditMedicationFormState: Equatable {
         serverTrackIntake = served.trackIntake
         autoMarkTaken = MedicationAutoMarkTakenFormValue(from: served)
         name = medication.name
+        note = served.note ?? ""
         dose = medication.dose
         // PRN carries no schedule times; otherwise pre-fill from the schedule.
         //
@@ -106,6 +109,25 @@ struct EditMedicationFormState: Equatable {
         graceMinutes = medication.schedule.entries.first?.reminderGraceMinutes
     }
 
+    /// The times the editor opens with: what the cadence picker's own rules
+    /// leave of them (a PRN medication shows none), so the change handler that
+    /// runs after the prefill finds nothing to trim.
+    var editorTimes: [TimeOfDay] {
+        Self.constrainedTimes(times, kind: cadenceKind)
+    }
+
+    /// The times a cadence allows: as many as its picker keeps (none for PRN,
+    /// one for rolling). Shared by the prefill and the editor's change handler.
+    static func constrainedTimes(_ times: [TimeOfDay], kind: CadenceKind) -> [TimeOfDay] {
+        Array(times.prefix(max(MedicationCadenceLogic.maxTimes(for: kind), 0)))
+    }
+
+    /// The grace switch as the editor opens it. PRN has no reminder to be late
+    /// for, so a stored grace reads as off, the same rule the picker applies.
+    var editorGraceEnabled: Bool {
+        graceMinutes != nil && cadenceKind != .asNeeded
+    }
+
     /// De-duplicate the flattened union while keeping it sorted. Two server rows
     /// may legitimately share a dose time (different labels); the form shows one
     /// row per time, and a duplicated time would otherwise render twice and be
@@ -116,7 +138,7 @@ struct EditMedicationFormState: Equatable {
     }
 }
 
-/// **v1.39.1 (#1033) — what `trackIntake` a medication PUT carries.**
+/// **v1.39.1 — what `trackIntake` a medication PUT carries.**
 ///
 /// The server leaves `trackIntake` alone when a write omits it, and on a
 /// medication kept as a record it also ignores `schedules`, `asNeeded` and
@@ -142,7 +164,7 @@ enum MedicationTrackIntakeWrite {
         value(server: form.server, edited: form.tracked, scheduleChanged: scheduleChanged)
     }
 
-    /// E1 — the add sheet's `trackIntake`: against a server that knows the
+    /// The add sheet's `trackIntake`: against a server that knows the
     /// field (``Medication/serverKnowsTrackIntake(_:)``) a new medication starts
     /// from the server default, tracked, so only a switch turned off is sent;
     /// against any other server the field is never sent.
@@ -152,7 +174,7 @@ enum MedicationTrackIntakeWrite {
     }
 }
 
-/// **15-02 (B3) — where the medication editor's keyboard belongs.**
+/// **Where the medication editor's keyboard belongs.**
 ///
 /// The editor drives an `@FocusState`, which no test can read and no reader can
 /// reason about outside a view host. But every decision that MOVES that focus
@@ -190,7 +212,7 @@ enum MedicationEditorFocus {
             // FORM-2 submit chain: name → dose, dose → done.
             origin == .name ? .dose : nil
         case .scheduleEditorEngaged:
-            // B3 — the schedule options are the interaction target now, and a
+            // The schedule options are the interaction target now, and a
             // keyboard over the control being operated is a dead end. Nowhere,
             // not "the previous field": the editor only ever regains focus by
             // the user choosing a field, so this cannot fight anyone for it.

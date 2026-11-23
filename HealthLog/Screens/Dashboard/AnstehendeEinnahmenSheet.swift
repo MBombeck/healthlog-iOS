@@ -1,7 +1,7 @@
 import Pow
 import SwiftUI
 
-/// **v0.5.6 HOME-COMPLIANCE-SHEET.** Bottom-sheet presenting today's
+/// Bottom-sheet presenting today's
 /// medication intakes — the operator taps the Compliance ring card on
 /// Home, sheet slides up from the bottom with the same data the
 /// standalone "Anstehende Einnahmen" card used to surface (now removed).
@@ -13,7 +13,7 @@ import SwiftUI
 /// Anstehenden Einnahmen dann nicht mehr sein — oder nur wenn sie
 /// überfällig sind."
 ///
-/// **v0.6.1.7 Y7 — Compliance-Haken-Logik (handbook §5.5 / AP-014).**
+/// **Compliance-Haken-Logik (handbook §5.5 / AP-014).**
 /// Operator complaint 2026-05-23: "Da haben wir jetzt für Sachen, die man
 /// noch nicht genommen hat, einen Haken, und für genommen. Ich hätte
 /// gerne einfach einen leeren Kreis: Wenn ich da reinklicke, ist da ein
@@ -47,7 +47,7 @@ struct AnstehendeEinnahmenSheet: View {
     /// exactly once per successful tap, never on initial appear or sheet
     /// dismissal.
     @State private var markedTick: Int = 0
-    /// **v0.11 #60** — pending injection-site capture for the Dashboard quick
+    /// Pending injection-site capture for the Dashboard quick
     /// take path. Set when the operator taps the take-circle on an
     /// `injectionSiteCaptureEnabled` row; the capture sheet supplies the site
     /// and only then is the dose recorded WITH it (web parity). Oral rows
@@ -68,33 +68,22 @@ struct AnstehendeEinnahmenSheet: View {
             medications: store.medications,
             now: now()
         )
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.md) {
-                    // 1.4 B2 — the empty state carries its own title; the
-                    // subtitle above it repeated it word for word.
-                    if snapshot.rows.isEmpty {
-                        emptyState
-                    } else {
-                        subtitle(for: snapshot)
-                        rows(for: snapshot)
-                    }
+        // A sheet that only shows something: the close button, nothing to
+        // confirm; each row records its intake on its own.
+        HLSheetScaffold("dashboard.intakesSheet.title", size: .standard) {
+            HLPage {
+                // The empty state carries its own title; the subtitle above
+                // it repeated it word for word.
+                if snapshot.rows.isEmpty {
+                    emptyState
+                } else {
+                    subtitle(for: snapshot)
+                    rows(for: snapshot)
                 }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.sm)
-                .padding(.bottom, HLSpace.xl)
             }
-            .hlScreenBackground()
-            .navigationTitle(Text(LocalizedStringKey("dashboard.intakesSheet.title")))
-            .navigationBarTitleDisplayMode(.inline)
-            // v0.6.1 Y2 — Home-Compliance pattern: drop the topBarTrailing
-            // X-button (`docs/design-handbook-v1.md §2.6 / D-001`). The
-            // drag-indicator + swipe-down is the only dismiss path.
         }
-        .hlSheetPresentation(.standard)
-        .presentationBackground(HLColor.surface)
         .sensoryFeedback(.success, trigger: markedTick)
-        // v0.11 #60 — injection-site capture interstitial for the Dashboard
+        // Injection-site capture interstitial for the Dashboard
         // quick take. Presented only for `injectionSiteCaptureEnabled` rows;
         // the chosen site rides into the same `markIntakeQuick` path so the
         // optimistic-write + Outbox semantics are preserved.
@@ -114,16 +103,22 @@ struct AnstehendeEinnahmenSheet: View {
     // MARK: - Subtitle
 
     private func subtitle(for snapshot: Snapshot) -> some View {
-        Text(snapshot.subtitleKey)
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("dashboard.intakesSheet.subtitle")
+        // 1.7: before today's doses are confirmed, the day's count only.
+        Group {
+            if store.isDoseStateUnconfirmed {
+                Text(verbatim: String(localized: "dashboard.compliance.dosesToday \(snapshot.rows.count)"))
+            } else {
+                Text(snapshot.subtitleKey)
+            }
+        }
+        .hlText(.factLabel)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("dashboard.intakesSheet.subtitle")
     }
 
     // MARK: - Empty
 
-    /// Canonical `HLEmptyState` lockup (audit-01 C1). The existing localized
+    /// Canonical `HLEmptyState` lockup. The existing localized
     /// keys stay so the copy is unchanged.
     private var emptyState: some View {
         HLEmptyState(
@@ -136,17 +131,18 @@ struct AnstehendeEinnahmenSheet: View {
 
     // MARK: - Rows
 
+    /// All of today's intakes in one row card, like every other list.
     private func rows(for snapshot: Snapshot) -> some View {
-        VStack(spacing: HLSpace.sm) {
+        HLCard(layout: .rows) {
             ForEach(snapshot.rows) { row in
-                IntakeRow(row: row) {
+                IntakeRow(row: row, unconfirmed: store.isDoseStateUnconfirmed) {
                     handleMarkTaken(row: row)
                 }
             }
         }
     }
 
-    /// **v0.11 #60** — for an injection-tracked med, capture a site before
+    /// For an injection-tracked med, capture a site before
     /// recording (web parity); for an oral med record immediately as before.
     private func handleMarkTaken(row: SheetRow) {
         if row.medication.injectionSiteCaptureEnabled {
@@ -156,8 +152,9 @@ struct AnstehendeEinnahmenSheet: View {
         Task { await markTaken(intakeId: row.intake.id, injectionSite: nil) }
     }
 
+    /// One tap plus undo (#188 (7)), like the medication list.
     private func markTaken(intakeId: String, injectionSite: InjectionSite?) async {
-        let outcome = await store.markIntakeQuick(
+        let outcome = await store.markIntakeQuickUndoable(
             intakeId: intakeId,
             status: .taken,
             injectionSite: injectionSite
@@ -171,9 +168,11 @@ struct AnstehendeEinnahmenSheet: View {
 
 private struct IntakeRow: View {
     let row: AnstehendeEinnahmenSheet.SheetRow
+    /// 1.7: today's doses are not confirmed yet; no overdue tint, no tap.
+    var unconfirmed = false
     let onMark: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// **Y7.** Per-row pulse driver — bumped exactly when the operator
+    /// Per-row pulse driver — bumped exactly when the operator
     /// taps the empty-circle tap-target. Wired to a Pow `.spray` change-
     /// effect on the trailing glyph + a `.sensoryFeedback(.success)` so
     /// the felt-quality matches the Y4.1 MedicationCard's Genommen
@@ -185,60 +184,54 @@ private struct IntakeRow: View {
     @State private var pulseTick: Int = 0
 
     var body: some View {
-        HLCard(style: .standard) {
-            HStack(spacing: HLSpace.md) {
-                // Y8: drop the per-row Circle().fill(surfaceElevated)
-                // backplate (handbook §2.6 wants flat row chrome) + swap
-                // the .tint reading to an explicit HLText.primary so the
-                // glyph doctrine stays mono regardless of any future
-                // nested .tint(...) modifier.
-                Image(systemName: "pills.fill")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .foregroundStyle(HLText.primary)
-                    .frame(width: 32, height: 32)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(row.medication.name)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    HStack(spacing: HLSpace.sm) {
-                        Text(row.medication.dose)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                        Text(row.scheduledLabel)
-                            .font(.hlSubhead)
-                            .foregroundStyle(row.isOverdue ? HLColor.statusBad : HLText.secondary)
-                            .monospacedDigit()
-                    }
-                }
-                Spacer(minLength: HLSpace.sm)
-                trailing
-            }
-            .contentShape(Rectangle())
+        // Name, then dose and time on one detail line; the time turns red
+        // when the server flags the dose as overdue.
+        HLRowLayout(title: Text(row.medication.name), subtitle: detail) {
+            trailing
+        } leading: {
+            HLRowGlyph(symbol: "pills.fill", tint: HLText.primary)
         }
         .accessibilityIdentifier("dashboard.intakesSheet.row.\(row.intake.id)")
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text(LocalizedStringKey("dashboard.intakesSheet.row.hint")))
     }
 
-    /// **Y7.** Trailing glyph derived from a pure presentation descriptor
+    private var detail: Text {
+        let time = Text(row.scheduledLabel)
+            .foregroundStyle(row.isOverdue && !unconfirmed ? HLColor.statusWarn : HLText.secondary)
+        let dose = row.medication.dose.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = dose.isEmpty ? time : Text("\(Text(verbatim: dose)), \(time)")
+        // #191: the snooze holding this dose, from the today row.
+        if row.intake.status == .snoozed, let until = row.intake.snoozedUntil {
+            return Text("\(base), \(Text(verbatim: MedicationDoseWords.snoozedUntil(HLTimeFormat.time(until))))")
+        }
+        guard let note = row.takenNote, !row.isFutureTaken else { return base }
+        return Text("\(base), \(Text(verbatim: note))")
+    }
+
+    /// Trailing glyph derived from a pure presentation descriptor
     /// so the contract is unit-testable without spinning up SwiftUI. The
     /// `.pending` case is the only branch that wires a tap — every other
     /// branch is a static read-only status indicator.
     @ViewBuilder
     private var trailing: some View {
-        let presentation = AnstehendeEinnahmenSheet.TrailingPresentation
-            .resolve(status: row.intake.status, isFutureScheduled: row.isFutureTaken)
+        let presentation = AnstehendeEinnahmenSheet.TrailingPresentation.resolve(
+            status: row.intake.status,
+            isFutureScheduled: row.isFutureTaken,
+            takenLate: row.intake.doseState?.takenLate == true,
+            isOverdue: row.isOverdue && !unconfirmed
+        )
         switch row.intake.status {
-        case .pending:
+        case .pending, .snoozed:
             Button(action: handleMark) {
+                // The status glyph in status colour, with the spray on
+                // success, the same size as the mark on the medication card:
+                // HLIconButton draws a title-sized symbol in text colour.
                 Image(systemName: presentation.symbolName)
-                    .font(.hlIcon(HLIconSize.hero, weight: .regular))
+                    .font(.hlIcon(MedicationQuickMarkButton.symbolSize, weight: .regular))
                     .foregroundStyle(presentation.tintColor)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    .hlMinimumHitTarget()
             }
-            .buttonStyle(.plain)
             .hlPressable()
             .changeEffect(
                 .spray(origin: UnitPoint.center) {
@@ -249,13 +242,17 @@ private struct IntakeRow: View {
                 isEnabled: !reduceMotion
             )
             .sensoryFeedback(.success, trigger: pulseTick)
+            .disabled(unconfirmed)
+            .opacity(unconfirmed ? 0.5 : 1)
             .accessibilityIdentifier("dashboard.intakesSheet.action.\(row.intake.id)")
             .accessibilityLabel(Text(LocalizedStringKey(presentation.accessibilityLabelKey)))
         default:
             Image(systemName: presentation.symbolName)
-                .font(.hlIcon(HLIconSize.hero, weight: .regular))
+                .font(.hlIcon(MedicationQuickMarkButton.symbolSize, weight: .regular))
                 .foregroundStyle(presentation.tintColor)
-                .frame(width: 44, height: 44)
+                // Not a button: the read-only status keeps the column of the
+                // tappable glyph above.
+                .frame(width: HLHitTarget.minimum, height: HLHitTarget.minimum)
                 .accessibilityLabel(Text(LocalizedStringKey(presentation.accessibilityLabelKey)))
         }
     }
@@ -269,7 +266,7 @@ private struct IntakeRow: View {
 // MARK: - Trailing presentation contract
 
 extension AnstehendeEinnahmenSheet {
-    /// **Y7.** Pure descriptor of the trailing glyph rendered for a given
+    /// Pure descriptor of the trailing glyph rendered for a given
     /// `IntakeStatus`. Hoisted out of the row view so the symbol-name +
     /// tint + accessibility key contract can be locked in a unit test
     /// without a SwiftUI host. The view body reads from this exact
@@ -300,7 +297,9 @@ extension AnstehendeEinnahmenSheet {
         ///   `.planning/v0148-cycle-marathon/INV-med-phantom-taken.md`.
         nonisolated static func resolve(
             status: IntakeStatus,
-            isFutureScheduled: Bool = false
+            isFutureScheduled: Bool = false,
+            takenLate: Bool = false,
+            isOverdue: Bool = false
         ) -> TrailingPresentation {
             // A future-scheduled `.taken` dose cannot have been taken yet —
             // present it as an upcoming dose (empty circle), never as done.
@@ -308,45 +307,51 @@ extension AnstehendeEinnahmenSheet {
                 return TrailingPresentation(
                     symbolName: "circle",
                     tint: .tertiary,
-                    accessibilityLabelKey: "dashboard.intakesSheet.status.upcoming"
+                    accessibilityLabelKey: "med.dose.state.pending"
                 )
             }
+            // #191 glyph rule (``MedicationDoseLook``): a dose still to take
+            // never carries a check. Its tap target stays the empty circle,
+            // amber while the server says overdue.
             switch status {
             case .pending:
                 return TrailingPresentation(
                     symbolName: "circle",
-                    tint: .tertiary,
+                    tint: isOverdue ? .statusWarn : .tertiary,
                     accessibilityLabelKey: "dashboard.intakesSheet.action.markTaken"
                 )
             case .taken:
+                let look = MedicationDoseLook(phase: takenLate ? .takenLate : .taken)
                 return TrailingPresentation(
-                    symbolName: "checkmark.circle.fill",
-                    tint: .statusOK,
-                    accessibilityLabelKey: "dashboard.intakesSheet.status.taken"
+                    symbolName: look.glyph.systemName,
+                    tint: takenLate ? .statusWarn : .statusOK,
+                    accessibilityLabelKey: takenLate ? "med.dose.state.taken_late" : "med.dose.state.taken"
                 )
             case .skipped:
                 return TrailingPresentation(
-                    symbolName: "xmark.circle",
+                    symbolName: MedicationDoseGlyph.skipForward.systemName,
                     tint: .secondary,
-                    accessibilityLabelKey: "dashboard.intakesSheet.status.skipped"
+                    accessibilityLabelKey: "med.dose.state.skipped"
                 )
             case .snoozed:
+                // Still to take: the snooze only moved the reminder. The
+                // detail line says until when.
                 return TrailingPresentation(
-                    symbolName: "moon.zzz",
+                    symbolName: "circle",
                     tint: .tertiary,
-                    accessibilityLabelKey: "dashboard.intakesSheet.status.snoozed"
+                    accessibilityLabelKey: "dashboard.intakesSheet.action.markTaken"
                 )
             case .missed:
                 // Server-terminal and deliberately non-interactive: a missed
                 // slot remains visible as missed but can never masquerade as a
                 // pending dose or expose the mark-taken button.
                 return TrailingPresentation(
-                    symbolName: "xmark.circle.fill",
+                    symbolName: MedicationDoseGlyph.triangle.systemName,
                     tint: .statusBad,
-                    accessibilityLabelKey: "med.heatmap.status.missed"
+                    accessibilityLabelKey: "med.dose.state.missed"
                 )
             case .unknown:
-                // Audit B-5 — a status this build cannot name. The row stays
+                // A status this build cannot name. The row stays
                 // visible and states nothing: no Haken, no missed-red, no tap
                 // target (the view's `.pending` branch is the only one wired).
                 return TrailingPresentation(
@@ -364,6 +369,7 @@ extension AnstehendeEinnahmenSheet {
     /// render time.
     enum HLTrailingTint: Equatable {
         case statusOK
+        case statusWarn
         case statusBad
         case secondary
         case tertiary
@@ -371,6 +377,7 @@ extension AnstehendeEinnahmenSheet {
         var color: Color {
             switch self {
             case .statusOK: HLColor.statusOK
+            case .statusWarn: HLColor.statusWarn
             case .statusBad: HLColor.statusBad
             case .secondary: HLText.secondary
             case .tertiary: HLText.tertiary
@@ -395,7 +402,10 @@ extension AnstehendeEinnahmenSheet {
         let medication: Medication
         let scheduledLabel: String
         let isOverdue: Bool
-        /// **v0.14.1 DOSE-SAFETY.** `true` when this row is `.taken` but its
+        /// "taken at 07:12 (pill box)" for a dose taken elsewhere (#191
+        /// `takenVia`); `nil` for an open dose or an unknown source.
+        var takenNote: String?
+        /// `true` when this row is `.taken` but its
         /// `scheduledAt` is still in the FUTURE relative to `now`. Such a row
         /// must NOT paint the taken checkmark — a dose due later cannot have
         /// been taken (the server's ±6h afternoon→19:00 snap, or a clock-skew
@@ -435,7 +445,8 @@ extension AnstehendeEinnahmenSheet {
         todayIntakes: [MedicationIntake],
         medications: [Medication],
         now: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        serverDoseState: Bool = MedicationServerResolvedSlots.isAvailable()
     ) -> Snapshot {
         let startOfToday = calendar.startOfDay(for: now)
         let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
@@ -447,8 +458,8 @@ extension AnstehendeEinnahmenSheet {
                 return SheetRow(
                     intake: intake,
                     medication: med,
-                    scheduledLabel: intake.scheduledAt.formatted(.dateTime.hour().minute()),
-                    // Parity 1.9 — overdue is the SERVER's verdict, not ours.
+                    scheduledLabel: HLTimeFormat.time(intake.scheduledAt),
+                    // Overdue is the SERVER's verdict, not ours.
                     // This used to read `intake.scheduledAt < now`, a pure
                     // client recompute of a value the server already computes
                     // and ships (`nextDueOverdue`, `verdict.ts:157-163`) —
@@ -458,9 +469,13 @@ extension AnstehendeEinnahmenSheet {
                     // A wall-clock comparison also cannot see a catch-up band:
                     // it called every passed slot overdue, including ones the
                     // server has already closed.
+                    // #191: with the resolved dose state the row's `state`
+                    // decides; without it the medication flag.
                     isOverdue: intake.status == .pending
-                        && med.isServerFlaggedOverdueSlot(intake.scheduledAt),
-                    // DOSE-SAFETY: a `.taken` row scheduled later than `now` is
+                        && ((serverDoseState ? intake.doseState?.isOverdue : nil)
+                            ?? med.isServerFlaggedOverdueSlot(intake.scheduledAt)),
+                    takenNote: MedicationTakenNote.text(for: intake),
+                    // A `.taken` row scheduled later than `now` is
                     // not actually taken yet — flag it so the trailing glyph +
                     // sort treat it as an upcoming dose, never a done one.
                     isFutureTaken: intake.status == .taken && intake.scheduledAt > now
@@ -472,7 +487,7 @@ extension AnstehendeEinnahmenSheet {
                 /// to the bottom in chronological order.
                 func rank(_ row: SheetRow) -> Int {
                     if row.intake.status == .pending, row.isOverdue { return 0 }
-                    // DOSE-SAFETY: a future-taken row is shown as an upcoming
+                    // A future-taken row is shown as an upcoming
                     // dose (not yet done), so it sorts with pending-upcoming.
                     if row.intake.status == .pending || row.isFutureTaken { return 1 }
                     return 2

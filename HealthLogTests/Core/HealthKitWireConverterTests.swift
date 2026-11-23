@@ -8,7 +8,7 @@
 
     @Suite("HealthKitWireConverter")
     struct HealthKitWireConverterTests {
-        // MARK: - Percent types travel as the raw fraction (#113)
+        // MARK: - Percent types travel as the raw fraction
 
         @Test("OxygenSaturation carries the RAW HK fraction (0.97) — the server scales")
         func spo2Scaling() {
@@ -23,7 +23,7 @@
             let entry = entries[0]
             #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.oxygenSaturation.rawValue)
             #expect(entry.unit == "%")
-            // #113 — no client-side ×100; the server's `percentFromFraction`
+            // No client-side ×100; the server's `percentFromFraction`
             // stores 97. See `PercentFractionWireContractTests`.
             #expect(abs(entry.value - 0.97) < 0.000_001)
             #expect(entry.sleepStage == nil)

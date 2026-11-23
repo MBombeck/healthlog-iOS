@@ -10,7 +10,7 @@
     import SpeziHealthKit
 
     #if canImport(UIKit)
-        import UIKit // #66 P0.1 — observer-wake background/foreground gate
+        import UIKit // Observer-wake background/foreground gate
     #endif
     #if canImport(SpeziScheduler) && canImport(UserNotifications)
         // Module-qualified import — the `Task` symbol on the SpeziScheduler
@@ -25,7 +25,7 @@
     ///
     /// SpeziHealthKit 1.4.x delivers sample changes through the collection-
     /// based `HealthKitConstraint` requirements (`handleNewSamples` /
-    /// `handleDeletedObjects`). v0.5.5 (W-A3) wires the Standard up for the
+    /// `handleDeletedObjects`). v0.5.5 wires the Standard up for the
     /// first cluster — Steps + ActiveEnergy — by routing observed samples
     /// through the same `MeasurementBatchUploader` + `uploadAndDecide`
     /// surface the legacy `HealthKitService` uses, so the upload behaviour,
@@ -37,7 +37,7 @@
     /// stays authoritative for every other read type. A `useSpezi` feature
     /// flag on the legacy service filters Steps + ActiveEnergy out of its
     /// `defaultBackgroundDeliveryTypes` so we don't double-process the
-    /// same samples. Until `attachUploader(_:featureFlags:)` is called by
+    /// same samples. Until `attachUploader` is called by
     /// the composition root, observations land in the log + diagnostics
     /// counter only — anchors are advanced (`.consumed` semantics).
     ///
@@ -51,24 +51,14 @@
     /// `HealthKitService.attachUploader` shape.
     actor HealthLogStandard: Standard, HealthKitConstraint {
         /// Composition-root-injected batch uploader. nil until
-        /// ``attachUploader(_:featureFlags:)`` runs (`AppContainer.init`
+        /// ``attachUploader`` runs (`AppContainer.init`
         /// in the production path).
         private var uploader: MeasurementBatchUploader?
         private var uploaderWaiters: [CheckedContinuation<MeasurementBatchUploader, Never>] = []
 
-        /// Composition-root-injected feature-flag reader. nil until
-        /// ``attachUploader(_:featureFlags:)`` runs. The Standard needs it
-        /// to mirror the HK-STATS gate (v1.4.30 R-A Option A) the legacy
-        /// `HealthKitService` already applies: when `enableDailyStats` is
-        /// ON, the five cumulative HK identifiers (Steps + ActiveEnergy
-        /// included) flow through `HealthKitStatisticsSyncCoordinator`
-        /// with `externalId="stats:<id>:<YYYY-MM-DD>"`, so the per-sample
-        /// batch path must NOT upload them. Anchors still advance.
-        private var featureFlags: (any FeatureFlagsServicing)?
-
-        /// Per-sample HR-bucket gate (W-HR-BUCKET-UPLOAD / GH #34).
+        /// Per-sample HR-bucket gate.
         /// Maps a sample's date → "does this date upload as 10-minute buckets"
-        /// — when `true` (and the HR-bucket flag is ON) the heartRate sample is
+        /// — when `true` the heartRate sample is
         /// dropped from the per-sample batch (the bucket sweep owns it). nil
         /// until ``attachUploader`` runs; when nil the gate is a no-op (no HR
         /// drop), so a pre-composition observation never loses data.
@@ -82,7 +72,7 @@
         /// `UserDefaults.standard`.
         private var hrCutoverGate: (@Sendable (Date) -> Bool)?
 
-        /// #12 — asks the HR-bucket coordinator for a sweep. Called after every
+        /// Asks the HR-bucket coordinator for a sweep. Called after every
         /// page that handed heart rate to the bucket path, so dropping a raw
         /// sample and scheduling the sweep that replaces it are one step. Until
         /// 1.1.0 (289) the sweep ran only inside orchestrated passes, and the
@@ -98,7 +88,7 @@
         /// replaced by nothing until the next full pass.
         private var dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)?
 
-        /// Composition-root-injected durable-retry queue (Phase 07 Wave 2). nil
+        /// Composition-root-injected durable-retry queue. nil
         /// until ``attachUploader`` runs and in unit tests that do not exercise
         /// the retry path.
         ///
@@ -115,12 +105,12 @@
         /// key, so that is what this slot now holds.
         var retryQueue: (any HealthSyncBatchRetryEnqueuing)?
 
-        /// #113 — where a row the server refused (`value_out_of_range`, …) is
+        /// Where a row the server refused (`value_out_of_range`, …) is
         /// remembered before the cursor passes it. nil until ``attachUploader``
         /// runs; a refused row with nowhere to go holds the page.
         private var skipRegister: HealthKitSkippedRowRegister?
 
-        /// Composition-root-injected server-deletion reconciler (A360-5 M-1).
+        /// Composition-root-injected server-deletion reconciler.
         /// nil until ``attachDeletionReconciler(_:)`` runs (and in unit tests
         /// that don't exercise the delete path). When wired, a HealthKit
         /// deletion the user makes in Apple Health is mirrored to a server
@@ -145,7 +135,6 @@
         /// anchor.
         func attachUploader(
             _ uploader: MeasurementBatchUploader?,
-            featureFlags: (any FeatureFlagsServicing)?,
             userIDProvider: (@Sendable () -> String?)? = nil,
             hrCutoverGate: (@Sendable (Date) -> Bool)? = nil,
             retryQueue: (any HealthSyncBatchRetryEnqueuing)? = nil,
@@ -154,7 +143,6 @@
             dailyStatsKick: (@Sendable (SyncTrigger) async -> Void)? = nil
         ) {
             self.uploader = uploader
-            self.featureFlags = featureFlags
             self.retryQueue = retryQueue
             self.skipRegister = skipRegister
             self.hrBucketKick = hrBucketKick
@@ -227,7 +215,7 @@
         /// ``HealthSamplePageConsuming`` — by ``AnchoredHealthSampleCollector``,
         /// which supplies the admission and then decides the cursor itself.
         ///
-        /// A2 (1.4, R-A7) — `backfill` marks a page of the history walk.
+        /// `backfill` marks a page of the history walk.
         func consumePage(
             _ samples: [HKSample],
             ofType typeID: String,
@@ -241,6 +229,11 @@
             // before anything posts or is kicked, so both carry it.
             let backgrounded = await Self.isApplicationBackgrounded()
             let trigger: SyncTrigger = backgrounded ? .background : SyncTriggerContext.shared.current
+            // #8 — a late summed sample marks its day for the next sweep,
+            // which otherwise reads only its window.
+            if let earliest = mapping.cumulativeHandedOffEarliest, let lease {
+                HealthKitStatsDirtyDays.mark(earliest, ownerID: lease.ownerID, defaults: .standard)
+            }
             if mapping.heartRateHandedOff > 0 || mapping.cumulativeHandedOff > 0 {
                 // The kicked sweeps run in their own tasks; the binding travels
                 // into them, so they post under this page's trigger.
@@ -262,7 +255,7 @@
                     .info(
                         "Spezi HK \(typeID, privacy: .public) — \(mapping.readCount, privacy: .public) foreign samples, 0 entries after gate"
                     )
-                // #113 — rows handed to the daily-statistics or HR-bucket path are
+                // Rows handed to the daily-statistics or HR-bucket path are
                 // not "uploaded" by this path; the server has not answered for
                 // them here. They are counted as handed off, and that path
                 // records its own server actions.
@@ -305,7 +298,7 @@
             // The single decision point. `installed` is the rule production runs;
             // it is compared against `required` by the Wave-0 matrix.
             let advanced = HealthSyncCursorPolicy.installed.decide(outcome) == .commit
-            // #113 — the honest counts: only rows the server stored are
+            // The honest counts: only rows the server stored are
             // uploaded, and a held page claims nothing (it is read again).
             await recordObservation(
                 identifier: typeID,
@@ -319,17 +312,17 @@
 
         /// The mapping/gate configuration this standard currently runs.
         ///
-        /// AUD-3 D-1 — the daily-statistics gate FAILS CLOSED in the unconfigured
-        /// window. A raw per-sample row (uuid external id) and a `stats:` row
-        /// carry different external ids the server cannot collapse, so a day that
-        /// gets both double-counts in the nightly rollup. `enableDailyStats`
-        /// defaults ON and the stats coordinator is authoritative for the
-        /// cumulative types, so the safe default while the flag reader is not yet
-        /// attached is to treat the gate as ENABLED.
+        /// The five cumulative HK identifiers (Steps + ActiveEnergy included)
+        /// flow through `HealthKitStatisticsSyncCoordinator` with
+        /// `externalId="stats:<id>:<YYYY-MM-DD>"`, so the per-sample batch path
+        /// never uploads them: a raw row and a `stats:` row carry different
+        /// external ids the server cannot collapse, so a day that got both would
+        /// double-count in the nightly rollup. Anchors still advance. Heart rate
+        /// goes through the bucket gate once ``attachUploader`` installed it.
         private var wireGate: HealthSampleWireGate {
             HealthSampleWireGate(
-                dailyStatsEnabled: featureFlags?.isEnabled(.enableDailyStats) ?? true,
-                hrBucketGate: (featureFlags?.isEnabled(.enableHRBuckets) ?? false) ? hrCutoverGate : nil
+                dailyStatsEnabled: true,
+                hrBucketGate: hrCutoverGate
             )
         }
 
@@ -498,7 +491,7 @@
             ///    witness above.
             /// 2. `badge` nil-ed out so the centrally-driven
             ///    `MedicationsStore.dueOrMissedCount` stays the single
-            ///    source of truth (v0.6.1.3 Y4.1).
+            ///    source of truth.
             /// 3. `categoryIdentifier == "MEDICATION_REMINDER"` so iOS
             ///    renders the 3-action chrome the operator validated.
             /// 4. `userInfo` shaped to
@@ -544,8 +537,11 @@
                 // demotes back to `.active` and the user never sees the
                 // banner mid-Focus.
                 content.interruptionLevel = .timeSensitive
+                // Hide content in notifications: the dose reminder is stored
+                // with the neutral text only.
+                NotificationContentPrivacy.apply(to: content, kind: .reminder)
 
-                // v0.6.1.3 Y4.1 — the App-Badge is driven centrally
+                // The App-Badge is driven centrally
                 // from `MedicationsStore.dueOrMissedCount`. Explicitly
                 // nil-out any Spezi-derived `badge` so a delivered
                 // banner does not bump the badge in parallel — the next
@@ -567,7 +563,7 @@
                 // Rewrite the category id so the banner picks up the
                 // existing `MEDICATION_REMINDER` action set. The
                 // upstream Spezi-derived id is shadowed.
-                content.categoryIdentifier = NotificationService.categoryMedication
+                content.categoryIdentifier = RelayCategoryIdentity.medication()
 
                 // Shape the userInfo dict to the canonical
                 // `medicationUserInfo(...)` contract. The `scheduledFor`

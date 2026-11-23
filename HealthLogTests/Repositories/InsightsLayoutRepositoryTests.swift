@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.8.0 W10 — coverage for `InsightsLayoutRepository` + `InsightsLayoutStore`
+/// Coverage for `InsightsLayoutRepository` + `InsightsLayoutStore`
 /// against a real `APIClient` with a stubbed `URLProtocol` (per the PROJECT_GUIDE.md
 /// rule: never a mock-server for outbox/replay paths — schema-drift bugs only
 /// surface against the real client + encoder).
@@ -282,7 +282,7 @@ struct InsightsLayoutRepositoryTests {
         #expect(store.layout == .default)
     }
 
-    // MARK: - v0.8.1 WB — add-tile re-enable + intra-mood-pair order
+    // MARK: - Add-tile re-enable + intra-mood-pair order
 
     @Test("add-tile flow re-enables a hidden tile via the store toggle")
     @MainActor

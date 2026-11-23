@@ -13,18 +13,15 @@ extension NotificationsScreen {
     @ViewBuilder
     var channelsCard: some View {
         if let payload = store?.payload, !payload.channels.isEmpty {
-            HLSettingsCard(icon: "antenna.radiowaves.left.and.right", title: "Channels") {
+            HLCard("Channels") {
                 ForEach(visibleChannels(payload.channels)) { channel in
                     channelRow(channel)
-                    if channel.id != visibleChannels(payload.channels).last?.id {
-                        Divider().opacity(0.5)
-                    }
                 }
             }
         }
     }
 
-    /// REG-12 (v0.5.6): the channel row is now status-aware. The earlier
+    /// The channel row is now status-aware. The earlier
     /// version derived its on/off state from the static
     /// `NotificationChannel.enabled` flag and showed an empty circle for
     /// paused/auto-disabled channels with no affordance to recover. We
@@ -39,31 +36,23 @@ extension NotificationsScreen {
         let isRetrying = store?.retryingChannelIds.contains(channel.id) ?? false
         let retrySucceeded = store?.lastRetrySucceededIds.contains(channel.id) ?? false
         return VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(channel.label).font(.hlHeadline)
-                    channelStateLine(channel, resolvedState: resolvedState)
-                    if let line = lastDeliveryLine(for: channel) {
-                        Text(line)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                    if let reason = lastFailureLine(for: channel) {
-                        Text(reason)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .accessibilityIdentifier("notifications.channel.\(channel.id).failure")
-                    }
-                }
-                Spacer()
-                // Monochrome doctrine: the state indicator is a plain ink
-                // glyph (checkmark / exclamation / pause / circle) — the
-                // shape + the state-line copy convey the state without a
-                // coloured "bubble". Glyph + tint live on
-                // `ResolvedChannelState` so the matrix stays unit-testable.
-                Image(systemName: resolvedState.glyph)
-                    .foregroundStyle(resolvedState.tint)
-                    .accessibilityLabel(Text(resolvedState.voiceOverLabel))
+            // Name and last delivery on the left, the state with its sign as
+            // the row's status. The state stays monochrome: shape and word
+            // carry it, not a coloured bubble.
+            HLRow(
+                title: Text(verbatim: channel.label),
+                detail: lastDeliveryLine(for: channel).map { Text($0) },
+                status: channelStatus(channel, resolvedState: resolvedState)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("notifications.channel.\(channel.id).state")
+            // Why the last push failed is a sentence, so it stands under the
+            // row with the retry, not cut into the row.
+            if let reason = lastFailureLine(for: channel) {
+                Text(reason)
+                    .hlText(.rowStatus)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("notifications.channel.\(channel.id).failure")
             }
             if resolvedState.needsRetryAction {
                 retryButton(channel: channel, isRetrying: isRetrying)
@@ -72,7 +61,6 @@ extension NotificationsScreen {
                 retrySuccessRow()
             }
         }
-        .padding(.vertical, HLSpace.xxs)
     }
 
     /// "Erneut versuchen" affordance — flips an auto-disabled or
@@ -83,21 +71,14 @@ extension NotificationsScreen {
     /// the operator gets immediate feedback (and the button can't be
     /// double-tapped).
     func retryButton(channel: NotificationChannel, isRetrying: Bool) -> some View {
-        Button {
+        HLButton(
+            HLControlWord.retry.key,
+            systemImage: "arrow.clockwise",
+            variant: .secondary,
+            isLoading: isRetrying
+        ) {
             Task { await store?.retry(channelId: channel.id) }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                if isRetrying {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                }
-                Text("Try again")
-            }
-            .font(.hlSubhead)
         }
-        .hlGlassButtonStyle()
-        .controlSize(.small)
         .disabled(isRetrying)
         .accessibilityIdentifier("notifications.channel.\(channel.id).retry")
         .accessibilityHint(Text("Re-enables the paused channel."))
@@ -108,25 +89,18 @@ extension NotificationsScreen {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(HLText.primary)
             Text("Back on — the next push will be retried.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowStatus)
         }
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
-    func channelStateLine(_ channel: NotificationChannel, resolvedState: ResolvedChannelState) -> some View {
+    /// The channel's state as the row's status text with its sign; a channel
+    /// the server has not switched on says so in plain words.
+    func channelStatus(_ channel: NotificationChannel, resolvedState: ResolvedChannelState) -> HLRowStatus {
         if !channel.globallyEnabled {
-            // 1.4 B2 — the state in plain words, without "operator".
-            Text("notifications.channel.notEnabled")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-        } else {
-            Text(resolvedState.stateLine)
-                .font(.hlCaption)
-                .foregroundStyle(resolvedState.stateLineTint)
-                .accessibilityIdentifier("notifications.channel.\(channel.id).state")
+            return HLRowStatus(String(localized: "notifications.channel.notEnabled"))
         }
+        return HLRowStatus(resolvedState.stateLine, icon: resolvedState.glyph)
     }
 
     @ViewBuilder
@@ -136,7 +110,7 @@ extension NotificationsScreen {
                 preferencesCard(for: channel, payload: payload)
             }
         } else if store?.isLoading == true {
-            HLSettingsCard(icon: "bell.fill", title: "Events") {
+            HLCard("Events") {
                 HStack {
                     Spacer()
                     ProgressView()
@@ -157,21 +131,17 @@ extension NotificationsScreen {
         let title: LocalizedStringKey = visibleChannels(payload.channels).count > 1
             ? LocalizedStringKey("Events — \(channel.label)")
             : "Events"
-        // UI-Standard R2 (U6) — der Karten-Footer sagte „Persönliche Rekorde
+        // UI-Standard R2 — der Karten-Footer sagte „Persönliche Rekorde
         // sind standardmäßig aus — du kannst sie hier einschalten." Beides ist
         // verboten: die Voreinstellungs-Ansage, weil der Schalter seinen
         // Zustand selbst zeigt, und die Bedien-Nacherzählung, weil der Satz
         // genau neben dem Schalter stand, den er beschreibt.
-        HLSettingsCard(
-            icon: "bell.fill",
-            title: title
-        ) {
+        HLCard(title) {
             if visible.isEmpty {
                 emptyEventsRow(for: channel)
             } else {
-                ForEach(Array(visible.enumerated()), id: \.element) { idx, eventType in
+                ForEach(visible, id: \.self) { eventType in
                     eventToggleRow(channel: channel, eventType: eventType, payload: payload)
-                    if idx < visible.count - 1 { Divider().opacity(0.5) }
                 }
             }
         }
@@ -196,15 +166,14 @@ extension NotificationsScreen {
             )
         ) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(NotificationEventLocalization.title(for: eventType))
-                    .font(.hlHeadline)
+                HLRowTitle(Text(verbatim: NotificationEventLocalization.title(for: eventType)))
                 if let hint = NotificationEventLocalization.hint(for: eventType) {
                     Text(hint)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                 }
             }
         }
+        .frame(minHeight: HLLayout.rowMinHeight)
         .disabled(!channel.enabled || !channel.globallyEnabled)
     }
 
@@ -213,18 +182,12 @@ extension NotificationsScreen {
         // mostly happens during onboarding before the first webhook ping).
         // Surface a clear non-empty row so the section never collapses
         // into "title only" — user reported sections feeling unfinished.
-        // UI-Standard R2 (U6) — „Tippe oben auf einen Schalter, um sie wieder
+        // UI-Standard R2 — „Tippe oben auf einen Schalter, um sie wieder
         // zu aktivieren." war eine Bedien-Nacherzählung der Schalter, die zwei
         // Karten weiter oben sichtbar sind.
-        Label {
-            Text("You have turned off these notifications")
-                .font(.hlHeadline)
-        } icon: {
-            Image(systemName: "bell.slash")
-                .foregroundStyle(HLText.tertiary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("NotificationsScreen.empty.\(channel.id)")
+        HLIconTextRow(icon: "bell.slash", "You have turned off these notifications")
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("NotificationsScreen.empty.\(channel.id)")
     }
 
     /// Returns true when the user has either `.authorized` or `.provisional`
@@ -256,10 +219,9 @@ extension NotificationsScreen {
     ///   caption, but monochrome (no coloured bubble).
     /// - Auto-dismiss after 4 seconds via a cancellable Task.
     var testPushCard: some View {
-        HLSettingsCard(
-            icon: "paperplane.fill",
-            title: "Diagnostics",
-            // UI-Standard R5 (U6) — Footer: höchstens zwei Sätze. 1.4 B2: one,
+        HLCard(
+            "Diagnostics",
+            // UI-Standard R5 — Footer: höchstens zwei Sätze. One,
             // in the reader's words (no "server").
             footer: "notifications.test.footer"
         ) {
@@ -272,8 +234,7 @@ extension NotificationsScreen {
                     }
                 }
             } label: {
-                Label("Send test notification", systemImage: "paperplane.fill")
-                    .font(.hlSubhead)
+                HLSettingsRow(icon: "paperplane.fill", title: "Send test notification")
             }
             .disabled(!canSendTestPush)
             .accessibilityHint(Text("Pick a test variant — the banner appears within a second."))
@@ -281,17 +242,13 @@ extension NotificationsScreen {
             if let variant = lastTestVariant, lastTestSentAt != nil {
                 confirmationRow(variant: variant)
             }
-            // v0.5.5 W-MED — sub-page link to the deeper diagnostics
+            // Sub-page link to the deeper diagnostics
             // screen. Surfaces categories + pending local-notification
             // request count so an operator self-diagnosing a "Banner
             // kommt nicht" report has more than the authorization
             // status to inspect.
-            Divider().opacity(0.5)
-            NavigationLink {
+            HLSettingsActionRow(icon: "stethoscope", title: "Advanced diagnostics", presents: .push) {
                 NotificationDiagnosticsScreen()
-            } label: {
-                Label("Advanced diagnostics", systemImage: "stethoscope")
-                    .font(.hlSubhead)
             }
             .accessibilityIdentifier("notifications.diagnostics.entry")
         }
@@ -303,18 +260,16 @@ extension NotificationsScreen {
                 .foregroundStyle(HLText.primary)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text("Notification sent — should appear shortly")
-                    .font(.hlSubhead.weight(.medium))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 Text(variant.menuTitle)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
     }
 
-    /// v0.14.2 FW7 — per-user notification-channel settings (ntfy + Telegram).
+    /// Per-user notification-channel settings (ntfy + Telegram).
     /// The web exposes these under `settings → notifications`; iOS previously
     /// hard-suppressed all non-APNs channels. Each card is gated on its
     /// server-wide availability flag (`/api/settings/global-services`), so a
@@ -338,21 +293,15 @@ extension NotificationsScreen {
         }
     }
 
-    /// UI-Standard R4 (U6) — der Footer war ein Wegweiser („… kannst du sie nur
+    /// UI-Standard R4 — der Footer war ein Wegweiser („… kannst du sie nur
     /// in den iOS-Einstellungen wieder aktivieren"), und der Absprung, auf den
     /// er zeigte, steht als einziger Inhalt derselben Karte direkt darunter.
     /// R4 verlangt an so einer Stelle den Absprung **oder** nichts — der
     /// Absprung war schon da.
     var systemSettingsCard: some View {
-        HLSettingsCard(
-            icon: "gear",
-            title: "System Settings"
-        ) {
-            Button {
+        HLCard("System Settings", layout: .rows) {
+            HLSettingsActionRow(icon: "gear", title: "Open System Settings", presents: .external) {
                 openSystemSettings()
-            } label: {
-                Label("Open System Settings", systemImage: "gear")
-                    .font(.hlSubhead)
             }
         }
     }

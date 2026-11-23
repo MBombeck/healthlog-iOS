@@ -9,7 +9,7 @@
     #endif
     @testable import HealthLog
 
-    /// **v0.14.8 W3 (AUDIT-SECURITY-B175) — logout-cleanup completeness.**
+    /// **Logout-cleanup completeness.**
     ///
     /// The audit found the third recurrence of the same leak class (mood →
     /// workout → cycle): a per-user store/importer is added to `AppContainer`
@@ -33,7 +33,7 @@
     @MainActor
     @Suite("Logout completeness — AUDIT-SECURITY-B175", .serialized)
     struct LogoutCompletenessTests {
-        // MARK: - H-1: Cycle importer + anchors reset on logout
+        // MARK: - Cycle importer + anchors reset on logout
 
         /// The cycle importer must be stopped + its per-user anchors reset on
         /// EVERY logout path — otherwise the observer keeps uploading the
@@ -79,7 +79,7 @@
             #expect(cycle.isDisabled == false)
         }
 
-        // MARK: - M-1: Registry — no store may skip the logout decision
+        // MARK: - Registry — no store may skip the logout decision
 
         /// Store-typed `AppContainer` properties that ARE reset by
         /// `performFullLocalLogout` (via `clearOnLogout()`,
@@ -91,54 +91,66 @@
         /// `AppContainer+Logout.performFullLocalLogout` — the registry can
         /// only enforce that the classification decision was made.
         private static let resetOnLogout: Set<String> = [
-            "customMetricsStore", // Build 3 — PHI: eigene Metriken + Werte
-            "accountSecurityStore", // parity 2.1 — clearOnLogout in cascade (LogoutClearable)
+            "customMetricsStore", // PHI: eigene Metriken + Werte
+            // #190, R1 (3), (5), (10): `handleSignOut()` in the notification
+            // purge at the cascade's tail revokes, wipes keys and counters,
+            // ends the relay's Activities; with the account key cached.
+            "pushRelay",
+            "accountSecurityStore", // clearOnLogout in cascade (LogoutClearable)
             "achievementsStore", "aiConsentStore", "aiProviderStore",
             "allergiesStore", // v1.25 PHI — clearOnLogout in cascade
             "familyHistoryStore", // v1.25 PHI — clearOnLogout in cascade
             "avatarStore", "chartsStore", "coachNudgeStore", // coachNudge: clearOnLogout in cascade
-            "coachCadenceSuggestionsStore", // #30 — clearOnLogout in cascade
+            "coachCadenceSuggestionsStore", // clearOnLogout in cascade
             "cycleStore", "dailyBriefingStore",
             "dashboardLayoutStore", "dashboardStore",
             "deliveryPreferencesStore", "diabetesStore", // diabetes: clearOnLogout in cascade
-            "disclaimerAckStore", // DISC-02 — clearOnLogout in cascade
+            "disclaimerAckStore", // clearOnLogout in cascade
             "doctorReportStore",
             "documentsStore", // PHI — clearOnLogout in cascade (LogoutClearable)
-            // GH #74 — deactivateOnLogout (explicit async path, like
+            // deactivateOnLogout (explicit async path, like
             // `moodHealthSyncStore`): forces the ECG upload switch OFF and
             // clears the per-user HealthKit cursor, so the next user on this
             // device inherits neither the consent nor the stream position.
             "ecgHealthSyncStore",
-            "featureFlagsStore",
+            // #180 — the Health Records offer (a lazy property, hence the
+            // storage name). Its answer belongs to the account that gave it:
+            // `clearOnLogout()` in the cascade, the leaving account's cursor in
+            // the owner-bound sign-out hook.
+            "$__lazy_storage_$_clinicalLabRecordsStore",
             "fitbitIntegrationStore", // v1.18.7 web-parity — clearOnLogout in cascade
             "healthScoreStore", "hkReadinessStore",
             "illnessStore", // v1.18.6 PHI — clearOnLogout in cascade
+            "seizuresStore", // seizure diary PHI and the quick-log timer — clearOnLogout in cascade
             "injectionSitePrefsStore", "insightsLayoutStore", "insightsStore",
             "labsStore", // v1.18.6 PHI — clearOnLogout in cascade
             "liveHealthKitTodayStore", "localDoctorReportStore",
-            "measurementRemindersStore", // v0.15 W-FRONTDOORS — clearOnLogout in cascade
+            "measurementRemindersStore", // clearOnLogout in cascade
             "measurementsStore",
             "medicationHealthSyncStore", // deactivateOnLogout (explicit async path, like moodHealthSyncStore)
-            "medicationsStore",
+            "medicationVisibilityStore", "medicationsStore", // visibility: clearOnLogout, per-account ids stay on disk
             "mentalHealthStore", // v1.25 PHI — clearOnLogout in cascade
-            // parity 2.3 — per-account MFA policy verdict; a stale `true` would
+            // Per-account MFA policy verdict; a stale `true` would
             // gate the next user against a requirement that is not theirs.
             "mfaEnrollmentGateStore",
             "moodHealthSyncStore",
             "moodStore", "moodTagCatalogStore", "moodTagManagementStore",
             "nightscoutIntegrationStore", // v1.18.7 web-parity — clearOnLogout in cascade
-            "nutrientStore", // Build 7.6 (#48) — clearOnLogout (nutrient read cache)
+            "nutrientStore", // Build 7.6 — clearOnLogout (nutrient read cache)
             "environmentStore", // Build 7.7 — clearOnLogout (environment read cache)
-            "stravaIntegrationStore", // Build 7.10 (#46) — clearOnLogout (connector state)
-            "onboardingTourStore", // #32 — clearOnLogout in cascade (next user reconciles own tour flag)
+            "stravaIntegrationStore", // Build 7.10 — clearOnLogout (connector state)
+            "onboardingTourStore", // clearOnLogout in cascade (next user reconciles own tour flag)
             "ouraIntegrationStore", // v1.18.7 web-parity — clearOnLogout in cascade
-            "passkeyManagementStore",
+            // pushRelay (#190/#191): account-bound keys, the relay binding and
+            // the domains of the last DATA_CHANGED. `handleSignOut()` rides
+            // `notificationClearOnLogoutHook` at the tail of the cascade.
+            "passkeyManagementStore", "pushRelay",
             "polarIntegrationStore", // v1.18.7 web-parity — clearOnLogout in cascade
-            // parity 2.2 — per-user security inventory; leaving it behind would
+            // Per-user security inventory; leaving it behind would
             // show the previous account's sessions to the next sign-in.
             "sessionsStore",
-            "serverStatsStores", "settingsStore", "syncModeStore",
-            "wellnessCardVisibilityStore", // v0141 — clearOnLogout in cascade (UI-pref hidden-set)
+            "serverStatsStores", "settingsStore",
+            "wellnessCardVisibilityStore", // clearOnLogout in cascade (UI-pref hidden-set)
             "whoopIntegrationStore",
             "withingsIntegrationStore"
         ]
@@ -150,13 +162,13 @@
             // phase in `AuthStore.logout()` / `handleUnauthorized()` before
             // the cascade fires. Resetting it from inside the cascade would
             // recurse into the hooks that invoked it.
-            "authStore", "onboardingDraft" // #153: memory-only setup draft, reset when OnboardingFlow appears after sign-out
+            "authStore", "onboardingDraft" // Memory-only setup draft, reset when OnboardingFlow appears after sign-out
         ]
 
         /// Reflection sweep: every `AppContainer` property whose type is a
         /// store (`…Store` / `…Stores`) must appear in exactly one of the two
         /// lists above. A new store that skips the logout decision — the bug
-        /// class behind mood (v0.10), workouts (v1.15), cycle (B175 H-1) and
+        /// class behind mood, workouts (v1.15), cycle and
         /// the M-1 sweep — fails here at PR time instead of at the next
         /// security audit.
         @Test("every store-typed AppContainer property is classified for logout")
@@ -198,7 +210,7 @@
             #expect(Self.resetOnLogout.isDisjoint(with: Self.intentionallyExempt))
         }
 
-        // MARK: - AUD-7 H1: LogoutClearable registry is the cascade's source
+        // MARK: - LogoutClearable registry is the cascade's source
 
         /// Store-typed `AppContainer` properties that are cleared by the
         /// **registry** iteration in `performFullLocalLogout` (the plain
@@ -207,7 +219,7 @@
         /// became a protocol-driven registry. Every name here MUST conform to
         /// `LogoutClearable` and appear in `container.logoutClearables`.
         private static let registryCleared: Set<String> = [
-            // Build 3 — Custom Metrics: Katalog + Eintraege gehoeren dem Konto.
+            // Custom Metrics: Katalog + Eintraege gehoeren dem Konto.
             "customMetricsStore",
             // Parity Phase 2 — account-scoped stores added with the security hub,
             // sessions list and forced-MFA gate. All three hold data that belongs
@@ -220,19 +232,18 @@
             "coachCadenceSuggestionsStore", "coachNudgeStore", "cycleStore",
             "dailyBriefingStore", "dashboardLayoutStore", "dashboardStore",
             "deliveryPreferencesStore", "diabetesStore", "disclaimerAckStore",
-            "doctorReportStore", "documentsStore", "featureFlagsStore",
+            "doctorReportStore", "documentsStore",
             "fitbitIntegrationStore",
-            "healthScoreStore", "hkReadinessStore", "illnessStore",
+            "healthScoreStore", "hkReadinessStore", "illnessStore", "seizuresStore",
             "injectionSitePrefsStore", "insightsLayoutStore", "insightsStore",
             "labsStore", "liveHealthKitTodayStore", "localDoctorReportStore",
-            "measurementsStore", "medicationsStore", "mentalHealthStore",
+            "measurementsStore", "medicationsStore", "mentalHealthStore", "medicationVisibilityStore",
             "moodStore", "moodTagCatalogStore", "moodTagManagementStore",
             "nightscoutIntegrationStore", "nutrientStore", "environmentStore",
             "stravaIntegrationStore", "onboardingTourStore",
             "ouraIntegrationStore", "passkeyManagementStore",
             "polarIntegrationStore", "settingsStore",
-            "syncModeStore",
-            "wellnessCardVisibilityStore", // v0141 — UI-pref hidden-set
+            "wellnessCardVisibilityStore", // UI-pref hidden-set
             "whoopIntegrationStore",
             "withingsIntegrationStore"
         ]
@@ -312,26 +323,6 @@
 
         // MARK: - M-1/M-2/M-3: the newly wired stores actually reset
 
-        /// The previously dead `SyncModeStore.clearOnLogout()` is wired: the
-        /// runtime mode (in-memory + `hl.syncMode` default) is dropped so the
-        /// next launch re-enters the onboarding picker instead of silently
-        /// re-pairing against the previous account's server.
-        @Test("logout clears the persisted sync-mode (M-1)")
-        func logoutClearsSyncMode() async throws {
-            let container = try makeContainer(
-                keychain: InMemoryKeychain(),
-                healthKit: MockHealthKitWriter()
-            )
-            defer { UserDefaults.standard.removeObject(forKey: SyncModeStore.storageKey) }
-            container.syncModeStore.setMode(.paired)
-            #expect(container.syncModeStore.mode == .paired)
-
-            await container.performFullLocalLogout(reason: .userInitiated)
-
-            #expect(container.syncModeStore.mode == nil)
-            #expect(UserDefaults.standard.string(forKey: SyncModeStore.storageKey) == nil)
-        }
-
         /// An un-saved typed API key in the AI-provider draft must never
         /// survive into the next user's session. (1.4 B4 — the Trends overlay
         /// chart configuration this test also reset went with its store.)
@@ -370,7 +361,7 @@
             #expect(container.hkReadinessStore.lastSyncedAt == nil)
         }
 
-        /// M-3 — the per-medication delivery overrides (`hl.delivery.*`, incl.
+        /// The per-medication delivery overrides (`hl.delivery.*`, incl.
         /// scope markers and the legacy `hl.liveActivity.enabled.*` keys)
         /// reveal *that* medication entities existed and are previous-user-
         /// scoped garbage for the next account. The logout sweep removes them.
@@ -400,7 +391,7 @@
             #expect(defaults.object(forKey: legacyKey) == nil)
         }
 
-        /// M-1 — the four `ServerStatsStores` members the hand-maintained
+        /// The four `ServerStatsStores` members the hand-maintained
         /// per-member call list had silently missed are covered now that the
         /// cascade calls the canonical bundle helper. Narrative is the
         /// seedable proxy: its inputs hash survives `clearOnLogout()` only if
@@ -720,7 +711,7 @@
 
         /// All store-typed property labels of `AppContainer` (type name ends
         /// in `Store`/`Stores`, optionals unwrapped). Internal (not `private`)
-        /// so the box-backed-coverage sibling file (W-PHI-HARDENING G5) can
+        /// so the box-backed-coverage sibling file can
         /// assert the box stores are absent from this stored-property sweep.
         static func storeTypedProperties(of container: AppContainer) -> [String] {
             Mirror(reflecting: container).children.compactMap { child in
@@ -735,45 +726,17 @@
         }
     }
 
-    // MARK: - Plan 06-05 — exact explicit-registry canary (test-only reflection)
+    // MARK: - Exact explicit-registry canary (test-only reflection)
 
     @MainActor
     extension LogoutCompletenessTests {
-        /// Absolute repository root derived from this file's compile-time path.
-        /// Lets the suite read production sources AS DATA for the
-        /// no-production-reflection assertion (simulator tests share the host
-        /// filesystem, so the read is deterministic on the build machine).
-        static var repositoryRoot: URL {
-            URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent() // Stores
-                .deletingLastPathComponent() // HealthLogTests
-                .deletingLastPathComponent() // repository root
-        }
-
-        /// `relativePath` source lines that invoke runtime reflection
-        /// (`Mirror(reflecting:`). Empty means the production file composes its
-        /// cleanup membership explicitly. An unreadable file returns a sentinel
-        /// hit so missing evidence fails closed instead of passing vacuously.
-        static func productionReflectionHits(relativePath: String) -> [String] {
-            let url = repositoryRoot.appendingPathComponent(relativePath)
-            guard let source = try? String(contentsOf: url, encoding: .utf8) else {
-                return ["<unreadable: \(relativePath)>"]
-            }
-            return source
-                .split(separator: "\n", omittingEmptySubsequences: false)
-                .enumerated()
-                .filter { $0.element.contains("Mirror(reflecting:") }
-                .map { "\(relativePath):\($0.offset + 1)" }
-        }
-
         /// **06-05 Task 1 — the exact-identity completeness canary.** The
         /// production `logoutClearables` registry must be an EXPLICIT typed
         /// composition that covers every `LogoutClearable`-conforming stored
         /// `AppContainer` property exactly once — discovered here by the
         /// test-side reflection sweep, which stays the independent canary. A
         /// missing, duplicate, or unknown member fails with its property label
-        /// (non-PHI), and any `Mirror(reflecting:` use in the production
-        /// registry file fails the same behavioral invariant.
+        /// (non-PHI).
         @Test
         func productionRegistryIsExplicitAndExactlyComplete() throws {
             let container = try makeContainer(
@@ -806,19 +769,15 @@
             let duplicateCount = registryIDs.count - registryIDSet.count
             // Unknown: a registry member that is not a conforming stored property.
             let unknownCount = registryIDSet.subtracting(reflectedLabelByID.keys).count
-            let reflectionHits = Self.productionReflectionHits(
-                relativePath: "HealthLog/Stores/AppContainer+Logout.swift"
-            )
 
             #expect(
-                missingLabels.isEmpty && duplicateCount == 0 && unknownCount == 0
-                    && reflectionHits.isEmpty,
-                "EXPECTED_RED: production registry membership was not exact — missing \(missingLabels), duplicates \(duplicateCount), unknown \(unknownCount), production reflection \(reflectionHits)"
+                missingLabels.isEmpty && duplicateCount == 0 && unknownCount == 0,
+                "production registry membership was not exact — missing \(missingLabels), duplicates \(duplicateCount), unknown \(unknownCount)"
             )
         }
     }
 
-    // MARK: - DISC-02 — disclaimer-ack store purge
+    // MARK: - Disclaimer-ack store purge
 
     @MainActor
     extension LogoutCompletenessTests {

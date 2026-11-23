@@ -16,7 +16,7 @@ struct SyncTriggerContextTests {
         #expect(context.current == .foreground)
     }
 
-    /// W5 (1.3, #126 1.2) — until 1.2 the closed window fell back to
+    /// Until 1.2 the closed window fell back to
     /// `foreground`; with the app state unknown it now keeps the word of the
     /// window that just closed (the server log showed a `foreground` batch
     /// seconds after nearly every `background` group).
@@ -41,7 +41,7 @@ struct SyncTriggerContextTests {
         // mit abräumen.
         #expect(context.current == .background)
         context.end(.background)
-        // W5 — the closed window keeps its word while the app state is unknown.
+        // The closed window keeps its word while the app state is unknown.
         #expect(context.current == .background)
     }
 
@@ -65,14 +65,14 @@ struct SyncTriggerContextTests {
                 throw Boom()
             }
         }
-        // W5 — closed (the count says so), and no longer `foreground` after it.
+        // Closed (the count says so), and no longer `foreground` after it.
         #expect(context.current == .background)
         #expect(context.openScopeCount == 0)
     }
 
-    /// V1 (1.2) — `manual` kam mit Server v1.42.0 (#123). Der Vertrag bleibt
+    /// `manual` kam mit Server v1.42.0 (#123). Der Vertrag bleibt
     /// geschlossen: genau die Wörter, die die Batch-Route kennt.
-    /// X4 (1.3) — `backfill` kam mit Server v1.43.0 (#138), hinter
+    /// `backfill` kam mit Server v1.43.0 (#138), hinter
     /// `features.syncTriggerBackfill`.
     @Test("Genau die fünf Vertragswerte existieren (manual seit v1.42, backfill seit v1.43)")
     func wireVocabularyIsClosed() {
@@ -108,7 +108,7 @@ struct SyncTriggerContextTests {
         relaunched.end(.manual)
     }
 
-    /// INT-N (1.2) — V1 (`manual`) und V4 (RMSSD) lesen dieselbe letzte
+    /// V1 (`manual`) und V4 (RMSSD) lesen dieselbe letzte
     /// Server-Version. Die App schreibt sie an genau einer Stelle
     /// (`HealthKitServerTypeGate.record`) und vergisst sie an genau einer.
     @Test("INT-N: `manual` folgt der einen gemerkten Server-Version, die auch RMSSD freigibt")
@@ -159,7 +159,7 @@ struct SyncTriggerContextTests {
         // Das Fenster ist zu; die Bindung trägt den Auslöser weiter.
         #expect(context.openScopeCount == 0)
         #expect(await late.value == .background)
-        // W5 — unbound work after the window: its word, not `foreground`.
+        // Unbound work after the window: its word, not `foreground`.
         #expect(context.current == .background)
     }
 
@@ -191,7 +191,7 @@ struct SyncTriggerContextTests {
         }
     }
 
-    // MARK: - W5 (1.3, #126 1.2): no `foreground` after a closed window
+    // MARK: - No `foreground` after a closed window
 
     @Test("W5: nach einem Hintergrund-Fenster ohne gemeldeten App-Zustand geht `background` auf den Draht")
     func closedBackgroundWindowStaysBackground() {

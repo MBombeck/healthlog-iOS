@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.8.0 W11 — AvatarRepository contract.**
+/// **AvatarRepository contract.**
 ///
 /// Drives the real `APIClient` (not a mock-server) through `MockURLProtocol`
 /// so the multipart upload, owner-scoped GET, and DELETE go over the exact

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **09-14 — the accepted v1.37.24 cyclic / PRN wire contract, both directions.**
+/// **The accepted v1.37.24 cyclic / PRN wire contract, both directions.**
 ///
 /// Pinned to the immutable tag `v1.37.24` (commit
 /// `e00d013459d88bb8be4b197138cf72da489c1645`) whose `docs/api/openapi.yaml`
@@ -28,7 +28,7 @@ import Testing
 ///
 /// **The anchor is not renamed, it is deleted.** The server anchors the cyclic
 /// phase on `medication.startsOn ?? medication.createdAt` — since server
-/// 1.39.3 (R1) as seven-day blocks from that calendar day, before that snapped
+/// 1.39.3 as seven-day blocks from that calendar day, before that snapped
 /// to the Sunday-rooted UTC week. There is no per-schedule anchor and there is nowhere
 /// on the server to put one. `serverCyclicOnWeek` below is a transcription of
 /// that function, and the parity clause asserts the iOS engine agrees with it
@@ -51,7 +51,7 @@ struct MedicationCyclicWireContractTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: the accepted cyclic wire shape does not survive iOS — \(violations.count) violation(s): \(violations.joined(separator: " | "))"
+            "the accepted cyclic wire shape does not survive iOS — \(violations.count) violation(s): \(violations.joined(separator: " | "))"
         )
     }
 
@@ -162,7 +162,7 @@ struct MedicationCyclicWireContractTests {
     }
 }
 
-/// **09-14 — an as-needed medication is saved as PRN and reads back as PRN.**
+/// **An as-needed medication is saved as PRN and reads back as PRN.**
 ///
 /// The accepted `CreateMedicationRequest` / `UpdateMedicationRequest` spell a
 /// whole-medication PRN as the medication-level `asNeeded: true` with an empty
@@ -188,7 +188,7 @@ struct MedicationPrnRoundTripContractTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: an as-needed medication does not round-trip as PRN — \(violations.count) violation(s): \(violations.joined(separator: " | "))"
+            "an as-needed medication does not round-trip as PRN — \(violations.count) violation(s): \(violations.joined(separator: " | "))"
         )
     }
 

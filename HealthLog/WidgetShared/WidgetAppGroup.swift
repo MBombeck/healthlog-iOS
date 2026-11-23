@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-2 — App Group coordinates shared by the app + the
+/// **App Group coordinates shared by the app + the
 /// `dev.healthlog.app.widgets` extension.**
 ///
 /// The Home / Lock-Screen widgets paint from a tiny snapshot the app
@@ -26,17 +26,23 @@ public enum WidgetAppGroup {
     /// Filename of the widget snapshot inside the group container.
     public static let snapshotFilename = "widget-snapshot.json"
 
-    /// **v0.8.4 WWIDGET-3** — filename of the one-shot "open capture" marker
+    /// Filename of the one-shot "open capture" marker
     /// the `OpenCaptureIntent` (Control Center / Action-Button "Erfassen"
     /// control) drops and the app consumes on foreground. See
     /// ``CaptureRequestStore``.
     public static let captureRequestFilename = "capture-request.json"
 
-    /// **v0.10.0 W-Widget-2Tap** — filename of the next-dose widget's
+    /// Filename of the next-dose widget's
     /// two-step "Genommen" pending-confirm marker. The widget intent's first
     /// tap arms it, the second tap (or a stale-window expiry) clears it. See
     /// ``WidgetPendingConfirmStore``.
     public static let pendingConfirmFilename = "widget-pending-confirm.json"
+
+    /// Filename of the last "Taken" outcome a widget or control intent saw.
+    /// See ``WidgetDoseOutcomeStore``.
+    public static let doseOutcomeFilename = "widget-dose-outcome.json"
+    /// #188 (7) — doses taken outside the app, offered for undo on next open.
+    public static let externalTakeLogFilename = "external-take-log.json"
 
     /// Resolved URL of the snapshot file inside the shared container, or
     /// `nil` when the container is unavailable (e.g. the group is not
@@ -69,5 +75,24 @@ public enum WidgetAppGroup {
         fileManager
             .containerURL(forSecurityApplicationGroupIdentifier: identifier)?
             .appendingPathComponent(pendingConfirmFilename, isDirectory: false)
+    }
+
+    /// Resolved URL of the dose-outcome marker inside the shared container,
+    /// or `nil` when the container is unavailable.
+    /// Resolved URL of the external-take log inside the shared container.
+    public static func externalTakeLogURL(
+        fileManager: FileManager = .default
+    ) -> URL? {
+        fileManager
+            .containerURL(forSecurityApplicationGroupIdentifier: identifier)?
+            .appendingPathComponent(externalTakeLogFilename, isDirectory: false)
+    }
+
+    public static func doseOutcomeURL(
+        fileManager: FileManager = .default
+    ) -> URL? {
+        fileManager
+            .containerURL(forSecurityApplicationGroupIdentifier: identifier)?
+            .appendingPathComponent(doseOutcomeFilename, isDirectory: false)
     }
 }

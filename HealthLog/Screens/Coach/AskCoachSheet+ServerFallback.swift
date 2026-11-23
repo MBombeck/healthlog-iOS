@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.7.1 W-COACH-FALLBACK** — surfaces that replace the AskCoach
+/// Surfaces that replace the AskCoach
 /// kill-card on iPhones without an on-device Foundation Model.
 ///
 /// Split out of `AskCoachSheet.swift` so the main view file stays under
@@ -15,37 +15,14 @@ import SwiftUI
 ///      on-device-unavailable copy, reached only when no server fallback
 ///      is applicable.
 extension AskCoachSheet {
-    // MARK: - Standalone placeholder (v0.11 W3)
-
-    /// Standalone + on-device Coach unavailable → the calm cloud placeholder.
-    /// There is no server to fall back to, so the consent / server-fallback arms
-    /// are skipped upstream and this surface stands in. The welcome lockup stays
-    /// above it so the sheet still reads as the Coach surface; the placeholder
-    /// carries the shared "Server verbinden" CTA (`beginServerPairing()`).
-    var standalonePlaceholder: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.xl) {
-                welcomeLockup
-                HLCloudDerivedPlaceholder(
-                    variant: .hero,
-                    surfaceName: String(localized: "cloud_derived.surface.server_coach"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-                Spacer(minLength: HLSpace.xxxl)
-            }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-        }
-    }
-
     // CO1 (v0154 walkthrough) — the per-turn active-arm pills
     // (`serverFallbackNotice` / `onDeviceNotice` / `byoNotice`) and the shared
-    // `activeModePill(...)` renderer were removed here. W1-C1 (b199) had promoted
+    // `activeModePill(...)` renderer were removed here. W1-C1 had promoted
     // the active-arm indicator to a `HLColor.statusWarn`-tinted, bordered egress
     // capsule painted over EVERY turn; the operator deliberately picked External
     // AI and flagged that permanent "comes from your server" banner as noise. The
     // honest replacement is on-demand: the collapsed provenance disclosure under
-    // each server-arm reply (CO4) plus the quiet token footer (CO5). The
+    // each server-arm reply plus the quiet token footer. The
     // empty-state `privateProvenanceNote` (in `AskCoachSheet.swift`) still names
     // the private on-device path before the first turn. The `usingServerFallback`
     // / `usingBYO` store flags stay (they gate other behaviour), they just no
@@ -94,9 +71,9 @@ extension AskCoachSheet {
         }
     }
 
-    // MARK: - Nested AI-consent sheet (A6b)
+    // MARK: - Nested AI-consent sheet
 
-    /// v0.14.7 A6b — the AI-consent sheet presented OVER the Coach sheet from the
+    /// The AI-consent sheet presented OVER the Coach sheet from the
     /// Coach view's own hierarchy (the shell can't present over an already-
     /// presented sheet, which swallowed the old token-routed prompt). On accept we
     /// grant the resolved provider; the `@Observable` `aiConsentStore` flips
@@ -106,12 +83,12 @@ extension AskCoachSheet {
     var coachConsentSheet: some View {
         if let container = appContainer {
             let provider = container.aiProviderStore.config?.resolvedProvider ?? .unconfigured
-            // W-B186 COACH-1 (#24) — when external AI is server/admin-managed
+            // When external AI is server/admin-managed
             // there is no per-user provider; consent targets the server-managed
             // scope so accepting actually grants (not a `.unconfigured` no-op).
             let usesProviderOpaqueConsent =
                 container.aiProviderStore.config?.usesProviderOpaqueAIConsent == true
-            // #143 — name the operator-held services the server reports
+            // Name the operator-held services the server reports
             // while it says `needed`.
             let standing = container.aiCapabilityGate.standingConsent
             AIConsentSheet(
@@ -119,7 +96,7 @@ extension AskCoachSheet {
                 recipients: standing?.verdict == .needed ? standing?.recipientNames ?? [] : [],
                 onAccept: {
                     if usesProviderOpaqueConsent {
-                        // #24 — grant the server-managed scope: `aiMode` flips to
+                        // Grant the server-managed scope: `aiMode` flips to
                         // `.online`, the coach surface re-renders into the live
                         // server conversation. The `ai_full` receipt below is this
                         // tap's own consent act (#143, `confirm: true`).
@@ -128,7 +105,7 @@ extension AskCoachSheet {
                         Task { await container.recordAcceptedAIConsent() }
                         return
                     }
-                    // v0.14.1 — fix the silent-bounce dead-end: `grant(for:)` is a
+                    // Fix the silent-bounce dead-end: `grant(for:)` is a
                     // guard-noop for `.unconfigured` (no provider → nothing to
                     // grant), so accepting consent for an unconfigured provider
                     // left `aiMode == .none` and `serverFallbackNeedsConsent`
@@ -144,7 +121,7 @@ extension AskCoachSheet {
                     }
                     container.aiConsentStore.grant(for: provider)
                     showCoachConsentSheet = false
-                    // #143 — this tap's receipt (`confirm: true`). The server's
+                    // This tap's receipt (`confirm: true`). The server's
                     // `ai.consent` decides whether one is needed: an own provider
                     // (`not_needed`) sends nothing. Best-effort.
                     Task { await container.recordAcceptedAIConsent() }
@@ -196,75 +173,46 @@ extension AskCoachSheet {
         )
     }
 
-    // MARK: - Provider-needed step (v0.14.1)
+    // MARK: - Provider-needed step
 
-    /// v0.14.1 — the "External AI needs a server provider" step, presented when
+    /// The "External AI needs a server provider" step, presented when
     /// the user picks External AI but no server provider is configured. Replaces
     /// the silent bounce-to-chooser dead-end (RCA: `grant(for: .unconfigured)` is
     /// a noop) with a calm, honest page that explains a server AI provider (or
     /// BYO key) is required, plus a single CTA that dismisses the Coach sheet and
     /// routes to Settings → Assistant where it is set up.
     var coachProviderNeededSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    VStack(spacing: HLSpace.sm) {
-                        Image(systemName: "cloud")
-                            .font(.hlLargeTitle.weight(.light))
-                            .foregroundStyle(HLText.primary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        Text(String(localized: "A server provider is required"))
-                            .font(.hlLargeTitle)
-                            .foregroundStyle(HLText.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .accessibilityElement(children: .combine)
-                    Text(
-                        String(
-                            // swiftlint:disable:next line_length
-                            localized: "The External AI coach answers through your server's AI provider — but none is configured yet. Set up a server provider (or your own key) to use it."
-                        )
-                    )
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Spacer(minLength: HLSpace.xl)
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.lg)
+        // The one step forward stands in the bar as the sheet's confirmation:
+        // it closes this step and the Coach sheet, then opens Settings →
+        // Assistant where the provider or own key is set up.
+        HLSheetScaffold(
+            "External AI",
+            action: .confirm("Set up a provider") {
+                showCoachProviderNeeded = false
+                dismissCoachSheet()
+                appRouter.requestSettingsAssistant()
+                return true
             }
-            .hlScrollEdgeSoft()
-            .hlScreenBackground()
-            .navigationTitle(String(localized: "External AI"))
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                HLButton(
-                    String(localized: "Set up a provider"),
-                    variant: .primary,
-                    size: .large
-                ) {
-                    // Dismiss the provider-needed step + the Coach sheet, then
-                    // route the operator to Settings → Assistant where the
-                    // provider / BYO key is configured.
-                    showCoachProviderNeeded = false
-                    dismissCoachSheet()
-                    appRouter.requestSettingsAssistant()
-                }
-                .tint(HLAccent.primary)
-                .padding(HLSpace.lg)
-                // 08-12 — 08-14 audited the Coach family by file list and this
-                // one was not on it; the shelf paints a raw material like the
-                // five that were. Preference first, same material otherwise.
-                .background(HLMaterialBackground(.regularMaterial))
+        ) {
+            HLPage {
+                HLEmptyState(icon: "cloud", title: Text(String(localized: "A server provider is required")))
+                    .accessibilityElement(children: .combine)
+                Text(
+                    String(
+                        // swiftlint:disable:next line_length
+                        localized: "The External AI coach answers through your server's AI provider — but none is configured yet. Set up a server provider (or your own key) to use it."
+                    )
+                )
+                .font(.hlBody)
+                .foregroundStyle(HLText.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .hlSheetPresentation(.form)
-        .presentationBackground(HLColor.surface)
     }
 }
 
-// MARK: - Coach source-choice page (v0.14.7 COACH-redesign)
+// MARK: - Coach source-choice page
 
 /// The one-page on-device-vs-server choice surface. Owns the local
 /// `selectedMode` so the picker is a live selection committed by the single
@@ -272,14 +220,14 @@ extension AskCoachSheet {
 /// pre-selected, so a user who just wants to proceed taps one calm button.
 private struct CoachSourceChoiceView: View {
     let onDeviceCapable: Bool
-    /// v0.14.1 — true when a server AI provider is configured, so the External AI
+    /// True when a server AI provider is configured, so the External AI
     /// path can actually work. When false the External AI card is rendered
     /// disabled-with-reason and committing it routes to the provider-needed step
     /// instead of a consent sheet that would noop + silently bounce.
     let hasServerProvider: Bool
     let onRequestServerConsent: () -> Void
     let onChooseOnDevice: () -> Void
-    /// v0.14.1 — invoked when the user tries to use External AI but no server
+    /// Invoked when the user tries to use External AI but no server
     /// provider is configured. The host routes to Settings → Assistant.
     let onNeedsProvider: () -> Void
 
@@ -324,41 +272,26 @@ private struct CoachSourceChoiceView: View {
             .padding(.horizontal, HLSpace.lg)
             .padding(.top, HLSpace.lg)
         }
-        .hlScrollEdgeSoft()
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: HLSpace.sm) {
-                HLButton(
-                    primaryTitle,
-                    variant: .primary,
-                    size: .large,
-                    action: commitSelection
-                )
-                .tint(HLAccent.primary)
-                // 1.4 B2-c — no "change this anytime in Settings" line under
-                // the choice; it is a setting, and it says so where it lives.
-            }
-            .padding(HLSpace.lg)
-            // The source-choice shelf, same rule as the provider-needed one.
-            .background(HLMaterialBackground(.regularMaterial))
+        // The one step forward in the system bar at the bottom edge, which
+        // brings the scroll edge under it. No "change this anytime in
+        // Settings" line under the choice; it is a setting, and it says so
+        // where it lives.
+        .hlBottomBar {
+            HLButton(
+                Text(verbatim: primaryTitle),
+                variant: .primary,
+                action: commitSelection
+            )
         }
     }
 
-    /// Centered hero glyph + large title — mirrors the `AIConsentSheet` lockup.
+    /// The Coach's one head form: the empty-state lockup.
     private var heroLockup: some View {
-        VStack(spacing: HLSpace.sm) {
-            Image(systemName: "sparkles")
-                .font(.hlLargeTitle.weight(.light))
-                .foregroundStyle(HLText.primary)
-                .frame(maxWidth: .infinity, alignment: .center)
-            Text(heroTitle)
-                .font(.hlLargeTitle)
-                .foregroundStyle(HLText.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
+        HLEmptyState(icon: "sparkles", title: Text(heroTitle))
+            .accessibilityElement(children: .combine)
     }
 
-    /// v0.14.1 — the hero title adapts to the reachable choice: a capable device
+    /// The hero title adapts to the reachable choice: a capable device
     /// genuinely chooses; a non-capable device with a provider consents to the
     /// server; a non-capable device with NO provider is told a provider is
     /// required (the CTA then routes to setup, never a silent-bounce consent).
@@ -385,7 +318,7 @@ private struct CoachSourceChoiceView: View {
         return String(localized: "Set up a provider")
     }
 
-    /// v0.14.1 — the two chooser cards (On-device + External AI). External AI is
+    /// The two chooser cards (On-device + External AI). External AI is
     /// `.available` only with a configured provider, else disabled-with-reason +
     /// a "set up a provider" recovery chip so the dead-end is unreachable in the
     /// picker. Computed by the pure ``AISourceOptions/coachChoice(hasServerProvider:)``
@@ -410,7 +343,7 @@ private struct CoachSourceChoiceView: View {
         }
     }
 
-    /// v0.14.1 — the explainer adapts to the reachable choice. Capable device →
+    /// The explainer adapts to the reachable choice. Capable device →
     /// the on-device-vs-server choice copy; non-capable + provider → the consent
     /// copy; non-capable + NO provider → the honest "set up a provider" copy so
     /// the page never promises a consent that would noop.
@@ -435,7 +368,7 @@ private struct CoachSourceChoiceView: View {
         )
     }
 
-    /// v0.14.1 — copy for the non-capable device with NO server provider: the
+    /// Copy for the non-capable device with NO server provider: the
     /// Coach cannot answer on-device and there is no provider to route through,
     /// so the user is told plainly that a provider must be set up first.
     private var providerNeededExplanation: String {

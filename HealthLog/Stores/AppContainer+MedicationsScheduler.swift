@@ -2,6 +2,7 @@
     import Foundation
     @_spi(APISupport) import Spezi
     import SpeziScheduler
+    import UserNotifications
 
     extension AppContainer {
         /// Resolve the running `MedicationsSchedulerModule` (registered
@@ -41,6 +42,9 @@
                         .info("MedicationsSchedulerModule not registered — reconcile skipped")
                     return
                 }
+                // D3 #9 — plan against the budget Spezi will really have.
+                let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+                MedicationReminderRunway.noteForeignPending(in: pending.map(\.identifier))
                 module.reconcile(medications: medications)
 
                 // v0.15.5 AUD-1 F8 (defense in depth) — force a SpeziScheduler

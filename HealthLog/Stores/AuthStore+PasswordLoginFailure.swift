@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - J1 / F1 — what a refused password sign-in tells the person
+// MARK: - What a refused password sign-in tells the person
 
 extension AuthStore {
     /// `login(email:password:)`'s failure routing: a refused password is not

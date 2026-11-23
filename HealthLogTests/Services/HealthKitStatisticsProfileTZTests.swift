@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **Audit B-7 — daily statistics anchor on the profile zone, not the device.**
+    /// **Daily statistics anchor on the profile zone, not the device.**
     ///
     /// `HealthKitStatisticsService` derived `dayKey` and the `measuredAt`
     /// day-start from a calendar frozen at construction time — in production
@@ -62,7 +62,7 @@ import Testing
 
         @Test("a later profile-zone emission is honoured without rebuilding the service")
         func providerIsReadLive() async throws {
-            // Audit B-7 — an isolated suite: `update` now mirrors the identifier
+            // An isolated suite: `update` now mirrors the identifier
             // into `UserDefaults`, and a test must not write into the process
             // store other cases read.
             let box = try ProfileTimeZoneBox(

@@ -9,13 +9,13 @@ import SwiftUI
 // takes `showsCorrelations: false` there (the same hoisting idiom "Signale des
 // Tages" already used), and this slot renders it in its new home.
 //
-// **Where it is mounted, corrected 2026-08-23 (C2).** This comment used to say
+// **Where it is mounted, corrected 2026-08-23.** This comment used to say
 // the block is mounted INSIDE the `dailyBriefing` section case so that it would
 // follow the Tagesbriefing through a reorder, and it named the trade-off that a
 // hidden Tagesbriefing would take the correlations with it. Neither is true of
 // the code any more and had not been for some time: `InsightsOverviewBody`
-// mounts this slot at `InsightsOverviewSlots.swift:448`, **after** the `ForEach`
-// over every visible section and before the empty/error slot. The block
+// mounts this slot **after** the `ForEach` over every visible section, as the
+// last zone of the column. The block
 // therefore trails the whole server-owned section list unconditionally, and a
 // hidden Tagesbriefing does not affect it at all.
 //
@@ -35,12 +35,11 @@ import SwiftUI
 
 /// Owns the ZUSAMMENHÄNGE IN DEINEN DATEN block. Store-scoped leaf in the same
 /// idiom as `InsightsOverviewSlots.swift`: it reads ONLY
-/// `CorrelationsDiscoveryStore` + `BackendAvailability`, so a correlations refresh (or a relevance statement round-trip)
+/// `CorrelationsDiscoveryStore`, so a correlations refresh (or a relevance statement round-trip)
 /// invalidates this slot alone rather than the whole overview.
 ///
-/// Gated on `backend.hasServer` alone (server v1.39: correlations are
-/// statistics, not AI, and channels whose module is off are filtered
-/// server-side), and the block itself still self-suppresses to nothing when the
+/// Not AI-gated (server v1.39: correlations are statistics, not AI, and
+/// channels whose module is off are filtered server-side), and the block itself still self-suppresses to nothing when the
 /// server returned no surviving pair.
 ///
 /// **CU-33 lives here now.** The block used to be mounted with a hardcoded
@@ -51,17 +50,16 @@ import SwiftUI
 /// read — and with it the reversible relevance affordance — moved here.
 struct InsightsCorrelationsSlot: View {
     let appContainer: AppContainer?
-    /// **C1** — the overview's own metric deep-link, handed down so a pair's
+    /// The overview's own metric deep-link, handed down so a pair's
     /// detail shape can jump into the Insights page of either channel. It is the
     /// same closure the vitals and trends slots receive, so a correlation jump
     /// and a tile tap land on exactly the same page.
     var onSelectMetric: ((MetricKind) -> Void)?
 
     @Environment(CorrelationsDiscoveryStore.self) private var correlationsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.correlations, appContainer) {
+        if InsightsOverviewGate.isVisible(.correlations, appContainer) {
             InsightsCorrelationsDiscoveryBlock(
                 pairs: correlationsStore.presentable,
                 pairsTested: correlationsStore.response?.pairsTested ?? 0,

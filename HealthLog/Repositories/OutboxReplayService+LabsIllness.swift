@@ -10,7 +10,7 @@ import Foundation
 extension OutboxReplayService {
     /// Replay the labs + biomarker writes (server dedups within 24h;
     /// soft-delete is tombstone-idempotent; restore foreign-ids are no-ops).
-    /// Returns the server id of a replayed lab create (1.4, S5).
+    /// Returns the server id of a replayed lab create.
     func dispatchLabs(_ op: OutboxQueue.Operation) async throws -> String? {
         guard let labsRepo else {
             throw HLError.unknown("Op-Kind \(op.kind.rawValue): labsRepo unwired")
@@ -19,7 +19,7 @@ extension OutboxReplayService {
         switch op.kind {
         case .createLab:
             let p = try decoder.decode(OutboxQueue.Payloads.CreateLab.self, from: op.payload)
-            // audit-v0162 H-4 — the server id goes back to the pass, so a queued
+            // The server id goes back to the pass, so a queued
             // update/delete that references the optimistic lab id is remapped.
             return try await labsRepo.replayCreateLabReturningServerId(p.body, idempotencyKey: key)
         case .updateLab:

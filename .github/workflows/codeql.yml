@@ -1,0 +1,100 @@
+name: CodeQL
+
+# Code scanning, written out as a workflow instead of the repository's
+# default setup so the languages, the schedule and the runner choice are in
+# the diff like everything else.
+#
+# Code scanning is free for public repositories only. Both jobs therefore run
+# where the repository is public (the mirror MBombeck/healthlog-iOS) and skip
+# themselves in the private development repository, which has no Advanced
+# Security and would only collect failed uploads.
+#
+#   analyze-actions  the workflow files themselves (injection through event
+#                    fields, unpinned or over-privileged steps). Hosted Linux,
+#                    seconds, on every push, pull request and week.
+#   analyze-swift    the app. CodeQL has to watch a real compile, which means
+#                    the Mac mini and the machine lock. It runs weekly and by
+#                    hand only, never for a pull request, so fork code never
+#                    reaches the self-hosted runner.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays, 03:41 UTC, before the working day and off the hour.
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze-actions:
+    name: Analyse GitHub Actions
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: actions
+          build-mode: none
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:actions"
+
+  analyze-swift:
+    name: Analyse Swift
+    if: ${{ !github.event.repository.private && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: [self-hosted, macOS, healthlog-mini]
+    # A cold traced Debug build of the app and its packages, plus the wait for
+    # the machine lock (CI, the other repository's CI or a release freeze).
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    env:
+      HEALTHLOG_XCODE_GATE_WAIT_SECONDS: "7200"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: swift
+          build-mode: manual
+
+      # The traced compile goes through the same gate as every other Xcode
+      # job on this machine, into its own derived data, so the analysis sees
+      # a cold build and never races CI or a freeze.
+      - name: Build (traced)
+        run: |
+          xcodegen
+          scripts/run-serialized-xcode-gate.sh "codeql-${{ github.run_id }}" -- build -configuration Debug -skipMacroValidation CODE_SIGN_IDENTITY=-
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:swift"
+
+      - name: Free the derived data
+        if: always()
+        run: rm -rf "/tmp/dd-hl-codeql-${{ github.run_id }}"

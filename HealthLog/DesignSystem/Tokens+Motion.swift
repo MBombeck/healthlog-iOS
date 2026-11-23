@@ -18,7 +18,7 @@ public enum HLMotion {
 
     /// Gentle tween for progress fills (ring overlays etc.).
     ///
-    /// v0.12 W3-6 — pulled from `0.6s` to `0.28s`. The prior 0.6s was 2× the
+    /// Pulled from `0.6s` to `0.28s`. The prior 0.6s was 2× the
     /// 200–300 ms perceptual doctrine ceiling and 2× what `HLRing` itself now
     /// uses for its sweep (`.easeOut(0.28)`); a progress fill that lags the
     /// ring it lives beside reads as sluggish. 0.28s lands inside the budget
@@ -29,7 +29,7 @@ public enum HLMotion {
     /// while remaining content tracks 1:1 with the user's finger. Calibrated
     /// against Apple Health's metric-detail hero parallax. Reduce-motion
     /// callers MUST bypass this multiplier and pin to `1.0` (no parallax).
-    /// W-IMPL-MOTION-POLISH (v0.5.5.1).
+    /// W-IMPL-MOTION-POLISH.
     public static let parallaxRate: CGFloat = 1.3
     /// Greeting fade distance — total scroll points over which the greeting
     /// dampens from 1.0 → `parallaxFadeFloor` opacity. 80pt matches the

@@ -1,4 +1,4 @@
-// L1 — Personal Records reads English in the English UI.
+// Personal Records reads English in the English UI.
 //
 // The screen App Review reaches through "Personal records" was built German
 // throughout: the time-range segments ("Allzeit", "Dieses Jahr" …) were German
@@ -50,14 +50,15 @@
                 #expect(!AppGermanCopyGuardTests.looksGerman(label), "\(type) → \(label)")
                 #expect(!label.contains("."), "\(type) resolved to a raw key: \(label)")
             }
-            #expect(MetricTypeLocalisation.label(forType: "HRV", locale: Self.english) == "Heart rate variability")
+            // The card label is the short form Apple Health uses.
+            #expect(MetricTypeLocalisation.label(forType: "HRV", locale: Self.english) == "HRV")
             #expect(MetricTypeLocalisation.label(forType: "FLIGHTS_CLIMBED", locale: Self.english) == "Flights climbed")
         }
 
-        @Test("the German metric names stay as they were")
+        @Test("the German card labels are short enough for half a row")
         func metricNamesGerman() {
-            #expect(MetricTypeLocalisation.label(forType: "HRV", locale: Self.german) == "Herzfrequenzvariabilität")
-            #expect(MetricTypeLocalisation.label(forType: "BODY_TEMPERATURE", locale: Self.german) == "Körpertemperatur")
+            #expect(MetricTypeLocalisation.label(forType: "HRV", locale: Self.german) == "HRV")
+            #expect(MetricTypeLocalisation.label(forType: "BODY_TEMPERATURE", locale: Self.german) == "Temperatur")
             #expect(MetricTypeLocalisation.label(forType: "AUDIO_EXPOSURE_ENV", locale: Self.german) == "Lärm-Belastung")
             #expect(MetricTypeLocalisation.label(forType: "MOOD", locale: Self.german) == "Stimmung")
         }
@@ -69,7 +70,7 @@
                 "records.delta.vsPrevious %@", "records.a11y.newRecord", "records.a11y.change %@",
                 "records.hero.since %@", "records.hero.a11y %@ %@ %@ %@", "records.comparison.a11yHint",
                 "records.comparison.a11y %@ %@ %@ %@ %@", "records.comparison.insideBand",
-                // #135 — the band is the server's: position words only, plus its range.
+                // The band is the server's: position words only, plus its range.
                 "records.comparison.belowCentered", "records.comparison.aboveCentered",
                 "records.comparison.range %@", "benchmark.source.eyebrow", "benchmark.source.typicalRange"
             ]

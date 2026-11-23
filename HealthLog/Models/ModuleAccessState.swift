@@ -24,7 +24,7 @@ import Synchronization
 // cannot name — instead of the map being dropped and the row vanishing
 // silently all over again.
 
-/// Audit A-7 — why a feature module is (not) available to the current user,
+/// Why a feature module is (not) available to the current user,
 /// as resolved server-side (`moduleAccess`, server v1.38.15).
 ///
 /// Precedence is resolved by the SERVER, outside-in: `unavailable` >
@@ -44,7 +44,7 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
     /// Decode-only sentinel for a token this build does not know. Never sent.
     case unknown = "__UNKNOWN__"
 
-    /// Audit A-7 — decodes an unrecognised server token onto ``unknown``
+    /// Decodes an unrecognised server token onto ``unknown``
     /// instead of throwing.
     ///
     /// `moduleAccess` decodes as a `[String: ModuleAccessState]`, and a throw
@@ -61,7 +61,7 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
         self = known
     }
 
-    /// Audit A-7 — refuses to put ``unknown`` back on the wire. `__UNKNOWN__`
+    /// Refuses to put ``unknown`` back on the wire. `__UNKNOWN__`
     /// is not a server access state; a client that sent it would be inventing
     /// one. No production path encodes this type (it is a response shape), so
     /// the throw is a tripwire for a future caller, not a live branch.
@@ -79,20 +79,20 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
         try container.encode(rawValue)
     }
 
-    /// Audit A-7 — every state the SERVER can actually send: `allCases` minus
+    /// Every state the SERVER can actually send: `allCases` minus
     /// the decode-only ``unknown`` sentinel.
     public static var serverCases: [ModuleAccessState] {
         allCases.filter { $0 != .unknown }
     }
 
-    /// Audit A-7 — the boolean this state must agree with. The server's
+    /// The boolean this state must agree with. The server's
     /// invariant is `modules[key] == (moduleAccess[key] == "enabled")`; this is
     /// that expression, named once.
     public var impliesEnabled: Bool {
         self == .enabled
     }
 
-    /// Audit A-7 — whether a switchboard row may still offer its toggle.
+    /// Whether a switchboard row may still offer its toggle.
     ///
     /// `disabled` is the person's own switch, so the row stays exactly as it is
     /// today (off, interactive). Every other off-state belongs to somebody else
@@ -102,7 +102,7 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
         self == .enabled || self == .disabled
     }
 
-    /// Audit A-7 — the catalogue key of the sentence explaining this state, or
+    /// The catalogue key of the sentence explaining this state, or
     /// `nil` for ``enabled`` (nothing to explain).
     ///
     /// Kept as a raw dotted key rather than two parallel copies of the copy, so
@@ -118,7 +118,7 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
         }
     }
 
-    /// Audit A-7 — the localized sentence explaining this state, or `nil` for
+    /// The localized sentence explaining this state, or `nil` for
     /// ``enabled``.
     public var offReason: String? {
         guard let offReasonKey else { return nil }
@@ -126,7 +126,7 @@ public enum ModuleAccessState: String, Sendable, Equatable, Hashable, CaseIterab
     }
 }
 
-/// Audit A-7 — logs each unrecognised `moduleAccess` token **once per
+/// Logs each unrecognised `moduleAccess` token **once per
 /// process**.
 ///
 /// The token is a server enum name (`not_granted`-shaped) — never a value,
@@ -147,7 +147,7 @@ enum UnknownModuleAccessStateLog {
     }
 }
 
-/// Audit A-7 — logs a `modules` / `moduleAccess` DISAGREEMENT once per module.
+/// Logs a `modules` / `moduleAccess` DISAGREEMENT once per module.
 ///
 /// The server's invariant says the two halves cannot disagree. If they ever do,
 /// the boolean wins (it is the half every gate has obeyed since #30) and no

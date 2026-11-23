@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// #113 — the one-time re-read of the SpO2 and body-fat partitions.
+    /// The one-time re-read of the SpO2 and body-fat partitions.
     ///
     /// The case that matters is the **existing installation**: a 1.0.3 phone
     /// whose two anchors already walked past every reading the old server
@@ -98,7 +98,7 @@
             // The two percent partitions start over from the backfill window …
             #expect(firstSource.resumedAnchors(Self.spo2) == [nil])
             #expect(firstSource.resumedAnchors(Self.bodyFat) == [nil])
-            // … and nothing else was dropped. 1.3 (#127): heart rate's 1.2.0
+            // … and nothing else was dropped. Heart rate's 1.2.0
             // cursor moved to the legacy slot (its live stream starts fresh),
             // while the two reset partitions carry no legacy cursor at all.
             #expect(firstSource.resumedAnchors(Self.heartRate) == [nil])

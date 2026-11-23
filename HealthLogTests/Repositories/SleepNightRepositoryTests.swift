@@ -4,8 +4,8 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.3 E1 — locks the `SleepNightRepository.night(for:)` contract behind the
-/// hypnogram detail (#124):
+/// Locks the `SleepNightRepository.night(for:)` contract behind the
+/// hypnogram detail:
 ///
 /// - the DEFAULT entry passes NO `date` query (the server returns its most-recent
 ///   night) — the old `latestPoint.at` device-tz day-key missed the server's
@@ -44,7 +44,7 @@ struct SleepNightRepositoryTests {
         MockURLProtocol.install { req in
             // The DEFAULT entry must NOT carry a `date=` query — the server picks
             // the most-recent night, sidestepping the device-tz day-key mismatch.
-            // CU-07: assert only on OUR route — the handler is process-global.
+            // Assert only on OUR route — the handler is process-global.
             if req.targets("/api/sleep/night") {
                 #expect(req.url?.query?.contains("date=") != true)
             }
@@ -83,7 +83,7 @@ struct SleepNightRepositoryTests {
 
     @Test("night — LIVE wire shape (fractional minutes, top-level night key) decodes")
     func liveFractionalBodyDecodes() async throws {
-        // W-SLEEP (v0.14.8) — shape captured from the live route: a top-level
+        // Shape captured from the live route: a top-level
         // `night` day-key sibling next to `main`/`naps`, and UNROUNDED float
         // minute sums (only `segments[].minutes` is rounded server-side).
         // This body used to throw `HLError.decoding` (`Int` fields) → the
@@ -125,7 +125,7 @@ struct SleepNightRepositoryTests {
         #expect(dto.main == nil)
     }
 
-    // MARK: - W-B180 — SWR cache per day-key (night navigation)
+    // MARK: - SWR cache per day-key (night navigation)
 
     @Test("W-B180 — latest night lands in the cache under nil AND its resolved day-key")
     func latestNightCachesUnderResolvedDayKey() async throws {

@@ -8,8 +8,8 @@ import SwiftUI
 /// echoes the modules map, which `ModuleGate.setEnabled` reconciles into local
 /// state).
 ///
-/// There's no reusable `OptInCard` yet, so the explainer is composed inline from
-/// `HLCard`.
+/// The head is the empty-state lockup (the journal has nothing to show yet),
+/// the bullets stand in one card under it.
 struct IllnessOptInScreen: View {
     @Environment(\.appContainer) private var container
 
@@ -21,55 +21,26 @@ struct IllnessOptInScreen: View {
     @State private var isEnabling = false
     @State private var enableError: String?
 
-    /// Bullet glyph column width that grows with the text scale so the icon
-    /// doesn't read tiny against the label at large Dynamic Type / AX sizes
-    /// (QA D-M3). Scales from the 24pt base.
-    @ScaledMetric(relativeTo: .subheadline) private var bulletWidth: CGFloat = 24
-
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                explainerCard
-                bulletsCard
-                // UI-Standard R17 (U1) — die Disclaimer-Karte („keine
-                // medizinische Beratung") ist entfallen. Sie stand zwölf Zeilen
-                // unter dem Bullet „Blickt zurück auf das Geschehene …" und
-                // sagte zur Hälfte dasselbe; der Bullet trägt die nützlichere
-                // Information und bleibt.
-                if let enableError {
-                    HLFormErrorText(enableError)
-                }
-                HLButton("illness.optIn.enable", icon: "checkmark.circle", variant: .primary, isLoading: isEnabling) {
-                    Task { await enable() }
-                }
-                .disabled(isEnabling)
-                .accessibilityIdentifier("illness.optIn.enable")
+        HLPage {
+            HLEmptyState(icon: "heart.text.square", title: "illness.optIn.headline", message: "illness.optIn.body")
+            bulletsCard
+            // UI-Standard R17 — die Disclaimer-Karte („keine
+            // medizinische Beratung") ist entfallen. Sie stand zwölf Zeilen
+            // unter dem Bullet „Blickt zurück auf das Geschehene …" und
+            // sagte zur Hälfte dasselbe; der Bullet trägt die nützlichere
+            // Information und bleibt.
+            if let enableError {
+                HLFormErrorText(enableError)
             }
-            .padding(HLSpace.lg)
+            HLButton("illness.optIn.enable", systemImage: "checkmark.circle", variant: .primary, isLoading: isEnabling) {
+                Task { await enable() }
+            }
+            .disabled(isEnabling)
+            .accessibilityIdentifier("illness.optIn.enable")
         }
-        .hlScreenBackground()
         .navigationTitle(Text("illness.optIn.title"))
-        .navigationBarTitleDisplayMode(.large)
-    }
-
-    private var explainerCard: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.md) {
-                    Image(systemName: "heart.text.square")
-                        .font(.hlTitle1)
-                        .foregroundStyle(HLAccent.userBrandTint)
-                        .accessibilityHidden(true)
-                    Text("illness.optIn.headline")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                }
-                Text("illness.optIn.body")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var bulletsCard: some View {
@@ -84,14 +55,11 @@ struct IllnessOptInScreen: View {
 
     private func bullet(icon: String, text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: icon)
-                .font(.hlSubhead)
-                .foregroundStyle(HLAccent.userBrandTint)
-                .frame(width: bulletWidth)
-                .accessibilityHidden(true)
+            // The row symbol column, so the bullets line up with every row
+            // of the app and grow with the text.
+            HLRowGlyph(symbol: icon, tint: HLAccent.userBrandTint)
             Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

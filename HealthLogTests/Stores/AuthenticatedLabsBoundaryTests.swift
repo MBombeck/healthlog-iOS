@@ -66,11 +66,15 @@ struct AuthenticatedLabsBoundaryTests {
             if request is APIRequest<ListBiomarkersResponse> {
                 return ListBiomarkersResponse(biomarkers: [Self.biomarker(id: "account-a-marker")])
             }
-            // #130 — the third request of the fan-out: the marker overview.
+            // The third request of the fan-out: the marker overview.
             if request is APIRequest<LabOverviewResponse> {
                 return LabOverviewResponse(markers: [
                     LabOverviewMarker(key: "bm:account-a-marker", count: 1, latest: Self.lab(id: "account-a-lab"))
                 ])
+            }
+            // The fourth: the person's list layout (server 1.47.1).
+            if request is APIRequest<ModuleListLayoutResponse> {
+                return ModuleListLayoutResponse(labs: nil)
             }
             throw HLError.unknown("unexpected labs boundary request")
         }
@@ -82,7 +86,7 @@ struct AuthenticatedLabsBoundaryTests {
         let store = LabsStore(repository: repository)
         store.bindAuthenticatedSessionRegistry(sessionRegistry, ownerIDProvider: sessionOwner.read)
         let accountALoad = Task { @MainActor in await store.load() }
-        await gate.waitForRequests(3)
+        await gate.waitForRequests(4)
 
         sessionRegistry.invalidate()
         store.clearOnLogout()
@@ -102,11 +106,11 @@ struct AuthenticatedLabsBoundaryTests {
             && store.lastError == nil
         #expect(
             accountBRemainsCurrent,
-            "EXPECTED_RED: late A lab fanout published into B"
+            "late A lab fanout published into B"
         )
     }
 
-    /// **20-02 / D-14-06-A — the labs half of the same instruction.**
+    /// **The labs half of the same instruction.**
     ///
     /// `lateAccountAFanoutCannotPublishIntoB` directly above proves the DATA
     /// fence: a superseded fan-out publishes no rows, no markers, no error. It
@@ -137,15 +141,16 @@ struct AuthenticatedLabsBoundaryTests {
         let gateB = FanoutGate()
         let calls = CallCounter()
         await api.setHandler { request in
-            // Three requests per load (labs + biomarkers + the #130 marker
-            // overview); the first three belong to account A, the rest to B.
+            // Four requests per load (labs + biomarkers + the #130 marker
+            // overview + the list layout); the first four belong to account
+            // A, the rest to B.
             let ordinal = calls.next()
-            if ordinal <= 3 {
+            if ordinal <= 4 {
                 await gateA.suspend()
             } else {
                 await gateB.suspend()
             }
-            let suffix = ordinal <= 3 ? "account-a" : "account-b"
+            let suffix = ordinal <= 4 ? "account-a" : "account-b"
             if request is APIRequest<ListLabResultsResponse> {
                 return ListLabResultsResponse(
                     results: [Self.lab(id: "\(suffix)-lab")],
@@ -158,6 +163,10 @@ struct AuthenticatedLabsBoundaryTests {
             if request is APIRequest<LabOverviewResponse> {
                 return LabOverviewResponse(markers: [])
             }
+            // The fourth: the person's list layout (server 1.47.1).
+            if request is APIRequest<ModuleListLayoutResponse> {
+                return ModuleListLayoutResponse(labs: nil)
+            }
             throw HLError.unknown("unexpected labs boundary request")
         }
 
@@ -169,7 +178,7 @@ struct AuthenticatedLabsBoundaryTests {
         store.bindAuthenticatedSessionRegistry(registry, ownerIDProvider: owner.read)
 
         let accountALoad = Task { @MainActor in await store.load() }
-        await gateA.waitForRequests(3)
+        await gateA.waitForRequests(4)
 
         registry.invalidate()
         store.clearOnLogout()
@@ -177,7 +186,7 @@ struct AuthenticatedLabsBoundaryTests {
         registry.activate(ownerID: owner.read())
 
         let accountBLoad = Task { @MainActor in await store.load() }
-        await gateB.waitForRequests(3)
+        await gateB.waitForRequests(4)
         #expect(store.isLoading, "precondition: account B's load is legitimately showing a skeleton")
 
         await gateA.release()
@@ -185,7 +194,7 @@ struct AuthenticatedLabsBoundaryTests {
 
         #expect(
             store.isLoading,
-            "EXPECTED_RED: a superseded labs load's unconditional defer cleared account B's skeleton"
+            "a superseded labs load's unconditional defer cleared account B's skeleton"
         )
         #expect(store.labs.isEmpty, "and it published no rows either")
 

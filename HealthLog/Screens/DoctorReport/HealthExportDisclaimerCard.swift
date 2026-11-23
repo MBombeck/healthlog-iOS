@@ -16,12 +16,9 @@ struct HealthExportDisclaimerCard: View {
     static let accessibilityIdentifier = "healthExport.disclaimer"
 
     var body: some View {
-        HLSettingsCard(
-            icon: "exclamationmark.shield",
-            title: "appstore.disclaimer.card_title"
-        ) {
+        HLCard("appstore.disclaimer.card_title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                // 1.4 B2-c — the export caveat only; "do not decide on this app
+                // The export caveat only; "do not decide on this app
                 // alone" is the onboarding acknowledgement, kept in About.
                 Text("export.disclaimer.not_certified")
                     .font(.hlCaption)
@@ -33,22 +30,9 @@ struct HealthExportDisclaimerCard: View {
                 // `SettingsExportScreen`, `ShareWithClinicianScreen`) pushes
                 // `UnifiedSharingScreen` onto a `NavigationStack`, so the hub
                 // is a push, styled like the About screen's links row.
-                NavigationLink {
+                HLSettingsActionRow(title: "settings.about.medicalSources", presents: .push) {
                     MedicalSourcesScreen()
-                } label: {
-                    HStack(spacing: HLSpace.md) {
-                        Text("settings.about.medicalSources")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.hlIcon(HLIconSize.sm))
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .accessibilityIdentifier("export.disclaimer.sourcesLink")
             }
         }

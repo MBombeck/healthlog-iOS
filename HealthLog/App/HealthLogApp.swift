@@ -19,7 +19,7 @@ struct HealthLogApp: App {
     // — ohne diesen Adapter feuert der Callback niemals (auch nicht über
     // `.onChange(of: scenePhase)`).
     //
-    // v0.5.5: HealthLogSpeziDelegate subclasses SpeziAppDelegate and composes
+    // HealthLogSpeziDelegate subclasses SpeziAppDelegate and composes
     // the legacy AppDelegate-based APNs forwarder. This boots Spezi + the
     // HealthKitConstraint-bearing HealthLogStandard while preserving HP5
     // MOOD_REMINDER + silent-sync push delivery (see file-doc on the
@@ -43,12 +43,17 @@ struct HealthLogApp: App {
         // suite the Notification Service Extension reads) forward into the
         // shared suite. Idempotent + no-op once the shared suite holds a value.
         LockScreenPrivacy.migrateLegacyValueIfNeeded()
-        // 13-01 — the ordered launch prologue. Everything that must happen
+        // Siri names no medication on a locked iPhone (the intents that
+        // write run there by design).
+        #if canImport(UIKit)
+            IntentMedicationNamePrivacy.isDeviceLocked = { !UIApplication.shared.isProtectedDataAvailable }
+        #endif
+        // The ordered launch prologue. Everything that must happen
         // before the first `AppEnvironment.resolve` of the process lives in
         // `LaunchPrologue.run`, in one place, and returns the order it ran in
         // so a test can assert it instead of a comment claiming it.
         //
-        // 13-05 — the prologue is also where the fresh-install rule's second
+        // The prologue is also where the fresh-install rule's second
         // premise is composed. `UserDefaults.standard` carries what older
         // builds wrote; the witness below carries what earlier launches left on
         // disk. Passed explicitly rather than defaulted: this is the one call
@@ -60,7 +65,7 @@ struct HealthLogApp: App {
             containerWitness: ApplicationSupportPriorLaunchWitness.production(),
             applyUITestOverrides: { keychain in
                 #if DEBUG
-                    // v0.5.4.1 — UI-test seam. The `-uitest-baseURL <url>`
+                    // UI-test seam. The `-uitest-baseURL <url>`
                     // launch argument writes the override into the keychain
                     // BEFORE `AppEnvironment.resolve` runs, so the demo
                     // XCUITest can pin the app to `https://demo.healthlog.dev`
@@ -90,8 +95,13 @@ struct HealthLogApp: App {
             let passkey: PasskeyServiceProtocol = StubPasskeyService()
         #endif
 
+        // The one read of the device class. The iPad has no HealthKit
+        // writer at all, so nothing downstream can ask Apple Health for anything.
+        let deviceProfile = DeviceProfile.current()
         #if canImport(HealthKit)
-            let hk: AnyHealthKitWriter? = HealthKitService(keychain: keychain, bundleID: env.bundleID)
+            let hk: AnyHealthKitWriter? = HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).readsHealthKit
+                ? HealthKitService(keychain: keychain, bundleID: env.bundleID)
+                : nil
         #else
             let hk: AnyHealthKitWriter? = nil
         #endif
@@ -100,9 +110,14 @@ struct HealthLogApp: App {
             environment: env,
             keychain: keychain,
             passkey: passkey,
-            healthKit: hk
+            healthKit: hk,
+            deviceProfile: deviceProfile
         )
         _container = State(initialValue: container)
+
+        // Before any scene: a background launch never reaches the view tasks
+        // that used to admit the account and arm its observers.
+        Self.activateStoredSession(container: container, readsHealthKit: hk != nil)
     }
 
     var body: some Scene {
@@ -114,6 +129,19 @@ struct HealthLogApp: App {
                 rootView
             #endif
         }
+        .commands {
+            ShellCommands()
+            HLPeriodCommands()
+        }
+    }
+
+    /// Locked from the first composition when a stored session was admitted
+    /// at launch and the biometric lock is on.
+    private var startsLocked: Bool {
+        AppLockClock.startsLocked(
+            phase: container.authStore.phase,
+            lockEnabled: container.settingsStore.biometricLockEnabled
+        )
     }
 
     /// The unmodified SwiftUI view tree. Factored out so the `body` can
@@ -121,29 +149,25 @@ struct HealthLogApp: App {
     /// — non-Spezi build configurations (test stubs, CI smoke targets)
     /// keep working unchanged.
     private var rootView: some View {
-        RootView()
-            // Phase 09 / plan 09-05 — the app drew. Resumed from the same
+        RootView(initiallyLocked: startsLocked)
+            // The app drew. Resumed from the same
             // one-shot render callback that owns the first-paint signposts, and
             // attached here, to `RootView()` itself, so it is that view's own
             // appearance rather than a proxy for it. Ordinary foreground
             // bootstrap awaits this before it asks the outbox to open; a
             // background write does not wait for it at all.
             .hlEmitFirstFrame(FirstFrameSignal.shared)
-            // POLISH-C (F-AX-DATEROW) — date pickers stack their label at the
+            // Date pickers stack their label at the
             // accessibility sizes, app-wide (sheets inherit it).
             .datePickerStyle(HLAdaptiveDatePickerStyle())
             .environment(container.authStore)
-            .environment(container.syncModeStore)
-            // R4 §3.1 — capability surface (sync-mode + auth + reachability).
-            // Server-derived surfaces consult this to decide between live
-            // content and `HLCloudDerivedPlaceholder`. Always-true flags in
-            // paired mode → no behaviour change for paired users.
+            // Capability surface (auth + reachability).
             .environment(container.backendAvailability)
             .environment(container.dashboardStore)
             .environment(container.dashboardLayoutStore)
             .environment(container.measurementsStore)
             .environment(container.medicationsStore)
-            // v0.9.0 RA3 — unified delivery preferences (Live Activity +
+            // Unified delivery preferences (Live Activity +
             // AlarmKit critical alarm) with per-channel "Dieses Gerät / Alle
             // Geräte" scope. Read/written by the medication edit sheet's
             // toggles; the per-med Live-Activity opt-in moved here (the
@@ -157,7 +181,7 @@ struct HealthLogApp: App {
             .environment(container.healthScoreStore)
             .environment(container.achievementsStore)
             .environment(container.settingsStore)
-            // v0.15 W-FRONTDOORS — app-wide Vorsorge reminder store (Home tile + manage screen).
+            // App-wide Vorsorge reminder store (Home tile + manage screen).
             .environment(container.measurementRemindersStore)
             .environment(container.aiProviderStore)
             .environment(container.chartsStore)
@@ -166,42 +190,44 @@ struct HealthLogApp: App {
             .environment(container.disclaimerAckStore)
             .environment(container.diabetesStore)
             .environment(container.injectionSitePrefsStore)
-            // v0.8.0 W6 — Settings-surface stores (passkey /
+            // Settings-surface stores (passkey /
             // Withings) so those screens go through Store→Repo, not in-View API.
             .environment(container.passkeyManagementStore)
             // Settings → Security (password change).
             .environment(container.accountSecurityStore)
-            // Parity 2.2 / 2.3 — active-session management + the forced
+            // Active-session management + the forced
             // second-factor enrolment gate (the latter read by `RootView`).
             .environment(container.sessionsStore)
             .environment(container.mfaEnrollmentGateStore)
             .environment(container.withingsIntegrationStore)
-            // v0.14.1 — WHOOP integration store.
+            // WHOOP integration store.
             .environment(container.whoopIntegrationStore)
             // v1.18.7 web-parity (❌-7) — Oura / Polar / Fitbit / Nightscout.
             .environment(container.ouraIntegrationStore)
             .environment(container.polarIntegrationStore)
             .environment(container.fitbitIntegrationStore)
-            // v1.28.11 (#46) — Strava workout/activity connector.
+            // v1.28.11 — Strava workout/activity connector.
             .environment(container.stravaIntegrationStore)
             .environment(container.nightscoutIntegrationStore)
-            // v0.8.0 W11 — self-hosted avatar store (display + upload).
+            // Self-hosted avatar store (display + upload).
             .environment(container.avatarStore)
             .environment(container.hkReadinessStore)
-            // v0141 — local per-card hide state for the Insights wellness score
+            // The device class, read once in `init`; screens that need device
+            // logic (never layout) read it from here.
+            .environment(\.deviceProfile, container.deviceProfile)
+            // Local per-card hide state for the Insights wellness score
             // cards (Recovery / Cardio-fitness / … cards that can never fill
             // without an Apple Watch), read by `InsightsScoreCardsBlock` + the
             // Insights customisation screen's "Score cards" toggles.
             .environment(container.wellnessCardVisibilityStore)
-            .environment(container.featureFlagsStore)
-            // v0.5.3-F3 — Web-Parity-Stores. Liefern Workouts, Targets,
+            // Web-Parity-Stores. Liefern Workouts, Targets,
             // Personal Records und Source-Priority an die neuen More-Tab
             // Surfaces. Stores stammen aus dem `serverStatsStores` Bundle
             // (V052-A7), die Surfaces wurden in F-3 ergänzt.
-            // v0.8.0 W10 — server-first Insights tile layout store, consumed
+            // Server-first Insights tile layout store, consumed
             // by InsightsScreen + the in-grid edit mode.
             .environment(container.insightsLayoutStore)
-            // v0.14.1 — sync-state handshake store, read by the subtle
+            // Sync-state handshake store, read by the subtle
             // "Zuletzt synchronisiert" caption at the bottom of the Dashboard +
             // Insights scroll content (the discreet last-synced status line).
             .environment(container.serverStatsStores.syncState)
@@ -209,97 +235,77 @@ struct HealthLogApp: App {
             .environment(container.serverStatsStores.personalRecords)
             .environment(container.serverStatsStores.insightsTargets)
             .environment(container.serverStatsStores.sourcePriority)
-            // v0.7.1 W-TARGETS-EDITOR — editable target-range overrides.
-            // v0.11 W-B — consumed by the inline per-metric band editor
+            // Editable target-range overrides.
+            // Consumed by the inline per-metric band editor
             // (`InsightsTargetBandEditorSheet`) reached from ChartDetailScreen,
-            // after the standalone Goals destination was retired (W-A).
+            // after the standalone Goals destination was retired.
             .environment(container.serverStatsStores.userThresholds)
-            // v0.12 W5b — the Insights overview RhythmEvents card + derived
+            // The Insights overview RhythmEvents card + derived
             // re-frames block (server-derived, paired-only, self-suppressing).
             .environment(container.serverStatsStores.rhythmEvents)
             .environment(container.serverStatsStores.derivedMetrics)
-            // v0141 W-PARITY (P7) — the pulse page's intraday day-curve store
+            // The pulse page's intraday day-curve store
             // (server-derived, cloud-gated, self-suppressing on an empty day).
             .environment(container.serverStatsStores.intradayPulse)
-            // v0141 W-PARITY (P8) — the Insights ECG surface store. Its
+            // The Insights ECG surface store. Its
             // `hasRecordings` flag data-gates the ECG pill, so an account with
             // no recordings never sees the surface at all.
             .environment(container.serverStatsStores.ecg)
             // Web-parity `TodayHero` — the daily-digest store backing the
             // dashboard `TodayHeroCard` (server-authoritative, self-hiding).
             .environment(container.serverStatsStores.dailyDigest)
-            // v0.12 — the Insights overview discovered-correlations block
+            // The Insights overview discovered-correlations block
             // (server-derived, operator-gated, self-suppressing).
             .environment(container.serverStatsStores.correlationsDiscovery)
-            // I-3 — the Insights overview "Zeitraum im Rückblick" retrospective
+            // The Insights overview "Zeitraum im Rückblick" retrospective
             // card (server-derived, display-only, week/month toggle).
             .environment(container.serverStatsStores.narrative)
-            // v0.14.1 — the Insights → Mood page relations cards (tag-influence
+            // The Insights → Mood page relations cards (tag-influence
             // + "better days" board, server-derived, association-not-cause).
             .environment(container.serverStatsStores.moodRelations)
-            // W-B189 (#23) — the Insights → Recovery sub-page store (strain /
+            // The Insights → Recovery sub-page store (strain /
             // training-load / autonomic-charge + heart-and-energy family,
             // server-computed, data-gated).
             .environment(container.serverStatsStores.recovery)
-            // v1.25 (GH iOS #38) — the three read-only "clinical signals"
+            // v1.25 — the three read-only "clinical signals"
             // awareness cards' store (Insights health-status + breathing-screening,
             // Labs labs-changes; server-authoritative, render-don't-recompute,
             // each card self-suppresses when its read is absent).
             .environment(container.serverStatsStores.clinicalSignals)
-            // v0.5.5.6 RECONCILE-CELEBRATE — shared celebration slot the
+            // Shared celebration slot the
             // RootView overlays atop `AuthenticatedShell` whenever a
             // commit produces a new personal record.
             .environment(container.celebrationCoordinator)
-            // 08-06 — the LOINC physician-review registry injection was
+            // The LOINC physician-review registry injection was
             // removed with the feature. No environment value replaces it:
             // there is no local review state left for a view to read.
-            // v0.6.2.x bug-c10-ios-direct — HK-direct today step total
+            // HK-direct today step total
             // store consumed by the dashboard Steps tile + chart-detail
             // today-segment so they paint live numbers instead of the
             // frozen server `stats:` row.
             .environment(container.liveHealthKitTodayStore)
             .environment(container.appRouter)
             .environment(\.appContainer, container)
-            // UI-Standard R15 (U1) — die `\.medicalDisclaimerAcknowledged`-
-            // Injektion ist entfallen. Der Pauschaltext lebt nur noch am
-            // Ack-Sheet und in Einstellungen → Über diese App; damit gibt es
-            // keine Fläche mehr, die ihn situativ unterdrücken müsste.
+            // Der medizinische Pauschaltext lebt nur am Ack-Sheet und in
+            // Einstellungen → Über diese App; keine Fläche muss ihn situativ
+            // unterdrücken, daher keine Environment-Injektion.
             .preferredColorScheme(container.settingsStore.appearance.colorScheme)
-            // Accent-Picker-Expansion (2026-05-16) — re-elevates the
-            // user-pickable `preferredTint` to drive the global `.tint(...)`
-            // of the entire shell, reversing the C-7 single-accent freeze.
-            // Operator-feedback on `walking-checkpoint-1`: *"das mit dieser
-            // Akzentfarbe muss man auswählen können"*. Every passive control
-            // that inherits `.tint` (Toggle, Picker, ProgressView, selected
-            // TabView item, NavigationLink chevron, segmented controls etc.)
-            // v0.6.1 monochrome direction: the app-root tint is anchored
-            // to `HLText.primary` (handbook §1.2). The accent-picker UI was
-            // retired in v0.6.1.0, but the underlying `preferredTint`
-            // preference still seeped through to every SwiftUI control via
-            // this root binding — producing the operator-reported "lila ist
-            // wieder da" regression on v0.6.1.x. Pinning to `HLText.primary`
-            // here keeps toolbar items, segmented pickers and the like
-            // monochrome by default. AskCoach surfaces opt back into the
-            // gradient locally per handbook §5.9, and chart/ring sites that
-            // used to read `preferredTint` are pinned to `HLText.primary`
-            // alongside this commit.
+            // The app-root tint is anchored to `HLText.primary` (handbook
+            // §1.2), so every control that inherits `.tint` (toolbar items,
+            // segmented pickers, ProgressView, selected tab) stays monochrome
+            // and the persisted `preferredTint` cannot leak through. AskCoach
+            // surfaces opt back into the gradient locally (handbook §5.9).
             .tint(HLText.primary)
-            // REG-13 (2026-05-21, TestFlight Build 23) — Operator-Feedback:
-            // "guck mal bei den Schaltern, wenn ich weiß und dunkel mache,
-            // dann kann ich den Schalter nicht mehr sehen". Bestimmte
-            // `HLTint`-Picks (`schwarz`, `weiss`, `cyan`) resolven in Dark
-            // Mode zu sehr hellen Werten, sodass der weiße Thumb mit dem
-            // ON-Track-Fill zu einem einzigen unsichtbaren Pill verschmilzt.
-            // QoL-A2: `HLToggleStyle` rendert jetzt einen NATIVEN Switch
-            // (`.toggleStyle(.switch)`), gepinnt auf `.tint(HLText.secondary)`
-            // — mono ON-Track, garantiert sichtbar gegen den weißen Thumb in
-            // Light + Dark (REG-13), mit voller nativer Drag/Focus/A11y +
-            // system-eigenem Reduce-Motion-Handling.
+            // `HLToggleStyle` rendert einen nativen Switch, gepinnt auf
+            // `.tint(HLText.secondary)`: ein heller Tint würde im Dark Mode mit
+            // dem weißen Thumb zu einer unsichtbaren Pille verschmelzen. So
+            // bleibt der ON-Track in Light und Dark sichtbar, mit nativer
+            // Drag-, Fokus-, A11y- und Reduce-Motion-Behandlung.
             .toggleStyle(.hl)
             .onOpenURL { url in
                 container.deepLinks.handle(url)
             }
-            // b182 W-B182-INVITE (GH #16) — universal-link entry point. A user
+            // Universal-link entry point. A user
             // who scans the web invite QR / taps
             // `https://<eigener-server>/auth/register?invite=hlv_…` opens the
             // app here, sofern das Build eine passende `applinks:`-Association
@@ -317,7 +323,7 @@ struct HealthLogApp: App {
                       ) else { return }
                 container.deepLinks.handle(route)
             }
-            // W-B187 QOL-2 — CoreSpotlight continuation. A tap on a HealthLog
+            // CoreSpotlight continuation. A tap on a HealthLog
             // Spotlight result resumes here; the indexed `uniqueIdentifier` IS
             // a `healthlog://` deep-link (medication detail / Insights metric),
             // so we feed it straight to the same `DeepLinkRouter` every other
@@ -328,13 +334,13 @@ struct HealthLogApp: App {
                 container.deepLinks.handle(url)
             }
             .task {
-                // v0.7.1 W-APPINTENTS — register the Siri / Spotlight
+                // Register the Siri / Spotlight
                 // shortcut phrases (Log BG / Log BP / Mark medication
                 // taken). The system auto-discovers the provider, but an
                 // explicit update keeps the parameter-dependent phrases
                 // (medication picker) fresh after a relevant data change.
                 HealthLogAppShortcuts.updateAppShortcutParameters()
-                // Phase 09 / plan 09-02 — sweep app-owned Apple-Health import
+                // Sweep app-owned Apple-Health import
                 // multipart residue on EVERY real launch. `async let` makes
                 // this a structured child of the launch task: it runs
                 // alongside the auth bootstrap instead of in front of it, and
@@ -346,19 +352,19 @@ struct HealthLogApp: App {
                 async let sweptImportTemps = AppContainer.sweepAppleHealthImportTemps()
                 await container.authStore.bootstrap()
                 _ = await sweptImportTemps
-                // W1-3 — once auth state is resolved, warm the SWR
+                // Once auth state is resolved, warm the SWR
                 // cache for the top three chart-detail destinations
                 // (weight / BP / pulse). Non-blocking, off the
                 // bootstrap critical path. Skip when unauthenticated
                 // since `measurementsRepo` would 401.
                 if case .authenticated = container.authStore.phase {
                     container.prefetchTopMetricsSeries()
-                    // W3 (v0.11 #22) — warm the daily-generated Insights caches
+                    // Warm the daily-generated Insights caches
                     // (assessments / comprehensive / briefing / targets) so the
                     // per-metric pages paint cache-first when the user opens
                     // Insights. Fire-and-forget + backend-availability-gated.
                     await container.insightsPrefetch.warm()
-                    // v0.5.5.2 W-IMPL-GRAVATAR-V2 — pre-warm the Gravatar
+                    // Pre-warm the Gravatar
                     // disk cache so the Dashboard's inline header avatar
                     // can paint the cached PNG on the very first body
                     // pass instead of flashing the initials gradient
@@ -379,7 +385,7 @@ struct HealthLogApp: App {
         /// this method.
         static func applyUITestEnvironmentOverrides(keychain: KeychainStoring) {
             let args = ProcessInfo.processInfo.arguments
-            // W-HERMETIC-E2E (v0152) — boot straight into an authenticated,
+            // Boot straight into an authenticated,
             // network-free state backed by bundled fixtures. Runs FIRST so the
             // seeded base URL + token win before `AppEnvironment.resolve`. When
             // active it short-circuits the rest of the overrides (it already
@@ -396,9 +402,8 @@ struct HealthLogApp: App {
             if args.contains("-uitest-skip-bootstrap") {
                 // **Onboarding UI-test seam.** A simulator reused across UI-test
                 // runs retains residual auth state — a Bearer token + `userID`
-                // in the Keychain, or a `standalone` OnboardingMode in
-                // UserDefaults. `AuthStore.bootstrap()` would then resolve to
-                // `.authenticated` / `.standalone` and mount `AuthenticatedShell`
+                // in the Keychain. `AuthStore.bootstrap()` would then resolve to
+                // `.authenticated` and mount `AuthenticatedShell`
                 // instead of `OnboardingFlow`, so the Welcome CTA never appears.
                 // This flag purges that residue BEFORE bootstrap runs so the
                 // phase deterministically resolves to `.unauthenticated` →
@@ -406,13 +411,11 @@ struct HealthLogApp: App {
                 // override below survives the wipe. Debug-only (the whole
                 // extension is `#if DEBUG`).
                 try? keychain.removeAll()
-                UserDefaults.standard.removeObject(forKey: SyncModeStore.storageKey)
-                UserDefaults.standard.removeObject(forKey: SyncModeStore.onboardingModeKey)
-                // v0.14.8 W2-SYNCUX — clear the one-shot first-login-banner
+                // Clear the one-shot first-login-banner
                 // flag so walkthrough tests exercise a true first login on a
                 // reused simulator.
                 UserDefaults.standard.removeObject(forKey: FirstLoginSyncBanner.completedDefaultsKey)
-                // 25-01 — a reused simulator's container carries an install
+                // A reused simulator's container carries an install
                 // sentinel from earlier runs, which would arm the update-
                 // notice card on this build's first onboarding walkthrough.
                 // The walkthroughs exercise a true first launch, and a true
@@ -448,7 +451,7 @@ extension EnvironmentValues {
     }
 }
 
-// UI-Standard R15 (U1) — `MedicalDisclaimerAcknowledgedKey` und sein
+// UI-Standard R15 — `MedicalDisclaimerAcknowledgedKey` und sein
 // `EnvironmentValues`-Zugang sind ersatzlos entfallen. Der DISC-02-Ansatz von
 // v1.18.6 hing sechs Pauschaltexte an einen Unterdrückungs-Schalter; §3 des
 // UI-Standards streicht die Texte selbst, womit der Schalter ohne Aufgabe

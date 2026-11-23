@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// v0.11 W-B — contract tests for the per-metric target band editor and the
+/// Contract tests for the per-metric target band editor and the
 /// target payload it edits. Pins the two pure mappings the metric page joins on:
 ///
 ///   • `MetricChartMath.targetType(for:)` — `MetricKind` → server target type;
@@ -10,7 +10,7 @@ import Testing
 ///     derived targets resolve to an empty list so no dead "adjust" button
 ///     renders).
 ///
-/// 1.4 B4 — the inline target reference panel these mappings were first written
+/// The inline target reference panel these mappings were first written
 /// for had no caller and was deleted, together with its `titleKind(forTargetType:)`
 /// title lookup; both mappings below stay live on `InsightsMetricScreen`.
 @Suite("Insights target editor — kind ⇄ target ⇄ editor mappings")

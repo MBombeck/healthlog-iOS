@@ -55,7 +55,7 @@ public struct RelatedLink: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// #141 — the `related` array, decoded leniently: an element with an
+/// The `related` array, decoded leniently: an element with an
 /// unknown `kind` or a missing required field is dropped, the rest stay. A value
 /// that is not an array at all reads as empty, so `related` can never fail the
 /// record it hangs on (a medication, a lab result, a document, an episode).
@@ -66,7 +66,7 @@ public struct RelatedLinks: Codable, Sendable, Hashable {
         self.items = items
     }
 
-    /// POLISH-A A2 — the document page lists its linked episodes once. The
+    /// The document page lists its linked episodes once. The
     /// server stores the document-episode link and returns it both in
     /// `conditionLinks` (the editable "linked conditions" card) and in
     /// `related` (v1.47.0, `document:conditionEpisode` is a stored cell). The

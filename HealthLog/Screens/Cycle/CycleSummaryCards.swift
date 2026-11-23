@@ -27,19 +27,21 @@ struct CyclePredictionSummary: View {
             // signal flagged it: the explicit confirmed-cycle count OR the
             // server/engine `stillLearning` flag (defaults true when absent).
             let showsFertility = Self.showsFertility(prediction, cyclesObserved: cyclesObserved)
-            HLSettingsCard(icon: "calendar.badge.clock", title: "cycle.prediction.title") {
+            HLSectionHeader("cycle.prediction.title", rank: .area)
+            HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    row("cycle.prediction.nextPeriod", value: Self.range(prediction))
-                    if showsFertility, let fertile = Self.fertile(prediction) {
-                        row("cycle.prediction.fertileWindow", value: fertile)
-                    }
-                    if showsFertility, let ovulation = Self.formatted(prediction.predictedOvulation) {
-                        row("cycle.prediction.ovulation", value: ovulation)
+                    HLFactGroup {
+                        HLFactRow("cycle.prediction.nextPeriod", value: Self.range(prediction))
+                        if showsFertility, let fertile = Self.fertile(prediction) {
+                            HLFactRow("cycle.prediction.fertileWindow", value: fertile)
+                        }
+                        if showsFertility, let ovulation = Self.formatted(prediction.predictedOvulation) {
+                            HLFactRow("cycle.prediction.ovulation", value: ovulation)
+                        }
                     }
                     if prediction.stillLearning || !showsFertility {
                         Text("cycle.prediction.stillLearning")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // App Store §1.4.1 / EU MDR (b182 compliance fix): a
@@ -71,8 +73,7 @@ struct CyclePredictionSummary: View {
             case .localFallback: Text("cycle.prediction.disclaimer.local")
             }
         }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.tertiary)
+        .hlText(.footnote)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, HLSpace.xs)
         .accessibilityIdentifier("cycle.prediction.disclaimer")
@@ -105,17 +106,6 @@ struct CyclePredictionSummary: View {
         CycleMaturity.showsFertility(cyclesObserved: cyclesObserved, stillLearning: prediction.stillLearning)
     }
 
-    private func row(_ key: LocalizedStringKey, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(key).font(.hlSubhead).foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(verbatim: value)
-                .font(.hlSubhead.weight(.medium))
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-
     static func range(_ p: CyclePredictionDTO) -> String {
         let lo = formatted(p.nextPeriodStartLow)
         let hi = formatted(p.nextPeriodStartHigh)
@@ -131,26 +121,9 @@ struct CyclePredictionSummary: View {
     }
 
     static func formatted(_ key: String?) -> String? {
-        guard let key, let date = dayFormatter.date(from: key) else { return nil }
-        return mediumFormatter.string(from: date)
+        guard let key, let date = ProfileDay.startOfDay(forKey: key, timeZone: .current) else { return nil }
+        return HLDateFormat.dayMonth(date)
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    private static let mediumFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
-        f.setLocalizedDateFormatFromTemplate("dMMM")
-        return f
-    }()
 }
 
 // MARK: - Cycle stats
@@ -160,46 +133,61 @@ struct CycleStatsCard: View {
     let cyclesObserved: Int
 
     var body: some View {
-        // 1.4 B2 — before two confirmed cycles there are no averages, and the
+        // Before two confirmed cycles there are no averages, and the
         // card is absent instead of asking for more cycles.
         if let stats, cyclesObserved >= 2 {
-            HLSettingsCard(icon: "chart.bar", title: "cycle.stats.title") {
+            HLSectionHeader("cycle.stats.title", rank: .area)
+            HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    if let avg = stats.avgLengthDays {
-                        row("cycle.stats.avgLength", value: daysValue(avg))
+                    let cells = Self.cells(stats)
+                    if !cells.isEmpty {
+                        HLStatGrid(cells: cells)
                     }
-                    if let variability = stats.lengthVariabilityDays {
-                        row("cycle.stats.variability", value: daysValue(Int(variability.rounded())))
-                    }
-                    if let period = stats.avgPeriodLengthDays {
-                        row("cycle.stats.avgPeriod", value: daysValue(period))
-                    }
-                    regularityRow(stats.regularityValue ?? .learning)
+                    // Regularity is a word, not a figure, so it reads as a
+                    // fact under the raster.
+                    HLFactRow(
+                        label: Text("cycle.stats.regularity"),
+                        value: Text(Self.regularityLabel(stats.regularityValue ?? .learning))
+                    )
                 }
             }
         }
     }
 
-    private func row(_ key: LocalizedStringKey, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(key).font(.hlSubhead).foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(verbatim: value).font(.hlSubhead.weight(.medium)).foregroundStyle(HLText.primary)
-        }
+    /// The key figures of the raster: average length, variability and
+    /// average period, each in days. A figure the server does not send
+    /// drops out.
+    static func cells(_ stats: CycleStatsDTO) -> [HLStatCell] {
+        cells(
+            avgLength: stats.avgLengthDays,
+            variability: stats.lengthVariabilityDays,
+            avgPeriod: stats.avgPeriodLengthDays
+        )
     }
 
-    private func regularityRow(_ regularity: CycleRegularity) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("cycle.stats.regularity").font(.hlSubhead).foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(Self.regularityLabel(regularity))
-                .font(.hlSubhead.weight(.medium))
-                .foregroundStyle(HLText.primary)
+    static func cells(avgLength: Int?, variability: Double?, avgPeriod: Int?) -> [HLStatCell] {
+        var cells: [HLStatCell] = []
+        if let avgLength {
+            cells.append(HLStatCell(
+                label: String(localized: "cycle.stats.cell.avgLength"), value: "\(avgLength)", unit: dayUnit(avgLength)
+            ))
         }
+        if let variability {
+            let days = Int(variability.rounded())
+            cells.append(HLStatCell(label: String(localized: "cycle.stats.variability"), value: "\(days)", unit: dayUnit(days)))
+        }
+        if let avgPeriod {
+            cells.append(HLStatCell(
+                label: String(localized: "cycle.stats.cell.avgPeriod"), value: "\(avgPeriod)", unit: dayUnit(avgPeriod)
+            ))
+        }
+        return cells
     }
 
-    private func daysValue(_ days: Int) -> String {
-        String(format: String(localized: "cycle.stats.daysFormat"), days)
+    /// The unit under a count of days, singular for one ("1 Tag", not
+    /// "1 Tage").
+    static func dayUnit(_ days: Int) -> String {
+        days == 1 ? String(localized: "cycle.stats.cell.unit.day") : String(localized: "cycle.stats.cell.unit.days")
     }
 
     static func regularityLabel(_ regularity: CycleRegularity) -> LocalizedStringKey {
@@ -215,17 +203,16 @@ struct CycleStatsCard: View {
 
 struct CycleLearningCard: View {
     var body: some View {
-        // 1.4 B2 — no privacy footer here; the opt-in says it once.
-        HLSettingsCard(icon: "sparkles", title: "cycle.learning.title") {
+        // No privacy footer here; the opt-in says it once.
+        HLCard("cycle.learning.title") {
             Text("cycle.learning.body")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.emptyMessage)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-// MARK: - No current assessment (Z1 / #72)
+// MARK: - No current assessment
 
 /// **Shown when the app holds no cycle verdict it may still put on screen.**
 ///
@@ -235,12 +222,11 @@ struct CycleLearningCard: View {
 /// "still learning" is a claim about the data, and the data may be perfectly
 /// complete — what is missing is a current answer, and the ring will not invent
 /// one on a device that does not know which day it is in the profile's timezone.
-struct CycleVerdictUnavailableCard: View {
+struct CycleNoVerdictCard: View {
     var body: some View {
-        HLSettingsCard(icon: "wifi.slash", title: "cycle.verdict.unavailable.title") {
+        HLCard("cycle.verdict.unavailable.title") {
             Text("cycle.verdict.unavailable.body")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.emptyMessage)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("cycle.home.verdictUnavailable")
@@ -249,16 +235,15 @@ struct CycleVerdictUnavailableCard: View {
 
 // MARK: - Disabled / unavailable
 
-struct CycleUnavailableCard: View {
+/// Cycle tracking is off for this account; the page around it brings the
+/// margins.
+struct CycleTrackingOffCard: View {
     var body: some View {
-        HLSettingsCard(icon: "lock", title: "cycle.unavailable.title") {
+        HLCard("cycle.unavailable.title") {
             Text("cycle.unavailable.body")
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.emptyMessage)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, HLSpace.lg)
-        .padding(.top, HLSpace.lg)
     }
 }
 
@@ -288,14 +273,14 @@ struct CycleCalendarLegend: View {
             items.append((.ovulation, "cycle.legend.ovulation"))
         }
         items.append((.symptoms, "cycle.legend.symptoms"))
-        // v1.39.1 (#1032) — the two day markers the grid gained.
+        // v1.39.1 — the two day markers the grid gained.
         items.append((.intercourse, "cycle.legend.intercourse"))
         items.append((.otherEntries, "cycle.legend.otherEntries"))
         items.append((.today, "cycle.legend.today"))
         return items
     }
 
-    /// **1.4 B4 — two columns.** In three columns the German labels broke
+    /// **Two columns.** In three columns the German labels broke
     /// inside the word („Geschlechts-verkehr“, „Periode (Prognose)“, „Weitere
     /// Einträge“) once the legend stopped shrinking them. Two columns give every
     /// label one line at the standard text sizes, and the pairs read together:
@@ -318,10 +303,9 @@ struct CycleCalendarLegend: View {
         HStack(spacing: HLSpace.xs) {
             CycleMarkerSwatch(kind: kind, scheme: colorScheme)
                 .frame(width: 16, height: 16)
-            // 1.4 B4 — the legend wraps instead of shrinking.
+            // The legend wraps instead of shrinking.
             Text(key)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.chartAxis)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

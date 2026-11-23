@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Shared WatchConnectivity contract (iPhone app ⇄ HealthLog watchOS companion)
 
 //
-// **v0.12 P2 — watchOS companion.** This file is the ONLY code shared
+// **watchOS companion.** This file is the ONLY code shared
 // between the phone app and the watch app (compiled into both via source
 // membership). It is intentionally **Foundation-only** and references no
 // app `Models` type, so the watch target stays thin — it never imports the
@@ -51,7 +51,7 @@ public enum WatchMeasurementKind: String, Codable, Sendable, Hashable, CaseItera
     }
 }
 
-/// **#115 B5 — the unit the wrist enters glucose in: the account's.** Raw values
+/// **The unit the wrist enters glucose in: the account's.** Raw values
 /// match the app's `GlucoseUnit`. The WIRE stays canonical: the watch converts
 /// to mg/dL itself (``canonicalMgdL(fromDisplayed:)``) before it sends, so a
 /// phone on any build stores what the wrist showed. A unit flag on the action
@@ -152,7 +152,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         }
     }
 
-    /// **v0.15.2 W-WATCH-COMPLICATIONS** — the latest Personal Health Score,
+    /// The latest Personal Health Score,
     /// for the watch-face score-ring complication. Mirrors the server value +
     /// band token verbatim (never recomputed). The complication paints the ring
     /// fraction from `score / 100` and maps the band to the signal colour,
@@ -189,7 +189,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         }
     }
 
-    /// **v0.15.2 W-WATCH-COMPLICATIONS** — the most-recent measurement reading,
+    /// The most-recent measurement reading,
     /// for the watch-face latest-measurement complication. The phone pre-formats
     /// `formattedValue` through the canonical descriptor formatter (so the
     /// complication shows the SAME string the dashboard tile does) and carries
@@ -241,29 +241,35 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
     /// the wrist's quiet "N today" subhead. Tolerant-decodes to 0 for an
     /// older/partial blob.
     public let moodCountToday: Int
-    /// `false` when the phone can't accept writes (no auth token AND not
-    /// standalone) — the watch shows a calm "sign in on iPhone" state.
-    /// `true` when the phone is signed-in **or** running standalone (a
-    /// no-server user has a working LOCAL write path), so the watch lets the
-    /// user log mood / mark intakes. F4: decouples watch usability from a
-    /// token-only check.
+    /// `false` when the phone can't accept writes (no auth token) — the watch
+    /// shows a calm "sign in on iPhone" state. `true` when the phone is signed
+    /// in, so the watch lets the user log mood / mark intakes.
     public let signedIn: Bool
-    /// **v0.15.2 W-WATCH-COMPLICATIONS** — the latest server-resolved Personal
+    /// The latest server-resolved Personal
     /// Health Score, for the watch-face health-score-ring complication. `nil`
     /// until the dashboard score has loaded (or on logout). Mirrored verbatim
     /// from the server — the watch never recomputes it (server-first).
     public let healthScore: HealthScoreGlance?
-    /// **v0.15.2 W-WATCH-COMPLICATIONS** — the most-recent measurement reading,
+    /// The most-recent measurement reading,
     /// for the watch-face latest-measurement complication. Carries a single
     /// pre-formatted value (formatted phone-side through the canonical
     /// `MetricKindDescriptor` formatter so it matches the dashboard tile) plus
     /// its unit + symbol + timestamp. `nil` until a measurement has loaded.
     public let latestMeasurement: LatestMeasurement?
-    /// **#115 B5** — the account's glucose unit, which the wrist enters glucose
+    /// The account's glucose unit, which the wrist enters glucose
     /// in. mg/dL when the phone did not say (a blob from an older phone build).
     public let glucoseUnit: WatchGlucoseUnit
+    /// #191 — the account's snooze span, so the wrist's "Remind me later
+    /// (30 min)" names what the phone will do. 30 for an older phone build.
+    public let snoozeMinutes: Int
     /// When the snapshot was generated (staleness / debugging).
     public let generatedAt: Date
+    /// #9 — an opaque hash of the signed-in account (``WatchOwnerHash``).
+    /// The watch copies it into every action it sends, and the phone drops an
+    /// action that names another account: one tapped for A and delivered
+    /// after a switch to B must not land in B's record. `nil` while signed
+    /// out and from an older phone build.
+    public let ownerHash: String?
 
     public init(
         doses: [Dose],
@@ -275,8 +281,11 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         healthScore: HealthScoreGlance? = nil,
         latestMeasurement: LatestMeasurement? = nil,
         glucoseUnit: WatchGlucoseUnit = .mgdL,
-        generatedAt: Date
+        snoozeMinutes: Int = 30,
+        generatedAt: Date,
+        ownerHash: String? = nil
     ) {
+        self.ownerHash = ownerHash
         self.doses = doses
         self.scheduledCount = scheduledCount
         self.takenCount = takenCount
@@ -286,6 +295,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         self.healthScore = healthScore
         self.latestMeasurement = latestMeasurement
         self.glucoseUnit = glucoseUnit
+        self.snoozeMinutes = snoozeMinutes
         self.generatedAt = generatedAt
     }
 
@@ -306,12 +316,15 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
             ?? false
         healthScore = try c.decodeIfPresent(HealthScoreGlance.self, forKey: .healthScore)
         latestMeasurement = try c.decodeIfPresent(LatestMeasurement.self, forKey: .latestMeasurement)
-        // #115 B5 — absent (older phone) or a unit this build does not know:
+        // Absent (older phone) or a unit this build does not know:
         // mg/dL, the unit every earlier wrist entered in.
         glucoseUnit = (try? c.decodeIfPresent(String.self, forKey: .glucoseUnit))
             .flatMap { $0 }
             .flatMap(WatchGlucoseUnit.init(rawValue:)) ?? .mgdL
+        snoozeMinutes = (try? c.decodeIfPresent(Int.self, forKey: .snoozeMinutes)).flatMap { $0 }
+            .flatMap { (5 ... 240).contains($0) ? $0 : nil } ?? 30
         generatedAt = try c.decodeIfPresent(Date.self, forKey: .generatedAt) ?? .distantPast
+        ownerHash = (try? c.decodeIfPresent(String.self, forKey: .ownerHash)).flatMap { $0 }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -328,12 +341,14 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         try c.encodeIfPresent(healthScore, forKey: .healthScore)
         try c.encodeIfPresent(latestMeasurement, forKey: .latestMeasurement)
         try c.encode(glucoseUnit, forKey: .glucoseUnit)
+        try c.encode(snoozeMinutes, forKey: .snoozeMinutes)
         try c.encode(generatedAt, forKey: .generatedAt)
+        try c.encodeIfPresent(ownerHash, forKey: .ownerHash)
     }
 
     private enum CodingKeys: String, CodingKey {
         case doses, scheduledCount, takenCount, recentMoodScore, moodCountToday, signedIn, canLog
-        case healthScore, latestMeasurement, glucoseUnit, generatedAt
+        case healthScore, latestMeasurement, glucoseUnit, snoozeMinutes, generatedAt, ownerHash
     }
 
     /// Fraction taken, clamped `0...1`. A day with no scheduled doses reads
@@ -343,7 +358,7 @@ public struct WatchSnapshot: Codable, Sendable, Equatable {
         return max(0, min(1, Double(takenCount) / Double(scheduledCount)))
     }
 
-    /// **Privacy H4 (audit-v0162)** — `true` when this snapshot carries no PHI:
+    /// **Privacy H4** — `true` when this snapshot carries no PHI:
     /// no doses, no schedule/taken counts, no mood, no score, no measurement, and
     /// the write path is closed (`!signedIn`). The phone pushes exactly this
     /// shape (``placeholder``) on logout; the watch treats a cleared snapshot as
@@ -416,7 +431,7 @@ public enum WatchMoodCount {
     }
 }
 
-/// **v0.15.2 W-WATCH-COMPLICATIONS — complication deep-link targets.**
+/// **Complication deep-link targets.**
 ///
 /// The watch-face complications carry a `healthlog://…` `widgetURL`; tapping one
 /// opens the WATCH app (never the phone) to the matching task. Resolution lives
@@ -450,7 +465,7 @@ public enum WatchActionKind: Codable, Sendable, Equatable {
     case logMood(score: Int, at: Date)
     /// Quick-capture a manual measurement at the wrist. `value` is the primary
     /// scalar (weight kg, glucose mg/dL, pulse bpm, or BP systolic) — always the
-    /// canonical unit; the wrist converts an mmol/L entry (#115 B5). `secondary`
+    /// canonical unit; the wrist converts an mmol/L entry. `secondary`
     /// carries the BP diastolic and is `nil` for every scalar kind. The phone
     /// bridges `kind` onto `MetricKind` and funnels the value into the SAME
     /// `MeasurementsStore` capture path the app's `MeasureSheet` uses (server
@@ -461,14 +476,18 @@ public enum WatchActionKind: Codable, Sendable, Equatable {
 /// An action the watch asks the phone to perform. Encoded into a durable
 /// `transferUserInfo` payload; the phone bridges it onto the live stores and
 /// echoes a ``WatchAck`` back keyed by `id` so the watch can show honest
-/// state (F2). `id` is a stable UUID minted on the watch at tap time.
+/// state. `id` is a stable UUID minted on the watch at tap time.
 public struct WatchAction: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let kind: WatchActionKind
+    /// #9 — the ``WatchSnapshot/ownerHash`` of the snapshot the action was
+    /// tapped on. `nil` from an older watch build.
+    public let ownerHash: String?
 
-    public init(id: String = UUID().uuidString, kind: WatchActionKind) {
+    public init(id: String = UUID().uuidString, kind: WatchActionKind, ownerHash: String? = nil) {
         self.id = id
         self.kind = kind
+        self.ownerHash = ownerHash
     }
 
     /// Tolerant decode: an action blob from an OLDER watch build has no `id`
@@ -487,10 +506,18 @@ public struct WatchAction: Codable, Sendable, Equatable, Identifiable {
             id = UUID().uuidString
             kind = try WatchActionKind(from: decoder)
         }
+        ownerHash = (try? c.decodeIfPresent(String.self, forKey: .ownerHash)).flatMap { $0 }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind
+        case id, kind, ownerHash
+    }
+
+    /// When the wrist was tapped, whatever the transport took to deliver it.
+    public var tappedAt: Date {
+        switch kind {
+        case let .markIntake(_, _, at), let .logMood(_, at), let .logMeasurement(_, _, _, at): at
+        }
     }
 
     /// Convenience: a mark-intake action with a fresh id.
@@ -512,15 +539,15 @@ public struct WatchAction: Codable, Sendable, Equatable, Identifiable {
 }
 
 /// The phone's verdict on a processed ``WatchAction``, sent back to the watch
-/// so the wrist shows an HONEST state instead of a blind optimistic check (F2).
+/// so the wrist shows an HONEST state instead of a blind optimistic check.
 public enum WatchAckOutcome: String, Codable, Sendable, Equatable {
     /// The write landed on the server (or local mirror) — fully done.
     case saved
     /// The phone couldn't reach the server but the write is durably queued in
     /// the Outbox and will sync — show "Saved, will sync."
     case queued
-    /// The phone couldn't accept the write at all (e.g. not signed in / not
-    /// standalone) — show "Couldn't save."
+    /// The phone couldn't accept the write at all (e.g. not signed in) — show
+    /// "Couldn't save."
     case failed
 }
 

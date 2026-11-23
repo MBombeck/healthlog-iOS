@@ -15,21 +15,22 @@ import SwiftUI
 /// with nothing yet painted is the one case worth a caption, because otherwise
 /// the sections would silently look like "you have no sleep rhythm".
 struct SleepInsightsBlock: View {
+    /// The days of the page's selected range; the composition chart follows it.
+    var rangeDays: Int = SleepStageCompositionCard.maxNights
     @Environment(\.appContainer) private var appContainer
     @State private var store = SleepInsightsStore()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             if let rhythm = store.rhythm {
                 SleepRhythmSection(rhythm: rhythm)
             }
             if let breakdown = store.breakdown {
-                SleepStageCompositionCard(breakdown: breakdown)
+                SleepStageCompositionCard(breakdown: breakdown, rangeDays: rangeDays)
             }
             if store.loadFailed {
                 Text("sleep.rhythm.error")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

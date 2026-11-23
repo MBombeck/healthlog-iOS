@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.12 P2 — HealthLog watchOS companion.**
+/// **HealthLog watchOS companion.**
 ///
 /// A deliberately THIN remote: it renders the glanceable `WatchSnapshot` the
 /// iPhone pushes (today's doses + compliance + latest mood) and sends back

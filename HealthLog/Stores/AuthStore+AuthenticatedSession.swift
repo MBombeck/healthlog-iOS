@@ -4,11 +4,10 @@ extension AuthStore {
     convenience init(
         auth: AuthService,
         keychain: KeychainStoring,
-        syncMode: SyncModeStore? = nil,
         defaults: UserDefaults = .standard,
         sessionRegistry: AuthenticatedSessionLeaseRegistry
     ) {
-        self.init(auth: auth, keychain: keychain, syncMode: syncMode, defaults: defaults)
+        self.init(auth: auth, keychain: keychain, defaults: defaults)
         authenticatedSessionRegistry = sessionRegistry
     }
 
@@ -36,9 +35,7 @@ extension AuthStore {
     /// **The Phase-06 invariants are preserved rather than re-litigated.** Every
     /// admitting transition happens while its caller holds the account boundary
     /// (`beginAuthenticationTransition`), so no activation can precede a
-    /// predecessor's teardown; every owner-losing transition invalidates,
-    /// including `enterStandaloneMode()` and `beginServerPairing()`, which used
-    /// to leave a live registry behind an unauthenticated shell. The four
+    /// predecessor's teardown; every owner-losing transition invalidates. The four
     /// terminal paths still invalidate at their own commitment point *before*
     /// any wipe — what `didSet` adds afterwards is an idempotent re-assertion,
     /// never a replacement.

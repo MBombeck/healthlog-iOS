@@ -1,6 +1,6 @@
 import SwiftUI
 
-// **v0.14.9 §2 — the re-frame ring tiles promoted from "More from your data".**
+// **The re-frame ring tiles promoted from "More from your data".**
 //
 // The operator asked for EVERYTHING in the "More from your data" rubric to
 // become a proper Gesundheitswerte ring tile, not just RECOVERY/STRESS. The two
@@ -18,15 +18,15 @@ import SwiftUI
 
 // MARK: - Vascular-age years-delta ring tile
 
-/// v0.14.9 §2 — Vascular age as a half-width RING with the years-delta centred
+/// Vascular age as a half-width RING with the years-delta centred
 /// ("3 yr above" / "below" / "in line"), WHOLE number only — the exact shape of
 /// the Cardio-Fitness `FitnessDeltaRingCard`, so the two age re-frames read as
 /// siblings. Tap → the same wellness detail sheet.
 struct VascularDeltaRingCard: View {
     let dto: DerivedMetricDTO
-    /// S4b (b182) — the dev-switchable tile style.
+    /// The dev-switchable tile style.
     let style: InsightsTileStyle
-    /// v0.14.11 — grid index for the phase-offset glow breath.
+    /// Grid index for the phase-offset glow breath.
     var glowPhaseIndex: Int = 0
     let onTap: () -> Void
 
@@ -59,7 +59,7 @@ struct VascularDeltaRingCard: View {
                     )
                     .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
                     Text(InsightsDerivedCopy.title(for: dto.metric))
-                        .font(.hlSubhead.weight(.medium))
+                        .font(.hlSubhead.weight(.semibold))
                         .foregroundStyle(appearance.labelColor)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -69,7 +69,7 @@ struct VascularDeltaRingCard: View {
                 .padding(.vertical, HLSpace.xs)
             }
         }
-        .hlPressable() // QOL-AUDIT H1: press feedback
+        .hlPressable(hover: .lift) // Press feedback, the card rises under the pointer
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityIdentifier("insights.scoreCard.VASCULAR_AGE_DELTA")
@@ -105,16 +105,16 @@ struct VascularDeltaRingCard: View {
 
 // MARK: - HRV-balance band ring tile
 
-/// v0.14.9 §2 — HRV balance as a half-width RING with the server band word
+/// HRV balance as a half-width RING with the server band word
 /// centred ("Balanced" / "High" / "Low"). HRV balance carries NO 0–100 score —
 /// only a band — so the band is positioned on the arc (balanced ≈ centred fill)
 /// and the word is the centre value. Honest: the band is the server's own, never
 /// reinterpreted. Tap → the same wellness detail sheet.
 struct HrvBalanceRingCard: View {
     let dto: DerivedMetricDTO
-    /// S4b (b182) — the dev-switchable tile style.
+    /// The dev-switchable tile style.
     let style: InsightsTileStyle
-    /// v0.14.11 — grid index for the phase-offset glow breath.
+    /// Grid index for the phase-offset glow breath.
     var glowPhaseIndex: Int = 0
     let onTap: () -> Void
 
@@ -146,7 +146,7 @@ struct HrvBalanceRingCard: View {
                     )
                     .modifier(WellnessRingShadow(active: appearance.ringShadowActive))
                     Text(InsightsDerivedCopy.title(for: dto.metric))
-                        .font(.hlSubhead.weight(.medium))
+                        .font(.hlSubhead.weight(.semibold))
                         .foregroundStyle(appearance.labelColor)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -156,7 +156,7 @@ struct HrvBalanceRingCard: View {
                 .padding(.vertical, HLSpace.xs)
             }
         }
-        .hlPressable() // QOL-AUDIT H1: press feedback
+        .hlPressable(hover: .lift) // Press feedback, the card rises under the pointer
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityIdentifier("insights.scoreCard.HRV_BALANCE")

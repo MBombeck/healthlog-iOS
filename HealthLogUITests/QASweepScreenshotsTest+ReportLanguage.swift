@@ -1,6 +1,6 @@
 import XCTest
 
-/// 1.5 L10N-REPORT — the report language under "Advanced" on the sharing
+/// The report language under "Advanced" on the sharing
 /// screen: the PDF form with the closed link, the open picker, and its menu.
 /// Runs with the sweep's language, appearance and text size. Only runs when
 /// `HL_SWEEP_OUT` is set.

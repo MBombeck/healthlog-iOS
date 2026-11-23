@@ -184,7 +184,7 @@ struct MoodStoreUndoWiringTests {
         let restored = MoodEntry(
             id: "mood-2",
             recordedAt: entry.recordedAt,
-            // Audit B-4 — the fixture entry carries a named level, so the score
+            // The fixture entry carries a named level, so the score
             // is present; the `?? 3` only keeps the type non-optional.
             score: entry.score ?? 3,
             tags: entry.tags,

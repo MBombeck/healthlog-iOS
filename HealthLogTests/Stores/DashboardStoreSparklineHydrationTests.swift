@@ -226,7 +226,7 @@ struct DashboardStoreSparklineHydrationTests {
         #expect(store.fanOutSettledAt == now, "fanOutSettledAt must capture the supplied `now` timestamp on success")
     }
 
-    /// **REG-11 regression guard (v0.5.6).** The operator-reported "BP /
+    /// **REG-11 regression guard.** The operator-reported "BP /
     /// Puls / Körperfett tile zeigt keinen Chart" symptom that survived four
     /// rounds of fixes (`cafac57f`, `f3b14346`, `79396261`) traces to a
     /// single-point server sparkline being treated as "non-empty" by both

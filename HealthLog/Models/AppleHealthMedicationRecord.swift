@@ -1,6 +1,6 @@
 import Foundation
 
-/// **GH #47 — a HealthKit `HKUserAnnotatedMedication` projected into a plain,
+/// **A HealthKit `HKUserAnnotatedMedication` projected into a plain,
 /// `Sendable` value type.** The HealthKit read path (iOS 26+) maps the opaque
 /// HK objects into these records so the importer + its tests never touch
 /// HealthKit types directly (the concrete reader is the only HK-aware seam).
@@ -74,7 +74,7 @@ public enum AppleHealthDoseLogStatus: Sendable, Equatable, Hashable {
     case other
 }
 
-/// **GH #47 — a HealthKit `HKMedicationDoseEvent` projected into a plain,
+/// **A HealthKit `HKMedicationDoseEvent` projected into a plain,
 /// `Sendable` value type.**
 ///
 /// - ``eventUUID`` ← HK dose-event `UUID` (the bulk-intake `externalId`, ≤128;
@@ -140,13 +140,13 @@ public struct AppleHealthDoseRecord: Sendable, Equatable, Hashable {
 
 /// The HealthKit read dependency the ``AppleHealthMedicationImporter`` needs,
 /// expressed as a protocol so it can be driven with synthetic records in tests
-/// (over a real ``APIClient`` + `MockURLProtocol`). The concrete iOS 26+
+/// (over a real ``APIClient`` + `MockURLProtocol`). The concrete
 /// implementation lives in `AppleHealthMedicationReader` behind
-/// `#available(iOS 26.0, *)` + `#if canImport(HealthKit)`.
+/// `#if canImport(HealthKit)`.
 public protocol AppleHealthMedicationReading: Sendable {
-    /// Whether HealthKit medication reading is available on this OS/device
-    /// (iOS 26+ with the Medications data type). `false` short-circuits the
-    /// whole importer so no auth prompt fires below the gate.
+    /// Whether HealthKit medication reading is available on this device.
+    /// `false` short-circuits the whole importer so no auth prompt fires
+    /// below the gate.
     var isAvailable: Bool { get }
 
     /// Request read authorization for the Medications + dose-event types.
@@ -167,7 +167,7 @@ public protocol AppleHealthMedicationReading: Sendable {
     /// dropping them as deleted.
     func doseReadWindow() async -> HealthReadWindow
 
-    /// **W3 (1.3, #126 1.5)** — subscribe to new dose events: an
+    /// Subscribe to new dose events: an
     /// `HKObserverQuery` on the dose-event type plus background delivery, so a
     /// dose logged in Health wakes the app instead of waiting for the next app
     /// open. `onChange` runs once per HealthKit signal; HealthKit gets its
@@ -178,7 +178,7 @@ public protocol AppleHealthMedicationReading: Sendable {
     ) async -> (any AppleHealthDoseEventObservation)?
 }
 
-/// **W3 (1.3)** — a running dose-event subscription. `stop()` ends the observer
+/// A running dose-event subscription. `stop()` ends the observer
 /// and the background delivery it armed.
 public protocol AppleHealthDoseEventObservation: Sendable {
     func stop() async

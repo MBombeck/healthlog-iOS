@@ -49,7 +49,7 @@ public final class ShareLinkStore {
     /// as "nothing to share".
     public private(set) var hasSelectionVocabulary: Bool = false
 
-    /// R2 / #115 A3 — set when the server wants a fresh proof for the create;
+    /// Set when the server wants a fresh proof for the create;
     /// the screen asks for it and runs the create again.
     public let stepUp = StepUpRetry()
 

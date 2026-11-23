@@ -46,7 +46,7 @@ public extension SettingsRepository {
 }
 
 public extension SettingsRepository {
-    // MARK: - glucose-unit (#108)
+    // MARK: - glucose-unit
 
     /// `PATCH /api/auth/me/glucose-unit` with `{ "glucoseUnit": "mg/dL" | "mmol/L" }`
     /// (server v1.39, `GlucoseUnitPatchRequest`). The route answers with the
@@ -62,7 +62,7 @@ public extension SettingsRepository {
     }
 }
 
-/// #108 — wire shape for `GET / PATCH /api/auth/me/glucose-unit`
+/// Wire shape for `GET / PATCH /api/auth/me/glucose-unit`
 /// (`GlucoseUnitResponse` / `GlucoseUnitPatchRequest`, server v1.39.0). Tolerant
 /// decode: a missing field resolves to `"mg/dL"`, the server's own blend.
 public struct GlucoseUnitDTO: Codable, Sendable, Equatable {
@@ -95,16 +95,16 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
     /// `"metric" | "imperial"` — resolved binary (never the raw DB `null`).
     public let unitPreference: String?
     /// `"mg/dL" | "mmol/L" | nil` — the RAW account column (`/me` sends
-    /// `user.glucoseUnit ?? null`). #108: the app resolves it like the server
+    /// `user.glucoseUnit ?? null`). The app resolves it like the server
     /// (``GlucoseUnit/resolvedServerValue(_:)``: `null` = mg/dL) and adopts it.
     public let glucoseUnit: String?
-    /// #108 — whether `/me` carried the `glucoseUnit` key at all. A `null` value
+    /// Whether `/me` carried the `glucoseUnit` key at all. A `null` value
     /// is a statement ("never set" = mg/dL, and the series is converted to
     /// mg/dL); an ABSENT key is an old server that says nothing, and the app then
     /// keeps its own mirror. `decodeIfPresent` folds both into `nil`, so the
     /// distinction is kept here.
     public let glucoseUnitPresent: Bool
-    /// #115 1.5 — the account zone the server cuts days in. From v1.39 `/me`
+    /// The account zone the server cuts days in. From v1.39 `/me`
     /// sends the RESOLVED zone (stored zone, or the instance default when the
     /// stored one is unusable); `/api/user/profile` still returns the raw
     /// column, so day keys follow this field, not the profile's.
@@ -113,7 +113,7 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
     public let disableCoach: Bool?
     /// Server-**resolved** cycle-tracking flag (never `null` on the wire).
     public let cycleTrackingEnabled: Bool?
-    /// **CU-01** — the owner's saved report profile, mirrored **read-only** onto
+    /// The owner's saved report profile, mirrored **read-only** onto
     /// `/api/auth/me` (server v1.32.39, `reportSelection: reportSelectionJson ??
     /// null`). Writes go exclusively through
     /// ``ReportSelectionRepository/replace(_:)`` on
@@ -143,7 +143,7 @@ public struct AuthMeServerPrefs: Decodable, Sendable, Equatable {
     /// `nil` covers all three honest absences — key omitted (older server),
     /// explicit `null` (never generated a report), and an empty string.
     public let lastReportPracticeName: String?
-    /// **N1** — `notificationPrefs.medication.{clientManaged, deliveryDefault}`,
+    /// `notificationPrefs.medication.{clientManaged, deliveryDefault}`,
     /// which `/me` carries from server v1.38.15 on (the same resolver as
     /// `GET /api/auth/me/notification-prefs`). A free ride on the round-trip
     /// the settings hydration already makes, so deciding whether the app has

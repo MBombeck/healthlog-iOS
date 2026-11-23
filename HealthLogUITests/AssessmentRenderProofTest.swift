@@ -1,6 +1,6 @@
 import XCTest
 
-/// b177 W-ASSESS2 — render proof for the per-metric **Einschätzung** block on
+/// Render proof for the per-metric **Einschätzung** block on
 /// the live demo tenant. The operator reported the per-metric assessments
 /// rendering NOTHING for two builds (only the overview worked); the b177 fix
 /// makes `MetricStatusDTO` decode tolerant-first so the fetch can no longer
@@ -18,7 +18,7 @@ final class AssessmentRenderProofTest: XCTestCase {
 
     func test_bloodPressure_assessment_renders() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot. NOTE: the
+        // Network-free hermetic boot. NOTE: the
         // per-metric **Einschätzung** prose is server-generated assessment
         // content the hermetic fixtures intentionally do NOT synthesize (it would
         // require pinning the full `MetricStatusDTO` assessment payload to a

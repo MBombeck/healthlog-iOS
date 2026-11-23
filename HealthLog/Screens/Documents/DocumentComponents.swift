@@ -20,8 +20,7 @@ struct DocumentUsageBar: View {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 HStack {
                     Text("documents.upload.quotaAlmostFull")
-                        .font(.hlFootnote.weight(.semibold))
-                        .foregroundStyle(HLColor.statusWarn)
+                        .hlText(.groupHeader, status: HLColor.statusWarn)
                     Spacer()
                     Text(usedLabel)
                         .font(.hlCaption.monospacedDigit())
@@ -44,13 +43,11 @@ struct DocumentUsageBar: View {
 
 // MARK: - DocumentFilterMenu
 
-/// The native toolbar filter entry — a "Filtern" `Menu` that replaces the old
-/// horizontal chip rail so the list itself reads as a first-class iOS list
-/// (Files / Mail style). Holds three facets: a Type group of multi-select
-/// toggles (checkmarks), a single-select linked-condition submenu, and a
-/// single-select year submenu, plus a "clear filters" item when anything is
-/// active. Mutates a working ``DocumentListFilter`` through plain `Binding`s and
-/// calls `apply` on every change; the menu glyph fills when a filter is active.
+/// The entries of the documents filter in the bar (`hlPageActions` `.filter`):
+/// a Type group of multi-select toggles (checkmarks), a single-select linked
+/// condition, a single-select year, plus "clear filters" while anything is
+/// active. Mutates a working ``DocumentListFilter`` through plain `Binding`s
+/// and calls `apply` on every change.
 struct DocumentFilterMenu: View {
     let filter: DocumentListFilter
     let conditionChips: [DocumentConditionLink]
@@ -59,47 +56,34 @@ struct DocumentFilterMenu: View {
     let clear: () -> Void
 
     var body: some View {
-        Menu {
-            Section("documents.filter.kindSection") {
-                ForEach(DocumentKindMeta.order) { kind in
-                    Toggle(isOn: kindBinding(kind)) {
-                        Label(DocumentKindMeta.labelKey(kind), systemImage: DocumentKindMeta.icon(kind))
-                    }
+        Section("documents.filter.kindSection") {
+            ForEach(DocumentKindMeta.order) { kind in
+                Toggle(isOn: kindBinding(kind)) {
+                    Label(DocumentKindMeta.labelKey(kind), systemImage: DocumentKindMeta.icon(kind))
                 }
             }
-            if !conditionChips.isEmpty {
-                Picker("documents.filter.conditionSection", selection: episodeBinding) {
-                    Text("documents.filter.allConditions").tag(String?.none)
-                    ForEach(conditionChips) { chip in
-                        Text(verbatim: chip.name).tag(String?.some(chip.episodeId))
-                    }
-                }
-            }
-            if !years.isEmpty {
-                Picker("documents.filter.yearSection", selection: yearBinding) {
-                    Text("documents.filter.allYears").tag(Int?.none)
-                    ForEach(years, id: \.self) { year in
-                        Text(verbatim: String(year)).tag(Int?.some(year))
-                    }
-                }
-            }
-            if filter.isActive {
-                Section {
-                    Button(role: .destructive, action: clear) {
-                        Label("documents.filter.clear", systemImage: "arrow.counterclockwise")
-                    }
-                }
-            }
-        } label: {
-            Label(
-                "documents.filter.menuTitle",
-                systemImage: filter.isActive
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle"
-            )
         }
-        .accessibilityLabel(Text("documents.filter.groupLabel"))
-        .accessibilityIdentifier("documents.toolbar.filter")
+        if !conditionChips.isEmpty {
+            Picker("documents.filter.conditionSection", selection: episodeBinding) {
+                Text("documents.filter.allConditions").tag(String?.none)
+                ForEach(conditionChips) { chip in
+                    Text(verbatim: chip.name).tag(String?.some(chip.episodeId))
+                }
+            }
+        }
+        if !years.isEmpty {
+            Picker("documents.filter.yearSection", selection: yearBinding) {
+                Text("documents.filter.allYears").tag(Int?.none)
+                ForEach(years, id: \.self) { year in
+                    Text(verbatim: String(year)).tag(Int?.some(year))
+                }
+            }
+        }
+        if filter.isActive {
+            Section {
+                Button("documents.filter.clear", systemImage: "arrow.counterclockwise", role: .destructive, action: clear)
+            }
+        }
     }
 
     private func kindBinding(_ kind: DocumentKind) -> Binding<Bool> {
@@ -140,85 +124,124 @@ struct DocumentFilterMenu: View {
     }
 }
 
+// MARK: - DocumentRowContent
+
+/// What one document row says, as plain data: the title, one detail line
+/// (filename, date, size) and at most one status. Every other fact (linked
+/// conditions, extraction state) lives on the detail page.
+struct DocumentRowContent: Equatable {
+    /// The one status a row may carry, most urgent first.
+    enum Status: Equatable {
+        /// The upload is still being read.
+        case processing
+        /// The read finished while the list was on screen.
+        case ready
+        /// The file opens only as a download.
+        case downloadOnly
+    }
+
+    let title: String
+    let detail: String?
+    let status: Status?
+
+    init(document: InboundDocument, isProcessing: Bool, isReady: Bool) {
+        let title = document.resolvedTitle ?? String(localized: "documents.card.untitled")
+        self.title = title
+        // The filename repeats the title when the document has no label of its
+        // own, so it only joins the line when it adds something.
+        let filename = document.filename.flatMap { $0.isEmpty || $0 == title ? nil : $0 }
+        detail = HLRowDetail.joined([
+            filename,
+            DocumentFormat.mediumDate(document.displayDate),
+            DocumentFormat.bytes(document.byteSize)
+        ])
+        if isProcessing {
+            status = .processing
+        } else if isReady {
+            status = .ready
+        } else if document.servingClass == .attachment {
+            status = .downloadOnly
+        } else {
+            status = nil
+        }
+    }
+
+    var rowStatus: HLRowStatus? {
+        switch status {
+        case .processing:
+            HLRowStatus(String(localized: "documents.card.processing"), icon: "clock.arrow.circlepath")
+        case .ready:
+            HLRowStatus(String(localized: "documents.card.ready"), icon: "checkmark.circle", tone: .success)
+        case .downloadOnly:
+            HLRowStatus(String(localized: "documents.card.attachmentBadge"), icon: "arrow.down.circle")
+        case nil:
+            nil
+        }
+    }
+
+    /// Title, detail line and status in the order they are seen.
+    var accessibilityText: String {
+        HLRowDetail.joined([title, detail, rowStatus?.title]) ?? title
+    }
+}
+
 // MARK: - DocumentCardRow
 
-/// One document as a list row: kind icon + title, a muted meta line
-/// (date · size · filename), and a footer of condition pills + a "download-only"
-/// badge for attachment-class files. In selection mode a leading checkmark
-/// reflects the bulk selection.
+/// One document as a list row: kind symbol, title and one detail line, at
+/// most one status as text on the right. In selection mode a leading
+/// checkmark column reflects the bulk selection.
 struct DocumentCardRow: View {
     let document: InboundDocument
     let selectionMode: Bool
     let isSelected: Bool
     let isHighlighted: Bool
+    /// The row is the one whose preview stands beside the list.
+    var isPaneSelected = false
 
-    /// Wave 4.6 — "Bereit" flash. The auto-index (+ background AI summary) job
+    /// "Bereit" flash. The auto-index (+ background AI summary) job
     /// is fire-and-forget server-side; nothing pushes its completion. `isReady`
     /// is purely local: it flips on when a row that WAS processing while this
     /// list was on screen stops processing, so the user sees the transition
-    /// instead of a chip silently disappearing. It never resurrects for a row
+    /// instead of a status silently disappearing. It never resurrects for a row
     /// that was already indexed when the list loaded.
     @State private var sawProcessing = false
     @State private var isReady = false
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    /// POLISH-A (SHOTS F-AX-DOCLIST) — one line each at the default size; at an
-    /// accessibility size the lines wrap instead of cutting "Befund…",
-    /// "28.10.2026…".
-    private var lineCap: Int? {
-        dynamicTypeSize.isAccessibilitySize ? nil : 1
-    }
 
     private var isProcessing: Bool {
         DocumentFormat.isProcessing(document)
     }
 
+    private var content: DocumentRowContent {
+        DocumentRowContent(document: document, isProcessing: isProcessing, isReady: isReady)
+    }
+
+    /// The recessed surface of the row shown beside the list, the soft tint of
+    /// a row the screen points at, else the section's own.
+    private var rowBackground: Color? {
+        if isPaneSelected { return HLSurface.tertiary }
+        return isHighlighted ? HLAccent.userBrandTint.opacity(0.12) : nil
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            if selectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    // Audit-01 M6 — same glyph size as the kind icon beside it,
-                    // so the row's leading column doesn't jump in edit mode.
-                    .font(.hlHeadline)
-                    .foregroundStyle(isSelected ? HLAccent.userBrandTint : HLText.tertiary)
-                    .accessibilityHidden(true)
-            }
-            Image(systemName: DocumentKindMeta.icon(document.kind))
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.secondary)
-                // POLISH-A — a fixed 24 pt column let the glyph run into the
-                // title at an accessibility size; it grows with the text there.
-                .frame(minWidth: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                // Primary line: the document title.
-                Text(titleText)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                    .lineLimit(lineCap)
-                // Secondary line: the filename (only when it adds information).
-                if let secondaryName {
-                    Text(verbatim: secondaryName)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .lineLimit(lineCap)
+        let said = content
+        HLRow(
+            title: Text(verbatim: said.title),
+            detail: said.detail.map { Text(verbatim: $0) },
+            status: said.rowStatus
+        ) {
+            HStack(spacing: HLRowMetrics.gap) {
+                // The circle of every multiple choice, from the choice row
+                // itself, so selecting documents reads like selecting anything.
+                if selectionMode, let mark = HLChoiceRow.symbol(mode: .multiple, isSelected: isSelected) {
+                    HLRowGlyph(symbol: mark, tint: isSelected ? HLText.primary : HLText.tertiary)
                 }
-                // Tertiary line: the muted date · size meta.
-                Text(metaLine)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .lineLimit(lineCap)
-                if !document.conditionLinks.isEmpty || document.servingClass == .attachment
-                    || isProcessing || isReady
-                {
-                    footer
-                }
+                HLRowGlyph(symbol: DocumentKindMeta.icon(document.kind))
             }
         }
-        .padding(.vertical, HLSpace.xxs)
-        .listRowBackground(isHighlighted ? HLAccent.userBrandTint.opacity(0.12) : nil)
+        .listRowBackground(rowBackground)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel(Text(verbatim: said.accessibilityText))
+        .accessibilityAddTraits(selectionMode && isSelected ? .isSelected : [])
         .onAppear { sawProcessing = isProcessing }
         .onChange(of: isProcessing) { wasProcessing, nowProcessing in
             if wasProcessing, !nowProcessing, sawProcessing {
@@ -226,65 +249,5 @@ struct DocumentCardRow: View {
             }
             sawProcessing = nowProcessing
         }
-    }
-
-    private var footer: some View {
-        // Audit-01 C2 — ONE chip language in the footer: the condition chips
-        // are `HLBadge`s like the attachment badge beside them (the former
-        // hand-rolled capsule used a raw 1pt inset + its own type recipe).
-        HStack(spacing: HLSpace.xxs) {
-            ForEach(document.conditionLinks.prefix(3)) { link in
-                HLBadge(link.name, tone: .neutral)
-                    .lineLimit(1)
-            }
-            if document.servingClass == .attachment {
-                HLBadge(
-                    String(localized: "documents.card.attachmentBadge"),
-                    icon: "arrow.down.circle",
-                    tone: .neutral
-                )
-            }
-            // Wave 4.6 — processing/ready feedback for the fire-and-forget
-            // auto-index job. Bounded by the recent-upload window, so an old,
-            // permanently-unindexed document never shows a stuck chip.
-            if isProcessing {
-                HLBadge(
-                    String(localized: "documents.card.processing"),
-                    icon: "clock.arrow.circlepath",
-                    tone: .neutral
-                )
-                .accessibilityIdentifier("documents.card.processing")
-            } else if isReady {
-                HLBadge(
-                    String(localized: "documents.card.ready"),
-                    icon: "checkmark.circle",
-                    tone: .success
-                )
-                .accessibilityIdentifier("documents.card.ready")
-            }
-        }
-    }
-
-    private var titleText: String {
-        document.resolvedTitle ?? String(localized: "documents.card.untitled")
-    }
-
-    /// The filename as a secondary line — shown only when it differs from the
-    /// visible title (otherwise it would just echo the primary line).
-    private var secondaryName: String? {
-        guard let filename = document.filename, !filename.isEmpty, filename != titleText else { return nil }
-        return filename
-    }
-
-    private var metaLine: String {
-        [DocumentFormat.mediumDate(document.displayDate), DocumentFormat.bytes(document.byteSize)]
-            .joined(separator: ", ")
-    }
-
-    private var accessibilityText: Text {
-        if let secondaryName {
-            return Text("\(titleText), \(secondaryName), \(metaLine)")
-        }
-        return Text("\(titleText), \(metaLine)")
     }
 }

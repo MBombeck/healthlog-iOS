@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B187 QOL-2** — coverage for the pure CoreSpotlight item builder.
+/// Coverage for the pure CoreSpotlight item builder.
 ///
 /// The load-bearing invariants:
 ///   - the `uniqueIdentifier` IS the app's own `healthlog://` deep-link

@@ -4,7 +4,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **v0.7.1 C-1 — queued offline writes survive a benign (row-preserving) logout.**
+/// **Queued offline writes survive a benign (row-preserving) logout.**
 ///
 /// The logout cascade (`AppContainer.performFullLocalLogout(reason:)`) keeps
 /// the encrypted outbox rows on the same-account, same-server paths

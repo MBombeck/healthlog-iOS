@@ -10,7 +10,7 @@ import Observation
 @MainActor
 @Observable
 public final class MedicationDetailStore {
-    /// v0.14.8 — became mutable so the detail screen's Edit flow can refresh
+    /// Became mutable so the detail screen's Edit flow can refresh
     /// the hero name/dose + ScheduleSection in place after a `PUT` save
     /// (operator brief 2026-06-07: a corrected plan must be "sofort sichtbar").
     /// Updated via ``updateMedication(_:)`` from `MedicationsStore`'s reloaded
@@ -29,7 +29,7 @@ public final class MedicationDetailStore {
     public private(set) var error: HLError?
     public private(set) var hasMoreIntakes: Bool = false
 
-    /// **v0.6.2.3 B1 — server-canonical 30-day compliance payload.**
+    /// **Server-canonical 30-day compliance payload.**
     ///
     /// Fetched in `load()` alongside `details` + `intakes` from
     /// `GET /api/medications/[id]/compliance`. The screen reads
@@ -47,7 +47,7 @@ public final class MedicationDetailStore {
     /// same source of truth.
     public private(set) var compliance: MedicationCompliancePayload?
 
-    /// **W3-MEDCONTRACT (v0.14.8) — server dose-history ledger.**
+    /// **Server dose-history ledger.**
     ///
     /// `GET /api/medications/{id}/dose-history` — the ONE unified per-slot
     /// read-model the server compliance % and the web Verlauf tab consume,
@@ -56,26 +56,26 @@ public final class MedicationDetailStore {
     /// no client-side projection from the *current* schedule can reproduce.
     /// When present it is authoritative for every past-slot surface on this
     /// screen (KPI, glyph track, Verlauf list); `nil` (older server ≤
-    /// v1.15.17, standalone mode, fetch hiccup) keeps the existing local
+    /// v1.15.17, fetch hiccup) keeps the existing local
     /// derivation as the fallback. Local math stays in charge of *future*
     /// projection (b162 dose-safety: ledger `upcoming` rows never read as
     /// taken) and of the card's `nextDueOverdue` composition (b175 — both
     /// untouched, they compose with the ledger rather than replace it).
     public private(set) var doseHistory: MedicationDoseHistoryEnvelope?
 
-    /// **v1.28 (GH iOS #45) — server-authoritative medication-efficacy view.**
+    /// **v1.28 — server-authoritative medication-efficacy view.**
     ///
     /// `GET /api/medications/{id}/efficacy` — the resolved "Wirkung" DTO: the
     /// target metric/lab, its series with start/dose-change/pause markers, the
     /// before/after-start comparison, and the cadence-aware adherence lane, ALL
     /// computed by the server's compliance engine. Association-only; the client
     /// never recomputes any figure here. `nil` = feature absent (route not on a
-    /// ≤ v1.27 server, standalone, or a fetch hiccup) → the section
+    /// ≤ v1.27 server, or a fetch hiccup) → the section
     /// self-suppresses. `internal(set)` so the `+Efficacy` extension's
     /// ``reloadEfficacy()`` can refresh it after a retarget PUT.
     public internal(set) var efficacy: MedicationEfficacyDTO?
 
-    /// **W-COMPLIANCE-INV (v0.14.8) — paint gate for the compliance KPI.**
+    /// **Paint gate for the compliance KPI.**
     ///
     /// `false` until the first `load()` has fully settled (every parallel GET
     /// — including the compliance payload + the dose-history ledger — has
@@ -90,18 +90,18 @@ public final class MedicationDetailStore {
     /// beats a placeholder flash mid-screen.
     public private(set) var hasSettledComplianceLoad: Bool = false
 
-    /// **14-02 (A3) — has the intake collection finished arriving?**
+    /// **Has the intake collection finished arriving?**
     ///
     /// `false` from the start of every `load()` until `drainRemainingIntakes()`
     /// returns (and unconditionally on any exit, so it cannot strand). While it
     /// is `false` the intake set is still growing and is therefore not a curve:
-    /// ``pkDoseEvents()`` returns `[]` and ``drugLevelSection`` reads
+    /// no curve is computed and ``drugLevelSection`` reads
     /// `.loading`. This is the difference the drug-level section never had, and
     /// its absence is why the section drew one curve per drain page and then
     /// jumped when the last one landed.
     public private(set) var hasSettledIntakeCollection: Bool = false
 
-    /// **14-02 (A3) — what the drug-level section renders.** Three states, one
+    /// **What the drug-level section renders.** Three states, one
     /// of them new: `.loading` (reserved height), `.empty`, `.curve`. Published
     /// exactly once per settled intake input.
     /// `internal(set)` (not `private(set)`) for the same reason `efficacy` is:
@@ -119,7 +119,7 @@ public final class MedicationDetailStore {
         pkGenerationCounter
     }
 
-    /// 14-02 — test seam: fires once per curve COMPUTATION (not per
+    /// Test seam: fires once per curve COMPUTATION (not per
     /// publication), so "computed once per settled input" is countable without
     /// reading a private field.
     @ObservationIgnored var onDrugLevelCurveComputed: (@MainActor () -> Void)?
@@ -132,10 +132,10 @@ public final class MedicationDetailStore {
     /// guard). Pre-fix iOS only surfaced inventory through the GLP-1-gated
     /// `details?.inventory` aggregate + `PenInventoryView`, so a stored
     /// tablet/injection inventory was invisible on the detail screen.
-    /// `nil` = fetch unavailable (standalone / not yet loaded / error);
+    /// `nil` = fetch unavailable (not yet loaded / error);
     /// `[]` = server answered with no items (section stays hidden).
     public private(set) var inventoryItems: [MedicationInventoryItemDTO]?
-    /// #25 / #115 · 1.3 — the server's supply summary from the same GET.
+    /// The server's supply summary from the same GET.
     /// `nil` when the server sent none (older than v1.19) or the read failed.
     public private(set) var inventorySummary: MedicationSupplySummary?
 
@@ -151,12 +151,12 @@ public final class MedicationDetailStore {
     public let drug: GLP1DrugCatalog.DrugRecord?
 
     private let repo: MedicationsRepository
-    /// Server seam for the generic inventory read. `nil` in standalone /
+    /// Server seam for the generic inventory read. `nil` in
     /// unit tests — the section then never renders from this store (the
     /// GLP-1 local pen mechanism stays available independently).
     private let therapyRepo: MedicationTherapyLogRepository?
 
-    /// **W-TZ-MED (v0.15.2) — server-profile day-anchoring zone.** The Verlauf
+    /// **Server-profile day-anchoring zone.** The Verlauf
     /// glyph track buckets each server dose/intake row into a calendar day; that
     /// bucketing must use the SAME profile IANA zone the rest of the med stack
     /// anchors on (`MedicationsStore.profileTimeZone`, `DashboardStore`,
@@ -185,7 +185,7 @@ public final class MedicationDetailStore {
 
     /// Initial + page-load size for the paginated intake history.
     ///
-    /// **v0.6.2.1 F4 — bumped from 7 → 30.** The detail screen derives
+    /// **Bumped from 7 → 30.** The detail screen derives
     /// two analytics surfaces from the loaded intake set:
     /// `verlaufGlyphs()` (14-day track) and `complianceSummary()`
     /// (30-day KPI labelled "Letzte 30 Tage"). With page-size 7, a
@@ -207,7 +207,7 @@ public final class MedicationDetailStore {
         medication: Medication,
         repo: MedicationsRepository,
         therapyRepo: MedicationTherapyLogRepository? = nil,
-        // W-TZ-MED — the Verlauf day-bucketing zone. Defaults to `.current`
+        // The Verlauf day-bucketing zone. Defaults to `.current`
         // (device TZ) so existing call-sites + unit tests are byte-unchanged;
         // the detail screen wires it to the live `MedicationsStore`
         // profile-zone provider so a traveling user buckets on the profile day.
@@ -244,7 +244,7 @@ public final class MedicationDetailStore {
     public func load() async {
         isLoading = true
         error = nil
-        // 14-02 (A3) — a new load supersedes any curve still being computed for
+        // A new load supersedes any curve still being computed for
         // the previous input, and the section returns to its reserved-height
         // loading branch rather than holding a curve built from a set that is
         // about to be replaced.
@@ -252,13 +252,13 @@ public final class MedicationDetailStore {
         hasSettledIntakeCollection = false
         drugLevelSection = .loading
         defer { isLoading = false }
-        // 14-02 (A3) — unconditional, and declared before anything can throw:
+        // Unconditional, and declared before anything can throw:
         // the section may not strand on `.loading` on ANY exit path. 13-03
         // found this shape three times over; it does not get to happen a
         // fourth.
         defer { hasSettledIntakeCollection = true }
         defer { settleDrugLevelSectionIfStillLoading() }
-        // W-COMPLIANCE-INV — the KPI may paint as soon as this load attempt
+        // The KPI may paint as soon as this load attempt
         // has settled, whether it produced server payloads (→ server-canonical
         // numbers) or not (offline / old server → clearly-marked fallback).
         defer { hasSettledComplianceLoad = true }
@@ -269,21 +269,21 @@ public final class MedicationDetailStore {
                 limit: intakesPageSize,
                 offset: 0
             )
-            // v0.6.2.3 B1 — load the server-canonical compliance payload
+            // Load the server-canonical compliance payload
             // alongside intakes so the KPI tile + Verlauf track render
             // numbers that agree with the web card surface. Throws are
             // swallowed locally so a single 5xx on this endpoint doesn't
             // gate the whole screen; the renderer falls back to the
             // legacy client-derived view in that case.
             async let compliance = repo.compliance(medicationID: medication.id)
-            // W3-MEDCONTRACT — fetch the dose-history ledger in the same
+            // Fetch the dose-history ledger in the same
             // parallel fan-out. Tolerant: any throw (route absent on ≤
-            // v1.15.17, standalone, transient 5xx) leaves `doseHistory`
+            // v1.15.17, transient 5xx) leaves `doseHistory`
             // nil and the legacy client-side derivation stays in charge.
             async let doseHistory = repo.doseHistory(medicationID: medication.id)
-            // v1.28 (GH iOS #45) — fetch the server-authoritative efficacy
+            // v1.28 — fetch the server-authoritative efficacy
             // ("Wirkung") view in the same parallel fan-out. `efficacy(...)`
-            // never throws (route absent / standalone / transport error → nil),
+            // never throws (route absent / transport error → nil),
             // so the section simply self-suppresses; no `try` needed.
             async let efficacy = repo.efficacy(medicationID: medication.id)
             // W-COMPLIANCE-INV Task 2 — generic per-medication inventory for
@@ -308,7 +308,7 @@ public final class MedicationDetailStore {
             self.intakes = intakesPage.events
             intakesMeta = intakesPage.meta
             hasMoreIntakes = intakesPage.events.count == intakesPageSize
-            // v0.10.0 B17b — auto-drain the remaining intake pages so the
+            // Auto-drain the remaining intake pages so the
             // Verlauf list + the client-derived glyph fallback see the
             // FULL history, not just the first 30. The operator saw "die
             // Sachen unter Verlauf werden nicht gezogen" (build 90): a
@@ -317,7 +317,7 @@ public final class MedicationDetailStore {
             // Mirrors the MoodRepository B16 offset-drain (0cd50273) with
             // a hard page cap so a runaway total can't spin forever.
             await drainRemainingIntakes()
-            // 14-02 (A3) — the drain IS the drug-level section's input, and it
+            // The drain IS the drug-level section's input, and it
             // has just settled. Compute the curve once, here, off the render
             // path; the remaining awaits below belong to other sections and
             // must not hold the curve back.
@@ -342,7 +342,7 @@ public final class MedicationDetailStore {
     }
 
     /// W-COMPLIANCE-INV Task 2 — generic inventory read. `nil` when no
-    /// server seam is wired (standalone) or the round-trip failed; the
+    /// server seam is wired or the round-trip failed; the
     /// caller keeps the previous value only across transient errors inside
     /// `load()` by overwriting with the fresh result.
     private func fetchInventory() async -> MedicationInventoryListDTO? {
@@ -363,7 +363,7 @@ public final class MedicationDetailStore {
         }
     }
 
-    /// **C2 — register a new supply container.** Optimistic: posts then
+    /// **Register a new supply container.** Optimistic: posts then
     /// refetches. A retriable error is enqueued by the repo (Outbox) and
     /// rethrown so the caller can keep the sheet open / show a banner.
     public func registerContainer(_ body: MedicationInventoryCreate) async throws {
@@ -372,7 +372,7 @@ public final class MedicationDetailStore {
         _ = try await therapyRepo.createInventoryItem(medicationID: medication.id, body: body)
     }
 
-    /// **C2 — patch one container (correct remaining units / first-use /
+    /// **Patch one container (correct remaining units / first-use /
     /// used-up / expiry / notes).** Posts then refetches.
     public func updateContainer(itemID: String, patch: MedicationInventoryPatch) async throws {
         guard let therapyRepo else { return }
@@ -384,14 +384,14 @@ public final class MedicationDetailStore {
         )
     }
 
-    /// **C2 / L2 — delete a container.** Posts then refetches.
+    /// **Delete a container.** Posts then refetches.
     public func deleteContainer(itemID: String) async throws {
         guard let therapyRepo else { return }
         defer { Task { await reloadInventory() } }
         try await therapyRepo.deleteInventoryItem(medicationID: medication.id, itemID: itemID)
     }
 
-    /// W3-MEDCONTRACT — refresh the dose-history ledger alone (one GET).
+    /// Refresh the dose-history ledger alone (one GET).
     /// Called after every retro-mutation / pin / unpin so the Verlauf list
     /// converges onto the server's re-attributed truth instead of trusting
     /// a local re-derivation. A throw keeps the previous ledger in place
@@ -402,7 +402,7 @@ public final class MedicationDetailStore {
         }
     }
 
-    /// v1.28 (GH iOS #45) — refresh the efficacy ("Wirkung") view alone. Called
+    /// v1.28 — refresh the efficacy ("Wirkung") view alone. Called
     /// after a retarget PUT so the re-resolved target + series repaint. A `nil`
     /// result (route absent / hiccup) suppresses the section rather than
     /// throwing — the same graceful contract as `load()`.
@@ -410,7 +410,7 @@ public final class MedicationDetailStore {
         efficacy = await repo.efficacy(medicationID: medication.id)
     }
 
-    /// v1.28 (GH iOS #45) — pin (or clear) the efficacy target, then re-fetch
+    /// v1.28 — pin (or clear) the efficacy target, then re-fetch
     /// the resolved view so the chart + before/after retarget. Interactive
     /// write (one idempotency key inside the repo). A failure records `error`
     /// (surfaced by the screen's `ErrorBanner`) rather than throwing, so the
@@ -429,7 +429,7 @@ public final class MedicationDetailStore {
         }
     }
 
-    /// v0.14.8 — replace the screen's `medication` with a freshly-edited copy
+    /// Replace the screen's `medication` with a freshly-edited copy
     /// (same `id`) so the hero name/dose + ScheduleSection re-render in place
     /// after the Edit sheet saves. Guards on matching `id` so a stale caller
     /// can't swap the screen onto a different medication.
@@ -465,7 +465,7 @@ public final class MedicationDetailStore {
     /// spin the loop forever. Mirrors `MoodRepository.maxPages`.
     private static let maxDrainPages = 80
 
-    /// v0.10.0 B17b — pull every remaining intake page after the first so
+    /// Pull every remaining intake page after the first so
     /// `intakes` holds the complete history. Drives both the Verlauf list
     /// and the client-derived glyph fallback. No-op when the first page
     /// already covered everything (`hasMoreIntakes == false`).
@@ -521,10 +521,10 @@ public final class MedicationDetailStore {
             self.doseHistory = doseHistory
             self.inventoryItems = inventoryItems
             self.inventorySummary = inventorySummary
-            // W-COMPLIANCE-INV — injected state represents a finished load by
+            // Injected state represents a finished load by
             // default; pass `settled: false` to pin the pre-paint gate.
             hasSettledComplianceLoad = settled
-            // 14-02 (A3) — an injection IS a settled collection: there is no
+            // An injection IS a settled collection: there is no
             // drain behind it. `settled: false` pins the still-collecting side.
             hasSettledIntakeCollection = settled
         }

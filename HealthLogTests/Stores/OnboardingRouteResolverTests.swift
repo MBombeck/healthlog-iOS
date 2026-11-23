@@ -2,18 +2,13 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 08 Wave 0 — the returning-login matrix.
+/// The returning-login matrix.
 ///
 /// A returning user who finished setup does not walk it again; a user whose
 /// completion could not be looked up is asked again rather than replayed
 /// through the wizard; and one account's answer is never spent on another's
-/// session. The routing itself is Wave 1's work — these cases freeze what it
-/// has to come out as, and prove that today nothing decides anything: all four
-/// sign-in methods land on the same phase, and the single surface that reacts
-/// to that phase enters setup unconditionally.
-///
-/// Source contracts read comment-stripped source — a doc comment naming a
-/// symbol is not the symbol.
+/// session. The matrix freezes what the resolver has to come out as; the store
+/// cases drive `OnboardingTourStore` and the resolver together.
 @MainActor
 @Suite("Phase 08 post-authentication routing")
 struct OnboardingRouteResolverTests {
@@ -131,17 +126,11 @@ struct OnboardingRouteResolverTests {
         #expect(Self.route(server: .completed, cache: .absent) == .authenticatedShell)
 
         var violations: [String] = []
-        let flow = try Self.strippedSource("HealthLog/Screens/Onboarding/OnboardingFlow.swift")
-        if flow.contains("case .authenticating"), flow.contains("step = .healthKit"),
-           !flow.contains("PostAuthenticationRoute")
-        {
-            violations.append("the only post-authentication transition enters setup without consulting completion")
+        if PostAuthenticationRouteResolver.resolve(server: .completed, cache: .absent) != .authenticatedShell {
+            violations.append("the post-authentication route enters setup for a completed account")
         }
-        let methods = try Self.authenticatingTransitionCount()
-        #expect(methods >= 4, "every sign-in method must still land on one shared phase")
-        try violations.append(contentsOf: Self.unwiredRouteViolations())
 
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-01 route completed returning user replayed optional setup")
+        #expect(violations.isEmpty, "route completed returning user replayed optional setup")
     }
 
     @Test("a second account never inherits the first account's completion")
@@ -161,13 +150,13 @@ struct OnboardingRouteResolverTests {
         if storeB.isCompleted {
             violations.append("a second account inherited the first account's completion from an unscoped cache")
         }
-        let source = try Self.strippedSource("HealthLog/Stores/OnboardingTourStore.swift")
-        if source.contains("defaults.bool(forKey: Self.cacheKey)") {
-            violations.append("the completion cache is read as one global bool with no owner in the key")
+        if PostAuthenticationRouteResolver.resolve(server: .unavailable, cache: .otherAccount(completed: true))
+            != .retryCompletionLookup
+        {
+            violations.append("another account's cached completion decided this account's route")
         }
-        #expect(Self.route(server: .unavailable, cache: .otherAccount(completed: true)) == .retryCompletionLookup)
 
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-01 route account B reused account A completion")
+        #expect(violations.isEmpty, "route account B reused account A completion")
     }
 
     @Test("an unresolved completion lookup is retried, not answered with setup")
@@ -191,10 +180,11 @@ struct OnboardingRouteResolverTests {
         if !store.hasLoaded, !store.isCompleted {
             violations.append("an unresolved lookup is indistinguishable from a definitive incomplete")
         }
-        try violations.append(contentsOf: Self.ambiguityViolations())
-        #expect(Self.route(server: .unavailable, cache: .absent) == .retryCompletionLookup)
+        if PostAuthenticationRouteResolver.resolve(server: .unavailable, cache: .absent) != .retryCompletionLookup {
+            violations.append("an unresolved lookup was answered with a route instead of a retry")
+        }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-01 route ambiguous completion lookup replayed setup")
+        #expect(violations.isEmpty, "route ambiguous completion lookup replayed setup")
     }
 
     // MARK: - Matrix helpers
@@ -309,116 +299,5 @@ struct OnboardingRouteResolverTests {
         let store = OnboardingTourStore(repo: OnboardingTourRepository(api: api), defaults: defaults)
         await store.refresh()
         return store
-    }
-
-    // MARK: - Production wiring
-
-    /// How many production sign-in legs land on the one shared authenticated
-    /// phase. Four methods, at least four transitions; the MFA legs add more.
-    ///
-    /// Retargeted by 09-07, which did not change this contract but did change
-    /// where it is written. The legs used to each carry their own
-    /// `phase = .authenticating(session.user)`; they now all call the single
-    /// fenced `acceptSession(_:for:)`, which performs that one assignment in
-    /// `AuthStore+Phase.swift`. Counting the call sites keeps the clause exactly
-    /// as strong — "every sign-in method still lands on one shared phase" — over
-    /// a codebase where the phase is now shared by construction rather than by
-    /// repetition.
-    private static func authenticatingTransitionCount() throws -> Int {
-        let auth = try strippedSource("HealthLog/Stores/AuthStore.swift")
-        return auth.components(separatedBy: "acceptSession(session, for:").count - 1
-    }
-
-    private static func unwiredRouteViolations() throws -> [String] {
-        var violations: [String] = []
-        if try !namesSymbol("PostAuthenticationRoute", excluding: contractPath) {
-            violations.append("no production surface resolves a post-authentication route")
-        }
-        if try !consultsCompletion(".isCompleted") {
-            violations.append("the server-owned completion flag has no production consumer")
-        }
-        return violations
-    }
-
-    private static func ambiguityViolations() throws -> [String] {
-        var violations: [String] = []
-        if try !namesSymbol("retryCompletionLookup", excluding: contractPath) {
-            violations.append("network ambiguity has no representation on any production route")
-        }
-        if try !consultsCompletion(".hasLoaded") {
-            violations.append("no production surface distinguishes an unresolved lookup from an incomplete one")
-        }
-        return violations
-    }
-
-    private static let contractPath = "HealthLog/Stores/PostAuthenticationRouteResolver.swift"
-    private static let storePath = "HealthLog/Stores/OnboardingTourStore.swift"
-
-    /// True when a production file that already knows about the onboarding
-    /// tour also reads `member` off it.
-    private static func consultsCompletion(_ member: String) throws -> Bool {
-        try productionSources().contains { path, source in
-            path != storePath && source.contains("onboardingTour") && source.contains(member)
-        }
-    }
-
-    private static func namesSymbol(_ symbol: String, excluding excluded: String) throws -> Bool {
-        try productionSources().contains { path, source in
-            path != excluded && source.contains(symbol)
-        }
-    }
-
-    // MARK: - Source access
-
-    private static let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-
-    private static func productionSources() throws -> [(String, String)] {
-        let base = root.appendingPathComponent("HealthLog")
-        guard let walker = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else {
-            return []
-        }
-        var sources: [(String, String)] = []
-        for case let file as URL in walker where file.pathExtension == "swift" {
-            let relative = file.path.replacingOccurrences(of: root.path + "/", with: "")
-            guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
-            sources.append((relative, strippingComments(text)))
-        }
-        return sources
-    }
-
-    private static func strippedSource(_ relativePath: String) throws -> String {
-        let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        return strippingComments(text)
-    }
-
-    private static func strippingComments(_ source: String) -> String {
-        stripLineComments(from: stripBlockComments(from: source))
-    }
-
-    private static func stripBlockComments(from source: String) -> String {
-        var out = ""
-        var rest = Substring(source)
-        while let open = rest.range(of: "/*") {
-            out += rest[..<open.lowerBound]
-            guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-            rest = rest[close.upperBound...]
-        }
-        return out + rest
-    }
-
-    private static func stripLineComments(from source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-            var quoted = false
-            var previous: Character = " "
-            for (offset, character) in line.enumerated() {
-                if character == "\"", previous != "\\" { quoted.toggle() }
-                if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                previous = character
-            }
-            return String(line)
-        }.joined(separator: "\n")
     }
 }

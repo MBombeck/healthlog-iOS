@@ -26,7 +26,7 @@ struct VorsorgeTrendStripView: View {
     var body: some View {
         Group {
             if let heights, heights.count >= 2 {
-                HStack(alignment: .bottom, spacing: 2) {
+                HStack(alignment: .bottom, spacing: HLSpace.xxs) {
                     ForEach(Array(heights.enumerated()), id: \.offset) { _, h in
                         RoundedRectangle(cornerRadius: 1, style: .continuous)
                             .fill(HLText.tertiary.opacity(0.45))

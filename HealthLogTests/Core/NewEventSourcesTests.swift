@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// W-NEW-EVENT-SOURCES (#23) — locks the two new server data-type surfaces that
+/// Locks the two new server data-type surfaces that
 /// landed with server v1.18.11:
 ///
 ///  1. **Withings ECG / AFib** → the EXISTING irregular-rhythm event type. The
@@ -171,7 +171,7 @@ struct NewEventSourcesTests {
         // MDR-careful framing, in either resolved locale. The test host resolves
         // the catalog to its active locale, so accept EN or DE.
         //
-        // UI-Standard R17 (U1) — bis hierher verlangte dieser Test zusätzlich
+        // UI-Standard R17 — bis hierher verlangte dieser Test zusätzlich
         // den Satzteil „keine medizinische Diagnose". Der ist gefallen: er ist
         // der Pauschal-Schwanz, der auf sechs Metrikseiten nahezu wortgleich
         // stand und dessen Substanz am Ack-Sheet und in Einstellungen → Über

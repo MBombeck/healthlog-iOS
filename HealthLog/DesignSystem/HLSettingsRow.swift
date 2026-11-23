@@ -20,7 +20,7 @@ import SwiftUI
 /// chevron-on-`NavigationLink` to SwiftUI.
 public struct HLSettingsRow<Trailing: View>: View {
     private let icon: String
-    /// v0.5.2-A8 / v0.8.0-W6: `nil` means "use the live user accent"
+    /// `nil` means "use the live user accent"
     /// (`HLAccent.userBrandTint`, resolved at body-eval from
     /// `SettingsStore.preferredTint`). The prior `.accentColor` default read
     /// the *asset-catalog* AccentColor, not the live tint. A non-nil override
@@ -31,10 +31,6 @@ public struct HLSettingsRow<Trailing: View>: View {
     private let title: LocalizedStringKey
     private let subtitle: LocalizedStringKey?
     private let trailing: Trailing
-    /// v0.14.1 08-04 — the row's layout is a function of the text size, not of
-    /// the device: at an accessibility size the trailing accessory gives up
-    /// its column.
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(
         icon: String,
@@ -51,63 +47,14 @@ public struct HLSettingsRow<Trailing: View>: View {
     }
 
     public var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                stackedLayout
-            } else {
-                compactLayout
-            }
-        }
-        .padding(.vertical, HLSpace.xxs)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Standard sizes — byte-for-byte the W1-4 density: chip, labels, spacer,
-    /// trailing, all on one line.
-    private var compactLayout: some View {
-        HStack(spacing: HLSpace.md) {
-            HLSettingsIconChip(symbol: icon, tint: iconTint ?? HLAccent.userBrandTint)
-            labels
-            Spacer(minLength: HLSpace.sm)
-            trailing
-        }
-    }
-
-    /// Accessibility sizes — the trailing accessory stops competing for a width
-    /// neither it nor the label can have and takes the line below. Nothing is
-    /// hidden, scaled down or clipped; the row is simply allowed to be taller,
-    /// which is the trade the user asked for when they enlarged the text.
-    private var stackedLayout: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .top, spacing: HLSpace.md) {
-                HLSettingsIconChip(symbol: icon, tint: iconTint ?? HLAccent.userBrandTint)
-                labels
-                Spacer(minLength: 0)
-            }
-            trailing
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var labels: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            // W1-4: hub title shrinks from hlBody (17pt) to hlSubhead
-            // (15pt) to align with Apple-Settings.app row density.
-            Text(title)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            if let subtitle {
-                // 1.4 B2-c — the hint wraps at every size. W1-4 cut it after
-                // one line for density and 08-04 lifted that for the
-                // accessibility sizes only, so at the default size a long hint
-                // ended in "…" (HIG: wrap, never truncate). A hint too long
-                // for its row is shortened instead.
-                Text(subtitle)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+        HLRowLayout(
+            title: Text(title),
+            subtitle: subtitle.map { Text($0) },
+            indicator: .hidden,
+            configuration: .standard,
+            leading: { HLSettingsIconChip(symbol: icon, tint: iconTint ?? HLAccent.userBrandTint) },
+            trailing: { trailing }
+        )
     }
 }
 
@@ -156,9 +103,11 @@ public extension HLSettingsRow where Trailing == HLSettingsRowValueText {
 public struct HLSettingsRowValueText: View {
     let value: String
     public var body: some View {
+        // As large as the row title, one weight lighter: the value never
+        // outweighs the name it belongs to.
         Text(value)
-            .font(.hlBody)
-            .foregroundStyle(HLText.secondary)
+            .font(HLRowValue.Emphasis.setting.font)
+            .foregroundStyle(HLRowValue.Emphasis.setting.tint)
             .lineLimit(1)
     }
 }
@@ -166,14 +115,14 @@ public struct HLSettingsRowValueText: View {
 // MARK: - Action row
 
 /// Canonical **tappable action row** — der Standard-Auslöser für jede Aktion
-/// und jede Navigation innerhalb einer `HLSettingsCard` (UI-Standard R8/R10).
+/// und jede Navigation innerhalb einer `HLCard` (UI-Standard R8/R10).
 ///
-/// **FW1-C (H5):** ~22 Settings sub-screens hand-rolled the same shape —
+/// ~22 Settings sub-screens hand-rolled the same shape —
 /// a `Button` whose label is `HStack { Image(systemName:) at a raw 13/14/16pt
 /// glyph; Text(...).font(.hlSubhead.weight(.semibold)); Spacer() }` — at
 /// *drifting* glyph sizes and without the canonical tinted icon chip.
 ///
-/// **UI-Standard W0 (E3) — was sich geändert hat:**
+/// **UI-Standard W0 — was sich geändert hat:**
 ///
 /// 1. `icon:` ist **optional**. Die 25 handgebauten Chevron-Zeilen des
 ///    Komponenten-Audits tragen keinen Chip; `icon: nil` bildet sie ab, ohne
@@ -197,26 +146,29 @@ public struct HLSettingsRowValueText: View {
 /// HLSettingsActionRow(title: "Passkeys", presents: .push) { PasskeyManagementScreen() }
 ///
 /// // Sheet / Erzeugen / Teilen / App verlassen / Bestätigen:
-/// HLSettingsActionRow(icon: "plus", title: "Token erstellen", presents: .create) { … }
+/// HLSettingsActionRow(title: "Token erstellen", presents: .create) { … }
 /// ```
 public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     /// Visual role — `.standard` tints chip + label with the user accent /
     /// primary text; `.destructive` routes both through `HLColor.statusBad`.
     public enum Role { case standard, destructive }
 
-    /// R10 — das Versprechen der Zeile, und damit ihr Trailing-Glyph.
+    /// Das Versprechen der Zeile, und damit ihr Zubehör.
     ///
-    /// `.push` fehlt hier **absichtlich**: ein Push ist ausschließlich über den
-    /// `destination:`-Initializer erreichbar (siehe `Push`). Genau diese
-    /// Trennung macht „Chevron, hinter dem ein Sheet aufgeht" unformulierbar.
+    /// Rechts stehen nur die Zeichen, die iOS kennt: der Chevron für alles,
+    /// was eine Seite oder ein Sheet öffnet, `arrow.up.right` für ein Ziel
+    /// außerhalb der App, das Teilen-Zeichen für das Teilen-Blatt. Etwas
+    /// Neues anlegen trägt das Plus vorn im Symbolfeld, wie „Erinnerung
+    /// anlegen“, und rechts nichts.
     public enum Presents: String, Equatable, Sendable, CaseIterable {
-        /// Bearbeiten-Transaktion in einem Sheet → `pencil`.
+        /// Öffnet ein Sheet zum Bearbeiten → Chevron.
         case sheet
-        /// Erzeugt etwas (Token, Link, Eintrag) in einem Sheet → `plus.circle`.
+        /// Erzeugt etwas (Token, Link, Eintrag) in einem Sheet → vorn das
+        /// Plus, rechts nichts.
         case create
         /// Teilen-Blatt → `square.and.arrow.up`.
         case share
-        /// Verlässt die App (Web-Seite, iOS-Einstellungen) → `arrow.up.right.square`.
+        /// Verlässt die App (Web-Seite, iOS-Einstellungen) → `arrow.up.right`.
         case external
         /// Löst direkt aus bzw. öffnet einen `confirmationDialog` — **kein**
         /// Glyph, weil die Zeile nirgendwohin führt.
@@ -230,7 +182,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
 
     private let icon: String?
     private let title: LocalizedStringKey
-    /// 1.4 B4 — one line under the label. It carries what a card's subtitle
+    /// One line under the label. It carries what a card's subtitle
     /// said when the card had only this row and lost its own title.
     private let subtitle: LocalizedStringKey?
     private let role: Role
@@ -240,11 +192,10 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
     /// `nil` ⇒ Push-Zeile (Chevron + `NavigationLink`).
     private let presents: Presents?
     private let destination: Destination?
-    /// SET-ROUTE — a push by value (`NavigationLink(value:)`), see the value init.
+    /// A push by value (`NavigationLink(value:)`), see the value init.
     private let valueLink: ((AnyView) -> NavigationLink<AnyView, Never>)?
     private let action: (() -> Void)?
     private let trailing: Trailing
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     // MARK: - Push (NavigationLink)
 
@@ -299,7 +250,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    /// Push-Zeile per Wert (SET-ROUTE, #153): appends `value` to the
+    /// Push-Zeile per Wert: appends `value` to the
     /// enclosing stack's path, so the page survives the privacy shield
     /// rebuilding the window. A `navigationDestination(for:)` of the stack
     /// resolves it; same chevron as the destination init.
@@ -322,7 +273,7 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         trailing = EmptyView()
     }
 
-    /// Push-Zeile per Wert mit Trailing (POLISH-C, C2): the same as above
+    /// Push-Zeile per Wert mit Trailing: the same as above
     /// with a state pill beside the chevron, for the provider rows of
     /// Integrations.
     public init(
@@ -354,167 +305,95 @@ public struct HLSettingsActionRow<Destination: View, Trailing: View>: View {
         return role == .destructive ? HLColor.statusBad : HLText.primary
     }
 
-    /// R10 — das Glyph gehört dem Primitive, nicht dem Aufrufer. Reine,
-    /// test-sichtbare Zuordnung (dasselbe Muster wie
-    /// `HLButton.restrainedContract`), damit `HLSettingsActionRowContractTests`
+    /// Das Zubehör gehört dem Primitive, nicht dem Aufrufer. Reine,
+    /// test-sichtbare Zuordnung, damit `HLSettingsActionRowContractTests`
     /// den Vertrag festnagelt, ohne den SwiftUI-Body zu inspizieren.
-    /// `nil` heißt: kein Trailing-Glyph — die Zeile führt nirgendwohin.
-    public nonisolated static func trailingSymbol(for presents: Presents) -> String? {
+    public nonisolated static func indicator(for presents: Presents) -> HLRowIndicator {
         switch presents {
-        case .sheet: "pencil"
-        case .create: "plus.circle"
-        case .share: "square.and.arrow.up"
-        case .external: "arrow.up.right.square"
-        case .confirm: nil
+        case .sheet: .disclosure
+        case .share: .symbol("square.and.arrow.up")
+        case .external: .symbol(HLRowIndicator.externalSymbol)
+        case .create, .confirm: .hidden
         }
     }
 
-    /// Push malt stattdessen den `HLDisclosureChevron` — siehe `label`.
-    private var presentationSymbol: String? {
-        presents.flatMap { Self.trailingSymbol(for: $0) }
+    /// Das Zeichen rechts, wo es kein Chevron ist: `nil` für den Chevron
+    /// und für eine Zeile ohne Zubehör.
+    public nonisolated static func trailingSymbol(for presents: Presents) -> String? {
+        if case let .symbol(name) = indicator(for: presents) { return name }
+        return nil
     }
 
-    /// 1.4 B4 — the trailing accessory (a status pill) keeps its own width,
-    /// so "Verbunden" never breaks into "Verbun-den" or collapses to a bar.
-    /// From XXL on, where a name and a pill no longer share one line, it
-    /// moves under the label (like `HLSettingsRow`'s stacked layout) instead
-    /// of squeezing it.
-    ///
-    /// POLISH-C (F-PSEUDO-INTEG) — below XXL a title without subtitle that
-    /// does not fit beside its pill (long translations, double-length
-    /// pseudo text) takes the stacked form too, instead of being pressed
-    /// into syllables ("With-ings").
-    @ViewBuilder
+    /// Das Symbol im Symbolfeld vorn: das des Aufrufers, sonst bei einer
+    /// Zeile, die etwas anlegt, das Plus.
+    public nonisolated static func leadingSymbol(icon: String?, presents: Presents?) -> String? {
+        if let icon { return icon }
+        return presents == .create ? createSymbol : nil
+    }
+
+    /// The sign in front of a row that creates something.
+    public nonisolated static var createSymbol: String {
+        "plus"
+    }
+
+    /// Whether a row with this promise is a link for VoiceOver. A row that
+    /// leaves the app opens a page elsewhere, and "link" is the word that
+    /// says so; every other row stays a button.
+    public nonisolated static func isLink(_ presents: Presents) -> Bool {
+        presents == .external
+    }
+
+    private var opensLink: Bool {
+        presents.map(Self.isLink) ?? false
+    }
+
+    /// A push and a sheet show the chevron, sharing and leaving the app
+    /// their own symbol, creating and confirming nothing.
+    private var indicator: HLRowIndicator {
+        guard let presents else { return .disclosure }
+        return Self.indicator(for: presents)
+    }
+
+    /// The trailing accessory (a status pill) keeps its own width, so
+    /// "Verbunden" never breaks into syllables; where name and pill no longer
+    /// share a line, the pill moves under the name.
     private var label: some View {
-        if dynamicTypeSize >= .xxLarge {
-            stackedLabel
-        } else if subtitle == nil {
-            ViewThatFits(in: .horizontal) {
-                oneLineLabel(titleFits: true)
-                stackedLabel
-            }
-        } else {
-            oneLineLabel(titleFits: false)
-        }
-    }
-
-    private var stackedLabel: some View {
-        // The accessory takes the row's full width under it, so a pill
-        // still reads "Verbunden" in one piece at the largest size.
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(alignment: .top, spacing: HLSpace.md) {
-                if let icon {
-                    HLSettingsIconChip(symbol: icon, tint: chipTint)
+        HLRowLayout(
+            title: Text(title),
+            subtitle: subtitle.map { Text($0) },
+            indicator: indicator,
+            configuration: .action(titleTint: labelTint, indicatorTint: labelTintOverride ?? HLText.tertiary),
+            leading: {
+                if let symbol = Self.leadingSymbol(icon: icon, presents: presents) {
+                    HLSettingsIconChip(symbol: symbol, tint: chipTint)
                 }
-                labels
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                trailingGlyph
-            }
-            trailing
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    /// `titleFits`: the title keeps its one-line width, so this form only
-    /// fits where the title and the pill share the line unbroken.
-    private func oneLineLabel(titleFits: Bool) -> some View {
-        HStack(spacing: HLSpace.md) {
-            if let icon {
-                HLSettingsIconChip(symbol: icon, tint: chipTint)
-            }
-            labels
-                .fixedSize(horizontal: titleFits, vertical: false)
-                .layoutPriority(1)
-            Spacer(minLength: HLSpace.sm)
-            trailing
-                .fixedSize()
-            trailingGlyph
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    private var labels: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(title)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(labelTint)
-                .fixedSize(horizontal: false, vertical: true)
-            if let subtitle {
-                // The same step down as a toggle row's description.
-                Text(subtitle)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var trailingGlyph: some View {
-        if presents == nil {
-            HLDisclosureChevron()
-        } else if let presentationSymbol {
-            Image(systemName: presentationSymbol)
-                .font(.hlFootnote.weight(.semibold))
-                .foregroundStyle(labelTintOverride ?? HLText.tertiary)
-                .accessibilityHidden(true)
-        }
+            },
+            trailing: { trailing }
+        )
     }
 
     public var body: some View {
+        // The row draws its own chevron; in a Form or List the system added
+        // a second one beside it (cycle settings, Apple Health row).
         if let destination {
             NavigationLink { destination } label: { label }
                 .buttonStyle(.plain)
+                .navigationLinkIndicatorVisibility(.hidden)
         } else if let valueLink {
             valueLink(AnyView(label))
                 .buttonStyle(.plain)
+                .navigationLinkIndicatorVisibility(.hidden)
         } else if let action {
             Button(role: role == .destructive ? .destructive : nil, action: action) { label }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(opensLink ? .isLink : [])
+                .accessibilityRemoveTraits(opensLink ? .isButton : [])
         }
-    }
-}
-
-// MARK: - Icon chip
-
-/// 26×26 tinted rounded-square icon used as the leading accessory of every
-/// `HLSettingsRow`. Public so other Settings-adjacent surfaces (e.g.
-/// `AIProviderScreen`) can paint identical icon chips outside the row
-/// envelope without re-implementing the geometry.
-///
-/// **W1-4:** shrunk from 28×28 / 15pt symbol to 26×26 / 13pt symbol per
-/// R5 #2 audit — the 28pt chip felt visually large next to a 15pt
-/// subhead title (the W1-4 row uses 15pt headings instead of 17pt body).
-public struct HLSettingsIconChip: View {
-    let symbol: String
-    let tint: Color
-
-    public init(symbol: String, tint: Color) {
-        self.symbol = symbol
-        self.tint = tint
-    }
-
-    public var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: HLRadius.xs, style: .continuous)
-                .fill(tint.opacity(0.18))
-            // Intentional fixed size:
-            // Icon sits inside a fixed 26×26 chip — must scale with the chip,
-            // not Dynamic Type. Chip dimension itself is a token decision.
-            Image(systemName: symbol)
-                // swiftlint:disable:next dynamic_type_bypass
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
-        }
-        .frame(width: 26, height: 26)
-        .accessibilityHidden(true)
     }
 }
 
 #Preview("HLSettingsRow") {
-    // C-7 + Theme-2.0 (T2-2): preview reflects the single-brand-accent
+    // C-7 + Theme-2.0: preview reflects the single-brand-accent
     // contract — every passive Settings row uses `HLAccent.primary` as
     // its icon-chip tint (which is also the parameter's default). Per-row
     // colour drift is an anti-pattern in production code; the preview matches.
@@ -531,11 +410,6 @@ public struct HLSettingsIconChip: View {
                 value: "12.05.1980"
             )
         }
-        // v0.14 purple-sweep: the prior "Accent color" picker preview row was
-        // dead — the accent-picker UI was retired in v0.6.1.0 (chrome is mono),
-        // and its `Picker(selection: "purple")` was the last purple literal in
-        // a non-token file. Removed; the Personalization section now previews
-        // the live appearance row only.
         Section("Personalization") {
             HLSettingsRow(
                 icon: "moon.fill",

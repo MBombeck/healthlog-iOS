@@ -7,7 +7,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **Phase 16 Plan 01 — K10: an account flag decides device-local setup.**
+    /// **K10: an account flag decides device-local setup.**
     ///
     /// The walkthrough's fresh install greeted the operator with "Apple Health
     /// nicht verbunden" on the dashboard. The HealthKit step exists and works;
@@ -22,9 +22,6 @@
     /// run on a device that has not done them, whatever the account says;
     /// account-level steps (AI source, anamnesis, baseline profile) keep
     /// honouring the account flag, so a returning user is never re-onboarded.
-    ///
-    /// Source contracts read comment-stripped source — a doc comment naming a
-    /// symbol is not the symbol.
     @MainActor
     @Suite("Phase 16 device-local setup routing")
     struct DeviceLocalSetupRoutingTests {
@@ -35,12 +32,12 @@
         ///
         /// Everything this case asserts is measured through published surface:
         /// the device's own readiness store truthfully reports "never asked",
-        /// and the production route is read for whether anything consults it.
+        /// and the scope decision turns that into the device-local route.
         @Test("a completed account on a fresh device is still asked for the device-local half")
         func freshDeviceGetsDeviceLocalSetup() throws {
             // The device fact, from the store that owns it. A fresh install has
             // no `requestedAt` for this user, so the device is honest about
-            // owing the sheet — this is the signal the route ignores.
+            // owing the sheet.
             let readiness = try Self.readinessStore(hasRequestedAuthorization: false)
             #expect(
                 !readiness.hasEverRequestedAuthorization,
@@ -61,28 +58,23 @@
                 "08-08's account-level answer stands; this plan does not overturn it"
             )
 
+            // The decision and the route it opens, for exactly that pair of facts.
             var violations: [String] = []
-            let resolver = try Self.strippedSource(Self.resolverPath)
-            if !resolver.contains("deviceLocal") {
-                violations.append(
-                    "the post-authentication decision takes no device-local input at all"
-                )
+            let scope = PostAuthenticationRouteResolver.setupScope(
+                accountSetupComplete: true,
+                deviceLocalSetup: .outstanding
+            )
+            if scope != .deviceLocalOnly {
+                violations.append("a finished account on an untouched device resolves to \(scope.rawValue)")
             }
-            let flow = try Self.flowPaths.map { try Self.strippedSource($0) }.joined(separator: "\n")
-            if !flow.contains("hasEverRequestedAuthorization") {
-                violations.append(
-                    "the flow reaches the shell without ever asking this device what it has done"
-                )
-            }
-            if !flow.contains("case deviceLocal") {
-                violations.append(
-                    "no step says whether it configures this device or this account — the classification does not exist"
-                )
+            let route = OnboardingFlow.activeRoute(setupScope: scope)
+            if !route.contains(.healthKit) {
+                violations.append("the route for that scope never reaches the HealthKit step")
             }
 
             #expect(
                 violations.isEmpty,
-                "EXPECTED_RED: an account flag skips device-local setup on a device that never granted anything"
+                "an account flag skips device-local setup on a device that never granted anything"
             )
         }
 
@@ -138,8 +130,6 @@
         @Test("a device-local-only run walks the head and never the account-level tail")
         func deviceLocalRouteExcludesTheAccountLevelTail() {
             let route = OnboardingFlow.activeRoute(
-                chosenMode: .server,
-                standaloneModeAvailable: false,
                 setupScope: .deviceLocalOnly
             )
             #expect(route == [.healthKit, .notifications])
@@ -151,8 +141,6 @@
             // was skipped: "Schritt 1 von 2", not "Schritt 5 von 7".
             let progress = OnboardingFlow.progress(
                 for: .healthKit,
-                chosenMode: .server,
-                standaloneModeAvailable: false,
                 setupScope: .deviceLocalOnly
             )
             #expect(progress.total == 2)
@@ -162,14 +150,10 @@
             // signed-in user back across their own login.
             #expect(OnboardingFlow.previousStep(
                 from: .healthKit,
-                chosenMode: .server,
-                standaloneModeAvailable: false,
                 setupScope: .deviceLocalOnly
             ) == nil)
             #expect(OnboardingFlow.previousStep(
                 from: .notifications,
-                chosenMode: .server,
-                standaloneModeAvailable: false,
                 setupScope: .deviceLocalOnly
             ) == .healthKit)
         }
@@ -178,20 +162,7 @@
         /// not name a scope gets the full route it got before this plan.
         @Test("the full route is unchanged for every caller that names no scope")
         func fullRouteIsUnchangedByDefault() {
-            for mode in [OnboardingMode.server, .standalone] {
-                for available in [true, false] {
-                    #expect(
-                        OnboardingFlow.activeRoute(
-                            chosenMode: mode,
-                            standaloneModeAvailable: available
-                        ) == OnboardingFlow.activeRoute(
-                            chosenMode: mode,
-                            standaloneModeAvailable: available,
-                            setupScope: .full
-                        )
-                    )
-                }
-            }
+            #expect(OnboardingFlow.activeRoute() == OnboardingFlow.activeRoute(setupScope: .full))
         }
 
         // MARK: - Controls (green before and after)
@@ -216,7 +187,7 @@
             #expect(
                 PostAuthenticationRouteResolver.resolve(server: .incomplete, cache: .absent) == .setup
             )
-            let route = OnboardingFlow.activeRoute(chosenMode: .server, standaloneModeAvailable: false)
+            let route = OnboardingFlow.activeRoute()
             for step in [OnboardingFlow.Step.healthKit, .notifications, .aiSource, .anamnesis, .baselineProfile] {
                 #expect(route.contains(step), "the full route still contains \(step)")
             }
@@ -242,16 +213,6 @@
             let scope: PostAuthenticationSetupScope
         }
 
-        private static let resolverPath = "HealthLog/Stores/PostAuthenticationRouteResolver.swift"
-        /// The flow's own sources. Two files, by the same 600-line discipline
-        /// that already produced `OnboardingRouteProgress.swift` — the route is
-        /// a value and lives beside the view that walks it, so a contract about
-        /// "the flow" has to read both or it can be satisfied by a move.
-        private static let flowPaths = [
-            "HealthLog/Screens/Onboarding/OnboardingFlow.swift",
-            "HealthLog/Screens/Onboarding/OnboardingFlowRoute.swift"
-        ]
-
         /// A readiness store on isolated defaults, standing for a device that
         /// has (or has not) already been through the system sheet.
         private static func readinessStore(hasRequestedAuthorization: Bool) throws -> HKReadinessStore {
@@ -268,42 +229,6 @@
             )
             if hasRequestedAuthorization { store.markAuthorizationRequested() }
             return store
-        }
-
-        // MARK: - Source access
-
-        private static let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
-        private static func strippedSource(_ relativePath: String) throws -> String {
-            let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-            return stripLineComments(from: stripBlockComments(from: text))
-        }
-
-        private static func stripBlockComments(from source: String) -> String {
-            var out = ""
-            var rest = Substring(source)
-            while let open = rest.range(of: "/*") {
-                out += rest[..<open.lowerBound]
-                guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-                rest = rest[close.upperBound...]
-            }
-            return out + rest
-        }
-
-        private static func stripLineComments(from source: String) -> String {
-            source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-                var quoted = false
-                var previous: Character = " "
-                for (offset, character) in line.enumerated() {
-                    if character == "\"", previous != "\\" { quoted.toggle() }
-                    if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                    previous = character
-                }
-                return String(line)
-            }.joined(separator: "\n")
         }
     }
 

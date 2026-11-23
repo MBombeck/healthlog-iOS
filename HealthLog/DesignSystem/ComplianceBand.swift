@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.12 W4-1 — the SINGLE source of truth for medication-compliance band
+/// The SINGLE source of truth for medication-compliance band
 /// classification + colour.
 ///
 /// **Why this exists:** the same adherence percentage was classified — and

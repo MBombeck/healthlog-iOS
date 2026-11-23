@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 MOVE (#133)** — the Dawarich connection as `GET /api/dawarich/status`
+/// The Dawarich connection as `GET /api/dawarich/status`
 /// reports it (server v1.43). Only what the "Unterwegs" section needs is read:
 /// whether the account is connected, and the first and last day the server
 /// holds movement for. Every field is tolerant, so a shape this build does not

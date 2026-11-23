@@ -5,7 +5,7 @@ import SwiftUI
 /// rendered `EmptyView` → black-screen on every other tap (A1-Audit §3.1,
 /// user-report #2 "Seite wird schwarz und die App hängt sich auf").
 ///
-/// W-IMPL-MOTION-POLISH (v0.5.5.1) adds the optional `namespace` payload —
+/// W-IMPL-MOTION-POLISH adds the optional `namespace` payload —
 /// the matched-geometry namespace owned by the presenting screen
 /// (`DashboardScreen` for the dashboard path, `nil` for the Charts list
 /// path until that surface adopts the same transition). The push closure
@@ -35,34 +35,5 @@ struct MetricDrillDown: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
-    }
-}
-
-/// Defensive fallback view used when `navigationDestination(item:)`
-/// resolves with neither a prepared `drillDownStore` nor a live
-/// `appContainer` — should never fire in production but renders
-/// **something visible** instead of silently swallowing the push.
-/// See WEIGHT-TILE-TAP-FIX commit for the operator-reported bug this
-/// defends against. Shared between `DashboardScreen` + `ChartsScreen`
-/// because both surfaces wire identical drill-down semantics into
-/// `ChartDetailScreen`.
-struct DrillDownErrorState: View {
-    let kindRaw: String
-    let surface: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text(String(localized: "Detail view could not be loaded"))
-                .font(.hlTitle3)
-                .foregroundStyle(HLText.primary)
-            Text(String(localized: "Please go back and tap again."))
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(HLSpace.lg)
-        .task {
-            HLLog.ui.error("\(surface) drill-down fallback rendered — \(kindRaw)")
-        }
     }
 }

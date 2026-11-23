@@ -2,12 +2,12 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0152 I2 — the missing Steps Insights detail page. The Home dashboard renders a
+/// The missing Steps Insights detail page. The Home dashboard renders a
 /// distinct `MetricKind.steps` tile, but tapping it dead-ended: `.steps` had no
 /// Insights slug, so `AppRouter.selectInsightsMetric(.steps)` no-op'd and no Steps
 /// subpage existed. The fix maps the `steps` slug ↔ `.steps` end-to-end.
 ///
-/// **Parity Build 4 / 4.1** — the tail-append is gone: `steps` is a first-class
+/// The tail-append is gone: `steps` is a first-class
 /// `SUB_PAGE_METRIC` key on the web (since v1.12) and therefore part of the
 /// server's `INSIGHTS_TILE_IDS`, so it is in `serverKnownIds` and reaches the
 /// strip through its curated layout slot. That also restores the operator's
@@ -35,7 +35,7 @@ struct InsightsStepsPageTests {
         #expect(InsightsCategoryGroups.category(for: .steps) == .activity)
     }
 
-    /// Build 4 — `steps` is server-known, so a layout PUT carries it and the
+    /// `steps` is server-known, so a layout PUT carries it and the
     /// operator's Steps order/visibility survives the round-trip. Keeping it out
     /// of `serverKnownIds` was what made `filteringForServer()` drop it.
     @Test("the steps slug is server-known and survives a PUT filter")

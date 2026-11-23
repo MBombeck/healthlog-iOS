@@ -1,4 +1,4 @@
-// 15-02 (B3) — the keyboard sits on the schedule options.
+// The keyboard sits on the schedule options.
 //
 // The operator's B3 is "das Dropdown für den Zeitplan öffnet sich, während die
 // Tastatur noch die unteren Zeilen verdeckt". The editor mounts its cadence
@@ -37,7 +37,7 @@ struct MedicationEditorKeyboardTests {
 
         #expect(
             field == nil,
-            "EXPECTED_RED: the keyboard stays up over the schedule options"
+            "the keyboard stays up over the schedule options"
         )
     }
 
@@ -52,7 +52,7 @@ struct MedicationEditorKeyboardTests {
 
         #expect(
             field == nil,
-            "EXPECTED_RED: the keyboard stays up from the name field too"
+            "the keyboard stays up from the name field too"
         )
     }
 

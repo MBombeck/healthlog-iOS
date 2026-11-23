@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.8.4 WWIDGET-3** — coverage for the compliance READ intent.
+/// Coverage for the compliance READ intent.
 ///
 /// Two layers:
 ///   - ``ComplianceQueryCopy/resource(scheduled:taken:)`` — the pure

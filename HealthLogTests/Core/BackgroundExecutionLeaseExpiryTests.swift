@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 #if canImport(UIKit)
-    /// Build 274 (public #4) — the production lease's expiry bridge, which had no
+    /// The production lease's expiry bridge, which had no
     /// coverage at all: `UIKitBackgroundExecutionLease.Expiry` carries the
     /// expiration handler (fires once, on the main thread, at an unknown moment)
     /// over to the body's task, and now also latches the one-shot end of the
@@ -13,7 +13,7 @@ import Testing
     /// RunningBoard kill this whole build is about.
     @Suite("Background-execution lease — the expiry bridge")
     struct BackgroundExecutionLeaseExpiryTests {
-        /// Build 274 (public #4) — counts cancel invocations across threads; the
+        /// Counts cancel invocations across threads; the
         /// expiry bridge is lock-based and `@unchecked Sendable`, so its probe is
         /// too.
         private final class Counter: @unchecked Sendable {

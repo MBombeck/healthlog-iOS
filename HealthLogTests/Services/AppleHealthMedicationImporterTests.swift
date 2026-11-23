@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **GH #47** — drives ``AppleHealthMedicationImporter`` over the **real**
+/// Drives ``AppleHealthMedicationImporter`` over the **real**
 /// ``APIClient`` + `MockURLProtocol` + a real ``MedicationsRepository`` (per
 /// PROJECT_GUIDE.md — no mock server on the write paths). Covers the mirror
 /// upsert: idempotency, adoption of a server-known row, the rename follow, the
@@ -123,7 +123,7 @@ struct AppleHealthMedicationImporterTests {
         #expect(recorder.mirrorPostCount == 1)
     }
 
-    // MARK: - CU-10 — unstable externalId + mirror cap
+    // MARK: - Unstable externalId + mirror cap
 
     @Test("A pointer-shaped externalId is refused pre-flight — nothing goes on the wire")
     func unstableExternalIdRefusedBeforeThePost() async throws {

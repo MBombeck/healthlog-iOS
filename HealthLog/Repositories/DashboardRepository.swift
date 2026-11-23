@@ -2,15 +2,8 @@ import Foundation
 
 public actor DashboardRepository {
     private let api: APIClientProtocol
-    /// v0.11 W2 — standalone seam. `nil` (default) → server `summary()` verbatim
-    /// (paired invariant). Non-nil + live standalone → the summary is aggregated
-    /// locally from the mirror + HealthKit-direct reads; no `/api/*` fires. The
-    /// per-tile `MetricDataState` fan-out (`DashboardStore.refreshMetricStates`)
-    /// independently routes through the already-standalone `MeasurementsRepository`
-    /// — this only supplies the seed.
-    private let standalone: StandaloneGate?
 
-    /// **CU-20 (#69)** — last `updatedAt` from `/api/dashboard/widgets` (GET,
+    /// Last `updatedAt` from `/api/dashboard/widgets` (GET,
     /// PUT echo, or DELETE reset echo). `nil` → unconditional write.
     private var widgetLayoutToken: String?
 
@@ -19,110 +12,25 @@ public actor DashboardRepository {
         widgetLayoutToken
     }
 
-    public init(api: APIClientProtocol, standalone: StandaloneGate? = nil) {
+    public init(api: APIClientProtocol) {
         self.api = api
-        self.standalone = standalone
     }
 
     public func summary() async throws -> DashboardSummary {
-        if standalone?.isActive == true {
-            return try await standaloneSummary()
-        }
         let req: APIRequest<DashboardSummary> = .get("/api/dashboard/summary")
         return try await api.send(req)
     }
 
-    /// Builds a `DashboardSummary` from on-device data only: the latest local
-    /// manual row per kind ∪ the latest HealthKit-direct sample for the
-    /// adapter-supported kinds (weight / pulse / steps). Compliance is left empty
-    /// in W2 — local medication compliance aggregation is the noted W2b
-    /// follow-up; the tiles still populate from the metric-state fan-out.
-    private func standaloneSummary() async throws -> DashboardSummary {
-        guard let standalone else {
-            return Self.emptyStandaloneSummary()
-        }
-        // Latest local manual row per kind.
-        let localSnaps = try await standalone.local.standaloneMeasurements(kind: nil, limit: nil)
-        var latestByKind: [MetricKind: Measurement] = [:]
-        for snap in localSnaps {
-            let measurement = snap.toDomainMeasurement()
-            // #33 — never let a malformed 0-systolic/0-diastolic BP row become the
-            // standalone tile's "latest"; the shared guard is a no-op for every
-            // non-BP kind, so a valid earlier BP wins the latest slot instead.
-            guard measurement.isDisplayableLatest else { continue }
-            if let existing = latestByKind[measurement.kind], existing.recordedAt >= measurement.recordedAt {
-                continue
-            }
-            latestByKind[measurement.kind] = measurement
-        }
-        // HealthKit-direct latest for the adapter-supported kinds (W1 coverage).
-        for kind in MeasurementsRepository.standaloneHKKinds {
-            let points: [SeriesPoint] = if kind.standaloneIsCumulative {
-                await standalone.healthKit.standaloneDailySeries(kind: kind, days: 7)
-            } else {
-                await standalone.healthKit.standaloneRecentSamples(kind: kind, days: 30, limit: 1)
-            }
-            guard let latest = points.max(by: { $0.at < $1.at }) else { continue }
-            if let existing = latestByKind[kind], existing.recordedAt >= latest.at { continue }
-            latestByKind[kind] = Measurement(
-                id: "hk-\(kind.rawValue)-\(latest.id)",
-                kind: kind,
-                recordedAt: latest.at,
-                value: .scalar(latest.value),
-                source: .appleHealth
-            )
-        }
-        let metrics: [DashboardMetric] = latestByKind.values
-            .sorted { $0.kind.rawValue < $1.kind.rawValue }
-            .map { measurement in
-                DashboardMetric(
-                    id: "local-\(measurement.kind.rawValue)",
-                    kind: measurement.kind,
-                    title: measurement.kind.displayName,
-                    latestValue: measurement.primaryValue,
-                    secondaryValue: {
-                        if case let .bloodPressure(_, dia) = measurement.value { return dia }
-                        return nil
-                    }(),
-                    unit: measurement.kind.unit,
-                    trend: .unknown,
-                    sparkline: [],
-                    updatedAt: measurement.recordedAt
-                )
-            }
-        return DashboardSummary(
-            greeting: Greeting(salutation: "", date: .now),
-            compliance: ComplianceSnapshot(scheduledToday: 0, takenToday: 0),
-            highlightInsight: nil,
-            metrics: metrics,
-            lastUpdated: .now
-        )
-    }
-
-    private static func emptyStandaloneSummary() -> DashboardSummary {
-        DashboardSummary(
-            greeting: Greeting(salutation: "", date: .now),
-            compliance: ComplianceSnapshot(scheduledToday: 0, takenToday: 0),
-            highlightInsight: nil,
-            metrics: [],
-            lastUpdated: .now
-        )
-    }
-
     /// Thin briefing read off `GET /api/dashboard/snapshot` (server v1.7.0+).
     ///
-    /// **v1.16.x tolerant-first (GH issue #15):** decodes ONLY the four
+    /// **v1.16.x tolerant-first:** decodes ONLY the four
     /// briefing fields (`briefing` / `briefingState` / `briefingUpdatedAt` /
     /// `briefingStale`) via the tolerant ``DashboardSnapshotBriefing`` DTO —
     /// unknown `briefingState` values land in `.unknown`, absent
     /// `briefingStale` defaults `false`. No LLM is reachable from this route
     /// server-side (read-only lift of the pre-generated cache), so the call
     /// is NOT consent-gated — it transmits no health data to any provider.
-    ///
-    /// Returns `nil` in standalone mode (no `/api/*` fires) — the on-device /
-    /// Statistik-Mode briefing ladder is the surface there anyway.
     public func snapshotBriefing() async throws -> DashboardSnapshotBriefing? {
-        if standalone?.isActive == true { return nil }
         let req: APIRequest<DashboardSnapshotBriefing> = .get("/api/dashboard/snapshot")
         return try await api.send(req)
     }
@@ -156,7 +64,7 @@ public actor DashboardRepository {
     /// `byRestoringIosOnlyWidgets(from:)` round-trip workaround is gone —
     /// the layout is sent + echoed in full.
     ///
-    /// **CU-20 (#69):** guarded by `baseUpdatedAt` — a stale token returns
+    /// Guarded by `baseUpdatedAt` — a stale token returns
     /// `409 dashboard_layout_conflict` with nothing written, and the retry is
     /// bounded (this GET is cached 300 s server-side, so a post-conflict
     /// re-read can keep returning the same stale token).
@@ -178,7 +86,7 @@ public actor DashboardRepository {
         }
     }
 
-    /// **Parity 1.2 — reset the layout the way the web does.**
+    /// **Reset the layout the way the web does.**
     ///
     /// `DELETE /api/dashboard/widgets` (`route.ts:338-353`) nulls the
     /// `dashboardWidgetsJson` column, so the next read re-resolves the layout
@@ -198,7 +106,7 @@ public actor DashboardRepository {
     public func resetWidgetLayout() async throws {
         let req: APIRequest<DashboardWidgetLayout> = .delete("/api/dashboard/widgets")
         let echoed = try await api.send(req)
-        // CU-20 — unlike the insights/medications resets, THIS DELETE echoes a
+        // Unlike the insights/medications resets, THIS DELETE echoes a
         // fresh token (`route.ts:413-451`), so adopt it rather than clearing.
         widgetLayoutToken = echoed.updatedAt
     }
@@ -206,7 +114,7 @@ public actor DashboardRepository {
 
 public actor InsightsRepository {
     let api: APIClientProtocol
-    /// 1.2 V5 — state of the `POST /api/insights/generate` discipline (hold
+    /// State of the `POST /api/insights/generate` discipline (hold
     /// after a 429, one shared request); see `InsightsRepository+Generate.swift`.
     let now: @Sendable () -> Date
     var generateHeldUntil: Date?
@@ -370,7 +278,7 @@ public actor SettingsRepository {
         return try await api.send(req)
     }
 
-    /// **v0.8.1 WD — avatar-persist fix.** Fetches `GET /api/auth/me`, which is
+    /// **Avatar-persist fix.** Fetches `GET /api/auth/me`, which is
     /// the only route that currently echoes `avatarUrl` (server v1.5.5;
     /// `src/app/api/auth/me/route.ts`). `GET /api/user/profile` does *not* select
     /// the avatar columns, so a profile-driven reload would otherwise revert the
@@ -403,7 +311,7 @@ public actor SettingsRepository {
     /// Added v0.4.1 / M2-A6 to back `SettingsStore.updateProfile(patch:)`
     /// from `EditProfileScreen`.
     ///
-    /// #97 / #115 · 0.4 — the 200 can be a PARTIAL save: the server skips a
+    /// The 200 can be a PARTIAL save: the server skips a
     /// field that fails validation, writes its siblings, and names the skipped
     /// one in `rejectedFields`. The result carries both halves so the caller
     /// can keep the form open instead of reading every 200 as a clean save.
@@ -420,19 +328,6 @@ public actor SettingsRepository {
     public func updateHealthKit(config: HealthKitSyncConfig) async throws -> HealthKitSyncConfig {
         let req: APIRequest<HealthKitSyncConfig> = try .patch("/api/integrations/healthkit", body: config)
         return try await api.send(req)
-    }
-}
-
-/// Thin projection of the `GET /api/auth/me` payload — only `avatarUrl`, the
-/// one field the profile load needs and the only avatar source the server
-/// currently exposes (v0.8.1 WD). `avatarUrl` is optional on the wire (older
-/// servers omit it; a user without a photo gets `null`) so the decode is
-/// tolerant and the caller falls back to the initials monogram on `nil`.
-public struct AuthMeAvatar: Decodable, Sendable, Equatable {
-    public let avatarUrl: String?
-
-    public init(avatarUrl: String?) {
-        self.avatarUrl = avatarUrl
     }
 }
 
@@ -458,13 +353,13 @@ public struct ProfilePatch: Encodable, Sendable, Equatable {
     public var gender: String??
     public var heightCm: Int??
     public var locale: String??
-    /// v0.5.4.3 HP5 — mood-reminder opt-in. Bool (not Bool??) because
+    /// Mood-reminder opt-in. Bool (not Bool??) because
     /// the server treats `moodReminderEnabled` as a non-nullable bool
     /// (default `false`); we send it only when the toggle actually
     /// changed. Use `.some(true)` / `.some(false)` to set, `.none` to
     /// omit from the wire payload.
     public var moodReminderEnabled: Bool?
-    /// v0.10.0 — extended patient-identity fields (server v1.7.0). Like the
+    /// Extended patient-identity fields (server v1.7.0). Like the
     /// other text fields these are `String??` so the wire payload can
     /// disambiguate "leave unchanged" (`.none`, key omitted) from "clear to
     /// null" (`.some(nil)`, explicit `null`). The server collapses an empty
@@ -474,7 +369,7 @@ public struct ProfilePatch: Encodable, Sendable, Equatable {
     /// German insurance number (KVNR). Sensitive PII — travels only over the
     /// existing cert-pinned TLS in the PATCH body and is **never** logged.
     public var insuranceNumber: String??
-    /// v0.11.0 — insurer IKNR (Institutionskennzeichen, 9 digits). `String??`
+    /// Insurer IKNR (Institutionskennzeichen, 9 digits). `String??`
     /// for the same leave-unchanged / clear-to-null disambiguation. Identifying
     /// PII — travels only over the cert-pinned PATCH body, **never** logged.
     public var insurerIkNumber: String??
@@ -483,7 +378,7 @@ public struct ProfilePatch: Encodable, Sendable, Equatable {
     /// `String??` keeps it uniform with the other text fields (we only ever
     /// send `.some(value)` — never clear it). `.none` omits the key.
     public var timeFormat: String??
-    /// A360-1 H1 — date-format preference (`AUTO | DMY | MDY | YMD`). Server
+    /// Date-format preference (`AUTO | DMY | MDY | YMD`). Server
     /// `applyProfileUpdate` accepts `dateFormat` as a non-nullable enum;
     /// `String??` keeps it uniform with `timeFormat` (we only ever send
     /// `.some(value)` — never clear it). `.none` omits the key.

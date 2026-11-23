@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// R2 / #115 A3 — "Confirm it's you" for a record action the server refused
+/// "Confirm it's you" for a record action the server refused
 /// with a proof-family 401 (share link, connector token, full or encrypted
 /// backup). Hosts the existing ``StepUpArmPicker``; the strength it asks for
 /// follows the account, as the server's `requireRecentProof` does: with a
@@ -13,7 +13,7 @@ import SwiftUI
 struct StepUpConfirmSheet: View {
     /// Receives the raw elevation token exactly once.
     let onConfirmed: (String) -> Void
-    /// POLISH-C (C1) — `true` for a loaded status whose account needs no
+    /// `true` for a loaded status whose account needs no
     /// proof for this action; the sheet then closes and ``onWaived`` runs.
     var waiveWhen: ((AccountSecurityStore.TwoFactorState) -> Bool)?
     var onWaived: (() -> Void)?
@@ -22,36 +22,25 @@ struct StepUpConfirmSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    Text("stepUp.record.body")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    switch security.twoFactor {
-                    case .idle, .loading:
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    case .unavailable, .failed, .loaded:
-                        StepUpArmPicker(
-                            requiresFresh: security.hasSecondFactor,
-                            hasTotp: security.isTotpEnabled,
-                            proofMethods: security.offeredProofMethods
-                        ) { elevation in
-                            guard let proof = elevation.consume() else { return }
-                            onConfirmed(proof.token)
-                            dismiss()
-                        }
+        HLSheetScaffold("settings.security.twoFactor.stepUp.prompt") {
+            HLPage {
+                Text("stepUp.record.body")
+                    .hlText(.factLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch security.twoFactor {
+                case .idle, .loading:
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                case .unavailable, .failed, .loaded:
+                    StepUpArmPicker(
+                        requiresFresh: security.hasSecondFactor,
+                        hasTotp: security.isTotpEnabled,
+                        proofMethods: security.offeredProofMethods
+                    ) { elevation in
+                        guard let proof = elevation.consume() else { return }
+                        onConfirmed(proof.token)
+                        dismiss()
                     }
-                }
-                .padding(HLSpace.lg)
-            }
-            .navigationTitle("settings.security.twoFactor.stepUp.prompt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
                 }
             }
             .task {
@@ -71,7 +60,7 @@ extension View {
     /// minted elevation to it, and re-runs the refused action. A `nil` retry
     /// (its store not built yet) presents nothing.
     ///
-    /// POLISH-C (C1) — `waiveWhen` names the accounts this action needs no
+    /// `waiveWhen` names the accounts this action needs no
     /// proof from; for one of them the sheet closes once the status is read,
     /// `onWaived` runs, and the action runs again without a proof.
     func stepUpConfirmation(
@@ -107,5 +96,13 @@ extension StepUpRetry {
                 if !presented, retry?.isRequested == true { retry?.cancel() }
             }
         )
+    }
+}
+
+extension StepUpRetry {
+    /// The tint of a card's message line. "Confirm it's you" is a step of
+    /// the flow, not a failure, so it reads secondary; anything else is an error.
+    static func messageTint(for message: String) -> Color {
+        message == requiredMessage ? HLText.secondary : HLColor.statusBad
     }
 }

@@ -9,7 +9,7 @@ struct CycleBuild5RequestTests {
         nonisolated(unsafe) var path: String?
         nonisolated(unsafe) var query: String?
         MockURLProtocol.install { request in
-            // CU-07: the handler is process-global — record only OUR route so a
+            // The handler is process-global — record only OUR route so a
             // parallel suite's request cannot overwrite what we assert on.
             if request.targets("/api/cycle/day-logs") {
                 path = request.url?.path
@@ -42,7 +42,7 @@ struct CycleBuild5RequestTests {
             )
         }
         let repository = try makeRepository()
-        let result = try await repository.updateDayLog(
+        let result = try await repository.updateDayLogReportingStarts(
             id: "row-1",
             patch: CycleDayLogPatch(
                 flow: .clear,
@@ -53,7 +53,7 @@ struct CycleBuild5RequestTests {
                 note: .clear
             )
         )
-        #expect(result.id == "row-1")
+        #expect(result.dayLog.id == "row-1")
         #expect(path == "/api/cycle/day-logs/row-1")
         #expect(method == "PATCH")
         let object = try #require(body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })
@@ -81,7 +81,7 @@ struct CycleBuild5RequestTests {
         )
 
         await #expect(throws: HLError.self) {
-            _ = try await repository.updateDayLog(id: "row-1", patch: patch)
+            _ = try await repository.updateDayLogReportingStarts(id: "row-1", patch: patch)
         }
 
         let operation = try #require(await outbox.snapshot.first)
@@ -134,7 +134,7 @@ struct CycleBuild5RequestTests {
     func customCRUD() async throws {
         nonisolated(unsafe) var calls: [(String, String, String?)] = []
         MockURLProtocol.install { request in
-            // CU-07: only the custom-symptom routes drive this request log (and
+            // Only the custom-symptom routes drive this request log (and
             // therefore the response phase) — foreign requests are ignored.
             if request.targets(prefixedBy: "/api/cycle/symptoms/custom") {
                 calls.append((request.httpMethod ?? "", request.url?.path ?? "", request.url?.query))

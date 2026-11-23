@@ -30,7 +30,7 @@ public struct HealthKitBatchEntryDTO: Codable, Sendable, Equatable {
     public let startDate: Date
     public let endDate: Date
     public let sleepStage: Int?
-    /// W-HKREAD — the integer `HKCategoryValue` codepoint for an EVENT-class
+    /// The integer `HKCategoryValue` codepoint for an EVENT-class
     /// category sample (irregular-rhythm, high/low-HR, walking-steadiness,
     /// breathing-disturbance, audio-exposure). Carries the device's own
     /// verdict / severity; the server resolves it to a `rhythmClassification`
@@ -40,6 +40,14 @@ public struct HealthKitBatchEntryDTO: Codable, Sendable, Equatable {
     public let externalId: String
     public let externalSourceVersion: String?
     public let deviceType: HealthKitDeviceType?
+    /// PHQ-9 / GAD-7 item answers (0-3, Apple's item order), only on an
+    /// `HKScoredAssessment` row; omitted from every other row.
+    public let assessmentAnswers: [Int]?
+    /// The IANA zone the reading was taken in (`HKMetadataKeyTimeZone`, else
+    /// the device's zone at read time), so the server cuts its local day there
+    /// (#181). Set only while the server reports
+    /// `features.measurementTimeZone`; omitted from the wire otherwise.
+    public let timeZone: String?
 
     public init(
         hkIdentifier: String,
@@ -53,7 +61,9 @@ public struct HealthKitBatchEntryDTO: Codable, Sendable, Equatable {
         categoryValue: Int? = nil,
         externalId: String,
         externalSourceVersion: String? = nil,
-        deviceType: HealthKitDeviceType? = nil
+        deviceType: HealthKitDeviceType? = nil,
+        assessmentAnswers: [Int]? = nil,
+        timeZone: String? = nil
     ) {
         self.hkIdentifier = hkIdentifier
         self.value = value
@@ -67,6 +77,28 @@ public struct HealthKitBatchEntryDTO: Codable, Sendable, Equatable {
         self.externalId = externalId
         self.externalSourceVersion = externalSourceVersion
         self.deviceType = deviceType
+        self.assessmentAnswers = assessmentAnswers
+        self.timeZone = timeZone
+    }
+
+    /// The same row with `timeZone` set (or cleared with `nil`).
+    public func withTimeZone(_ timeZone: String?) -> HealthKitBatchEntryDTO {
+        HealthKitBatchEntryDTO(
+            hkIdentifier: hkIdentifier,
+            value: value,
+            valueMin: valueMin,
+            valueMax: valueMax,
+            unit: unit,
+            startDate: startDate,
+            endDate: endDate,
+            sleepStage: sleepStage,
+            categoryValue: categoryValue,
+            externalId: externalId,
+            externalSourceVersion: externalSourceVersion,
+            deviceType: deviceType,
+            assessmentAnswers: assessmentAnswers,
+            timeZone: timeZone
+        )
     }
 }
 
@@ -75,7 +107,7 @@ public struct HealthKitBatchEntryDTO: Codable, Sendable, Equatable {
 /// dekodieren und gegen das Erwartete asserten können.
 public struct HealthKitBatchPayload: Codable, Sendable, Equatable {
     public let entries: [HealthKitBatchEntryDTO]
-    /// **CU-21 (C1)** — optionales **Top-Level**-Feld (Geschwister von
+    /// Optionales **Top-Level**-Feld (Geschwister von
     /// `entries`, nicht pro Eintrag), Server ≥ v1.32.31. Trägt den tatsächlichen
     /// Auslöser dieses Sweeps; der Server persistiert ihn und leitet daraus ab,
     /// ob dieses Telefon selbstständig liefert oder nur bei geöffneter App.
@@ -93,7 +125,7 @@ public struct HealthKitBatchPayload: Codable, Sendable, Equatable {
 /// Server-Antwort: `data` von `POST /api/measurements/batch`. Per-Entry-Status-Liste
 /// ist die Cursor-Advance-Quelle (siehe `08-locked-contracts.md §2.1`).
 ///
-/// **Phase 07 / Plan 07-04.** Dieses DTO dekodiert *tolerant* — jedes Feld
+/// Dieses DTO dekodiert *tolerant* — jedes Feld
 /// optional-mit-Default, jedes unbekannte Statuswort als `.unknown`. Toleranz
 /// ist hier ausdrücklich keine Annahme: HTTP 200 allein bewegt keinen Cursor.
 /// Welche Indizes terminal sind, entscheidet ``MeasurementBatchAcceptance``
@@ -168,7 +200,7 @@ public struct HealthKitBatchResponseDTO: Codable, Sendable, Equatable {
         public let index: Int
         public let status: HealthKitEntryStatus
         public let reason: String?
-        /// 1.5 FIX-DATA (#126) — only on a `value_out_of_range` skip
+        /// Only on a `value_out_of_range` skip
         /// (server v1.39.1): the value after conversion into the stored unit,
         /// the number the band was checked against.
         public let convertedValue: Double?
@@ -221,7 +253,7 @@ public struct HealthKitValueRange: Codable, Sendable, Equatable {
 
 /// Per-Entry-Status des deployten Servers (`v1.37.12`, Revision `d21fe48`).
 ///
-/// **Phase 07 / Plan 07-04 — tolerantes Decoding ist NICHT terminale Annahme.**
+/// **Tolerantes Decoding ist NICHT terminale Annahme.**
 /// Dieses Enum sagt nur, welches Wort der Server geschickt hat. Ob ein Index den
 /// Cursor bewegen darf, entscheidet ausschliesslich
 /// ``MeasurementBatchAcceptance`` — reason-aware und pro Index. Vier Worte sind

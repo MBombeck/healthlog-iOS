@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.5.6 POLISH-PR — `PersonalRecordsStore` enrichment contract tests.
+/// `PersonalRecordsStore` enrichment contract tests.
 ///
 /// Pins the view-model derivation pipeline that powers the redesigned
 /// `PersonalRecordsScreen`: `enrichedRecords`, `heroRecord`,
@@ -121,37 +121,52 @@ struct PersonalRecordsStoreEnrichmentTests {
         #expect(store.visibleRecords.map(\.id) == ["w-this"])
     }
 
-    @Test("Streak records are surfaced into the rail by metricSlot pattern")
-    func streakSurfacing() async {
+    @Test("Every catalog language keeps streaks in the rail and milestones, out of the grid")
+    func streakSurfacing() async throws {
+        let catalog = try ParityCatalog.load()
+        let entry = try #require(catalog.strings["records.streak.slot %@ %lld"])
+        let localizations = try #require(entry.localizations)
+        #expect(localizations.keys.contains("ko"), "The localized streak regression must cover Korean")
+        #expect(localizations.keys.contains("es"), "The localized streak regression must cover Spanish")
         MockURLProtocol.install { req in
             let body = Data(#"{"data":[],"error":null}"#.utf8)
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let repo = PersonalRecordsRepository(api: makeAPI())
         let plain = makeRecord(id: "p1", metricType: "ACTIVITY_STEPS", value: 23000, achievedAt: now)
-        let streak = PersonalRecordDTO(
-            id: "s1",
-            userId: "u1",
-            metricType: "ACTIVITY_STEPS",
-            metricSlot: "Längste Serie ≥ 10.000 (14 Tage)",
-            direction: .max,
-            value: 14,
-            unit: "Tage",
-            achievedAt: now,
-            sourceMeasurementId: nil,
-            source: "HEALTHLOG_CLIENT",
-            externalId: nil,
-            createdAt: now
-        )
-        let derived = StubDerivedSource(records: [plain, streak])
-        let store = PersonalRecordsStore(
-            repo: repo,
-            derivedSource: derived,
-            sparklineProvider: nil,
-            clock: { now }
-        )
-        await store.load()
-        #expect(store.streakRecords.map(\.id) == ["s1"])
+        // Read every translation directly so a new language cannot silently lose its streak marker.
+        for language in localizations.keys.sorted() {
+            let format = try #require(ParityCatalog.value(entry, language: language), "Missing streak slot for \(language)")
+            let streak = PersonalRecordDTO(
+                id: "s1",
+                userId: "u1",
+                metricType: "ACTIVITY_STEPS",
+                metricSlot: String(format: format, "10,000", Int64(30)),
+                direction: .max,
+                value: 30,
+                unit: "",
+                achievedAt: now,
+                sourceMeasurementId: nil,
+                source: "HEALTHLOG_CLIENT",
+                externalId: nil,
+                createdAt: now
+            )
+            let derived = StubDerivedSource(records: [plain, streak])
+            let store = PersonalRecordsStore(
+                repo: repo,
+                derivedSource: derived,
+                sparklineProvider: nil,
+                clock: { now }
+            )
+            await store.load()
+            let enrichedStreak = try #require(store.enrichedRecords.first { $0.id == streak.id }, "\(language)")
+            let grid = PersonalRecordsScreen.gridRecords(store.enrichedRecords)
+            #expect(grid.map(\.id) == [plain.id], "\(language): only the plain record belongs in the grid")
+            #expect(store.streakRecords.map(\.id) == [streak.id], "\(language): only the streak belongs in the rail")
+            let milestoneIDs = Milestone.synthesise(from: [enrichedStreak]).map(\.id)
+            #expect(milestoneIDs.contains("week-streak"), "\(language): a 30-day streak earns the week milestone")
+            #expect(milestoneIDs.contains("month-streak"), "\(language): a 30-day streak earns the month milestone")
+        }
     }
 
     @Test("clearOnLogout resets selectedBucket + enrichedRecords")
@@ -176,7 +191,7 @@ struct PersonalRecordsStoreEnrichmentTests {
         #expect(!store.enrichedRecords.isEmpty)
         store.clearOnLogout()
         #expect(store.enrichedRecords.isEmpty)
-        // v0.14.1 (#139) — logout resets to the new `.week` default, not `.allTime`.
+        // Logout resets to the new `.week` default, not `.allTime`.
         #expect(store.selectedBucket == .week)
     }
 
@@ -224,10 +239,22 @@ struct PersonalRecordsStoreEnrichmentTests {
         #expect(map["WEIGHT"] == 80)
     }
 
+    @Test("a new best under half a percent above the last says its size, never +0 %")
+    func deltaUnderOnePercent() {
+        let tiny = RecordCard.deltaLabel(delta: PersonalRecord.Delta(absolute: 12, percent: 12.0 / 12987))
+        #expect(!tiny.contains("%"))
+        #expect(tiny.hasPrefix("+12"))
+        let clear = RecordCard.deltaLabel(delta: PersonalRecord.Delta(absolute: 500, percent: 0.05))
+        #expect(clear.contains("5"))
+        #expect(clear.contains("%"))
+    }
+
     @Test("MetricTypeKindResolver maps canonical types + tolerates unknowns")
     func resolverHandlesCanonicalAndUnknown() {
         #expect(MetricTypeKindResolver.kind(forMetricType: "WEIGHT") == .weight)
         #expect(MetricTypeKindResolver.kind(forMetricType: "BLOOD_PRESSURE_SYS") == .bloodPressure)
+        #expect(MetricTypeKindResolver.kind(forMetricType: "FLIGHTS_CLIMBED") == .flightsClimbed)
+        #expect(MetricTypeKindResolver.kind(forMetricType: "TIME_IN_DAYLIGHT") == .timeInDaylight)
         #expect(MetricTypeKindResolver.kind(forMetricType: "ACTIVITY_STEPS") == .steps)
         #expect(MetricTypeKindResolver.kind(forMetricType: "SLEEP_DURATION") == .sleep)
         #expect(MetricTypeKindResolver.kind(forMetricType: "UNKNOWN_FUTURE") == nil)

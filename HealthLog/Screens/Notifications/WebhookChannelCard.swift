@@ -21,7 +21,7 @@ struct WebhookChannelCard: View {
     /// Transient header-value draft. Empty ⇒ not sent (server keeps any stored
     /// secret). The stored value is never read back into this field.
     @State private var headerValueDraft = ""
-    /// #112 — the body shape. Hydrated from the server; ``WebhookFormat/unknown``
+    /// The body shape. Hydrated from the server; ``WebhookFormat/unknown``
     /// (a value this build does not know) selects nothing and is never sent, so
     /// saving keeps whatever the server stored.
     @State private var format: WebhookFormat = .generic
@@ -29,24 +29,17 @@ struct WebhookChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        // 1.4 B2 — the services a webhook reaches sit under the switch; the
+        // The services a webhook reaches sit under the switch; the
         // footer is gone.
-        HLSettingsCard(icon: "link", title: "notifications.webhook.title") {
-            Toggle(isOn: $enabled) {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text("notifications.webhook.enable")
-                        .font(.hlSubhead.weight(.semibold))
-                    Text("notifications.webhook.services")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .accessibilityIdentifier("notifications.webhook.enableToggle")
+        HLCard("notifications.webhook.title") {
+            HLSettingsToggleRow(
+                title: "notifications.webhook.enable",
+                description: "notifications.webhook.services",
+                isOn: $enabled,
+                accessibilityID: "notifications.webhook.enableToggle"
+            )
 
             if enabled {
-                Divider().opacity(0.5)
-
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     Text("notifications.webhook.url")
                         .font(.hlCaption)
@@ -82,35 +75,32 @@ struct WebhookChannelCard: View {
 
                 if let invalid = validationMessage {
                     Text(invalid)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLColor.statusBad)
+                        .hlText(.rowStatus, status: HLColor.statusBad)
                         .accessibilityIdentifier("notifications.webhook.validation")
                 }
             }
 
-            HLButton(
-                String(localized: "notifications.channel.save"),
-                variant: .secondary,
-                isLoading: store.webhookWorking
-            ) {
-                Task { await save() }
-            }
-            .disabled(store.webhookWorking || validationMessage != nil)
-            .accessibilityIdentifier("notifications.webhook.saveButton")
-
+            // Save and test belong together: one pair, save as the main
+            // action; without a channel to test, save stands alone.
             if enabled {
-                HLButton(
-                    String(localized: "notifications.channel.test"),
-                    icon: "paperplane",
-                    // UI-Standard R9 (U6) — siehe NtfyChannelCard: Test und
-                    // Speichern sind hier beide `.secondary`.
-                    variant: .secondary,
-                    isLoading: store.webhookWorking
-                ) {
-                    Task { await test() }
+                HLButtonPair {
+                    saveButton
+                } secondary: {
+                    HLButton(
+                        "notifications.channel.test",
+                        systemImage: "paperplane",
+                        // UI-Standard R9 — siehe NtfyChannelCard: Test und
+                        // Speichern sind hier beide `.secondary`.
+                        variant: .secondary,
+                        isLoading: store.webhookWorking
+                    ) {
+                        Task { await test() }
+                    }
+                    .disabled(store.webhookWorking)
+                    .accessibilityIdentifier("notifications.webhook.testButton")
                 }
-                .disabled(store.webhookWorking)
-                .accessibilityIdentifier("notifications.webhook.testButton")
+            } else {
+                saveButton
             }
 
             if store.webhookTestSucceeded {
@@ -123,8 +113,7 @@ struct WebhookChannelCard: View {
 
             if let error = store.webhookError {
                 Text(error.userFacingDescription)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLColor.statusBad)
+                    .hlText(.rowStatus, status: HLColor.statusBad)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("notifications.webhook.error")
             }
@@ -134,21 +123,34 @@ struct WebhookChannelCard: View {
         .sensoryFeedback(.success, trigger: testTick)
     }
 
-    // MARK: - Format (#112)
+    // MARK: - Format
 
     private var formatPicker: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Picker(selection: $format) {
+            HLAdaptiveSegmentedPicker(
+                "notifications.webhook.format.label",
+                selection: $format,
+                labels: ["notifications.webhook.format.generic", "notifications.webhook.format.gotify"]
+            ) {
                 Text("notifications.webhook.format.generic").tag(WebhookFormat.generic)
                 Text("notifications.webhook.format.gotify").tag(WebhookFormat.gotify)
-            } label: {
-                Text("notifications.webhook.format.label")
             }
-            .pickerStyle(.segmented)
             .accessibilityIdentifier("notifications.webhook.formatPicker")
-            // 1.4 B2 — what each format sends, and the Gotify setup, stand in
+            // What each format sends, and the Gotify setup, stand in
             // the screen's (i).
         }
+    }
+
+    private var saveButton: some View {
+        HLButton(
+            "notifications.channel.save",
+            variant: .secondary,
+            isLoading: store.webhookWorking
+        ) {
+            Task { await save() }
+        }
+        .disabled(store.webhookWorking || validationMessage != nil)
+        .accessibilityIdentifier("notifications.webhook.saveButton")
     }
 
     // MARK: - Derived
@@ -176,8 +178,7 @@ struct WebhookChannelCard: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.primary)
             Text("notifications.channel.test.sent")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowStatus)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)

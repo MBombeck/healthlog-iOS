@@ -11,7 +11,7 @@ import Foundation
 /// - `DELETE /api/insights/coach/facts`      → soft-delete all ("forget all"),
 ///   returns `{ cleared: <count> }`.
 ///
-/// **Coach kill-switch (B4).** If the operator disabled the Coach surface every
+/// **Coach kill-switch.** If the operator disabled the Coach surface every
 /// handler 403s with `meta.errorCode: "assistant.disabled.coach"`. ``APIClient``
 /// maps that to ``HLError/aiUnavailable(_:)`` and mirrors it into
 /// `AICapabilityGate` — so this repository surfaces the **same** typed

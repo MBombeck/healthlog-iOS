@@ -8,7 +8,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// #17 — newest workouts reach the server first, and a foreground pass
+    /// Newest workouts reach the server first, and a foreground pass
     /// catches the history up within its budget. Every case drives the real
     /// importer against a synthetic HealthKit with hundreds of workouts.
     @Suite("Workout history catch-up (#17)", .serialized, .timeLimit(.minutes(1)))
@@ -166,6 +166,22 @@ import Testing
             let done = try #require(await harness.importer.historyBacklog().publicStatus)
             #expect(!done.isImporting)
             #expect(done.remainingEstimate == 0)
+            await harness.importer.stop()
+        }
+
+        @Test("D5 #6: the backlog count reads bounded pages, never the whole remainder at once")
+        @available(iOS, deprecated: 18.0, message: "Synthetic HealthKit fixture")
+        func backlogCountIsPaged() async throws {
+            let harness = try await Harness(historyCount: 1400, newestHistoryDaysAgo: 0, budgetPages: 2)
+
+            _ = await harness.importer.runBoundedPage(mode: .processing)
+
+            let limits = await harness.history.anchoredLimits
+            #expect(!limits.contains(HKObjectQueryNoLimit), "an unlimited anchored read held every remaining workout")
+            #expect(limits.allSatisfy { $0 <= WorkoutCatchUpPolicy.countPageLimit })
+            let status = try #require(await harness.importer.historyBacklog().publicStatus)
+            // 1400 − 200 imported by the anchor − 10 recent already delivered ahead.
+            #expect(status.remainingEstimate == 1190)
             await harness.importer.stop()
         }
 

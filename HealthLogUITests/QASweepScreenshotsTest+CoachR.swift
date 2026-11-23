@@ -1,6 +1,6 @@
 import XCTest
 
-/// 1.5 COACH-R — the Coach against a v1.41 server (`-uitest-coach-r`,
+/// The Coach against a v1.41 server (`-uitest-coach-r`,
 /// `CoachRFixtures`): the thinking depth under „Erweitert" in Settings,
 /// Assistant, the running answer with its status line, the plan proposal and
 /// the opened trail. The AI consent is accepted (`-uitest-citations` configures
@@ -34,17 +34,7 @@ extension QASweepScreenshotsTest {
         app.terminate()
         bootAcceptingAI(extra: ["-uitest-coach-r", "-uitest-citations"])
 
-        openDeepLink("healthlog://coach")
-        settle(5)
-        for id in ["InsightsScreen.askCoachCollapsedCoin.header", "InsightsScreen.enableCoachCoin.header"] {
-            let coin = app.buttons[id]
-            if coin.waitForExistence(timeout: 3), coin.isHittable {
-                coin.tap()
-                settle(3)
-                break
-            }
-        }
-        acceptAIConsentIfShown()
+        openCoachSheet()
         let field = app.textFields.firstMatch
         guard tap(field, "coach input") else {
             shot("\(tag)-coach-noinput")
@@ -78,7 +68,7 @@ extension QASweepScreenshotsTest {
         let link = element("settings.ai.advanced")
         for _ in 0 ..< 6 {
             // Above the tab bar, not under it.
-            if link.exists, link.isHittable, link.frame.maxY < app.tabBars.firstMatch.frame.minY { return link }
+            if link.exists, link.isHittable, link.frame.maxY < ShellNavigator.bottomChromeMinY(in: app) { return link }
             app.swipeUp()
             settle(1)
         }
@@ -98,7 +88,7 @@ extension QASweepScreenshotsTest {
         if isXXL {
             arguments += ["-UIPreferredContentSizeCategoryName", xxlCategory]
         }
-        if env["HL_SWEEP_APPEARANCE"] == "light" {
+        if isLightAppearance {
             arguments += HermeticAppearance.lightArguments
         }
         app.launchHermeticAndWaitForDashboard(extraArguments: arguments + extra, timeout: 120)
@@ -109,11 +99,27 @@ extension QASweepScreenshotsTest {
             settle(1)
         }
         acceptAIConsentIfShown()
-        dismissHealthAuthorization()
+        answerHealthAccess()
+    }
+
+    /// The coach link, then the header coin when the link alone opened
+    /// nothing, then the consent sheet if it comes up.
+    func openCoachSheet() {
+        openDeepLink("healthlog://coach")
+        settle(5)
+        for id in ["InsightsScreen.askCoachCollapsedCoin.header", "InsightsScreen.enableCoachCoin.header"] {
+            let coin = app.buttons[id]
+            if coin.waitForExistence(timeout: 3), coin.isHittable {
+                coin.tap()
+                settle(3)
+                break
+            }
+        }
+        acceptAIConsentIfShown()
     }
 
     func acceptAIConsentIfShown() {
-        // POLISH-C — the Dutch consent sheet says "Accepteren".
+        // The Dutch consent sheet says "Accepteren".
         for label in ["Accept", "Akzeptieren", "Accepteren"] {
             let button = app.buttons[label]
             if button.exists, button.isHittable {

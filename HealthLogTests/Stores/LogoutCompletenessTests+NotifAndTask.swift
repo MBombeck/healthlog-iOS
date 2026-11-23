@@ -7,7 +7,7 @@
     @testable import HealthLog
     import Testing
 
-    // MARK: - LOGOUT-NOTIF — delivered/pending notifications + badge cleared
+    // MARK: - Delivered/pending notifications + badge cleared
 
     @MainActor
     extension LogoutCompletenessTests {
@@ -92,6 +92,33 @@
                 store.complianceRefreshTask == nil,
                 "clearOnLogout MUST cancel + drop the compliance-refresh Task"
             )
+        }
+    }
+
+    // MARK: - Health Records answer and cursor (D4-1)
+
+    @MainActor
+    extension LogoutCompletenessTests {
+        /// D4-1 — the Health Records answer belonged to the leaving account:
+        /// the cascade takes it back, and the owner-bound hook drops that
+        /// account's cursor, so the next account is asked before anything of
+        /// the device's lab records reaches it.
+        @Test("logout takes back the Health Records answer and the leaving account's cursor")
+        func logoutTakesBackHealthRecordsAnswer() async throws {
+            let container = try makeContainer(keychain: InMemoryKeychain(), healthKit: MockHealthKitWriter())
+            container.clinicalLabRecordsStore.decline()
+            #expect(ClinicalLabRecordsConsent.current() == .declined)
+            let owner = "d4-logout-\(UUID().uuidString)"
+            var cursor = ClinicalLabRecordCursor()
+            cursor.anchor = Data([1])
+            ClinicalLabRecordCursorStore().save(cursor, owner: owner)
+
+            await container.performFullLocalLogout(reason: .userInitiated)
+            await container.ownerPartitionCleanup.run(previousUserID: owner)
+
+            #expect(container.clinicalLabRecordsStore.consent == .notAsked)
+            #expect(ClinicalLabRecordsConsent.current() == .notAsked)
+            #expect(ClinicalLabRecordCursorStore().load(owner: owner).anchor == nil)
         }
     }
 

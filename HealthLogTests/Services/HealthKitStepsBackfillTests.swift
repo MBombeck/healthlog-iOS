@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-// v0.7.0 W-STEPS — pure-helper coverage for the steps-backfill cascade.
+// Pure-helper coverage for the steps-backfill cascade.
 //
 // Pins the three pure decision points behind the operator-reported
 // "Schritte alle Daten zeigt nichts" fix:
@@ -41,7 +41,7 @@ import Testing
             let defaults = try freshDefaults()
             HealthKitBackfillWindowStore.persist(.oneYear, keychain: keychain, defaults: defaults)
 
-            // v0.7.1 M-3 — the lookup is now a pure read: it keeps returning
+            // The lookup is now a pure read: it keeps returning
             // the wide window until the sweep actually completes and the flag
             // is marked. Pre-fix it burned the flag on the first read, so an
             // interrupted sweep silently skipped the backfill forever.

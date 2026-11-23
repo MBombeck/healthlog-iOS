@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.11 — injection-site tracking adoption (server v1.8.5).
+/// Injection-site tracking adoption (server v1.8.5).
 ///
 /// Covers: the server↔local enum bridge, default-tolerant medication decode
 /// of the new `trackInjectionSites` / `allowedInjectionSites` fields, the
@@ -20,7 +20,7 @@ struct InjectionSiteTrackingTests {
     @Test("server enum strings round-trip through serverRawValue")
     func serverEnumRoundTrip() {
         for site in InjectionSite.serverCases {
-            // Audit B-4 — `serverRawValue` is optional now: the sentinel has no
+            // `serverRawValue` is optional now: the sentinel has no
             // server spelling, and every named site must still have one.
             let server = site.serverRawValue
             #expect(server != nil, "\(site) must keep a server spelling")

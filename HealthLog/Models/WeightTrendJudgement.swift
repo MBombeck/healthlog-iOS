@@ -1,6 +1,6 @@
 import Foundation
 
-/// #115 · 1.1 — which way a weight change counts as progress, judged by the
+/// Which way a weight change counts as progress, judged by the
 /// server against the person's own stored target.
 ///
 /// Wire: `GET /api/dashboard/snapshot` → `tiles.weightTrend`

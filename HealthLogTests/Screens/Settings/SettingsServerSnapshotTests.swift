@@ -8,7 +8,7 @@
     import SwiftUI
     import Testing
 
-    /// **Phase 09 / plan 09-03 — the configured server is read once, not per frame.**
+    /// **The configured server is read once, not per frame.**
     ///
     /// Four audited surfaces resolved the configured server address out of the
     /// Keychain from inside a SwiftUI `body`: the onboarding auth step (three
@@ -105,7 +105,7 @@
             let reads = keychain.readsWhileArmed
             #expect(
                 reads.isEmpty,
-                "EXPECTED_RED: SwiftUI body performed a Keychain read"
+                "SwiftUI body performed a Keychain read"
             )
         }
 
@@ -122,7 +122,7 @@
             #expect(server.accountSecurityURL?.host == Self.configuredHost)
             #expect(server.accountSecurityURL?.path == "/settings/security")
             #expect(server.region == .selfHosted)
-            // #65 — a self-hosted host this build carries no association for.
+            // A self-hosted host this build carries no association for.
             #expect(server.supportsPasskeys == false)
             #expect(server.prefersWebHandoff)
         }

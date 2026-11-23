@@ -11,7 +11,7 @@
     #endif
     @testable import HealthLog
 
-    /// **v0.7.0 W-LOGOUT (A-SEC NEW-H-1) — single-source logout cascade.**
+    /// **Single-source logout cascade.**
     ///
     /// Pre-v0.7.0 only the "switch server" path (`handleLocalLogout()`) ran the
     /// full local teardown. `AuthStore.logout()` (user-tap), the APIClient 401
@@ -82,7 +82,7 @@
 
             // Cascade ran to its last line: the universal teardown signal fired.
             #expect(cascade.completions == 1)
-            // Same-account sign-out keeps rows → key MUST survive (C-1) so a
+            // Same-account sign-out keeps rows → key MUST survive so a
             // re-login can decrypt + replay the pending optimistic writes.
             #expect(keychain.getData(forKey: KeychainKey.outboxPayloadKey) != nil)
         }
@@ -115,7 +115,7 @@
             // Cascade ran to its last line.
             #expect(cascade.completions == 1)
             // A 401 is a same-account, same-server expiry — rows kept → key
-            // MUST survive (C-1) so the writes replay after re-auth.
+            // MUST survive so the writes replay after re-auth.
             #expect(keychain.getData(forKey: KeychainKey.outboxPayloadKey) != nil)
             // The 401 bridge ALSO wipes the auth-bundle via
             // `handleUnauthorized()` — pin that so a future refactor that drops
@@ -142,7 +142,7 @@
             await hook()
 
             #expect(cascade.completions == 1)
-            // Account-deletion clears rows AND key together (C-1) — the
+            // Account-deletion clears rows AND key together — the
             // cross-user leakage defense the original wipe provided is intact.
             #expect(keychain.getData(forKey: KeychainKey.outboxPayloadKey) == nil)
         }
@@ -173,78 +173,71 @@
             #expect(keychain.getData(forKey: KeychainKey.outboxPayloadKey) == nil)
         }
 
-        // MARK: - Standalone mirror wipe (v0.11 RISK-2)
+        // MARK: - Records left by an offline-mode build
 
-        /// **RISK-2 cross-account leak.** The standalone local mirror
-        /// (`localRepo`) is the offline history the adopt-upload hook pushes
-        /// into whatever account the user next pairs. If it survived a server
-        /// switch, the flow standalone → pair A → switch server → standalone →
-        /// pair B would adopt-upload A's offline history into B. The
-        /// `.switchServer` cascade must wipe the mirror so the next pairing
-        /// starts empty.
-        @Test("switch-server logout wipes the standalone local mirror (no cross-account leak)")
-        func switchServerWipesStandaloneMirror() async throws {
-            let keychain = InMemoryKeychain()
-            let container = makeContainer(keychain: keychain)
+        /// Seeds the folder an offline-mode build wrote, as `standalone.sqlite`
+        /// with its siblings, under a directory of this test's own that stands
+        /// in for Application Support. The caller removes it.
+        private func seedLegacyStandaloneStore() throws -> (base: URL, folder: URL) {
+            let base = FileManager.default.temporaryDirectory
+                .appendingPathComponent("hl-cascade-standalone-\(UUID().uuidString)", isDirectory: true)
+            let folder = base.appendingPathComponent("HealthLog/Standalone", isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for name in ["standalone.sqlite", "standalone.sqlite-shm", "standalone.sqlite-wal"] {
+                try Data("legacy".utf8).write(to: folder.appendingPathComponent(name))
+            }
+            return (base, folder)
+        }
 
-            // Seed the standalone mirror with one offline measurement.
-            _ = try await container.localRepo.addMeasurement(
-                kind: "WEIGHT",
-                value: 72.5,
-                unit: "kg",
-                recordedAt: .now
-            )
-            let before = try await container.localRepo.measurements()
-            #expect(before.count == 1, "Precondition: mirror seeded with one row")
+        /// The records die with the server context, as the offline mirror did.
+        @Test("switch-server logout removes the legacy offline records")
+        func switchServerRemovesLegacyStandaloneStore() async throws {
+            let seeded = try seedLegacyStandaloneStore()
+            defer { try? FileManager.default.removeItem(at: seeded.base) }
+            let container = makeContainer(keychain: InMemoryKeychain())
+            container.legacyStandaloneStoreBase = seeded.base
 
             await container.handleLocalLogout() // .switchServer
 
-            let after = try await container.localRepo.measurements()
-            #expect(after.isEmpty, "Standalone mirror MUST be empty after a server switch")
+            #expect(!FileManager.default.fileExists(atPath: seeded.folder.path))
         }
 
-        /// Account-deletion already wiped the mirror pre-fix; pin it so the
-        /// shared `clearsStandaloneMirror` gate keeps covering both reasons.
-        @Test("account-deletion wipes the standalone local mirror")
-        func accountDeletionWipesStandaloneMirror() async throws {
-            let keychain = InMemoryKeychain()
-            let container = makeContainer(keychain: keychain)
-
-            _ = try await container.localRepo.addMeasurement(
-                kind: "PULSE",
-                value: 61,
-                unit: "bpm",
-                recordedAt: .now
-            )
-            #expect(try await container.localRepo.measurements().count == 1)
+        @Test("account-deletion removes the legacy offline records")
+        func accountDeletionRemovesLegacyStandaloneStore() async throws {
+            let seeded = try seedLegacyStandaloneStore()
+            defer { try? FileManager.default.removeItem(at: seeded.base) }
+            let container = makeContainer(keychain: InMemoryKeychain())
+            container.legacyStandaloneStoreBase = seeded.base
 
             let hook = try #require(container.authStore.localCleanupHook)
             await hook() // .accountDeleted
 
-            #expect(try await container.localRepo.measurements().isEmpty)
+            #expect(!FileManager.default.fileExists(atPath: seeded.folder.path))
         }
 
-        /// Same-account paths (`.userInitiated`) must NOT wipe the mirror — the
-        /// standalone history legitimately belongs to the same identity, so a
-        /// plain sign-out followed by re-login preserves the offline ledger.
-        @Test("userInitiated logout preserves the standalone local mirror")
-        func userInitiatedPreservesStandaloneMirror() async throws {
+        /// A same-account sign-out keeps them, as it kept the offline mirror.
+        @Test("userInitiated logout keeps the legacy offline records")
+        func userInitiatedKeepsLegacyStandaloneStore() async throws {
+            let seeded = try seedLegacyStandaloneStore()
+            defer { try? FileManager.default.removeItem(at: seeded.base) }
             let keychain = InMemoryKeychain()
             try keychain.setString("bearer-fixture", forKey: KeychainKey.authToken)
             let container = makeContainer(keychain: keychain)
-
-            _ = try await container.localRepo.addMeasurement(
-                kind: "WEIGHT",
-                value: 70,
-                unit: "kg",
-                recordedAt: .now
-            )
+            container.legacyStandaloneStoreBase = seeded.base
 
             let hook = try #require(container.authStore.onPostLogoutHook)
             await hook() // .userInitiated
 
-            let after = try await container.localRepo.measurements()
-            #expect(after.count == 1, "Same-account sign-out must keep the standalone mirror")
+            #expect(FileManager.default.fileExists(atPath: seeded.folder.appendingPathComponent("standalone.sqlite").path))
+        }
+
+        /// The policy behind the three cases above, for every reason.
+        @Test("only the server-context reasons remove the legacy offline records")
+        func onlyServerContextReasonsRemoveLegacyStandaloneStore() {
+            #expect(LogoutReason.accountDeleted.clearsLegacyStandaloneStore)
+            #expect(LogoutReason.switchServer.clearsLegacyStandaloneStore)
+            #expect(!LogoutReason.userInitiated.clearsLegacyStandaloneStore)
+            #expect(!LogoutReason.tokenExpired.clearsLegacyStandaloneStore)
         }
 
         // MARK: - Cascade idempotency

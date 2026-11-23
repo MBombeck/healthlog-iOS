@@ -82,7 +82,7 @@
             try #require(
                 block.contains("measurementsStore.loadAvailability()"),
                 """
-                EXPECTED_RED: InsightsScreen's pull-to-refresh block never calls \
+                InsightsScreen's pull-to-refresh block never calls \
                 measurementsStore.loadAvailability(), so no pull the operator performs can repair an \
                 interrupted availability read — R4-ANSWER finding (c)
                 """
@@ -107,7 +107,7 @@
             #expect(await calls.value == 2, "the re-drive must reach the transport, not be swallowed")
         }
 
-        // MARK: - The TTL question STATE.md handed forward (PIN — no EXPECTED_RED)
+        // MARK: - The TTL question STATE.md handed forward (PIN)
 
         /// 21-03 found `MedicationsScreen`'s pull was a no-op *by construction*
         /// because it omitted `force` inside a 60 s TTL. `loadAvailability()`

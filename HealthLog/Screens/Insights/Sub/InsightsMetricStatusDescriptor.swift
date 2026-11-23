@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.3 C4 — the **pure builder** that maps the server `comprehensive`
+/// The **pure builder** that maps the server `comprehensive`
 /// digest + targets payload onto the canonical ``InsightsMetricStatusCard.Descriptor``
 /// for ANY ``MetricKind``. Kept view-free so the honest-only contract (each slot
 /// self-suppresses when the server carries no signal) is unit-testable without
@@ -22,7 +22,7 @@ import Foundation
 ///     metric with no target carries none of those → the card degrades to
 ///     value-only, or suppresses entirely when even the value is absent.
 ///
-/// **1.4 B4 — the average is an average.** The card sits under the heading
+/// **The average is an average.** The card sits under the heading
 /// "30 Tage Durchschnitt". It used to fall back to the latest reading when the
 /// digest had no `avg30`, which is every account without a configured AI
 /// provider (the digest is consent-gated) and every type the digest did not
@@ -42,7 +42,7 @@ enum InsightsMetricStatusDescriptor {
     ///     (v0.14.4 D1). `nil`/<2 points → no sparkline. BP keeps its full anatomy
     ///     and ignores this.
     ///   - serverAverage30: the summaries slice's `avg30` for this kind, used
-    ///     when the digest carries none (1.4 B4).
+    ///     when the digest carries none.
     static func build(
         kind: MetricKind,
         digest: ComprehensiveDigest?,
@@ -61,7 +61,7 @@ enum InsightsMetricStatusDescriptor {
             buildGeneric(
                 kind: kind,
                 digest: digest,
-                // #20 — only the row whose band describes THIS kind's series. The
+                // Only the row whose band describes THIS kind's series. The
                 // server `PULSE` row is the resting-pulse band: it may sit on the
                 // resting card, never on the raw pulse card (HealthLog#584).
                 target: target.flatMap { $0.type == MetricChartMath.bandTargetType(for: kind) ? $0 : nil },
@@ -81,7 +81,7 @@ enum InsightsMetricStatusDescriptor {
         let sys = digest?.summaries?["BLOOD_PRESSURE_SYS"]?.avg30
         let dia = digest?.summaries?["BLOOD_PRESSURE_DIA"]?.avg30
         let headline: String? = if let sys, let dia {
-            String(format: "%.0f/%.0f", sys, dia)
+            "\(HLValueFormat.number(sys, fractionDigits: 0 ... 0))/\(HLValueFormat.number(dia, fractionDigits: 0 ... 0))"
         } else {
             nil
         }
@@ -145,7 +145,7 @@ enum InsightsMetricStatusDescriptor {
         }
     }
 
-    /// #115 · 1.3 — the band caption states only the band the server sent.
+    /// The band caption states only the band the server sent.
     /// It used to fill a missing edge with an invented 120–129 / 70–79, so an
     /// account whose target the server did not resolve read a band nobody set.
     /// Any missing edge → no caption.
@@ -167,7 +167,7 @@ enum InsightsMetricStatusDescriptor {
         // be a lie. The honest BMI headline is the server-computed BMI value
         // (`digest.bmi`), falling back to the latest charted BMI reading.
         let value = digest?.bmi ?? latestValue
-        let headline = value.map { $0.formatted(.number.precision(.fractionLength(1))) }
+        let headline = value.map { HLValueFormat.number($0, fractionDigits: 1 ... 1) }
         let classification = digest?.bmiClassification
         return InsightsMetricStatusCard.Descriptor(
             title: kind.displayName,
@@ -189,7 +189,7 @@ enum InsightsMetricStatusDescriptor {
             inTargetWindowLabel: nil,
             // The WHO band hint (e.g. "WHO 18.5 – 24.9") is the BMI Zielband.
             targetBandCaption: classification.map(bmiBandHint),
-            // v0.14.4 D1 — BMI never gets an In-Range bar (no day-share target),
+            // BMI never gets an In-Range bar (no day-share target),
             // so it carries the target-less Verlauf too (operator: "BMI hat keinen
             // Verlauf"). The WHO band caption stays — that is honest reference.
             sparklineValues: sparklineValues,
@@ -244,7 +244,7 @@ enum InsightsMetricStatusDescriptor {
         sparklineValues: [Double]?,
         units: UnitPreferences
     ) -> InsightsMetricStatusCard.Descriptor {
-        // 1.4 B4 — the headline is the server's 30-day mean and nothing else:
+        // The headline is the server's 30-day mean and nothing else:
         // the digest's, else the summaries slice's. No fallback to the latest
         // reading (see the type doc).
         let avg30 = kind.availabilitySummaryKey.flatMap { digest?.summaries?[$0]?.avg30 } ?? serverAverage30
@@ -256,12 +256,12 @@ enum InsightsMetricStatusDescriptor {
         let chip = classificationChip(from: target)
         let pct = pctInTarget(from: target)
         let band = targetBandCaption(from: target, units: units)
-        // v0.14.4 D1 — when there is NO clinical band/bar (a non-targeted kind such
+        // When there is NO clinical band/bar (a non-targeted kind such
         // as Aktive Energie + the ~25 other no-target kinds), still give the card a
         // **Verlauf** sparkline so it reads like Gewicht/Puls minus the band. We do
         // NOT fabricate a Zielband or an "Im Zielbereich" bar — honest trend only.
         // Targeted kinds (pct/band populated) keep their richer anatomy and skip it.
-        // 1.4 B4 — the line rides with the average: without one there is no
+        // The line rides with the average: without one there is no
         // card to carry it (the chart below draws the same points).
         let trend: [Double]? = (pct == nil && band == nil && headline != nil) ? sparklineValues : nil
         return InsightsMetricStatusCard.Descriptor(
@@ -319,11 +319,11 @@ enum InsightsMetricStatusDescriptor {
         return Int(share.rounded())
     }
 
-    /// **#115 P2** — the card's headline in the account's unit. The server's
+    /// The card's headline in the account's unit. The server's
     /// 30-day average is canonical SI (glucose too). A kind whose transform
     /// leaves precision open keeps the prior 0…1-dp text.
     private static func headlineText(kind: MetricKind, avg30: Double, units: UnitPreferences) -> String {
-        let identity: (Double) -> String = { $0.formatted(.number.precision(.fractionLength(0 ... 1))) }
+        let identity: (Double) -> String = { HLValueFormat.number($0, fractionDigits: 0 ... 1) }
         guard units.transform(for: kind).rescales else { return identity(avg30) }
         return MetricValueFormatter.account(avg30, kind: kind, units: units, identity: identity)
     }
@@ -348,13 +348,13 @@ enum InsightsMetricStatusDescriptor {
 
     /// Trim a trailing `.0` so whole-number bands read `120` not `120.0`.
     private static func fmt(_ value: Double) -> String {
-        // SWEEP (W-CRASHGUARD) — a finite whole renders as an Int; a non-finite
+        // SWEEP — a finite whole renders as an Int; a non-finite
         // OR out-of-`Int.range` bound (`1e30`, which equals its `.rounded()` and
         // IS finite) falls through to the fractional formatter via the
         // `Int(safeServer:)` nil-on-reject contract — never traps.
         if value == value.rounded(), let whole = Int(safeServer: value) {
             return String(whole)
         }
-        return value.formatted(.number.precision(.fractionLength(1)))
+        return HLValueFormat.number(value, fractionDigits: 1 ... 1)
     }
 }

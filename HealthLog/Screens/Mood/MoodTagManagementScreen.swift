@@ -9,11 +9,9 @@ struct MoodTagManagementScreen: View {
     @State private var editingTag: MoodTagDTO?
     @State private var showCreateGroup = false
     @State private var editingGroup: MoodTagCategoryDTO?
-    @State private var pendingGroupDelete: MoodTagCategoryDTO?
-    @State private var pendingPurge: MoodTagDTO?
 
     var body: some View {
-        HLSettingsPage(title: "mood.tags.manage.title") {
+        HLPage {
             if let loadError = store.loadError, !store.didLoad {
                 loadErrorCard(loadError)
             } else {
@@ -40,54 +38,14 @@ struct MoodTagManagementScreen: View {
         .sheet(item: $editingGroup) { group in
             MoodTagGroupEditSheet(mode: .edit(group))
         }
-        .hlConfirmDestructive(
-            Text("mood.tags.manage.group.delete.title"),
-            presenting: $pendingGroupDelete,
-            message: { group in
-                let customCount = group.tags.filter(\.custom).count
-                return Text(String(
-                    format: String(localized: "mood.tags.manage.group.delete.body"),
-                    customCount
-                ))
-            },
-            confirm: Text("mood.tags.manage.group.delete.confirm"),
-            cancel: Text("Cancel"),
-            onCancel: { pendingGroupDelete = nil },
-            action: { group in
-                pendingGroupDelete = nil
-                Task { await store.deleteGroup(key: group.key) }
-            }
-        )
-        .hlConfirmDestructive(
-            Text("mood.tags.manage.purge.title"),
-            presenting: $pendingPurge,
-            message: { tag in
-                if let count = tag.usageCount {
-                    Text(String(
-                        format: String(localized: "mood.tags.manage.purge.body"),
-                        count
-                    ))
-                } else {
-                    Text("mood.tags.manage.purge.bodyNoCount")
-                }
-            },
-            confirm: Text("mood.tags.manage.purge.confirm"),
-            cancel: Text("Cancel"),
-            onCancel: { pendingPurge = nil },
-            action: { tag in
-                pendingPurge = nil
-                Task { await store.deleteCustom(key: tag.key, purge: true) }
-            }
-        )
     }
 
     private func loadErrorCard(_ error: HLError) -> some View {
-        HLSettingsCard(icon: "exclamationmark.triangle", title: "mood.tags.manage.title") {
+        HLCard("mood.tags.manage.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 Text(error.userFacingDescription)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                HLButton(String(localized: "Retry"), variant: .secondary) {
+                    .hlText(.factLabel)
+                HLButton(HLControlWord.retry.key, variant: .secondary) {
                     Task { await store.load() }
                 }
             }
@@ -95,7 +53,7 @@ struct MoodTagManagementScreen: View {
     }
 
     private func mutationErrorCard(_ error: HLError) -> some View {
-        HLSettingsCard(icon: "exclamationmark.triangle", title: "Error") {
+        HLCard("Error") {
             Text(error.userFacingDescription)
                 .font(.hlSubhead)
                 .foregroundStyle(HLColor.statusBad)
@@ -106,19 +64,12 @@ struct MoodTagManagementScreen: View {
     /// fest oder erstelle eigene Gruppen.") benannte genau die Bedienelemente
     /// daneben: die Zeile „Gruppe hinzufügen" und das Hoch/Runter-Menü.
     private var groupsCard: some View {
-        HLSettingsCard(
-            icon: "rectangle.3.group",
-            title: "mood.tags.manage.groups.title"
-        ) {
+        HLCard("mood.tags.manage.groups.title") {
             VStack(spacing: 0) {
                 ForEach(Array(store.groups.enumerated()), id: \.element.key) { index, group in
                     groupRow(group, index: index)
-                    if index < store.groups.count - 1 {
-                        Divider().opacity(0.6)
-                    }
                 }
-                Divider().opacity(0.6)
-                addRow("mood.tags.manage.group.add", systemImage: "plus.circle") {
+                HLSettingsActionRow(title: "mood.tags.manage.group.add", presents: .create) {
                     store.clearMutationError()
                     showCreateGroup = true
                 }
@@ -134,17 +85,15 @@ struct MoodTagManagementScreen: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(group.localizedLabel)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                 Text(String(
                     format: String(localized: "mood.tags.manage.group.tagCount"),
                     group.tags.filter { !$0.archived }.count
                 ))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
             }
             Spacer(minLength: HLSpace.sm)
-            Menu {
+            HLIconButton(systemImage: "ellipsis", label: LocalizedStringKey(group.localizedLabel), menu: {
                 Button {
                     Task { await store.moveGroup(key: group.key, by: -1) }
                 } label: {
@@ -165,47 +114,41 @@ struct MoodTagManagementScreen: View {
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
-                    Button(role: .destructive) {
-                        pendingGroupDelete = group
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+                    // A group takes its tags along: asked first.
+                    HLDeleteMenuItem(.confirmed(
+                        title: "mood.tags.manage.group.delete.title",
+                        message: LocalizedStringKey(String(
+                            format: String(localized: "mood.tags.manage.group.delete.body"),
+                            group.tags.filter(\.custom).count
+                        ))
+                    ) {
+                        await store.deleteGroup(key: group.key)
+                    })
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text(group.localizedLabel))
+            })
         }
         .padding(.vertical, HLSpace.sm)
+        .hlDeleteConfirmation()
     }
 
     private var tagsCard: some View {
-        // UI-Standard R2 (U6, N7) — wie oben: „Sortiere Tags, verschiebe sie
+        // UI-Standard R2 — wie oben: „Sortiere Tags, verschiebe sie
         // zwischen Gruppen oder blende sie aus." zählte die Menüpunkte auf, die
         // das Kontextmenü jeder Zeile ohnehin zeigt.
-        HLSettingsCard(
-            icon: "tag",
-            title: "mood.tags.manage.tags.title"
-        ) {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                // 1.4 B4 — a group without a visible tag is left out instead of
+        HLCard("mood.tags.manage.tags.title") {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                // A group without a visible tag is left out instead of
                 // a label over "Noch keine Tags in dieser Gruppe."
                 ForEach(store.groups.filter { $0.tags.contains { !$0.archived } }) { group in
                     let tags = group.tags.filter { !$0.archived }
                     VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        HLSectionLabel(verbatim: group.localizedLabel)
+                        HLCardLabel(verbatim: group.localizedLabel)
                         ForEach(Array(tags.enumerated()), id: \.element.key) { index, tag in
                             tagRow(tag, group: group, index: index, count: tags.count)
-                            if index < tags.count - 1 {
-                                Divider().opacity(0.6)
-                            }
                         }
                     }
                 }
-                Divider().opacity(0.6)
-                addRow("mood.tags.manage.custom.add", systemImage: "plus.circle") {
+                HLSettingsActionRow(title: "mood.tags.manage.custom.add", presents: .create) {
                     store.clearMutationError()
                     showCreateTag = true
                 }
@@ -230,24 +173,18 @@ struct MoodTagManagementScreen: View {
                     .foregroundStyle(tag.hidden ? HLText.tertiary : HLText.primary)
                 if tag.isRated {
                     Text(verbatim: HLNumberFormat.range("\(tag.scaleMin)", "\(tag.scaleMax)"))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                 }
             }
             Spacer(minLength: HLSpace.xs)
             if let usageCount = tag.usageCount {
-                Text("\(usageCount)")
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .padding(.horizontal, HLSpace.sm)
-                    .padding(.vertical, HLSpace.xxs)
-                    .background(HLSurface.tertiary, in: Capsule())
+                HLBadge(HLValueFormat.number(Double(usageCount), fractionDigits: 0 ... 0))
                     .accessibilityLabel(Text(String(
                         format: String(localized: "mood.tags.manage.usage"),
                         usageCount
                     )))
             }
-            Menu {
+            HLIconButton(systemImage: "ellipsis", label: LocalizedStringKey(tag.localizedLabel), menu: {
                 Button {
                     Task {
                         await store.moveTagWithinGroup(key: tag.key, groupKey: group.key, by: -1)
@@ -294,12 +231,7 @@ struct MoodTagManagementScreen: View {
                         )
                     }
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text(tag.localizedLabel))
+            })
         }
         .padding(.vertical, HLSpace.sm)
     }
@@ -307,11 +239,11 @@ struct MoodTagManagementScreen: View {
     @ViewBuilder
     private var archivedCard: some View {
         if !store.archivedCustomTags.isEmpty {
-            // 1.4 B2 — the menu on each row shows restore and delete; no
+            // The menu on each row shows restore and delete; no
             // footer explains them.
-            HLSettingsCard(icon: "archivebox", title: "mood.tags.manage.archived.title") {
+            HLCard("mood.tags.manage.archived.title") {
                 VStack(spacing: 0) {
-                    ForEach(Array(store.archivedCustomTags.enumerated()), id: \.element.key) { index, tag in
+                    ForEach(store.archivedCustomTags, id: \.key) { tag in
                         HStack(spacing: HLSpace.md) {
                             Image(systemName: MoodTagSFSymbol.symbol(forTag: tag))
                                 .foregroundStyle(HLText.secondary)
@@ -320,53 +252,41 @@ struct MoodTagManagementScreen: View {
                                 .font(.hlSubhead)
                             Spacer()
                             if let usageCount = tag.usageCount {
-                                Text("\(usageCount)")
-                                    .font(.hlCaption)
-                                    .foregroundStyle(HLText.tertiary)
+                                HLBadge(HLValueFormat.number(Double(usageCount), fractionDigits: 0 ... 0))
+                                    .accessibilityLabel(Text(String(
+                                        format: String(localized: "mood.tags.manage.usage"),
+                                        usageCount
+                                    )))
                             }
-                            Menu {
+                            HLIconButton(systemImage: "ellipsis", label: LocalizedStringKey(tag.localizedLabel), menu: {
                                 Button {
                                     Task { await store.setCustomActive(key: tag.key, isActive: true) }
                                 } label: {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
-                                Button(role: .destructive) {
-                                    pendingPurge = tag
-                                } label: {
-                                    Label("mood.tags.manage.deletePurge", systemImage: "trash")
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .frame(width: 44, height: 44)
-                            }
+                                // Deleting for good takes the tag off every entry: asked first.
+                                HLDeleteMenuItem(purgeAction(for: tag))
+                            })
                         }
                         .padding(.vertical, HLSpace.sm)
-                        if index < store.archivedCustomTags.count - 1 {
-                            Divider().opacity(0.6)
-                        }
+                        .hlDeleteConfirmation()
                     }
                 }
             }
         }
     }
 
-    private func addRow(
-        _ title: LocalizedStringKey,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: systemImage)
-                Text(title)
-                    .font(.hlSubhead.weight(.semibold))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(.tint)
-            .padding(.vertical, HLSpace.sm)
-            .contentShape(Rectangle())
+    private func purgeAction(for tag: MoodTagDTO) -> HLDeleteAction {
+        let message = tag.usageCount.map {
+            String(format: String(localized: "mood.tags.manage.purge.body"), $0)
+        } ?? String(localized: "mood.tags.manage.purge.bodyNoCount")
+        return .confirmed(
+            verbatim: String(localized: "mood.tags.manage.purge.title"),
+            message: message,
+            word: "mood.tags.manage.purge.confirm"
+        ) {
+            _ = await store.deleteCustom(key: tag.key, purge: true)
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -379,9 +299,10 @@ private struct MoodTagGroupEditSheet: View {
     let mode: Mode
 
     @Environment(MoodTagManagementStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @State private var label = ""
     @State private var icon = "Tag"
+    /// Name and icon as the sheet opened, for the question before discarding.
+    @State private var seeded: (label: String, icon: String) = ("", "Tag")
     @FocusState private var labelFocused: Bool
 
     private var isEditing: Bool {
@@ -394,44 +315,43 @@ private struct MoodTagGroupEditSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "mood.tags.manage.group.edit" : "mood.tags.manage.group.create",
+            size: .standard,
+            action: .save(isEnabled: !trimmedLabel.isEmpty && trimmedLabel.count <= 40) {
+                await save()
+            },
+            isDirty: label != seeded.label || icon != seeded.icon
+        ) {
             Form {
                 Section("mood.tags.manage.group.details") {
                     TextField("mood.tags.edit.label.placeholder", text: $label)
                         .focused($labelFocused)
-                    Picker("mood.tags.edit.icon.title", selection: $icon) {
+                    Picker(selection: $icon) {
                         ForEach(MoodTagCatalog.customIconAllowList, id: \.self) { option in
-                            Label(option, systemImage: MoodTagSFSymbol.symbolForAllowListIcon(option))
-                                .tag(option)
+                            Label(
+                                MoodTagIconName.label(for: option),
+                                systemImage: MoodTagSFSymbol.symbolForAllowListIcon(option)
+                            )
+                            .tag(option)
                         }
+                    } label: {
+                        HLRowTitle("mood.tags.edit.icon.title")
                     }
                 }
+                .hlFormRowSurface()
                 if let error = store.mutationError {
                     Section { HLFormErrorText(error.userFacingDescription) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(
-                Text(isEditing ? "mood.tags.manage.group.edit" : "mood.tags.manage.group.create")
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await save() }
-                    }
-                    .disabled(trimmedLabel.isEmpty || trimmedLabel.count > 40 || store.isMutating)
-                }
-            }
+            .hlPageMargins()
             .onAppear(perform: seed)
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 labelFocused = true
             }
         }
-        .hlSheetPresentation(.standard)
     }
 
     private func seed() {
@@ -440,15 +360,16 @@ private struct MoodTagGroupEditSheet: View {
         if let currentIcon = group.icon {
             icon = currentIcon
         }
+        seeded = (label, icon)
     }
 
-    private func save() async {
-        let success: Bool = switch mode {
+    /// `true` closes the sheet; on a failure the error stays in the form.
+    private func save() async -> Bool {
+        switch mode {
         case .create:
             await store.createGroup(label: trimmedLabel, icon: icon)
         case let .edit(group):
             await store.updateGroup(key: group.key, label: trimmedLabel, icon: icon)
         }
-        if success { dismiss() }
     }
 }

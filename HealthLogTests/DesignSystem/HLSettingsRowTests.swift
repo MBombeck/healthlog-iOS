@@ -16,16 +16,13 @@ import Testing
 @MainActor
 @Suite("HLSettingsRow contract")
 struct HLSettingsRowTests {
-    @Test("HLSettingsIconChip exposes 28×28 frame")
+    @Test("the icon chip starts at the row icon size and grows with the text up to its cap")
     func iconChipGeometry() {
-        let chip = HLSettingsIconChip(symbol: "person.crop.circle.fill", tint: HLAccent.primary)
-        // We can't introspect the frame via reflection in a build-clean way,
-        // but we lock the constants by reading the file-level frame() call —
-        // if the primitive drifts off 28×28, the visual diff with Apple-
-        // Settings (which uses 29×29 on iPhone) becomes user-visible.
-        _ = chip.body
-        // No assertion here other than "doesn't crash" — the *value* lock
-        // lives in `HLSettingsRow.swift:128-130` (`frame(width: 28, height: 28)`).
+        #expect(HLSettingsIconChip.baseSide == HLLayout.rowIcon)
+        #expect(HLSettingsIconChip.maxSide > HLSettingsIconChip.baseSide)
+        #expect(HLSettingsIconChip.side(forScaled: 10) == HLSettingsIconChip.baseSide)
+        #expect(HLSettingsIconChip.side(forScaled: 40) == 40)
+        #expect(HLSettingsIconChip.side(forScaled: 500) == HLSettingsIconChip.maxSide)
     }
 
     @Test("HLSettingsRow value-text convenience compiles + composes")
@@ -78,7 +75,7 @@ struct HLSettingsRowTests {
         _ = row.body
     }
 
-    // MARK: - 08-04 — adaptive layout, measured differentially
+    // MARK: - Adaptive layout, measured differentially
 
     /// At an accessibility size the trailing value takes its own line; at a
     /// standard size it stays in the row. Both halves are asserted against the
@@ -102,10 +99,74 @@ struct HLSettingsRowTests {
         #expect(valuedDefault < 90, "a standard-size Settings row must stay compact")
     }
 
+    /// Beside the title the symbol takes a quarter of the line at the largest
+    /// sizes, and words break in two. Above it, the title wraps exactly as it
+    /// does in a row without a symbol, so the row is that row plus the symbol
+    /// and the gap under it.
+    @Test(
+        "at accessibility sizes the symbol stands above the title and takes no width from it",
+        arguments: [DynamicTypeSize.accessibility1, .accessibility3, .accessibility5]
+    )
+    func symbolStandsAboveTheTitle(typeSize: DynamicTypeSize) throws {
+        let title = Text(verbatim: "Mitteilungen aktivieren")
+        let subtitle = Text(verbatim: "Für Medikamenten- und Stimmungs-Erinnerungen")
+        let symbolSide: CGFloat = 30
+        let bare = try DesignContractMeasure.size(
+            of: HLRowLayout(title: title, subtitle: subtitle),
+            typeSize: typeSize
+        )
+        let withSymbol = try DesignContractMeasure.markerFrame(
+            in: HLRowLayout(title: title, subtitle: subtitle) {
+                EmptyView()
+            } leading: {
+                DesignContractMeasure.marker.frame(width: symbolSide, height: symbolSide)
+            },
+            typeSize: typeSize
+        )
+        #expect(withSymbol.frame.minX == 0)
+        #expect(withSymbol.frame.minY == 0, "the symbol does not stand above the title")
+        #expect(withSymbol.size.height == (bare.height + symbolSide + HLSpace.xs).rounded(.up))
+    }
+
+    /// The same row at the standard sizes: the symbol stays beside the title
+    /// and the row keeps the height it has without one.
+    @Test(
+        "at standard sizes the symbol stays beside the title and the row keeps its height",
+        arguments: [DynamicTypeSize.xSmall, .large, .xxxLarge]
+    )
+    func symbolStaysBesideTheTitle(typeSize: DynamicTypeSize) throws {
+        let title = Text(verbatim: "Konto")
+        let symbolSide: CGFloat = 28
+        let bare = try DesignContractMeasure.size(of: HLRowLayout(title: title), typeSize: typeSize)
+        let withSymbol = try DesignContractMeasure.markerFrame(
+            in: HLRowLayout(title: title) {
+                EmptyView()
+            } leading: {
+                DesignContractMeasure.marker.frame(width: symbolSide, height: symbolSide)
+            },
+            typeSize: typeSize
+        )
+        #expect(bare.height == HLRowMetrics.minHeight)
+        #expect(withSymbol.size.height == HLRowMetrics.minHeight)
+        #expect(withSymbol.frame.midY == HLRowMetrics.minHeight / 2, "the symbol is not centred on the row")
+    }
+
+    /// Past the first accessibility size the indicator stops growing, so it
+    /// leaves the width to the title.
+    @Test("the disclosure chevron grows with the text up to the first accessibility size and no further")
+    func chevronStopsGrowing() throws {
+        let standard = try DesignContractMeasure.size(of: HLDisclosureChevron(), width: nil, typeSize: .large)
+        let capped = try DesignContractMeasure.size(of: HLDisclosureChevron(), width: nil, typeSize: .accessibility1)
+        let largest = try DesignContractMeasure.size(of: HLDisclosureChevron(), width: nil, typeSize: .accessibility5)
+        #expect(HLDisclosureChevron.largestTypeSize == .accessibility1)
+        #expect(capped.height > standard.height, "the chevron does not grow with the text at all")
+        #expect(largest == capped, "the chevron grows past its cap")
+    }
+
     /// The card header carries the sentence that says what the card *is*. It
     /// truncated at one line unconditionally, so enlarging the text removed
     /// words from it. Same differential: long vs short subtitle at one width.
-    /// 1.4 B2-c — it wraps at the standard size too now (HIG: wrap, never
+    /// It wraps at the standard size too now (HIG: wrap, never
     /// truncate); the one-line header was what ended in "…".
     @Test("the card subtitle wraps at every text size")
     func cardSubtitleWrapsAtAccessibilitySizes() throws {
@@ -124,7 +185,7 @@ struct HLSettingsRowTests {
     }
 
     private static func card(subtitle: LocalizedStringKey) -> some View {
-        HLSettingsCard(icon: "person.crop.circle.fill", title: "Profil", subtitle: subtitle) {
+        HLCard("Profil", subtitle: subtitle) {
             Text("Body")
                 .font(.hlBody)
         }

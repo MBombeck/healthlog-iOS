@@ -10,7 +10,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// E1 — a State of Mind POST whose answer cannot be read (`HLError.decoding`,
+    /// A State of Mind POST whose answer cannot be read (`HLError.decoding`,
     /// here a captive portal's HTML 200) used to be a final refusal: the anchor
     /// moved past a mood that may exist nowhere (C4, open point). Now the anchor
     /// holds; after `maxHeldSweeps` unreadable answers for the same sample it is

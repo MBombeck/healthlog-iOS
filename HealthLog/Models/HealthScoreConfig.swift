@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v1.35.0 (GH #83) — the account's own recipe for the Health Score, as
+/// **v1.35.0 — the account's own recipe for the Health Score, as
 /// `GET`/`PATCH /api/auth/me/health-score-config` speaks it.**
 ///
 /// The score used to be composed for everybody the same way; since v1.35.0 a

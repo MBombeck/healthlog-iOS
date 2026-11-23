@@ -10,7 +10,7 @@ import Foundation
 
     // MARK: - UNUserNotificationCenterDelegate
 
-    /// Build 274 (public #3) — the conformance is `@preconcurrency` so the two
+    /// The conformance is `@preconcurrency` so the two
     /// MAIN-ACTOR isolated witnesses may take the delegate's non-Sendable
     /// `UNNotification` / `UNNotificationResponse` arguments. Without it Swift 6
     /// rejects the isolated witnesses ("cannot be sent from caller of protocol
@@ -29,7 +29,7 @@ import Foundation
     /// isolation of both this line and the witnesses.
     @MainActor
     extension NotificationService: @preconcurrency UNUserNotificationCenterDelegate {
-        /// **v0.7.0 W-SEC-M-2 — defensive allowlist for `medicationId`
+        /// **Defensive allowlist for `medicationId`
         /// arriving via APNs userInfo.**
         ///
         /// `DeepLinkRoute.idAllowlist` covers IDs that travel through a
@@ -55,7 +55,7 @@ import Foundation
             return regex.firstMatch(in: candidate, options: [], range: range) == nil ? nil : candidate
         }
 
-        /// Build 274 (public #3) — both delegate witnesses are MAIN-ACTOR
+        /// Both delegate witnesses are MAIN-ACTOR
         /// isolated (the extension is `@MainActor`; do not add `nonisolated`).
         /// The compiler-synthesised ObjC thunk runs an async witness in a Task and
         /// calls UIKit's completion handler from the executor that Task ends on.
@@ -70,7 +70,7 @@ import Foundation
             // Foreground: Banner + Sound. Medikamenten-Reminder sind
             // zeit-kritisch — ein silent-swallow wäre User-feindlich.
             //
-            // v0.6.1.3 Y4.1 — `.badge` is intentionally dropped from
+            // `.badge` is intentionally dropped from
             // the foreground-presentation set. The App-Badge is now
             // driven centrally from `MedicationsStore.dueOrMissedCount`;
             // letting the OS auto-bump on every foreground arrival
@@ -79,14 +79,20 @@ import Foundation
             let userInfo = content.userInfo
             let wrapped = RemoteNotificationUserInfo(userInfo)
             let payload = APNsPayload.parse(userInfo: wrapped.raw)
-            // v0.6.1.3 Y4.1 — a med reminder that arrives in the
+            // A med reminder that arrives in the
             // foreground means a new dose just rolled into the due
             // window. Recompute the badge so the icon reflects the new
             // "due" state immediately, before the user even acts on the
             // banner. Idempotent for non-medication categories — the
             // store snapshot stays unchanged.
+            // #191: a dose recorded elsewhere arrived while the app is open.
+            if userInfo["eventType"] as? String == MedicationIntakeRecordedPush.eventType {
+                await medicationFreshnessCheck?()
+            }
             if payload?.eventType == Self.categoryMedication {
                 await refreshBadgeFromAttachedStoreIfAvailable()
+                // #189 (4): a reminder of a slot resolved elsewhere stays silent.
+                if medicationReminderIsResolved(notification) { return [] }
             }
             // v1.39.2 — a check-up reminder just went out; re-read what the
             // server now says is due (it may stay due, or roll on if weekly).
@@ -168,13 +174,24 @@ import Foundation
             _: UNUserNotificationCenter,
             didReceive response: UNNotificationResponse
         ) async {
-            let userInfo = response.notification.request.content.userInfo
+            let request = response.notification.request
+            // #190 5.3: an unopened remote notification acts on nothing.
+            if let relayTapGate,
+               !relayTapGate(request.identifier, request.trigger is UNPushNotificationTrigger, request.content.userInfo)
+            {
+                return
+            }
+            let userInfo = request.content.userInfo
             let wrapped = RemoteNotificationUserInfo(userInfo)
             let actionID = response.actionIdentifier
+            // D3 #6: a Spezi banner away from the account zone books onto the
+            // account slot with its wall-clock time, pinned.
+            let booking = MedicationReminderSlot.booking(deliveredAt: response.notification.date)
             let payload = Self.resolvedPayload(
                 userInfo: wrapped.raw,
-                deliveredAt: response.notification.date
+                deliveredAt: booking.scheduledFor
             )
+            let slotPin = wrapped.raw["speziScheduled"] as? Bool == true ? booking.pin : nil
             // eventType/actionID are fixed routing constants (enum-grade), no user data.
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.notifications.info(
@@ -186,17 +203,19 @@ import Foundation
             // system before the network call has at least started — that
             // is what keeps the runtime alive on lock-screen taps.
             // Snooze + deep-links are pure-UI and fire-and-forget.
-            await dispatchAction(actionID: actionID, payload: payload)
+            await dispatchAction(actionID: actionID, payload: payload, slotPin: slotPin)
+            // #191: every interaction re-checks the medication stamp.
+            await medicationFreshnessCheck?()
         }
 
         /// Main-actor dispatch of a notification action. Public-internal
         /// scope so tests can drive the routing without the delegate
         /// dance — the test seam matches the production seam below.
         @MainActor
-        func dispatchAction(actionID: String, payload: APNsPayload?) async {
+        func dispatchAction(actionID: String, payload: APNsPayload?, slotPin: Date? = nil) async {
             switch actionID {
             case Self.actionMedicationTaken:
-                await handleMedicationTaken(payload: payload)
+                await handleMedicationTaken(payload: payload, slotPin: slotPin)
             case Self.actionMedicationSnooze:
                 await handleMedicationSnooze(payload: payload)
             case Self.actionMedicationSkipped:
@@ -212,7 +231,7 @@ import Foundation
             case Self.actionMoodDismiss:
                 await handleMoodDismiss(payload: payload)
             case Self.actionMeasurementDone:
-                // W-B189 (#23) — "Erledigt"/complete on a preventive-care
+                // "Erledigt"/complete on a preventive-care
                 // reminder. Routes to the measurement capture deep-link (see
                 // `NotificationService+MeasurementReminder.swift`); there is no
                 // confirmed server completion route in the v1.17.1 contract.
@@ -220,33 +239,27 @@ import Foundation
             default:
                 // Body-tap or unknown action — fall back to the deep-link
                 // contract. If the payload carries `medicationId` we
-                // route straight to the detail screen, otherwise honour
-                // the `deepLink` string. v0.5.4.3 HP5: a MOOD_REMINDER
+                // route straight to its due dose, otherwise honour
+                // the `deepLink` string. A MOOD_REMINDER
                 // body-tap (default-action) routes to the mood quick-
                 // entry sheet via the router. Unknown actions never crash.
                 if payload?.eventType == Self.categoryMood {
                     deepLinks.routeToMoodQuickEntry()
                 } else if payload?.eventType == Self.categoryMeasurementReminder {
-                    // W-B189 (#23) — a preventive-care reminder body-tap deep-
+                    // A preventive-care reminder body-tap deep-
                     // links to the measurement capture surface via the server-
                     // supplied `deepLink`; falls back to the dashboard when the
                     // push carries none. Shared with the "Erledigt" action so
                     // the routing stays single-source.
                     handleMeasurementBodyTap(payload: payload)
                     await refreshRemindersAfterMeasurementReminder(payload: payload)
-                } else if let medicationId = Self.validatedMedicationId(payload?.medicationId),
-                          let url = URL(string: "healthlog://medications/\(medicationId)")
-                {
-                    // v0.7.0 W-SEC-M-2 — the URL parser already
-                    // re-validates via `DeepLinkRoute.idAllowlist`, but
-                    // the synthesised URL never benefits from defence-
-                    // in-depth: a tampered `medicationId` here would
-                    // construct a URL that's then re-parsed, and the
-                    // fallback path would `.unknown(...)` to dashboard.
-                    // Validating up-front avoids the wasted hop and
-                    // keeps log lines truthful ("ID rejected" vs.
-                    // "route became unknown").
-                    deepLinks.handle(url)
+                } else if let medicationId = Self.validatedMedicationId(payload?.medicationId) {
+                    // #186 — a dose reminder lands on its dose, on the Meds
+                    // list where the card offers Take and Skip, with every
+                    // dose due in the same slot marked alongside it. The
+                    // medication's info page has neither action. The id is
+                    // validated up-front so a tampered one never routes.
+                    deepLinks.handle(.medicationDue(id: medicationId, slot: payload?.scheduledFor))
                 } else if let payload {
                     routeBodyTap(payload)
                 }
@@ -255,12 +268,12 @@ import Foundation
         }
 
         @MainActor
-        private func handleMedicationTaken(payload: APNsPayload?) async {
+        private func handleMedicationTaken(payload: APNsPayload?, slotPin: Date? = nil) async {
             guard let payload, let rawId = payload.medicationId else {
                 // Missing metadata — surface as a deep-link instead of
                 // a half-formed POST. Operator-side fix: server has to
                 // attach `medicationId` to the push.
-                // v0.12 W0-2 — `healthlog://medications` now resolves to the
+                // `healthlog://medications` now resolves to the
                 // Meds list root (`.medications`), not `.unknown` → Dashboard.
                 HLLog.notifications.error("med.taken without medicationId — falling back to Meds list")
                 if let url = URL(string: "healthlog://medications") {
@@ -268,11 +281,11 @@ import Foundation
                 }
                 return
             }
-            // v0.7.0 W-SEC-M-2 — APN-payload IDs go through the same
+            // APN-payload IDs go through the same
             // allowlist regex as deep-link IDs. A tampered / over-long /
             // non-allowlisted ID never reaches the repository POST.
             guard let medicationId = Self.validatedMedicationId(rawId) else {
-                // v0.12 W0-2 — Meds list root, not Dashboard (see above).
+                // Meds list root, not Dashboard (see above).
                 HLLog.notifications.error(
                     "med.taken: medicationId rejected by allowlist — falling back to Meds list"
                 )
@@ -287,28 +300,36 @@ import Foundation
             }
             let scheduledFor = payload.scheduledFor ?? .now
             do {
-                // M2 — a reminder fires at the slot time but the user can tap
+                // A reminder fires at the slot time but the user can tap
                 // "Genommen" hours later (lock screen next morning). Record the
                 // administration instant clamped to `min(scheduledFor, now)` —
                 // the same canonical clamp the in-app retro path uses — so a
                 // far-future-of-slot `takenAt` can't mis-band on-time/late
                 // compliance.
-                try await repo.recordFromReminder(
+                let idempotencyKey = IdempotencyKey()
+                // D3 #6: a pinned take keeps its own moment; the pin names the slot.
+                let receipt = try await repo.recordFromReminderReturningReceipt(
                     medicationId: medicationId,
                     scheduledFor: scheduledFor,
                     status: .taken,
-                    takenAt: min(scheduledFor, .now)
+                    takenAt: slotPin == nil ? min(scheduledFor, .now) : .now,
+                    forceSlotInstant: slotPin,
+                    idempotencyKey: idempotencyKey
                 )
                 HLLog.notifications.info("med.taken: server roundtrip OK medicationId=\(medicationId, privacy: .private)")
-                // v0.6.0.7 Spezi Phase E — mirror the completion to the
-                // SpeziScheduler `Outcome` store so the next reconcile
-                // / BGAppRefresh pass does NOT re-queue a banner for
-                // the same dose. Fire-and-forget — local mirror is
-                // non-authoritative.
-                Self.completeSpeziEventIfAvailable(
+                // #188 (7), R1 (1): offered for undo, bound to the row this tap wrote.
+                ExternalTakeLog().record(
                     medicationId: medicationId,
-                    scheduledFor: scheduledFor
+                    scheduledFor: scheduledFor,
+                    source: .notification,
+                    binding: ExternalTakeLog.Binding.forCommit(error: nil, receipt: receipt, idempotencyKey: idempotencyKey.raw)
                 )
+                // Spezi Phase E — mirror the completion so the next reconcile
+                // does NOT re-queue a banner for the same dose (non-authoritative).
+                Self.completeSpeziEventIfAvailable(medicationId: medicationId, scheduledFor: scheduledFor)
+            } catch let already as MedicationAlreadyTaken {
+                await confirmAlreadyTaken(already) // #189 (6): no second dose, say so.
+                Self.completeSpeziEventIfAvailable(medicationId: medicationId, scheduledFor: scheduledFor)
             } catch let err as HLError {
                 // Med-intake triage logs must be accurate: a transient-refresh
                 // 401 is durably enqueued (`shouldPersistToOutbox`), NOT a
@@ -332,16 +353,16 @@ import Foundation
         @MainActor
         private func handleMedicationSkipped(payload: APNsPayload?) async {
             guard let payload, let rawId = payload.medicationId else {
-                // v0.12 W0-2 — Meds list root, not Dashboard.
+                // Meds list root, not Dashboard.
                 HLLog.notifications.error("med.skipped without medicationId — falling back to Meds list")
                 if let url = URL(string: "healthlog://medications") {
                     deepLinks.handle(url)
                 }
                 return
             }
-            // v0.7.0 W-SEC-M-2 — see `handleMedicationTaken` for rationale.
+            // See `handleMedicationTaken` for rationale.
             guard let medicationId = Self.validatedMedicationId(rawId) else {
-                // v0.12 W0-2 — Meds list root, not Dashboard.
+                // Meds list root, not Dashboard.
                 HLLog.notifications.error(
                     "med.skipped: medicationId rejected by allowlist — falling back to Meds list"
                 )
@@ -413,16 +434,11 @@ import Foundation
 
         @MainActor
         private func handleMedicationSnooze(payload: APNsPayload?) async {
-            // Local re-schedule only. Server push state stays unchanged
-            // because snooze is a client-side concept: server doesn't
-            // know it should suppress the next scheduled push at the
-            // 15-minute mark. The local UNTimeIntervalNotificationTrigger
-            // delivers a private banner with the same metadata so the
-            // user can still hit "Genommen" / "Übersprungen" on the
-            // snoozed alert. Reuses the same category so the 3-action
-            // chrome carries through.
+            // Local re-schedule only (snooze is a client-side concept). The
+            // re-fired banner keeps the metadata and the category, so its
+            // Taken / Skipped actions still name this dose.
             //
-            // v0.7.0 W-SEC-M-2 — sanitise `medicationId` *before* it
+            // Sanitise `medicationId` *before* it
             // becomes part of the snoozed request's `userInfo` (where
             // the next tap re-enters `handleMedicationTaken/Skipped` and
             // would re-run the allowlist anyway) and *before* it
@@ -431,7 +447,7 @@ import Foundation
             // namespace). `buildMedicationSnoozeRequest` consumes the
             // sanitised payload directly.
             let sanitisedPayload = Self.sanitisedForSnooze(payload: payload)
-            // W-B188 — the snoozed re-schedule re-shows the banner 15 min
+            // The snoozed re-schedule re-shows the banner 15 min
             // later; honour the same lock-screen-privacy opt-out so the drug
             // name doesn't re-leak on the snoozed banner.
             let req = Self.buildMedicationSnoozeRequest(
@@ -439,9 +455,16 @@ import Foundation
                 hideMedicationName: LockScreenPrivacy.hideMedicationName()
             )
             do {
-                // Build 273 — through the shared gate (Focus filter + pending
-                // budget), like every other locally scheduled reminder.
-                try await addLocalNotification(req)
+                // Through the shared gate (Focus filter), like every other
+                // locally scheduled reminder, but never refused for the
+                // budget (D3 #9): the person asked for it a moment ago, and
+                // past 64 iOS drops the latest-firing request, not this one.
+                let added = try await addLocalNotification(req, budgetExempt: true)
+                guard added else {
+                    HLLog.notifications
+                        .warning("med.snooze.15m: held back medicationId=\(payload?.medicationId ?? "nil", privacy: .private)")
+                    return
+                }
                 HLLog.notifications.info("med.snooze.15m: re-scheduled medicationId=\(payload?.medicationId ?? "nil", privacy: .private)")
             } catch {
                 HLLog.notifications.error(
@@ -450,7 +473,7 @@ import Foundation
             }
         }
 
-        /// **v0.7.0 W-SEC-M-2** — returns a copy of `payload` with
+        /// Returns a copy of `payload` with
         /// `medicationId` cleared if it fails the allowlist regex.
         /// Other fields pass through untouched. Snooze-builder consumes
         /// the sanitised value so a bogus ID can never enter the
@@ -485,9 +508,9 @@ import Foundation
             payload: APNsPayload?,
             hideMedicationName: Bool = false
         ) -> UNNotificationRequest {
-            let id = "snooze-\(payload?.medicationId ?? "anon")-\(UUID().uuidString)"
+            let id = snoozeIdentifier(medicationId: payload?.medicationId, scheduledFor: payload?.scheduledFor)
             let content = UNMutableNotificationContent()
-            // W-B188 — when the lock-screen-privacy opt-out is on, the server
+            // When the lock-screen-privacy opt-out is on, the server
             // payload title (the drug name) + body (the dose) are replaced by
             // a generic localized label so the snoozed banner doesn't re-leak
             // the medication name. `userInfo` below still carries the
@@ -500,7 +523,7 @@ import Foundation
                 content.body = payload?.body ?? String(localized: "Reminder")
             }
             content.sound = .default
-            content.categoryIdentifier = Self.categoryMedication
+            content.categoryIdentifier = RelayCategoryIdentity.medication()
             // Snoozed banner must inherit the same time-sensitive priority
             // as the original medication push — otherwise iOS demotes the
             // rescheduled banner to `.active` and the user learns "snoozing
@@ -521,6 +544,8 @@ import Foundation
                 if let eventType = payload.eventType { userInfo["eventType"] = eventType }
             }
             content.userInfo = userInfo
+            // Hide content in notifications: only the neutral text is stored.
+            NotificationContentPrivacy.apply(to: content, kind: .reminder)
 
             let trigger = UNTimeIntervalNotificationTrigger(
                 timeInterval: Self.snoozeIntervalSeconds,
@@ -534,66 +559,12 @@ import Foundation
         /// same shape (the action handler re-parses via `APNsPayload`).
         ///
         /// Internal (was `private`) so the local-fallback orchestrator
-        /// (W-MED) builds the same userInfo shape without re-implementing
+        /// builds the same userInfo shape without re-implementing
         /// the formatter — single-source guarantee.
         static func iso8601String(from date: Date) -> String {
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return f.string(from: date)
-        }
-
-        /// Canonical `userInfo` shape for a medication-reminder banner —
-        /// mirrors the server APNs payload contract so the on-tap action
-        /// handler (`dispatchAction`) drives `med.taken` / `med.skipped` /
-        /// `med.snooze.15m` regardless of whether the banner originated
-        /// from the server cron, the local fallback, or the smart-reminder
-        /// wrapper.
-        /// Parse a banner's userInfo into the action payload, resolving
-        /// `scheduledFor` for Spezi-built medication banners.
-        ///
-        /// SpeziScheduler materialises its `UNNotificationRequest`s at reconcile
-        /// time and the `SchedulerNotificationsConstraint` hook only sees task +
-        /// content, never the trigger — so the `scheduledFor` stamped there
-        /// (`HealthLogStandard.notificationContent(for:content:)`) is the BUILD
-        /// instant, not the fire instant. Acting on it would post "taken" against
-        /// yesterday's reconcile time and miss today's slot. Those banners carry
-        /// `speziScheduled: true`; for them the delivery date IS the slot (Spezi
-        /// fires at the occurrence start), so we substitute it. Server pushes
-        /// carry the real slot and are left untouched.
-        nonisolated static func resolvedPayload(
-            userInfo: [AnyHashable: Any],
-            deliveredAt: Date
-        ) -> APNsPayload? {
-            guard let parsed = APNsPayload.parse(userInfo: userInfo) else { return nil }
-            guard userInfo["speziScheduled"] as? Bool == true else { return parsed }
-            return APNsPayload(
-                title: parsed.title,
-                body: parsed.body,
-                eventType: parsed.eventType,
-                metricType: parsed.metricType,
-                deepLink: parsed.deepLink,
-                isContentAvailable: parsed.isContentAvailable,
-                medicationId: parsed.medicationId,
-                scheduleId: parsed.scheduleId,
-                scheduledFor: deliveredAt,
-                reminderId: parsed.reminderId
-            )
-        }
-
-        static func medicationUserInfo(
-            medicationId: String,
-            scheduleId: String?,
-            scheduledFor: Date
-        ) -> [String: Any] {
-            var info: [String: Any] = [
-                "medicationId": medicationId,
-                "scheduledFor": iso8601String(from: scheduledFor),
-                "eventType": categoryMedication
-            ]
-            if let scheduleId {
-                info["scheduleId"] = scheduleId
-            }
-            return info
         }
     }
 

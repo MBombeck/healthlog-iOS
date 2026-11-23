@@ -152,7 +152,7 @@ struct AuthenticatedStorePublicationBoundaryTests {
         )
     }
 
-    // 09-08 — six store families are suspended, switched and resumed inside ONE
+    // Six store families are suspended, switched and resumed inside ONE
     // arrangement, because the property under test is that a late account-A
     // effect is rejected by all six *of the same session*. Splitting it into six
     // tests would give six different sessions and stop proving that.

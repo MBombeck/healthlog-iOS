@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// **CU-10 / GH #47 — the stable identity of an Apple Health medication concept.**
+/// **The stable identity of an Apple Health medication concept.**
 ///
 /// The mirror's server upsert key is `(userId, externalSource, externalId)`, so
 /// the whole feature rests on `externalId` being the SAME string for the same

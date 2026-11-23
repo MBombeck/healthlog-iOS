@@ -1,7 +1,7 @@
 import AppIntents
 import SwiftUI
 
-/// **v0.15 W-SIRI** — Settings → Siri & Shortcuts.
+/// Settings → Siri & Shortcuts.
 ///
 /// A read-only explainer surface for the app's App Intents stack: it lists,
 /// in plain language, what the user can say to Siri (or wire into a Shortcut)
@@ -10,26 +10,28 @@ import SwiftUI
 /// but a user who never opens those never learns the affordances exist. This
 /// screen is the in-app discovery surface the operator mandate asks for.
 ///
-/// `ShortcutsLink` jumps straight into the Shortcuts app filtered to
-/// HealthLog's actions; `SiriTipView` renders Apple's native "Add to Siri"
-/// affordance for one representative intent. Both are pure system controls —
-/// no parallel intent registration, no donation here (the
+/// An external row opens the Shortcuts app; `SiriTipView` renders Apple's
+/// native "Add to Siri" affordance for one representative intent. No
+/// parallel intent registration, no donation here (the
 /// `AppShortcutsProvider` already donates at app launch).
 struct SettingsSiriShortcutsScreen: View {
+    @Environment(\.openURL) private var openURL
+
+    /// Opens the Shortcuts app. iOS offers no public URL for one app's
+    /// shortcuts; the system `ShortcutsLink` labelled itself with a bare
+    /// "-Kurzbefehle" whenever the app name was not resolved.
+    static let shortcutsAppURL = URL(string: "shortcuts://")
+
     var body: some View {
-        HLSettingsPage(title: "Siri & Shortcuts") {
+        HLPage {
             phrasesCard
             quickActionsCard
         }
         .navigationTitle("Siri & Shortcuts")
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2-c — what happens to a spoken entry, and that Siri needs you
+        // What happens to a spoken entry, and that Siri needs you
         // signed in, is the screen's (i); the how-it-works card is gone.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: Self.info, accessibilityIdentifier: "settings.siri.info")
-            }
-        }
+        .hlPageActions([.info(Self.info, identifier: "settings.siri.info")])
     }
 
     static var info: HLInfoContent {
@@ -51,65 +53,55 @@ struct SettingsSiriShortcutsScreen: View {
     // MARK: - What you can say
 
     private var phrasesCard: some View {
-        // 1.4 B2-c — how to use the phrases, read before the list instead of
+        // How to use the phrases, read before the list instead of
         // after it.
-        HLSettingsCard(
-            icon: "mic.fill",
-            title: "What you can say",
+        HLCard(
+            "What you can say",
             subtitle: "Start any phrase with “Hey Siri”. Replace the example values and medication names with your own."
         ) {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                ForEach(Array(Self.phrases.enumerated()), id: \.offset) { idx, entry in
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                ForEach(Array(Self.phrases.enumerated()), id: \.offset) { _, entry in
                     phraseRow(entry)
-                    if idx < Self.phrases.count - 1 {
-                        Divider().opacity(0.6)
-                    }
                 }
             }
         }
     }
 
+    /// A phrase is a sentence to say, not a list entry: name and note wrap
+    /// instead of ending in "…", in the row's title and detail type, with
+    /// the symbol in the row's symbol column.
     private func phraseRow(_ entry: PhraseEntry) -> some View {
-        HStack(alignment: .top, spacing: HLSpace.md) {
-            Image(systemName: entry.symbol)
-                .font(.hlIcon(HLIconSize.md))
-                .foregroundStyle(Color.accentColor)
-                .hlInfoIconColumn()
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(entry.phrase)
-                    .font(.hlSubhead.weight(.medium))
-                    .foregroundStyle(HLText.primary)
+        HStack(alignment: .top, spacing: HLRowMetrics.gap) {
+            HLRowGlyph(symbol: entry.symbol, tint: HLAccent.userBrandTint)
+            VStack(alignment: .leading, spacing: HLRowMetrics.labelSpacing) {
+                HLRowTitle(Text(entry.phrase))
                 if let detail = entry.detail {
                     Text(detail)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Shortcuts app + Add to Siri
 
-    /// UI-Standard R2 — der Karten-Footer erzählte die zwei System-Controls
-    /// darunter nach („Öffne die Kurzbefehle-App …, oder füge eine zu Siri
-    /// hinzu."). `ShortcutsLink` und `SiriTipView` beschriften sich selbst.
-    /// Gefallen.
+    /// The row's text is ours, so it reads the same in every language. The
+    /// system's `SiriTipView` stood here and spoke the system language: an
+    /// English "Log a measurement in HealthLog" under German phrases. The
+    /// phrases card above already lists what to say, in the app's language.
     private var quickActionsCard: some View {
-        HLSettingsCard(
-            icon: "square.stack.3d.up.fill",
-            title: "Build your own"
-        ) {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                ShortcutsLink()
-                    .shortcutsLinkStyle(.automatic)
-                    .accessibilityIdentifier("settings.siri.shortcutsLink")
-                SiriTipView(intent: LogMeasurementIntent())
-                    .siriTipViewStyle(.automatic)
-                    .accessibilityIdentifier("settings.siri.tip")
+        HLCard("Build your own") {
+            HLSettingsActionRow(
+                icon: "square.2.layers.3d",
+                title: "settings.siri.openShortcuts",
+                presents: .external
+            ) {
+                if let url = Self.shortcutsAppURL { openURL(url) }
             }
+            .accessibilityIdentifier("settings.siri.shortcutsLink")
         }
     }
 
@@ -130,7 +122,7 @@ struct SettingsSiriShortcutsScreen: View {
     /// — every registered intent has a row here so the discovery surface never
     /// lies about what's available.
     ///
-    /// **UI-Standard R2 (U5).** Vier Beschreibungen sind gefallen, weil sie den
+    /// **UI-Standard R2.** Vier Beschreibungen sind gefallen, weil sie den
     /// Satz darüber umformulierten („Blutdruck erfassen" → „Erfasse einen
     /// systolisch/diastolisch-Wert.", „Stimmung erfassen", „Medikament als
     /// genommen markieren", „Habe ich … heute schon genommen"). Die drei

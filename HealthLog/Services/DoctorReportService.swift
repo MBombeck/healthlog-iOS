@@ -2,7 +2,7 @@ import Foundation
 
 /// Server-rendered doctor-report PDF download (siehe ADR-002).
 ///
-/// **v0141 W-DATAPARITY (P3) — canonical route.** The legacy
+/// **Canonical route.** The legacy
 /// `POST /api/doctor-report/pdf` route was removed server-side (the route file
 /// calls it the "legacy doctor-report route"), so every server render 404'd and
 /// the screen silently fell back to the poorer on-device renderer. The PDF is

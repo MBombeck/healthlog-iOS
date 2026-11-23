@@ -57,6 +57,25 @@ import Synchronization
             defaults.withLock { $0.removeObject(forKey: key) }
         }
 
+        /// The workout deletions to send now, from this importer's defaults:
+        /// none while the route is closed (they are kept), otherwise the kept
+        /// ones plus `ids`.
+        func workoutDeletionsToSend(_ ids: [String], ownerID: String) -> [String] {
+            defaults.withLock {
+                AppleHealthPendingDeletions.toSend(
+                    ids,
+                    .workout,
+                    ownerID: ownerID,
+                    routeOpen: AppleHealthIngestCapability.isAvailable(.appleHealthDeletes, defaults: $0),
+                    defaults: $0
+                )
+            }
+        }
+
+        func clearWorkoutDeletions(ownerID: String) {
+            defaults.withLock { AppleHealthPendingDeletions.clear(.workout, ownerID: ownerID, defaults: $0) }
+        }
+
         func loadAnchor(forKey key: String, label: String) -> HKQueryAnchor? {
             defaults.withLock {
                 HealthKitAnchorArchive.loadAnchor(forKey: key, from: $0, label: label)
@@ -69,7 +88,7 @@ import Synchronization
             }
         }
 
-        /// #17 — backlog bookkeeping beside the anchor. An undecodable blob is
+        /// Backlog bookkeeping beside the anchor. An undecodable blob is
         /// treated as "unknown", which only costs a recount.
         func loadBacklog(forKey key: String) -> WorkoutImportBacklogState {
             defaults.withLock { defaults in
@@ -125,11 +144,14 @@ import Synchronization
         let workouts: [HKWorkout]
         let newAnchor: HKQueryAnchor?
         let fetchedCount: Int
+        /// Workouts deleted in Apple Health since the anchor (sample UUIDs).
+        let deletedIDs: [String]
 
-        init(workouts: [HKWorkout], newAnchor: HKQueryAnchor?, fetchedCount: Int? = nil) {
+        init(workouts: [HKWorkout], newAnchor: HKQueryAnchor?, fetchedCount: Int? = nil, deletedIDs: [String] = []) {
             self.workouts = workouts
             self.newAnchor = newAnchor
             self.fetchedCount = fetchedCount ?? workouts.count
+            self.deletedIDs = deletedIDs
         }
     }
 
@@ -260,13 +282,14 @@ import Synchronization
                         predicate: nil,
                         anchor: anchor,
                         limit: limit
-                    ) { _, samples, _, newAnchor, error in
+                    ) { _, samples, deleted, newAnchor, error in
                         if let error {
                             completion(.failure(error))
                         } else {
                             completion(.success(.init(
                                 workouts: (samples as? [HKWorkout]) ?? [],
-                                newAnchor: newAnchor
+                                newAnchor: newAnchor,
+                                deletedIDs: (deleted ?? []).map(\.uuid.uuidString)
                             )))
                         }
                     }
@@ -397,7 +420,9 @@ import Synchronization
     /// dedicated importer from accidentally enabling or disabling Spezi-owned
     /// types and makes the observer lifecycle deterministic in tests.
     protocol WorkoutHealthKitStore: Sendable {
-        func executeWorkoutObserver(onUpdate: @escaping @Sendable () -> Void) async
+        /// `onUpdate` returns when the delivery's work is done; only then does
+        /// the adapter hand HealthKit its receipt.
+        func executeWorkoutObserver(onUpdate: @escaping @Sendable () async -> Void) async
         func stopWorkoutObserver() async
         func enableWorkoutBackgroundDelivery() async throws
         func disableWorkoutBackgroundDelivery() async throws
@@ -413,22 +438,22 @@ import Synchronization
             self.store = store
         }
 
-        func executeWorkoutObserver(onUpdate: @escaping @Sendable () -> Void) {
+        func executeWorkoutObserver(onUpdate: @escaping @Sendable () async -> Void) {
             guard observerQuery == nil else { return }
             let query = HKObserverQuery(
                 sampleType: HKObjectType.workoutType(),
                 predicate: nil
             ) { _, completion, error in
-                // HealthKit requires prompt completion. Network work is always
-                // scheduled after this acknowledgement and never blocks it.
-                completion()
+                // The receipt waits for the sweep (or its deadline): acknowledged
+                // earlier, iOS may suspend the process before the upload ran.
                 if let error {
                     HLLog.healthKit.error(
                         "workout HK observer error: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
                     )
-                    return
                 }
-                onUpdate()
+                HealthKitDeliveryReceipt.deliver(error: error, completionHandler: completion) {
+                    await onUpdate()
+                }
             }
             observerQuery = query
             store.execute(query)

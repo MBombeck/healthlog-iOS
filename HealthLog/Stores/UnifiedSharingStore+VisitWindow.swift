@@ -16,9 +16,9 @@ public extension UnifiedSharingStore {
     }
 
     /// Preset the window, as "visit.next.report" does. Ignored
-    /// for a form that cannot carry it.
+    /// for a form that cannot carry it; kept while no form is chosen.
     func presetWindow(_ window: ReportWindow?) {
-        self.window = Self.formTakesWindow(outputForm) ? window : nil
+        self.window = (outputForm.map(Self.formTakesWindow) ?? true) ? window : nil
     }
 
     /// The period card's choice: a look-back of `days`, which ends the preset.

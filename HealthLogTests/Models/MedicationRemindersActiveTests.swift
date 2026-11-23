@@ -91,8 +91,7 @@ struct MedicationRemindersActiveTests {
         #expect(!CriticalMedAlarmRouting.isAlarmEligible(
             medication: medication,
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ))
     }
 
@@ -109,14 +108,12 @@ struct MedicationRemindersActiveTests {
         #expect(try !CriticalMedAlarmRouting.isAlarmEligible(
             medication: Self.autoMarked(),
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ))
         #expect(try CriticalMedAlarmRouting.isAlarmEligible(
             medication: Self.reminding(),
             alarmEnabled: { _ in true },
-            authorized: true,
-            osAvailable: true
+            authorized: true
         ))
     }
 

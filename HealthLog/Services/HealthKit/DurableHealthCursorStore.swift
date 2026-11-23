@@ -3,7 +3,7 @@ import Foundation
     import HealthKit
 #endif
 
-// Phase 07 Wave 1 — the owner-partitioned, read-back-verified cursor store.
+// The owner-partitioned, read-back-verified cursor store.
 //
 // Everything the shipped app persists as a HealthKit cursor today is either
 // installation-global (SpeziHealthKit's own slots) or per-type but not
@@ -253,19 +253,19 @@ actor DurableHealthCursorStore {
             throw HealthSyncCursorStoreError.partitionOwnerMismatch
         }
         guard !anchor.isEmpty else {
-            markFailed(key, reason: "anchor blob was empty")
+            markFailed(key, reason: Self.emptyAnchorReason)
             throw HealthSyncCursorStoreError.malformedAnchor
         }
 
         let candidate = CursorRecord(version: Self.formatVersion, anchor: anchor, updatedAt: clock())
         guard let encoded = try? encoder.encode(candidate) else {
-            markFailed(key, reason: "cursor record could not be encoded")
+            markFailed(key, reason: Self.unencodableRecordReason)
             throw HealthSyncCursorStoreError.malformedAnchor
         }
         storage.write(key.storageKey, encoded)
 
         guard let readBack = record(for: key), readBack == candidate else {
-            markFailed(key, reason: "cursor write did not survive read back")
+            markFailed(key, reason: Self.unverifiedWriteReason)
             throw HealthSyncCursorStoreError.writeNotVerified
         }
         try lease.requireCurrent()
@@ -372,7 +372,7 @@ actor DurableHealthCursorStore {
     /// Drops the committed cursor of one partition, once per `resetID`, so the
     /// next collection walks the partition again from the chosen cutoff.
     ///
-    /// **#113.** Readings the server refused before a client fix are behind the
+    /// Readings the server refused before a client fix are behind the
     /// anchor; only a re-read can offer them again, and the server folds every
     /// reading it already holds on `externalId`. The migration record is left
     /// alone — the partition stays exactly as collectable as it was — and the
@@ -396,7 +396,7 @@ actor DurableHealthCursorStore {
 
         // An empty blob is how "no cursor" reads (see `record(for:)`): the
         // backing store has no delete, and a tombstone keeps it that way.
-        // 1.3 (#127) — the legacy forward cursor and the live/history split
+        // The legacy forward cursor and the live/history split
         // go with it, so the partition walks again from the chosen window
         // exactly like a fresh one.
         storage.write(key.storageKey + Self.legacySuffix, Data())
@@ -567,6 +567,88 @@ actor DurableHealthCursorStore {
     }
 }
 
+// MARK: - Recovery from a failed write
+
+/// Why a partition stayed closed after the live leg tried to reopen it, as
+/// Sync Diagnostics names it. A fixed vocabulary: no free-text reason, no
+/// owner, no anchor.
+enum HealthSyncPartitionLockReason: String, Codable, Sendable, Equatable {
+    /// A cursor write did not land; the next pass tries again.
+    case failedWrite
+    /// The partition was never set up for this account; the next launch
+    /// does that.
+    case notMigrated
+    /// Closed on purpose (no proof of ownership, or a fail-closed rollback);
+    /// the next launch checks the ownership again.
+    case closed
+
+    init(_ state: HealthSyncCursorMigrationState) {
+        switch state {
+        case let .failed(reason) where DurableHealthCursorStore.retryableFailureReasons.contains(reason):
+            self = .failedWrite
+        case .notStarted:
+            self = .notMigrated
+        default:
+            self = .closed
+        }
+    }
+}
+
+/// In an extension so the actor body stays within its length budget; it
+/// shares the file for the private record writer.
+extension DurableHealthCursorStore {
+    static let emptyAnchorReason = "anchor blob was empty"
+    static let unencodableRecordReason = "cursor record could not be encoded"
+    static let unverifiedWriteReason = "cursor write did not survive read back"
+    static let unarchivableAnchorReason = "anchor could not be archived"
+
+    /// The failures a later pass may simply try again: each is a cursor write
+    /// of the owner's own partition that did not land. Nothing about who owns
+    /// the partition is in doubt. A failed ownership proof or an explicit
+    /// `failClosed` is not in this set and stays failed.
+    static let retryableFailureReasons: Set<String> = [
+        emptyAnchorReason, unencodableRecordReason, unverifiedWriteReason, unarchivableAnchorReason
+    ]
+
+    /// Opens a partition a failed cursor write closed, so the next pass reads
+    /// it again instead of waiting for the next process launch.
+    ///
+    /// The partition returns to the state it collected under: replaying from
+    /// the cutoff when it still carries its quarantine reference, verified
+    /// otherwise. The stored cursor stays as it is. Only a write that read back
+    /// verified ever stands there, so the type resumes after the last page the
+    /// server confirmed, and anything after it is read again.
+    ///
+    /// - Returns: `true` when the partition may collect afterwards.
+    @discardableResult
+    func reopenAfterFailedWrite(
+        _ key: HealthSyncCursorKey,
+        requiring lease: HealthSyncAuthenticatedLease
+    ) throws -> Bool {
+        try lease.requireCurrent()
+        guard lease.ownerID == key.ownerID else {
+            throw HealthSyncCursorStoreError.partitionOwnerMismatch
+        }
+        guard case let .failed(reason) = migrationState(for: key) else {
+            return permitsCollection(for: key)
+        }
+        guard Self.retryableFailureReasons.contains(reason) else { return false }
+        let reference = quarantineReference(for: key)
+        write(
+            MigrationRecord(
+                version: Self.formatVersion,
+                state: reference == nil ? MigrationRecord.verified : MigrationRecord.replayingLegacy,
+                quarantineReference: reference,
+                reason: nil,
+                updatedAt: clock()
+            ),
+            for: key
+        )
+        try lease.requireCurrent()
+        return permitsCollection(for: key)
+    }
+}
+
 #if canImport(HealthKit)
 
     extension DurableHealthCursorStore {
@@ -581,7 +663,7 @@ actor DurableHealthCursorStore {
             requiring lease: HealthSyncAuthenticatedLease
         ) throws -> CursorRecord {
             guard let blob = HealthKitAnchorArchive.encodeAnchor(anchor, label: key.source.rawValue) else {
-                markFailed(key, reason: "anchor could not be archived")
+                markFailed(key, reason: Self.unarchivableAnchorReason)
                 throw HealthSyncCursorStoreError.malformedAnchor
             }
             return try save(anchor: blob, for: key, requiring: lease)

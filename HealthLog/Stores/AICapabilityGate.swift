@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **#114 / #115 · 0.2 — the single source of truth for AI availability.**
+/// **The single source of truth for AI availability.**
 ///
 /// Holds the `ai` block from `GET /api/auth/me` (server v1.39). Every AI surface
 /// asks THIS gate, by capability:
@@ -50,7 +50,7 @@ public final class AICapabilityGate {
         account != nil
     }
 
-    /// #143 — the standing AI consent the server reported (`ai.consent`,
+    /// The standing AI consent the server reported (`ai.consent`,
     /// v1.43.2), `nil` before the first load, on an older server, or when the
     /// server's status is one this build does not know. Read-only: nothing
     /// here ever mints a receipt.
@@ -94,7 +94,7 @@ public final class AICapabilityGate {
         publish()
     }
 
-    /// #129 — render the block `PUT /api/auth/me/ai-usage` answered until the
+    /// Render the block `PUT /api/auth/me/ai-usage` answered until the
     /// next `/api/auth/me` load (which also re-resolves the capabilities the
     /// level gates). No-op without a block: the setting is hidden then.
     public func applyUsage(_ usage: AIUsageState) {

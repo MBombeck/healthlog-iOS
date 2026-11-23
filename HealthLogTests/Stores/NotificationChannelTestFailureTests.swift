@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#112 — webhook `format` and the cause of a failed channel test.**
+/// **Webhook `format` and the cause of a failed channel test.**
 ///
 /// Real `APIClient` over `MockURLProtocol`, so the transport's opt-in
 /// (`APIRefusalDetail`) and its retry policy are what is under test, not a

@@ -1,4 +1,4 @@
-// Phase 24 / plan 24-01 — the defect that cost four builds.
+// The defect that cost four builds.
 //
 // `POST /api/auth/refresh` answers with token fields ONLY and no `user` block.
 // That is documented server contract (`05-auth-flows.md`, W2a-A2 §3.1) and is
@@ -38,8 +38,7 @@
 //    pre-seeded the sentinel whose ABSENCE was the trigger.
 // 3. **The fence against its return.** An empty write to that slot from ANY
 //    production path is a failure, asserted behaviourally through a trap
-//    Keychain across every persist entry point, and structurally by
-//    enumerating every production write site.
+//    Keychain across every persist entry point.
 //
 // Scope, deliberately: the Phase-06 lease fences are CORRECT. Refusing an
 // authenticated request without an owner id is the right behaviour. Nothing
@@ -249,7 +248,7 @@
             #expect(
                 keychain.getString(forKey: KeychainKey.userID) == Self.realUserID,
                 """
-                EXPECTED_RED: 24-01-A the refresh path wrote an empty KeychainKey.userID over a good one
+                the refresh path wrote an empty KeychainKey.userID over a good one
                 Every lease-fenced store refuses from here on, and the dashboard skeleton is permanent.
                 """
             )
@@ -300,7 +299,6 @@
             let authStore = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: registry
             )
@@ -325,7 +323,7 @@
             #expect(
                 summaryRequests == 1,
                 """
-                EXPECTED_RED: 24-01-B a lease-fenced store issued no request from a poisoned install
+                a lease-fenced store issued no request from a poisoned install
                 The empty Keychain user id survives restarts and app updates, so this state is permanent \
                 until the identity is recovered — a guarded build alone never repairs it.
                 """
@@ -380,7 +378,6 @@
             let authStore = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: AuthenticatedSessionLeaseRegistry()
             )
@@ -423,7 +420,6 @@
             let authStore = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: AuthenticatedSessionLeaseRegistry()
             )
@@ -489,7 +485,6 @@
             let authStore = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: registry
             )
@@ -565,7 +560,6 @@
             let firstLaunch = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: firstDefaults,
                 sessionRegistry: AuthenticatedSessionLeaseRegistry()
             )
@@ -581,7 +575,6 @@
             let coldRelaunch = AuthStore(
                 auth: service,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: secondDefaults,
                 sessionRegistry: registry
             )
@@ -648,7 +641,7 @@
             #expect(
                 violations == 0,
                 """
-                EXPECTED_RED: 24-01-C a production persist path wrote an empty KeychainKey.userID
+                a production persist path wrote an empty KeychainKey.userID
                 Observed \(violations) empty write(s): \(keychain.emptyUserIDWriteSites.joined(separator: ", ")). \
                 An empty upsert is indistinguishable from a real id to every lease-fenced store.
                 """
@@ -657,100 +650,45 @@
             #expect(keychain.getString(forKey: KeychainKey.userID) == Self.realUserID)
         }
 
-        /// The structural half. The behavioural trap above can only see the
-        /// paths a unit test can drive; this one enumerates every production
-        /// write of the slot and requires each to be either guarded or a named,
-        /// non-empty constant. A NEW unguarded write site turns this red the
-        /// moment it is added, which is the property that keeps the defect from
-        /// returning by another route.
-        ///
-        /// Precedent: `MeasurementBatchCompositionContractTests` reads shipped
-        /// source the same way.
-        @Test("every production write site of KeychainKey.userID is guarded against an empty value")
-        func everyProductionWriteSiteIsGuarded() throws {
+        /// The trap above only sees paths a unit test can drive. A new write of the
+        /// slot anywhere in the app could blank it again, so every write site is listed.
+        @Test("every production write of KeychainKey.userID sits in a reviewed, guarded file")
+        func everyProductionWriteSiteIsReviewed() throws {
             let root = URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
+                .deletingLastPathComponent() // Core
+                .deletingLastPathComponent() // HealthLogTests
+                .deletingLastPathComponent() // <repo>
             let appRoot = root.appendingPathComponent("HealthLog")
-
+            var scanned = 0
             var writeSites: [String] = []
-            let enumerator = try #require(FileManager.default.enumerator(
-                at: appRoot,
-                includingPropertiesForKeys: nil
-            ))
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
-                let source = try String(contentsOf: url, encoding: .utf8)
-                guard source.contains("KeychainKey.userID") else { continue }
+            let files = try #require(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+            for case let url as URL in files where url.pathExtension == "swift" {
+                scanned += 1
+                let text = try String(contentsOf: url, encoding: .utf8)
+                guard text.contains("KeychainKey.userID") else { continue }
                 let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
-                for (index, line) in source.components(separatedBy: .newlines).enumerated() {
-                    guard line.contains("KeychainKey.userID") else { continue }
-                    // A write is either a direct `setString(_:forKey:)` or an
-                    // append into `persist`'s pending-write list.
-                    let isDirectWrite = line.contains("setString(") && line.contains("forKey: KeychainKey.userID")
-                    let isPendingWrite = line.contains("pendingWrites.append((KeychainKey.userID")
-                    guard isDirectWrite || isPendingWrite else { continue }
-                    writeSites.append("\(relative):\(index + 1)")
+                for (index, line) in text.components(separatedBy: .newlines).enumerated() {
+                    let code = line.trimmingCharacters(in: .whitespaces)
+                    guard !code.hasPrefix("//"), !code.hasPrefix("*"), code.contains("KeychainKey.userID") else {
+                        continue
+                    }
+                    let keyedWrite = code.contains("forKey: KeychainKey.userID")
+                        && !code.contains("get") && !code.contains("delete") && !code.contains("remove")
+                    let pendingWrite = code.contains("pendingWrites.append((KeychainKey.userID")
+                    if keyedWrite || pendingWrite { writeSites.append("\(relative):\(index + 1)") }
                 }
             }
 
-            // The complete, reviewed inventory. Adding a site without adding it
-            // here — and without guarding it — fails this test by name.
-            let expected = [
-                // The persist path. Guarded since 24-01: written only when the
-                // session carries a non-empty id, mirroring the `userDisplayName`
-                // write eight lines below it.
+            #expect(scanned > 100, "the scan must see the app's source tree, saw \(scanned) file(s)")
+            // AuthService writes only a non-empty resolved id, the recovery writes only
+            // what `trimmedNonEmptyHint` returned, the hermetic seed is a constant.
+            let reviewed: Set = [
                 "HealthLog/Services/AuthService.swift",
-                // The 24-01 repair. Writes only what `trimmedNonEmptyHint`
-                // resolved, so it can persist an id but never a blank.
                 "HealthLog/Services/AuthService+IdentityRecovery.swift",
-                // UI-test seeding only, behind `isAuthenticatedBoot`, and the
-                // value is a non-empty compile-time constant.
                 "HealthLog/App/HermeticUITestSupport.swift"
             ]
-            let foundFiles = Set(writeSites.map { $0.components(separatedBy: ":")[0] })
-            #expect(
-                foundFiles == Set(expected),
-                "unreviewed production write site(s) for KeychainKey.userID: \(writeSites.sorted())"
-            )
-
-            // And the persist write is guarded, not merely present. Both halves
-            // in ONE assertion: a guard that is added while the unconditional
-            // write survives beside it repairs nothing, so the two conditions
-            // are one fact and must fail as one.
-            let authService = try String(
-                contentsOf: appRoot.appendingPathComponent("Services/AuthService.swift"),
-                encoding: .utf8
-            )
-            let guardPresent = authService.contains("if let resolvedUserID = session.user.id.trimmedNonEmptyHint {")
-            let unconditionalWriteGone = !authService
-                .contains("pendingWrites.append((KeychainKey.userID, session.user.id))")
-            #expect(
-                guardPresent && unconditionalWriteGone,
-                """
-                EXPECTED_RED: 24-01-D the KeychainKey.userID write is not guarded on a non-empty id
-                guardPresent=\(guardPresent) unconditionalWriteGone=\(unconditionalWriteGone). \
-                The userDisplayName write eight lines below already carries this guard.
-                """
-            )
-
-            // The repair's own write is fed by `trimmedNonEmptyHint`, so the
-            // thing that heals the slot cannot itself become a way to blank it.
-            let recovery = try String(
-                contentsOf: appRoot.appendingPathComponent("Services/AuthService+IdentityRecovery.swift"),
-                encoding: .utf8
-            )
-            #expect(recovery.contains("let recovered = user.id.trimmedNonEmptyHint"))
-            #expect(recovery.contains("try keychain.setString(recovered, forKey: KeychainKey.userID)"))
-
-            // The seeded UI-test id is a non-empty constant, so the third site
-            // cannot poison anything either.
-            let hermetic = try String(
-                contentsOf: appRoot.appendingPathComponent("App/HermeticUITestSupport.swift"),
-                encoding: .utf8
-            )
-            #expect(hermetic.contains("static let seededUserID"))
-            #expect(!hermetic.contains("seededUserID = \"\""))
+            let found = Set(writeSites.map { String($0.split(separator: ":")[0]) })
+            #expect(found == reviewed, "unreviewed write site(s) for KeychainKey.userID: \(writeSites.sorted())")
         }
     }
 

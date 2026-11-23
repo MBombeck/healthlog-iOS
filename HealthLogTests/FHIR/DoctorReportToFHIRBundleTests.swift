@@ -283,7 +283,7 @@ struct DoctorReportToFHIRBundleTests {
         let bundle = try DoctorReportToFHIRBundle.bundle(from: spec)
 
         let entries = try #require(bundle.entry)
-        // #115 R3 — Composition + Patient only: like server v1.39.3, no vitals report without a vital sign.
+        // Composition + Patient only: like server v1.39.3, no vitals report without a vital sign.
         #expect(entries.count == 2)
 
         // No Observations, no MedicationStatements

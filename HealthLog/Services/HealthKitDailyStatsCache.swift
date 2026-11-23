@@ -9,7 +9,7 @@ import SwiftData
 /// was die deployte Route als Upsert (`updated`) verbucht (siehe
 /// `08-locked-contracts.md` §12).
 ///
-/// **Phase 07 / Plan 07-04 — owner-partitioniert.** Der Schluessel traegt den
+/// **Owner-partitioniert.** Der Schluessel traegt den
 /// Account. Ohne ihn war der Cache installationsweit: Account B las den
 /// `lastPostedValue`, den Account A geschrieben hatte, hielt den Tag fuer
 /// konvergiert und postete ihn nie — Bs Tagestotal fehlte auf dem Server, und
@@ -175,6 +175,32 @@ public actor HealthKitDailyStatsCache {
         try modelContext.save()
     }
 
+    /// #8 — the days in `[fromDayKey, toDayKey]` this account last posted
+    /// with a value above 0. A sweep that no longer reads such a day sends it
+    /// once as 0 (see `HealthKitStatisticsSyncCoordinator+SweepWindow`).
+    public func postedDays(
+        ownerUserID: String,
+        fromDayKey: String,
+        toDayKey: String
+    ) throws -> [HealthKitDailyStatsCacheEntry] {
+        guard let owner = Self.canonicalOwner(ownerUserID) else { return [] }
+        let descriptor = FetchDescriptor<HealthKitDailyStatsCacheRow>(
+            predicate: #Predicate { row in row.ownerUserID == owner && row.lastPostedValue > 0 }
+        )
+        return try modelContext.fetch(descriptor)
+            .filter { $0.dayKey >= fromDayKey && $0.dayKey <= toDayKey }
+            .map {
+                HealthKitDailyStatsCacheEntry(
+                    ownerUserID: $0.ownerUserID,
+                    hkIdentifier: $0.hkIdentifier,
+                    dayKey: $0.dayKey,
+                    lastPostedValue: $0.lastPostedValue,
+                    serverMeasurementId: $0.serverMeasurementId,
+                    updatedAt: $0.updatedAt
+                )
+            }
+    }
+
     /// Anzahl Eintraege eines Owners — Test-introspection + Diagnostics.
     public func count(ownerUserID: String) throws -> Int {
         guard let owner = Self.canonicalOwner(ownerUserID) else { return 0 }
@@ -311,7 +337,7 @@ public struct HealthKitDailyStatsCacheEntry: Sendable, Equatable {
 
 /// Action-Plan fuer einen neuen Statistics-Run.
 ///
-/// **Phase 07 / Plan 07-04.** Der `patch`-Arm ist entfallen. Er verlangte eine
+/// Der `patch`-Arm ist entfallen. Er verlangte eine
 /// Server-Row-Id, die dieser Pfad nie besass: `postDailyStat` gab immer `nil`
 /// zurueck, also wurde `serverMeasurementId` in Produktion nie geschrieben und
 /// der Arm nie erreicht. Die deployte Route behandelt `stats:<type>:<day>` als
@@ -336,7 +362,7 @@ public extension HealthKitDailyStatsCache {
     /// corrupt cache file never crashes launch — mirrors the Outbox / SWRCache
     /// recovery ladders. In-memory loses the last-posted-values every relaunch
     /// (extra HK queries), which is worth post-mortem triage but not a crash.
-    /// **Phase 07 / Plan 07-04 — die Leiter hat jetzt eine Sprosse mehr.**
+    /// **Die Leiter hat jetzt eine Sprosse mehr.**
     /// Zwischen "persistent" und "in-memory" liegt *beiseitelegen*: schlaegt der
     /// Open fehl (etwa weil ein aelterer Build den V2-Store mit dem V1-Schema
     /// oeffnet), wird die Store-Datei umbenannt und ein frischer persistenter

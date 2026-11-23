@@ -26,7 +26,7 @@ struct CacheInvalidationMediumsTests {
         }
     }
 
-    // MARK: - M-2 — mood write invalidates the served 365-day slice
+    // MARK: - Mood write invalidates the served 365-day slice
 
     @Test("M-2: MoodStore observes days:365 — the moodEntryChange arm now includes it")
     func moodEntryChangeArmCoversStoreWindow() {
@@ -65,13 +65,13 @@ struct CacheInvalidationMediumsTests {
         )
     }
 
-    // MARK: - M-3 / M-4 — measurement write invalidates kind-page + availability
+    // MARK: - Measurement write invalidates kind-page + availability
 
     @Test("M-3/M-4: a measurement create drops the kind-scoped chart page + availability slice")
     func measurementCreateInvalidatesKindPageAndAvailability() async throws {
         let cache = try SWRCache(modelContainer: SWRCache.makeInMemory())
         let coordinator = SWRCoordinator(cache: cache, reachability: StubReach())
-        // Seed the per-kind chart-detail page (M-3) + the availability slice (M-4).
+        // Seed the per-kind chart-detail page + the availability slice.
         try await cache.write(
             .measurementsRecentKind(type: "WEIGHT", limit: 400),
             payload: JSONEncoder.hlDefault.encode([HealthLog.Measurement]())

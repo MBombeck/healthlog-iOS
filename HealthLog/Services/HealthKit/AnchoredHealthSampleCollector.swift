@@ -2,7 +2,7 @@
     import Foundation
     import HealthKit
 
-    // Phase 07 Wave 2 — the app owns the query, so the app can own the cursor.
+    // The app owns the query, so the app can own the cursor.
     //
     // SpeziHealthKit 1.4.2 (`a86db5c`) reads the stored anchor, runs the query,
     // awaits the app handler, and then persists the query's new anchor
@@ -45,7 +45,7 @@
         let newAnchor: HKQueryAnchor?
         /// `true` when the page filled its limit, so more is waiting behind it.
         let mayHaveMore: Bool
-        /// Deleted since the anchor: UUIDs for the server (A5), server ids of HealthLog copies (A6).
+        /// Deleted since the anchor: UUIDs for the server (A5), server ids of HealthLog copies.
         var deletedSampleIDs: [String] = []
         var deletedCopyServerIDs: [String] = []
 
@@ -73,7 +73,7 @@
             limit: Int
         ) async throws -> AnchoredHealthSamplePage
 
-        /// 1.3 (#127) — the same bounded read, narrowed to `window` on every
+        /// The same bounded read, narrowed to `window` on every
         /// call (not only the first). `nil` reads everything after `anchor`.
         func page(
             typeIdentifier: String,
@@ -111,7 +111,7 @@
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncPageOutcome
 
-        /// A2 (1.4, R-A7, #138) — one page of the history walk: the same
+        /// One page of the history walk: the same
         /// consumption, posted as `syncTrigger: "backfill"` where the server
         /// takes it, so history never moves the server's live arrival stamps.
         func consumeHistory(
@@ -124,7 +124,7 @@
     /// The change-signal seam. One subscription per type, delivering the type
     /// identifier that changed and nothing else.
     protocol HealthSampleChangeObserving: Sendable {
-        /// V1 (1.2) — `onChange` is awaited: the observer hands back HealthKit's
+        /// `onChange` is awaited: the observer hands back HealthKit's
         /// completion handler only once the delivery it reports was collected
         /// (or its deadline passed), so iOS keeps the process running for it.
         func startObserving(
@@ -145,9 +145,16 @@
             let disposition: HealthSyncDisposition
             /// Present exactly when the cursor did not advance for this page.
             let holdReason: HealthSyncHoldReason?
-            /// 1.3 (#127) — what the history leg did for this type in this
+            /// What the history leg did for this type in this
             /// pass, `nil` when the pass ran no history.
             var history: HistoryResult?
+            /// Why the partition stayed closed in this pass; `nil` when it
+            /// was open (or reopened).
+            var lockReason: HealthSyncPartitionLockReason?
+
+            var partitionLocked: Bool {
+                lockReason != nil
+            }
         }
 
         /// Objects per anchored page. Large enough that a normal wake finishes in
@@ -169,13 +176,18 @@
         /// cursor at once. Uptime at start; a run older than
         /// `HealthSampleSplitPolicy.staleHistoryRun` no longer blocks.
         var historyRun: (token: UUID, startedAt: TimeInterval)?
-        /// A2 (1.4, R-A8) — types whose history another path owns (the summed
+        /// Types whose history another path owns (the summed
         /// types, which the statistics path sends as day and hour totals).
         /// Their raw history is never walked.
         let historyOwnedElsewhere: @Sendable (String) -> Bool
-        /// V1 — what a delivery waits for after its drain: the statistics and
+        /// What a delivery waits for after its drain: the statistics and
         /// pulse-bucket sweeps its pages requested.
         private let deliveryFollowUp: (@Sendable () async -> Void)?
+        /// Told after every live leg which of the types it looked at stayed
+        /// locked, so Sync Diagnostics can name them.
+        private let partitionLocks: PartitionLockSink
+        /// Serialises the live legs of one partition across passes.
+        let liveTurns = HealthPartitionTurns()
 
         /// Types signalled since the drain last looked. A set, so a burst of
         /// callbacks for one type is one unit of work.
@@ -196,7 +208,8 @@
             pageLimit: Int = AnchoredHealthSampleCollector.defaultPageLimit,
             clock: HealthSampleSplitClock = .live,
             historyOwnedElsewhere: @escaping @Sendable (String) -> Bool = { _ in false },
-            deliveryFollowUp: (@Sendable () async -> Void)? = nil
+            deliveryFollowUp: (@Sendable () async -> Void)? = nil,
+            partitionLocks: @escaping PartitionLockSink = AnchoredHealthSampleCollector.diagnosticsLockSink
         ) {
             self.cursors = cursors
             self.query = query
@@ -207,6 +220,19 @@
             self.clock = clock
             self.historyOwnedElsewhere = historyOwnedElsewhere
             self.deliveryFollowUp = deliveryFollowUp
+            self.partitionLocks = partitionLocks
+        }
+
+        /// `(locked, checked)`: the types still locked among those checked, with why.
+        typealias PartitionLockSink = @Sendable (
+            _ locked: [String: HealthSyncPartitionLockReason],
+            _ checked: [String]
+        ) async -> Void
+
+        static let diagnosticsLockSink: PartitionLockSink = { locked, checked in
+            await MainActor.run {
+                HKSyncDiagnostics.shared.recordLockedPartitions(locked, checked: checked)
+            }
         }
 
         // MARK: - Bounded collection
@@ -218,7 +244,7 @@
         /// resolved it itself could query before the choice was loaded, which is
         /// exactly the cold-activation defect Wave 0 pinned.
         ///
-        /// **1.3 (#127)** — every type's live stream first, then history in
+        /// Every type's live stream first, then history in
         /// what is left: `historyOrder` (default: `typeIdentifiers`) is the
         /// order the history leg visits, `historyBudget` replaces the
         /// trigger's own history allowance ("Sync everything now"), and
@@ -238,17 +264,28 @@
 
             var results: [TypeResult] = []
             for typeIdentifier in typeIdentifiers {
-                await results.append(
-                    collectLive(typeIdentifier, budget: budget, cutoff: cutoff, lease: lease)
-                )
+                // One leg per account and type at a time, from the anchor
+                // read to the last commit.
+                let turn = HealthPartitionTurns.key(ownerID: lease.ownerID, typeIdentifier: typeIdentifier)
+                await liveTurns.acquire(turn)
+                let live = await collectLive(typeIdentifier, budget: budget, cutoff: cutoff, lease: lease)
+                await liveTurns.release(turn)
+                results.append(live)
                 if Task.isCancelled { return results }
             }
+            await partitionLocks(
+                Dictionary(
+                    results.compactMap { result in result.lockReason.map { (result.typeIdentifier, $0) } },
+                    uniquingKeysWith: { first, _ in first }
+                ),
+                typeIdentifiers
+            )
 
             let allowance = historyBudget ?? .required(for: budget)
             guard budget.allowsFirstHistoryImport, allowance.pagesPerType > 0, history != nil else {
                 return results
             }
-            // A2 (1.4, R3 S6) — a live page found the server out of reach: no
+            // A live page found the server out of reach: no
             // history this pass, it would only read pages it cannot send.
             if results.contains(where: { $0.holdReason == .serverUnreachable }) {
                 return results.map { Self.withUnreachableHistory($0) }
@@ -280,9 +317,17 @@
                 return .refused(result(typeIdentifier, 0, 0, .failed, .leaseLost))
             }
             // The same gate the store applies to a write, applied before the read:
-            // an unproven or failed migration collects nothing at all.
-            guard await cursors.permitsCollection(for: key) else {
-                return .refused(result(typeIdentifier, 0, 0, .deferred, nil))
+            // an unproven or failed migration collects nothing at all. A
+            // partition a failed cursor write closed is opened again here, so
+            // the type is not lost until the next launch.
+            var permitted = await cursors.permitsCollection(for: key)
+            if !permitted {
+                permitted = await (try? cursors.reopenAfterFailedWrite(key, requiring: lease)) == true
+            }
+            guard permitted else {
+                var locked = result(typeIdentifier, 0, 0, .deferred, nil)
+                locked.lockReason = await HealthSyncPartitionLockReason(cursors.migrationState(for: key))
+                return .refused(locked)
             }
             // 1.3 — establishes the split once: a 1.2.0 forward cursor moves to
             // the legacy leg and the live stream starts at `liveStart`. A live
@@ -313,6 +358,8 @@
             }
 
             var anchor = await cursors.queryAnchor(for: key)
+            // The stored cursor this leg read; a commit only replaces it.
+            var committed = await cursors.anchor(for: key)
             var caughtUp = split.liveCaughtUp
             var pages = 0
             var samplesRead = 0
@@ -361,15 +408,16 @@
                     return result(typeIdentifier, pages, samplesRead, .failed, .retryPersistenceFailed)
                 }
 
-                let decision = await cursors.commit(page: outcome, anchor: blob, for: key, requiring: lease)
+                let decision = await cursors.commit(page: outcome, anchor: blob, for: key, requiring: lease, replacing: committed)
                 pages += 1
 
                 if case let .hold(reason) = decision {
                     logHold(key, reason: reason)
-                    return result(typeIdentifier, pages, samplesRead, retryPersisted ? .retryPersisted : .failed, reason)
+                    return result(typeIdentifier, pages, samplesRead, Self.holdDisposition(reason, retryPersisted), reason)
                 }
 
                 anchor = newAnchor
+                committed = blob
                 if !page.mayHaveMore {
                     // The stream has reached the present. From here on it reads
                     // without a date narrowing, so a sample HealthKit inserts
@@ -412,7 +460,7 @@
             }
         }
 
-        /// V1 (1.2) — one HealthKit delivery, start to finish: the type joins the
+        /// One HealthKit delivery, start to finish: the type joins the
         /// drain, the drain runs, and the sweeps its pages requested finish. The
         /// observer calls HealthKit's completion handler after this returns.
         func deliver(typeIdentifier: String) async {
@@ -447,11 +495,13 @@
         private func drainObservedTypes() async {
             defer { observedDrain = nil }
             while !pendingObservedTypes.isEmpty, !Task.isCancelled {
-                let batch = pendingObservedTypes.sorted()
-                pendingObservedTypes.removeAll()
+                // Admission first: a refused one keeps the signalled types
+                // pending, so the next delivery collects them as well.
                 guard let cutoff = observedCutoff,
                       let admission = observedAdmission,
                       let lease = try? admission() else { return }
+                let batch = pendingObservedTypes.sorted()
+                pendingObservedTypes.removeAll()
                 await collect(
                     typeIdentifiers: batch,
                     trigger: .observer,
@@ -479,6 +529,13 @@
             )
         }
 
+        /// A leg another run overtook only defers; every other hold failed,
+        /// unless its rows wait durably for a retry.
+        static func holdDisposition(_ reason: HealthSyncHoldReason, _ retryPersisted: Bool) -> HealthSyncDisposition {
+            if reason == .superseded { return .deferred }
+            return retryPersisted ? .retryPersisted : .failed
+        }
+
         func logHold(_ key: HealthSyncCursorKey, reason: HealthSyncHoldReason) {
             // Source and hold reason are fixed enum cases chosen in this file; the
             // owner is hashed out of the key and never appears here, and an anchor
@@ -504,83 +561,7 @@
             }
             return HKObjectType.categoryType(
                 forIdentifier: HKCategoryTypeIdentifier(rawValue: identifier)
-            ) ?? HealthKitServer144Types.otherSampleType(for: identifier) // HK-NEW: State of Mind
-        }
-    }
-
-    /// Source-targeted `HKObserverQuery` subscriptions, one per type, plus the
-    /// background-delivery arming the app already declared per type.
-    actor HealthKitSampleChangeObserver: HealthSampleChangeObserving {
-        private let store: HKHealthStore
-        private var queries: [HKObserverQuery] = []
-        private var backgroundArmed: [HKSampleType] = []
-
-        init(store: HKHealthStore) {
-            self.store = store
-        }
-
-        func startObserving(
-            _ typeIdentifiers: [String],
-            onChange: @escaping @Sendable (String) async -> Void
-        ) async {
-            for identifier in typeIdentifiers {
-                guard let sampleType = HealthKitSampleTypeResolver.sampleType(for: identifier) else {
-                    continue
-                }
-                let query = HKObserverQuery(
-                    sampleType: sampleType,
-                    predicate: nil
-                ) { _, completionHandler, error in
-                    // The completion handler is HealthKit's own delivery receipt.
-                    // It is called exactly once on every path, including the
-                    // error path, so a transient failure does not stop future
-                    // deliveries. V1 (1.2): after the delivery was collected and
-                    // its sweeps ran, not before: until 1.1.1 it was called at
-                    // once and iOS could suspend the process with the work
-                    // still in flight. The deadline keeps a slow network from
-                    // holding it past HealthKit's patience.
-                    let receipt = HealthKitDeliveryReceipt(completionHandler)
-                    guard error == nil else {
-                        receipt.fire()
-                        return
-                    }
-                    receipt.arm(deadline: HealthKitDeliveryReceipt.deadline)
-                    Task {
-                        await onChange(identifier)
-                        receipt.fire()
-                    }
-                }
-                store.execute(query)
-                queries.append(query)
-
-                guard HealthKitBackgroundDeliveryPolicy.continuesInBackground(for: identifier) else {
-                    continue
-                }
-                do {
-                    try await store.enableBackgroundDelivery(for: sampleType, frequency: .immediate)
-                    backgroundArmed.append(sampleType)
-                } catch {
-                    // A refused arming is a reachability fact about this device,
-                    // not a data fault: the type still collects on every pull
-                    // trigger. The identifier is a fixed HealthKit constant, never
-                    // a value and never an account.
-                    // swiftlint:disable:next hllog_public_privacy_interpolation
-                    HLLog.healthKit.info(
-                        "background delivery unavailable [\(identifier, privacy: .public)] — pull triggers still collect"
-                    )
-                }
-            }
-        }
-
-        func stopObserving() async {
-            for query in queries {
-                store.stop(query)
-            }
-            queries.removeAll()
-            for sampleType in backgroundArmed {
-                try? await store.disableBackgroundDelivery(for: sampleType)
-            }
-            backgroundArmed.removeAll()
+            ) ?? HealthKitServer144Types.otherSampleType(for: identifier) // State of Mind
         }
     }
 #endif

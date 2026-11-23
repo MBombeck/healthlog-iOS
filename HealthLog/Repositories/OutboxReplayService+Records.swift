@@ -9,7 +9,7 @@ import Foundation
 extension OutboxReplayService {
     /// Replay the allergy + family-history writes (server dedups a create within
     /// 24h; PATCH is idempotent; the soft-delete is tombstone-idempotent).
-    /// Returns the server id of a replayed create (1.4, S5).
+    /// Returns the server id of a replayed create.
     func dispatchRecords(_ op: OutboxQueue.Operation) async throws -> String? {
         let key = op.idempotencyKey
         switch op.kind {
@@ -32,7 +32,7 @@ extension OutboxReplayService {
         switch op.kind {
         case .createAllergy:
             let p = try decoder.decode(OutboxQueue.Payloads.CreateAllergy.self, from: op.payload)
-            // audit-v0162 H-4 — the server id goes back to the pass, which
+            // The server id goes back to the pass, which
             // remaps any queued update/delete still on the optimistic id.
             return try await repo.replayCreateReturningServerId(p.body, idempotencyKey: key)
         case .updateAllergy:

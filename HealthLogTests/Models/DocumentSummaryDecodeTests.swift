@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Wave 4.1 — the persisted-summary DTO gap.**
+/// **The persisted-summary DTO gap.**
 ///
 /// Before this wave `DocumentDTO.swift` decoded neither `summary` nor
 /// `summaryGeneratedAt` nor `contentIndexSource`, so the prose the web shows at
@@ -179,7 +179,7 @@ struct DocumentSummaryDecodeTests {
     }
 }
 
-/// **Wave 4.6 — the bounded processing window** behind the list card's
+/// **The bounded processing window** behind the list card's
 /// "Wird verarbeitet…" / "Bereit" chips and the post-upload poll. Mirrors the
 /// web `vault-utils.ts` (`RECENT_UPLOAD_WINDOW_MS`, `isDocumentProcessing`,
 /// `hasProcessingDocument`). The point of the window is that it is BOUNDED: an

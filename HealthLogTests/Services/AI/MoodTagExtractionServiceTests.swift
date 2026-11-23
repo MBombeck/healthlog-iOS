@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Tests for `MoodTagExtractionService` (D-2).
+/// Tests for `MoodTagExtractionService`.
 ///
 /// The actual on-device `LanguageModelSession` is unavailable in CI (Apple
 /// Intelligence is device-eligibility gated + cannot be reached from the

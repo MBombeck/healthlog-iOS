@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// DASHBOARD-BUG-FIX-2 — integration coverage exercising the full chain:
+/// Integration coverage exercising the full chain:
 ///
 /// 1. Dashboard: empty `/api/measurements` → wide-page derive yields
 ///    `.empty` for every kind → series fallback fires per kind →

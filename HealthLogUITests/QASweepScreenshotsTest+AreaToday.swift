@@ -8,7 +8,6 @@ import XCTest
 /// writes a line to `_notes.txt`). Only runs when `HL_SWEEP_OUT` is set.
 extension QASweepScreenshotsTest {
     func test_14_areaTodayMeasurementsInsights() {
-        guard !isXXL else { return }
         boot()
         todayWalk()
         moreWalk()
@@ -50,10 +49,19 @@ extension QASweepScreenshotsTest {
     /// snapshot limit, which ended the walk before the pages (seen twice on
     /// the base build).
     private func insightsWalk() {
-        // 1.4 B4-a — blood pressure for its two-line chart and the date axis.
+        // Blood pressure for its two-line chart and the date axis.
+        // The metric pages name their kind in the header; a link that did not
+        // land left the previous page on screen under the wrong name.
+        let headers = ["sleep": "sleep", "resting-pulse": "restingHeartRate", "blood-pressure": "bloodPressure"]
         for slug in ["medications", "workouts", "mood", "ecg", "sleep", "resting-pulse", "blood-pressure"] {
             openDeepLink("healthlog://insights/\(slug)")
             settle(5)
+            if let kind = headers[slug],
+               !app.descendants(matching: .any)["insights.page.header.title.\(kind)"].waitForExistence(timeout: 8)
+            {
+                note("insights/\(slug): page did not open")
+                continue
+            }
             scrollUpToTop()
             shotToEnd("14-insights-\(slug)")
         }
@@ -65,25 +73,24 @@ extension QASweepScreenshotsTest {
         shotToEnd("14-insights-overview")
     }
 
-    /// **1.4 B4-a — the chart lines of the medication-and-mood world.** The
+    /// **The chart lines of the medication-and-mood world.** The
     /// mood trend (its mean label, its date axis), the cycle's basal
     /// temperature and history charts (their y range, their date labels), the
     /// GLP-1 drug level and the PHQ-9 history (their date axes), on the
     /// `-uitest-area-meds` overlay; the screens themselves belong to B4-c.
     func test_18_b4a_chartLines() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-area-meds", "-hl.settings.cycleTracking.optIn", "YES"])
-        dismissHealthAuthorization()
+        answerHealthAccess()
         openDeepLink("healthlog://insights/mood")
         settle(6)
         // The cycle opt-in asks Health for its categories on the first screen.
-        dismissHealthAuthorization()
+        answerHealthAccess()
         scrollUpToTop()
-        scrollColumn = 0.98 // B4-z — past the mood chart's scrub, see 16b
+        scrollColumn = 0.98 // Past the mood chart's scrub, see 16b
         shotToEnd("18-mood-page")
         scrollColumn = 0.5
         tab("ellipsis")
-        dismissHealthAuthorization()
+        answerHealthAccess()
         scrollUpToTop()
         guard let cycle = probe("more.row.cycle") else {
             note("Cycle: More row not present under opt-in")
@@ -91,7 +98,7 @@ extension QASweepScreenshotsTest {
         }
         cycle.tap()
         settle(4)
-        dismissHealthAuthorization()
+        answerHealthAccess()
         shotToEnd("18-cycle-home")
         goBack()
         settle(1)
@@ -129,19 +136,10 @@ extension QASweepScreenshotsTest {
     }
 
     /// Today without a single medication: the plain hermetic world (no
-    /// marketing overlay), where the adherence card has nothing to show.
+    /// marketing overlay) with nothing scheduled, so the adherence card has
+    /// nothing to show.
     func test_15_todayWithoutMedications() {
-        guard !isXXL else { return }
-        app = XCUIApplication()
-        let arguments = language.launchArguments + [
-            "-uitest-phase8", "insightsAccessibility",
-            "-uitest-sweep",
-            "-hl.healthkit.requestedAt.hermetic-user", "true",
-            "-hl.healthkit.workoutReadMigrated.hermetic-user", "true"
-        ]
-        app.launchHermeticAndWaitForDashboard(extraArguments: arguments, timeout: 120)
-        settle(8)
-        dismissOverlays()
+        boot(marketing: false, extra: ["-uitest-sweep-nomeds"])
         shotToEnd("15-today-nomeds")
     }
 
@@ -154,7 +152,7 @@ extension QASweepScreenshotsTest {
         }
         target.tap()
         settle(3)
-        dismissHealthAuthorization()
+        answerHealthAccess()
         shotToEnd(name)
         scrollUpToTop()
         then()

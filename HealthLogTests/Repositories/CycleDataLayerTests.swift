@@ -240,14 +240,6 @@ struct CycleDataLayerTests {
         #expect(SyncEntityKind.cycles.urlSegment == "cycle/cycles")
     }
 
-    @Test("Cursor version bump → re-init on mismatch")
-    func cursorVersionReinit() {
-        #expect(SyncCursorVersion.current == 2)
-        #expect(SyncCursorVersion.requiresReinit(persisted: 1))
-        #expect(SyncCursorVersion.requiresReinit(persisted: nil))
-        #expect(!SyncCursorVersion.requiresReinit(persisted: 2))
-    }
-
     @Test("SyncState round-trips cycle high-water-marks")
     func syncStateCycleHWM() throws {
         let json = Data(#"{"cycleDays":"2026-06-01T10:00:00.000Z","cycles":"2026-05-30T09:00:00.000Z"}"#.utf8)
@@ -471,7 +463,7 @@ private extension URLRequest {
     }
 }
 
-// MARK: - #115 / 0.3 — a replayed day-log the server did not store stays queued
+// MARK: - A replayed day-log the server did not store stays queued
 
 extension CycleDataLayerTests {
     /// `day-logs/bulk` (v1.39.0) answers a failed DB write with HTTP 200 and

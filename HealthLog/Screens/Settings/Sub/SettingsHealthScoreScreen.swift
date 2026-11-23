@@ -29,8 +29,6 @@ import SwiftUI
 /// concurrency token; ``HealthScoreConfigRepository`` omits the key entirely
 /// rather than sending `null`, which the server would reject.
 struct SettingsHealthScoreScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
     /// Optional on purpose: this screen must not trap if it is ever reached on
     /// a path that never injected them. They exist only to invalidate a stale
@@ -42,21 +40,17 @@ struct SettingsHealthScoreScreen: View {
     @State private var store: HealthScoreConfigStore?
 
     var body: some View {
-        HLSettingsPage(title: "Health Score") {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "Health Score"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-            }
+        HLPage {
+            connectedBody
         }
         .navigationTitle("Health Score")
         .navigationBarTitleDisplayMode(.inline)
+        // Saving is the check mark in the bar like every other edit page,
+        // not a large grey button under the switches. A refusal keeps the
+        // page open with its explanation; a save goes back.
+        .hlConfirmBar(saveAction, identifier: "settings.healthScore.save", hidesUntilChanged: true)
         .task {
-            guard backend.hasServer, store == nil, let api = container?.api else { return }
+            guard store == nil, let api = container?.api else { return }
             let created = HealthScoreConfigStore(repo: HealthScoreConfigRepository(api: api))
             store = created
             await created.load()
@@ -74,30 +68,23 @@ struct SettingsHealthScoreScreen: View {
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, HLSpace.xxl)
+                    .padding(.vertical, HLLayout.sectionGapBefore)
             }
         }
     }
 
     private func loadFailedState(store: HealthScoreConfigStore) -> some View {
-        HLEmptyState(
-            icon: "wifi.exclamationmark",
-            title: "Couldn't load which pillars count."
-        ) {
-            HLButton("Try again", icon: "arrow.clockwise", variant: .secondary) {
-                Task { await store.load() }
-            }
+        HLErrorState("Couldn't load which pillars count.") {
+            await store.load()
         }
-        .containerCentered()
     }
 
     /// One row per pillar. No per-row description on purpose (R1/R2): the
     /// pillar names say what they are, and a paragraph under each switch would
     /// be eight restatements of a title.
     private func pillarsCard(store: HealthScoreConfigStore) -> some View {
-        HLSettingsCard(
-            icon: "slider.horizontal.3",
-            title: "Pillars that count",
+        HLCard(
+            "Pillars that count",
             // R2 (Grenze/Limit) — the hard bound the server enforces, stated
             // once, before the decision. Deliberately does not name which
             // pillars share an area: that mapping lives on the server and a
@@ -119,23 +106,23 @@ struct SettingsHealthScoreScreen: View {
                 )
             }
             // 1.0.3 (App Review 1.4.1) — the references behind the rule in the
-            // subtitle. 1.4 B2-c: inside the card that states the rule, no
+            // subtitle. Inside the card that states the rule, no
             // longer loose between the card and the Save button.
             HLSourcesLink(topic: .healthScore)
         }
     }
 
+    /// No action until the selection loaded; then enabled only for a change.
+    private var saveAction: HLSheetAction {
+        guard let store, store.config != nil else { return .none }
+        return .save(isEnabled: store.hasChanges && !store.isSaving) {
+            await save(store: store)
+            return store.outcome == .saved
+        }
+    }
+
     private func saveSection(store: HealthScoreConfigStore) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLButton(
-                "Save",
-                variant: .primary,
-                isLoading: store.isSaving,
-                action: { Task { await save(store: store) } }
-            )
-            .disabled(store.isSaving || !store.hasChanges)
-            .accessibilityIdentifier("settings.healthScore.save")
-
             // R2 (Folge) at the control that causes it: saving a different
             // selection changes what the number MEANS, which is invisible in
             // the number itself — the score keeps looking like a score. Shown
@@ -146,8 +133,7 @@ struct SettingsHealthScoreScreen: View {
             // definition site, so the two can never drift.
             if store.hasChanges, case .idle = store.outcome {
                 Text(HealthScorePresentation.chosenCompositionExplanation)
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.note)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings.healthScore.comparability")
             }
@@ -176,14 +162,11 @@ struct SettingsHealthScoreScreen: View {
         case .idle:
             EmptyView()
         case .saved:
-            Label(String(localized: "Saved"), systemImage: "checkmark.circle.fill")
-                .font(.hlFootnote)
-                .foregroundStyle(HLColor.statusOK)
+            HLBadge(String(localized: "Saved"), icon: "checkmark.circle.fill", tone: .success, form: .text)
                 .accessibilityIdentifier("settings.healthScore.saved")
         case let .refused(reason):
             Text(HealthScorePresentation.explanation(for: reason))
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.note)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("settings.healthScore.refused")
         case let .failed(message):

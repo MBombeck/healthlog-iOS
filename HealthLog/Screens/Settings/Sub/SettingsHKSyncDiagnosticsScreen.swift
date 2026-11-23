@@ -17,14 +17,14 @@ import SwiftUI
 /// trigger a sync and exposes no reset button (logout-cleanup happens
 /// implicitly via `HKSyncDiagnostics.reset()` when the auth store wipes). One
 /// action is "Resend skipped": it offers readings the server already refused
-/// once more, the same rows, under the same account. The other (W1, 1.3.0) is
+/// once more, the same rows, under the same account. The other is
 /// "Erneut senden" on the rows the outbox holds back: it re-arms rows already
 /// queued and starts one replay pass. Neither can make the device send
 /// anything new. A "Jetzt syncen" affordance lives one
 /// screen up in Integrations → Apple Health; pushing the same button here
 /// would be the wrong IA.
 ///
-/// **08-15 — the switch and the wake counters are gone from here.** The
+/// **The switch and the wake counters are gone from here.** The
 /// pulse-upload switch was the one control on this page that mutated what the
 /// app sends to the server, and a Settings page that can make a phone start
 /// manufacturing raw heart-rate uploads for diagnosis is not a release
@@ -35,51 +35,56 @@ import SwiftUI
 /// together with the per-kind anchor advances.
 ///
 /// **Counters are session-scope** — they zero on cold launch. The (i)
-/// says so (1.4 B2-c), so "0 reads" right after a restart does not read as
+/// says so, so "0 reads" right after a restart does not read as
 /// "sync broken".
 struct SettingsHKSyncDiagnosticsScreen: View {
     @State var diagnostics = HKSyncDiagnostics.shared
     @Environment(HKReadinessStore.self) private var hkReadiness
-    /// CU-21 (C1) — Zugriff auf `settingsRepo` für den frischen
+    /// Zugriff auf `settingsRepo` für den frischen
     /// `GET /api/integrations/healthkit`. `internal`, damit die
     /// `+ServerHealth`-Extension (file_length-Disziplin) sie lesen kann.
     @Environment(\.appContainer) var container
     @State var serverSummary: HKServerSyncHealthSummary?
     @State var serverLoadFailed = false
-    /// #113 — the skip register of the signed-in account (`+Skipped`).
+    /// The skip register of the signed-in account (`+Skipped`).
     @State var skippedSnapshot: HealthKitSkippedRowSnapshot?
     @State var resendSummary: HealthKitSkippedRowReoffer.Summary?
     @State var isResending = false
-    /// #12 — the heart-rate bucket ledger of the signed-in account (`+HeartRateBuckets`).
+    /// The heart-rate bucket ledger of the signed-in account (`+HeartRateBuckets`).
     @State var hrBucketSnapshot: HRBucketDiagnosticsSnapshot?
-    /// V1 — the persistent `stats:` upload record of the signed-in account (`+StatsUploads`).
+    /// The persistent `stats:` upload record of the signed-in account (`+StatsUploads`).
     @State var statsUploadLog: HealthKitStatsUploadLog?
-    /// W1 (1.3.0) — the outbox rows the replay holds back, by reason (`+HeldWrites`).
+    /// The outbox rows the replay holds back, by reason (`+HeldWrites`).
     @State var heldGroups: [OutboxHeldGroup] = []
     @State var isRearming = false
     @State var rearmedCount: Int?
-    /// W5 (1.3.0) — "Bericht kopieren" just put the summary on the clipboard.
+    /// "Bericht kopieren" just put the summary on the clipboard.
     @State var reportCopied = false
+    /// The server version as `GET /api/version` answered on this visit.
+    @State var serverVersion: String?
 
     var body: some View {
-        HLSettingsPage(title: "settings.hkdiag.title") {
-            // W5 (1.3.0, #126 1.4) — the server view comes first: it holds
+        HLPage {
+            // The server view comes first: it holds
             // the answer to "does this phone deliver on its own?" and the last
             // background arrival, which opening the app no longer hides. 1.4
             // B2-c: everything below is this iPhone; the (i) says which cards
             // count since the last launch and which are kept across launches.
             serverHealthCard
-            // W1 — the banner's "waiting" count leaves these rows out, so this
+            // The banner's "waiting" count leaves these rows out, so this
             // is where they are explained.
             heldWritesCard
+            // Held back on the phone itself: doses and locked types.
+            withheldCard
             summaryCard
-            // V1 — the app's own half of the same question, per summed type,
+            // The app's own half of the same question, per summed type,
             // kept across launches, with the server's line for the same type.
             statsUploadCard
             skippedCard
             heartRateBucketCard
             workoutDeliveryCard
-            // 1.3 (#127) — how far back the older history has got, per type.
+            ingestV2Card
+            // How far back the older history has got, per type.
             historyPerTypeCard
             kindListCard
             backgroundCard
@@ -88,29 +93,23 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         }
         .navigationTitle("settings.hkdiag.title")
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2-c — the glossary is the screen's one (i): where each card's
+        // The glossary is the screen's one (i): where each card's
         // values come from, what the words mean, the background limits. The
         // cards keep their titles and values.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: info, accessibilityIdentifier: "settings.hkdiag.info")
-            }
-        }
+        .hlPageActions([.info(info, identifier: "settings.hkdiag.info")])
         .task { await hkReadiness.refresh() }
         .task { await loadServerSyncHealth() }
         .task { await loadSkipped() }
         .task { loadHeartRateBuckets() }
         .task { loadStatsUploads() }
         .task { await loadHeldWrites() }
+        .task { await loadServerVersion() }
     }
 
     // MARK: - Summary
 
     private var summaryCard: some View {
-        HLSettingsCard(
-            icon: "waveform.path.ecg",
-            title: "settings.hkdiag.summary_title"
-        ) {
+        HLCard("settings.hkdiag.summary_title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 statRow(
                     label: "settings.hkdiag.summary_kinds_observed",
@@ -128,7 +127,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                     label: "settings.hkdiag.summary_last_activity",
                     value: lastActivityLabel
                 )
-                // W-B182 — last active pull of the SpeziHealthKit manual
+                // Last active pull of the SpeziHealthKit manual
                 // collectors. Distinguishes "never armed" (broken: shows
                 // "Nie") from "armed, nothing new" (healthy: a recent trigger
                 // with quiet kinds). Persisted, so it survives relaunch.
@@ -140,7 +139,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         }
     }
 
-    // MARK: - Support session (08-15)
+    // MARK: - Support session
 
     /// **The way to the detail this page no longer carries.**
     ///
@@ -150,9 +149,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     /// sit behind a two-step, view-local session; a plain push, because the
     /// gate belongs to the destination and starts locked on every mount.
     private var supportDiagnosticsCard: some View {
-        // 1.4 B2-c — the next screen explains its own confirmation. 1.4 B4 —
+        // The next screen explains its own confirmation. 1.4 B4 —
         // one row, one heading: the row names its screen.
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "settings.support.title", presents: .push) {
                 SettingsSupportDiagnosticsScreen(topic: .appleHealth)
             }
@@ -163,12 +162,12 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     // MARK: - Background (#66 P0.1 — Baustein 4)
 
     /// The way to the one iOS switch that decides whether background runs
-    /// happen at all. 1.4 B2-c: the three limits and the "not an app bug"
+    /// happen at all. The three limits and the "not an app bug"
     /// note are in the (i); the card keeps the action.
     private var backgroundCard: some View {
-        HLSettingsCard(
-            icon: "exclamationmark.triangle",
-            title: "settings.hkdiag.limits_title"
+        HLCard(
+            "settings.hkdiag.limits_title",
+            layout: .rows
         ) {
             HLSettingsActionRow(
                 icon: "gear",
@@ -184,22 +183,14 @@ struct SettingsHKSyncDiagnosticsScreen: View {
     // MARK: - Per-Kind list
 
     private var kindListCard: some View {
-        HLSettingsCard(
-            icon: "list.bullet.indent",
-            title: "settings.hkdiag.kinds_title"
-        ) {
+        HLCard("settings.hkdiag.kinds_title") {
             if rows.isEmpty {
-                Text("settings.hkdiag.kinds_empty")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("settings.hkdiag.kinds_empty")
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     ForEach(rows, id: \.kind) { row in
                         kindRow(row)
-                        if row.kind != rows.last?.kind {
-                            Divider().opacity(0.4)
-                        }
                     }
                 }
             }
@@ -214,8 +205,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                     .foregroundStyle(HLText.primary)
                     .hlInfoIconColumn()
                 Text(row.kind.descriptor.title)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(row.statusLabel)
@@ -227,10 +217,9 @@ struct SettingsHKSyncDiagnosticsScreen: View {
                     .font(.hlCaption.monospacedDigit())
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                // W5 — says which time it is: checked, or a new value sent.
+                // Says which time it is: checked, or a new value sent.
                 Text(row.timeLabel)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -247,7 +236,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         #endif
     }
 
-    /// 1.4 B4 — label and value wrap in full (the workout counts ended in
+    /// Label and value wrap in full (the workout counts ended in
     /// "47 nicht…" at the standard size) and stack at the accessibility sizes.
     func statRow(label: LocalizedStringKey, value: String) -> some View {
         HLSettingsStatRow(label: Text(label), value: value)
@@ -278,7 +267,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         return date.formatted(.relative(presentation: .named))
     }
 
-    /// #66 P0.1 — a relative-time label for a wake timestamp, or the localized
+    /// A relative-time label for a wake timestamp, or the localized
     /// "Nie" when the channel has never fired. `internal` (not `private`) since
     /// CU-21 so the `+ServerHealth` extension file shares the one formatter.
     func relativeOrNever(_ date: Date?) -> String {
@@ -288,7 +277,7 @@ struct SettingsHKSyncDiagnosticsScreen: View {
         return date.formatted(.relative(presentation: .named))
     }
 
-    /// W-B182 — "<relative time> · <source>" for the last manual-collector pull,
+    /// "<relative time> · <source>" for the last manual-collector pull,
     /// or "Nie" when no trigger has ever run (the "never armed" tell).
     private var lastTriggerLabel: String {
         guard let date = diagnostics.lastCollectionTriggerAt else {
@@ -348,10 +337,10 @@ struct SettingsHKSyncDiagnosticsScreen: View {
 struct KindRow: Equatable {
     let kind: MetricKind
     let stats: HKSyncDiagnostics.KindStats
-    /// #113 — rows of this kind waiting in the skip register. Persistent, so the
+    /// Rows of this kind waiting in the skip register. Persistent, so the
     /// warning survives the cold-launch reset of the session counters.
     var registeredSkipCount: Int = 0
-    /// W5 — for a summed kind, the last daily-statistics sweep (kept across
+    /// For a summed kind, the last daily-statistics sweep (kept across
     /// launches): a check that found nothing new still counts as a check.
     var lastSweepAt: Date?
 
@@ -373,7 +362,7 @@ struct KindRow: Equatable {
 
     /// A kind is only "stuck" when activity is genuinely STALE. The previous
     /// field-mismatch heuristic (`read > 0 && uploaded == 0`) false-flagged
-    /// every cumulative kind: with `enableDailyStats` ON, the daily-stats gate
+    /// every cumulative kind: the daily-stats gate
     /// drops the foreign cumulative samples after they're read, so `read > 0`
     /// while `uploaded == 0` — yet the REAL upload went up the stats path and
     /// bumped `statsPostedTotal` instead. Freshness can't lie like that.
@@ -384,7 +373,7 @@ struct KindRow: Equatable {
     /// classification has exactly one home (and tests can pin it without
     /// asserting on localized text).
     enum Status: Equatable {
-        /// #113 — rows of this kind were refused (skip register) or wait in the
+        /// Rows of this kind were refused (skip register) or wait in the
         /// outbox. Outranks everything else: "OK" while readings are not
         /// stored is exactly the lie #113 was about.
         case warning
@@ -408,7 +397,7 @@ struct KindRow: Equatable {
         if stats.samplesUploadedTotal > 0 || statsActions > 0 {
             return .healthy
         }
-        // #113 — an anchor move alone is no longer proof: a page whose every row
+        // An anchor move alone is no longer proof: a page whose every row
         // was refused moved it too. It counts only when nothing this path read
         // is unaccounted for — nothing read at all (armed, quiet), or every row
         // handed to the daily-statistics / HR-bucket path.

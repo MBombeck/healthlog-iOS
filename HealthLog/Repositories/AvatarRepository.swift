@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.0 W11 — self-hosted avatar (server v1.5.5).**
+/// **Self-hosted avatar (server v1.5.5).**
 ///
 /// Wraps the three avatar endpoints the server shipped to replace the
 /// Gravatar third-party leak (v0.6.2 removed the email-hash egress):

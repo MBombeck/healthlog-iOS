@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **W-HKREAD — import HealthKit categorical EVENT-class samples the server
+    /// **Import HealthKit categorical EVENT-class samples the server
     /// classifies (heart-rhythm + mobility + audio-exposure events).**
     ///
     /// A dedicated direct-`HKHealthStore` observe path, modelled on
@@ -62,7 +62,7 @@ import Foundation
     /// drains** them.
     actor HeartHealthEventImporter {
         private let store: HKHealthStore
-        private let uploader: MeasurementBatchUploader
+        let uploader: MeasurementBatchUploader
         private let anchorKeyPrefix: String
         /// The partition token the importer was constructed for. An admitted
         /// owner whose token differs is a different account, and this importer
@@ -74,8 +74,14 @@ import Foundation
         /// `nil` in contexts with no queue (tests, pre-composition). A page that
         /// needs a retry and has nowhere to write it reports `durableRetryFailed`,
         /// so the cursor holds rather than claiming ground it does not have.
-        private let retry: (any HealthSyncBatchRetryEnqueuing)?
+        let retry: (any HealthSyncBatchRetryEnqueuing)?
         private var observerQueries: [HKObserverQuery] = []
+        /// Sweep units an observer is armed for, so a unit the server opens
+        /// later gets its observer on the next refresh.
+        private var observedUnitKeys: Set<String> = []
+        /// Asks whether a record module is on (illness for symptoms, mental
+        /// health for PHQ-9 / GAD-7). `nil`: those units are not swept.
+        let moduleProbe: (@Sendable (ModuleKey) async -> Bool)?
         /// One sweep at a time per type, with exactly one trailing re-run — an
         /// observer burst is one pass, not one pass per callback.
         private let coalescer = SweepCoalescer(label: "heart-events")
@@ -109,8 +115,10 @@ import Foundation
             defaults: UserDefaults = .standard,
             admission: (@Sendable () throws -> HealthSyncAuthenticatedLease)? = nil,
             cursors: DurableHealthCursorStore? = nil,
-            retry: (any HealthSyncBatchRetryEnqueuing)? = nil
+            retry: (any HealthSyncBatchRetryEnqueuing)? = nil,
+            moduleProbe: (@Sendable (ModuleKey) async -> Bool)? = nil
         ) {
+            self.moduleProbe = moduleProbe
             self.store = store
             self.uploader = uploader
             self.defaults = defaults
@@ -127,8 +135,18 @@ import Foundation
         @discardableResult
         func start() async -> HealthSyncDisposition {
             guard observerQueries.isEmpty else { return .deferred }
-            for type in Self.eventCategoryTypes() {
-                let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, error in
+            armObservers(for: sweepUnits())
+            return await refresh()
+        }
+
+        /// One observer per sweep unit not yet observed. A unit of several types
+        /// (the symptoms) is one observer over all of them.
+        private func armObservers(for units: [EventSweepUnit]) {
+            for unit in units where !observedUnitKeys.contains(unit.key) {
+                observedUnitKeys.insert(unit.key)
+                let unitKey = unit.key
+                let handler: @Sendable (HKObserverQuery, @escaping HKObserverQueryCompletionHandler, (any Error)?) -> Void = {
+                    [weak self] _, completion, error in
                     if let error {
                         HLLog.healthKit.error(
                             "hk-event observer error: \(LogSanitizer.redact(String(describing: error)), privacy: .public)"
@@ -140,14 +158,22 @@ import Foundation
                         // network round-trip, and the sweep must not outlive a
                         // teardown unobserved. Both, rather than either — the
                         // old detached task was neither owned nor drainable.
-                        Task { [weak self] in await self?.enqueueObservedSweep(for: type) }
+                        Task { [weak self] in await self?.enqueueObservedSweep(forUnitKey: unitKey) }
                     }
                     completion()
+                }
+                let query = if unit.types.count == 1, let only = unit.types.first {
+                    HKObserverQuery(sampleType: only, predicate: nil) { query, completion, error in
+                        handler(query, completion, error)
+                    }
+                } else {
+                    HKObserverQuery(queryDescriptors: unit.descriptors) { query, _, completion, error in
+                        handler(query, completion, error)
+                    }
                 }
                 observerQueries.append(query)
                 store.execute(query)
             }
-            return await refresh()
         }
 
         /// One explicit, bounded sweep of every event type without replacing the
@@ -158,14 +184,19 @@ import Foundation
         @discardableResult
         func refresh() async -> HealthSyncDisposition {
             var results: [HealthSyncDisposition] = []
-            for type in Self.eventCategoryTypes() {
+            let units = sweepUnits()
+            // A unit the server opened since `start()` gets its observer now.
+            if !observerQueries.isEmpty { armObservers(for: units) }
+            for unit in units {
                 // A teardown that lands mid-refresh stops the remaining types
                 // rather than sweeping them under an account that is going away.
                 guard !Task.isCancelled else {
                     results.append(.deferred)
                     break
                 }
-                await results.append(runAnchoredSweep(for: type))
+                // A unit whose module is off is left out, not counted as off.
+                guard await moduleAllows(unit) else { continue }
+                await results.append(runAnchoredSweep(for: unit))
             }
             return Self.aggregate(results)
         }
@@ -181,6 +212,7 @@ import Foundation
                 store.stop(query)
             }
             observerQueries.removeAll()
+            observedUnitKeys.removeAll()
             let draining = observerTasks
             observerTasks.removeAll()
             for task in draining.values {
@@ -195,8 +227,8 @@ import Foundation
         /// different user signing in on the same device must start clean so we
         /// never sweep the prior user's event history into whoever is logged in.
         func resetAnchors() {
-            for type in Self.eventCategoryTypes() {
-                defaults.removeObject(forKey: anchorKey(for: type))
+            for unit in Self.allSweepUnits() {
+                defaults.removeObject(forKey: anchorKey(for: unit))
             }
         }
 
@@ -204,10 +236,11 @@ import Foundation
 
         /// Registers one observer signal as owned, coalesced work for its own
         /// signalled type — never a fan-out across the other six.
-        private func enqueueObservedSweep(for type: HKCategoryType) {
+        private func enqueueObservedSweep(forUnitKey key: String) {
+            guard let unit = sweepUnits().first(where: { $0.key == key }) else { return }
             let id = UUID()
             observerTasks[id] = Task { [weak self] in
-                _ = await self?.runAnchoredSweep(for: type)
+                _ = await self?.runAnchoredSweep(for: unit)
                 await self?.retireObserverTask(id)
             }
         }
@@ -218,12 +251,16 @@ import Foundation
 
         /// our own write echoing back (anti-dupe).
         ///
-        /// W-HK-RELIABILITY G-7: skip only OUR own echo (our externalUUID AND
+        /// Skip only OUR own echo (our externalUUID AND
         /// this app's HK source). A third-party heart-event sample carrying an
         /// externalUUID now flows in instead of being silently dropped.
         nonisolated static func entry(from sample: HKCategorySample) -> HealthKitBatchEntryDTO? {
             if HealthKitSampleOwnership.isOwnEcho(sample) { return nil }
-            return HealthKitBatchEntryDTO(
+            return HealthKitReadingTimeZone.stamp(unstampedEntry(from: sample), from: sample)
+        }
+
+        nonisolated static func unstampedEntry(from sample: HKCategorySample) -> HealthKitBatchEntryDTO? {
+            HealthKitBatchEntryDTO(
                 hkIdentifier: HealthKitServer144Types.wireIdentifier(forRegistry: sample.categoryType.identifier),
                 value: 1,
                 unit: "event",
@@ -238,22 +275,24 @@ import Foundation
 
         /// Bridge the anchored query into async/await.
         private func fetch(
-            type: HKCategoryType,
+            unit: EventSweepUnit,
             anchor: HKQueryAnchor?
-        ) async throws -> (samples: [HKCategorySample], newAnchor: HKQueryAnchor?) {
+        ) async throws -> EventSweepPage {
             try await withCheckedThrowingContinuation { continuation in
                 let query = HKAnchoredObjectQuery(
-                    type: type,
-                    predicate: nil,
+                    queryDescriptors: unit.descriptors,
                     anchor: anchor,
                     limit: HKObjectQueryNoLimit
-                ) { _, samples, _, newAnchor, error in
+                ) { _, samples, deleted, newAnchor, error in
                     if let error {
                         continuation.resume(throwing: error)
                         return
                     }
-                    let events = (samples as? [HKCategorySample]) ?? []
-                    continuation.resume(returning: (events, newAnchor))
+                    continuation.resume(returning: EventSweepPage(
+                        samples: samples ?? [],
+                        deletedIDs: (deleted ?? []).map(\.uuid.uuidString),
+                        newAnchor: newAnchor
+                    ))
                 }
                 store.execute(query)
             }
@@ -274,14 +313,14 @@ import Foundation
 
         /// One anchored batch for a single event type, serialized per type: a
         /// burst of observer fires becomes one pass plus one trailing re-run.
-        private func runAnchoredSweep(for type: HKCategoryType) async -> HealthSyncDisposition {
+        private func runAnchoredSweep(for unit: EventSweepUnit) async -> HealthSyncDisposition {
             // One token per call. Only the first caller's body runs, so only that
             // caller's token is ever filled in; a coalesced trigger reads nothing
             // back and reports `.deferred` — which is exactly what happened to it.
             let token = UUID()
-            await coalescer.run(key: type.identifier) { [weak self] in
+            await coalescer.run(key: unit.key) { [weak self] in
                 guard let self else { return }
-                let disposition = await performAnchoredSweep(for: type)
+                let disposition = await performAnchoredSweep(for: unit)
                 await record(disposition, for: token)
             }
             return takeDisposition(for: token) ?? .deferred
@@ -299,7 +338,7 @@ import Foundation
         /// new samples since the committed anchor, post the foreign ones, and
         /// commit this type's cursor only if the shared rule says the page is
         /// accounted for.
-        private func performAnchoredSweep(for type: HKCategoryType) async -> HealthSyncDisposition {
+        private func performAnchoredSweep(for unit: EventSweepUnit) async -> HealthSyncDisposition {
             guard let lease = try? admission?() else {
                 HLLog.healthKit.info("hk-event sweep refused — no admitted account")
                 return .disabled
@@ -309,19 +348,21 @@ import Foundation
                 return .disabled
             }
             guard !Task.isCancelled else { return .deferred }
-            await establishCursorPartitionIfNeeded(type, requiring: lease)
+            // A unit whose module is off is not read at all: its cursor stays,
+            // and the history goes up once the person turns the module on.
+            guard await moduleAllows(unit) else { return .disabled }
+            await establishCursorPartitionIfNeeded(unit, requiring: lease)
 
-            let anchor = await committedAnchor(for: type, requiring: lease)
+            let anchor = await committedAnchor(for: unit, requiring: lease)
             do {
                 // Fence 1 of 3 — before the query.
                 try lease.requireCurrent()
-                let result = try await fetch(type: type, anchor: anchor)
+                let result = try await fetch(unit: unit, anchor: anchor)
                 // Fence 2 of 3 — an account replacement that landed during the
                 // read must not let this page reach the wire under the new owner.
                 try lease.requireCurrent()
-                let entries = result.samples.compactMap(Self.entry(from:))
-                let page = await transmit(entries, requiring: lease)
-                return await commitAnchor(result.newAnchor, for: type, page: page, requiring: lease)
+                let page = await transmitPage(result, of: unit, requiring: lease)
+                return await commitAnchor(result.newAnchor, for: unit, page: page, requiring: lease)
             } catch let refusal as HealthSyncLeaseRefusal {
                 return refusal == .cancelled ? .deferred : .expired
             } catch is CancellationError {
@@ -374,7 +415,7 @@ import Foundation
                 try lease.requireCurrent()
                 let outcomes = try await uploader.upload(entries)
                 try lease.requireCurrent()
-                // INT-A — an answer ends a run of held rejections for this type.
+                // An answer ends a run of held rejections for this type.
                 defaults.removeObject(forKey: heldRejectionKey(entries))
                 for outcome in outcomes {
                     for skipped in outcome.skipped
@@ -388,7 +429,7 @@ import Foundation
             } catch is CancellationError {
                 return Self.refusedPage(.cancelled, postedCount: entries.count)
             } catch where HealthKitBatchRejection.classify(error) != .retry {
-                // #115 / 0.3 — a whole-batch 4xx is not a transport failure.
+                // A whole-batch 4xx is not a transport failure.
                 return await rejectedPage(HealthKitBatchRejection.classify(error), entries: entries, requiring: lease)
             } catch {
                 // A raised transport says nothing about individual rows: the
@@ -467,7 +508,7 @@ import Foundation
             }
         }
 
-        private static var emptyPage: HealthSyncPageOutcome {
+        static var emptyPage: HealthSyncPageOutcome {
             HealthSyncPageOutcome(
                 postedCount: 0,
                 entries: [],
@@ -479,7 +520,7 @@ import Foundation
             )
         }
 
-        private static func refusedPage(
+        static func refusedPage(
             _ refusal: HealthSyncLeaseRefusal,
             postedCount: Int
         ) -> HealthSyncPageOutcome {
@@ -496,8 +537,8 @@ import Foundation
 
         // MARK: - Anchor persistence (UserDefaults, per PROJECT_GUIDE.md battery rationale)
 
-        private func anchorKey(for type: HKCategoryType) -> String {
-            anchorKeyPrefix + type.identifier
+        private func anchorKey(for unit: EventSweepUnit) -> String {
+            anchorKeyPrefix + unit.key
         }
 
         /// The partition this admission may write for one event type. Owner-bound
@@ -505,10 +546,10 @@ import Foundation
         /// key.
         private static func cursorKey(
             for lease: HealthSyncAuthenticatedLease,
-            type: HKCategoryType
+            unit: EventSweepUnit
         ) -> HealthSyncCursorKey? {
             let owner: HealthSyncOwnerLease = lease.owner
-            return owner.cursorKey(typeIdentifier: type.identifier)
+            return owner.cursorKey(typeIdentifier: unit.key)
         }
 
         /// Adopts the pre-Phase-07 per-user, per-type anchor into the owner
@@ -517,15 +558,15 @@ import Foundation
         /// the sweep has already refused unless the admitted owner hashes to
         /// exactly this importer's token.
         private func establishCursorPartitionIfNeeded(
-            _ type: HKCategoryType,
+            _ unit: EventSweepUnit,
             requiring lease: HealthSyncAuthenticatedLease
         ) async {
             guard let cursors,
-                  let key = Self.cursorKey(for: lease, type: type),
+                  let key = Self.cursorKey(for: lease, unit: unit),
                   !migratedPartitions.contains(key.storageKey) else { return }
             _ = try? await cursors.migrate(
                 key,
-                legacyKey: anchorKey(for: type),
+                legacyKey: anchorKey(for: unit),
                 ownership: .provenOwner(lease.ownerID),
                 requiring: lease
             )
@@ -535,17 +576,17 @@ import Foundation
         /// The anchor this account's partition committed for one type, or the
         /// legacy per-user value when no durable store is wired.
         private func committedAnchor(
-            for type: HKCategoryType,
+            for unit: EventSweepUnit,
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HKQueryAnchor? {
-            if let cursors, let key = Self.cursorKey(for: lease, type: type) {
+            if let cursors, let key = Self.cursorKey(for: lease, unit: unit) {
                 return await cursors.queryAnchor(for: key)
             }
-            // W-HK-RELIABILITY H-2 — surface decode failures + controlled reset.
+            // Surface decode failures + controlled reset.
             return HealthKitAnchorArchive.loadAnchor(
-                forKey: anchorKey(for: type),
+                forKey: anchorKey(for: unit),
                 from: defaults,
-                label: "hkevent:\(type.identifier)"
+                label: "hkevent:\(unit.key)"
             )
         }
 
@@ -555,7 +596,7 @@ import Foundation
         /// cursor store is never *more* permissive than production.
         private func commitAnchor(
             _ anchor: HKQueryAnchor?,
-            for type: HKCategoryType,
+            for unit: EventSweepUnit,
             page: HealthSyncPageOutcome,
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncDisposition {
@@ -563,8 +604,8 @@ import Foundation
                 return page.durableRetryPersisted ? .retryPersisted : .succeeded
             }
             let decision: HealthSyncCommitDecision
-            if let cursors, let key = Self.cursorKey(for: lease, type: type),
-               let blob = HealthKitAnchorArchive.encodeAnchor(anchor, label: "hkevent:\(type.identifier)")
+            if let cursors, let key = Self.cursorKey(for: lease, unit: unit),
+               let blob = HealthKitAnchorArchive.encodeAnchor(anchor, label: "hkevent:\(unit.key)")
             {
                 decision = await cursors.commit(page: page, anchor: blob, for: key, requiring: lease)
             } else {
@@ -572,9 +613,9 @@ import Foundation
                 if decision == .commit {
                     HealthKitAnchorArchive.saveAnchor(
                         anchor,
-                        forKey: anchorKey(for: type),
+                        forKey: anchorKey(for: unit),
                         to: defaults,
-                        label: "hkevent:\(type.identifier)"
+                        label: "hkevent:\(unit.key)"
                     )
                 }
             }
@@ -586,7 +627,7 @@ import Foundation
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.healthKit.info("hk-event anchor holds — \(reason.rawValue, privacy: .public)")
             switch reason {
-            case .cancelled: return .deferred
+            case .cancelled, .superseded: return .deferred
             case .leaseLost: return .expired
             case .nonterminalEntry, .incompleteIndexCoverage, .retryPersistenceFailed, .serverUnreachable: return .failed
             }

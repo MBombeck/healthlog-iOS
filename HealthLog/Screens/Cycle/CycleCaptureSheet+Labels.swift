@@ -7,7 +7,7 @@ import SwiftUI
 extension CycleCaptureSheet {
     // MARK: - Labels
 
-    /// K1 — the flow segments' labels, in order, for `HLAdaptiveSegmentedPicker`
+    /// The flow segments' labels, in order, for `HLAdaptiveSegmentedPicker`
     /// to measure.
     static var flowLabels: [LocalizedStringKey] {
         CycleFlowLevel.allCases.map(flowLabel)
@@ -91,6 +91,6 @@ extension CycleCaptureSheet {
         guard let suffix = transform.suffix else {
             return String(format: String(localized: "cycle.capture.bbt.value"), value)
         }
-        return "\(transform.display(value).formatted(.number.precision(.fractionLength(2)))) \(suffix)"
+        return "\(HLValueFormat.number(transform.display(value), fractionDigits: 2 ... 2)) \(suffix)"
     }
 }

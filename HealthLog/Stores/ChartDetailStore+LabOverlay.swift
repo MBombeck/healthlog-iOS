@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **1.5 LAB-LINES (#158, server #1299)** — the state behind the lab
+/// The state behind the lab
 /// marker under a metric chart.
 ///
 /// Owned by the metric page's extras block, so it lives as long as the page

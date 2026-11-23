@@ -76,7 +76,7 @@ struct MetricStatusDTODecodingTests {
         #expect(dto.text == nil)
     }
 
-    // MARK: - v0.11 W46 — current server contract (apiSuccess envelope + SWR extras)
+    // MARK: - Current server contract (apiSuccess envelope + SWR extras)
 
     /// The metric-status routes now wrap the result in `apiSuccess(result)` →
     /// `{ data: <result>, error: null }` (server `src/lib/api-response.ts`), and
@@ -111,7 +111,7 @@ struct MetricStatusDTODecodingTests {
     }
 
     /// The read-only "preparing" miss: provider present, no last-good text yet.
-    /// The card renders its skeleton (W46) rather than an empty/ready arm.
+    /// The card renders its skeleton rather than an empty/ready arm.
     @Test("preparing envelope (no text yet) decodes with hasProvider:true + text:null")
     func preparingEnvelope() throws {
         let body = Data(#"""
@@ -133,7 +133,7 @@ struct MetricStatusDTODecodingTests {
         #expect(dto.text == nil)
     }
 
-    // MARK: - Task #50 — SWR signal decode + lifecycle classification
+    // MARK: - SWR signal decode + lifecycle classification
 
     /// The cold-cache `preparing` body MUST decode its `preparing` flag (iOS
     /// previously dropped it → the card self-suppressed → text never surfaced).
@@ -217,7 +217,7 @@ struct MetricStatusDTODecodingTests {
         #expect(dto.isPreparing == true)
     }
 
-    // MARK: - b177 W-ASSESS2 — tolerant-first decode (fetch survives field drift)
+    // MARK: - Tolerant-first decode (fetch survives field drift)
 
     /// A body WITHOUT `hasProvider` must still decode (default `true`) and
     /// surface its prose. Pre-b177 this threw `keyNotFound("hasProvider")`,
@@ -325,19 +325,5 @@ struct MetricKindRawValueTests {
             let kind = try JSONDecoder.hlDefault.decode(MetricKind.self, from: json)
             #expect(kind.rawValue == raw)
         }
-    }
-
-    @Test("TolerantMetricKind decodes unknown server kinds as nil")
-    func tolerantDecodingSurvivesUnknown() throws {
-        let json = Data("\"futureMetric_v999\"".utf8)
-        let tolerant = try JSONDecoder.hlDefault.decode(TolerantMetricKind.self, from: json)
-        #expect(tolerant.value == nil)
-    }
-
-    @Test("TolerantMetricKind decodes known kinds correctly")
-    func tolerantDecodingKnown() throws {
-        let json = Data("\"sleep\"".utf8)
-        let tolerant = try JSONDecoder.hlDefault.decode(TolerantMetricKind.self, from: json)
-        #expect(tolerant.value == .sleep)
     }
 }

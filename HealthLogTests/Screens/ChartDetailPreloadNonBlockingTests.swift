@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.11 W56 (#56 / #55) regression guard — the chart-detail first paint must
+/// v0.11 W56 regression guard — the chart-detail first paint must
 /// NOT block on the cumulative pre-load hook (the HealthKit daily-stats
 /// refresh wired for active energy / steps). Pre-fix, `ChartDetailStore.load()`
 /// `await`ed `preLoadHook()` INLINE at the very top, before the SWR series
@@ -72,7 +72,7 @@ struct ChartDetailPreloadNonBlockingTests {
         }
     }
 
-    // MARK: - #55 — range change re-fires the query
+    // MARK: - Range change re-fires the query
 
     @Test("Changing the range bumps queryKey (the .task(id:) re-fires load)")
     func rangeChangeBumpsQueryKey() throws {
@@ -94,7 +94,7 @@ struct ChartDetailPreloadNonBlockingTests {
         #expect(store.queryKey == after)
     }
 
-    // MARK: - #56 — first paint does not block on the pre-load hook
+    // MARK: - First paint does not block on the pre-load hook
 
     @Test("Series paints BEFORE the cumulative pre-load hook resolves")
     func firstPaintDoesNotBlockOnPreloadHook() async throws {

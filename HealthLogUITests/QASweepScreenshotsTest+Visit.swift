@@ -28,13 +28,12 @@ extension QASweepScreenshotsTest {
     }
 
     func test_19v_nextVisitOlderServer() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-visit", "-uitest-visit-plain"])
         guard openVorsorge() else { return }
         shot("19v-vorsorge-visit-olderServer")
     }
 
-    /// POLISH-A A8 — a v1.47.1 server capped the window at two years: the card
+    /// A v1.47.1 server capped the window at two years: the card
     /// says so instead of "since your last visit".
     func test_19v_nextVisitCapped() {
         boot(extra: ["-uitest-visit", "-uitest-visit-capped"])
@@ -44,7 +43,6 @@ extension QASweepScreenshotsTest {
     }
 
     func test_19v_noVisit() {
-        guard !isXXL else { return }
         boot()
         guard openVorsorge() else { return }
         if probe("visit.next") != nil { note("19v: section shown without a booked visit") }

@@ -15,9 +15,9 @@
 //   - every `.metric` page dies at the `guard availableKinds.contains(kind)`
 //     inside the layout loop (`:396`), so an empty availability set erases the
 //     whole chartable universe at once;
-//   - Erholung (`.recovery`) is inserted BEFORE the layout loop (`:386-389`)
-//     and `InsightsContainerScreen+Ordering.liveAvailableSpecials` inserts it
-//     unconditionally, so it cannot be gated away by missing measurements;
+//   - Erholung (the recovery pages) is inserted BEFORE the layout loop, fed by
+//     `RecoveryInsightsStore`, so it cannot be gated away by missing
+//     measurements;
 //   - Workouts is likewise unconditional in `liveAvailableSpecials`;
 //   - Stimmung rides `moodStore.entries`, which are LOCAL — no
 //     `MeasurementsStore` involvement at all;
@@ -33,9 +33,8 @@
 // re-derive it, and so 22-01 inherits a failing test the moment it changes the
 // composition contract.
 //
-// **This pin is GREEN by construction against the current tree and carries no
-// `EXPECTED_RED` marker** — stated plainly, as 14-06's "preflight-observe"
-// precedent allows. It is a characterization test, not a defect claim.
+// **This pin is GREEN by construction against the current tree.** It is a
+// characterization test, not a defect claim.
 
 import Foundation
 import Testing
@@ -52,7 +51,7 @@ struct InsightsEmptyAvailabilityCompositionTests {
     /// business, membership is the mechanism's.
     private static let fiveSurvivors: Set<InsightsTabSelection> = [
         .overview,
-        .special(.recovery),
+        .metric(.recoveryScore),
         .special(.workouts),
         .special(.mood),
         .special(.ecg)
@@ -90,8 +89,11 @@ struct InsightsEmptyAvailabilityCompositionTests {
     /// are unconditional — and `.medications` is ABSENT because the medications
     /// list had not landed at the moment the strip composed.
     private static let survivingSpecials: Set<InsightsSpecialPage> = [
-        .recovery, .workouts, .mood, .ecg
+        .workouts, .mood, .ecg
     ]
+
+    /// The recovery family answered with one current member.
+    private static let recoveryKinds: [MetricKind] = [.recoveryScore]
 
     // MARK: - 1) the reduction itself
 
@@ -100,7 +102,8 @@ struct InsightsEmptyAvailabilityCompositionTests {
         let ordered = InsightsTabSelection.ordered(
             layout: operatorLayout(),
             availableKinds: [],
-            availableSpecials: Self.survivingSpecials
+            availableSpecials: Self.survivingSpecials,
+            recoveryKinds: Self.recoveryKinds
         )
 
         #expect(
@@ -110,11 +113,13 @@ struct InsightsEmptyAvailabilityCompositionTests {
         #expect(ordered.count == 5, "and nothing appears twice")
         #expect(ordered.first == .overview, "Übersicht stays the mandatory first pill")
         #expect(
-            ordered.contains(.special(.recovery)),
+            ordered.contains(.metric(.recoveryScore)),
             "Erholung is inserted outside the layout loop, so availability cannot remove it"
         )
         #expect(
-            !ordered.contains(where: { if case .metric = $0 { true } else { false } }),
+            !ordered.contains(where: { selection in
+                if case let .metric(kind) = selection { !InsightsCategoryGroups.recoveryKinds.contains(kind) } else { false }
+            }),
             "every metric page dies at the availability guard inside the layout loop"
         )
     }
@@ -128,14 +133,16 @@ struct InsightsEmptyAvailabilityCompositionTests {
         let withoutMedications = InsightsTabSelection.ordered(
             layout: operatorLayout(),
             availableKinds: [],
-            availableSpecials: Self.survivingSpecials
+            availableSpecials: Self.survivingSpecials,
+            recoveryKinds: Self.recoveryKinds
         )
         #expect(!withoutMedications.contains(.special(.medications)))
 
         let withMedications = InsightsTabSelection.ordered(
             layout: operatorLayout(),
             availableKinds: [],
-            availableSpecials: Self.survivingSpecials.union([.medications])
+            availableSpecials: Self.survivingSpecials.union([.medications]),
+            recoveryKinds: Self.recoveryKinds
         )
         #expect(
             withMedications.contains(.special(.medications)),
@@ -155,14 +162,18 @@ struct InsightsEmptyAvailabilityCompositionTests {
         let ordered = InsightsTabSelection.ordered(
             layout: operatorLayout(),
             availableKinds: landed,
-            availableSpecials: Self.survivingSpecials
+            availableSpecials: Self.survivingSpecials,
+            recoveryKinds: Self.recoveryKinds
         )
 
         let metrics = Set(ordered.compactMap { selection -> MetricKind? in
             if case let .metric(kind) = selection { return kind }
             return nil
         })
-        #expect(metrics == landed, "exactly the landed kinds, no more and no fewer")
+        #expect(
+            metrics.subtracting(InsightsCategoryGroups.recoveryKinds) == landed,
+            "exactly the landed kinds, no more and no fewer"
+        )
         #expect(
             Self.fiveSurvivors.isSubset(of: Set(ordered)),
             "and the five survivors are still there — availability only ever adds"
@@ -176,7 +187,8 @@ struct InsightsEmptyAvailabilityCompositionTests {
         let ordered = InsightsTabSelection.ordered(
             layout: operatorLayout(),
             availableKinds: [.weight],
-            availableSpecials: Self.survivingSpecials
+            availableSpecials: Self.survivingSpecials,
+            recoveryKinds: Self.recoveryKinds
         )
         #expect(Set(ordered) != Self.fiveSurvivors)
         #expect(ordered.contains(.metric(.weight)))

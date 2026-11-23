@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - R2 / #115 A6 — the refresh never leaves without its device id
+// MARK: - The refresh never leaves without its device id
 
 extension AuthService {
     /// How often ``deviceIDForRefresh()`` asks the Keychain before it gives up.
@@ -43,7 +43,7 @@ extension AuthService {
     /// id read above is what goes out even if a second Keychain read inside
     /// `buildURLRequest` fails. `maxRetries: 0` — the token is one-time-use
     /// (a resend would be reuse → family revoked); `failFast` — the auth
-    /// session (#96).
+    /// session.
     static func refreshRequest(
         body: some Encodable,
         deviceID: String
@@ -56,5 +56,35 @@ extension AuthService {
             maxRetries: 0,
             failFast: true
         )
+    }
+}
+
+extension AuthService {
+    /// **#191 — `409 auth.refresh.superseded`: another refresh of the same
+    /// session won the race.** Not terminal. The winner (another request of
+    /// this app, the widget or an intent) persists the rotated pair; this one
+    /// re-reads the stored pair instead of retrying with the token it sent,
+    /// which the server would answer as a replay (`401 auth.refresh.reuse`,
+    /// terminal). Rotated pair found → ``RefreshOutcome/refreshed`` (the caller
+    /// resends with the stored bearer). Not yet there → one short wait for the
+    /// winner's write, then ``RefreshOutcome/transient``: the session stays,
+    /// the next request tries again.
+    func adoptWinnerOfRefreshRace(
+        sentRefreshToken: String,
+        generation: UInt64,
+        winnerWriteWait: Duration = .milliseconds(300)
+    ) async -> RefreshOutcome {
+        /// A sign-out or account switch in between: the stored pair is not
+        /// this session's winner.
+        func rotated() -> Bool {
+            guard generation == credentialPersistenceGeneration,
+                  let stored = keychain.getString(forKey: KeychainKey.refreshToken) else { return false }
+            return stored != sentRefreshToken
+        }
+        if rotated() { return .refreshed }
+        try? await Task.sleep(for: winnerWriteWait)
+        if rotated() { return .refreshed }
+        HLLog.auth.notice("Refresh superseded; the winner's pair is not stored yet, session kept.")
+        return .transient
     }
 }

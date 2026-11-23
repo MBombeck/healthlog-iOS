@@ -168,7 +168,7 @@
             #expect(writer.savedSamples.isEmpty)
         }
 
-        // MARK: - Physiological-range validation (v0.6.0.6)
+        // MARK: - Physiological-range validation
 
         @Test("Reading with sys=0/dia=999 is rejected — no HK save, no DTO")
         func outOfRangeBpRejected() async {
@@ -277,7 +277,7 @@
             #expect(DeviceReadingForwarder.isPhysiologicallyValid(value: 250, identifier: hrIdent)) // upper bound
         }
 
-        // MARK: - Outbox-replay enqueue on offline upload failure (v0.6.0.6)
+        // MARK: - Outbox-replay enqueue on offline upload failure
 
         @Test("Upload throw enqueues prepared DTOs to the outbox stub")
         func uploadFailureEnqueuesOutbox() async {
@@ -367,7 +367,7 @@
             #expect(writer.savedSamples.isEmpty)
         }
 
-        // MARK: - Defensive bounds beyond H1 (v0.6.0.7 P4)
+        // MARK: - Defensive bounds beyond H1
 
         @Test("Batch larger than maxSamplesPerForward is rejected wholesale")
         func oversizedBatchRejected() async {

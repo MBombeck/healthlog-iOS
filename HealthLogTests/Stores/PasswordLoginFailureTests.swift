@@ -1,4 +1,4 @@
-// J1 / F1 — a refused password sign-in must say so, not "Sign-in expired".
+// A refused password sign-in must say so, not "Sign-in expired".
 //
 // Drives the REAL `AuthStore` → `AuthService` → `APIClient` against the v1.39.2
 // server responses of `POST /api/auth/login` (`src/app/api/auth/login/route.ts`

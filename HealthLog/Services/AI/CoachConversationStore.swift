@@ -38,7 +38,7 @@ import Observation
 /// `async`/`await` and the only mutation is the cheap append on
 /// completion.
 ///
-/// **Streaming (v0.12 W8-1):** `runOnDeviceTurn` consumes
+/// **Streaming:** `runOnDeviceTurn` consumes
 /// `LocalLLMService.streamResponse` and renders each
 /// `CoachInsight.PartiallyGenerated` snapshot in place via
 /// `upsertStreamingAssistant`, so the bubble grows progressively.
@@ -91,7 +91,7 @@ public final class CoachConversationStore {
     /// and submit). Reset to `nil` on the next successful turn.
     public private(set) var lastError: LocalLLMError?
 
-    /// **v0.6.1 F6 — double-response guard.** Set to `true` for the
+    /// **Double-response guard.** Set to `true` for the
     /// duration of a `send(_:)` call so the AskCoachSheet's
     /// `onChange(of: store.chat)` observer can distinguish a
     /// programmatic suggestion-chip / `send(_:)` user-append (which the
@@ -148,9 +148,9 @@ public final class CoachConversationStore {
     /// **v0.5.7 G.5** — partition key resolver. Injected as a closure
     /// (not a direct `KeychainStore` ref) so tests can pin a
     /// deterministic user id without spinning up the keychain. Returns
-    /// `CoachChatMessage.standaloneUserID` when no keychain user is
-    /// present so cold-launch / standalone-mode turns still partition
-    /// under a stable sentinel.
+    /// `CoachChatMessage.signedOutUserID` when no keychain user is
+    /// present so cold-launch turns still partition under a stable
+    /// sentinel.
     public var userIDProvider: @MainActor () -> String
 
     /// **v0.5.7 G.5** — SwiftData persistence shim. `nil` in unit-tests
@@ -162,14 +162,14 @@ public final class CoachConversationStore {
     /// re-instantiation across body re-evaluations).
     public var persistence: CoachChatStore?
 
-    /// **v0.7.1 W-COACH-FALLBACK** — server Coach used when the
-    /// on-device model is unavailable (no Apple Intelligence, pre-iOS-26,
-    /// model still downloading, device ineligible). `nil` in unit tests
+    /// Server Coach used when the
+    /// on-device model is unavailable (no Apple Intelligence, model still
+    /// downloading, device ineligible). `nil` in unit tests
     /// that only exercise the on-device path; production wiring in
     /// `AppContainer+SpeziLLM.swift` always supplies one.
     public var serverService: CoachServerService?
 
-    /// **v0.7.1 W-COACH-FALLBACK** — synchronous gate the store consults
+    /// Synchronous gate the store consults
     /// to decide whether the server fallback may run. Production wires
     /// this to `AIConsentStore.hasConsent(for:)` against the active
     /// server provider so we never transmit health data off-device
@@ -191,12 +191,12 @@ public final class CoachConversationStore {
     /// `serverConsentGate`.
     public var prefersServerArm: (@MainActor () -> Bool)?
 
-    /// **#114 / #115 · 0.2** — the server-resolved AI capabilities; every turn
+    /// The server-resolved AI capabilities; every turn
     /// checks `coach` for the arm it would take (``coachCapabilityRefusal()``).
     /// `nil` in unit tests that do not exercise the gate.
     public var aiCapabilities: (any AICapabilityReading)?
 
-    /// **v0.7.1 W-COACH-FALLBACK** — `true` while the conversation is
+    /// `true` while the conversation is
     /// being served by the server fallback rather than the on-device
     /// model. Drives the AskCoach sheet's "läuft auf dem Server"
     /// disclosure so the user knows their data leaves the device on this
@@ -213,7 +213,7 @@ public final class CoachConversationStore {
     /// so a fresh conversation starts a new server thread.
     private(set) var serverConversationID: String?
 
-    /// **A360 H1/H2 (v0156)** — the metric/correlation scope the user was looking
+    /// **A360 H1/H2** — the metric/correlation scope the user was looking
     /// at when they opened the Coach (per-tile "Ask the coach about this",
     /// per-metric page, correlation card). Set by the AskCoach sheet from its
     /// launch context; threaded into the server chat request's `scope` on the
@@ -228,7 +228,7 @@ public final class CoachConversationStore {
         launchScope = scope
     }
 
-    /// **AUD-5 H2 — the in-flight turn task.** `send(_:)` /
+    /// **The in-flight turn task.** `send(_:)` /
     /// `respondToLastUserTurn(_:)` run their turn runner inside this held task so
     /// the view can cancel it on dismiss (``cancelInFlightTurn()``). Previously the
     /// send was an unstructured `Task { await store.send(…) }` in the view with no
@@ -241,7 +241,7 @@ public final class CoachConversationStore {
     /// dead-view reply.
     private var turnTask: Task<Void, Never>?
 
-    /// **AUD-5 H2 — cancel the in-flight Coach turn.** Called from the Coach
+    /// **Cancel the in-flight Coach turn.** Called from the Coach
     /// sheet's `onDisappear` so leaving the sheet mid-stream tears the SSE socket
     /// down (cooperative `URLSession` cancellation) and the turn stops before it
     /// persists a reply whose view is gone. Idempotent + cheap when nothing is in
@@ -252,36 +252,34 @@ public final class CoachConversationStore {
         isResponding = false
     }
 
-    /// Per-message feedback state for server-arm assistant replies (thumbs
-    /// up/down → `POST /api/insights/chat/messages/{id}/feedback`). See
-    /// ``CoachMessageFeedback`` for the registration + one-shot contract;
-    /// the submit path lives in `CoachMessageFeedback.swift`'s store
-    /// extension. Cleared alongside the transcript.
-    public let feedback = CoachMessageFeedback()
+    /// Answer → server message id for server-arm replies, so the trail of
+    /// an answer can be loaded (``CoachMessageIndex``). Cleared alongside the
+    /// transcript.
+    public let messageIndex = CoachMessageIndex()
 
-    /// 1.5 COACH-R — status line, proposals and trails (`+Reasoning`).
+    /// Status line, proposals and trails (`+Reasoning`).
     public let live = CoachLiveTrail()
 
-    /// **CO4 (v0154)** — provenance envelopes keyed by the appended assistant
+    /// Provenance envelopes keyed by the appended assistant
     /// transcript-entity id, so the bubble can look up its "what I'm looking at"
     /// disclosure. Server-arm only (on-device / BYO turns carry no provenance —
     /// the server never sees those). Session-lived (the transcript is the live
     /// `chat`); cleared alongside the transcript.
     public private(set) var provenanceByEntity: [UUID: CoachServerService.CoachProvenance] = [:]
 
-    /// **CO5 (v0154)** — per-turn token usage keyed by the appended assistant
+    /// Per-turn token usage keyed by the appended assistant
     /// transcript-entity id, so the bubble can paint the quiet token footer.
     /// Server-arm only; session-lived; cleared alongside the transcript.
     public private(set) var usageByEntity: [UUID: CoachServerService.CoachUsage] = [:]
 
-    /// **v0.13 W4 — BYO-key (client-side device→provider) arm.** The actor that
+    /// **BYO-key (client-side device→provider) arm.** The actor that
     /// transmits the composed prompt straight from this device to the user's own
     /// LLM provider. `nil` in unit tests that only exercise the on-device /
     /// server arms; production wiring in `AppContainer+SpeziLLM.swift` always
     /// supplies one (with the consent gate baked into the service).
     public var byoService: BYOLLMService?
 
-    /// **v0.13 W4** — resolves the active BYO provider, or `nil` when the BYO arm
+    /// Resolves the active BYO provider, or `nil` when the BYO arm
     /// is not the user's chosen mode (no grant). Production wires this to
     /// `AIConsentStore` (the first granted `BYOProviderID`); `nil` → the BYO arm
     /// is never selected.
@@ -296,25 +294,25 @@ public final class CoachConversationStore {
         byoService != nil && byoProviderResolver?() != nil
     }
 
-    /// **v0.13 W4** — `true` while the active turn is being served by the BYO-key
+    /// `true` while the active turn is being served by the BYO-key
     /// arm. Drives the AskCoach sheet's "direct from this device to your
     /// provider" disclosure so the user knows their data egresses to a third
     /// party on this path (distinct from the server path).
     public private(set) var usingBYO: Bool = false
 
-    /// **v1.18.1 (§3)** — the cadence suggestion the latest server turn emitted,
+    /// **v1.18.1** — the cadence suggestion the latest server turn emitted,
     /// if any. Ephemeral (never persisted): the transcript renders an actionable
     /// card while it is non-nil; it clears when the user acts on it or starts a
     /// new turn / conversation. Only the server arm sets it — the on-device + BYO
     /// arms never produce suggestions.
     public private(set) var pendingSuggestion: CoachServerService.CoachReminderSuggestion?
 
-    /// **v1.18.1 (§3)** — set after `actOnSuggestion` succeeds so the card can
+    /// **v1.18.1** — set after `actOnSuggestion` succeeds so the card can
     /// show a brief "reminder created" confirmation before it clears. `nil` once
     /// the suggestion is cleared.
     public private(set) var lastSuggestionAction: CoachServerService.SuggestionAction?
 
-    /// **#30** — hook fired when a server turn surfaces an inline cadence
+    /// Hook fired when a server turn surfaces an inline cadence
     /// suggestion, so the proactive Insights card surface
     /// (``CoachCadenceSuggestionsStore``) can present the *same* suggestion
     /// (bridged to ``CoachCadenceSuggestion``) outside an open chat. Wired in
@@ -329,7 +327,7 @@ public final class CoachConversationStore {
         serverConsentGate: (@MainActor () -> Bool)? = nil,
         byoService: BYOLLMService? = nil,
         byoProviderResolver: (@MainActor () -> BYOProviderID?)? = nil,
-        userIDProvider: @escaping @MainActor () -> String = { CoachChatMessage.standaloneUserID }
+        userIDProvider: @escaping @MainActor () -> String = { CoachChatMessage.signedOutUserID }
     ) {
         self.service = service
         self.snapshotProvider = snapshotProvider
@@ -356,7 +354,7 @@ public final class CoachConversationStore {
     // `CoachConversationStore+ServerArm.swift` next to the arm-decision gate it
     // reads.
 
-    /// **C1 — set the egress provenance flags from the store.** The view-facing
+    /// **Set the egress provenance flags from the store.** The view-facing
     /// `seedIntendedArm()` resolves the derived arm; these setters keep the
     /// `usingServerFallback` / `usingBYO` mutation in the store (they are
     /// `private(set)`) so the extension can flip them without widening access.
@@ -391,11 +389,11 @@ public final class CoachConversationStore {
         guard !trimmed.isEmpty else { return }
 
         lastError = nil
-        // v1.18.1 (§3) — a new user turn supersedes any prior cadence card
+        // v1.18.1 — a new user turn supersedes any prior cadence card
         // (covers the on-device / BYO arms, which never set a new suggestion).
         pendingSuggestion = nil
         lastSuggestionAction = nil
-        // **F6 guard:** flip BEFORE the user-append so the AskCoachSheet
+        // Flip BEFORE the user-append so the AskCoachSheet
         // `onChange` observer can detect "this user-append came from
         // store.send — don't dispatch a second LLM round-trip". Cleared
         // in a defer so every exit path (early return, throw, success)
@@ -406,7 +404,7 @@ public final class CoachConversationStore {
         appendUser(trimmed)
         persistMessage(role: .user, text: trimmed)
 
-        // AUD-5 H2 — run the turn inside a held, cancellable task so the view can
+        // Run the turn inside a held, cancellable task so the view can
         // tear it down on dismiss. We still `await` it so callers (suggestion
         // chips / composer submit) keep their `async` contract; a `cancel()` makes
         // the awaited task return promptly (the runners check `Task.isCancelled`
@@ -415,18 +413,18 @@ public final class CoachConversationStore {
     }
 
     /// Runs the arm-routed turn inside the held ``turnTask`` so it is cancellable
-    /// on sheet dismiss (AUD-5 H2). Shared by `send(_:)` + `respondToLastUserTurn`.
+    /// on sheet dismiss. Shared by `send(_:)` + `respondToLastUserTurn`.
     private func runHeldTurn(userText: String) async {
         turnTask?.cancel()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            // #115 · 0.2 — the operator / the person may have switched the Coach
+            // The operator / the person may have switched the Coach
             // off (or the record does not admit it): say so, run nothing.
             if let refusal = coachCapabilityRefusal() {
                 lastError = .serverFailed(HLError.aiUnavailable(refusal))
                 return
             }
-            // **v0.13 W4 — BYO-key arm.** The user's explicit "Own key" choice
+            // **BYO-key arm.** The user's explicit "Own key" choice
             // wins over both other arms: requests go straight from this device to
             // their provider. The service enforces the consent gate before
             // any transmit.
@@ -434,7 +432,7 @@ public final class CoachConversationStore {
                 await runBYOTurn(userText: userText)
                 return
             }
-            // **v0.7.1 W-COACH-FALLBACK** — when the on-device model is not ready
+            // When the on-device model is not ready
             // but a consented server service is wired, route the turn to the
             // server Coach instead of dead-ending on the kill-card.
             if shouldUseServerFallback {
@@ -472,17 +470,17 @@ public final class CoachConversationStore {
         // we're the only writer to the persistence layer.
         persistMessage(role: .user, text: trimmed)
 
-        // AUD-5 H2 — same held, cancellable turn path as `send(_:)`.
+        // Same held, cancellable turn path as `send(_:)`.
         await runHeldTurn(userText: trimmed)
     }
 
-    // MARK: - BYO-key turn (v0.13 W4 — device→provider direct)
+    // MARK: - BYO-key turn (device→provider direct)
 
     /// Runs one assistant turn against the user's own LLM provider, directly
     /// from this device (the user turn was already appended + persisted by the
     /// caller). Reuses the SAME composed prompt as every other arm
     /// (`PrivacyFirstPromptBuilder` via ``composePrompt(userText:)``), so the
-    /// snapshot + injection-guard carry over verbatim. Non-streaming (D11): the
+    /// snapshot + injection-guard carry over verbatim. Non-streaming: the
     /// reply lands as a single assistant turn.
     ///
     /// **Consent enforcement (5.1.2(i)):** `BYOLLMService.generate` is wired with
@@ -495,7 +493,7 @@ public final class CoachConversationStore {
             lastError = .foundationModelsUnavailable
             return
         }
-        // v0.13 WR — the disclosure flags are mutually exclusive: this turn
+        // The disclosure flags are mutually exclusive: this turn
         // egresses device→provider, so clear any stale server-fallback notice
         // from a prior arm. Renders exactly one honest egress disclosure.
         usingBYO = true
@@ -505,9 +503,9 @@ public final class CoachConversationStore {
         let composedPrompt = composePrompt(userText: userText)
         do {
             let raw = try await byoService.generate(prompt: composedPrompt, provider: provider)
-            // AUD-5 H2 — sheet dismissed mid-request: don't persist a dead-view turn.
+            // Sheet dismissed mid-request: don't persist a dead-view turn.
             if Task.isCancelled { return }
-            // R11 (1.0.3) — the BYO arm runs a provider we do not control, on a
+            // The BYO arm runs a provider we do not control, on a
             // prompt the user can steer. Non-streaming, so the filter sees the
             // whole reply before anything is rendered at all.
             let text = await filteredReply(raw)
@@ -517,7 +515,7 @@ public final class CoachConversationStore {
         } catch let error as BYOLLMError {
             // Map onto the existing banner surface — the AskCoach error copy
             // renders an honest, key-checkable message per case (W4 errorCopy).
-            // v0.13 WP (L2) — log the case label only, never the raw provider
+            // Log the case label only, never the raw provider
             // `badRequest` payload (which could echo a request fragment).
             // loggableDescription is a curated enum label (L2 hardening) — never the
             // free-form provider payload.
@@ -534,24 +532,20 @@ public final class CoachConversationStore {
         }
     }
 
-    // MARK: - On-device turn (v0.12 W8-1 streaming)
+    // MARK: - On-device turn (streaming)
 
     /// Runs one assistant turn against the on-device model (user turn already
-    /// appended + persisted by the caller). **v0.12 W8-1:** streams the
+    /// appended + persisted by the caller). Streams the
     /// `CoachInsight.PartiallyGenerated` snapshots and renders them in place so
     /// the bubble grows (headline → body → actions) instead of popping in whole.
     /// Only the final text is persisted; a stream throw leaves the partial turn
     /// in place and sets `lastError` so the banner offers retry.
     private func runOnDeviceTurn(userText: String) async {
-        // v0.13 WR — on-device is fully private: clear BOTH egress disclosures so
+        // On-device is fully private: clear BOTH egress disclosures so
         // a prior server/BYO turn's notice never lingers on a private turn.
         usingServerFallback = false
         usingBYO = false
         #if canImport(FoundationModels)
-            guard #available(iOS 26.0, *) else {
-                lastError = .foundationModelsUnavailable
-                return
-            }
             isResponding = true
             defer { isResponding = false }
             // G.4 — the transcript shows the raw user text; the model receives
@@ -565,7 +559,7 @@ public final class CoachConversationStore {
                 do {
                     let stream = try service.streamResponse(prompt: composedPrompt)
                     for try await snapshot in stream {
-                        // AUD-5 H2 — stop promptly if the sheet was dismissed
+                        // Stop promptly if the sheet was dismissed
                         // mid-stream; don't keep mutating a gone view's transcript.
                         if Task.isCancelled { return }
                         let rendered = Self.renderPartial(snapshot.content)
@@ -574,11 +568,11 @@ public final class CoachConversationStore {
                         upsertStreamingAssistant(rendered, isFirstPartial: !didAppend)
                         didAppend = true
                     }
-                    // AUD-5 H2 — never persist a dead-view turn after a dismiss.
+                    // Never persist a dead-view turn after a dismiss.
                     if Task.isCancelled { return }
                     // Persist only the final, complete assistant turn.
                     if didAppend {
-                        // R11 (1.0.3) — the stream may have painted partials the
+                        // The stream may have painted partials the
                         // filter never saw; the FINAL bubble is the filtered one.
                         // Overwriting the trailing turn in place (the same seam
                         // the partials used) means a flagged reply never settles
@@ -590,7 +584,7 @@ public final class CoachConversationStore {
                         }
                         persistMessage(role: .assistant, text: finalText)
                     } else {
-                        // 22-02 (D-14-04-A) — the stream completed having
+                        // The stream completed having
                         // rendered nothing. Saying nothing about that leaves the
                         // user turn standing alone with `lastError == nil`,
                         // which reads like a deliberate non-answer.
@@ -601,7 +595,7 @@ public final class CoachConversationStore {
                     lastError = error
                     return
                 } catch {
-                    // **#14 — context-window overflow recovery.** The stream
+                    // **Context-window overflow recovery.** The stream
                     // throws the raw `GenerationError`; when it is
                     // `exceededContextWindowSize` the service swaps the hoisted
                     // session for a fresh one carrying a condensed transcript
@@ -626,7 +620,7 @@ public final class CoachConversationStore {
         #endif
     }
 
-    // MARK: - Server fallback turn (v0.7.1 W-COACH-FALLBACK)
+    // MARK: - Server fallback turn
 
     /// Runs one assistant turn against the server Coach. The user turn
     /// was already appended + persisted by the caller. On success the
@@ -640,26 +634,26 @@ public final class CoachConversationStore {
             lastError = .foundationModelsUnavailable
             return
         }
-        // v0.13 WR — mutual exclusivity: this turn runs on the server, so clear
+        // Mutual exclusivity: this turn runs on the server, so clear
         // any stale BYO notice from a prior arm.
         usingServerFallback = true
         usingBYO = false
         isResponding = true
         defer { isResponding = false }
         let priorConversationID = serverConversationID
-        // **A360 H1/H2 (v0156)** — attach the launch scope to the FIRST turn of a
+        // **A360 H1/H2** — attach the launch scope to the FIRST turn of a
         // fresh server conversation only (web parity: a continued thread keeps its
         // established scope). `nil` once a thread id has latched or when the Coach
         // was opened without a metric context.
         let turnScope: CoachScopeWire? = priorConversationID == nil ? launchScope?.wireScope : nil
-        // **A360 H3 (v0156)** — progressive streaming render seam. The accumulator
+        // Progressive streaming render seam. The accumulator
         // appends a new assistant turn on the first token, then replaces it in
         // place on each later token so the bubble grows token-by-token (same
         // `upsertStreamingAssistant` plumbing the on-device arm uses). Guarded so a
         // mid-stream dismiss (cancellation) stops mutating a gone view's transcript.
         let streamRender = ServerStreamRender()
         do {
-            // 1.5 COACH-R — tokens pass the MDR filter before they paint; the
+            // Tokens pass the MDR filter before they paint; the
             // activity frames drive the status line (`+Reasoning`).
             let reply = try await respondOnServer(
                 serverService,
@@ -668,7 +662,7 @@ public final class CoachConversationStore {
                 scope: turnScope,
                 render: streamRender
             )
-            // AUD-5 H2 — the user dismissed the sheet while the SSE turn was in
+            // The user dismissed the sheet while the SSE turn was in
             // flight. `URLSession` cancellation usually throws first (handled in
             // `catch`), but on a graceful late completion the response can still
             // arrive: do NOT mutate / persist a reply whose view is gone. Bail
@@ -689,14 +683,14 @@ public final class CoachConversationStore {
             // bubble settles on the authoritative text rather than the raw token
             // concatenation. When NO token arrived (older server / refusal path
             // routed through `parseSSE`-style frames), append fresh as before.
-            // R11 (1.0.3) — the SSE arm is the one that streams text the filter
+            // The SSE arm is the one that streams text the filter
             // cannot see token by token. It does not have to: the server's `done`
             // frame carries the authoritative, cleaned reply, and the arm already
             // overwrites the accumulated bubble with it. Filtering THAT text — the
             // one thing that both settles on screen and is persisted — is what
             // makes the guarantee hold for a stream.
             let replyText = await filteredReply(reply.text)
-            // AUD-5 H2 / fix round 1 (I1) — `filteredReply` is a suspension
+            // AUD-5 H2 / fix round 1 — `filteredReply` is a suspension
             // point, so a dismiss can land between the filter and the settle.
             // The BYO and on-device arms re-check here; this arm did not, and
             // would have painted a bubble into a gone view's transcript. The
@@ -706,25 +700,25 @@ public final class CoachConversationStore {
             if Task.isCancelled { return }
             // Replaces the streamed bubble, or appends when none painted.
             upsertStreamingAssistant(replyText, isFirstPartial: !streamRender.didAppend)
-            // v1.18.1 (§3) — surface the cadence suggestion (if the server emitted
+            // v1.18.1 — surface the cadence suggestion (if the server emitted
             // one this turn) as an actionable card under the reply. A new turn
             // having no suggestion clears any stale one.
             pendingSuggestion = reply.suggestion
             lastSuggestionAction = nil
-            // #30 — also route it into the proactive Insights card surface (the
+            // Also route it into the proactive Insights card surface (the
             // overview store owns the opt-in / dismissed / Focus-filter gating).
             if let suggestion = reply.suggestion {
                 onSuggestion?(Self.bridgeCadenceSuggestion(suggestion))
             }
-            // Feedback registration + CO4/CO5 provenance + token stash: the
-            // appended assistant turn is the last transcript entity; map the
-            // server's `done` messageId (feedback) and the provenance / usage
-            // envelopes onto it so the bubble can render the thumbs row, the
-            // collapsed "what I'm looking at" disclosure, and the quiet token
-            // footer. Provenance/usage are render-only; we never log them.
+            // Message index + CO4/CO5 provenance + token stash: the appended
+            // assistant turn is the last transcript entity; map the server's
+            // `done` messageId (for the trail) and the provenance / usage
+            // envelopes onto it so the row under the answer can open the
+            // evidence and the trail. Provenance/usage are render-only; we
+            // never log them.
             if let entityID = lastEntityID() {
                 if let messageID = reply.messageId {
-                    feedback.register(messageID: messageID, forEntity: entityID)
+                    messageIndex.register(messageID: messageID, forEntity: entityID)
                 }
                 if let provenance = reply.provenance, !provenance.isEmpty {
                     provenanceByEntity[entityID] = provenance
@@ -740,7 +734,7 @@ public final class CoachConversationStore {
             if Task.isCancelled { return }
             persistMessage(role: .assistant, text: replyText)
         } catch {
-            // AUD-5 H2 — a dismiss-triggered cancellation surfaces here as a
+            // A dismiss-triggered cancellation surfaces here as a
             // URLError(.cancelled); it is not a real failure, so don't paint a
             // retry banner on a gone view.
             if Task.isCancelled { return }
@@ -760,7 +754,7 @@ public final class CoachConversationStore {
         }
     }
 
-    /// **v1.18.1 (§3)** — act on the pending coach cadence suggestion.
+    /// **v1.18.1** — act on the pending coach cadence suggestion.
     /// `accept` creates a `MeasurementReminder` (origin COACH) server-side; the
     /// new reminder then appears in the native list (Settings → Notifications →
     /// Manage reminders). `dismiss`/`stop` just clear the card (the server records
@@ -773,7 +767,7 @@ public final class CoachConversationStore {
             lastSuggestionAction = action
             pendingSuggestion = nil
         } catch {
-            // Reviewed (M-7): the only `.public` value is the action enum case
+            // Reviewed: the only `.public` value is the action enum case
             // (operator-grade per the rule); the error detail is `.private` +
             // sanitizer-redacted. Mirrors the respond()-arm error log above.
             // swiftlint:disable:next hllog_public_privacy_interpolation
@@ -788,7 +782,7 @@ public final class CoachConversationStore {
     // #30) lives in `CoachConversationStore+Helpers.swift`.
 
     // `serverLocaleCode()` + `lastEntityID()` live in
-    // `CoachConversationStore+Helpers.swift` (moved with the feedback wiring to
+    // `CoachConversationStore+Helpers.swift` (moved with the message-index wiring to
     // keep this file under the 600-line SwiftLint ceiling).
 
     /// Clears the transcript + error state for a fresh conversation.
@@ -802,20 +796,20 @@ public final class CoachConversationStore {
     /// partition. If the user signs out next, `clearOnLogout` runs
     /// again for the new partition — idempotent, cheap.
     public func reset() {
-        // AUD-5 H2 — a "New conversation" must not let a prior turn complete into
+        // A "New conversation" must not let a prior turn complete into
         // the freshly-cleared transcript.
         cancelInFlightTurn()
         chat = []
         lastError = nil
         isResponding = false
-        // v1.18.1 (§3) — a fresh conversation drops any pending cadence card.
+        // v1.18.1 — a fresh conversation drops any pending cadence card.
         pendingSuggestion = nil
         lastSuggestionAction = nil
-        // **#14** — drop the hoisted on-device session so "Neue
+        // Drop the hoisted on-device session so "Neue
         // Unterhaltung" really starts fresh: a kept session would leak
         // the cleared transcript into the model context of the next turn.
         service.resetSession()
-        // v0.7.1 W-COACH-FALLBACK — start a fresh server thread on the
+        // Start a fresh server thread on the
         // next server-backed turn so "Neue Unterhaltung" doesn't append
         // to the prior conversation server-side.
         serverConversationID = nil
@@ -824,7 +818,7 @@ public final class CoachConversationStore {
         launchScope = nil
         usingServerFallback = false
         usingBYO = false
-        feedback.clear()
+        messageIndex.clear()
         // CO4/CO5 — drop the per-entity provenance + token stashes (the entity
         // ids they keyed are gone with the transcript).
         provenanceByEntity = [:]
@@ -832,7 +826,7 @@ public final class CoachConversationStore {
         live.clear()
         // Wipe the persisted transcript for the current partition.
         // `userIDProvider` returns the keychain user (or the
-        // standalone sentinel) so the right partition is hit.
+        // signed-out sentinel) so the right partition is hit.
         let userID = userIDProvider()
         persistence?.clear(userID: userID)
     }
@@ -845,24 +839,22 @@ public final class CoachConversationStore {
     /// `userIDProvider()` to resolve it. Pass an explicit partition.
     ///
     /// When `partition` is `nil`, falls back to a partition resolve
-    /// via `userIDProvider()` — covers the standalone-mode logout
-    /// (where the sentinel partition is stable across the flip) and
-    /// any caller that doesn't track the prior user explicitly.
+    /// via `userIDProvider()` — covers any caller that doesn't track the prior user explicitly.
     public func clearOnLogout(partition: String? = nil) {
-        // AUD-5 H2 — cancel any in-flight turn so a logout never lets a prior
+        // Cancel any in-flight turn so a logout never lets a prior
         // user's turn persist into the next partition.
         cancelInFlightTurn()
         chat = []
         lastError = nil
         isResponding = false
-        // **#14** — the next signed-in user must never inherit the prior
+        // The next signed-in user must never inherit the prior
         // user's on-device model context.
         service.resetSession()
         serverConversationID = nil
         launchScope = nil
         usingServerFallback = false
         usingBYO = false
-        feedback.clear()
+        messageIndex.clear()
         provenanceByEntity = [:]
         usageByEntity = [:]
         live.clear()

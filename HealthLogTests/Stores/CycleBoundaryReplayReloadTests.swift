@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#115 B6 — a period boundary replayed from the outbox refreshes the grid.**
+/// **A period boundary replayed from the outbox refreshes the grid.**
 ///
 /// Offline, `commitCapture` queues `POST /api/cycle/period` and keeps the old
 /// calendar on screen. When the outbox later delivers it, the server can fold

@@ -1,11 +1,11 @@
 import Foundation
 
-/// **MED-PLUS (1.5.0, #126 3.4) — a medication's courses, as the server
+/// **A medication's courses, as the server
 /// resolves them.**
 ///
 /// Since server v1.40 a medication is taken in courses ("Behandlungen"): each
 /// with a first day, an optional last day and, when it was ended with "End
-/// treatment" (#1280), the instant it ended (`endedAt`). The list rows carry a
+/// treatment", the instant it ended (`endedAt`). The list rows carry a
 /// summary (`courseCount`, `previousCourseEndedOn`); the courses themselves are
 /// read on demand from `GET /api/medications/{id}/courses` (owner-only).
 ///

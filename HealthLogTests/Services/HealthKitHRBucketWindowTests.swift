@@ -3,7 +3,7 @@
     @testable import HealthLog
     import Testing
 
-    /// Build 273 (A6), reworked for #12 — the HR-bucket sweep must catch up
+    /// Build 273, reworked for #12 — the HR-bucket sweep must catch up
     /// after dormancy instead of being floored at `now - lookback`.
     /// `heartRateBuckets` is not an incremental partition and the raw per-sample
     /// path drops HR once in bucket mode, so a window floored at 48 h left every

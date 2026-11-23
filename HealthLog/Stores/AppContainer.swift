@@ -13,8 +13,8 @@
 // investigation: `.planning/v0157-features/INV-4-appcontainer.md`. Helper
 // extensions: `+CoreInfra`, `+Repositories`, `+OutboxReplayFactory`,
 // `+MeasurementsMedications`, `+SecondaryStores`, `+IntegrationStores`, `+Cycle`,
-// `+ServerStats`, `+HealthKitStats`, `+LiveFlagsAttach`, `+LogoutHooks`,
-// `+AIConsentGate`, `+Routing`, `+Notifications`, `+FeatureFlags`, `+Foreground`,
+// `+ServerStats`, `+HealthKitStats`, `+HealthKitSeamsAttach`, `+LogoutHooks`,
+// `+AIConsentGate`, `+Routing`, `+Notifications`, `+AIWiring`, `+Foreground`,
 // `+Wiring`.
 import Foundation
 
@@ -34,21 +34,22 @@ public final class AppContainer {
     public let cacheInvalidator: CacheInvalidator
     public let auth: AuthService
     public let refreshCoordinator: RefreshCoordinator
+    /// Owner-bound sign-out wipes of the later stores (see `+CoreInfra`).
+    let ownerPartitionCleanup: OwnerPartitionCleanup
     let authenticatedSessionRegistry: AuthenticatedSessionLeaseRegistry
     public let measurementsRepo: MeasurementsRepository
-    let profileTimeZoneBox = ProfileTimeZoneBox.shared // AUD-3 D-3 — see ADR; #115 1.5 shared
-    /// audit-v0162 M-7 — persisted "does this server materialise today's dose slots itself?"
+    let profileTimeZoneBox = ProfileTimeZoneBox.shared // See ADR; #115 1.5 shared
+    /// Persisted "does this server materialise today's dose slots itself?"
     /// verdict; drives `MedicationsStore.derivedIntakeSynthesisEnabledProvider`. See the type
     /// doc for the threshold, the unknown-state default, and what each direction costs.
     let medicationSlotGate = MedicationSlotMaterializationGate()
-    let onboardingDraft = OnboardingDraftStore() // #153 — setup draft, memory only; see type doc
+    let onboardingDraft = OnboardingDraftStore() // Setup draft, memory only; see type doc
 
     // MARK: Repositories
 
     public let medicationsRepo: MedicationsRepository
     public let glp1LocalRepo: GLP1LocalRepository
     public let medicationTherapyLogRepo: MedicationTherapyLogRepository
-    public let localRepo: LocalRepository
     public let moodRepo: MoodRepository
     public let dashboardRepo: DashboardRepository
     public let insightsRepo: InsightsRepository
@@ -77,7 +78,7 @@ public final class AppContainer {
     public let moduleGateRepo: ModuleGateRepository
     public let avatarRepo: AvatarRepository
     public let sleepNightRepo: SleepNightRepository
-    /// parity 4.7 — sleep debt / chronotype / average + multi-night stage
+    /// Sleep debt / chronotype / average + multi-night stage
     /// composition. Read-only, no outbox; consumed by the sleep metric page.
     public let sleepInsightsRepo: SleepInsightsRepository
     public let serverStatsRepos: ServerStatsRepos
@@ -90,11 +91,11 @@ public final class AppContainer {
     /// and `custom-metrics` is not in `MODULE_KEYS`), so this surface is
     /// unconditionally available to an authenticated account.
     public let customMetricsRepo: CustomMetricsRepository // PHI
-    /// Build 7.6 (GH #48) — nutrient READ + water-quick-add repo. Shared with
+    /// Build 7.6 — nutrient READ + water-quick-add repo. Shared with
     /// outbox replay so an offline water quick-add survives a restart. Reads
     /// network-direct (no SWR cache); the store holds the in-memory snapshot.
     public let nutrientReadRepo: NutrientReadRepository
-    /// Build 7 Item 7.7 — environmental-context module overview repo (read-only,
+    /// Environmental-context module overview repo (read-only,
     /// network-direct). Module-gated (default-ON) via a `403 module.disabled`.
     public let environmentRepo: EnvironmentRepository
     public let illnessRepo: IllnessRepository // PHI — shared with outbox replay (see ADR)
@@ -110,8 +111,12 @@ public final class AppContainer {
 
     public let healthKitUploader: MeasurementBatchUploader // container-bound for test isolation
     public let healthKit: AnyHealthKitWriter? // optional during tests / macOS
+    /// The device this process runs on, read once at the app boundary
+    /// (``DeviceProfile/current()``) and injected. Device logic asks it;
+    /// layout never does.
+    public let deviceProfile: DeviceProfile
     public let backgroundSync: BackgroundSyncCoordinator // public so onboarding / re-entry can trigger
-    public let healthKitDailyStatsSync: HealthKitDailyStatsSyncing? // V0.5.2 N4 — see +HealthKitStats
+    public let healthKitDailyStatsSync: HealthKitDailyStatsSyncing? // See +HealthKitStats
     public let healthKitHRBucketSync: HealthKitHRBucketSyncing? // W-HR-BUCKET-UPLOAD / GH #34
 
     // MARK: Routing / notifications
@@ -121,14 +126,21 @@ public final class AppContainer {
 
     #if canImport(UserNotifications) && canImport(UIKit)
         let notifications: NotificationService
-        /// Y8 — single-slot coalescer for per-mutation badge refreshes (see ADR).
+        /// #190 — the push relay (opt-in, keys, binding, opt-out).
+        let pushRelay: PushRelayStore
+        /// Single-slot coalescer for per-mutation badge refreshes (see ADR).
         /// Internal (not `private`) so `AppContainer+Wiring` can read it.
         let badgeRefreshCoalescer = BadgeRefreshCoalescer()
     #endif
 
-    /// LOGOUT-NOTIF — closure seam (so tests can spy) for clearing delivered +
+    /// Closure seam (so tests can spy) for clearing delivered +
     /// pending notifications + badge on sign-out. Defaulted in `init`. See ADR.
     var notificationClearOnLogoutHook: (@MainActor () async -> Void)?
+    /// Where the records of the retired offline mode live, and the defaults
+    /// that carry the note about them. Tests point both at their own copies;
+    /// `nil` is the real Application Support folder.
+    var legacyStandaloneStoreBase: URL?
+    var legacyStandaloneDefaults: UserDefaults = .standard
 
     // MARK: Foreground throttles (see ADR for per-throttle rationale)
 
@@ -140,7 +152,6 @@ public final class AppContainer {
     // MARK: Stores (PHI-bearing slice — kept flat for the Mirror logout sweep; see ADR)
 
     public let authStore: AuthStore
-    public let syncModeStore: SyncModeStore // .standalone vs .paired
     public let backendAvailability: BackendAvailability // R4 §3.1 capability surface
     public let dashboardStore: DashboardStore
     public let dashboardLayoutStore: DashboardLayoutStore
@@ -155,28 +166,36 @@ public final class AppContainer {
     let spotlightCoordinator: SpotlightCoordinator // W-B187 QOL-2
     let watchSession: WatchSessionCoordinator // v0.12 P2 watchOS companion
     public let moodStore: MoodStore
-    public let cycleGate: CycleGate // dormant behind FeatureFlag.cycleTracking
-    public let cycleStore: CycleStore // dormant behind FeatureFlag.cycleTracking
+    public let cycleGate: CycleGate // who is offered cycle tracking (module map, gender, opt-in)
+    public let cycleStore: CycleStore // inert until `cycleGate` admits the user
     public let moodTagCatalogStore: MoodTagCatalogStore
     public let moodTagManagementStore: MoodTagManagementStore
     public let moodHealthSyncStore: MoodHealthSyncStore
-    /// GH #47 — Apple Health medications mirror toggle (iOS 26+, OFF by default).
+    /// Apple Health medications mirror toggle (iOS 26+, OFF by default).
     public let medicationHealthSyncStore: MedicationHealthSyncStore
+    /// Lab results from Health Records (#180): the Labs offer and the
+    /// importer the sync runs. Lazy so the composition block stays as it is;
+    /// first read by `installHealthSyncOrchestration` at the end of `init`.
+    lazy var clinicalLabRecordsStore = Self.makeClinicalLabRecordsStore(api: api, keychain: keychain, idiom: deviceProfile.idiom)
     public let insightsStore: InsightsStore
     public let dailyBriefingStore: DailyBriefingStore
-    public let insightsPrefetch: InsightsPrefetchService // W3 (#22) daily cache-warmer
+    public let insightsPrefetch: InsightsPrefetchService // W3 daily cache-warmer
     public let healthScoreStore: HealthScoreStore
     public let achievementsStore: AchievementsStore
     public let settingsStore: SettingsStore
-    /// N1 — keeps `notificationPrefs.medication.clientManaged` true to this
+    /// Keeps `notificationPrefs.medication.clientManaged` true to this
     /// device (wired in `AppContainer+MedicationReminderDelivery`).
     let medicationReminderDelivery: MedicationReminderDeliveryCoordinator
+    /// Decides whether this device plans the local reminders (an iPad next to
+    /// an active iPhone does not). Wired in `AppContainer+ReminderPlanning`.
+    let reminderPlanning: ReminderPlanningCoordinator
     public let measurementRemindersStore: MeasurementRemindersStore // W-FRONTDOORS (PHI)
     public let labsStore: LabsStore // PHI
     public let customMetricsStore: CustomMetricsStore // PHI
-    public let nutrientStore: NutrientStore // Build 7.6 (GH #48) — nutrient read/display
-    public let environmentStore: EnvironmentStore // Build 7 Item 7.7 — environmental-context display
+    public let nutrientStore: NutrientStore // Build 7.6 — nutrient read/display
+    public let environmentStore: EnvironmentStore // Environmental-context display
     public let illnessStore: IllnessStore // PHI
+    public let seizuresStore: SeizuresStore // PHI — seizure diary (server v1.48.0), holds the quick-log timer
     public let documentsStore: DocumentsStore // PHI — document vault
     public let allergiesStore: AllergiesStore // v1.25 PHI
     public let familyHistoryStore: FamilyHistoryStore // v1.25 PHI
@@ -208,8 +227,8 @@ public final class AppContainer {
     public let avatarStore: AvatarStore
     public let hkReadinessStore: HKReadinessStore // F7
     public let wellnessCardVisibilityStore: WellnessCardVisibilityStore // per-card Insights score-card hide (UI-pref)
-    public let featureFlagsStore: FeatureFlagsStore
-    public let aiCapabilityGate: AICapabilityGate // #115 0.2 — `/api/auth/me` `ai`, loaded by ModuleGate
+    public let medicationVisibilityStore: MedicationVisibilityStore // medications hidden from the tab list, per account (UI-pref)
+    public let aiCapabilityGate: AICapabilityGate // `/api/auth/me` `ai`, loaded by ModuleGate
     public let serverStatsStores: ServerStatsStores // V052-A7
     public let onDeviceBriefingService: OnDeviceBriefingService
     public let trendObservationsService: TrendObservationsService
@@ -217,15 +236,15 @@ public final class AppContainer {
     public let undoCoordinator: UndoCoordinator // shared Rückgängig-pill slot
     public let celebrationCoordinator: CelebrationCoordinator // RECONCILE-CELEBRATE
     public let liveHealthKitTodayStore: LiveHealthKitTodayStore // bug-c10-ios-direct
-    public let nutrientDailySync: NutrientDailySyncing? // GH #48 — nutrient day-totals sync
-    public let ecgSync: (any EcgSyncing)? // GH #74 — Apple-Health ECG upload
-    public let ecgHealthSyncStore: EcgHealthSyncStore // GH #74 — the device-local opt-in switch
+    public let nutrientDailySync: NutrientDailySyncing? // Nutrient day-totals sync
+    public let ecgSync: (any EcgSyncing)? // Apple-Health ECG upload
+    public let ecgHealthSyncStore: EcgHealthSyncStore // The device-local opt-in switch
 
     // Accessed from `AppContainer+Logout.swift` extension — needs internal visibility.
     let unauthorizedRef = UnauthorizedHandlerRef()
     private var replayLoopTask: Task<Void, Never>?
 
-    // 09-08 — the designated initializer. Swift requires every stored property
+    // The designated initializer. Swift requires every stored property
     // of this container to be assigned here, and there are that many stores;
     // the runtime hooks that *could* leave already did (see
     // `AppContainer+Wiring.configureRuntimeWiring`). What is left is the part
@@ -237,13 +256,15 @@ public final class AppContainer {
         keychain: KeychainStoring = KeychainStore(),
         passkey: PasskeyServiceProtocol,
         healthKit: AnyHealthKitWriter? = nil,
-        // #10 — test seam for the composition's own APIClient transport; `nil` = `.default`.
+        // Test seam for the composition's own APIClient transport; `nil` = `.default`.
         apiSessionConfiguration: URLSessionConfiguration? = nil,
-        // N1 — test seam for the notification-permission read; `nil` = the system's.
-        notificationsAuthorized: (@Sendable () async -> Bool)? = nil
+        // Test seam for the notification-permission read; `nil` = the system's.
+        notificationsAuthorized: (@Sendable () async -> Bool)? = nil,
+        deviceProfile: DeviceProfile = .phone
     ) {
         self.environment = environment
         self.keychain = keychain
+        self.deviceProfile = deviceProfile
 
         // Core infrastructure phase — pinned APIClient, Outbox, Reachability,
         // SWR coordinator/invalidator, auth + refresh. Construction (incl. the
@@ -267,35 +288,27 @@ public final class AppContainer {
         cacheInvalidator = infra.cacheInvalidator
         auth = infra.auth
         refreshCoordinator = infra.refreshCoordinator
-        // C3 repositories bundle (v0.7.3) — construction in
+        ownerPartitionCleanup = infra.ownerPartitionCleanup
+        // Repositories bundle — construction in
         // `AppContainer+Repositories.makeRepositories`; the `public let` handles
         // below stay on `AppContainer` (call-sites + logout reach unchanged).
         // `metricInsightsRepo` is built later (after the consent stores).
-        // v0.11 W2 — local mirror + read-union gate built first, threaded into the
-        // repos (paired runtime keeps the server/SWR path; see `makeStandaloneGate`).
-        // audit P-1 — the SwiftData open is DEFERRED (`makeWithRecoveryTask`): the
-        // mirror is dormant in paired mode, so the container opens lazily on the
-        // first read/write, never on the cold-launch tick.
-        let localMirror = LocalRepository.makeWithRecoveryTask()
         let repos = Self.makeRepositories(
             apiClient: apiClient,
             outbox: outbox,
             swr: coordinator,
-            local: localMirror,
-            standalone: Self.makeStandaloneGate(local: localMirror),
             baseURL: environment.baseURL
         )
         measurementsRepo = repos.measurements
         medicationsRepo = repos.medications
         glp1LocalRepo = repos.glp1Local
         medicationTherapyLogRepo = repos.medicationTherapyLog
-        localRepo = repos.local // v0.11 W1/W2 — standalone local mirror (read-union active in standalone)
         moodRepo = repos.mood
         dashboardRepo = repos.dashboard
         insightsRepo = repos.insights
         analyticsRepo = repos.analytics
         // metricInsightsRepo is constructed AFTER aiConsentStore + aiProviderStore
-        // exist so it can capture the shared consent gate (PB1 H1).
+        // exist so it can capture the shared consent gate.
         achievementsRepo = repos.achievements
         settingsRepo = repos.settings
         aiProviderRepo = repos.aiProvider
@@ -325,16 +338,16 @@ public final class AppContainer {
         injectionSitePrefsRepo = repos.injectionSitePrefs
         moduleGateRepo = repos.moduleGate // #30
         avatarRepo = AvatarRepository(api: apiClient) // v0.8.0 W11
-        sleepNightRepo = SleepNightRepository(api: apiClient) // #124 — sleep hypnogram detail
-        sleepInsightsRepo = SleepInsightsRepository(api: apiClient) // parity 4.7 — rhythm + stage composition
+        sleepNightRepo = SleepNightRepository(api: apiClient) // Sleep hypnogram detail
+        sleepInsightsRepo = SleepInsightsRepository(api: apiClient) // Rhythm + stage composition
         serverStatsRepos = Self.makeServerStatsRepos(apiClient: apiClient, outbox: outbox, swr: coordinator) // V052-A7
-        // v0.8.0 W10 — outbox-backed so an offline Insights reorder/visibility edit survives a restart.
+        // Outbox-backed so an offline Insights reorder/visibility edit survives a restart.
         insightsLayoutRepo = InsightsLayoutRepository(api: apiClient, outbox: outbox)
         doctorReport = repos.doctorReport
         // v0.14.8 cycle marathon — built before outbox-replay so it can drain the
-        // cycle kinds. Dormant behind `FeatureFlag.cycleTracking` (no UI).
+        // cycle kinds.
         cycleRepo = CycleRepository(api: apiClient, outbox: outbox, swr: coordinator)
-        // W-B187 COACH-3 — outbox-backed so an offline adopt/dismiss survives a
+        // Outbox-backed so an offline adopt/dismiss survives a
         // restart (the server dedupes the replayed adoption against stored prose).
         coachAboutMeRepo = CoachAboutMeRepository(api: apiClient, outbox: outbox)
         // v1.18.6 PHI — labs + illness repos, built before outbox-replay so it can
@@ -347,11 +360,11 @@ public final class AppContainer {
         // cache-first (`.customMetrics`); the per-metric entry feed is
         // network-direct (paged + sort-directional — see the repo doc).
         customMetricsRepo = CustomMetricsRepository(api: apiClient, outbox: outbox, swr: coordinator)
-        // Build 7.6 (GH #48) — nutrient read/water-quick-add repo, built before
+        // Build 7.6 — nutrient read/water-quick-add repo, built before
         // outbox-replay so it can drain the `logNutrientWater` kind (an offline
         // water quick-add survives a restart). Reads network-direct.
         nutrientReadRepo = NutrientReadRepository(api: apiClient, outbox: outbox)
-        // Build 7 Item 7.7 — environmental-context overview repo. Read-only,
+        // Environmental-context overview repo. Read-only,
         // network-direct; no outbox (no write path yet), so it is not in the
         // replay aggregator. Module-gated (default-ON) via `403 module.disabled`.
         environmentRepo = EnvironmentRepository(api: apiClient)
@@ -376,7 +389,7 @@ public final class AppContainer {
         // before outbox-replay so it can drain the offline submit kind. Reads
         // network-direct (no SWR cache); the store holds the in-memory history.
         mentalHealthRepo = MentalHealthRepository(api: apiClient, outbox: outbox, swr: coordinator)
-        // v0.15 W-FRONTDOORS — Vorsorge reminder repo (interactive CRUD, no outbox
+        // Vorsorge reminder repo (interactive CRUD, no outbox
         // by design — see repo doc). Built here so the store below can capture it.
         measurementReminderRepo = MeasurementReminderRepository(api: apiClient)
         // Cross-repo replay aggregator — construction (incl. the best-effort
@@ -402,7 +415,9 @@ public final class AppContainer {
             nutrientReadRepo: nutrientReadRepo,
             healthKit: healthKit,
             // audit-v0162 H1 (Opt 3) — degraded-server signal (attempt-suppression).
-            serverHealth: infra.serverHealth
+            serverHealth: infra.serverHealth,
+            keychain: keychain,
+            refreshCoordinator: infra.refreshCoordinator
         )
         self.healthKit = healthKit
         // HK-Batch-Uploader + BG-Sync-Coordinator — construction (incl. the
@@ -412,29 +427,30 @@ public final class AppContainer {
         let hkInfra = Self.makeHealthKitInfra(
             apiClient: apiClient,
             healthKit: healthKit,
-            measurementsRepo: measurementsRepo, keychain: keychain
+            measurementsRepo: measurementsRepo, keychain: keychain,
+            registersHealthKitTask: HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).registersHealthKitBackgroundTask
         )
         let uploader = hkInfra.uploader
         healthKitUploader = uploader
         let bgSync = hkInfra.backgroundSync
         backgroundSync = bgSync
-        let syncStore = SyncModeStore()
-        syncModeStore = syncStore
+        // An install from the offline-mode era starts signed out; its stored
+        // mode is dropped so every later launch reads the same.
+        StandaloneRetirement.retireStoredMode(in: .standard)
         authenticatedSessionRegistry = AuthenticatedSessionLeaseRegistry()
-        authStore = AuthStore(auth: auth, keychain: keychain, syncMode: syncStore, sessionRegistry: authenticatedSessionRegistry)
+        authStore = AuthStore(auth: auth, keychain: keychain, sessionRegistry: authenticatedSessionRegistry)
         // #49 / v1.30.11 — wire the native OIDC SSO driver so the login screen's
         // "Sign in with SSO" affordance can open an `ASWebAuthenticationSession`.
         #if canImport(AuthenticationServices)
             authStore.oidcAuthenticator = Self.webAuthenticationDriver()
         #endif
-        // R4 §3.1 — capability surface. Folds the just-built sync-mode + auth
-        // stores; the reachability stream is wired below (`start(reachability:)`)
-        // so the online flag tracks interface edges. Holds weak refs to the two
-        // stores, so no retain cycle with the composition root.
+        // Capability surface. Folds the just-built auth store; the
+        // reachability stream is wired below (`start(reachability:)`) so the
+        // online flag tracks interface edges. Holds a weak ref to the store, so
+        // no retain cycle with the composition root.
         let availability = BackendAvailability(
-            syncMode: syncStore,
             authStore: authStore,
-            // R1 — die Adressfrage wird ab hier beobachtbar beantwortet, damit
+            // Die Adressfrage wird ab hier beobachtbar beantwortet, damit
             // eine Installation ohne hinterlegte Adresse zum Adress-Schritt
             // geführt wird statt in ein Anmeldeformular, das scheitern muss.
             hasServerAddress: environment.isServerConfigured
@@ -457,7 +473,7 @@ public final class AppContainer {
             // NotificationService konformiert AppDelegateBridge — der Helper
             // setzt `AppDelegate.bridge` (rechtzeitig vor dem ersten
             // Token-Callback) + kickt den Legacy-Backup-Purge. Construction
-            // moved verbatim into `AppContainer+Notifications` (v0.7.3).
+            // moved verbatim into `AppContainer+Notifications`.
             notifications = Self.makeNotificationService(
                 api: apiClient,
                 environment: environment,
@@ -466,6 +482,7 @@ public final class AppContainer {
                 backgroundSync: bgSync,
                 medicationsRepo: medicationsRepo
             )
+            pushRelay = Self.makePushRelay(api: apiClient, keychain: keychain, notifications: notifications)
         #endif
         dashboardStore = DashboardStore(
             repo: dashboardRepo,
@@ -474,17 +491,17 @@ public final class AppContainer {
             userIDProvider: { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         )
         dashboardLayoutStore = DashboardLayoutStore(repo: dashboardRepo, swr: coordinator)
-        // v0.8.0 W10 — server-first Insights tile layout (order + visibility).
+        // Server-first Insights tile layout (order + visibility).
         insightsLayoutStore = InsightsLayoutStore(repo: insightsLayoutRepo)
         let undo = UndoCoordinator()
         undoCoordinator = undo
-        // RECONCILE-CELEBRATE — shared PR celebration slot; built before
+        // Shared PR celebration slot; built before
         // MeasurementsStore so the constructor can capture it. The
         // personal-records snapshot is wired post-construction below
         // because `serverStatsStores` is built later in this init.
         let celebration = CelebrationCoordinator()
         celebrationCoordinator = celebration
-        // 08-06 — the LOINC physician-review registry was constructed here and
+        // The LOINC physician-review registry was constructed here and
         // is gone; nothing took its slot. A locally typed reviewer name is not
         // clinical review, so the composition root has no business owning a
         // store whose only job was to manufacture that claim. Its persisted
@@ -517,7 +534,7 @@ public final class AppContainer {
             authenticatedSessionRegistry,
             ownerIDProvider: { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         )
-        // v0.9.0 RA3 — unified delivery-preferences store (Live Activity +
+        // Unified delivery-preferences store (Live Activity +
         // AlarmKit critical alarm). Server-default layer is the
         // NoServerDeliveryDefaults stub; behaves exactly like today's
         // device-local prefs. Stood up unconditionally (cheap UserDefaults
@@ -525,7 +542,7 @@ public final class AppContainer {
         // AlarmKit. The hook wiring lives in `configureRuntimeWiring`.
         deliveryPreferencesStore = DeliveryPreferencesStore(provider: NoServerDeliveryDefaults())
         #if canImport(ActivityKit)
-            // v0.8.4 WWIDGET-1 — Live Activity controller; `NotificationService`
+            // Live Activity controller; `NotificationService`
             // is the push-token sink. Hooked onto the intake-change path in
             // `configureRuntimeWiring`.
             #if canImport(UserNotifications) && canImport(UIKit)
@@ -536,10 +553,9 @@ public final class AppContainer {
                 medicationLiveActivityController = MedicationLiveActivityController()
             #endif
         #endif
-        widgetSnapshotWriter = WidgetSnapshotWriter() // WWIDGET-2 — hooks in configureRuntimeWiring
-        spotlightCoordinator = SpotlightCoordinator() // W-B187 QOL-2 — hooks in configureRuntimeWiring
-        let earlyFeatureFlagsStore = FeatureFlagsStore() // D-2: moved up for MoodStore tag-extraction wiring
-        aiCapabilityGate = AICapabilityGate() // #115 0.2 — before MoodStore: its on-device tagger reads it
+        widgetSnapshotWriter = WidgetSnapshotWriter() // Hooks in configureRuntimeWiring
+        spotlightCoordinator = SpotlightCoordinator() // Hooks in configureRuntimeWiring
+        aiCapabilityGate = AICapabilityGate() // Before MoodStore: its on-device tagger reads it
         moodStore = Self.makeMoodStore(
             repo: moodRepo,
             healthKit: healthKit,
@@ -548,22 +564,22 @@ public final class AppContainer {
         )
         moodTagCatalogStore = MoodTagCatalogStore(repo: moodTagCatalogRepo) // v0.14 Daylio picker
         moodTagManagementStore = MoodTagManagementStore(repo: moodTagCatalogRepo) // v1.13.0 management
-        watchSession = WatchSessionCoordinator() // v0.12 P2 — hooks in configureRuntimeWiring
-        // v0.10.0 W-Mood-B — Apple-Health State-of-Mind sync toggle (OFF by default).
+        watchSession = WatchSessionCoordinator() // Hooks in configureRuntimeWiring
+        // Apple-Health State-of-Mind sync toggle (OFF by default).
         moodHealthSyncStore = MoodHealthSyncStore(
             healthKit: healthKit,
             moodRepo: moodRepo,
             keychain: keychain
         )
-        // GH #47 — Apple Health medications mirror (iOS 26+, device-local opt-in,
-        // OFF by default). The reader is nil below iOS 26 / on non-HK builds, so
-        // the store reports `isAvailable == false` and hides the toggle.
+        // Apple Health medications mirror (device-local opt-in, OFF by
+        // default). The reader is nil on non-HK builds, so the store reports
+        // `isAvailable == false` and hides the toggle.
         medicationHealthSyncStore = MedicationHealthSyncStore(
             repo: medicationsRepo,
             keychain: keychain,
             reader: Self.makeAppleHealthMedicationReader()
         )
-        // Phase 07 / plan 07-05 — the account every mirror sweep is admitted
+        // The account every mirror sweep is admitted
         // under. Bound rather than injected because this store's initializer is
         // `public` and the Phase-06 lease vocabulary is module-internal.
         medicationHealthSyncStore.bindHealthSyncAdmission(
@@ -573,25 +589,23 @@ public final class AppContainer {
         dailyBriefingStore = DailyBriefingStore(repo: insightsRepo, swr: coordinator)
         healthScoreStore = HealthScoreStore(repo: analyticsRepo, swr: coordinator)
         achievementsStore = AchievementsStore(repo: achievementsRepo)
-        // V052-A7 / v0.5.4-BF7 / v0.5.5.6 POLISH-PR — the PersonalRecords
+        // The PersonalRecords
         // derived-source + sparkline provider are now built inside the factory
         // (both depend only on `measurementsRepo`).
         serverStatsStores = Self.makeServerStatsStores(
             repos: serverStatsRepos,
             measurementsRepo: measurementsRepo
         )
-        // Build 9 (9.3) — inject `cycleRepo` + `backend` so the cycle opt-in can be
-        // server-synced (explicit toggle PATCH + the one migration), server-mode
-        // gated (standalone stays local).
+        // Inject `cycleRepo` so the cycle opt-in can be
+        // server-synced (explicit toggle PATCH + the one migration).
         settingsStore = SettingsStore(
             repo: settingsRepo,
             swr: coordinator,
             cycleRepo: cycleRepo,
-            backend: backendAvailability,
             authenticatedSessionRegistry: authenticatedSessionRegistry,
             userIDProvider: { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         )
-        // v0.15 W-FRONTDOORS — app-wide Vorsorge reminder store (SWR-deduped),
+        // App-wide Vorsorge reminder store (SWR-deduped),
         // shared by the Home next-due tile + the manage screen.
         measurementRemindersStore = MeasurementRemindersStore(
             repo: measurementReminderRepo,
@@ -607,11 +621,12 @@ public final class AppContainer {
             ownerIDProvider: { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         )
         customMetricsStore = CustomMetricsStore(repository: customMetricsRepo, undo: undo)
-        // Build 7 Item 7.7 — environmental-context display store. Holds the
+        // Environmental-context display store. Holds the
         // in-memory overview snapshot; module-gated (default-ON) via a
         // `403 module.disabled`. Conforms to LogoutClearable (auto-cleared).
         environmentStore = EnvironmentStore(repository: environmentRepo)
         illnessStore = IllnessStore(repository: illnessRepo, undo: undo)
+        seizuresStore = SeizuresStore(repository: SeizuresRepository(api: apiClient))
         documentsStore = DocumentsStore(repository: documentsRepo, undo: undo) // shared undo pill
         documentsStore.bindAuthenticatedSessionRegistry(
             authenticatedSessionRegistry,
@@ -640,7 +655,7 @@ public final class AppContainer {
             consentStore: aiConsentStore,
             providerStore: aiProviderStore
         )
-        (metricInsightsRepo, insightsPrefetch) = Self.makeMetricInsights( // W3 (#22) — daily assessment cache + warmer
+        (metricInsightsRepo, insightsPrefetch) = Self.makeMetricInsights( // Daily assessment cache + warmer
             apiClient: apiClient, consentGate: asyncGate, swr: coordinator, targetsRepo: serverStatsRepos.insightsTargets,
             insightsRepo: insightsRepo, availability: availability, aiCapabilities: aiCapabilityGate.reader
         )
@@ -715,13 +730,11 @@ public final class AppContainer {
         // Local UI-pref store for per-card Insights score-card visibility (no
         // repo — pure UserDefaults, cleared on logout via the Mirror registry).
         wellnessCardVisibilityStore = WellnessCardVisibilityStore()
-        featureFlagsStore = earlyFeatureFlagsStore // D-2: built early for MoodStore wiring
+        medicationVisibilityStore = MedicationVisibilityStore { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         // v0.14.8 cycle marathon — gate + store for the cycle data layer.
-        // Construction VERBATIM in `AppContainer+Cycle.makeCycle` (both dormant
-        // behind `FeatureFlag.cycleTracking`, default OFF).
+        // Construction in `AppContainer+Cycle.makeCycle`.
         let cycle = Self.makeCycle(
             settingsStore: settingsStore,
-            featureFlagsStore: earlyFeatureFlagsStore,
             moduleGate: moduleGate,
             cycleRepo: cycleRepo,
             availability: availability,
@@ -737,23 +750,22 @@ public final class AppContainer {
             healthKit: healthKit,
             api: apiClient,
             uploader: uploader,
-            featureFlagsStore: featureFlagsStore,
             backgroundSync: bgSync,
             swr: coordinator,
             keychain: keychain,
             registry: authenticatedSessionRegistry,
-            retryQueue: outbox, // 07-04 — a non-terminal stats chunk becomes a durable row
-            moduleGate: moduleGate, // GH #48 — nutrient sync gates on the module map
-            profileTimeZoneBox: profileTimeZoneBox // Audit B-7 — HK day totals on the profile zone
+            retryQueue: outbox, // A non-terminal stats chunk becomes a durable row
+            moduleGate: moduleGate, // Nutrient sync gates on the module map
+            profileTimeZoneBox: profileTimeZoneBox // HK day totals on the profile zone
         )
         healthKitHRBucketSync = hkStats.hrBucket
         healthKitDailyStatsSync = hkStats.dailyStats
         liveHealthKitTodayStore = hkStats.liveToday
         nutrientDailySync = hkStats.nutrient // GH #48
-        // Build 7.6 (GH #48) — nutrient read/display store. Shares the repo with
+        // Build 7.6 — nutrient read/display store. Shares the repo with
         // outbox-replay.
         //
-        // **N2** — constructed HERE rather than next to the other PHI stores
+        // Constructed HERE rather than next to the other PHI stores
         // above, because it now also owns the state-driven HealthKit
         // read-authorization for the dietary catalog and therefore needs the
         // module gate, the HK writer and the day-totals coordinator — and the
@@ -765,7 +777,7 @@ public final class AppContainer {
             healthKit: healthKit,
             dailySync: nutrientDailySync
         )
-        // GH #74 — the Apple-Health ECG upload pair (coordinator + opt-in
+        // The Apple-Health ECG upload pair (coordinator + opt-in
         // switch). No module gate: server v1.39 serves and accepts ECG
         // recordings whatever the `insights` (AI analysis) module says, so the
         // module map plays no part in building it (work order #115 · 0.1).
@@ -786,17 +798,22 @@ public final class AppContainer {
         // relative order, behaviour-identical: the closures fire later, never
         // during init). Runs BEFORE `wireLogoutHooks` so the logout cascade
         // hooks stay last (they weakly capture a fully initialised `self`).
+        let devicesRepo = DevicesRepository(api: apiClient)
+        let planning = ReminderPlanningCoordinator(idiom: deviceProfile.idiom) { try await devicesRepo.list() }
+        reminderPlanning = planning
         medicationReminderDelivery = Self.makeMedicationReminderDelivery(
             api: apiClient,
-            notificationsAuthorized: notificationsAuthorized
+            notificationsAuthorized: notificationsAuthorized,
+            plansLocally: { [planning] in planning.plansLocally },
+            otherPhoneIsActive: { [planning] in planning.otherPhoneIsActive }
         )
         configureRuntimeWiring(apiClient: apiClient, bgSync: bgSync)
-        // Logout / 401 / account-delete / adopt-on-pair hooks — wiring lives in
+        // Logout / 401 / account-delete hooks — wiring lives in
         // `AppContainer+LogoutHooks.wireLogoutHooks`. Called here (not earlier)
         // because the three cascade hooks weakly capture `self`, which is fully
         // initialised at this point.
         wireLogoutHooks(apiClient: apiClient)
-        // Phase 07 / plan 07-07 — install the one capability-complete pass every
+        // Install the one capability-complete pass every
         // trigger runs. Last, because it reads eleven finished services; behind
         // `AppOwnedHealthCollection`, so it edits no trigger call site.
         installHealthSyncOrchestration()

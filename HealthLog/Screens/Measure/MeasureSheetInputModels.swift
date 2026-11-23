@@ -8,7 +8,7 @@ import Foundation
 // The `MeasureRecentKinds` doc comment had drifted onto `PainScoreInput` in
 // `MeasureSheetView.swift`; each type now carries its own again.
 
-/// v0158 — pure 0–10 NRS clamp/validation logic for the MeasureSheet pain
+/// Pure 0–10 NRS clamp/validation logic for the MeasureSheet pain
 /// picker. Extracted from the View so the integer-constraint contract (the
 /// server accepts any 0–10 float; the client must pin the integer) is
 /// unit-testable without a SwiftUI render context.
@@ -29,7 +29,7 @@ enum PainScoreInput {
     }
 }
 
-/// H1 (v0.11 W26) — pure parse/serialize/push logic for the MeasureSheet
+/// Pure parse/serialize/push logic for the MeasureSheet
 /// recent-kinds MRU. Extracted from the View so the persistence contract
 /// (newest-first ordering, de-dupe, cap, stale-value filtering) is unit-
 /// testable without a SwiftUI render context.
@@ -53,5 +53,25 @@ enum MeasureRecentKinds {
             mru = Array(mru.prefix(limit))
         }
         return mru.map(\.rawValue).joined(separator: ",")
+    }
+}
+
+/// The example in an empty measurement field, written the way the device
+/// writes numbers (72,4 in German, 72.4 in English). The values are canonical
+/// (kg, °C, cm, mg/dL); the sheet converts them for an account in other units.
+enum MeasurePlaceholder {
+    /// A typical reading per kind and how many decimals it is shown with.
+    static let examples: [MetricKind: (value: Double, fractionDigits: Int)] = [
+        .weight: (72.4, 1), .glucose: (92, 0), .pulse: (62, 0), .bodyFat: (22.5, 1),
+        .bodyTemperature: (36.8, 1), .spo2: (98, 0), .bodyWater: (42, 0), .boneMass: (3.2, 1),
+        .restingHeartRate: (55, 0), .hrv: (45, 0), .vo2Max: (42.5, 1),
+        // Manual clinical decimal fields (pain uses a picker, not this).
+        .gripStrength: (38.0, 1), .waistCircumference: (84.0, 1)
+    ]
+
+    static func text(_ kind: MetricKind, locale: Locale = .current) -> String {
+        guard let example = examples[kind] else { return 0.formatted(.number.locale(locale)) }
+        let digits = example.fractionDigits
+        return HLValueFormat.number(example.value, fractionDigits: digits ... digits, grouping: .never, locale: locale)
     }
 }

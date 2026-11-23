@@ -27,8 +27,8 @@ import SwiftUI
 /// files; the local
 /// `swiftlint:disable:this type_body_length` stays the smaller scar.
 ///
-/// **UI-Standard R12 (U4) — vom Screen zur Sektion.** Dieser Typ hieß
-/// `AIProviderScreen` und war ein vollständiges `HLSettingsPage` mit eigenem
+/// **UI-Standard R12 — vom Screen zur Sektion.** Dieser Typ hieß
+/// `AIProviderScreen` und war ein vollständiges `HLPage` mit eigenem
 /// `ScrollView`. Sein einziger Aufrufer, ``SettingsAIScreen``, bettete ihn
 /// mitten auf seiner eigenen scrollenden Seite ein — ein `ScrollView` im
 /// `ScrollView`, dokumentiert als Workaround für einen Scroll-Bug, mit dem
@@ -41,12 +41,11 @@ import SwiftUI
 struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     @Environment(AIProviderStore.self) private var store
     @Environment(\.appContainer) private var container
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var didPerformInitialLoad = false
 
     var body: some View {
-        // Bug 3 (v0.14.8) — anchor on `AIConsentStore.revision` so the consent
+        // Bug 3 — anchor on `AIConsentStore.revision` so the consent
         // toggle (and its presence) re-evaluate when a grant is revoked from the
         // picker's "No assistant" path. The toggle reads `hasConsent`, computed
         // from the Keychain (untracked by Observation), so without this anchor the
@@ -54,18 +53,18 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         // swiftlint:disable:next redundant_discardable_let
         let _ = container?.aiConsentStore.revision
         // W1-5 / R5 #2 — body converted from a multi-section `Form` to the
-        // `HLSettingsCard` paradigm so Settings → KI feels identical to the
+        // `HLCard` paradigm so Settings → KI feels identical to the
         // rest of the Settings hub. Every preserved field, picker, button +
         // chain visual stays; the envelope changes from
-        // `Form { Section header footer }` to `HLSettingsCard(icon: title:
+        // `Form { Section header footer }` to `HLCard(title:
         // footer:)`.
         //
-        // R12 (U4) — der `VStack` ersetzt das frühere `HLSettingsPage`: er
+        // Der `VStack` ersetzt das frühere `HLPage`: er
         // reiht die Karten im selben `HLSpace.lg`-Rhythmus, den der
         // `LazyVStack` des Hosts vorgibt, und trägt die Modifier der Sektion
         // genau einmal (ein `Group` würde sie auf jede Karte einzeln legen und
         // `.task` pro Karte feuern).
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             statusCard
             // A provider identifier unknown to this client is still a valid,
             // server-confirmed configuration. Do not render a misleading
@@ -77,7 +76,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                     providerDetailsCard
                 }
             }
-            // PB1 H2 / Bug 3 (v0.14.8) — consent toggle. Render it whenever there
+            // PB1 H2 / Bug 3 — consent toggle. Render it whenever there
             // is a real server provider OR an existing grant. Gating it ONLY on
             // `serverProvider != .unconfigured` made the disable affordance vanish
             // when the live `config` resolved `.unconfigured` (not loaded yet) —
@@ -91,20 +90,21 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                 )
             }
             chainCard
-            if !store.usesProviderOpaqueAIConsent {
-                saveCard
-            }
             if let error = store.error {
                 errorCard(error)
             }
-            // 1.4 B2-c — no app sync footer on the assistant settings.
+            // No app sync footer on the assistant settings.
         }
+        // Saving is the check mark in the bar (Z17), not a large button at
+        // the end of the page. The page stays: the assistant page holds more
+        // than this form, and the status card shows the saved provider.
+        .hlConfirmBar(saveAction, identifier: Self.saveButtonIdentifier, hidesUntilChanged: true)
         .task {
             guard !didPerformInitialLoad else { return }
             didPerformInitialLoad = true
             await store.load()
         }
-        // R12 — `.refreshable` (und der Erfolgs-Tick) liegen jetzt beim Host:
+        // `.refreshable` (und der Erfolgs-Tick) liegen jetzt beim Host:
         // ein `refreshable` gehört an den ScrollView, und den besitzt seit der
         // Auflösung der Verschachtelung `SettingsAIScreen`. Pull-to-Refresh
         // aktualisiert damit die ganze Assistent-Seite statt nur ihres unteren
@@ -118,62 +118,32 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         }
     }
 
-    // MARK: - Cards (W1-5)
+    // MARK: - Cards
 
+    /// The state stands in the card's head, as on Integrations; the provider
+    /// is the card's first row and the key its stat row.
     private var statusCard: some View {
-        HLSettingsCard(icon: "info.circle.fill", title: "Status") {
-            statusRow
-            if let preview = store.serverKeyPreview {
-                Divider().opacity(0.5)
-                HStack {
-                    Text("Current key")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer(minLength: HLSpace.sm)
-                    Text(preview)
-                        .font(.hlMetric(.body))
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
-                        .accessibilityIdentifier(Self.keyPreviewIdentifier)
-                }
-            }
-            Divider().opacity(0.5)
-            statusFooter
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// POLISH-C (C6) — at an accessibility text size the state pill moves
-    /// under the provider's name; beside it, it broke into four lines.
-    private var statusRow: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
-            : AnyLayout(HStackLayout(spacing: HLSpace.md))
-        return layout {
-            HStack(spacing: HLSpace.md) {
+        HLCard("Status") {
+            statusBadge
+        } content: {
+            HLRow(
+                title: Text(verbatim: store.usesProviderOpaqueAIConsent
+                    ? String(localized: "External AI")
+                    : store.serverProvider.label)
+            ) {
                 HLSettingsIconChip(
                     symbol: store.usesProviderOpaqueAIConsent ? "server.rack" : store.serverProvider.iconName,
                     tint: store.usesProviderOpaqueAIConsent ? HLColor.cyan : store.serverProvider.iconTint
                 )
-                // R3 — die Anbieter-Herkunft („API-Schlüssel von console.anthropic.com")
-                // stand dreimal in einer Ansicht: hier, in jeder Picker-Zeile und als
-                // Footer der Detail-Karte. Heimat ist die Detail-Karte, wo sie beim
-                // Eingabefeld steht; in der Status-Zeile trug sie nichts, was der
-                // Footer derselben Karte zwei Zeilen tiefer nicht sagt.
-                Text(store.usesProviderOpaqueAIConsent ? String(localized: "External AI") : store.serverProvider.label)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            if !dynamicTypeSize.isAccessibilitySize {
-                Spacer(minLength: HLSpace.sm)
+            if let preview = store.serverKeyPreview {
+                HLSettingsStatRow(label: Text("Current key"), value: preview)
+                    .accessibilityIdentifier(Self.keyPreviewIdentifier)
             }
-            statusBadge
+            statusFooter
+                .hlText(.rowSubtitle)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -182,7 +152,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
             HLBadge(String(localized: "aiprovider.badge.saved"), icon: "checkmark", tone: .success)
                 .accessibilityIdentifier(Self.savedBadgeIdentifier)
         } else if store.isLoading || store.config == nil {
-            // Bug 4 (v0.14.8) — "Not configured" must mean "the server genuinely
+            // Bug 4 — "Not configured" must mean "the server genuinely
             // has no provider", NOT "the client hasn't loaded the config yet".
             // While `config == nil` (load in flight or not yet started) show the
             // neutral progress affordance instead of falsely claiming the user
@@ -192,7 +162,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
             HLBadge(String(localized: "aiprovider.badge.configured"), icon: "checkmark.seal.fill", tone: .success)
                 .accessibilityIdentifier(Self.configuredBadgeIdentifier)
         } else if store.serverProvider == .unconfigured {
-            // POLISH-C (F-AI-1) — the row already reads "Not configured";
+            // The row already reads "Not configured";
             // a pill saying it again only crowded the line.
             EmptyView()
         } else {
@@ -208,7 +178,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         } else {
             switch store.serverProvider {
             case .unconfigured:
-                // Bug 4 (v0.14.8) — the provider is a *server* concern; frame the
+                // Bug 4 — the provider is a *server* concern; frame the
                 // empty state as "the server has none set up yet" rather than an
                 // in-app error the user is failing to resolve.
                 Text(
@@ -221,7 +191,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
             case .local:
                 Text("A local Ollama or LM Studio instance is in use. The server has to reach this URL.")
             case .openaiCompatible:
-                // CU-16 — the server resolved an OpenAI-compatible endpoint. iOS
+                // The server resolved an OpenAI-compatible endpoint. iOS
                 // cannot name the vendor behind it and has no field for its base
                 // URL or key, so the line says exactly that and points at the
                 // server instead of implying an in-app setting is missing.
@@ -235,21 +205,19 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     @ViewBuilder
     private var providerPickerCard: some View {
         @Bindable var bindable = store
-        HLSettingsCard(icon: "sparkles", title: "Select provider") {
+        HLCard("Select provider") {
             ForEach(providerCases, id: \.self) { provider in
                 Button {
-                    bindable.draftProvider = provider
+                    store.selectProvider(provider)
                 } label: {
                     HStack(spacing: HLSpace.md) {
                         HLSettingsIconChip(symbol: provider.iconName, tint: provider.iconTint)
                         VStack(alignment: .leading, spacing: HLSpace.xxs) {
                             Text(provider.label)
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
-                            // 1.4 B2-c — wraps instead of ending in "…".
+                                .hlText(.rowTitle)
+                            // Wraps instead of ending in "…".
                             Text(provider.subtitle)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.rowSubtitle)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: HLSpace.sm)
@@ -262,12 +230,9 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                     }
                     .contentShape(Rectangle())
                 }
-                // W1-7: app-wide press-feedback
+                // App-wide press-feedback
                 .hlPressable()
                 .accessibilityIdentifier("aiProvider.row.\(provider.rawValue)")
-                if provider != providerCases.last {
-                    Divider().opacity(0.5)
-                }
             }
         }
     }
@@ -276,7 +241,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         [.unconfigured] + AIProvider.configurableCases
     }
 
-    /// Bug 3 (v0.14.8) — the provider the consent/disable toggle keys on.
+    /// Bug 3 — the provider the consent/disable toggle keys on.
     /// Prefers the live server provider; falls back to the granted provider so
     /// the disable affordance stays reachable even when `config` hasn't resolved
     /// a server provider yet. `nil` only when there is neither a server provider
@@ -293,7 +258,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     // MARK: - Provider details
 
     private var providerDetailsCard: some View {
-        HLSettingsCard(icon: "key.horizontal.fill", title: LocalizedStringKey(store.draftProvider.label)) {
+        HLCard(LocalizedStringKey(store.draftProvider.label)) {
             switch store.draftProvider {
             case .anthropic, .openai:
                 cloudKeyField
@@ -307,21 +272,29 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
                 // URL + key, no iOS field to render.
                 EmptyView()
             }
-            Divider().opacity(0.5)
             providerDetailsFooter
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func keyHint(_ sentence: LocalizedStringKey, address: String) -> some View {
+        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+            Text(sentence)
+            HLIdentifierText(address, style: .caption1)
         }
     }
 
     @ViewBuilder
     private var providerDetailsFooter: some View {
         switch store.draftProvider {
+        // The address is an identifier the reader types into a browser, so it
+        // stands on its own line without hyphenation; the menu names of the
+        // provider's English console are no longer spelled out.
         case .anthropic:
-            Text("API key: get one at console.anthropic.com under Settings → API Keys.")
+            keyHint("aiprovider.anthropic.keyHint", address: "console.anthropic.com/settings/keys")
         case .openai:
-            Text("API key: get one at platform.openai.com under API Keys.")
+            keyHint("aiprovider.openai.keyHint", address: "platform.openai.com/api-keys")
         case .local:
             Text("aiprovider.local.help")
         case .unconfigured, .openaiCompatible:
@@ -335,23 +308,17 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         @Bindable var bindable = store
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             if let preview = store.serverKeyPreview, store.serverProvider == store.draftProvider {
-                HStack {
-                    Text("Current:")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                    Text(preview)
-                        .font(.hlMetric(.caption))
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    Button(role: .destructive) {
-                        Task { await store.clearAPIKey() }
-                    } label: {
-                        Text("Remove")
-                            .font(.hlCaption.weight(.semibold))
+                HLSettingsStatRow(label: Text("Current key"), value: preview)
+                // Its own full row under the preview, as on the other
+                // credential screens.
+                HLDeleteButton(
+                    "Remove",
+                    form: .row,
+                    action: .confirmed(title: "Remove this key?") {
+                        await store.clearAPIKey()
                     }
-                    .disabled(store.isSaving)
-                }
+                )
+                .disabled(store.isSaving)
             }
             SecureField(String(localized: "New API key"), text: $bindable.draftAPIKey)
                 .hlSecretEntry()
@@ -397,12 +364,9 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     /// briefing exists. We visualise that truth honestly here so the user
     /// understands the cascade.
     private var chainCard: some View {
-        // 1.4 B2-c — the two steps say the order; the footer about a
+        // The two steps say the order; the footer about a
         // "deterministic template" is gone.
-        HLSettingsCard(
-            icon: "arrow.triangle.branch",
-            title: "Order"
-        ) {
+        HLCard("Order") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 chainStep(
                     index: 1,
@@ -425,18 +389,22 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
         }
     }
 
+    /// The numbered disc of a chain step: a badge, not a button.
+    private static let stepBadgeSide: CGFloat = 28
+
     private func chainStep(index: Int, label: String, isActive: Bool, tint: Color) -> some View {
         HStack(spacing: HLSpace.md) {
             ZStack {
                 Circle()
                     .fill(tint.opacity(isActive ? 0.18 : 0.08))
-                    .frame(width: 28, height: 28)
+                    .frame(width: Self.stepBadgeSide, height: Self.stepBadgeSide)
                 Text("\(index)")
                     .font(.hlCaption.weight(.bold))
                     .foregroundStyle(isActive ? tint : HLText.tertiary)
             }
+            // A step names something like a row title does, in its type.
             Text(label)
-                .font(.hlBody)
+                .font(HLRowTitle.font)
                 .foregroundStyle(isActive ? HLText.primary : HLText.secondary)
         }
     }
@@ -453,35 +421,19 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
 
     // MARK: - Save
 
-    private var saveCard: some View {
-        // W1-5: save lives in a borderless container so the primary
-        // CTA stays the loudest surface on the screen. Wrap in a
-        // VStack inside the card paradigm to maintain rhythm with the
-        // surrounding cards while preserving the full-width HLButton
-        // affordance.
-        //
-        // R9 — „Speichern am Formularende" ist die abschließende Commit-Aktion
-        // des Flows und damit `.primary`; das ist die EINZIGE `.primary`-Fläche
-        // der Assistent-Seite (siehe die Begründung an `BYOKeyEntryCard`).
-        VStack(spacing: 0) {
-            HLButton(
-                String(localized: "Save"),
-                icon: store.isSaving ? nil : "checkmark.circle.fill",
-                variant: .primary,
-                isLoading: store.isSaving
-            ) {
-                Task { await store.save() }
-            }
-            .disabled(!store.hasUnsavedChanges || store.isSaving)
-            .accessibilityIdentifier(Self.saveButtonIdentifier)
+    /// No action for a provider this client does not understand.
+    private var saveAction: HLSheetAction {
+        guard !store.usesProviderOpaqueAIConsent else { return .none }
+        return .save(isEnabled: store.hasUnsavedChanges && !store.isSaving) {
+            await store.save()
+            return false
         }
-        .padding(.top, HLSpace.sm)
     }
 
     // MARK: - Error
 
     private func errorCard(_ error: HLError) -> some View {
-        HLSettingsCard(icon: "exclamationmark.octagon.fill", title: "Error") {
+        HLCard("Error") {
             HStack(alignment: .top, spacing: HLSpace.md) {
                 Image(systemName: "exclamationmark.octagon.fill")
                     .foregroundStyle(HLColor.statusBad)
@@ -506,7 +458,7 @@ struct AIProviderSection: View { // swiftlint:disable:this type_body_length
     static let consentToggleIdentifier = "aiProvider.consentToggle"
 }
 
-/// PB1 H2 — Settings → KI surface for the consent toggle promised in
+/// Settings → KI surface for the consent toggle promised in
 /// `AIConsentSheet`'s bullet 3 ("in Einstellungen → KI jederzeit
 /// deaktivieren"). Bound to the current server-truth provider, NOT the
 /// draft — the draft is what the user is about to save, not what is
@@ -522,20 +474,21 @@ private struct AIConsentToggleCard: View {
 
     var body: some View {
         let isGranted = consentStore.hasConsent(for: provider)
-        // 1.4 B4 — one row, one heading: the switch names what it allows,
+        // One row, one heading: the switch names what it allows,
         // the footer that it is a revocable consent.
-        HLSettingsCard(
-            // R18 — war ein hartkodiertes deutsches Literal ohne Katalog-
+        HLCard(
+            // War ein hartkodiertes deutsches Literal ohne Katalog-
             // eintrag (PROJECT_GUIDE.md: keine hardcoded UI-Strings). Der englische
             // Quelltext ist jetzt der Schlüssel, die deutsche Fassung steht
             // wortgleich im Katalog — englische Nutzer sahen hier bislang
             // deutschen Text. Klasse D. 1.4 B2-c: der Widerruf bleibt, der
             // zweite Satz beschrieb nur, was beim Einschalten erscheint.
-            footer: "aiConsent.toggle.footer"
+            footer: "aiConsent.toggle.footer",
+            layout: .rows
         ) {
-            // R11 — war ein roher `Toggle` mit handgebautem Label-Block; die
+            // War ein roher `Toggle` mit handgebautem Label-Block; die
             // Geometrie (Textbreite, Gap zum Schalter, Tinte der Beschreibung)
-            // kommt jetzt aus dem Primitive. Bug 5 (v0.14.8) bleibt gültig: das
+            // kommt jetzt aus dem Primitive. Bug 5 bleibt gültig: das
             // ist die SERVER-Einwilligung — die Daten gehen an den eigenen
             // Server, der sie weiterreicht; der Client kennt den Namen des
             // Dritt-Anbieters nicht und behauptet ihn deshalb nicht.

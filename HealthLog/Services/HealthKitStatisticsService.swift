@@ -30,19 +30,31 @@ public struct HealthKitDailyStatRow: Sendable, Equatable {
     /// `"minutes"`). Spiegelt das `unitMap` aus
     /// `src/lib/validations/measurement.ts`.
     public let unit: String
+    /// The zone the day was summed in (#191: a `stats:` row carries it
+    /// once the server takes `timeZone`). Not part of the row's identity.
+    public let timeZoneIdentifier: String?
 
     public init(
         hkIdentifier: String,
         dayStart: Date,
         dayKey: String,
         value: Double,
-        unit: String
+        unit: String,
+        timeZoneIdentifier: String? = nil
     ) {
         self.hkIdentifier = hkIdentifier
         self.dayStart = dayStart
         self.dayKey = dayKey
         self.value = value
         self.unit = unit
+        self.timeZoneIdentifier = timeZoneIdentifier
+    }
+
+    /// Equality without the zone, as before it existed: caches and
+    /// dedupe compare rows, and the zone says nothing about the value.
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.hkIdentifier == rhs.hkIdentifier && lhs.dayStart == rhs.dayStart && lhs.dayKey == rhs.dayKey
+            && lhs.value == rhs.value && lhs.unit == rhs.unit
     }
 
     /// Locked externalId. v1.4.30 §12 — `stats:<HKQuantityTypeIdentifier>:<YYYY-MM-DD>`.
@@ -54,7 +66,7 @@ public struct HealthKitDailyStatRow: Sendable, Equatable {
 /// Konfigurations-Bundle pro kumulativem HK-Type. Bindet einen
 /// `HKQuantityTypeIdentifier` an seine Wire-Unit-Strings + die HK-Unit
 /// die der Statistics-Query intern braucht.
-/// #115 / 0.3 — what one read of every cumulative type produced, and how
+/// What one read of every cumulative type produced, and how
 /// many types could not be read at all. A read with `failedTypes > 0` did not
 /// cover its window, so the sweep that made it is not complete.
 public struct HealthKitDailyStatsRead: Sendable, Equatable {
@@ -88,10 +100,16 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         "HKQuantityTypeIdentifierFlightsClimbed",
         "HKQuantityTypeIdentifierDistanceWalkingRunning",
         "HKQuantityTypeIdentifierTimeInDaylight",
-        // HK-NEW (1.5) — the exercise and stand rings (server v1.44), day
+        // The exercise and stand rings (server v1.44), day
         // totals like daylight; only where the server maps them.
         "HKQuantityTypeIdentifierAppleExerciseTime",
-        "HKQuantityTypeIdentifierAppleStandTime"
+        "HKQuantityTypeIdentifierAppleStandTime",
+        // Resting energy (server v1.47.1), a day total like active energy.
+        "HKQuantityTypeIdentifierBasalEnergyBurned",
+        // Cycling and rowing distance (server 1.49.0), summed per day so the
+        // Watch and the iPhone do not count one ride twice.
+        "HKQuantityTypeIdentifierDistanceCycling",
+        "HKQuantityTypeIdentifierDistanceRowing"
     ]
 
     /// Default-Konfig fuer alle 5 locked cumulative types. Wire-Units
@@ -104,10 +122,13 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierDistanceWalkingRunning", wireUnit: "m"),
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierTimeInDaylight", wireUnit: "minutes"),
         HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierAppleExerciseTime", wireUnit: "minutes"),
-        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierAppleStandTime", wireUnit: "minutes")
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierAppleStandTime", wireUnit: "minutes"),
+        HealthKitCumulativeTypeConfig(identifier: HealthKitBasalEnergy.identifier, wireUnit: HealthKitBasalEnergy.wireUnit),
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierDistanceCycling", wireUnit: "m"),
+        HealthKitCumulativeTypeConfig(identifier: "HKQuantityTypeIdentifierDistanceRowing", wireUnit: "m")
     ]
 
-    /// HK-NEW (1.5) — the configs the configured server stores yet. A server
+    /// The configs the configured server stores yet. A server
     /// before v1.44 would answer the ring rows with `unmappable_identifier`.
     static func serverCollectable(
         _ configs: [HealthKitCumulativeTypeConfig] = defaults,
@@ -130,8 +151,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
     /// - Wir wollen die Cert-Pinning + Idempotency-Key + 429-Backoff-Logik
     ///   des existierenden `APIClient` + `MeasurementBatchUploader` reuse.
     /// - Der Caller (`HealthKitService`-Orchestrator) kennt den User-Auth-Status
-    ///   und kann den Run unterdruecken bevor wir HK-Queries triggern, wenn
-    ///   `enableDailyStats == false` (FeatureFlag).
+    ///   und kann den Run unterdruecken, bevor wir HK-Queries triggern.
     /// - Tests koennen den Service mit einem Stub-`HealthKitStatisticsQuerying`
     ///   isoliert decken.
     public actor HealthKitStatisticsService {
@@ -158,7 +178,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
             self.clock = clock
         }
 
-        /// **Audit B-7 — the one calendar every day boundary in this service is
+        /// **The one calendar every day boundary in this service is
         /// cut on.** Reads the profile-zone provider on every access, so a
         /// profile emission (or a device that travelled) is honoured without
         /// rebuilding the actor.
@@ -166,11 +186,11 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
             Self.dayAnchorCalendar(base: baseCalendar, timeZone: timeZoneProvider?())
         }
 
-        /// Audit B-7 — pure resolution rule behind ``dayAnchorCalendar``: the
+        /// Pure resolution rule behind ``dayAnchorCalendar``: the
         /// profile zone replaces the base calendar's zone and nothing else; a
         /// `nil` zone returns the base untouched.
         ///
-        /// **Audit B-7 — what this calendar does NOT reach: the DST day.**
+        /// **What this calendar does NOT reach: the DST day.**
         /// `HKStatisticsCollectionQuery` enumerates its `DateComponents(day: 1)`
         /// interval in the DEVICE calendar, not in this one; only the anchor and
         /// the row keying below are ours. On a day where the two zones observe a
@@ -268,7 +288,8 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
                     dayStart: stats.startDate,
                     dayKey: dayKey(for: stats.startDate, calendar: calendar),
                     value: value,
-                    unit: wireUnit
+                    unit: wireUnit,
+                    timeZoneIdentifier: calendar.timeZone.identifier
                 )
                 rows.append(row)
             }
@@ -361,6 +382,8 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
             case "mg": HKUnit.gramUnit(with: .milli)
             case "ug": HKUnit.gramUnit(with: .micro)
             case "ml": HKUnit.literUnit(with: .milli)
+            case "g": HKUnit.gram()
+            case "kcal": HKUnit.kilocalorie()
             default: nil
             }
         }
@@ -421,9 +444,12 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
             case "HKQuantityTypeIdentifierStepCount",
                  "HKQuantityTypeIdentifierFlightsClimbed":
                 .count()
-            case "HKQuantityTypeIdentifierActiveEnergyBurned":
+            case "HKQuantityTypeIdentifierActiveEnergyBurned",
+                 "HKQuantityTypeIdentifierBasalEnergyBurned":
                 .kilocalorie()
-            case "HKQuantityTypeIdentifierDistanceWalkingRunning":
+            case "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                 "HKQuantityTypeIdentifierDistanceCycling",
+                 "HKQuantityTypeIdentifierDistanceRowing":
                 .meter()
             case "HKQuantityTypeIdentifierTimeInDaylight",
                  "HKQuantityTypeIdentifierAppleExerciseTime",
@@ -463,7 +489,7 @@ public struct HealthKitCumulativeTypeConfig: Sendable, Equatable {
         case noCollection
     }
 
-    /// GH #48 — the nutrient sync coordinator queries HK through the
+    /// The nutrient sync coordinator queries HK through the
     /// ``NutrientDailyRowsProviding`` seam; the concrete service already exposes
     /// the matching `dailyRows(forNutrientIdentifier:wireUnit:from:to:)`.
     extension HealthKitStatisticsService: NutrientDailyRowsProviding {}

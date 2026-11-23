@@ -12,14 +12,16 @@ struct NutrientBatchDTOTests {
     func catalogCoversEveryCode() {
         // 24 vitamins/minerals + water + caffeine.
         #expect(NutrientCatalog.all.count == 26)
-        // Audit B-4 — `serverCases`, not `allCases`: the decode-only `.unknown`
+        // `serverCases`, not `allCases`: the decode-only `.unknown`
         // sentinel is not a catalogue member and must never be requested from
         // HealthKit or offered anywhere.
         // SUPP (v1.43) — `dha` and `epa` are server codes too, but responses
         // only: the HealthKit catalogue is the 26 SYNCABLE codes.
-        #expect(NutrientCode.serverCases.count == 28)
-        #expect(NutrientCode.allCases.count == 29)
-        let codes = Set(NutrientCatalog.all.map(\.code))
+        // 1.7: twelve energy and macro codes (server 1.48.0), synced only
+        // while the server reports them (`NutrientCatalog.macros`).
+        #expect(NutrientCode.serverCases.count == 40)
+        #expect(NutrientCode.allCases.count == 41)
+        let codes = Set(NutrientCatalog.syncItems(includingMacros: true).map(\.code))
         #expect(codes == Set(NutrientCode.serverCases.filter(\.isSyncable)), "every catalog code is unique + present")
         #expect(!codes.contains(.dha) && !codes.contains(.epa))
         #expect(!codes.contains(.unknown))
@@ -46,11 +48,11 @@ struct NutrientBatchDTOTests {
         #expect(item(.pantothenicAcid)?.hkIdentifier == "HKQuantityTypeIdentifierDietaryPantothenicAcid")
     }
 
-    @Test("Energy / macros / sodium / potassium are NOT in the catalog (out of scope)")
+    @Test("Energy and macros stay out of the micronutrient catalog; they sync only as `macros`")
     func outOfScopeCodesAbsent() {
-        let rawValues = Set(NutrientCode.serverCases.map(\.rawValue))
-        for excluded in ["energy", "carbohydrates", "protein", "fat", "sugar", "fiber", "sodium", "potassium"] {
-            #expect(!rawValues.contains(excluded), "\(excluded) must be out of scope")
+        let macroCodes = Set(NutrientCatalog.macros.map(\.code.rawValue))
+        for code in ["energy", "carbohydrates", "protein", "fat", "sugar", "fiber", "sodium", "potassium"] {
+            #expect(macroCodes.contains(code), "\(code) syncs only through the macro gate")
         }
         for item in NutrientCatalog.all {
             for banned in ["Sodium", "Potassium", "Carbohydrates", "Protein", "Sugar", "Fiber", "FatTotal", "EnergyConsumed"] {

@@ -1,14 +1,12 @@
 import Foundation
 
-/// #119 / #126 P2 — the server's daily pulse for the doctor report.
+/// The server's daily pulse for the doctor report.
 public extension MeasurementsRepository {
     /// `GET /api/measurements/series-batch?types=PULSE&from=…&to=…`: one row
     /// per local day (server v1.40.1: the mean of the day's hour means; count,
     /// min and max over every reading). Network-direct, user-initiated (the
-    /// report is generated on a tap). Standalone answers `nil`: there is no
-    /// server, and the report applies the same rule to the readings it has.
+    /// report is generated on a tap).
     func dailyPulse(from: Date, to: Date) async throws -> [DailyPulseValue]? {
-        if isStandalone { return nil }
         let req: APIRequest<SeriesBatchPulseWire> = .get(
             "/api/measurements/series-batch",
             query: [

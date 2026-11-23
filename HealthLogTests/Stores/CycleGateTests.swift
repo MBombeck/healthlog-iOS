@@ -4,14 +4,13 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// App-target tests for the `@Observable CycleGate` — it layers the
-/// `cycleTracking` feature flag + `SettingsStore` (profile gender + explicit
-/// opt-in) + an injected (no-prompt) biological-sex provider on top of the
-/// pure `CycleGateResolver` (tested platform-free in the Core suite).
+/// App-target tests for the `@Observable CycleGate` — it layers
+/// `SettingsStore` (profile gender + explicit opt-in) + an injected
+/// (no-prompt) biological-sex provider on top of the pure `CycleGateResolver`
+/// (tested platform-free in the Core suite).
 ///
 /// Drives `SettingsStore.load()` through `MockURLProtocol` so the profile
-/// gender is real, and constructs a `FeatureFlagsStore` whose `cycleTracking`
-/// flag is flipped ON via the wire (default is OFF).
+/// gender is real.
 @MainActor
 @Suite("CycleGate", .serialized, .mockURLSession)
 struct CycleGateTests {
@@ -33,14 +32,6 @@ struct CycleGateTests {
         return SettingsStore(repo: repo, defaults: defaults)
     }
 
-    /// Feature-flags store with `cycle.tracking` deployed ON (wire flips the
-    /// default-OFF). Returns a store that has already refreshed.
-    private func makeFlagsStoreEnabled() async -> FeatureFlagsStore {
-        let store = FeatureFlagsStore()
-        store.setOverride(.cycleTracking, enabled: true)
-        return store
-    }
-
     private func installProfileRouter(gender: String?, cycleEnabled: Bool? = nil) {
         let g = gender.map { "\"\($0)\"" } ?? "null"
         let profileJSON = """
@@ -48,7 +39,7 @@ struct CycleGateTests {
         "avatarUrl":null,"dateOfBirth":null,"gender":\(g),"heightCm":170,\
         "locale":"de","timezone":"Europe/Berlin","moodReminderEnabled":false},"error":null}
         """
-        // Build 9 (9.3) — the /me projection carries the server-resolved
+        // The /me projection carries the server-resolved
         // cycleTrackingEnabled when provided; absent = old-server (tolerant) path.
         let cycleField = cycleEnabled.map { #","cycleTrackingEnabled":\#($0)"# } ?? ""
         let meJSON = #"{"data":{"id":"u1","username":"u","email":"u@example.com","avatarUrl":null\#(cycleField)},"error":null}"#
@@ -67,134 +58,105 @@ struct CycleGateTests {
         }
     }
 
-    // MARK: - Feature-flag gating
-
-    @Test("Flag OFF → never available, even for a female profile")
-    func flagOffSuppresses() async {
-        // Default is now ON, so test the suppression path by injecting the
-        // server flag explicitly OFF (mirrors makeFlagsStoreEnabled with false).
-        let flags = FeatureFlagsStore()
-        flags.setOverride(.cycleTracking, enabled: false)
+    @Test("Female profile → available")
+    func femaleAvailable() async {
         installProfileRouter(gender: "female")
         let settings = makeSettings()
         await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
-        gate.refresh()
-        #expect(gate.isCycleTrackingAvailable == false)
-    }
-
-    @Test("Flag ON + female profile → available")
-    func flagOnFemaleAvailable() async {
-        let flags = await makeFlagsStoreEnabled()
-        installProfileRouter(gender: "female")
-        let settings = makeSettings()
-        await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
 
-    // MARK: - Gender resolution (flag ON throughout)
+    // MARK: - Gender resolution
 
-    @Test("Flag ON + male profile → not available")
+    @Test("Male profile → not available")
     func maleNotAvailable() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male")
         let settings = makeSettings()
         await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
-    @Test("Flag ON + other gender without opt-in → not available")
+    @Test("Other gender without opt-in → not available")
     func otherNoOptIn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "other")
         let settings = makeSettings()
         await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
-    @Test("Flag ON + other gender WITH explicit opt-in → available")
+    @Test("Other gender WITH explicit opt-in → available")
     func otherWithOptIn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "other")
         let settings = makeSettings()
         await settings.load()
         settings.cycleTrackingOptIn = true
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
 
-    @Test("Flag ON + nil gender + no HK signal → not available")
+    @Test("Nil gender + no HK signal → not available")
     func nilGenderNoSignal() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: nil)
         let settings = makeSettings()
         await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
-    @Test("Flag ON + nil gender + HK female (granted) → available via fallback")
+    @Test("Nil gender + HK female (granted) → available via fallback")
     func hkFemaleFallback() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: nil)
         let settings = makeSettings()
         await settings.load()
         let gate = CycleGate(
             settings: settings,
-            featureFlags: flags,
             biologicalSexProvider: { .female }
         )
         await gate.refreshAsync()
         #expect(gate.isCycleTrackingAvailable == true)
     }
 
-    @Test("Flag ON + nil gender + HK unknown (not granted) → not available")
+    @Test("Nil gender + HK unknown (not granted) → not available")
     func hkUnknownNoFallback() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: nil)
         let settings = makeSettings()
         await settings.load()
         let gate = CycleGate(
             settings: settings,
-            featureFlags: flags,
             biologicalSexProvider: { .unknown }
         )
         await gate.refreshAsync()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
-    @Test("Flag ON + nil gender + HK male (granted) → not available (never for men)")
+    @Test("Nil gender + HK male (granted) → not available (never for men)")
     func hkMaleNoFallback() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: nil)
         let settings = makeSettings()
         await settings.load()
         let gate = CycleGate(
             settings: settings,
-            featureFlags: flags,
             biologicalSexProvider: { .male }
         )
         await gate.refreshAsync()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
-    @Test("Flag ON + nil gender + HK notSet → not available")
+    @Test("Nil gender + HK notSet → not available")
     func hkNotSetNoFallback() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: nil)
         let settings = makeSettings()
         await settings.load()
         let gate = CycleGate(
             settings: settings,
-            featureFlags: flags,
             biologicalSexProvider: { .notSet }
         )
         await gate.refreshAsync()
@@ -205,53 +167,49 @@ struct CycleGateTests {
 
     @Test("Server module cycle=false WINS over a female profile")
     func serverModuleFalseOverridesFemale() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "female")
         let settings = makeSettings()
         await settings.load()
         let moduleGate = ModuleGate(modules: ["cycle": false])
-        let gate = CycleGate(settings: settings, featureFlags: flags, moduleGate: moduleGate)
+        let gate = CycleGate(settings: settings, moduleGate: moduleGate)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
 
     @Test("Server module cycle=true keeps a female profile available")
     func serverModuleTrueKeepsAvailable() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "female")
         let settings = makeSettings()
         await settings.load()
         let moduleGate = ModuleGate(modules: ["cycle": true])
-        let gate = CycleGate(settings: settings, featureFlags: flags, moduleGate: moduleGate)
+        let gate = CycleGate(settings: settings, moduleGate: moduleGate)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
 
     @Test("Absent module map → falls back to local gender resolution")
     func absentMapFallsBackToGender() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "female")
         let settings = makeSettings()
         await settings.load()
         // Map present but WITHOUT a cycle key → fall back to gender (female → on).
         let moduleGate = ModuleGate(modules: ["mood": false])
-        let gate = CycleGate(settings: settings, featureFlags: flags, moduleGate: moduleGate)
+        let gate = CycleGate(settings: settings, moduleGate: moduleGate)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
 
-    // MARK: - Build 9 (9.3) — server × local matrix (gate truth-table unchanged)
+    // MARK: - Server × local matrix (gate truth-table unchanged)
 
     /// Server `cycleTrackingEnabled:true` is adopted into the opt-in cache, so the
     /// gate is on even for a male profile (resolver rule 1 — explicit opt-in).
     @Test("Build 9 — server true → gate ON (adopted opt-in), even for a male profile")
     func serverTrueGateOn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male", cycleEnabled: true)
         let settings = makeSettings()
         await settings.load()
         #expect(settings.cycleTrackingOptIn == true) // adopted
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
@@ -260,12 +218,11 @@ struct CycleGateTests {
     /// gender rule — a male profile stays OFF.
     @Test("Build 9 — server false + male → gate follows gender (OFF)")
     func serverFalseMaleGateOff() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male", cycleEnabled: false)
         let settings = makeSettings()
         await settings.load()
         #expect(settings.cycleTrackingOptIn == false)
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
@@ -275,12 +232,11 @@ struct CycleGateTests {
     /// false (the gate truth-table is deliberately unchanged; only storage moved).
     @Test("Build 9 — server false + female (no module map) → gender rule keeps gate ON (§6.3)")
     func serverFalseFemaleGenderRuleOn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "female", cycleEnabled: false)
         let settings = makeSettings()
         await settings.load()
         #expect(settings.cycleTrackingOptIn == false)
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
@@ -289,12 +245,11 @@ struct CycleGateTests {
     /// the gate ON for a male profile (no server value to adopt).
     @Test("Build 9 — server nil (old server) + local opt-in true + male → gate ON")
     func serverNilLocalTrueGateOn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male") // no cycleEnabled → server nil
         let settings = makeSettings()
         await settings.load()
         settings.cycleTrackingOptIn = true // local override survives (no adoption)
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }
@@ -302,11 +257,10 @@ struct CycleGateTests {
     /// Old server + local opt-in false + male → gate OFF (unchanged).
     @Test("Build 9 — server nil + local false + male → gate OFF")
     func serverNilLocalFalseGateOff() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male")
         let settings = makeSettings()
         await settings.load()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == false)
     }
@@ -316,13 +270,12 @@ struct CycleGateTests {
     /// cycleTrackingEnabled was false (CycleGate.swift:90-93 precedence unchanged).
     @Test("Build 9 — ModuleGate cycle:true wins over an adopted server-false opt-in")
     func moduleGateWinsOverAdoptedOptIn() async {
-        let flags = await makeFlagsStoreEnabled()
         installProfileRouter(gender: "male", cycleEnabled: false)
         let settings = makeSettings()
         await settings.load()
         #expect(settings.cycleTrackingOptIn == false)
         let moduleGate = ModuleGate(modules: ["cycle": true])
-        let gate = CycleGate(settings: settings, featureFlags: flags, moduleGate: moduleGate)
+        let gate = CycleGate(settings: settings, moduleGate: moduleGate)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable == true)
     }

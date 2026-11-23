@@ -26,7 +26,7 @@ public struct HLCycleRing: View {
     public struct Model: Sendable, Equatable {
         public var cycleLengthDays: Int
         public var dayOfCycle: Int
-        /// **Z1 (#72) — may a position on the ring be claimed at all?** The
+        /// **May a position on the ring be claimed at all?** The
         /// server sends `dayOfCycle: null` in `OVERDUE`: the arcs still draw,
         /// but no marker, bloom or tracer points at a day, because there is no
         /// day to point at. `dayOfCycle` keeps a clamped value only so the
@@ -91,7 +91,7 @@ public struct HLCycleRing: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    /// 1.4 B4 — `true` once the motion window has closed (`cycleRingMotionWindow`).
+    /// `true` once the motion window has closed (`cycleRingMotionWindow`).
     @State private var motionAtRest = false
 
     /// Whether anything on the ring may move now: never under Reduce Motion or
@@ -382,19 +382,14 @@ public struct HLCycleRing: View {
     @ViewBuilder
     private func centerContent(side: CGFloat) -> some View {
         let inset = HLRing.derivedStroke(forSide: side) * 2 + HLSpace.lg
+        // The words wrap between each other and never end in "…": a phase
+        // name is read in full or not at all. A word wider than the ring's
+        // middle shrinks on its own line.
         VStack(spacing: HLSpace.xs) {
-            Text(model.centerTitle)
-                .font(.hlMetric(.title))
+            HLWholeWordText(model.centerTitle, font: .hlMetric(.title), alignment: .center)
                 .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.6)
-                .lineLimit(2)
-            Text(model.centerSubtitle)
-                .font(.hlSubhead)
+            HLWholeWordText(model.centerSubtitle, font: .hlSubhead, alignment: .center)
                 .foregroundStyle(HLText.secondary)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.7)
-                .lineLimit(2)
         }
         .padding(.horizontal, HLSpace.sm)
         .frame(width: max(0, side - inset * 2))
@@ -564,7 +559,7 @@ private struct DayMarker: View {
             guard breathing else { return }
             withAnimation(.linear(duration: 0)) { pulse = false }
         }
-        // 1.4 B4 — the motion window closed: halt the loop the same way.
+        // The motion window closed: halt the loop the same way.
         .onChange(of: breathing) { _, now in
             if !now { withAnimation(.linear(duration: 0)) { pulse = false } }
         }

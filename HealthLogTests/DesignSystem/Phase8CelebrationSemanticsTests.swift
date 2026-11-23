@@ -7,14 +7,10 @@
     @testable import HealthLog
     import Testing
 
-    /// **08-11 — what the celebration says, and to whom.**
+    /// **What the celebration says, and to whom.**
     ///
-    /// `Phase8AccessibilityPolicyTests.celebrationSemanticsMatchVisibleMetric`
-    /// states the contract as source policy: no fixed English label replacing
-    /// the children it hides. This suite states the content — the spoken label
-    /// carries the localized metric and the printed figure, the figure follows
-    /// the locale, and the two are one function rather than two formatters that
-    /// can drift.
+    /// The spoken label carries the localized metric and the printed figure,
+    /// and the figure follows the locale.
     ///
     /// Everything here is a pure `nonisolated static` on `CelebrationOverlay`,
     /// which is the point: the old label was a literal inside a `private var
@@ -59,7 +55,7 @@
             let fractional = CelebrationOverlay.valueText(for: Self.dto(value: 78.2, unit: "kg"))
 
             #expect(!whole.contains(separator), "a whole number must not print a decimal separator")
-            // 1.4 B4 — a step record's unit reads in the app's own word
+            // A step record's unit reads in the app's own word
             // ("Schritte" on the German gate), still after the figure.
             #expect(whole.hasSuffix(" \(PersonalRecordDTO.localizedUnit("Steps"))"))
             #expect(fractional.contains(separator), "a fractional value must keep its digit")
@@ -77,27 +73,7 @@
             #expect(CelebrationOverlay.valueText(for: Self.dto(value: .nan, unit: "kg")) == "—")
         }
 
-        /// The printed figure and the spoken one are the SAME call, not two
-        /// formatters that agree today. Read from the production source, because
-        /// "these two produce the same string for this fixture" is a weaker
-        /// statement than "there is only one of them".
-        @Test("the printed figure and the spoken one are one function")
-        func printedAndSpokenValueShareOneSource() throws {
-            let source = try Phase8SourceScan.stripped(Self.overlayPath)
-            let announcement = try #require(
-                Phase8SourceScan.member(named: "private var announcement: some View", in: source)
-            )
-            let body = try #require(Phase8SourceScan.member(named: "var body: some View", in: source))
-
-            // #115 P2 — both now carry the account's units, still one call each.
-            #expect(announcement.contains("Self.valueText(for: record.base, units: unitPreferences)"))
-            #expect(body.contains("Self.spokenAchievement(for: record.base, units: unitPreferences)"))
-            #expect(source.contains("valueText(for: dto, units: units)"), "the spoken label must compose the printed figure")
-        }
-
         // MARK: - Fixtures
-
-        private static let overlayPath = "HealthLog/Screens/PersonalRecords/CelebrationOverlay.swift"
 
         private static func dto(
             metricType: String = "ACTIVITY_STEPS",

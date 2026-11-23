@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.7.1 B1.2 (W-INSIGHTS-SKELETON-GATE, A-UIUX-H-1) — pins the fan-out
+/// Pins the fan-out
 /// readiness aggregator that decides whether the Insights surface paints its
 /// coherent cold-launch silhouette or the live composition.
 ///

@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **Parity Build 4 · 4.5 — the `sections` slice.**
+/// **The `sections` slice.**
 ///
 /// Before this build `InsightsLayoutStore` had no `sections` concept at all, so
 /// overview section show/hide + reorder — a shipped web surface since v1.15.11 —

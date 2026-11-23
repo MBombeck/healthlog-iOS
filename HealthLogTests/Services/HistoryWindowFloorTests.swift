@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// 1.4 (S1) — the chosen window keeps its oldest days.
+    /// The chosen window keeps its oldest days.
     ///
     /// 1.3.0 recomputed the window's lower bound from "now" on every pass.
     /// With 7, 30 or 90 days or a year chosen, the bound moved forward a day

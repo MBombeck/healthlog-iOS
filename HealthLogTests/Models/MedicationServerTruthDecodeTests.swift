@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **08-17 — the published v1.37.19 medication truth at the model boundary.**
+/// **The published v1.37.19 medication truth at the model boundary.**
 ///
 /// Pinned to the immutable tag `v1.37.19` (commit
 /// `d8cbe2596fb9612cfda82b047611178884351c7b`) whose `docs/api/openapi.yaml`
@@ -138,7 +138,7 @@ struct MedicationServerTruthDecodeTests {
             violations.append("a write body rebuilt from the decoded slots drops the raw 0.5 override")
         }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: v1.37.19 fields are not propagated")
+        #expect(violations.isEmpty, "v1.37.19 fields are not propagated")
     }
 
     // MARK: - Clause 3 — compatibility and the write boundary

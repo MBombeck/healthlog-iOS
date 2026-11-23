@@ -1,6 +1,6 @@
 import Foundation
 
-// **CU-32 — effektiv-datierte, verschlüsselte Anamnese-Fakten.**
+// **Effektiv-datierte, verschlüsselte Anamnese-Fakten.**
 //
 // Wire: `GET|POST /api/anamnesis/facts`, `PATCH|DELETE /api/anamnesis/facts/{id}`
 // (Server ≥ v1.34.0). Der serialisierte Server-Typ heisst

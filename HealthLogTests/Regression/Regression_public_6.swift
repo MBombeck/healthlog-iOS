@@ -24,6 +24,8 @@
         private static let canvas = CGSize(width: 393, height: 220)
         private nonisolated static let inkThreshold = 170
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(progress: Double, value: String?, label: String?, tint: Color) throws -> CGImage {
             let row = HStack(alignment: .center, spacing: HLSpace.lg) {
                 HLRing(progress: progress, label: label, value: value, tint: tint)

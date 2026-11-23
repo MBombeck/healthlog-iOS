@@ -10,14 +10,13 @@ import SwiftUI
 /// concern (connect / sync / data types / special syncs / import / transparency).
 ///
 /// The destination (`SettingsAppleHealthImportScreen`) is unchanged — only the
-/// entry point moved. Server-only: the caller gates the card on
-/// `backend.hasServer` (the XML-parse pipeline lives on the server). Split into
+/// entry point moved (the XML-parse pipeline lives on the server). Split into
 /// its own extension file to keep the host type under the body-length budget.
 extension AppleHealthIntegrationDetailScreen {
     var importCard: some View {
-        // 1.4 B2-c — the "export ZIP" subtitle is gone. 1.4 B4 — one row,
+        // The "export ZIP" subtitle is gone. One row,
         // one heading: the row names its screen.
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "settings.applehealth_import.hero_title", presents: .push) {
                 SettingsAppleHealthImportScreen()
             }

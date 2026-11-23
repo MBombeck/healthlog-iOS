@@ -116,7 +116,7 @@ struct CyclePredictionEngineTests {
         #expect(peri.cyclesObserved >= normal.cyclesObserved)
     }
 
-    // MARK: - Period length (§2)
+    // MARK: - Period length
 
     @Test("contiguous 5-day bleeding run")
     func periodRun() {
@@ -149,9 +149,9 @@ struct CyclePredictionEngineTests {
         #expect(observed == Engine.Tuning.default.periodMax + 2)
     }
 
-    // MARK: - Adherence density (§3) — A360-5 M-3 NaN guard
+    // MARK: - Adherence density — A360-5 M-3 NaN guard
 
-    /// A360-5 M-3 — on the cycle-start day (`today == lastStart`, sinceStart 0)
+    /// On the cycle-start day (`today == lastStart`, sinceStart 0)
     /// the density division must NOT yield NaN. Pre-fix `expectedDays` resolved
     /// to 0 and the loop filter excluded the day-0 observation; the guard now
     /// clamps `expectedDays` to ≥ 1 so the math is finite and a same-day

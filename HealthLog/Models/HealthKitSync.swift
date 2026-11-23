@@ -4,7 +4,7 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
     public let entries: [HealthKitSyncEntry]
     public let lastSyncedAt: Date?
 
-    // MARK: - CU-21 (C1) — Sync-Gesundheit, nur im GET
+    // MARK: - Sync-Gesundheit, nur im GET
 
     /// Server ≥ v1.32.31 legt vier Felder dem GET von
     /// `/api/integrations/healthkit` bei; das PATCH-Echo trägt sie NICHT. Alle
@@ -23,10 +23,10 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
     /// ausgelöst hat. Das ist der harte Beleg für „dieses Telefon liefert
     /// selbstständig".
     public let lastBackgroundSyncAt: Date?
-    /// **Legacy, fallback only (#139).** Deprecated in server v1.43, removed in
+    /// **Legacy, fallback only.** Deprecated in server v1.43, removed in
     /// v1.44. Read only when ``health`` is absent (a server before v1.42.4).
     public let syncHealth: HealthKitSyncHealth?
-    /// #139 — the server's unified connection state for Apple Health (v1.42.4+,
+    /// The server's unified connection state for Apple Health (v1.42.4+,
     /// GET only). Null until the phone has delivered anything.
     public let health: ConnectionHealth?
     /// Nur Typen, die tatsächlich geliefert haben. `nil` = der Server kennt das
@@ -83,7 +83,7 @@ public struct HealthKitSyncConfig: Codable, Sendable, Equatable {
         acceptedTypes = try? c.decodeIfPresent([String].self, forKey: .acceptedTypes)
     }
 
-    /// #10 — das PATCH-Echo mit den Lesefeldern des vorigen GET.
+    /// Das PATCH-Echo mit den Lesefeldern des vorigen GET.
     ///
     /// Die PATCH-Route antwortet mit `lastSyncedAt: null` und ohne die vier
     /// CU-21-Felder: sie sagt damit nichts über den letzten Sync, sie kennt ihn
@@ -241,7 +241,7 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
     public let model: String
     public let apnsToken: String?
     public let apnsEnvironment: APNsEnvironment?
-    /// W-B189 (#22) — ActivityKit push token for a running medication Live
+    /// ActivityKit push token for a running medication Live
     /// Activity (hex). When present, the server (≥ v1.17.1) sends a direct
     /// `apns-push-type: liveactivity` `end`/`update` push to the running
     /// Activity so a remote intake clears the lock-screen countdown even
@@ -251,6 +251,20 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
     /// shape. This is the per-Activity **update** token (a push-to-start
     /// token can only start an Activity, not push to a running one).
     public let liveActivityPushToken: String?
+    /// **#191 — one update token per running Activity**, with its medication
+    /// and slot: the full current list, `[]` clears it. Omitted when `nil`
+    /// (the capability is shut), so the body stays byte-identical for older
+    /// servers.
+    public let liveActivityTokens: [LiveActivityTokenWire]?
+    /// The fields this device reports on its own behalf (#179, #190), in
+    /// their own type so other additions to the body merge without conflict.
+    /// Empty by default: the body is then byte-identical to before.
+    public var pushFields = DeviceRegistrationPushFields()
+
+    private enum CodingKeys: String, CodingKey {
+        case token, bundleId, locale, appVersion, model, apnsToken, apnsEnvironment, liveActivityPushToken
+        case liveActivityTokens
+    }
 
     public init(
         token: String,
@@ -260,7 +274,8 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
         model: String,
         apnsToken: String? = nil,
         apnsEnvironment: APNsEnvironment? = nil,
-        liveActivityPushToken: String? = nil
+        liveActivityPushToken: String? = nil,
+        liveActivityTokens: [LiveActivityTokenWire]? = nil
     ) {
         precondition(
             (apnsToken == nil) == (apnsEnvironment == nil),
@@ -274,6 +289,7 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
         self.apnsToken = apnsToken
         self.apnsEnvironment = apnsEnvironment
         self.liveActivityPushToken = liveActivityPushToken
+        self.liveActivityTokens = liveActivityTokens
     }
 
     /// Custom encoding so `liveActivityPushToken` is **omitted** from the
@@ -291,5 +307,60 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
         try container.encodeIfPresent(apnsToken, forKey: .apnsToken)
         try container.encodeIfPresent(apnsEnvironment, forKey: .apnsEnvironment)
         try container.encodeIfPresent(liveActivityPushToken, forKey: .liveActivityPushToken)
+        try encodeLiveActivityTokens(into: &container)
+        try pushFields.encode(into: encoder)
+    }
+}
+
+extension DeviceRegistration {
+    /// One list: the app's own Activities and, while the relay is on, the
+    /// Activities the relay started (`relayStart: true`, no medication).
+    private enum TokenEntry: Encodable {
+        case app(LiveActivityTokenWire)
+        case relay(RelayStartedActivityToken)
+
+        func encode(to encoder: any Encoder) throws {
+            switch self {
+            case let .app(entry): try entry.encode(to: encoder)
+            case let .relay(entry): try entry.encode(to: encoder)
+            }
+        }
+    }
+
+    private func encodeLiveActivityTokens(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        let relay = pushFields.relayStartedActivities
+        guard liveActivityTokens != nil || !relay.isEmpty else { return }
+        let entries = (liveActivityTokens ?? []).map(TokenEntry.app) + relay.map(TokenEntry.relay)
+        try container.encode(entries, forKey: .liveActivityTokens)
+    }
+}
+
+/// One entry of ``DeviceRegistration/liveActivityTokens`` (#191): the Activity's update token (hex), the medication it
+/// shows and the slot it books against.
+public struct LiveActivityTokenWire: Codable, Sendable, Equatable {
+    public let token: String
+    public let medicationId: String
+    public let slotInstant: Date
+    /// #190 5.4 — `statement` and `signature` (`hl-activity-v1`) while the
+    /// relay is on; without them the server sends no `end` through the relay.
+    public var relayProof: RelayActivityProof?
+
+    public init(token: String, medicationId: String, slotInstant: Date, relayProof: RelayActivityProof? = nil) {
+        self.token = token
+        self.medicationId = medicationId
+        self.slotInstant = slotInstant
+        self.relayProof = relayProof
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case token, medicationId, slotInstant
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(token, forKey: .token)
+        try container.encode(medicationId, forKey: .medicationId)
+        try container.encode(slotInstant, forKey: .slotInstant)
+        try relayProof?.encode(into: encoder)
     }
 }

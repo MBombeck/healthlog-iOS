@@ -1,6 +1,6 @@
 import Foundation
 
-// #114 / #115 · 0.2 — AI availability as the SERVER resolves it.
+// AI availability as the SERVER resolves it.
 //
 // Server v1.39 publishes one object per AI capability on `GET /api/auth/me`
 // (`ai.capabilities`), resolved for the active record from every layer that can
@@ -282,7 +282,7 @@ public protocol AICapabilityReading: Sendable {
     func state(_ key: AICapabilityKey) -> AICapabilityState
     /// True once the server has sent an `ai` block (v1.39+). Such a server
     /// resolves operator, module and consent for its AI routes itself, so a
-    /// client-side gate that only duplicates that can step aside (#115 B7).
+    /// client-side gate that only duplicates that can step aside.
     /// A refusal mirrored on an older server does NOT make this true.
     var reportsCapabilities: Bool { get }
 }
@@ -310,23 +310,6 @@ public struct LegacyAICapabilities: AICapabilityReading {
 
     public func state(_: AICapabilityKey) -> AICapabilityState {
         .legacy
-    }
-}
-
-/// A fixed capability map, for tests and previews.
-public struct FixedAICapabilities: AICapabilityReading {
-    private let block: AIAccountBlock?
-
-    public init(_ block: AIAccountBlock?) {
-        self.block = block
-    }
-
-    public func state(_ key: AICapabilityKey) -> AICapabilityState {
-        block?.state(key) ?? .legacy
-    }
-
-    public var reportsCapabilities: Bool {
-        block != nil
     }
 }
 

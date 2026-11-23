@@ -18,11 +18,12 @@ import SwiftUI
 /// Store delivers updates and a card that only said so was removed.
 struct SettingsAboutScreen: View {
     @Environment(\.appContainer) var container
-    /// #134 — "Support-Info kopieren" (`SettingsAboutScreen+SupportInfo.swift`).
+    @Environment(\.openURL) private var openURL
+    /// "Support-Info kopieren" (`SettingsAboutScreen+SupportInfo.swift`).
     @State var supportInfoState: SupportInfoCopyState = .idle
 
     var body: some View {
-        HLSettingsPage(title: "About") {
+        HLPage {
             // v0.8.0 W7 W3/C4 — the Server card was promoted out of About
             // into its own "Server & sync" hub row (operational, not
             // "about the app"). About now leads with Identity, then the
@@ -36,7 +37,7 @@ struct SettingsAboutScreen: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// v0.7.0 W-APPSTORE — Apple Guideline 1.4.1 (medical-app safety):
+    /// Apple Guideline 1.4.1 (medical-app safety):
     /// a surfaced "not for diagnosis / consult a doctor / methodology"
     /// disclaimer reachable from Settings → Über. HealthLog summarizes
     /// values + surfaces AI-derived insights, so App Review expects an
@@ -44,9 +45,8 @@ struct SettingsAboutScreen: View {
     /// the app, not only in the store listing. Localized (DE primary,
     /// EN parity) via `appstore.disclaimer.*`.
     private var disclaimerCard: some View {
-        HLSettingsCard(
-            icon: "exclamationmark.shield.fill",
-            title: "appstore.disclaimer.card_title",
+        HLCard(
+            "appstore.disclaimer.card_title",
             subtitle: "appstore.disclaimer.card_subtitle",
             footer: "appstore.disclaimer.footer",
             // UI-Standard R5/E9 — die eine dokumentierte Doppelbelegung dieses
@@ -67,11 +67,8 @@ struct SettingsAboutScreen: View {
     /// zählte die drei Zeilen darunter auf (Version, Build, Bundle-ID).
     /// Tautologie, gefallen.
     private var identityCard: some View {
-        HLSettingsCard(
-            icon: "info.circle.fill",
-            title: "HealthLog"
-        ) {
-            // Y8 H-1: brand-anchor surface — the monochrome BrandMark
+        HLCard("HealthLog") {
+            // Brand-anchor surface — the monochrome BrandMark
             // sits above the version stats so the about-card reads
             // as the app's identity card, not just a build-info dump.
             // Only the WelcomeStep carried the mark before; adopting
@@ -98,23 +95,20 @@ struct SettingsAboutScreen: View {
     /// exakt die zwei Zeilen, die direkt darunter „Datenschutzerklärung" und
     /// „Dokumentation" heißen. Gefallen.
     private var linksCard: some View {
-        HLSettingsCard(
-            icon: "book.fill",
-            title: "Links"
-        ) {
-            // parity 2.9 — resolve against the CONFIGURED server, not the
+        HLCard("Links", layout: .rows) {
+            // Resolve against the CONFIGURED server, not the
             // hardcoded operator host. A self-hoster reading "Privacy policy"
             // was sent to the managed host's `/privacy` — someone else's
             // policy, describing someone else's data handling. Same bug class
             // as the forgot-password host fix (audit 02 · C-1).
             linkRow(
                 title: "Privacy policy",
-                // 09-03 — rendered from the configured-server value snapshot;
+                // Rendered from the configured-server value snapshot;
                 // this body performs no Keychain query.
                 url: (container?.configuredServer ?? .bundleFallback).privacyPolicyURL,
                 identifier: "settings.about.privacyLink"
             )
-            // #61 — `/docs` never existed on any instance. The server owners
+            // `/docs` never existed on any instance. The server owners
             // resolved it to a deliberately EXTERNAL, instance-independent target,
             // so this URL is fixed and is NOT resolved against the configured
             // server host (unlike the privacy link above).
@@ -124,40 +118,33 @@ struct SettingsAboutScreen: View {
                 identifier: "settings.about.docsLink"
             )
             // 1.0.3 (App Review 1.4.1) — in-app hub of every medical source.
-            NavigationLink {
+            HLSettingsActionRow(title: "settings.about.medicalSources", presents: .push) {
                 MedicalSourcesScreen()
-            } label: {
-                HStack(spacing: HLSpace.md) {
-                    Text("settings.about.medicalSources")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(HLText.tertiary)
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("settings.about.medicalSourcesLink")
+            // 1.7 — the app's license, its source code and the notices of
+            // every Swift package it ships (MIT, BSD, Apache-2.0).
+            HLSettingsActionRow(title: "settings.about.licenses", presents: .push) {
+                SettingsLicensesScreen()
+            }
+            .accessibilityIdentifier("settings.about.licensesLink")
         }
     }
 
-    // 1.4 B2-c — the Updates card is gone. It had no function: "updates
+    // The Updates card is gone. It had no function: "updates
     // ship through the App Store" plus "this app does not check", beside a
     // decorative (i) that did nothing when tapped.
 
     // MARK: - Helpers
 
-    /// v0.11 W-settings-typography: `.hlSubhead` label, `.hlBody` value (the
-    /// Server-screen statRow contract, b146/W37-P4). 1.4 B4: the shared
+    /// `.hlSubhead` label, `.hlBody` value (the
+    /// Server-screen statRow contract, b146/W37-P4). The shared
     /// `HLSettingsStatRow`, which stacks at the accessibility sizes.
     private func statRow(label: LocalizedStringKey, value: String) -> some View {
         HLSettingsStatRow(label: Text(label), value: value)
     }
 
-    /// parity 2.9 — the in-product privacy policy of the **configured**
+    /// The in-product privacy policy of the **configured**
     /// instance. `/privacy` is a real server route, so this resolves to a live
     /// page on a self-hosted deployment too. Pure + static so it is unit-testable.
     /// `nil`, solange kein Server eingerichtet ist.
@@ -168,34 +155,20 @@ struct SettingsAboutScreen: View {
     @ViewBuilder
     private func linkRow(title: LocalizedStringKey, url: URL?, identifier: String) -> some View {
         if let url {
-            Link(destination: url) {
-                HStack(spacing: HLSpace.md) {
-                    Text(title)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                    Spacer()
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .foregroundStyle(.tint)
-                }
-                .contentShape(Rectangle())
+            HLSettingsActionRow(title: title, presents: .external) {
+                openURL(url)
             }
             .accessibilityIdentifier(identifier)
         } else {
-            HStack(spacing: HLSpace.md) {
-                Text(title)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.tertiary)
-                Spacer()
+            HLRowLayout(title: title) {
                 Text("Not available")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
             }
             .accessibilityIdentifier(identifier)
         }
     }
 
-    /// **08-07 — the version truth, read and never composed.**
+    /// **The version truth, read and never composed.**
     ///
     /// The two Info-dictionary keys are named here, at the presentation site,
     /// because this is where a reader checks what About shows against what

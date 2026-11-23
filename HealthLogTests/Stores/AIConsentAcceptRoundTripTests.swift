@@ -1,6 +1,6 @@
 // J1 / 4 — "the assistant consent came back after a relaunch".
 //
-// The review walk (H3, 26.09.2026) saw the consent sheet again after Accept
+// The review walk saw the consent sheet again after Accept
 // and no new `consent_receipts` row on the server. These tests drive the
 // accept → relaunch → receipt path against the v1.39.2 server shapes:
 // `GET /api/user/ai-provider` of the review account (provider
@@ -147,7 +147,7 @@
             let log = Log()
             install(latestHasFull: false, mintStatus: 200, log: log)
             #expect(first.acceptAIConsent(request) == .granted)
-            // #143 — the Accept tap records the receipt (older server: no `ai.consent`).
+            // The Accept tap records the receipt (older server: no `ai.consent`).
             #expect(await first.recordAcceptedAIConsent(repository: mockRepository(), refresh: {}) == .recorded)
 
             // The receipt went out in the v1.39.2 shape.

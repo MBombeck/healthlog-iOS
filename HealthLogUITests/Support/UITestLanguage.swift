@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 L10N-CORE — the interface language a UI test launches the app in.**
+/// **The interface language a UI test launches the app in.**
 ///
 /// One place for the launch arguments that force a language, instead of a
 /// `language == "de" ? "de_DE" : "en_US"` branch in every rig. `-AppleLanguages`
@@ -15,14 +15,18 @@ enum UITestLanguage: String, CaseIterable {
     case de
     case en
     case nl
+    case ko
+    case es
     case pseudoDouble
 
     /// Reads a rig's environment value (`HL_SWEEP_LANG`, `HL_MARKETING_LANG`):
-    /// `de`, `en`, `nl`, or `pseudo`. Anything else, or nothing, is English.
+    /// `de`, `en`, `nl`, `ko`, `es`, or `pseudo`. Anything else, or nothing, is English.
     init(environmentValue: String?) {
         switch environmentValue?.lowercased() {
         case "de": self = .de
         case "nl": self = .nl
+        case "ko": self = .ko
+        case "es": self = .es
         case "pseudo", "pseudodouble": self = .pseudoDouble
         default: self = .en
         }
@@ -34,6 +38,8 @@ enum UITestLanguage: String, CaseIterable {
         case .de: "de"
         case .en, .pseudoDouble: "en"
         case .nl: "nl"
+        case .ko: "ko"
+        case .es: "es"
         }
     }
 
@@ -43,10 +49,12 @@ enum UITestLanguage: String, CaseIterable {
         case .de: "de_DE"
         case .en, .pseudoDouble: "en_US"
         case .nl: "nl_NL"
+        case .ko: "ko_KR"
+        case .es: "es_ES"
         }
     }
 
-    /// Short tag for file and folder names (`de`, `en`, `nl`, `pseudo`).
+    /// Short tag for file and folder names (`de`, `en`, `nl`, `ko`, `es`, `pseudo`).
     var tag: String {
         switch self {
         case .pseudoDouble: "pseudo"

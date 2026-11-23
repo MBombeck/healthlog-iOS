@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// A2 (1.4) — one page on the wire: what it is called, and what happens
+    /// One page on the wire: what it is called, and what happens
     /// when it cannot go out.
     ///
     /// * R3 S6: offline, or with the uploader in its backoff, a page holds its
@@ -79,16 +79,6 @@
             }
         }
 
-        private struct DailyStatsOn: FeatureFlagsServicing {
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableDailyStats: true
-                case .enableHRBuckets: false
-                default: flag.defaultValue
-                }
-            }
-        }
-
         /// A trigger context that knows a v1.43 server with `backfill`.
         private static func backfillServer() -> SyncTriggerContext {
             let context = SyncTriggerContext()
@@ -120,7 +110,7 @@
                 .map([0.95, 0.96, 0.97].map(SkipFixture.spo2Sample))
         }
 
-        // MARK: - Hold (S6)
+        // MARK: - Hold
 
         @Test("offline: the page holds, nothing is parked, nothing counted")
         func offlineHolds() async throws {
@@ -175,7 +165,7 @@
             #expect(HealthSyncCursorPolicy.required.decide(outcome) == .commit)
         }
 
-        // MARK: - backfill (R-A7)
+        // MARK: - backfill
 
         @Test("a history page goes out as backfill, a live page under its own trigger")
         func historyPageIsBackfill() async throws {
@@ -243,7 +233,6 @@
                     throttle: BatchSyncThrottle(maxPerWindow: 1000, jitter: 0 ... 0),
                     syncTrigger: context
                 ),
-                featureFlags: DailyStatsOn(),
                 dailyStatsKick: { _ in kicked.withLock { $0.append(context.wireValue) } }
             )
             let steps = HKQuantitySample(

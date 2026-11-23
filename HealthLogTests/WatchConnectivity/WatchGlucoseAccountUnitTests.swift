@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B5 — the wrist enters glucose in the account's unit.**
+/// **The wrist enters glucose in the account's unit.**
 ///
 /// The watch dialled glucose in fixed mg/dL (20…600). For an mmol/L account
 /// that was a second unit at the wrist. The phone now tells the watch the

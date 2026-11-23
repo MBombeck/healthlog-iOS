@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B6 — the dashboard insight card no longer claims an assistant.**
+/// **The dashboard insight card no longer claims an assistant.**
 ///
 /// Since server v1.39 `GET /api/insights/cards` answers `provider: "rules"`:
 /// the cards are rule-based. The tile still said "Assistant insight" beside a

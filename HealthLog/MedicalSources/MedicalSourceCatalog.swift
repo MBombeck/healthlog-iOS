@@ -124,7 +124,11 @@ public enum MedicalSourceCatalog {
         make(.appleIrregularRhythm, "Apple Support: Irregular rhythm notification", 2024, "https://support.apple.com/en-us/HT208931"),
         make(.appleWalkingSteadiness, "Apple Support: Walking Steadiness", 2024, "https://support.apple.com/en-us/102504"),
         make(.appleSleepApnea, "Apple Support: Sleep apnea notifications", 2024, "https://support.apple.com/en-us/120031"),
-        make(.studenski2011GaitSpeed, "Studenski 2011 (Gait Speed)", 2011, "https://doi.org/10.1001/jama.2010.1923")
+        make(.studenski2011GaitSpeed, "Studenski 2011 (Gait Speed)", 2011, "https://doi.org/10.1001/jama.2010.1923"),
+        make(.trinka2015StatusEpilepticus, "Trinka 2015 (ILAE Status Epilepticus)", 2015, "https://pubmed.ncbi.nlm.nih.gov/26336950/"),
+        make(.niceNg217Epilepsies, "NICE NG217", 2022, "https://www.nice.org.uk/guidance/ng217"),
+        make(.beniczky2025IlaeSeizures, "Beniczky 2025 (ILAE Seizure Classification)", 2025, "https://doi.org/10.1111/epi.18338"),
+        make(.cdcSeizureFirstAid, "CDC Seizure First Aid", 2024, "https://www.cdc.gov/epilepsy/first-aid-for-seizures/index.html")
     ]
 
     private static let byID: [MedicalSourceID: MedicalSource] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.8.4 WWIDGET-2** — pins the widget snapshot mechanism: the pure
+/// Pins the widget snapshot mechanism: the pure
 /// medications→`WidgetSnapshot` mapping (the timeline data the next-dose +
 /// compliance widgets render), the App Group store round-trip, and the
 /// `ComplianceSummary.fraction` contract.
@@ -117,7 +117,7 @@ struct WidgetSnapshotTests {
         #expect(summary.fraction == 1)
     }
 
-    // MARK: - W-B183 — server-ledger compliance drives the ring
+    // MARK: - Server-ledger compliance drives the ring
 
     @Test("ringFraction tracks the SERVER ledger percent, not the today count")
     func ringFractionPrefersServerPercent() {
@@ -195,7 +195,7 @@ struct WidgetSnapshotTests {
         #expect(abs(snapshot.compliance.ringFraction - 0.25) < 0.0001)
     }
 
-    // MARK: - W-B183 — canonical time format carried in the snapshot
+    // MARK: - Canonical time format carried in the snapshot
 
     @Test("The time-format raw value round-trips through the store")
     func timeFormatRawRoundTrips() throws {
@@ -316,7 +316,7 @@ struct WidgetSnapshotTests {
         #expect(reload > now)
     }
 
-    // MARK: - v0.10.0 W-Mood-B — mood glance field
+    // MARK: - Mood glance field
 
     @Test("RecentMood.isToday distinguishes a same-day from a prior-day entry")
     func recentMoodIsToday() {

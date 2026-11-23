@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-// Phase 07 — the retry identity every durable HealthLog write shares.
+// The retry identity every durable HealthLog write shares.
 //
 // Split out of `HealthSyncContracts.swift` by plan 07-05. `MoodRepository`
 // derives both a mood entry's optimistic local id and its idempotency key from
@@ -28,6 +28,8 @@ enum HealthSyncSource: String, CaseIterable, Sendable, Codable {
     case outbox
     /// MIRROR (1.5) — the server→Apple-Health mirror (`ServerMirrorBackgroundPass`).
     case serverMirror
+    /// Lab results from Health Records (`ClinicalLabRecordImporter`, #180).
+    case clinicalLabRecords
 }
 
 // MARK: - Stable retry identity

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.5.5.7 RECONCILE-COMPARE — disclaimer + source sheet for the
+/// Disclaimer + source sheet for the
 /// `ComparisonBand`.
 ///
 /// **Why a dedicated sheet rather than a popover:** the band paints
@@ -10,7 +10,7 @@ import SwiftUI
 /// band, and the global provenance line at the full-height `.form`
 /// detent per `hlSheetPresentation` contract.
 ///
-/// **UI-Standard R17 + R18 (U1):** das Sheet heißt *Quellen*-Sheet, und
+/// **UI-Standard R17 + R18:** das Sheet heißt *Quellen*-Sheet, und
 /// genau das trägt es jetzt — „Quelle: CDC / WHO Daten 2020–2024."
 /// Der angehängte Pauschalteil („Werte sind Richtwerte, kein
 /// medizinischer Befund. Bei Fragen wende dich an deinen Arzt oder deine
@@ -29,7 +29,7 @@ import SwiftUI
 ///
 /// **Localization:** every string surfaced here flows through
 /// `LocalizedStringKey` + the project `Localizable.xcstrings` so the
-/// EN translation can extend without code edits. #135 — the source label
+/// EN translation can extend without code edits. The source label
 /// and the band are the server's (`benchmark.sourceLabel`, already in the
 /// account's language; `low` and `high` in the record's unit).
 struct BenchmarkSourceSheet: View {
@@ -44,28 +44,17 @@ struct BenchmarkSourceSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.xl) {
-                    header
-                    sourceCard
-                    if !sources.isEmpty {
-                        referencesCard
-                    }
+        // A sheet that only shows something: the close button, nothing to
+        // confirm. `onDismiss` stays on the surface so the host can react.
+        HLSheetScaffold(LocalizedStringKey(Layout.navigationTitle)) {
+            HLPage {
+                header
+                sourceCard
+                if !sources.isEmpty {
+                    referencesCard
                 }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.xl)
             }
-            .hlScreenBackground()
-            .navigationTitle(LocalizedStringKey(Layout.navigationTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            // v0.6.1 Y2 — Home-Compliance pattern: drop the 'Schließen'
-            // confirmationAction. Drag-indicator dismisses. `onDismiss`
-            // stays on the surface so the host can react to interactive
-            // dismissal if needed.
         }
-        .hlSheetPresentation(.form)
-        .presentationBackground(HLColor.surface)
     }
 
     // MARK: - Subviews
@@ -77,7 +66,7 @@ struct BenchmarkSourceSheet: View {
                     .font(.hlIcon(HLIconSize.lg))
                     .foregroundStyle(HLAccent.userBrandTint)
                     .accessibilityHidden(true)
-                HLSectionLabel(LocalizedStringKey(Layout.eyebrow))
+                HLCardLabel(LocalizedStringKey(Layout.eyebrow))
             }
             Text(metricLabel)
                 .font(.hlTitle2)
@@ -86,17 +75,16 @@ struct BenchmarkSourceSheet: View {
     }
 
     private var sourceCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel(LocalizedStringKey(Layout.sourceTitle))
-            Text(band.sourceLabel)
-                .font(.hlBody)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            referenceRangeRow
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.sm) {
+                HLCardLabel(LocalizedStringKey(Layout.sourceTitle))
+                Text(band.sourceLabel)
+                    .font(.hlBody)
+                    .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                referenceRangeRow
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HLSpace.lg)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
     }
 
     private var referenceRangeRow: some View {
@@ -112,25 +100,23 @@ struct BenchmarkSourceSheet: View {
         .padding(.top, HLSpace.xs)
     }
 
-    /// 1.0.3 (App Review 1.4.1) — the standing "CDC/WHO 2020–2024" prose is
-    /// replaced by the named references themselves, each a Safari `Link`
-    /// (A360-3), rendered with the shared ``HLSourceRow``.
+    /// 1.0.3 (App Review 1.4.1) — the named references themselves, each a
+    /// Safari `Link` (A360-3), rendered with the shared ``HLSourceRow``.
     private var referencesCard: some View {
-        VStack(alignment: .leading, spacing: HLSpace.md) {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "text.book.closed")
-                    .font(.hlIcon(HLIconSize.rowAction))
-                    .foregroundStyle(HLText.secondary)
-                    .accessibilityHidden(true)
-                HLSectionLabel("sources.sheet.referencesTitle")
-            }
-            ForEach(sources) { source in
-                HLSourceRow(name: source.name, year: source.year, caveatKey: source.caveatKey, url: source.url)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLSpace.md) {
+                HStack(spacing: HLSpace.xs) {
+                    Image(systemName: "text.book.closed")
+                        .font(.hlIcon(HLIconSize.rowAction))
+                        .foregroundStyle(HLText.secondary)
+                        .accessibilityHidden(true)
+                    HLCardLabel("sources.sheet.referencesTitle")
+                }
+                ForEach(sources) { source in
+                    HLSourceRow(name: source.name, year: source.year, caveatKey: source.caveatKey, url: source.url)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HLSpace.lg)
-        .background(HLSurface.tertiary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
         .accessibilityIdentifier("benchmark.source.references")
     }
 }

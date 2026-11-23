@@ -14,7 +14,7 @@ import Foundation
     /// `aps.category` payloads.
     @MainActor
     extension NotificationService {
-        // MARK: - Categories (S3 / v0.4.1 / v0.5.3 F-4)
+        // MARK: - Categories
 
         /// Identifiers MUST match server-side payload `aps.category`:
         ///   - "MEDICATION_REMINDER"  → 3 actions (Genommen, Snooze 15 min, Übersprungen)
@@ -39,7 +39,7 @@ import Foundation
         /// level of `userInfo` — without those the action buttons render
         /// but the handler falls through to a deep-link only.
         ///
-        /// v0.5.4.3 HP5: MOOD_REMINDER category added in lock-step with
+        /// MOOD_REMINDER category added in lock-step with
         /// server PR #190 which introduces the daily mood-reminder cron
         /// + `MOOD_REMINDER` event type. "Stimmung erfassen" deep-links
         /// to the central-CTA `MoodQuickEntrySheet`. "Snooze 1h"
@@ -56,7 +56,7 @@ import Foundation
         nonisolated static let categoryMedicationLowStock = "MEDICATION_LOW_STOCK"
         nonisolated static let categoryBriefing = "DAILY_BRIEFING_NUDGE"
         nonisolated static let categoryMood = "MOOD_REMINDER"
-        /// W-B189 (#23) — preventive-care (Vorsorge) reminder. The server rides
+        /// Preventive-care (Vorsorge) reminder. The server rides
         /// the generic APNs category today (plain-alert fallback); this dedicated
         /// category adds an "Erledigt"/complete action for parity with the
         /// med/mood reminder pattern. The identifier MUST match the server-side
@@ -70,7 +70,7 @@ import Foundation
         /// operator's `APNS_CRITICAL_ENTITLEMENT` is set). The foreground
         /// presentation policy elevates it (`foregroundPresentationOptions`).
         nonisolated static let categorySystemAlert = "SYSTEM_ALERT"
-        /// **W-THRESHOLD-NUDGE (v0.15.2)** — client-side out-of-range nudge. A
+        /// Client-side out-of-range nudge. A
         /// PURELY INFORMATIONAL, retrospective banner fired locally when a
         /// just-logged reading falls outside a server / user-defined range AND
         /// the server has not already escalated it. No actions — a body-tap only
@@ -89,14 +89,14 @@ import Foundation
         static let actionMedicationSkipped = "med.skipped"
         static let actionBriefingOpen = "BRIEFING_OPEN"
 
-        /// v0.5.4.3 HP5 — mood-reminder action identifiers. Mirror the
+        /// Mood-reminder action identifiers. Mirror the
         /// medication-action shape but with longer snooze (1h vs 15min)
         /// because mood logging is less time-sensitive than a dose.
         static let actionMoodLogNow = "mood.log.now"
         static let actionMoodSnooze = "mood.snooze.1h"
         static let actionMoodDismiss = "mood.dismiss"
 
-        /// W-B189 (#23) — preventive-care reminder "Erledigt"/complete action.
+        /// Preventive-care reminder "Erledigt"/complete action.
         /// Foreground so the tap opens the app onto the measurement capture
         /// surface. There is no confirmed server completion route in the v1.17.1
         /// contract (the server only asked for the category for parity), so the
@@ -107,7 +107,9 @@ import Foundation
         /// Snooze interval used by the snooze action — surfaced as a
         /// static so tests can assert the trigger without re-deriving
         /// the value.
-        static let snoozeIntervalSeconds: TimeInterval = 15 * 60
+        static var snoozeIntervalSeconds: TimeInterval {
+            MedicationSnooze.interval
+        }
 
         /// Mood-snooze interval — longer than med-snooze because the
         /// 22:00 mood-reminder doesn't compete with a time-locked dose.
@@ -117,23 +119,30 @@ import Foundation
 
         func registerCategories() {
             let medication = UNNotificationCategory(
-                identifier: Self.categoryMedication,
+                // #190 5.3: the random per-install id in envelope mode.
+                identifier: RelayCategoryIdentity.medication(),
                 actions: [
                     // "Genommen" — primary positive action. Foreground
                     // option keeps the banner dismissed silently; the
                     // server-roundtrip runs inside the handler before we
                     // surrender the background runtime. No
                     // authentication-required flag because the user
-                    // already authenticated to wake the phone, and the
-                    // action is undo-able from the Today section.
+                    // already authenticated to wake the phone. The take is
+                    // noted in `ExternalTakeLog`, so the next open of the app
+                    // offers its undo (#188 (7)); the old "undo from the
+                    // Today section" no longer exists.
                     UNNotificationAction(
                         identifier: Self.actionMedicationTaken,
-                        title: String(localized: "Taken"),
+                        title: String(localized: "med.dose.action.take", defaultValue: "Take"),
                         options: []
                     ),
+                    // The span is the account's (#191); the category is
+                    // registered again when it changes
+                    // (``MedicationSnooze/didChange``). The identifier keeps
+                    // its old spelling so delivered banners still route.
                     UNNotificationAction(
                         identifier: Self.actionMedicationSnooze,
-                        title: String(localized: "Snooze 15 min"),
+                        title: MedicationSnooze.actionTitle(),
                         options: []
                     ),
                     // "Übersprungen" — flagged destructive so iOS
@@ -144,7 +153,7 @@ import Foundation
                     // far more clearly than a plain action.
                     UNNotificationAction(
                         identifier: Self.actionMedicationSkipped,
-                        title: String(localized: "med.card.action.skipped"),
+                        title: String(localized: "med.dose.action.skip", defaultValue: "Skip"),
                         options: [.destructive]
                     )
                 ],
@@ -163,7 +172,7 @@ import Foundation
                 intentIdentifiers: [],
                 options: []
             )
-            // v0.5.4.3 HP5 — MOOD_REMINDER category lands in lock-step
+            // MOOD_REMINDER category lands in lock-step
             // with server PR #190. "Stimmung erfassen" is foreground so
             // the tap opens the app onto the central-CTA quick-entry
             // sheet. "Snooze 1h" stays backgrounded (snooze is silent
@@ -192,7 +201,7 @@ import Foundation
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             )
-            // W-B185 — low-supply heads-up: NO actions, so iOS shows only the
+            // Low-supply heads-up: NO actions, so iOS shows only the
             // plain banner (body-tap deep-links to supply). Crucially carries
             // none of the Taken/Snooze/Skipped intake actions, which on a supply
             // alert would let a tap record a dose the user never took.
@@ -202,7 +211,7 @@ import Foundation
                 intentIdentifiers: [],
                 options: []
             )
-            // W-B189 (#23) — preventive-care reminder. A single "Erledigt"/
+            // Preventive-care reminder. A single "Erledigt"/
             // complete action (foreground, so the tap opens the app onto the
             // measurement capture surface). The body-tap deep-links to capture
             // via the server-supplied `deepLink`. `.customDismissAction` so a
@@ -220,7 +229,7 @@ import Foundation
                 intentIdentifiers: [],
                 options: [.customDismissAction]
             )
-            // W-THRESHOLD-NUDGE — informational out-of-range nudge. NO actions
+            // Informational out-of-range nudge. NO actions
             // (it is retrospective + non-diagnostic — there is nothing to "do"
             // from the banner); a body-tap deep-links to the labs surface. The
             // `.passive`/`.active` interruption level is set on the content, so

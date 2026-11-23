@@ -182,9 +182,9 @@ struct MentalHealthStoreTests {
         #expect(!err.contains("[3,2,3")) // no compact item array
     }
 
-    // MARK: - C1: crisis card on EVERY positive item-9 NON-retriable failure
+    // MARK: - Crisis card on EVERY positive item-9 NON-retriable failure
 
-    /// SAFETY (C1) regression suite. Before the fix, a positive item-9 whose submit
+    /// SAFETY regression suite. Before the fix, a positive item-9 whose submit
     /// ended in a NON-retriable error (`.decoding` from a 201 shape-drift, `.server`
     /// 4xx, `.canceled`, `.unknown`) fell into the generic `catch` → `phase == .form`,
     /// `result == nil`, and NO crisis card — someone in crisis got no resources. The
@@ -216,7 +216,7 @@ struct MentalHealthStoreTests {
         let crisis = try #require(result.crisis)
         #expect(crisis.resources.contains { $0.id == "telefonSeelsorge" }) // DE fallback
         // No double-write: the non-retriable branch does NOT enqueue. A write cut
-        // off on the wire (E1) is queued once, under the key it was sent with.
+        // off on the wire is queued once, under the key it was sent with.
         #expect(await outbox.snapshot.count == (queued ? 1 : 0))
         // PHI never leaks into the soft error string.
         let err = store.lastError ?? ""
@@ -250,7 +250,7 @@ struct MentalHealthStoreTests {
         try await assertCrisisShownAfterFailure(store, outbox: outbox)
     }
 
-    /// E1 — a submit cut off on the wire (`URLError.cancelled` while the task
+    /// A submit cut off on the wire (`URLError.cancelled` while the task
     /// runs: suspend, pin failure) is no longer dropped: it is queued once under
     /// the idempotency key it was sent with, and the crisis card still shows.
     @Test("C1: positive item-9 + cut-off submit → crisis card STILL shows, queued once")

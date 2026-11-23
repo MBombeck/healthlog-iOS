@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **AUDITC (1.5.0, #132)** — the `auditC` block of the read route, read
+/// **AUDITC** — the `auditC` block of the read route, read
 /// leniently, and the result shown exactly as the server scored it: the
 /// verdict comes from `aboveCutoff` alone, a profile without a sex shows the
 /// sum only, and an instrument this build cannot render as delivered is not
@@ -100,7 +100,7 @@ struct LifeAuditCDecodingTests {
 
     // MARK: - Nothing computed on the device
 
-    /// POLISH-C (C8) — on iOS 26.5 the combined label lost the source line
+    /// On iOS 26.5 the combined label lost the source line
     /// (MATRIX M4). The label is spelled out now and names the source.
     @Test("the VoiceOver label carries every line, the source included; no source without a cut-off")
     func accessibilityLabelNamesTheSource() throws {

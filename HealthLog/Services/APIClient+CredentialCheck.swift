@@ -17,7 +17,7 @@ extension APIClient {
             || isCredentialCheckRefusal(path: path, body: body)
     }
 
-    /// **B5 (1.4)** — a 401 that refuses a credential the request carried in
+    /// A 401 that refuses a credential the request carried in
     /// its body, not the session that sent it.
     ///
     /// `POST /api/auth/password` answers a wrong current password with 401

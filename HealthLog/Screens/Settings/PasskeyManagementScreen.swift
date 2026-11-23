@@ -17,7 +17,6 @@ struct PasskeyManagementScreen: View {
     @Environment(PasskeyManagementStore.self) private var store
     @Environment(\.appContainer) private var container
     @Environment(\.openURL) private var openURL
-    @State private var pendingDeleteID: String?
     @State private var renameTarget: PasskeyEntry?
     @State private var renameText: String = ""
     @State private var refreshTick: Int = 0
@@ -28,51 +27,51 @@ struct PasskeyManagementScreen: View {
                 if store.isLoading, store.passkeys.isEmpty {
                     ProgressView().frame(maxWidth: .infinity)
                 } else if store.passkeys.isEmpty {
-                    // 1.4 B2-c — what a passkey is good for moved into the one
+                    // What a passkey is good for moved into the one
                     // footer sentence under "Add a passkey".
-                    Text("settings.passkeys.empty.title")
-                        .font(.hlBody).foregroundStyle(HLText.secondary)
+                    HLEmptyNote("settings.passkeys.empty.title")
                 } else {
                     ForEach(store.passkeys) { passkey in
-                        VStack(alignment: .leading, spacing: HLSpace.xs) {
-                            Text(passkey.displayName).font(.hlHeadline)
-                            Text("passkey.created \(passkey.createdAt.formatted(.dateTime.day().month().year()))")
-                                .font(.hlCaption).foregroundStyle(HLText.secondary)
-                            if let deviceLabel = passkey.deviceLabel {
-                                Text(deviceLabel)
-                                    .font(.hlCaption).foregroundStyle(HLText.tertiary)
-                            }
-                            Text(passkey.lastUsedLabel)
-                                .font(.hlCaption).foregroundStyle(HLText.tertiary)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                pendingDeleteID = passkey.id
-                            } label: { Label("settings.passkeys.delete.action", systemImage: "trash") }
+                        // One line of facts under the name: when it was
+                        // created, where it lives, when it was last used.
+                        HLRow(
+                            title: Text(verbatim: passkey.displayName),
+                            detail: HLRowDetail.text([
+                                String(localized: "passkey.created \(HLDateFormat.date(passkey.createdAt))"),
+                                passkey.deviceLabel,
+                                passkey.lastUsedLabel
+                            ])
+                        )
+                        .hlSwipeDelete(.confirmed(
+                            title: "settings.passkeys.delete.title",
+                            message: "settings.passkeys.delete.message"
+                        ) {
+                            await store.delete(id: passkey.id)
+                        }) {
                             // Rename closed the gap that left every credential
                             // the old native enrolment created permanently
                             // named "HealthLog" (it hardcoded the name). It
                             // stays useful for web-created credentials too.
-                            Button {
+                            Button("settings.passkeys.rename", systemImage: "pencil") {
                                 renameText = passkey.displayName
                                 renameTarget = passkey
-                            } label: { Label("settings.passkeys.rename", systemImage: "pencil") }
+                            }
                         }
                     }
                 }
             } header: {
-                Text("settings.passkeys.registered")
+                HLSectionHeader("settings.passkeys.registered")
             }
+            .hlFormRowSurface()
 
-            // CU-15 — replaces the former "Add new passkey" button, which could
+            // Replaces the former "Add new passkey" button, which could
             // only produce a 401 against server ≥ v1.34.1 (see type doc).
             Section {
                 // R8 (Muster 1.11) — der rohe `Link` mit handgesetztem
                 // Trailing-Glyph ist jetzt die kanonische Absprung-Zeile; das
-                // `arrow.up.right.square` kommt vom `presents: .external`-
+                // `arrow.up.right` kommt vom `presents: .external`-
                 // Vertrag des Primitives, nicht mehr vom Aufrufer.
                 HLSettingsActionRow(
-                    icon: "safari",
                     title: "settings.passkeys.web.link",
                     presents: .external
                 ) {
@@ -83,41 +82,28 @@ struct PasskeyManagementScreen: View {
                     }
                 }
                 .accessibilityIdentifier("settings.passkeys.webLink")
-            } header: {
-                Text("settings.passkeys.web.title")
-            } footer: {
-                // R12 — Fußnoten-Tinte in Listen-Gerüsten ist `HLText.secondary`.
-                // 1.4 B2-c — one sentence: where passkeys are added and what
-                // they give you; the reason why it is the browser is gone.
+                // One sentence: where passkeys are added and what they give
+                // you. Inside the card, as the cards of the account pages
+                // carry their notes, not loose under it.
                 Text("settings.passkeys.web.footer")
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.note)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                HLSectionHeader("settings.passkeys.web.title")
             }
+            .hlFormRowSurface()
         }
-        // W3b B3 — iOS 26+ soft scroll-edge (no-op on iOS 18-25).
-        .hlScrollEdgeSoft()
+        .hlPageMargins()
         .navigationTitle("settings.passkeys.title")
-        // SET-V2-C (C-3) — sub-screen canon is `.inline` (vgl. SettingsExportScreen).
+        // Sub-screen canon is `.inline` (vgl. SettingsExportScreen).
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.load() }
         .refreshable {
             await store.load()
             refreshTick &+= 1
         }
-        // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
+        // Success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
-        .hlConfirmDestructive(
-            Text("settings.passkeys.delete.title"),
-            isPresented: Binding(get: { pendingDeleteID != nil }, set: { if !$0 { pendingDeleteID = nil } }),
-            message: Text("settings.passkeys.delete.message"),
-            confirm: Text("settings.passkeys.delete.action"),
-            cancel: Text("settings.passkeys.cancel"),
-            onCancel: { pendingDeleteID = nil },
-            action: {
-                if let id = pendingDeleteID {
-                    Task { await delete(id: id) }
-                }
-            }
-        )
         .alert(
             "settings.passkeys.rename.title",
             isPresented: Binding(get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } })
@@ -135,14 +121,11 @@ struct PasskeyManagementScreen: View {
             .disabled(!WebAuthnKeyName.isValid(renameText))
             Button("settings.passkeys.cancel", role: .cancel) { renameTarget = nil }
         }
-        .alert(
+        .hlAcknowledgeAlert(
             "settings.passkeys.error.title",
-            isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.clearError() } }),
-            presenting: store.error
-        ) { _ in
-            Button("OK") { store.clearError() }
-        } message: { err in
-            Text(err.localizedDescription)
+            item: Binding(get: { store.error }, set: { if $0 == nil { store.clearError() } })
+        ) { err in
+            Text(err.userFacingDescription)
         }
     }
 
@@ -158,11 +141,6 @@ struct PasskeyManagementScreen: View {
         renameTarget = nil
     }
 
-    private func delete(id: String) async {
-        await store.delete(id: id)
-        pendingDeleteID = nil
-    }
-
     /// The **configured** instance's security settings — where passkeys are
     /// registered on the web.
     ///
@@ -172,7 +150,7 @@ struct PasskeyManagementScreen: View {
     /// ``SettingsAboutScreen/privacyPolicyURL(keychain:)``. Pure + static so it
     /// is unit-testable.
     ///
-    /// U3: die Auflösung selbst lebt seit dem UI-Standard-Umbau in
+    /// Die Auflösung selbst lebt seit dem UI-Standard-Umbau in
     /// ``AccountSecurityWebLink`` — der Sicherheits-Hub, der 2FA-Screen und
     /// der Step-up-Picker springen auf dieselbe Seite und dürfen dafür nicht
     /// je eine eigene Kopie der Regel halten. Dieser Einstieg bleibt, weil die
@@ -187,7 +165,7 @@ struct PasskeyManagementScreen: View {
 /// Prisma `select` projects: `id`, `name` (nullable), `credentialDeviceType` (nullable),
 /// `credentialBackedUp` (nullable), `createdAt`, and `lastUsedAt` (nullable).
 ///
-/// **#60 — `lastUsedAt` restored (tolerant).** The server has tracked and delivered
+/// **`lastUsedAt` restored (tolerant).** The server has tracked and delivered
 /// `lastUsedAt` since v1.23.0 (`prisma/schema.prisma` `Passkey.lastUsedAt`, confirmed on
 /// issue #60); `null` means the credential has not been used for a login yet. It is
 /// decoded as `Date?` so an older self-hosted instance that omits the key still decodes
@@ -222,13 +200,13 @@ public struct PasskeyEntry: Codable, Identifiable, Sendable {
         }
     }
 
-    /// "Last used" line (#60). A concrete `lastUsedAt` renders the date; `nil`
+    /// "Last used" line. A concrete `lastUsedAt` renders the date; `nil`
     /// reads "never used" — which is the credential's honest state, since the
     /// server delivers `null` until the passkey is first used for a login.
     var lastUsedLabel: String {
         if let lastUsedAt {
             return String(
-                localized: "passkey.lastUsed \(lastUsedAt.formatted(.dateTime.day().month().year()))"
+                localized: "passkey.lastUsed \(HLDateFormat.date(lastUsedAt))"
             )
         }
         return String(localized: "settings.passkeys.neverUsed")

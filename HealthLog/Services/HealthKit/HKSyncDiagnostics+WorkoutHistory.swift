@@ -1,6 +1,6 @@
 import Foundation
 
-// #17 — the operator-visible half of the workout history catch-up.
+// The operator-visible half of the workout history catch-up.
 //
 // This is the one value the Sync Diagnostics surface binds to: whether an
 // older workout history is still being imported and, when known, about how

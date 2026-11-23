@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **LIFE (1.5.0, #132)** — the read route decodes every kind of the
+/// The read route decodes every kind of the
 /// v1.47.0 contract, skips what it does not know without losing the rest, and
 /// keeps an answer it cannot read in full away from the editor.
 @Suite("LifeCircumstancesDecoding")
@@ -127,6 +127,6 @@ struct LifeCircumstancesDecodingTests {
         #expect(!LifeCircumstancesEntryRow.isOffered(off))
         #expect(!LifeCircumstancesEntryRow.isOffered(absent))
         #expect(!LifeCircumstancesEntryRow.isOffered(odd))
-        #expect(!LifeCircumstancesEntryRow.isOffered(nil), "no /me yet, an older server or standalone: no row")
+        #expect(!LifeCircumstancesEntryRow.isOffered(nil), "no /me yet or an older server: no row")
     }
 }

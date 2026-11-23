@@ -79,7 +79,7 @@ public actor AppleHealthImportService {
     ///     method owns the security-scoped access for exactly the copy, and
     ///     releases it before the upload begins — see ``prepareBody(source:boundary:)``.
     public func upload(fileURL: URL) async throws -> AppleHealthImportKickoffDTO {
-        // Phase 09 Wave 0 — preparation and transport are measured separately,
+        // Preparation and transport are measured separately,
         // because this plan replaces the first and must not be able to hide its
         // cost in the second.
         let magnitude = Self.magnitude(ofFileAt: fileURL)
@@ -297,7 +297,7 @@ public actor AppleHealthImportService {
     }
 }
 
-/// **Phase 09 / plan 09-02 — the security-scope seam.**
+/// **The security-scope seam.**
 ///
 /// The document picker hands back a URL the app may read only between a
 /// balanced `startAccessingSecurityScopedResource()` /
@@ -333,7 +333,7 @@ public struct SecurityScopedAccess: Sendable {
     )
 }
 
-/// **Phase 09 / plan 09-02 — the copy ledger seam.**
+/// **The copy ledger seam.**
 ///
 /// Records the byte count of every chunk the archive copy moves. This is the
 /// only honest way a simulator test can bound the import's peak incremental

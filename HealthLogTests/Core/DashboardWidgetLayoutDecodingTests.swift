@@ -85,7 +85,7 @@ struct DashboardWidgetLayoutDecodingTests {
 
     @Test("toggleTileVisibility flips a known row")
     func toggleTileVisibility() {
-        // v0.4.1: defaults are now tile-visible by default. Use achievements
+        // Defaults are now tile-visible by default. Use achievements
         // (which intentionally stays `tileVisible: false` in the iOS default
         // because it has a dedicated tile, not a metric tile) for the flip
         // assertion so the test exercises both directions.
@@ -126,7 +126,7 @@ struct DashboardWidgetLayoutDecodingTests {
         #expect(visibleIds.contains(DashboardWidgetId.mood))
         #expect(visibleIds.contains(DashboardWidgetId.bpInTarget))
         #expect(visibleIds.contains(DashboardWidgetId.medications))
-        // vo2Max is now a MetricKind-backed widget (v0.5.2 F2) — still
+        // vo2Max is now a MetricKind-backed widget — still
         // ships visible by default just like before.
         #expect(visibleIds.contains(DashboardWidgetId.vo2Max))
         // achievements stays hidden by default (has a dedicated tile, not
@@ -162,7 +162,7 @@ struct DashboardWidgetLayoutDecodingTests {
             DashboardWidgetId.boneMass,
             DashboardWidgetId.oxygenSaturation,
             DashboardWidgetId.vo2Max,
-            // v0.5.2 F2 — appended in HK-completeness-order: cardio first
+            // Appended in HK-completeness-order: cardio first
             // (RHR + HRV), then vitals (bodyTemperature), then mobility
             // (walkingSpeed / asymmetry / stepLength), then body-composition (BMI).
             DashboardWidgetId.restingHeartRate,
@@ -178,7 +178,7 @@ struct DashboardWidgetLayoutDecodingTests {
             DashboardWidgetId.respiratoryRate,
             DashboardWidgetId.audioExposureEnvironment,
             DashboardWidgetId.audioExposureHeadphone,
-            // v0158 — v1.25 clinical measurement types, appended in catalogue
+            // v1.25 clinical measurement types, appended in catalogue
             // order. Tile-visible by default (H2 fix) per the every-MetricKind
             // invariant; the empty-tile policy keeps them off a fresh grid.
             DashboardWidgetId.painNRS,
@@ -215,7 +215,7 @@ struct DashboardWidgetLayoutDecodingTests {
         #expect(DashboardWidgetId.metricKind(forId: "medications") == nil)
         #expect(DashboardWidgetId.metricKind(forId: "achievements") == nil)
         #expect(DashboardWidgetId.metricKind(forId: "bpInTarget") == nil)
-        // v0.5.2 F2: vo2Max became a MetricKind, removed from the non-metric
+        // vo2Max became a MetricKind, removed from the non-metric
         // list. The remaining three are app-level surfaces, not chart metrics.
         #expect(DashboardWidgetId.metricKind(forId: "vo2Max") == .vo2Max)
         // Build 7 / item 7.3: `mood` GRADUATED to a first-class metric tile — it

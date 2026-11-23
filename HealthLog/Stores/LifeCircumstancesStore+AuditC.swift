@@ -1,6 +1,6 @@
 import Foundation
 
-/// **AUDITC (1.5.0)** — AUDIT-C on the life-circumstances store.
+/// **AUDITC** — AUDIT-C on the life-circumstances store.
 ///
 /// The store keeps what the read route delivered; the form's own state (the
 /// chosen answers, the retry identity, the removal question) lives in
@@ -31,7 +31,7 @@ extension LifeCircumstancesStore {
         await load()
     }
 
-    // MARK: - The earlier one-word answer (POLISH-C, C7)
+    // MARK: - The earlier one-word answer
 
     /// Reads `ALCOHOL_PATTERN` from `GET /api/anamnesis/facts`, as the web's
     /// alcohol section does. Only where the page has AUDIT-C: on an older

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.1 ITEM-A — daily multi-dose intake-mark dispatch.**
+/// **Daily multi-dose intake-mark dispatch.**
 ///
 /// Operator bug (post-b147): tapping "Genommen" on **Lisinopril** (a daily,
 /// multi-time oral med) played the confirm beam but the dose the operator
@@ -120,7 +120,7 @@ struct ActiveMedicationDispatchDoseTests {
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.14.2 H3 — ad-hoc mark `scheduledFor` resolution.**
+/// **Ad-hoc mark `scheduledFor` resolution.**
 ///
 /// When `resolveDispatchDose` finds no pending today-row the tap falls through
 /// to the ad-hoc synth POST. The old path keyed it on `scheduledFor = .now`,
@@ -155,21 +155,22 @@ struct ActiveMedicationAdHocScheduledForTests {
         )
     }
 
-    @Test("Weekly med marked on an off-day resolves to the real Monday slot, not now")
-    func weeklyOffDayResolvesToScheduledSlot() {
+    @Test("D3 #3: a weekly med marked on an off-day books now, never last week's Monday slot")
+    func weeklyOffDayBooksNow() {
         let med = Self.weeklyMondayMed()
         let resolved = ActiveMedicationsSection.resolveAdHocScheduledFor(
             medication: med,
             now: Self.saturdayNow,
             timeZone: Self.berlin
         )
-        // Must NOT be "now" (the Saturday off-day) — it must snap to a Monday.
-        #expect(abs(resolved.timeIntervalSince(Self.saturdayNow)) > 60)
-        let cal = Self.cal()
-        #expect(cal.component(.weekday, from: resolved) == 2) // Monday
-        // The nearest already-due slot is the PAST Monday (2026-06-01), so the
-        // resolved instant is before now.
-        #expect(resolved < Self.saturdayNow)
+        #expect(resolved == Self.saturdayNow)
+        let fromServer = ActiveMedicationsSection.resolveAdHocScheduledFor(
+            medication: med,
+            now: Self.saturdayNow,
+            timeZone: Self.berlin,
+            daySlots: []
+        )
+        #expect(fromServer == Self.saturdayNow)
     }
 
     @Test("PRN med keeps now (the act IS the slot)")

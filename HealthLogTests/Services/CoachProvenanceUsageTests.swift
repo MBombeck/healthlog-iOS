@@ -2,9 +2,9 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CO4 / CO5 (v0154)** — pure `parseSSE` decode coverage for the two SSE
+/// Pure `parseSSE` decode coverage for the two SSE
 /// payloads iOS previously dropped on the floor: the `provenance` frame
-/// (`metricSource`, CO4) and the `done.usage` envelope (CO5). The store-driven
+/// (`metricSource`, CO4) and the `done.usage` envelope. The store-driven
 /// stash tests (which need the fallback suite's API stub) live in
 /// `CoachServerFallbackTests.swift`.
 @Suite("Coach provenance + token usage — SSE decode")

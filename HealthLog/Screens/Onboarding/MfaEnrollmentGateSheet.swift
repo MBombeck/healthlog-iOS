@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The seam between this gate and the actual TOTP-enrolment flow.
 ///
-/// **Coordination note (parity Build 2).** A sibling agent is building
+/// **Coordination note.** A sibling agent is building
 /// `SettingsSecurityScreen`, which will own the native TOTP enrolment
 /// (QR/secret → confirm code → recovery codes). At the time this gate was
 /// written that screen did not exist in the tree, so the gate must not
@@ -45,7 +45,7 @@ struct MfaEnrollmentGateSheet: View {
 
     @Environment(\.openURL) private var openURL
 
-    /// 08-09 — the escape is one tap away, and it is now one *answered* tap.
+    /// The escape is one tap away, and it is now one *answered* tap.
     /// Signing out of the gate drops the session exactly as it always did; what
     /// changed is that the button no longer does it on contact. This is the
     /// surface where a mis-tap costs the most, because the user is here because
@@ -64,10 +64,9 @@ struct MfaEnrollmentGateSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(HLColor.background)
-        .hlScrollEdgeSoft()
         // The gate must not be swipeable away — that is the whole point.
         .interactiveDismissDisabled(true)
-        // 08-09 — the shared destructive confirmation. `onSignOut` is unchanged
+        // The shared destructive confirmation. `onSignOut` is unchanged
         // and still the only cleanup path; it is now reached from an answer.
         .hlLogoutConfirmation($logoutConfirmation) {
             await onSignOut()
@@ -105,10 +104,9 @@ struct MfaEnrollmentGateSheet: View {
     private var actions: some View {
         VStack(spacing: HLSpace.sm) {
             HLButton(
-                String(localized: "mfaEnroll.enrollButton"),
-                icon: enrollButtonIcon,
-                variant: .primary,
-                size: .compact
+                "mfaEnroll.enrollButton",
+                systemImage: enrollButtonIcon,
+                variant: .primary
             ) {
                 switch destination {
                 case let .web(url):
@@ -128,9 +126,8 @@ struct MfaEnrollmentGateSheet: View {
             }
 
             HLButton(
-                String(localized: "mfaEnroll.signOutButton"),
-                variant: .ghost,
-                size: .regular,
+                "mfaEnroll.signOutButton",
+                variant: .secondary,
                 isLoading: logoutConfirmation.isSigningOut
             ) {
                 logoutConfirmation.request()
@@ -142,7 +139,7 @@ struct MfaEnrollmentGateSheet: View {
 
     private var enrollButtonIcon: String {
         switch destination {
-        case .web: "safari"
+        case .web: HLRowIndicator.externalSymbol
         }
     }
 

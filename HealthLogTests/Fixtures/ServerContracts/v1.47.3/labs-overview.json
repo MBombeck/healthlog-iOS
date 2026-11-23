@@ -1,0 +1,71 @@
+{
+  "data": {
+    "markers": [
+      {
+        "key": "bm:bm_inr",
+        "count": 12,
+        "trend": [1.0, 1.1, null, 1.3],
+        "latest": {
+          "id": "lab_inr_3", "biomarkerId": "bm_inr", "panel": "coagulation", "analyte": "INR",
+          "value": 1.3, "valueText": null, "unit": "1", "referenceLow": 0.85, "referenceHigh": 1.15,
+          "takenAt": "2026-10-21T08:00:00Z", "source": "DOCUMENT", "hasNote": false, "rangeStatus": "above",
+          "createdAt": "2026-10-21T09:00:00Z", "updatedAt": "2026-10-21T09:00:00Z"
+        }
+      },
+      {
+        "key": "bm:bm_crp",
+        "count": 3,
+        "trend": [2.4, 2.1],
+        "latest": {
+          "id": "lab_crp_3", "biomarkerId": "bm_crp", "panel": "inflammation", "analyte": "hs-CRP",
+          "value": 2.1, "valueText": null, "unit": "mg/L", "referenceLow": 0, "referenceHigh": 3,
+          "takenAt": "2026-10-21T08:00:00Z", "source": "DOCUMENT", "hasNote": false, "rangeStatus": "in-range",
+          "createdAt": "2026-10-21T09:00:00Z", "updatedAt": "2026-10-21T09:00:00Z"
+        }
+      },
+      {
+        "key": "analyte:praxis-wert",
+        "count": 1,
+        "trend": [null],
+        "latest": {
+          "id": "lab_own_1", "biomarkerId": null, "panel": "Meine Praxis", "analyte": "Praxis-Wert",
+          "value": null, "valueText": "negativ", "unit": "", "referenceLow": null, "referenceHigh": null,
+          "takenAt": "2026-09-02T08:00:00Z", "source": "MANUAL", "hasNote": false, "rangeStatus": "unknown",
+          "createdAt": "2026-09-02T09:00:00Z", "updatedAt": "2026-09-02T09:00:00Z"
+        }
+      },
+      {
+        "key": "analyte:zink",
+        "count": 2,
+        "trend": [71.0, 80.0],
+        "latest": {
+          "id": "lab_zn_2", "biomarkerId": null, "panel": null, "analyte": "Zink",
+          "value": 80.0, "valueText": null, "unit": "ug/dl", "referenceLow": 70, "referenceHigh": 120,
+          "takenAt": "2026-08-14T08:00:00Z", "source": "MANUAL", "hasNote": false, "rangeStatus": "in-range",
+          "createdAt": "2026-08-14T09:00:00Z", "updatedAt": "2026-08-14T09:00:00Z"
+        }
+      }
+    ],
+    "categories": [
+      {
+        "key": "inflammation", "label": "Entzündung", "markerKeys": ["bm:bm_crp"],
+        "counts": { "inRange": 1, "below": 0, "above": 0, "unknown": 0 }, "status": "in-range"
+      },
+      {
+        "key": "coagulation", "label": "Gerinnung", "markerKeys": ["bm:bm_inr"],
+        "counts": { "inRange": 0, "below": 0, "above": 1, "unknown": 0 }, "status": "above"
+      },
+      {
+        "key": "custom:3f9a1c0b7d42", "label": "Meine Praxis", "markerKeys": ["analyte:praxis-wert"],
+        "counts": { "inRange": 0, "below": 0, "above": 0, "unknown": 1 }, "status": "unknown"
+      },
+      {
+        "key": "other", "label": "Sonstige", "markerKeys": ["analyte:zink"],
+        "counts": { "inRange": 1, "below": 0, "above": 0, "unknown": 0 }, "status": "in-range"
+      }
+    ],
+    "grouped": true
+  },
+  "error": null,
+  "meta": { "requestId": "req_fixture_labs_overview" }
+}

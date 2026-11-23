@@ -82,7 +82,7 @@ extension DoctorReportToFHIRBundle {
         entries.append(contentsOf: labObservations.map { makeURNEntry(.observation($0), id: $0.id) })
         entries.append(contentsOf: conditions.map { makeURNEntry(.condition($0), id: $0.id) })
         entries.append(contentsOf: illnessObservations.map { makeURNEntry(.observation($0), id: $0.id) })
-        // #115 R3 — no vital sign, no vitals DiagnosticReport (server v1.39.3):
+        // No vital sign, no vitals DiagnosticReport (server v1.39.3):
         // an empty `result` panel asserts a report that has nothing in it.
         if let vitalsReport {
             entries.append(makeEntry(fullURL: "urn:uuid:\(vitalsReport.id)", resource: .diagnosticReport(vitalsReport.resource)))
@@ -174,10 +174,10 @@ extension DoctorReportToFHIRBundle {
         // forbids `value[x]` and `dataAbsentReason` together, so it is strictly
         // one or the other. A genuine `0` (key present) still emits
         // `valueQuantity: 0`.
-        // AUD-4 M1 — a non-finite / out-of-range lab value can't be represented
+        // A non-finite / out-of-range lab value can't be represented
         // as a valid Quantity (garbage on +inf, encode-abort on NaN). Treat it
         // as data-absent (FHIR-correct) rather than emitting a corrupt value.
-        // Item 1.5 — a QUALITATIVE row ("negativ") is not data-absent: it has a
+        // A QUALITATIVE row ("negativ") is not data-absent: it has a
         // result, just not a numeric one. FHIR R4 models that as `valueString`,
         // so emit it rather than claiming the value is unknown. Order matters:
         // numeric wins, then qualitative text, then genuine absence.
@@ -214,7 +214,7 @@ extension DoctorReportToFHIRBundle {
         ucum: UCUMUnit
     ) -> ObservationReferenceRange? {
         guard low != nil || high != nil else { return nil }
-        // AUD-4 M1 — skip a non-finite / out-of-range bound (makeQuantity → nil)
+        // Skip a non-finite / out-of-range bound (makeQuantity → nil)
         // rather than stamping a corrupt SimpleQuantity onto the range.
         let lowQuantity = low.flatMap { makeQuantity(value: $0, ucum: ucum) }
         let highQuantity = high.flatMap { makeQuantity(value: $0, ucum: ucum) }
@@ -307,7 +307,7 @@ extension DoctorReportToFHIRBundle {
 
         // verificationStatus — `unconfirmed`. The episode is a patient self-log,
         // never a clinician-confirmed diagnosis. Mirrors the server's guard rail
-        // so the Condition does not over-assert (W-FHIR-CODING-CLEANUP, #30).
+        // so the Condition does not over-assert.
         condition.verificationStatus = makeConditionVerificationStatus()
 
         // category — problem-list-item (a journaled long-lived condition,
@@ -367,7 +367,7 @@ extension DoctorReportToFHIRBundle {
 
     /// `Condition.verificationStatus = unconfirmed` — every episode is a patient
     /// self-log, never a clinician-confirmed diagnosis. Mirrors the server's
-    /// guard rail (W-FHIR-CODING-CLEANUP, #30).
+    /// guard rail.
     private static func makeConditionVerificationStatus() -> CodeableConcept {
         let coding = Coding()
         coding.system = FHIRPrimitiveFactory.uri(conditionVerStatusSystem).asPrimitive()
@@ -391,7 +391,7 @@ extension DoctorReportToFHIRBundle {
     static func makeIllnessCategoryCoding(_ type: IllnessType) -> Coding {
         let (code, display) = switch type {
         case .infection: ("40733004", "Infectious disease")
-        // #115 R3 — 106190000 is inactive in SNOMED CT; the server moved to
+        // 106190000 is inactive in SNOMED CT; the server moved to
         // 473011001 in v1.39.3 (validator-checked against tx.fhir.org).
         case .allergy: ("473011001", "Allergic condition")
         case .injury: ("417163006", "Traumatic or non-traumatic injury")
@@ -456,7 +456,7 @@ extension DoctorReportToFHIRBundle {
         {
             // Body temperature is a true LOINC vital sign even when logged as
             // part of an illness day — reuse the canonical body-temperature
-            // mapping so a clinician sees it under the right code. AUD-4 M1: a
+            // mapping so a clinician sees it under the right code. A
             // non-finite fever value drops the supporting observation.
             let mapping = MetricFHIRMapper.mapping(for: .bodyTemperature)
             let code = mapping.map { makeCodeableConcept(loinc: $0.loinc) } ?? {

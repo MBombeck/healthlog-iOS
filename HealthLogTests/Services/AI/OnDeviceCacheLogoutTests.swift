@@ -19,7 +19,7 @@ import Testing
 /// race-free across `write` / `clearOnLogout` overlap.
 @Suite("On-device AI caches — logout clears, locked writes")
 struct OnDeviceCacheLogoutTests {
-    /// v0.9.0 — `OnDeviceBriefingCache` now persists to a file-protected JSON
+    /// `OnDeviceBriefingCache` now persists to a file-protected JSON
     /// store (off `UserDefaults`); the test seam injects a throwaway temp
     /// directory.
     private func makeTempDir() -> URL {

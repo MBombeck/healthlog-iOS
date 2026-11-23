@@ -21,21 +21,18 @@ import SwiftUI
 struct NextVisitSection<PageContent: View>: View {
     @ViewBuilder let pageContent: () -> PageContent
 
-    @Environment(BackendAvailability.self) private var backend
     @Environment(AppRouter.self) private var router
     @Environment(\.appContainer) private var appContainer
     @State private var model: NextVisitModel?
     @State private var attempt = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
-            if backend.hasServer {
-                content
-            }
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+            content
             pageContent()
         }
-        .task(id: LoadKey(focus: router.focusedVisitId, attempt: attempt, hasServer: backend.hasServer)) {
-            guard backend.hasServer, let model = resolvedModel() else { return }
+        .task(id: LoadKey(focus: router.focusedVisitId, attempt: attempt)) {
+            guard let model = resolvedModel() else { return }
             await model.load(focus: router.focusedVisitId)
         }
     }
@@ -48,20 +45,16 @@ struct NextVisitSection<PageContent: View>: View {
         case let .loaded(next):
             NextVisitCard(next: next)
         case let .disabled(reason):
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("visit.next.title")
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("visit.next.title")
                 FeatureDisabledCard(variant: .inline, reason: reason)
             }
             .accessibilityIdentifier("visit.next.disabled")
         case .failed:
-            HLCard {
+            HLCard("visit.next.title") {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("visit.next.title")
-                    Text("visit.next.loadFailed")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary, size: .compact) { attempt += 1 }
+                    HLEmptyNote("visit.next.loadFailed")
+                    HLButton(HLControlWord.retry.key, variant: .secondary) { attempt += 1 }
                         .accessibilityIdentifier("visit.next.retry")
                 }
             }
@@ -80,7 +73,6 @@ struct NextVisitSection<PageContent: View>: View {
     private struct LoadKey: Equatable {
         let focus: String?
         let attempt: Int
-        let hasServer: Bool
     }
 }
 
@@ -90,27 +82,19 @@ struct NextVisitCard: View {
 
     var body: some View {
         let visit = next.visit
-        HLCard {
+        HLCard("visit.next.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("visit.next.title")
-                    .accessibilityAddTraits(.isHeader)
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(verbatim: HLDateFormat.dateTime(visit.occurredAt))
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    if let practice = NextVisitFormat.practiceLine(visit.practitioner) {
-                        Text(verbatim: practice)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
+                // When and where, as one row: the date is the title, the
+                // practice its line.
+                HLRow(
+                    title: Text(verbatim: HLDateFormat.dateTime(visit.occurredAt)),
+                    detail: NextVisitFormat.practiceLine(visit.practitioner).map { Text(verbatim: $0) }
+                )
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("visit.next.when")
                 if let preparation = visit.preparation {
                     Text(verbatim: NextVisitFormat.sinceLine(preparation))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("visit.next.since")
                 }
@@ -126,29 +110,16 @@ struct NextVisitCard: View {
         .accessibilityIdentifier("visit.next")
     }
 
+    /// What stood out since the window began: one row each, the sentence as
+    /// the title and its day under it.
     private func notable(_ rows: [NextVisitModel.NotableRow]) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text("visit.next.notable.title")
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 0) {
+            HLSectionHeader("visit.next.notable.title")
             ForEach(rows) { row in
                 let date = NextVisitFormat.day(row.date)
-                // Date above the sentence: a date column of varying width
-                // left the sentences ragged.
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(verbatim: date)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .monospacedDigit()
-                    Text(verbatim: row.text)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(verbatim: "\(date), \(row.text)"))
+                HLRow(title: Text(verbatim: row.text), detail: Text(verbatim: date))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: "\(date), \(row.text)"))
             }
         }
         .padding(.top, HLSpace.xxs)
@@ -156,25 +127,14 @@ struct NextVisitCard: View {
         .accessibilityIdentifier("visit.next.notable")
     }
 
+    /// The doctor report for exactly this window: a page of its own, so a
+    /// menu row with its chevron.
     private func reportLink(_ window: ReportWindow) -> some View {
-        NavigationLink {
-            UnifiedSharingScreen(preselectedForm: .pdf, presetWindow: window)
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "doc.text")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-                Text("visit.next.report")
-                    .font(.hlSubhead.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
+        HLRow("visit.next.report", accessory: .chevron)
+            .hlRowLink {
+                UnifiedSharingScreen(preselectedForm: .pdf, presetWindow: window)
             }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("visit.next.report")
+            .accessibilityIdentifier("visit.next.report")
     }
 }
 
@@ -294,6 +254,6 @@ extension NotableWording {
     /// "August 2026" for the `since` of an extreme, in the interface language.
     static func monthYear(_ key: String?, calendar: Calendar = .current) -> String? {
         guard let key, let parts = ReportWindow.dayComponents(key), let date = calendar.date(from: parts) else { return nil }
-        return date.formatted(.dateTime.month(.wide).year().locale(AppLanguage.current.formattingLocale))
+        return HLDateFormat.monthYear(date, locale: AppLanguage.current.formattingLocale)
     }
 }

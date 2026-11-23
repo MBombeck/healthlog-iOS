@@ -1,90 +1,165 @@
 import SwiftUI
 
-/// v0.11 W52-3 / Task #48 — drives the Insights tab strip's hide-on-scroll.
+// MARK: - The strip over the pager
+
+/// What the one Insights strip over the pager draws.
 ///
-/// The strip lives in `InsightsContainerScreen`'s `.safeAreaInset(edge: .top)`.
-/// To declutter while reading a long metric column, it HIDES on scroll-down and
-/// REVEALS on scroll-up — exactly the web strip's behaviour.
+/// The container owns the selection and the order; the strip stands fixed
+/// at the top of the tab and its chosen pill follows the page.
 ///
-/// **W44 safety (the hang we must not reintroduce).** The horizontal pager pins
-/// each page with `.containerRelativeFrame(.horizontal)` ONLY and bridges
-/// `scrolledID ↔ selection` via guarded mirrors. Coupling ANY vertical
-/// measurement back into that resolver re-triggers the AttributeGraph layout
-/// loop that froze build 116. This model is therefore deliberately decoupled
-/// from the pager: each page reports its OWN INNER vertical scroll offset (via
-/// `.onScrollGeometryChange` on the inner `ScrollView` of `InsightsScreen` /
-/// `InsightsMetricScreen`) into `report(offset:)`. The container reads only the
-/// resulting `hidden` flag and animates the strip's **offset + opacity** — never
-/// its height, never the safeAreaInset's reported size. The pager's
-/// `.containerRelativeFrame` / `.scrollPosition` resolver therefore never re-runs
-/// as a function of scroll, so the W44 coupling cannot re-form.
-///
-/// `@MainActor @Observable` per the project state doctrine (no `ObservableObject`,
-/// no Combine). Injected into the environment by the container; the two inner
-/// screens read it back to push their offset up.
-@MainActor
-@Observable
-final class InsightsStripVisibility {
-    /// `true` → the strip is slid up under the nav + faded out. The container
-    /// animates the transition (reduce-motion-gated at the call site).
-    private(set) var hidden = false
+/// Equal when what the strip draws is equal: the selection, the order and
+/// the note. The two actions are left out on purpose;
+/// the container rebuilds them on every update with the same effect, and
+/// counting them made every update look like a change to every strip.
+struct InsightsStripContext: Equatable {
+    var selection: Binding<InsightsTabSelection>
+    /// The selection's value when the context was made, the one a strip draws.
+    var selected: InsightsTabSelection
+    var orderedSelections: [InsightsTabSelection]
+    var onPillTap: @MainActor (InsightsTabSelection) -> Void
+    var onCustomize: @MainActor () -> Void
+    var availabilityNote: String?
 
-    /// The last inner-scroll offset we evaluated a direction against. `nil`
-    /// until the first report, so the very first sample establishes a baseline
-    /// without spuriously toggling.
-    private var lastOffset: CGFloat?
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.selected == rhs.selected
+            && lhs.orderedSelections == rhs.orderedSelections
+            && lhs.availabilityNote == rhs.availabilityNote
+    }
+}
 
-    /// Direction hysteresis — a small dead-band so a single jittery frame (or a
-    /// rubber-band overscroll wobble) doesn't flip the strip. Only a scroll
-    /// movement that exceeds this many points in one direction since the last
-    /// pivot changes the hidden state.
-    private static let directionThreshold: CGFloat = 12
+extension EnvironmentValues {
+    /// Whether the page around this view is the pager's visible page.
+    @Entry var insightsPageIsActive = false
+    /// Whether the page around this view is a page of the Insights pager;
+    /// `false` on a page shown on its own (the metric page pushed from the
+    /// dashboard) and on a page pushed from inside the tab. Constant for a
+    /// page, so a view that asks "am I in the pager" is not run again on
+    /// every swipe; the strip's context, which changes with every page, is
+    /// not in the environment at all.
+    @Entry var insightsInPager = false
+    /// Bumped when the pill of the active page is tapped again.
+    @Entry var insightsPageRetapSignal = 0
+}
 
-    /// Top dwell zone — within this many points of the very top the strip is
-    /// always revealed, so the operator never lands at the top of a page with a
-    /// hidden strip (the strip must frame the header at rest).
-    private static let topRevealZone: CGFloat = 8
+/// The strip itself, from a context.
+private struct InsightsContextStrip: View {
+    let context: InsightsStripContext
+    let shownSelection: InsightsTabSelection?
 
-    /// Report a fresh inner-scroll vertical content offset from one of the
-    /// pages. Positive `offset` = scrolled down (content moved up under the nav).
-    ///
-    /// Pure direction logic with hysteresis — NO view-layout work happens here,
-    /// so this can never feed a measurement back into the horizontal pager.
-    func report(offset: CGFloat) {
-        // Near the top → always reveal. Reset the pivot so the next downward
-        // move is measured from the top, not from a stale deep-scroll value.
-        if offset <= Self.topRevealZone {
-            lastOffset = offset
-            if hidden { hidden = false }
-            return
-        }
+    var body: some View {
+        InsightsMetricTabStrip(
+            selection: context.selection,
+            shownSelection: shownSelection,
+            orderedSelections: context.orderedSelections,
+            onPillTap: context.onPillTap,
+            onCustomize: context.onCustomize,
+            availabilityNote: context.availabilityNote
+        )
+    }
+}
 
-        guard let last = lastOffset else {
-            // First real sample below the top — establish the baseline only.
-            lastOffset = offset
-            return
-        }
+/// Where the strip runs on a wide window: over the readable column and one
+/// page margin on each side, the same on both sides.
+enum InsightsStripLayout {
+    /// The widest the strip runs: the column and a margin on each side.
+    static let maximumWidth = HLLayout.readableWidth + 2 * HLLayout.pageMargin
 
-        let delta = offset - last
-        if delta > Self.directionThreshold {
-            // Scrolled DOWN past the dead-band → hide. Re-pivot here so a later
-            // small upward wobble doesn't immediately reveal.
-            if !hidden { hidden = true }
-            lastOffset = offset
-        } else if delta < -Self.directionThreshold {
-            // Scrolled UP past the dead-band → reveal.
-            if hidden { hidden = false }
-            lastOffset = offset
-        }
-        // |delta| ≤ threshold → within the dead-band: hold state AND hold the
-        // pivot, so many tiny same-direction frames still accumulate toward a
-        // flip (we don't reset `lastOffset` here).
+    /// The fade at a cut end: the page margin where the strip runs over it,
+    /// twice that where it ends at the column, so a chip there fades out
+    /// instead of reading as cut.
+    static func fadeLength(contentInset: CGFloat) -> CGFloat {
+        contentInset > 0 ? HLEdgeFade.length : 2 * HLLayout.pageMargin
     }
 
-    /// Reset to the revealed baseline — called when the operator switches pages,
-    /// so a new page always opens with the strip framing its header.
-    func reset() {
-        lastOffset = nil
-        if hidden { hidden = false }
+    /// The strip's width in a pager `pageWidth` wide.
+    static func width(pageWidth: CGFloat) -> CGFloat {
+        min(max(0, pageWidth), maximumWidth)
+    }
+}
+
+/// The one strip of the tab, under the active page's head, over the pager,
+/// on the app's background that fades into the page below it.
+struct InsightsPinnedStrip: View {
+    let context: InsightsStripContext
+    /// The pill shown chosen while a swipe passes a page; `nil` shows the
+    /// selection.
+    var shownSelection: InsightsTabSelection?
+
+    var body: some View {
+        // The pills run over the page's column and a margin on each side;
+        // the background spans the window.
+        InsightsContextStrip(context: context, shownSelection: shownSelection)
+            .frame(maxWidth: InsightsStripLayout.maximumWidth)
+            .clipped()
+            .frame(maxWidth: .infinity)
+            // The app's own background behind the whole row of pills, from
+            // window edge to window edge, so no page content shows between
+            // two pills; below the row it fades into the page like the
+            // system's soft scroll edge.
+            .background {
+                VStack(spacing: 0) {
+                    HLSurface.primary
+                    LinearGradient(
+                        colors: [HLSurface.primary, HLSurface.primary.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: Self.fadeHeight)
+                }
+                // The fade hangs below the strip's own frame, over the page.
+                .padding(.bottom, -Self.fadeHeight)
+                .ignoresSafeArea(edges: .horizontal)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+    }
+
+    /// How far below the pills the background fades into the page.
+    static let fadeHeight: CGFloat = HLSpace.md
+}
+
+// MARK: - A page's scroll position over activation
+
+/// What a pager page does with its own scroll position: a page the pager
+/// leaves goes back to its top once it is out of view, so it is at its top
+/// when it comes back, and a re-tap of the active pill brings the active page
+/// to its top. Reads the activation from the environment, so a page change
+/// runs this modifier and not the page.
+struct InsightsPageScrollReset: ViewModifier {
+    @Binding var position: ScrollPosition
+
+    @Environment(\.insightsPageIsActive) private var isActive
+    @Environment(\.insightsPageRetapSignal) private var retapSignal
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Counts activation changes, so a reset meant for a page that has
+    /// already come back is dropped.
+    @State private var activationChanges = 0
+
+    /// How long a page that was left stays as it is: past the end of a paging
+    /// slide, so it never moves in view.
+    static let resetDelay: Duration = .milliseconds(450)
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isActive) { _, active in
+                activationChanges += 1
+                guard !active else { return }
+                let change = activationChanges
+                Task { @MainActor in
+                    try? await Task.sleep(for: Self.resetDelay)
+                    guard change == activationChanges else { return }
+                    position.scrollTo(edge: .top)
+                }
+            }
+            .onChange(of: retapSignal) { _, _ in
+                guard isActive else { return }
+                if reduceMotion {
+                    position.scrollTo(edge: .top)
+                } else {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        position.scrollTo(edge: .top)
+                    }
+                }
+            }
     }
 }

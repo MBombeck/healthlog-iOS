@@ -9,7 +9,7 @@ import Foundation
 ///
 /// - with the server's day values (``DailyPulseValue``): mean and median over
 ///   those days, min and max over the days' own min and max, count summed;
-/// - without them (offline, standalone): the same rule applied to the readings
+/// - without them (offline): the same rule applied to the readings
 ///   in the window, hours in the account's calendar, so the row never falls
 ///   back to a plain average of readings.
 enum DoctorReportPulse {

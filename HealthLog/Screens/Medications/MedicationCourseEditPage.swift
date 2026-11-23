@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **MED-PLUS (1.5.0, #126 3.4)** — a past course: correct its first and
+/// A past course: correct its first and
 /// last day, or delete it.
 ///
 /// Pushed on the medication page's own navigation stack instead of presented
@@ -17,7 +17,6 @@ struct MedicationCourseEditPage: View {
     @State private var startsOn: Date
     @State private var endsOn: Date
     @State private var isWorking = false
-    @State private var confirmingDelete = false
     @State private var errorText: String?
 
     init(course: MedicationCourse, model: MedicationCoursesModel) {
@@ -31,12 +30,16 @@ struct MedicationCourseEditPage: View {
     var body: some View {
         Form {
             Section {
-                DatePicker("med.schedule.course.startsOn", selection: $startsOn, displayedComponents: [.date])
-                    .environment(\.timeZone, CourseWindowRow.anchorTimeZone)
-                    .accessibilityIdentifier("med.courses.edit.startsOn")
-                DatePicker("med.schedule.course.endsOn", selection: $endsOn, displayedComponents: [.date])
-                    .environment(\.timeZone, CourseWindowRow.anchorTimeZone)
-                    .accessibilityIdentifier("med.courses.edit.endsOn")
+                DatePicker(selection: $startsOn, displayedComponents: [.date]) {
+                    HLRowTitle("med.schedule.course.startsOn")
+                }
+                .environment(\.timeZone, CourseWindowRow.anchorTimeZone)
+                .accessibilityIdentifier("med.courses.edit.startsOn")
+                DatePicker(selection: $endsOn, displayedComponents: [.date]) {
+                    HLRowTitle("med.schedule.course.endsOn")
+                }
+                .environment(\.timeZone, CourseWindowRow.anchorTimeZone)
+                .accessibilityIdentifier("med.courses.edit.endsOn")
                 if !Self.isRangeValid(startsOn: startsOn, endsOn: endsOn) {
                     HLFormErrorText(String(localized: "med.schedule.course.invalidRange"))
                         .font(.hlCaption)
@@ -45,22 +48,19 @@ struct MedicationCourseEditPage: View {
                 Text("med.courses.edit.footer")
                     .font(.hlCaption)
             }
+            .hlFormRowSurface()
             if let errorText {
                 Section { HLFormErrorText(errorText) }
+                    .hlFormRowSurface()
             }
             deleteSection
         }
+        .hlPageMargins()
         .navigationTitle(Text("med.courses.edit.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    Task { await save() }
-                }
-                .disabled(!canSave)
-                .accessibilityIdentifier("med.courses.edit.save")
-            }
-        }
+        // A pushed edit page: the check mark in the bar of the stack it is in,
+        // the page goes back once the course is saved.
+        .hlConfirmBar(.save(isEnabled: canSave) { await save() }, identifier: "med.courses.edit.save")
     }
 
     private var canSave: Bool {
@@ -70,39 +70,32 @@ struct MedicationCourseEditPage: View {
 
     private var deleteSection: some View {
         Section {
-            if confirmingDelete {
-                Text("med.courses.delete.question")
-                    .foregroundStyle(HLText.secondary)
-                Button("med.courses.delete.confirm", role: .destructive) {
-                    Task { await delete() }
-                }
-                .disabled(isWorking)
-                .accessibilityIdentifier("med.courses.edit.delete.confirm")
-                Button("Cancel") {
-                    confirmingDelete = false
-                }
-            } else {
-                Button("med.courses.delete.action", role: .destructive) {
-                    confirmingDelete = true
-                }
-                .disabled(isWorking)
-                .accessibilityIdentifier("med.courses.edit.delete")
-            }
+            // A course goes for good: the button asks first.
+            HLDeleteButton(
+                "med.courses.delete.action",
+                form: .row,
+                action: .confirmed(title: "med.courses.delete.question") { await delete() }
+            )
+            .disabled(isWorking)
+            .accessibilityIdentifier("med.courses.edit.delete")
         }
+        .hlFormRowSurface()
     }
 
     // MARK: - Writes
 
-    private func save() async {
+    /// `true` when the course is saved and the page may go back.
+    private func save() async -> Bool {
         isWorking = true
         errorText = nil
         defer { isWorking = false }
         let body = Self.body(startsOn: startsOn, endsOn: endsOn)
         do {
             try await model.update(course, startsOn: body.startsOn, endsOn: body.endsOn)
-            dismiss()
+            return true
         } catch {
             errorText = MedicationCoursesModel.message(for: error)
+            return false
         }
     }
 
@@ -114,7 +107,6 @@ struct MedicationCourseEditPage: View {
             try await model.delete(course)
             dismiss()
         } catch {
-            confirmingDelete = false
             errorText = MedicationCoursesModel.message(for: error)
         }
     }

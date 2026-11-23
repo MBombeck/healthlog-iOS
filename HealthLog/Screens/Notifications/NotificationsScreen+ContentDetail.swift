@@ -8,8 +8,8 @@ extension NotificationsScreen {
     @ViewBuilder
     var notificationContentCard: some View {
         if let detailed = store?.notificationContentDetailed {
-            // 1.4 B2 — what the switch does sits under its title; no footer.
-            HLSettingsCard(icon: "text.bubble", title: "notifications.content.title") {
+            // What the switch does sits under its title; no footer.
+            HLCard("notifications.content.title", layout: .rows) {
                 HLSettingsToggleRow(
                     title: "notifications.content.toggle",
                     description: "notifications.content.footer",

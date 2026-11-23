@@ -25,7 +25,7 @@ public actor OutboxQueue {
         case staleOwner
     }
 
-    /// Build 274 (public #4) — a refused background-execution lease, as its own
+    /// A refused background-execution lease, as its own
     /// error type rather than a `HLError.unknown` string.
     ///
     /// The refusal used to be indistinguishable from a decode failure, a full
@@ -77,7 +77,7 @@ public actor OutboxQueue {
         /// back-off (skip an op re-attempted within `attemptBackoff`). Mirrors
         /// `OutboxOperation.lastAttemptAt`.
         public var lastAttemptAt: Date?
-        /// **v0.13 WS — cross-user binding.** The user who owned this write at
+        /// **Cross-user binding.** The user who owned this write at
         /// enqueue time. Left `nil` by the repository enqueue sites; the
         /// `OutboxQueue.enqueue` chokepoint stamps the current signed-in
         /// `KeychainKey.userID` before persisting (single source of truth, so
@@ -85,20 +85,20 @@ public actor OutboxQueue {
         /// repo). A non-`nil` value passed in (tests) is respected as-is.
         public var ownerUserID: String?
 
-        /// **Audit B-2 — the server already took this write.** Stamped before the
+        /// **The server already took this write.** Stamped before the
         /// row is removed, so a failed removal cannot put the same operation back
         /// on the wire; the drain finishes such a row locally. See
         /// ``OutboxOperation/delivered``.
         public var delivered: Bool
 
-        /// **audit-v0162 H-4 — optimistic→server id remap key.** The entity id a
+        /// **Optimistic→server id remap key.** The entity id a
         /// PHI records/labs op concerns (a `create` stamps its `optimistic-<uuid>`,
         /// a dependent `update`/`delete` the id it targets). `OutboxReplayService`
         /// remaps siblings to the real server id once the create lands. `nil` for
         /// kinds without an optimistic-id chain. See `OutboxOperation.clientEntityId`.
         public var clientEntityId: String?
 
-        /// C4 — the replay's last note on this row, read back so an
+        /// The replay's last note on this row, read back so an
         /// "unconfirmed since" marker survives between passes (see
         /// `OutboxReplayService+Interruption`). Read-only mirror of
         /// `OutboxOperation.lastError`; nothing new is persisted.
@@ -143,7 +143,7 @@ public actor OutboxQueue {
         /// `updateMeasurement` payload: server route `PATCH /api/measurements/[id]`.
         /// The `patch` mirrors `MeasurementPatch` (value/measuredAt/notes).
         ///
-        /// **BP-pair semantics (T-1):** `diastolicId` + `diastolicValue` are
+        /// **BP-pair semantics:** `diastolicId` + `diastolicValue` are
         /// populated when the affected measurement is a `bloodPressure` row
         /// with both peers known (Aggregator merged sys + dia). Replay then
         /// re-issues two paired PATCHes against `[id]` (systolic-value) and
@@ -158,14 +158,14 @@ public actor OutboxQueue {
             /// persists `kind` purely so cache-invalidation on replay knows
             /// which `measurementSeries(kind:, days:)` buckets to drop.
             public let kind: MetricKind
-            /// Diastolic peer-row id for BP-pair edits (T-1). `nil` for
+            /// Diastolic peer-row id for BP-pair edits. `nil` for
             /// scalar measurements und für BP-Halbpaare die solo auf dem
             /// Server liegen (Aggregator-Fallback).
             public let diastolicId: String?
             /// Diastolic peer value for BP-pair edits. Used in the second
             /// PATCH leg against `diastolicId`. `nil` for non-BP payloads.
             public let diastolicValue: Double?
-            /// Glucose context for glucose-row edits (T-2). Persisted on the
+            /// Glucose context for glucose-row edits. Persisted on the
             /// outbox so the replay path can re-hydrate the
             /// `MeasurementPatch.glucoseContext` field (Wire-Codable
             /// suppresses it — the value would otherwise be lost across an
@@ -274,9 +274,24 @@ public actor OutboxQueue {
         public struct DeleteIntake: Codable, Sendable {
             public let medicationId: String
             public let eventId: String
-            public init(medicationId: String, eventId: String) {
+            /// #191 — the undo precondition; absent in entries queued before
+            /// 1.7, which decode with both `nil`.
+            public let expectedSyncVersion: Int?
+            public let expectedIdempotencyKey: String?
+            public init(
+                medicationId: String,
+                eventId: String,
+                expectedSyncVersion: Int? = nil,
+                expectedIdempotencyKey: String? = nil
+            ) {
                 self.medicationId = medicationId
                 self.eventId = eventId
+                self.expectedSyncVersion = expectedSyncVersion
+                self.expectedIdempotencyKey = expectedIdempotencyKey
+            }
+
+            public var expected: IntakeUndoPrecondition? {
+                IntakeUndoPrecondition(syncVersion: expectedSyncVersion, idempotencyKey: expectedIdempotencyKey)
             }
         }
 
@@ -324,7 +339,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.8.0 W10 — server-first Insights layout write. The full
+        /// Server-first Insights layout write. The full
         /// (server-filtered) layout is the idempotent replace body; replay
         /// re-issues the identical PUT under the persisted idempotency key.
         public struct UpdateInsightsLayout: Codable, Sendable {
@@ -334,7 +349,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.12 SP3 — `createMedicationSideEffect` payload. Replay re-issues
+        /// `createMedicationSideEffect` payload. Replay re-issues
         /// `POST /api/medications/[medicationId]/side-effects` with `body`.
         public struct CreateMedicationSideEffect: Codable, Sendable {
             public let medicationId: String
@@ -345,7 +360,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.12 SP3 — `deleteMedicationSideEffect` payload. Replay re-issues
+        /// `deleteMedicationSideEffect` payload. Replay re-issues
         /// `DELETE /api/medications/[medicationId]/side-effects/[logId]`.
         public struct DeleteMedicationSideEffect: Codable, Sendable {
             public let medicationId: String
@@ -356,7 +371,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.12 SP4 — `createMedicationInventory` payload. Replay re-issues
+        /// `createMedicationInventory` payload. Replay re-issues
         /// `POST /api/medications/[medicationId]/inventory` with `body`.
         public struct CreateMedicationInventory: Codable, Sendable {
             public let medicationId: String
@@ -367,7 +382,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.12 SP4 — `updateMedicationInventory` payload. Replay re-issues
+        /// `updateMedicationInventory` payload. Replay re-issues
         /// `PATCH /api/medications/[medicationId]/inventory/[itemId]`.
         public struct UpdateMedicationInventory: Codable, Sendable {
             public let medicationId: String
@@ -380,7 +395,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.12 SP4 — `deleteMedicationInventory` payload. Replay re-issues
+        /// `deleteMedicationInventory` payload. Replay re-issues
         /// `DELETE /api/medications/[medicationId]/inventory/[itemId]`.
         public struct DeleteMedicationInventory: Codable, Sendable {
             public let medicationId: String
@@ -391,7 +406,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.14.8 — `logCycleDayLog` payload. Replay POSTs the single entry to
+        /// `logCycleDayLog` payload. Replay POSTs the single entry to
         /// the bulk drain `POST /api/cycle/day-logs/bulk` under the persisted
         /// idempotency key; the entry's `externalId` makes the UPSERT idempotent.
         public struct LogCycleDayLog: Codable, Sendable {
@@ -401,7 +416,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.14.8 — `updateCycleDayLog` payload: `PATCH /api/cycle/day-logs/[id]`.
+        /// `updateCycleDayLog` payload: `PATCH /api/cycle/day-logs/[id]`.
         public struct UpdateCycleDayLog: Codable, Sendable {
             public let id: String
             public let patch: CycleDayLogPatch
@@ -435,7 +450,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.14.8 — `deleteCycleDayLog` payload: `DELETE /api/cycle/day-logs/[id]`.
+        /// `deleteCycleDayLog` payload: `DELETE /api/cycle/day-logs/[id]`.
         public struct DeleteCycleDayLog: Codable, Sendable {
             public let id: String
             public init(id: String) {
@@ -443,7 +458,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.14.8 — `cyclePeriod` payload: `POST /api/cycle/period`.
+        /// `cyclePeriod` payload: `POST /api/cycle/period`.
         public struct CyclePeriod: Codable, Sendable {
             public let request: CyclePeriodRequest
             public init(request: CyclePeriodRequest) {
@@ -451,7 +466,7 @@ public actor OutboxQueue {
             }
         }
 
-        /// v0.14.8 audit Wave A (C4.1) — `uploadWorkoutBatch` payload. Replay
+        /// `uploadWorkoutBatch` payload. Replay
         /// re-issues `POST /api/workouts/batch` (one chunk, ≤ the server's
         /// 100-workout cap — the importer chunks before calling
         /// `uploadBatch`) under the persisted idempotency key. The per-entry
@@ -467,7 +482,7 @@ public actor OutboxQueue {
         // W-B187 COACH-3 payloads live in `OutboxQueue+CoachAboutMe.swift`.
     }
 
-    /// **Phase 09 / plan 09-05 — one persistent-store open, deferred and shared.**
+    /// **One persistent-store open, deferred and shared.**
     ///
     /// The result of running the G-9 recovery ladder once. It is a value rather
     /// than a `ModelContainer` at the call site so the composition root can wrap
@@ -492,7 +507,7 @@ public actor OutboxQueue {
     private var openInFlight: Task<OutboxStore, Never>?
     private var continuations: [UUID: AsyncStream<[Operation]>.Continuation] = [:]
 
-    /// **v0.13 WS.** Resolves the currently signed-in `KeychainKey.userID` at
+    /// Resolves the currently signed-in `KeychainKey.userID` at
     /// enqueue time so `enqueue(_:)` can stamp every row's owner from a single
     /// chokepoint (no per-repository plumbing). Defaults to a real
     /// `KeychainStore` read; tests inject a deterministic provider. Reads
@@ -508,7 +523,7 @@ public actor OutboxQueue {
     /// provider is injected. Persistent and recovery queues never enable it.
     private let allowsUnauthenticatedTestLease: Bool
 
-    /// Build 274 (public #4) — every write to the shared-container store runs
+    /// Every write to the shared-container store runs
     /// under this lease; see `BackgroundExecutionLeasing`.
     private let backgroundLease: any BackgroundExecutionLeasing
 
@@ -523,7 +538,7 @@ public actor OutboxQueue {
     ///     `ModelConfiguration(isStoredInMemoryOnly: true)` — meant for tests.
     ///   - currentOwnerProvider: resolves the signed-in `KeychainKey.userID`
     ///     for the v0.13 WS owner stamp. Defaults to a live Keychain read.
-    ///   - backgroundLease: Build 274 (public #4) — the background-execution
+    ///   - backgroundLease: Build 274 — the background-execution
     ///     lease every persist runs under. Defaults to the unconditional one.
     public init(
         inMemory: Bool = false,
@@ -542,7 +557,7 @@ public actor OutboxQueue {
         self.backgroundLease = backgroundLease
     }
 
-    /// **Phase 09 / plan 09-05 — the deferred production entry point.**
+    /// **The deferred production entry point.**
     ///
     /// Constructs a queue that has opened nothing. The first operation (or an
     /// explicit ``prepareStore()``) runs `open` exactly once, and every arrival
@@ -552,7 +567,7 @@ public actor OutboxQueue {
     /// (``recoverOrDegradeStore()``), so it does not throw: a corrupted offline
     /// store is bad, and failing every outbox write over it is worse.
     ///
-    /// Build 274 (public #4) — `backgroundLease` is the assertion every persist
+    /// `backgroundLease` is the assertion every persist
     /// runs under; the production factory passes the UIKit one.
     public static func deferred(
         _ open: @escaping @Sendable () -> StoreHandle,
@@ -568,7 +583,7 @@ public actor OutboxQueue {
         )
     }
 
-    /// Build 274 (public #4) — takes the background-execution lease without a
+    /// Takes the background-execution lease without a
     /// default so the deferred production path always states which one it uses.
     private init(
         deferredOpen: @escaping @Sendable () -> StoreHandle,
@@ -593,7 +608,7 @@ public actor OutboxQueue {
     /// Production callers should otherwise use `init(inMemory:)` or
     /// `makeWithRecovery()`.
     ///
-    /// Build 274 (public #4) — carries the same defaulted `backgroundLease`
+    /// Carries the same defaulted `backgroundLease`
     /// seam as the other initializers, so the stored lease is stated by every
     /// construction path rather than inferred.
     public init(
@@ -643,7 +658,7 @@ public actor OutboxQueue {
     /// * **Cancellation-proof.** The task is detached and non-throwing, so a
     ///   cancelled first caller cannot cancel the open every other caller is
     ///   waiting on — the handle survives its first user.
-    /// Build 273 (A15) — whether a live (not dead-lettered) row already waits
+    /// Whether a live (not dead-lettered) row already waits
     /// under `idempotencyKey`. One additive lookup; the HealthKit stats
     /// coordinator asks before it re-enqueues a re-planned chunk.
     public func hasLiveOperation(idempotencyKey: String) async -> Bool {
@@ -701,7 +716,7 @@ public actor OutboxQueue {
     /// exactly once, on first use. The ladder itself lives in
     /// `OutboxQueue+WriteAhead.swift` (file_length discipline).
     ///
-    /// Build 274 (public #4) — this factory serves the App-Intent stack in BOTH
+    /// This factory serves the App-Intent stack in BOTH
     /// processes (`IntentDependencies`), and the widget extension may not touch
     /// `UIApplication`, so it keeps the unconditional lease. The queue that
     /// carries the HealthKit observer wake — the one build 271 died on — is the
@@ -711,7 +726,7 @@ public actor OutboxQueue {
         deferred { recoverOrDegradeStore() }
     }
 
-    /// **Audit B-2 / B-11 — the two post-success store writes, as fault seams.**
+    /// **The two post-success store writes, as fault seams.**
     /// A successful dispatch is followed by an entity remap and a row removal,
     /// and the fix is about what happens when either of those LOCAL writes
     /// fails — a state no stubbed HTTP response can produce. Test-only (the
@@ -723,6 +738,17 @@ public actor OutboxQueue {
     }
 
     private var injectedFaults: Set<InjectableFault> = []
+
+    /// Rows whose first send is running in this process right now (see
+    /// `writeAhead`). They are on disk so a crash cannot lose them, but they
+    /// are not waiting for anything: the replay leaves them alone and the
+    /// waiting count leaves them out. Empty after a restart by construction,
+    /// which is exactly when such a row becomes the replay's to send.
+    var liveSendIDs: Set<UUID> = []
+
+    /// Counts `broadcast()` calls, so a write that came and went without an
+    /// announcement can tell whether an observer saw it in between.
+    private(set) var broadcastGeneration: UInt64 = 0
 
     /// Test-only: make the named store write throw on every call until cleared.
     func injectFault(_ fault: InjectableFault) {
@@ -755,7 +781,7 @@ public actor OutboxQueue {
         }
     }
 
-    /// b177 W-SYNCPROGRESS — read-only backlog count for sync-progress
+    /// Read-only backlog count for sync-progress
     /// surfaces. One snapshot fetch; callers needing LIVE counts subscribe to
     /// `changes` and read `ops.count` instead.
     public var pendingCount: Int {
@@ -785,7 +811,7 @@ public actor OutboxQueue {
     }
 
     public func enqueue(_ op: Operation) async throws {
-        // v0.13 WS — stamp the owning user-id from the single chokepoint so
+        // Stamp the owning user-id from the single chokepoint so
         // every repository enqueue site is covered without per-call plumbing.
         // A caller that already set `ownerUserID` (tests) wins; otherwise we
         // resolve the live signed-in user.
@@ -861,14 +887,14 @@ public actor OutboxQueue {
         }
     }
 
-    /// Build 274 (public #4) — the single write chokepoint into the app-group
+    /// The single write chokepoint into the app-group
     /// store. Both the container open and the save run inside a
     /// background-execution lease; when the system grants no time the row is NOT
     /// written and the call throws ``WriteRefusal/noBackgroundExecutionTime``,
     /// which every caller already treats as "not persisted" (the health-sync
     /// path holds its page and re-collects on the next wake).
-    private func persist(_ op: Operation, ownerUserID: String?) async throws {
-        // Phase 07 — the forward-compatibility sentinel is a *read* shape. It
+    private func persist(_ op: Operation, ownerUserID: String?, announce: Bool = true) async throws {
+        // The forward-compatibility sentinel is a *read* shape. It
         // must never reach disk, or a later build would replay a row whose real
         // contract this build had already overwritten.
         guard op.kind != .unrecognized else {
@@ -876,8 +902,8 @@ public actor OutboxQueue {
         }
         let id = op.id, kindRaw = op.kind.rawValue, payload = op.payload
         let idempotencyKey = op.idempotencyKey, createdAt = op.createdAt, attempts = op.attempts
-        let clientEntityId = op.clientEntityId
-        // Build 274 (public #4) — the store lives in the app-group container;
+        let clientEntityId = op.clientEntityId, lastError = op.lastError
+        // The store lives in the app-group container;
         // a SQLite lock held across a suspension is a RunningBoard kill.
         //
         // `resolvedStore()` is resolved INSIDE the lease, not before it. On the
@@ -894,13 +920,28 @@ public actor OutboxQueue {
                 createdAt: createdAt,
                 attempts: attempts,
                 ownerUserID: ownerUserID,
-                clientEntityId: clientEntityId
+                clientEntityId: clientEntityId,
+                lastError: lastError
             )
         }
         guard persisted != nil else {
             throw WriteRefusal.noBackgroundExecutionTime
         }
-        await broadcast()
+        if announce { await broadcast() }
+    }
+
+    /// `enqueue` without the announcement: for a row whose send starts in the
+    /// same breath. Observers hear of it only if it stays.
+    func enqueueUnannounced(_ op: Operation) async throws {
+        try await persist(op, ownerUserID: op.ownerUserID ?? currentOwnerProvider(), announce: false)
+    }
+
+    /// `remove` without the announcement, for the same row once it has landed.
+    func removeUnannounced(id: UUID) async throws {
+        if injectedFaults.contains(.remove) {
+            throw HLError.unknown("injected outbox remove fault")
+        }
+        try await resolvedStore().delete(id: id)
     }
 
     private nonisolated static func canonicalOwner(_ ownerUserID: String?) -> String {
@@ -919,7 +960,7 @@ public actor OutboxQueue {
         await broadcast()
     }
 
-    /// **Audit B-2 — mark the row as taken by the server, before removing it.**
+    /// **Mark the row as taken by the server, before removing it.**
     /// See ``OutboxOperation/delivered``: this is what makes a failed `remove`
     /// harmless instead of a duplicate write on the next drain.
     public func markDelivered(id: UUID) async throws {
@@ -927,7 +968,7 @@ public actor OutboxQueue {
         await broadcast()
     }
 
-    /// **Audit B-3 — dead-letter one named row (payload this build cannot read).**
+    /// **Dead-letter one named row (payload this build cannot read).**
     /// Retains the write, drops it out of the replay snapshot, leaves it
     /// recoverable via ``resubmitDeadLetter(id:)``. Returns `true` when a live
     /// row matched.
@@ -950,7 +991,7 @@ public actor OutboxQueue {
         await broadcast()
     }
 
-    /// audit-v0162 H-4 — remap an optimistic entity id to the server id on every
+    /// Remap an optimistic entity id to the server id on every
     /// sibling row once the create lands. Returns the number of rows rewritten.
     @discardableResult
     public func applyEntityRemap(from optimisticId: String, to serverId: String) async throws -> Int {
@@ -1010,6 +1051,7 @@ public actor OutboxQueue {
     }
 
     func broadcast() async {
+        broadcastGeneration &+= 1
         let snap = await snapshot
         for c in continuations.values {
             c.yield(snap)

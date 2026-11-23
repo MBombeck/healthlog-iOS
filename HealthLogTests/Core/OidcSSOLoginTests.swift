@@ -68,7 +68,7 @@
         @MainActor
         private final class StubAnchor: ASPresentationAnchorProvider {
             func anchor() -> ASPresentationAnchor {
-                ASPresentationAnchor()
+                SceneAnchorProvider.windowlessAnchor()
             }
         }
 
@@ -263,7 +263,7 @@
 
         // MARK: - 4) each error reason maps to a surfaced message
 
-        /// R2 / #115 A2 — the server's real spellings (`oidc_<snake_case>`,
+        /// The server's real spellings (`oidc_<snake_case>`,
         /// `src/app/api/auth/oidc/login/route.ts` + `…/callback/route.ts` at
         /// tag v1.39.6, listed in the OpenAPI description of
         /// `GET /api/auth/oidc/login`). This test used to pin the hyphenated

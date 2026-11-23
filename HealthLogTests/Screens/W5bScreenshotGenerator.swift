@@ -7,7 +7,7 @@ import Testing
 /// representative fixture data via `ImageRenderer`, in light + dark, and writes
 /// PNGs to `.planning/v012-megamarathon/W5b-screens/`.
 ///
-/// 1.4 B4 — the derived re-frames block ("More from your data") it also
+/// The derived re-frames block ("More from your data") it also
 /// rendered was deleted; every derived score is a ring tile now.
 ///
 /// **Why render-to-PNG instead of a live demo-tenant capture.** The card

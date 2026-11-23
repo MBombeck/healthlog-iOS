@@ -7,7 +7,7 @@
     import Testing
     import UIKit
 
-    /// **U1 (#16) — die neue Sync-Anzeige oben im Dashboard, gerendert.**
+    /// **Die neue Sync-Anzeige oben im Dashboard, gerendert.**
     ///
     /// Hostet Glyph-Platz und Statusfeld in einem echten `UIWindow`
     /// (das Test-Bundle läuft in der App) und prüft, dass in den erwarteten
@@ -80,6 +80,8 @@
             .environment(store)
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(_ view: some View, name: String, dark: Bool) throws -> UIImage {
             let size = CGSize(width: 393, height: 420)
             let host = UIHostingController(rootView: AnyView(view))
@@ -126,19 +128,32 @@
         }
 
         /// Largest luminance spread inside a rectangle (every pixel).
+        ///
+        /// The renderer may hand back 16 bits per channel; read byte by byte,
+        /// a one-step shade then looks like a wide spread. The image is drawn
+        /// into 8-bit RGBA first, so a step of one stays a step of one.
         private func luminanceSpread(_ image: UIImage, in rect: CGRect) -> Int {
-            guard let cg = image.cgImage, let data = cg.dataProvider?.data, let ptr = CFDataGetBytePtr(data) else {
-                return Int.max
+            guard let source = image.cgImage else { return Int.max }
+            let width = source.width, height = source.height, bpr = width * 4, bpp = 4
+            var pixels = [UInt8](repeating: 0, count: bpr * height)
+            let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+                guard let context = CGContext(
+                    data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                    bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                ) else { return false }
+                context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+                return true
             }
-            let scale = CGFloat(cg.width) / image.size.width
-            let x0 = max(0, Int(rect.minX * scale)), x1 = min(cg.width, Int(rect.maxX * scale))
-            let y0 = max(0, Int(rect.minY * scale)), y1 = min(cg.height, Int(rect.maxY * scale))
-            let bpr = cg.bytesPerRow, bpp = cg.bitsPerPixel / 8
+            guard drawn else { return Int.max }
+            let scale = CGFloat(width) / image.size.width
+            let x0 = max(0, Int(rect.minX * scale)), x1 = min(width, Int(rect.maxX * scale))
+            let y0 = max(0, Int(rect.minY * scale)), y1 = min(height, Int(rect.maxY * scale))
             var minLum = 255, maxLum = 0
             for y in y0 ..< y1 {
                 for x in x0 ..< x1 {
                     let p = y * bpr + x * bpp
-                    let lum = (Int(ptr[p]) + Int(ptr[p + 1]) + Int(ptr[p + 2])) / 3
+                    let lum = (Int(pixels[p]) + Int(pixels[p + 1]) + Int(pixels[p + 2])) / 3
                     minLum = min(minLum, lum)
                     maxLum = max(maxLum, lum)
                 }
@@ -146,7 +161,7 @@
             return maxLum - minLum
         }
 
-        /// U5 (1.1.1) — the strip just inside the panel's top edge, above its
+        /// The strip just inside the panel's top edge, above its
         /// first text line. On the glass surface the header's date line
         /// ("Samstag, 4. Oktober") refracted into exactly this strip as a faint
         /// ghost (spread 5 light, 22 dark); the opaque fill keeps it flat.
@@ -168,7 +183,7 @@
             let store = makeStore(minimumSyncingHold: .seconds(3))
             stub(status: 200)
             let handshake = Task { await store.handshake() }
-            // T1 (1.4) — awaited (bounded by time), not a 100 ms sleep: the
+            // Awaited (bounded by time), not a 100 ms sleep: the
             // glyph is read as soon as the handshake has started, well inside
             // the 3 s hold, however slowly a loaded machine gets there.
             await phase09AwaitCondition { await MainActor.run { store.indicatorGlyph == .syncing } }
@@ -196,7 +211,7 @@
             return (diagnostics, { defaults.removePersistentDomain(forName: suite) })
         }
 
-        // INT-L (1.1.1) — no badge on the avatar; each attention state is a
+        // No badge on the avatar; each attention state is a
         // calm glyph in the slot next to it, and the panel reads as plain text.
 
         @Test("Fehlgeschlagen: eigenes Symbol im Platz neben dem Avatar", arguments: [false, true])

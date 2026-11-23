@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **W42 (v0.11) — `MedicationSchedule.isWeeklyCadence` correctness.**
+/// **`MedicationSchedule.isWeeklyCadence` correctness.**
 ///
 /// `isWeeklyCadence` gates the card + detail glyph-track render between the
 /// daily strip and the weekly "X Dosistage" due-count surface. The predicate

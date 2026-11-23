@@ -62,6 +62,82 @@ enum IllnessPresentation {
     }
 }
 
+/// What one journal row says, in the app's two-line row: the name, one
+/// line of side facts (type, span, flares, note), the course as a status
+/// under nothing else. Pure, so the row's wording is testable.
+struct IllnessEpisodeRowContent: Equatable {
+    let title: String
+    let detail: String?
+    let status: String
+    let symbol: String
+    /// What VoiceOver reads for the whole row, as before the two-line form.
+    let spoken: String
+
+    init(episode: IllnessEpisodeDTO, childCount: Int = 0) {
+        let span = Self.span(of: episode)
+        let flares = childCount > 0
+            ? String(format: String(localized: "illness.journal.children.count"), childCount)
+            : nil
+        let note = episode.note?.isEmpty == false ? String(localized: "Note") : nil
+        title = episode.label
+        detail = HLRowDetail.joined([episode.type.localizedLabel, span, flares, note])
+        status = episode.lifecycle.localizedLabel
+        symbol = episode.type.icon
+        spoken = String(
+            format: String(localized: "illness.row.a11y"),
+            episode.label,
+            episode.type.localizedLabel,
+            span
+        )
+    }
+
+    /// "Seit 3. Nov. 2026" while it runs, "3. Nov. 2026 bis 9. Nov. 2026"
+    /// once it ended.
+    static func span(of episode: IllnessEpisodeDTO) -> String {
+        if let resolvedAt = episode.resolvedAt, !resolvedAt.isEmpty {
+            return String(
+                format: String(localized: "illness.journal.onsetResolved"),
+                IllnessDateFormat.mediumDate(episode.onsetAt),
+                IllnessDateFormat.mediumDate(resolvedAt)
+            )
+        }
+        return String(
+            format: String(localized: "illness.journal.onsetActive"),
+            IllnessDateFormat.mediumDate(episode.onsetAt)
+        )
+    }
+}
+
+/// What one logged day says as a history row: the date as title, the
+/// symptoms and the note on the one side line, the day's impact as status.
+/// The fever is the row's value and needs the account's unit, so the view
+/// sets it.
+struct IllnessDayLogRowContent: Equatable {
+    let title: String
+    let detail: String?
+    let impact: String?
+
+    init(log: IllnessDayLogDTO) {
+        title = IllnessDateFormat.mediumDate(log.date)
+        let symptoms: [String?] = log.symptoms.map(Self.symptomLabel)
+        detail = HLRowDetail.joined(symptoms + [log.note])
+        impact = log.functionalImpact.map { IllnessPresentation.impactLabel(for: $0) ?? String($0) }
+    }
+
+    /// The catalogue name of a symptom, with its grade where one was set.
+    static func symptomLabel(_ symptom: IllnessSymptom) -> String {
+        let base: String = if let entry = IllnessSymptomCatalog.entry(for: symptom.key) {
+            String(localized: String.LocalizationValue(entry.labelKey))
+        } else {
+            symptom.key.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+        if let severity = symptom.severity {
+            return "\(base) (\(severity))"
+        }
+        return base
+    }
+}
+
 struct IllnessDeleteConfirmation: Equatable {
     private(set) var candidate: IllnessEpisodeDTO?
 
@@ -211,7 +287,7 @@ enum IllnessDateFormat {
     /// Medium date (e.g. "Jun 10, 2026") from an ISO-8601 instant or a
     /// `YYYY-MM-DD` day key. Falls back to the raw string if unparseable. Routes
     /// through ``HLDateFormat`` so the field order honours the user's
-    /// server-backed date-format preference (A360-1 H1).
+    /// server-backed date-format preference.
     static func mediumDate(_ raw: String) -> String {
         guard let date = parse(raw) else { return raw }
         return HLDateFormat.date(date, style: .abbreviated)

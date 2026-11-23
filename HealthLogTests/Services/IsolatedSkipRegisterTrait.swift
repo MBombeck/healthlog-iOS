@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 
-/// INT-A — every sync path writes refusals into the ONE skip register
+/// Every sync path writes refusals into the ONE skip register
 /// (`HealthKitSkippedRowRegister.current`). A suite that drives such a path
 /// carries this trait: each test runs against its own in-memory register,
 /// never the app's shared file, and reads it back through `.current`.

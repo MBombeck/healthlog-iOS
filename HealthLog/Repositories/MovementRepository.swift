@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.5 MOVE (#133)** — the reads behind the "Unterwegs" section of the
+/// The reads behind the "Unterwegs" section of the
 /// environment screen and the Dawarich row in Settings › Integrations.
 ///
 /// A thin read-only `actor` like ``EnvironmentRepository``: no outbox, no disk

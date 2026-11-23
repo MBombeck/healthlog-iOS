@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **L10N-MH — the questionnaire text, the `englishOriginal` switch and the
+/// **The questionnaire text, the `englishOriginal` switch and the
 /// `wording` record, against servers with and without the field.**
 ///
 /// Real `APIClient` + `MockURLProtocol`. The interface language and the

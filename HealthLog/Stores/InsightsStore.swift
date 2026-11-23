@@ -14,7 +14,7 @@ public final class InsightsStore {
     /// the UI actually paints — derived from the same data sources as
     /// comprehensive but already iOS-shaped (id/title/summary/severity).
     public private(set) var cards: [Insight] = []
-    /// F1 (1.1.0) — `true` once `insights/cards` has answered (fresh, cached,
+    /// `true` once `insights/cards` has answered (fresh, cached,
     /// or a failure that kept a last-known list). Only then is an empty
     /// ``cards`` the server's word ("no rule fired") rather than "not asked
     /// yet"; the overview's empty state keys off this, never off a list that
@@ -34,7 +34,7 @@ public final class InsightsStore {
     /// Wall-clock when the visible payload was last refreshed.
     public private(set) var lastUpdatedAt: Date?
 
-    /// v0.7.1 B1.2 (W-INSIGHTS-SKELETON-GATE, A-UIUX-H-1) — latched the first
+    /// Latched the first
     /// time the comprehensive surface settles to ANY terminal SWR arm
     /// (`.cached` / `.fresh` / `.failed`) or a `loadDirect()` completes. Once
     /// the primary surface has resolved, the screen has enough to lay out a
@@ -61,14 +61,14 @@ public final class InsightsStore {
     /// Failures surface via ``error`` and leave the previously-loaded payload
     /// intact (graceful degradation).
     ///
-    /// **#114 / #115 · 0.2 — no AI-consent gate.** `insights/comprehensive` and
+    /// **No AI-consent gate.** `insights/comprehensive` and
     /// `insights/cards` are deterministic data (server v1.39: cards are always
     /// `provider: "rules"`); no model is reached and nothing leaves the
     /// account, so they load whatever the consent or the AI capabilities say.
     /// The consent gate stays on the one generating call, `POST
     /// insights/generate` (``DailyBriefingStore``).
     public func load() async {
-        // 14-06 — see `MedicationsStore.load`. `.insightsWarm` is a member of the
+        // See `MedicationsStore.load`. `.insightsWarm` is a member of the
         // same bounded foreground pass, so this stream meets the same 250 ms
         // cancellation the medications list does. Declared before the first
         // suspension point, which is both where 13-03 put it and what keeps the
@@ -103,7 +103,7 @@ public final class InsightsStore {
     private func loadDirect() async {
         isLoading = true
         error = nil
-        // v0.7.1 B1.2 — the surface has resolved once this returns regardless
+        // The surface has resolved once this returns regardless
         // of success/failure; a failed fetch still flips the skeleton gate so
         // the screen can paint its error/empty composition instead of
         // spinning the full silhouette forever.
@@ -137,7 +137,7 @@ public final class InsightsStore {
                 isShowingStaleCache = true
                 lastUpdatedAt = Date()
                 isLoading = false
-                // v0.7.1 B1.2 — a cache hit is enough to lay out a coherent
+                // A cache hit is enough to lay out a coherent
                 // first paint; latch the skeleton gate so the SWR revalidate
                 // that follows keeps the (stale) composition instead of
                 // re-flashing the silhouette.
@@ -219,13 +219,13 @@ public final class InsightsStore {
         isShowingStaleCache = false
         feedbackSubmitted = []
         error = nil
-        // v0.7.1 B1.2 — reset the skeleton latch so the next sign-in cold
+        // Reset the skeleton latch so the next sign-in cold
         // path shows the coherent silhouette again instead of inheriting the
         // prior session's "already settled" state.
         hasSettledOnce = false
     }
 
-    /// v0.7.1 B1.2 (W-INSIGHTS-SKELETON-GATE, A-UIUX-H-1) — pure fan-out
+    /// Pure fan-out
     /// readiness aggregator. The Insights surface fans out ~7 parallel loads
     /// (comprehensive + cards here, plus health-score / briefing /
     /// measurements / mood / dashboard / targets across sibling stores); with
@@ -279,7 +279,7 @@ public final class InsightsStore {
         return isLoading
     }
 
-    // B2 (v0.4.1): `setProvider(_:)` was removed. The AI-Provider is now owned by
+    // `setProvider(_:)` was removed. The AI-Provider is now owned by
     // a dedicated `AIProviderStore` backed by `GET/PATCH /api/user/ai-provider`
     // (see `HealthLog/Stores/AIProviderStore.swift`). InsightsStore is the
     // *consumer* of generated cards/briefings, not the editor of provider state.

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **audit-v0162 M-7 — the gate that was built and never wired.**
+/// **The gate that was built and never wired.**
 ///
 /// `MedicationsStore.derivedIntakeSynthesisEnabledProvider` shipped as
 /// `= { true }` with an "until wired" note; only tests ever assigned it, so the

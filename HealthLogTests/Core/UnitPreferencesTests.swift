@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.11 N1 — locks the display-unit conversion contract end-to-end:
+/// Locks the display-unit conversion contract end-to-end:
 /// pure conversion math (`UnitPreferences`), the `MetricKind.unitFamily`
 /// routing, and the unit-aware formatters on `DashboardMetric`.
 ///

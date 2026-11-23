@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #5 — the daily forced re-login, reproduced at the seam where it happened.
+/// The daily forced re-login, reproduced at the seam where it happened.
 ///
 /// The 24 h access token expires while a dozen requests are on the wire. They
 /// all get 401, single-flight folds them onto ONE rotation (A → B) and they

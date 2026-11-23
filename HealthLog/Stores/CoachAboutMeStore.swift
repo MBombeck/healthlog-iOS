@@ -37,12 +37,12 @@ public final class CoachAboutMeStore: BoxBackedPHIStore {
         case failed
     }
 
-    /// **COACH-3** — questions currently being adopted/dismissed (drives the
+    /// Questions currently being adopted/dismissed (drives the
     /// per-row spinner + disables double-taps). Keyed by the exact question
     /// text (server identifies questions by text, not id).
     public private(set) var inFlightQuestions: Set<String> = []
 
-    /// **COACH-3** — outcome of the most recent clarifying-question action,
+    /// Outcome of the most recent clarifying-question action,
     /// for an inline confirmation / error note. Reset on the next action.
     public enum QuestionActionOutcome: Equatable, Sendable {
         case idle
@@ -116,9 +116,9 @@ public final class CoachAboutMeStore: BoxBackedPHIStore {
         saveOutcome = .idle
     }
 
-    // MARK: - Clarifying-question loop (COACH-3)
+    // MARK: - Clarifying-question loop
 
-    /// **COACH-3** — adopt a pending clarifying-question answer into the
+    /// Adopt a pending clarifying-question answer into the
     /// matching self-context field. The user types the answer in their own
     /// words (`answer`); the server picks the target field from the question
     /// wording, appends, and dedupes. We dismiss the question optimistically
@@ -152,7 +152,7 @@ public final class CoachAboutMeStore: BoxBackedPHIStore {
         }
     }
 
-    /// **COACH-3** — dismiss a pending clarifying question without answering
+    /// Dismiss a pending clarifying question without answering
     /// it. Optimistic removal from the list; the server returns the remaining
     /// set, which we adopt as the source of truth. On failure the question is
     /// restored.
@@ -179,7 +179,7 @@ public final class CoachAboutMeStore: BoxBackedPHIStore {
         }
     }
 
-    /// **COACH-3** — "remember this": fold a user's own chat statement into the
+    /// "remember this": fold a user's own chat statement into the
     /// self-context. No `question` is sent — the server matches the target
     /// field from the statement text itself (v1.16.8). Returns the adopt
     /// result so the chat surface can show a quiet confirmation ("Gemerkt"),
@@ -227,7 +227,7 @@ public final class CoachAboutMeStore: BoxBackedPHIStore {
         didLoad = false
     }
 
-    /// **W-PHI-HARDENING (G5)** — box-backed PHI conformance so the
+    /// Box-backed PHI conformance so the
     /// ``MiniCoachBox`` logout registry can clear this store generically and the
     /// completeness suite can verify it. Forwards to ``clearOnLogout()``.
     public func clearPHIOnLogout() async {

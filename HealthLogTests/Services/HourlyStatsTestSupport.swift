@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **X4 (1.3, #138)** — fixtures for the hourly `stats:` suites.
+    /// Fixtures for the hourly `stats:` suites.
     ///
     /// The API records every batch POST (its `syncTrigger`, the external ids
     /// and the entry instants) and answers each entry `inserted`, or throws
@@ -217,7 +217,6 @@ import Testing
                 statisticsService: reader,
                 cache: cache,
                 uploader: uploader,
-                featureFlags: AlwaysOnFeatureFlags(),
                 calendar: HourlyFakeReader.calendar(zone),
                 clock: { Self.now },
                 admission: { lease },

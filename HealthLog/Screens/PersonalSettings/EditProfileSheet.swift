@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// SET-6 (AUDIT-QOL-UX §5) — modal presentation wrapper for `EditProfileScreen`.
+/// Modal presentation wrapper for `EditProfileScreen`.
 ///
 /// Every other edit surface in the app — `EditMeasurementSheet`,
 /// `EditMedicationSheet`, `EditMoodSheet` — is presented as a **sheet** (an edit
@@ -11,23 +11,15 @@ import SwiftUI
 ///
 /// The screen itself auto-saves (`EditProfileScreen` debounces field commits and
 /// flushes on `onDisappear`), so there is no Save button — the trailing toolbar
-/// hosts the screen's own transient "Saved" cue. A leading **Done** button
-/// dismisses the sheet (the auto-save `onDisappear` flush fires on dismissal,
-/// so nothing is lost). `.form` height + drag indicator come from the canonical
-/// `hlSheetPresentation` token, matching the other edit sheets.
+/// hosts the screen's own transient "Saved" cue. The scaffold's Done check
+/// mark dismisses the sheet (the auto-save `onDisappear` flush fires on
+/// dismissal, so nothing is lost).
 struct EditProfileSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
-        NavigationStack {
+        // The screen saves each field as it goes; the check mark only
+        // leaves, and the flush on disappear keeps the last edit.
+        HLSheetScaffold("Edit Profile", action: .done()) {
             EditProfileScreen()
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(String(localized: "Done")) { dismiss() }
-                            .accessibilityIdentifier("editProfile.done")
-                    }
-                }
         }
-        .hlSheetPresentation(.form)
     }
 }

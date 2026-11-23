@@ -4,7 +4,7 @@ import Foundation
 
 /// The doctor report's fixed labels in the report language. Since 1.5 every
 /// label is a key of `DoctorReport.xcstrings` (``DoctorReportStrings``); the
-/// per-language branches that came with Dutch (PR #29) became that table, so a
+/// per-language branches that came with Dutch became that table, so a
 /// new report language is a translation, not a code change.
 enum LocaleText {
     static func coverTitle(for locale: ReportLocale) -> String {

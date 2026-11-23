@@ -35,59 +35,43 @@ struct InsightsOverviewHeader: View {
     let onAskCoach: () -> Void
 
     @Environment(InsightsTargetsStore.self) private var insightsTargetsStore
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        // DRIFT-2 — route through the canonical `InsightsPageHeader` so the
-        // overview shares ONE header primitive with the metric / Mood pages.
-        InsightsPageHeader(
+        // The canonical `HLTabHeader` with typed actions: one glass group in
+        // the fixed order (page setting, coach), like every Insights page.
+        HLTabHeader(
             "Insights",
-            accessibilityIdentifierSuffix: "overview"
-        ) {
-            // W-NATIVE-REORDER — single always-on customise button, the SHARED
-            // equal-sized header circle. Shown only when there are targets.
-            if !insightsTargetsStore.targets.isEmpty {
-                InsightsHeaderActionCircle(
-                    systemImage: "slider.horizontal.3",
-                    accessibilityLabelText: String(localized: "Customise insights"),
-                    accessibilityHintText: String(localized: "Reorder, add, or remove tiles"),
-                    accessibilityIdentifier: "insights.header.customiseMenu"
-                ) {
-                    onCustomize()
-                }
-            }
+            titleIdentifier: "insights.page.header.title.overview",
+            actions: headerActions
+        )
+    }
 
-            // DRIFT-3 — the Coach affordance is the SAME monochrome, STATIC
-            // `InsightsHeaderActionCircle(sparkles)` used on every other Insights
-            // header. Task #53 — shown in `.onDevice` + `.online`.
-            // #115 · 0.2 — and only while the server's `coach` capability
-            // offers an entry point (`appContainer.offersCoach`).
-            if aiSurfacesVisible, appContainer.offersCoach {
-                InsightsHeaderActionCircle(
-                    systemImage: "sparkles",
-                    accessibilityLabelText: String(localized: "Ask the coach"),
-                    accessibilityIdentifier: "InsightsScreen.askCoachCollapsedCoin.header"
-                ) {
-                    // Y9-E — Quick-Launch to Chat.
-                    onAskCoach()
-                }
-                .transition(reduceMotion ? .identity : .opacity)
-            } else if coachReengageAvailable {
-                // b182 (F1) — Coach suppressed but a server provider exists and
-                // consent is missing/declined. Offer a re-engage entry in the SAME
-                // header slot so the surface is never a silent dead end.
-                InsightsHeaderActionCircle(
-                    systemImage: "sparkles",
-                    accessibilityLabelText: String(localized: "Enable the coach"),
-                    accessibilityHintText: String(localized: "Opens the assistant consent choice"),
-                    accessibilityIdentifier: "InsightsScreen.enableCoachCoin.header"
-                ) {
-                    reengageCoach()
-                }
-                .transition(reduceMotion ? .identity : .opacity)
-            }
+    private var headerActions: HLTabHeaderActions {
+        var items: [HLTabHeaderAction] = []
+        // Customising the overview, only when there are targets to show.
+        if !insightsTargetsStore.targets.isEmpty {
+            items.append(.settings(label: "Customise insights", identifier: "insights.header.customiseMenu") {
+                onCustomize()
+            })
         }
+        // The coach while its capability offers an entry point; with the
+        // coach held back for a missing consent, the same place offers to
+        // turn it on, so the surface is never a dead end.
+        if aiSurfacesVisible, appContainer.offersCoach {
+            items.append(.coach(identifier: "InsightsScreen.askCoachCollapsedCoin.header") {
+                onAskCoach()
+            })
+        } else if coachReengageAvailable {
+            items.append(HLTabHeaderAction(
+                role: .coach,
+                systemImage: "sparkles",
+                label: "Enable the coach",
+                identifier: "InsightsScreen.enableCoachCoin.header",
+                isSelected: false,
+                kind: .button { reengageCoach() }
+            ))
+        }
+        return HLTabHeaderActions(items)
     }
 
     // Gates duplicated here (not shared with the Coach slot) so their
@@ -106,7 +90,6 @@ struct InsightsOverviewHeader: View {
             aiMode: container.aiMode,
             coachCapability: container.aiCapabilityGate.reportsCapabilities
                 ? container.aiCapabilityGate.state(.coach) : nil,
-            hasServer: backend.hasServer,
             resolvedProvider: provider,
             hasConsentForProvider: container.aiConsentStore.hasConsent(for: provider),
             isServerManagedAvailable: container.aiProviderStore.config?.usesProviderOpaqueAIConsent == true,
@@ -131,18 +114,17 @@ struct InsightsCoachSlot: View {
     let appContainer: AppContainer?
 
     @Environment(SettingsStore.self) private var settings
-    @Environment(BackendAvailability.self) private var backend
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if coachReengageAvailable, !settings.coachHeroDismissed {
-            // b182 (F1) — calm re-engage card when the Coach is suppressed but a
+            // Calm re-engage card when the Coach is suppressed but a
             // server provider exists and consent is missing/declined.
             CoachReengageCard(action: { reengageCoach() })
                 .transition(reduceMotion ? .identity : .opacity)
         }
 
-        // ── COACH CADENCE SUGGESTIONS — proactive accept/dismiss cards (#30). ──
+        // ── COACH CADENCE SUGGESTIONS — proactive accept/dismiss cards. ──
         // Calm cards (NOT the colourful hero); the store owns opt-in + module +
         // online gating and self-suppresses when there is nothing to offer.
         if coachModuleEnabled, appContainer.offersCoach, let cadenceStore = appContainer?.coachCadenceSuggestionsStore {
@@ -155,14 +137,14 @@ struct InsightsCoachSlot: View {
 
     // register on THIS leaf — see file header).
 
-    /// #30 — the in-overview Coach affordances respect the `coach` module.
+    /// The in-overview Coach affordances respect the `coach` module.
     private var coachModuleEnabled: Bool {
         guard let gate = appContainer?.moduleGate else { return true }
         _ = gate.modules
         return gate.isEnabled(.coach)
     }
 
-    /// b182 (F1) — gates the Coach re-engage affordance. Tracks `revision` so it
+    /// Gates the Coach re-engage affordance. Tracks `revision` so it
     /// re-evaluates the moment a grant lands.
     private var coachReengageAvailable: Bool {
         guard let container = appContainer else { return false }
@@ -172,7 +154,6 @@ struct InsightsCoachSlot: View {
             aiMode: container.aiMode,
             coachCapability: container.aiCapabilityGate.reportsCapabilities
                 ? container.aiCapabilityGate.state(.coach) : nil,
-            hasServer: backend.hasServer,
             resolvedProvider: provider,
             hasConsentForProvider: container.aiConsentStore.hasConsent(for: provider),
             isServerManagedAvailable: container.aiProviderStore.config?.usesProviderOpaqueAIConsent == true,
@@ -181,7 +162,7 @@ struct InsightsCoachSlot: View {
         )
     }
 
-    /// b182 (F1) — re-opens the consent choice for a suppressed Coach.
+    /// Re-opens the consent choice for a suppressed Coach.
     private func reengageCoach() {
         appContainer?.aiConsentStore.requestExplicitPrompt()
     }
@@ -207,12 +188,11 @@ struct InsightsWellnessScoresSlot: View {
     let onSelectMood: () -> Void
 
     @Environment(DerivedInsightsStore.self) private var derivedInsightsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.wellnessScores, appContainer) {
+        if InsightsOverviewGate.isVisible(.wellnessScores, appContainer) {
             InsightsServerDerivedOverview(
-                // I-2 — full list (incl. insufficient arms) for the score-ring gate.
+                // Full list (incl. insufficient arms) for the score-ring gate.
                 derivedMetricsAll: derivedInsightsStore.metrics,
                 onSelectMetric: onSelectMetric,
                 onSelectMood: onSelectMood,
@@ -227,8 +207,8 @@ struct InsightsWellnessScoresSlot: View {
                 showsCorrelations: false
             )
 
-            // v0.14.1 — warm-in-flight placeholder, self-suppressing the instant a
-            // score lands. Never a spinner. 1.4 B2: the shape of the score tiles
+            // Warm-in-flight placeholder, self-suppressing the instant a
+            // score lands. Never a spinner. The shape of the score tiles
             // instead of a loose grey sentence under the section.
             if derivedInsightsStore.warming, derivedInsightsStore.presentable.isEmpty {
                 InsightsScoreCardsSkeleton()
@@ -243,10 +223,9 @@ struct InsightsSignalsSlot: View {
     let appContainer: AppContainer?
 
     @Environment(DerivedInsightsStore.self) private var derivedInsightsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.signals, appContainer) {
+        if InsightsOverviewGate.isVisible(.signals, appContainer) {
             InsightsSignalsOfTheDaySection(metrics: derivedInsightsStore.metrics)
         }
     }
@@ -268,10 +247,10 @@ struct InsightsDailyBriefingSlot: View {
 
     var body: some View {
         if InsightsOverviewGate.insightsModuleEnabled(appContainer), let report = generalHealthReportText {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
+            Group {
                 // Flush drops the header inset so the heading shares the prose
                 // body's leading edge.
-                InsightsSectionHeader("insights.overview.dailyBriefing.title", flush: true)
+                HLSectionHeader("insights.overview.dailyBriefing.title", rank: .area)
                 Text(report)
                     .font(.hlBody)
                     .foregroundStyle(HLText.secondary)
@@ -295,56 +274,6 @@ struct InsightsDailyBriefingSlot: View {
         if let paragraph = briefingStore.paragraphContent { return paragraph }
         if let week = narrativeStore.narrative(for: .week)?.text { return week }
         return narrativeStore.narrative(for: .month)?.text
-    }
-}
-
-// MARK: - Empty / error slot (InsightsStore + Backend)
-
-/// Owns the standalone cloud-derived placeholder + the empty / error states.
-/// Reads `InsightsStore` + `Backend` (+ `AuthStore` for the connect CTA) here so
-/// a digest refresh invalidates ONLY this slot.
-struct InsightsEmptyErrorSlot: View {
-    @Environment(InsightsStore.self) private var store
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
-    @Environment(MeasurementsStore.self) private var measurementsStore
-
-    var body: some View {
-        // Standalone: the server-generated insight layer has no on-device
-        // equivalent. One calm placeholder with the shared "Server verbinden" CTA.
-        if !backend.canShowCloudInsights {
-            HLCloudDerivedPlaceholder(
-                surfaceName: String(localized: "cloud_derived.surface.insights"),
-                onConnect: { authStore.beginServerPairing() }
-            )
-        }
-
-        // Empty + Error states. Server-derived → paired only; in standalone the
-        // placeholder already represents the absent server layer.
-        if backend.canShowCloudInsights {
-            if let emptyState {
-                InsightsEmptyStateCard(state: emptyState)
-            }
-            if let error = store.error {
-                InsightsErrorCard(error: error) {
-                    Task { await store.refresh() }
-                }
-            }
-        }
-    }
-
-    /// F1 — empty only when the server has answered with no cards and there is
-    /// no recorded data (see ``InsightsEmptyState``).
-    private var emptyState: InsightsEmptyState? {
-        let serverCount = store.comprehensive?.digest?.totalMeasurements ?? 0
-        return InsightsEmptyState.resolve(
-            hasServer: backend.canShowCloudInsights,
-            hasDeliveredCards: store.hasDeliveredCards,
-            cardsEmpty: store.cards.isEmpty,
-            isLoading: store.isLoading,
-            hasError: store.error != nil,
-            hasRecordedData: serverCount > 0 || !measurementsStore.recent.isEmpty
-        )
     }
 }
 
@@ -373,28 +302,54 @@ struct InsightsOverviewBody: View {
     @Environment(HealthScoreStore.self) private var healthScoreStore
     @Environment(InsightsTargetsStore.self) private var insightsTargetsStore
     @Environment(MoodStore.self) private var moodStore
-    /// Parity Build 4 · 4.5 — the server-first overview SECTION arrangement
+    /// The server-first overview SECTION arrangement
     /// (which blocks show, in what order). Read here, on the composition owner,
     /// so a section edit re-lays-out the column and nothing else.
     @Environment(InsightsLayoutStore.self) private var layoutStore
 
     var body: some View {
-        let skeleton = isShowingInitialSkeleton
-        if skeleton {
+        // First paint, nothing recorded at all, or the overview: the empty
+        // state stands in the free area like on every page of the pager.
+        HLStateContainer(phase) {
             // First-paint shape-aware placeholder.
             InsightsSkeletonContent()
-        } else {
+        } empty: {
+            HLEmptyState(
+                icon: "sparkles",
+                title: "No insights yet",
+                message: "Insights appear once enough data is logged — capture more measurements."
+            )
+            .accessibilityIdentifier("insights.empty")
+        } content: {
             loadedContent
+        }
+        // A failed refresh is the shared banner above the overview, which
+        // stays in place below it.
+        .hlErrorBannerOverlay(error: store.error) {
+            Task { await store.refresh() }
         }
         // The shared sync footer: real states only (1.4 decision 3). The
         // first-login hint is the `FirstLoginSyncBanner`'s, not a second line.
         HLSyncStatusFooter(screenLoading: store.isLoading)
     }
 
+    private var phase: HLLoadPhase {
+        if isShowingInitialSkeleton { return .loading }
+        let serverCount = store.comprehensive?.digest?.totalMeasurements ?? 0
+        let empty = InsightsEmptyState.resolve(
+            hasDeliveredCards: store.hasDeliveredCards,
+            cardsEmpty: store.cards.isEmpty,
+            isLoading: store.isLoading,
+            hasError: store.error != nil,
+            hasRecordedData: serverCount > 0 || !measurementsStore.recent.isEmpty
+        )
+        return empty == .needsData ? .empty : .loaded
+    }
+
     /// The ordered zones, each a store-scoped leaf so a mutation invalidates
     /// only that zone (see file header).
     ///
-    /// **Parity Build 4 · 4.5 — the order and the membership are now the
+    /// **The order and the membership are now the
     /// operator's**, read from the server-first `sections` slice instead of
     /// being hardcoded here. Web has had this since v1.15.11; iOS had no
     /// `sections` concept at all, so the whole arrangement surface was
@@ -402,8 +357,8 @@ struct InsightsOverviewBody: View {
     ///
     /// The quiet Coach block is deliberately outside the customizable region.
     /// Correlations are also anchored: they follow the complete server-owned
-    /// section list so they always sit below Vitalwerte. The empty/error slot
-    /// likewise always trails.
+    /// section list so they always sit below Vitalwerte. A failed load is the
+    /// banner above the column, not a slot in it.
     ///
     /// Every section still self-gates on its own data, so an enabled section
     /// with nothing to say renders nothing — visibility here is permission, not
@@ -420,9 +375,6 @@ struct InsightsOverviewBody: View {
         // Available without competing with the primary health hierarchy. The
         // block itself owns a collapsed-by-default disclosure.
         InsightsCorrelationsSlot(appContainer: appContainer, onSelectMetric: onSelectMetric)
-
-        // ── Standalone placeholder + empty / error states (anchored last). ──
-        InsightsEmptyErrorSlot()
     }
 
     /// One overview section by its server id. The case order below is the
@@ -532,7 +484,7 @@ enum InsightsOverviewDataSlot: CaseIterable {
 /// `.modules` inside a slot's `body` tracks it on THAT slot).
 enum InsightsOverviewGate {
     /// Whether a data slot may render: its owning module is on, or it has none.
-    /// Fail-open when no gate is wired or the map is absent (#30).
+    /// Fail-open when no gate is wired or the map is absent.
     @MainActor
     static func isVisible(_ slot: InsightsOverviewDataSlot, gate: ModuleGate?) -> Bool {
         guard let key = slot.owningModule, let gate else { return true }
@@ -549,7 +501,7 @@ enum InsightsOverviewGate {
     /// overview slot that shows AI-written text. It keeps its 1.0.3 gate until
     /// the `ai` capability model (`/api/auth/me` `ai.capabilities.briefing`)
     /// replaces it. Never gate a data slot on this; use ``isVisible(_:gate:)``.
-    /// Fail-open when the map is absent (#30).
+    /// Fail-open when the map is absent.
     @MainActor
     static func insightsModuleEnabled(_ appContainer: AppContainer?) -> Bool {
         guard let gate = appContainer?.moduleGate else { return true }

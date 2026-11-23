@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Watch-side snapshot persistence (app ⇄ complication)
 
 //
-// **v0.12 P2 — watch complications.** The watch app writes the latest
+// **Watch complications.** The watch app writes the latest
 // `WatchSnapshot` (received from the phone via WatchConnectivity) into the
 // watch's App Group container; the complication's `TimelineProvider` reads it
 // (fast, offline-safe, no WC round-trip). Compiled into BOTH the watch app +
@@ -60,7 +60,7 @@ struct WatchSnapshotStore {
         return try? decoder.decode(WatchSnapshot.self, from: data)
     }
 
-    /// **Privacy H4 (audit-v0162)** — delete the at-rest snapshot file. Called by
+    /// **Privacy H4** — delete the at-rest snapshot file. Called by
     /// the watch client when the phone pushes a cleared (logout) snapshot, so the
     /// previous user's medication names / doses / mood / measurement do not
     /// persist on the wrist in `watch-snapshot.json`. Idempotent — a missing file

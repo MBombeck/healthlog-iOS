@@ -108,7 +108,7 @@ struct DrillDownEagerStoreTests {
     }
 }
 
-/// v0.5.5.1 — cover the **MetricDrillDown UUID collision race** that the
+/// Cover the **MetricDrillDown UUID collision race** that the
 /// v0.4.0 fix defended against. The DashboardScreen `openDetail(for:)`
 /// path eagerly builds a `ChartDetailStore` then flips the `drillDown`
 /// state. The `.navigationDestination(item:)` closure consumes the

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// J1 / F3 — when the biometric app lock is due. `RootView` owns one of these
+/// When the biometric app lock is due. `RootView` owns one of these
 /// as `@State` and asks it on every scene-phase change and every auth-phase
 /// change; the view only turns its answers into `locked = true` +
 /// `tryUnlock()`. Pure value type so both rules are testable without a scene.
@@ -18,7 +18,7 @@ import SwiftUI
 /// **Rule 2 — no lock for a person who just signed in.** The cold-launch lock
 /// exists for a launch that *resumes* a stored session: nobody proved who is
 /// holding the phone. A person who walked through onboarding in this process
-/// just typed the password (or chose standalone), so asking for Face ID on
+/// just typed the password, so asking for Face ID on
 /// the first frame of the dashboard only interrupts them. The initial lock
 /// therefore fires only when the process reaches an unlock-eligible phase
 /// without having shown the sign-in flow first. Background → foreground after
@@ -45,6 +45,19 @@ struct AppLockClock: Equatable {
         self.gracePeriod = gracePeriod
     }
 
+    /// Whether the window starts locked, before it composes anything.
+    ///
+    /// Since 1.7 the stored session is admitted while the process starts,
+    /// before any scene (`LaunchSessionActivation`), so the first composition
+    /// can already see `.authenticated`. The view task that applies the
+    /// cold-launch lock runs only after that composition; starting locked
+    /// keeps the protected content from being built even once. Same rule as
+    /// the cold-launch lock: a stored session and the setting on.
+    static func startsLocked(phase: AuthStore.Phase, lockEnabled: Bool) -> Bool {
+        guard lockEnabled, case .authenticated = phase else { return false }
+        return true
+    }
+
     /// The auth phase settled on a new value. Returns `true` when the view
     /// must lock now (the cold-launch lock).
     mutating func authPhaseChanged(to phase: AuthStore.Phase, lockEnabled: Bool) -> Bool {
@@ -54,7 +67,7 @@ struct AppLockClock: Equatable {
             return false
         case .unknown:
             return false
-        case .authenticated, .standalone:
+        case .authenticated:
             guard lockEnabled, !initialDecisionTaken else { return false }
             initialDecisionTaken = true
             // Rule 2 — a sign-in in this process is proof enough.

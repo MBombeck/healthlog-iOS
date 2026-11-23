@@ -104,7 +104,7 @@ public struct LabResultDTO: Codable, Sendable, Equatable, Identifiable, Hashable
     /// #126 P2 (v1.42.3) — the server converted the printed value into the
     /// marker's unit. The printed value and unit stay in ``sourceValue`` /
     /// ``sourceUnit``; ``printedReferenceText`` is the range as printed. All
-    /// optional (older servers send none). Decoded now, shown later (X3, 3.5).
+    /// optional (older servers send none). Decoded now, shown later.
     public let converted: Bool?
     public let sourceValue: Double?
     public let sourceUnit: String?
@@ -229,7 +229,7 @@ public struct LabResultDetailDTO: Codable, Sendable, Equatable, Identifiable, Ha
     public let biomarkerId: String?
     public let panel: String?
     public let analyte: String
-    /// Item 1.5 — carries the same absence semantics as ``LabResultDTO/value``.
+    /// Carries the same absence semantics as ``LabResultDTO/value``.
     /// The detail GET previously defaulted a missing/null `value` to `0`, so the
     /// detail screen of a qualitative row read "0" where the list read "".
     public let value: Double?
@@ -315,7 +315,7 @@ public struct LabResultDetailDTO: Codable, Sendable, Equatable, Identifiable, Ha
         biomarkerId = try c.decodeIfPresent(String.self, forKey: .biomarkerId)
         panel = try c.decodeIfPresent(String.self, forKey: .panel)
         analyte = try c.decodeIfPresent(String.self, forKey: .analyte) ?? ""
-        // Item 1.5 — no `?? 0`. Absence stays absence.
+        // No `?? 0`. Absence stays absence.
         value = try c.decodeIfPresent(Double.self, forKey: .value)
         valueText = try c.decodeIfPresent(String.self, forKey: .valueText)
         unit = try c.decodeIfPresent(String.self, forKey: .unit) ?? ""
@@ -370,7 +370,7 @@ public struct BiomarkerDTO: Codable, Sendable, Equatable, Identifiable, Hashable
     public let updatedAt: String
     /// #130 (v1.43) — other spellings that map to this marker (sorted, without
     /// the marker's own name). Empty from a server that does not send them.
-    /// Read-only here; editing aliases and merging are a later unit (X3).
+    /// Read-only here; editing aliases and merging are a later unit.
     public let aliases: [String]
 
     public init(
@@ -471,34 +471,55 @@ public struct ListLabResultsResponse: Codable, Sendable, Equatable {
 /// `GET /api/biomarkers` → `data` = `{ biomarkers: [Biomarker] }`.
 public struct ListBiomarkersResponse: Codable, Sendable, Equatable {
     public let biomarkers: [BiomarkerDTO]
+    /// The person's own panel names, one spelling each (server v1.47.1,
+    /// #164): the suggestions under the marker form's panel field. Empty
+    /// on an older server, which then offers none.
+    public let customPanels: [String]
 
-    public init(biomarkers: [BiomarkerDTO]) {
+    public init(biomarkers: [BiomarkerDTO], customPanels: [String] = []) {
         self.biomarkers = biomarkers
+        self.customPanels = customPanels
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         biomarkers = try c.decodeIfPresent([BiomarkerDTO].self, forKey: .biomarkers) ?? []
+        customPanels = ((try? c.decodeIfPresent([String].self, forKey: .customPanels)) ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
-// MARK: - Marker overview (#130)
+// MARK: - Marker overview
 
-/// `GET /api/labs/overview` → `data` = `{ markers: [LabOverviewMarker] }`
-/// (server v1.42.4+). One entry per marker over the WHOLE history, not paged,
+/// `GET /api/labs/overview` → `data` = `{ markers, categories, grouped }`
+/// (server v1.42.4+; `categories` and `grouped` from the release that groups
+/// the list). One entry per marker over the WHOLE history, not paged,
 /// so a marker measured only years ago is never cut off by a page size. This is
 /// the source of the labs list; `GET /api/labs?limit=` is not.
 ///
-/// Lossy: a marker this build cannot read is skipped, the rest still render.
+/// `categories` are the list's groups as the server resolved them: label in
+/// the caller's language, members, counts and a combined status, already in
+/// the caller's order (the server applies `categoryOrder` of the list layout,
+/// so no order is sent beside them). A client renders them as given and never
+/// rebuilds them. `grouped` says whether grouping adds anything; while it is
+/// `false` (or against a server without categories) the list is flat.
+///
+/// Lossy: a marker or a category this build cannot read is skipped, the rest
+/// still render.
 public struct LabOverviewResponse: Codable, Sendable, Equatable {
     public let markers: [LabOverviewMarker]
+    public let categories: [LabOverviewCategory]
+    public let grouped: Bool
 
-    public init(markers: [LabOverviewMarker]) {
+    public init(markers: [LabOverviewMarker], categories: [LabOverviewCategory] = [], grouped: Bool = false) {
         self.markers = markers
+        self.categories = categories
+        self.grouped = grouped
     }
 
     private enum CodingKeys: String, CodingKey {
-        case markers
+        case markers, categories, grouped
     }
 
     public init(from decoder: Decoder) throws {
@@ -507,6 +528,9 @@ public struct LabOverviewResponse: Codable, Sendable, Equatable {
         // fixture or proxy answering with some other shape) and must fail, so
         // the store keeps its fallback instead of showing an empty list.
         markers = try c.decode([FailableMarker].self, forKey: .markers).compactMap(\.marker)
+        categories = ((try? c.decodeIfPresent([FailableCategory].self, forKey: .categories)) ?? [])
+            .compactMap(\.category)
+        grouped = (try? c.decodeIfPresent(Bool.self, forKey: .grouped)) ?? false
     }
 
     private struct FailableMarker: Decodable {
@@ -515,6 +539,85 @@ public struct LabOverviewResponse: Codable, Sendable, Equatable {
         init(from decoder: Decoder) throws {
             marker = try? LabOverviewMarker(from: decoder)
         }
+    }
+
+    private struct FailableCategory: Decodable {
+        let category: LabOverviewCategory?
+
+        init(from decoder: Decoder) throws {
+            category = try? LabOverviewCategory(from: decoder)
+        }
+    }
+}
+
+/// How many members of a category have their newest reading in range, below,
+/// above, or unassessed (qualitative, or without a range).
+public struct LabOverviewCategoryCounts: Codable, Sendable, Equatable {
+    public let inRange: Int
+    public let below: Int
+    public let above: Int
+    public let unknown: Int
+
+    public init(inRange: Int = 0, below: Int = 0, above: Int = 0, unknown: Int = 0) {
+        self.inRange = inRange
+        self.below = below
+        self.above = above
+        self.unknown = unknown
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        inRange = (try? c.decodeIfPresent(Int.self, forKey: .inRange)) ?? 0
+        below = (try? c.decodeIfPresent(Int.self, forKey: .below)) ?? 0
+        above = (try? c.decodeIfPresent(Int.self, forKey: .above)) ?? 0
+        unknown = (try? c.decodeIfPresent(Int.self, forKey: .unknown)) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case inRange, below, above, unknown
+    }
+}
+
+/// One category of the labs list, resolved by the server. `key` is opaque (a
+/// catalog panel key, `custom:<hash>` or `other`) and stable, `label` is shown
+/// as sent, `markerKeys` names the ``LabOverviewMarker/key`` values it holds,
+/// `status` is the combined, neutral verdict of the members' newest readings.
+public struct LabOverviewCategory: Codable, Sendable, Equatable, Identifiable {
+    public let key: String
+    public let label: String
+    public let markerKeys: [String]
+    public let counts: LabOverviewCategoryCounts
+    public let status: LabRangeStatus
+
+    public var id: String {
+        key
+    }
+
+    public init(
+        key: String,
+        label: String,
+        markerKeys: [String],
+        counts: LabOverviewCategoryCounts = LabOverviewCategoryCounts(),
+        status: LabRangeStatus = .unknown
+    ) {
+        self.key = key
+        self.label = label
+        self.markerKeys = markerKeys
+        self.counts = counts
+        self.status = status
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case key, label, markerKeys, counts, status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try c.decode(String.self, forKey: .key)
+        label = try c.decode(String.self, forKey: .label)
+        markerKeys = (try? c.decodeIfPresent([String].self, forKey: .markerKeys)) ?? []
+        counts = (try? c.decodeIfPresent(LabOverviewCategoryCounts.self, forKey: .counts)) ?? LabOverviewCategoryCounts()
+        status = (try? c.decodeIfPresent(LabRangeStatus.self, forKey: .status)) ?? .unknown
     }
 }
 

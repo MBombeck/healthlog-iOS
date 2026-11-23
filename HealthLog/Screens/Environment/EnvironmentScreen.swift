@@ -26,10 +26,11 @@ struct EnvironmentScreen: View {
         HLAsyncListScreen(
             phase: phase,
             refresh: { await reload() },
-            loading: { HLAsyncListSkeletonRows() },
+            loading: { HLAsyncListSkeletonRows().hlFormRowSurface() },
             empty: { EmptyView() },
-            content: { if let store { loadedRows(store: store) } }
+            content: { if let store { loadedRows(store: store).hlFormRowSurface() } }
         )
+        .hlPageMargins()
         .navigationTitle(Text("environment.list.title"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await onAppear() }
@@ -56,7 +57,7 @@ struct EnvironmentScreen: View {
     private func loadedRows(store: EnvironmentStore) -> some View {
         if store.isDisabled {
             Section {
-                // Audit A-7 — the module is off; the server says why (a scoped
+                // The module is off; the server says why (a scoped
                 // sharing grant, the operator's instance switch, the viewer's
                 // own switch). `nil` on a server < v1.38.15 → the neutral copy.
                 FeatureDisabledCard(
@@ -100,58 +101,48 @@ struct EnvironmentScreen: View {
     @ViewBuilder
     private func homeSection(store: EnvironmentStore) -> some View {
         if let home = store.home, store.hasHome {
-            Section(header: Text("environment.home.section")) {
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(home.label ?? String(localized: "environment.home.unnamed"))
-                        .font(.hlBody)
-                        .foregroundStyle(HLText.primary)
-                    if let since = home.since, let formatted = Self.displayDate(since) {
-                        Text("environment.home.since \(formatted)")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                }
-                .padding(.vertical, HLSpace.xxs)
+            Section {
+                HLRow(
+                    title: Text(home.label ?? String(localized: "environment.home.unnamed")),
+                    detail: home.since.flatMap(Self.displayDate).map { Text("environment.home.since \($0)") }
+                )
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("environment.home")
+            } header: {
+                HLSectionHeader("environment.home.section")
             }
         }
     }
 
     private func coverageSection(store: EnvironmentStore) -> some View {
-        Section(header: Text("environment.coverage.section")) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("environment.coverage.days \(store.context.days)")
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-                    .accessibilityIdentifier("environment.coverage.days")
-                Spacer(minLength: HLSpace.sm)
+        Section {
+            // The latest covered day is a date, not a reading, so it takes
+            // the quieter value weight.
+            HLRowLayout(title: Text("environment.coverage.days \(store.context.days)")) {
                 if let latest = store.context.latestDate, let formatted = Self.displayDate(latest) {
-                    Text(formatted)
-                        .font(.hlBody.monospacedDigit())
-                        .foregroundStyle(HLText.secondary)
+                    HLRowValue(formatted, emphasis: .setting)
                 }
             }
-            .padding(.vertical, HLSpace.xxs)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("environment.coverage.days")
+        } header: {
+            HLSectionHeader("environment.coverage.section")
         }
     }
 
     @ViewBuilder
     private func travelSection(store: EnvironmentStore) -> some View {
         if !store.travel.isEmpty {
-            Section(header: Text("environment.travel.section")) {
+            Section {
                 ForEach(store.travel) { trip in
-                    VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                        Text(trip.label.isEmpty ? String(localized: "environment.home.unnamed") : trip.label)
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.primary)
-                        Text(Self.dateRange(trip.startDate, trip.endDate))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                    }
-                    .padding(.vertical, HLSpace.xxs)
+                    HLRow(
+                        title: Text(trip.label.isEmpty ? String(localized: "environment.home.unnamed") : trip.label),
+                        detail: Text(Self.dateRange(trip.startDate, trip.endDate))
+                    )
                     .accessibilityElement(children: .combine)
                 }
+            } header: {
+                HLSectionHeader("environment.travel.section")
             }
         }
     }
@@ -162,7 +153,8 @@ struct EnvironmentScreen: View {
     /// string), the LINKS are fixed licence URLs.
     private func attributionSection(store: EnvironmentStore) -> some View {
         Section {} footer: {
-            EnvironmentAttributionView(attribution: store.attribution)
+            // Under the centred empty state the credit is centred too.
+            EnvironmentAttributionView(attribution: store.attribution, centered: !store.hasContent)
                 .accessibilityIdentifier("environment.attribution")
         }
     }
@@ -196,10 +188,10 @@ struct EnvironmentScreen: View {
     static func displayDate(_ raw: String) -> String? {
         guard !raw.isEmpty else { return nil }
         if let day = dayKeyFormatter.date(from: String(raw.prefix(10))) {
-            return mediumFormatter.string(from: day)
+            return HLDateFormat.date(day)
         }
         if let instant = ISO8601DateFormatter().date(from: raw) {
-            return mediumFormatter.string(from: instant)
+            return HLDateFormat.date(instant)
         }
         return raw
     }
@@ -212,18 +204,14 @@ struct EnvironmentScreen: View {
     }
 
     private static let dayKeyFormatter: DateFormatter = {
+        // Parses the server's `yyyy-MM-dd` keys; the display goes through
+        // `displayDate`, not through this formatter.
+        // swiftlint:disable:next hl_date_via_helper
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    private static let mediumFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .none
         return f
     }()
 }
@@ -232,31 +220,37 @@ struct EnvironmentScreen: View {
 /// The credit text is the server-provided (defaulted) string; the links are fixed
 /// licence URLs. Kept as a small dedicated view so the licence surface is a single
 /// reusable unit.
-private struct EnvironmentAttributionView: View {
+struct EnvironmentAttributionView: View {
     let attribution: String
+    /// Centred under a centred empty state; leading under cards.
+    var centered = false
+
+    /// The server sends the credit in English. Its canonical wording is shown
+    /// in the interface language; any other credit stays as served.
+    static func credit(for attribution: String) -> String {
+        attribution == EnvironmentOverviewDTO.defaultAttribution
+            ? String(localized: "environment.attribution.credit")
+            : attribution
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
+        VStack(alignment: centered ? .center : .leading, spacing: HLSpace.xxs) {
             if let url = EnvironmentOverviewDTO.attributionURL {
-                Link(destination: url) {
-                    Text(verbatim: attribution)
-                        .font(.hlCaption)
-                        .underline()
-                }
-                .accessibilityIdentifier("environment.attribution.link")
+                HLTextLink(verbatim: Self.credit(for: attribution), destination: url)
+                    .accessibilityIdentifier("environment.attribution.link")
             } else {
-                Text(verbatim: attribution)
-                    .font(.hlCaption)
+                Text(verbatim: Self.credit(for: attribution))
             }
             if let license = EnvironmentOverviewDTO.licenseURL {
-                Link(destination: license) {
-                    Text("environment.attribution.license")
-                        .font(.hlCaption2)
-                        .underline()
-                }
+                HLTextLink("environment.attribution.license", destination: license)
             }
         }
-        .foregroundStyle(HLText.tertiary)
+        // The links take the size of the line around them; secondary ink
+        // like every quiet line, no underline.
+        .font(.hlCaption)
+        .foregroundStyle(HLText.secondary)
+        .multilineTextAlignment(centered ? .center : .leading)
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
         .padding(.top, HLSpace.xs)
     }
 }

@@ -1,7 +1,7 @@
 import Foundation
 @testable import HealthLog
 
-// MARK: - Scripted transport (Phase 08 Wave 0)
+// MARK: - Scripted transport
 
 /// A per-store `APIClientProtocol` whose every response is decided by one
 /// closure the test owns. Nothing here is process-global, so two stores in the

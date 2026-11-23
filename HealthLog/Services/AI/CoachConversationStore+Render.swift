@@ -1,5 +1,5 @@
-// v0.12 W8-1 — the `CoachInsight` → Markdown render helpers, split out of
-// `CoachConversationStore.swift` (v0.13 W4) to keep that file under the
+// The `CoachInsight` → Markdown render helpers, split out of
+// `CoachConversationStore.swift` to keep that file under the
 // SwiftLint 600-line ceiling. Both are `nonisolated static` pure functions of
 // their input, so they live cleanly in an extension with no isolation cost.
 
@@ -8,7 +8,6 @@ import Foundation
 #if canImport(FoundationModels)
     import FoundationModels
 
-    @available(iOS 26.0, *)
     extension CoachConversationStore {
         /// Renders a `CoachInsight.PartiallyGenerated` snapshot into the same
         /// Markdown shape as ``render(_:)``. Each partial field is `Optional`

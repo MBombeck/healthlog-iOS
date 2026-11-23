@@ -48,7 +48,7 @@ public actor PatternsRepository {
             let req: APIRequest<CorrelationPatternsResponse> = .get("/api/insights/patterns")
             return try await api.send(req).patterns
         } catch HLError.moduleDisabled {
-            // #30 — `APIClient` types the `insights` module-gate 403; the
+            // `APIClient` types the `insights` module-gate 403; the
             // surface is off, which is a hidden block, not a failure.
             return nil
         } catch let HLError.server(status, code, _)

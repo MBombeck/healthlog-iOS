@@ -90,7 +90,7 @@ public final class InjectionSitePrefsStore {
         InjectionSiteEffectiveSet.effective(allowed: allowed, globalExcluded: excluded)
     }
 
-    /// v0.14.8 W3 (AUDIT-SECURITY-B175 M-1) — drop the previous user's
+    /// Drop the previous user's
     /// deny-list on logout (it reveals injection-therapy use) and reset the
     /// TTL so the next user's first read always fetches fresh.
     public func clearOnLogout() {

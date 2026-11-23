@@ -1,4 +1,4 @@
-// #10 — "Settings > Apple Health" showed "Not synced yet" forever.
+// "Settings > Apple Health" showed "Not synced yet" forever.
 //
 // `MeasurementBatchUploader.setSuccessNotifier(_:)` existed, was documented as
 // "set by the composition root" and was unit-tested with an injected closure;

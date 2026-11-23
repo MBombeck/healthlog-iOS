@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.5.1-A B3 — `ComplianceSnapshot.ratio` and `hasSchedule` semantics.
+/// `ComplianceSnapshot.ratio` and `hasSchedule` semantics.
 @Suite("ComplianceSnapshot — v0.5.1-A B3")
 struct ComplianceSnapshotV051ATests {
     @Test("ratio is 0 when nothing scheduled today (was 1.0, rendered as '100% / 0:00 heute')")

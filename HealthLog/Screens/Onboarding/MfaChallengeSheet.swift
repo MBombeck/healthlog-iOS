@@ -26,7 +26,6 @@ struct MfaChallengeSheet: View {
     let passkeySupportedForHost: Bool
 
     @Environment(AuthStore.self) private var authStore
-    @Environment(\.dismiss) private var dismiss
 
     @State private var code: String = ""
     @State private var useRecovery: Bool = false
@@ -57,7 +56,9 @@ struct MfaChallengeSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Verifying is the step's own button under the code; the bar only
+        // closes, and the host backs out of the challenge when it does.
+        HLSheetScaffold("onboarding.mfa.navTitle") {
             ScrollView {
                 VStack(alignment: .leading, spacing: HLSpace.lg) {
                     header
@@ -93,29 +94,18 @@ struct MfaChallengeSheet: View {
                         action: { Task { await submit() } }
                     )
                     .disabled(!canSubmit || authStore.isWorking)
-                    .padding(.horizontal, HLSpace.xl)
+                    // The card's edges, not a margin of its own.
+                    .padding(.horizontal, HLLayout.pageMargin)
                     .accessibilityIdentifier("mfa.verifyCTA")
 
                     if showWebAuthn {
                         webAuthnButton
-                            .padding(.horizontal, HLSpace.xl)
+                            .padding(.horizontal, HLLayout.pageMargin)
                     }
 
                     Spacer(minLength: HLSpace.xxl)
                 }
                 .padding(.top, HLSpace.md)
-            }
-            .background(HLColor.background)
-            .navigationTitle(String(localized: "onboarding.mfa.navTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) {
-                        authStore.cancelMFA()
-                        dismiss()
-                    }
-                    .accessibilityIdentifier("mfa.cancel")
-                }
             }
             .onAppear { codeFocused = true }
         }
@@ -167,7 +157,7 @@ struct MfaChallengeSheet: View {
             .foregroundStyle(HLText.primary)
             .focused($codeFocused)
             .padding(HLSpace.md)
-            .background(HLColor.surface)
+            .background(HLTextField.plate)
             .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
             .accessibilityIdentifier("mfa.codeField")
         }
@@ -180,36 +170,31 @@ struct MfaChallengeSheet: View {
     private var rememberDeviceToggle: some View {
         Toggle(isOn: $rememberDevice) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text("onboarding.mfa.rememberDevice")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                HLRowTitle("onboarding.mfa.rememberDevice")
                 Text("onboarding.mfa.rememberDevice.caption")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .toggleStyle(.switch)
+        // The app's switch, green when on like every other one.
+        .toggleStyle(.hl)
         .accessibilityIdentifier("mfa.rememberDeviceToggle")
     }
 
     private var recoveryToggle: some View {
-        Button {
+        HLLinkButton(useRecovery ? "onboarding.mfa.useAuthenticator" : "onboarding.mfa.useRecovery", alignment: .leading) {
             useRecovery.toggle()
             code = ""
-        } label: {
-            Text(useRecovery ? "onboarding.mfa.useAuthenticator" : "onboarding.mfa.useRecovery")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
         }
         .accessibilityIdentifier("mfa.recoveryToggle")
     }
 
     private var webAuthnButton: some View {
         HLButton(
-            String(localized: "onboarding.mfa.useSecurityKey"),
-            icon: "faceid",
-            variant: .ghost,
+            "onboarding.mfa.useSecurityKey",
+            systemImage: "faceid",
+            variant: .secondary,
             action: {
                 #if canImport(AuthenticationServices) && canImport(UIKit)
                     Task {
@@ -232,7 +217,7 @@ struct MfaChallengeSheet: View {
             code: trimmed,
             rememberDevice: rememberDevice
         )
-        // L3 — a WRONG code keeps the challenge up with an inline error (#37/H1).
+        // A WRONG code keeps the challenge up with an inline error (#37/H1).
         // Clear the stale digits so the field is empty for the retry; otherwise the
         // 6-digit auto-submit never re-fires (the value is unchanged) and the user
         // has to manually delete the old code first. A dead ticket clears the

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **CU-25 (#72) — where the cycle prediction on screen came from.**
+/// **Where the cycle prediction on screen came from.**
 ///
 /// The project's standing rule is that the server computes the canonical value
 /// and the client consumes the resolved DTO. The cycle surface keeps a second,
@@ -18,7 +18,7 @@ import Foundation
 ///    same input. A divergence breaks a test instead of quietly showing a
 ///    different number.
 ///
-/// **Z1 (#72) — scope.** This applies to the FORECAST only. The cycle VERDICT
+/// **Scope.** This applies to the FORECAST only. The cycle VERDICT
 /// (`state` / `phase` / `overdueDays`) has no on-device origin to label, because
 /// it has no on-device path: see ``CycleVerdictDTO`` and `CycleStore+Verdict`.
 public enum CyclePredictionProvenance: String, Sendable, Equatable, CaseIterable {

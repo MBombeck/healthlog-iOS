@@ -66,7 +66,7 @@
             await api.setHandler { try server.handle($0) }
             let repo = try MeasurementsRepository(api: api, outbox: OutboxQueue(inMemory: true))
             let health = MockHealthKitWriter()
-            let store = MeasurementsStore(repo: repo, healthKit: health, isStandalone: { false })
+            let store = MeasurementsStore(repo: repo, healthKit: health)
 
             let saved: Bool
             switch entry {

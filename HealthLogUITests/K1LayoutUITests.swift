@@ -1,6 +1,6 @@
 import XCTest
 
-/// **K1 (1.1.0) — the two layout findings from the H2 sweep that a query can
+/// **The two layout findings from the H2 sweep that a query can
 /// measure.**
 ///
 /// - The error banner makes room: on the medication detail the sweep fixture's
@@ -76,9 +76,7 @@ final class K1LayoutUITests: XCTestCase {
     }
 
     private func openMedications(_ app: XCUIApplication) {
-        let tab = app.tabBars.buttons.containing(.image, identifier: "pills.fill").firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 20), "Medications tab missing")
-        tab.tap()
+        XCTAssertTrue(ShellNavigator.select(symbol: "pills.fill", in: app, timeout: 20), "Medications tab missing")
     }
 
     private func boot(extra: [String] = []) -> XCUIApplication {

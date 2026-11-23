@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// **LIFE (1.5.0, #132, Server #614) — "Life circumstances".**
+/// **"Life circumstances".**
 ///
 /// Reached from "About me", next to the anamnesis facts it extends, and only
 /// when the server says it has the feature (`features.lifeCircumstances`,
-/// v1.43). Six sections as one calm page: each section is a card that opens
-/// on a tap, saves on its own and keeps its AI switch under "Advanced". Below
+/// v1.43). Six sections as one calm page: each section is a row of one card that
+/// opens on a tap, saves on its own and keeps its AI switch under "Advanced". Below
 /// them the screening hints the server derives, with their sources.
 ///
 /// The old anamnesis screen stays as it was; smoking status and shift work
@@ -43,7 +43,7 @@ struct LifeCircumstancesScreen: View {
             case let .failed(message):
                 failedState(message, store: store)
             case let .disabled(reason):
-                HLSettingsPage(title: "life.title") {
+                HLPage {
                     FeatureDisabledCard(variant: .hero, reason: reason)
                         .accessibilityIdentifier("life.disabled")
                 }
@@ -65,17 +65,16 @@ struct LifeCircumstancesScreen: View {
             title: Text("life.loadError"),
             message: message == String(localized: "life.loadError") ? nil : Text(verbatim: message)
         ) {
-            HLButton("Try again", icon: "arrow.clockwise", variant: .secondary) {
+            HLButton(HLControlWord.retry.key, systemImage: "arrow.clockwise", variant: .secondary) {
                 Task { await store.load() }
             }
             .accessibilityIdentifier("life.retry")
         }
-        .containerCentered()
         .accessibilityIdentifier("life.loadFailed")
     }
 
     private func page(_ payload: LifeCircumstances, store: LifeCircumstancesStore) -> some View {
-        HLSettingsPage(title: "life.title") {
+        HLPage {
             if store.isStale {
                 notice(String(localized: "life.stale"), identifier: "life.stale") {
                     Task { await store.load() }
@@ -88,8 +87,14 @@ struct LifeCircumstancesScreen: View {
                 HLEmptyState(icon: "person.text.rectangle", title: "life.empty")
                     .accessibilityIdentifier("life.empty")
             }
-            ForEach(payload.sections) { section in
-                LifeSectionCard(section: section, payload: payload, store: store, canSave: !store.isStale)
+            if !payload.sections.isEmpty {
+                // One card, one row per section, like every other list of
+                // places to go on a settings page.
+                HLCard(layout: .rows) {
+                    ForEach(payload.sections) { section in
+                        LifeSectionCard(section: section, payload: payload, store: store, canSave: !store.isStale)
+                    }
+                }
             }
             if !payload.derived.screeningHints.isEmpty {
                 LifeScreeningHintsCard(hints: payload.derived.screeningHints)
@@ -109,16 +114,14 @@ struct LifeCircumstancesScreen: View {
                 .foregroundStyle(HLText.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: HLSpace.sm)
-            Button(action: action) {
-                Image(systemName: identifier == "life.stale" ? "arrow.clockwise" : "xmark.circle.fill")
-                    .foregroundStyle(HLText.secondary)
-                    .frame(minWidth: 44, minHeight: 44)
+            if identifier == "life.stale" {
+                HLIconButton(systemImage: "arrow.clockwise", label: HLControlWord.retry.key, action: action)
+            } else {
+                HLDismissButton(label: "anamnesis.error.dismiss", action: action)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(identifier == "life.stale" ? Text("Try again") : Text("anamnesis.error.dismiss"))
         }
         .padding(.horizontal, HLSpace.md)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card))
+        .hlCardSurface()
         .accessibilityIdentifier(identifier)
     }
 }

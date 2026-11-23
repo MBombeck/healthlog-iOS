@@ -1,6 +1,6 @@
 import Foundation
 
-/// **V1 (1.2)** — HealthKit's observer completion handler, delivered exactly once.
+/// HealthKit's observer completion handler, delivered exactly once.
 ///
 /// A background delivery keeps the process alive only until the app calls the
 /// handler `HKObserverQuery` passes in. Until 1.1.1 the handler was called the
@@ -59,5 +59,28 @@ final class HealthKitDeliveryReceipt: @unchecked Sendable {
 
     var hasFired: Bool {
         lock.withLock { handler == nil }
+    }
+
+    /// One observer delivery: an error fires the receipt at once, otherwise
+    /// `work` runs and the receipt fires when it returns or at `deadline`.
+    /// Every `HKObserverQuery` handler goes through this, so none of them can
+    /// acknowledge HealthKit before the work it was woken for.
+    static func deliver(
+        error: (any Error)?,
+        completionHandler: @escaping () -> Void,
+        deadline: Duration = HealthKitDeliveryReceipt.deadline,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        work: @escaping @Sendable () async -> Void
+    ) {
+        let receipt = HealthKitDeliveryReceipt(completionHandler)
+        guard error == nil else {
+            receipt.fire()
+            return
+        }
+        receipt.arm(deadline: deadline, sleep: sleep)
+        Task {
+            await work()
+            receipt.fire()
+        }
     }
 }

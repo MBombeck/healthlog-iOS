@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// SUPP-EDIT (1.5.0, #131 P3) — the state and the writes of the
+/// The state and the writes of the
 /// composition form.
 ///
 /// The rows are built from the server's nutrient catalogue: a row names a

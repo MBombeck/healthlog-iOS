@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/MBombeck/healthlog-iOS/security/advisories/new
+    about: Privately, never as a public issue. See SECURITY.md for the policy and the email fallback.
+  - name: Translations
+    url: https://translate.healthlog.dev
+    about: Translations are made in Tolgee, not in pull requests. Use the translation template here only to ask for access, a new language or a correction you cannot make yourself.
+  - name: Server, web app and self-hosting
+    url: https://github.com/MBombeck/HealthLog/issues
+    about: Problems with the server, the web app or your installation belong in the server project.
+  - name: Documentation
+    url: https://docs.healthlog.dev
+    about: Setup, configuration and feature documentation.

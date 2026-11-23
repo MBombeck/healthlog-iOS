@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.8.4 WWIDGET-1 — extension-local copy.**
+/// **Extension-local copy.**
 ///
 /// The Live-Activity / widget colour palette lives in the shared
 /// `LiveActivityTokens.swift` (`LAColor`), compiled into both the app and
@@ -12,7 +12,7 @@ import SwiftUI
 /// own `Localizable.xcstrings` (EN + DE) so no hardcoded UI strings ship.
 enum LAStrings {
     static var taken: LocalizedStringKey {
-        "la.med.action.taken"
+        "med.dose.action.take"
     }
 
     /// **v0.10 Walkthrough-2 LA2** — the relabel on the armed (pending-confirm)
@@ -29,7 +29,7 @@ enum LAStrings {
     }
 
     static var takenConfirmation: LocalizedStringKey {
-        "la.med.status.taken"
+        "med.dose.state.taken"
     }
 
     static var snoozed: LocalizedStringKey {
@@ -93,8 +93,34 @@ enum LAStrings {
         "la.med.remaining_short"
     }
 
+    /// #190 5.4 — what a stale Activity says: the shown state may be out of date.
+    static var checkStatus: LocalizedStringKey {
+        "la.med.check_status"
+    }
+
     /// Short label next to the overdue (red) countdown — "überfällig".
     static var overdueShort: LocalizedStringKey {
         "la.med.overdue_short"
+    }
+
+    /// Short label under a due time that has passed but is not yet overdue
+    /// (the dose band's grace) — "seit Fälligkeit".
+    static var dueSinceShort: LocalizedStringKey {
+        "la.med.due_since_short"
+    }
+
+    /// **#188 (6)** — the caption under the due clock: "remaining" while it
+    /// counts down; once the due time has passed "overdue" when the app says
+    /// so (server-gated), otherwise "since due".
+    static func countdownCaption(
+        for state: MedicationActivityAttributes.ContentState,
+        now: Date = .now
+    ) -> LocalizedStringKey {
+        switch state.countdownPresentation(now: now) {
+        case .overdueSince:
+            state.isOverdue ? overdueShort : dueSinceShort
+        case .countdown, .hidden:
+            state.isOverdue ? overdueShort : remainingShort
+        }
     }
 }

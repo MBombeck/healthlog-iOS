@@ -1,6 +1,6 @@
 import Foundation
 
-/// **MED (1.5.0) — course actions on the medications repository.**
+/// **Course actions on the medications repository.**
 ///
 /// - `POST /api/medications/{id}/courses/end` (server v1.46.0, #1280): ends the
 ///   running course now. No body. 409 `medications.course.notRunning` when no
@@ -13,7 +13,7 @@ import Foundation
 /// the course at a different moment, and a start replayed on another day would
 /// start on the wrong one; the person retries instead.
 ///
-/// MED-PLUS (1.5.0, #126 3.4) adds the course list, the correction of a
+/// MED-PLUS adds the course list, the correction of a
 /// past course and its deletion, all owner-only on the server (a delegate reads
 /// 403):
 /// - `GET /api/medications/{id}/courses`

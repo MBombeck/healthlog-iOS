@@ -1,6 +1,6 @@
 import Foundation
 
-/// **#115 1.5 — one calendar for server day keys.**
+/// **One calendar for server day keys.**
 ///
 /// The server cuts every day-scoped row (mood entries, cycle day logs, illness
 /// day logs, medication courses, compliance buckets, sleep nights) in the

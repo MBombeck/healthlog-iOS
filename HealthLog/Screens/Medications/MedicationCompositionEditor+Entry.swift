@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// SUPP-EDIT (1.5.0, #131 P3) — the centred text link under the
+/// The centred text link under the
 /// composition: "Zusammensetzung bearbeiten", or "Zusammensetzung eintragen"
 /// for a vitamin or a supplement that has none yet.
 ///
@@ -18,30 +18,25 @@ struct MedicationCompositionEditLink: View {
     @Environment(AuthStore.self) private var authStore: AuthStore?
 
     var body: some View {
-        if let container, container.syncModeStore.isPaired, serverKnowsComposition,
+        if let container, serverKnowsComposition,
            MedicationCompositionAccess.canEdit(access),
            !lines.isEmpty || MedicationCompositionAccess.offersEmptyComposition(category: medication.category)
         {
-            NavigationLink {
-                MedicationCompositionEditor(
-                    model: MedicationCompositionEditorModel(
-                        medicationID: medication.id,
-                        lines: lines,
-                        repository: MedicationIngredientsRepository(api: container.api),
-                        offReason: { [gate = container.moduleGate] in gate.offReason(.nutrients) }
-                    ),
-                    offersLabelPhoto: offersLabelPhoto(container),
-                    onSaved: onSaved
-                )
-            } label: {
-                Text(lines.isEmpty ? "medications.composition.edit.add" : "medications.composition.edit.link")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(minHeight: 44)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            HLLinkButton(
+                LocalizedStringKey(lines.isEmpty ? "medications.composition.edit.add" : "medications.composition.edit.link"),
+                destination: {
+                    MedicationCompositionEditor(
+                        model: MedicationCompositionEditorModel(
+                            medicationID: medication.id,
+                            lines: lines,
+                            repository: MedicationIngredientsRepository(api: container.api),
+                            offReason: { [gate = container.moduleGate] in gate.offReason(.nutrients) }
+                        ),
+                        offersLabelPhoto: offersLabelPhoto(container),
+                        onSaved: onSaved
+                    )
+                }
+            )
             .accessibilityIdentifier("medications.composition.edit")
         }
     }

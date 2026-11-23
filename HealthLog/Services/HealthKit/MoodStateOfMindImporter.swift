@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **v0.10.0 W-Mood-B — import `HKStateOfMind` logged elsewhere into
+    /// **Import `HKStateOfMind` logged elsewhere into
     /// HealthLog mood.**
     ///
     /// A small, dedicated, direct-`HKHealthStore` observe path (State of Mind
@@ -27,7 +27,7 @@ import Foundation
     /// Gated entirely behind the Settings toggle — the owner only constructs +
     /// starts this when `syncMoodWithAppleHealth` is on.
     ///
-    /// **Phase 07 / plan 07-05 — owner-bound, write-ahead durable.** Three
+    /// **Owner-bound, write-ahead durable.** Three
     /// things changed and they are one change:
     ///
     ///   * The sweep is admitted. One ``HealthSyncAuthenticatedLease`` is taken
@@ -53,7 +53,7 @@ import Foundation
         static let cursorTypeIdentifier = "HKStateOfMindType"
 
         private let store: HKHealthStore
-        private let repo: MoodRepository
+        let repo: MoodRepository
         private let anchorKey: String
         /// The partition token the importer was constructed for. An admitted
         /// owner whose token differs is a different account, and this importer
@@ -103,7 +103,6 @@ import Foundation
         /// Start the long-running observer + run an initial anchored sweep.
         /// Idempotent — a second call is a no-op while one observer is live.
         func start() async {
-            guard #available(iOS 18.0, *) else { return }
             guard observerQuery == nil else { return }
             let type = HKObjectType.stateOfMindType()
             let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, error in
@@ -128,7 +127,6 @@ import Foundation
 
         /// One user-requested anchored sweep without replacing the observer.
         func refresh() async {
-            guard #available(iOS 18.0, *) else { return }
             await runCoalescedSweep()
         }
 
@@ -153,7 +151,7 @@ import Foundation
             }
         }
 
-        /// **v0.10.0 W10 M2 — reset the per-user import anchor.**
+        /// **Reset the per-user import anchor.**
         ///
         /// On logout / user-change the device-local sync toggle is forced off,
         /// but the persisted anchor (partitioned by user id) would otherwise
@@ -169,7 +167,7 @@ import Foundation
         /// Does NOT re-read `KeychainKey.userID` — the keychain may already be
         /// wiped by the concurrent logout cascade.
         ///
-        /// **Phase 07 / plan 07-05:** the Phase-07 cursor partition is
+        /// The Phase-07 cursor partition is
         /// deliberately *not* cleared. It hashes its owner into its storage key,
         /// so no other account can read it, and deleting a partition on an owner
         /// this method is forbidden from re-resolving is exactly the M4 race the
@@ -181,7 +179,6 @@ import Foundation
         // MARK: - Owned observer work
 
         /// Registers one observer signal as owned, coalesced work.
-        @available(iOS 18.0, *)
         private func enqueueObservedSweep() {
             let id = UUID()
             observerTasks[id] = Task { [weak self] in
@@ -194,7 +191,6 @@ import Foundation
             observerTasks[id] = nil
         }
 
-        @available(iOS 18.0, *)
         private func runCoalescedSweep() async {
             await coalescer.run(key: Self.cursorTypeIdentifier) { [weak self] in
                 await self?.runAnchoredSweep()
@@ -206,7 +202,6 @@ import Foundation
         /// One anchored batch: admit an account, fetch new State-of-Mind samples
         /// since the committed anchor, import the foreign ones, and commit the
         /// new anchor only if the shared rule says the page is accounted for.
-        @available(iOS 18.0, *)
         private func runAnchoredSweep() async {
             guard let lease = try? admission?() else {
                 HLLog.healthKit.info("state-of-mind sweep refused — no admitted account")
@@ -230,7 +225,10 @@ import Foundation
                 // Fence 2 of 3 — an account replacement that landed during the
                 // read must not let this page reach the wire under the new owner.
                 try lease.requireCurrent()
-                let page = await consume(result.samples, requiring: lease)
+                var page = await consume(result.samples, requiring: lease)
+                if let held = await forwardDeletions(result.deletedIDs, after: page, requiring: lease) {
+                    page = page.holding(held)
+                }
                 await commitAnchor(result.newAnchor, page: page, requiring: lease)
             } catch {
                 // Nothing is committed. A read that failed says nothing about the
@@ -246,7 +244,6 @@ import Foundation
         /// Internal (not `private`) so the durability suite can drive the
         /// transmission half with constructed samples against the real
         /// `APIClient`; the query half needs an authorized `HKHealthStore`.
-        @available(iOS 18.0, *)
         func consume(
             _ samples: [HKStateOfMind],
             requiring lease: HealthSyncAuthenticatedLease
@@ -257,14 +254,14 @@ import Foundation
             var pageHeld = false
 
             for sample in samples {
-                // Anti-dupe (W-HK-RELIABILITY G-7): skip only OUR own echo —
+                // Anti-dupe: skip only OUR own echo —
                 // carries our externalUUID AND authored by this app's HK source.
                 // A third-party state-of-mind sample that happens to carry an
                 // externalUUID now flows in instead of being silently dropped.
                 if HealthKitSampleOwnership.isOwnEcho(sample) { continue }
                 let identity = sample.uuid.uuidString
                 var outcome = await importForeign(sample, identity: identity, requiring: lease)
-                // E1 — an unreadable answer holds for a bounded run of sweeps, then
+                // An unreadable answer holds for a bounded run of sweeps, then
                 // the sample goes into the skip register and the page moves on.
                 outcome = await settleUnreadable(outcome, sample: sample, identity: identity, requiring: lease)
                 switch outcome {
@@ -282,10 +279,10 @@ import Foundation
                         classification: Self.classification(of: outcome)
                     )
                 )
-                // #115 / 0.3 — the mood module is off. Every further sample
+                // The mood module is off. Every further sample
                 // would get the same 403, so the page stops here and holds.
-                // C4 — so does a cancelled request: nothing was stored or queued.
-                // E1 — and an unreadable answer still inside its run of sweeps.
+                // So does a cancelled request: nothing was stored or queued.
+                // And an unreadable answer still inside its run of sweeps.
                 if Self.isModuleRefusal(outcome) || Self.isInterrupted(outcome) || Self.isUnreadable(outcome) {
                     pageHeld = true
                     break
@@ -317,14 +314,14 @@ import Foundation
         /// path applies to `unstable_external_id`, and the opposite of the rule
         /// for `enqueueLost`, which is precisely a failure a retry *would* fix.
         ///
-        /// **#115 / 0.3 — one refusal is not about the sample.** A 403 with
+        /// **One refusal is not about the sample.** A 403 with
         /// `meta.errorCode == "module.disabled"` (typed by `APIClient` into
         /// `HLError.moduleDisabled`) says the person's mood module is off right
         /// now. Treating it as final lost every mood logged in Apple Health while
         /// the module was off. It is nonterminal: the anchor holds while the
         /// module is off and the next sweep after it is switched on imports.
         ///
-        /// **C4 — nor is a cancelled request** (``isInterrupted(_:)``). Before, it
+        /// **Nor is a cancelled request** (``isInterrupted(_:)``). Before, it
         /// counted as a final refusal and the anchor moved past a mood that had
         /// reached neither the server nor the outbox.
         static func classification(of outcome: MoodWriteOutcome) -> HealthSyncAcceptanceClass {
@@ -334,7 +331,7 @@ import Foundation
             case let .rejected(error) where error.isModuleDisabled || error == .canceled:
                 .nonterminal
             case .rejected(.decoding):
-                // E1 — the write may have landed or not; see `settleUnreadable`.
+                // The write may have landed or not; see `settleUnreadable`.
                 .nonterminal
             case .rejected:
                 .terminalAccepted
@@ -343,7 +340,7 @@ import Foundation
             }
         }
 
-        /// C4 — `true` for a request that was cancelled rather than answered
+        /// `true` for a request that was cancelled rather than answered
         /// (`URLError.cancelled`, a failed certificate pin, or a cancelled task).
         /// Not a refusal of the sample: nothing is stored and nothing queued, so
         /// committing past it would lose the mood. The anchor holds.
@@ -359,7 +356,6 @@ import Foundation
         }
 
         /// Import a single foreign sample under a restart-stable identity.
-        @available(iOS 18.0, *)
         private func importForeign(
             _ sample: HKStateOfMind,
             identity: String,
@@ -381,7 +377,11 @@ import Foundation
                 tags: [],
                 note: nil,
                 recordedAt: sample.startDate,
-                retryIdentity: envelope
+                retryIdentity: envelope,
+                // With the delete routes the entry carries its source pair, so
+                // a later deletion in Apple Health can find it.
+                appleHealthSampleID: AppleHealthIngestCapability.isAvailable(.appleHealthDeletes, defaults: defaults)
+                    ? sample.uuid.uuidString : nil
             )
             // Fence 3 of 3 — a write that completed after the account changed is
             // not this account's progress, whatever the server said.
@@ -397,24 +397,27 @@ import Foundation
         }
 
         /// Bridge the anchored query into async/await.
-        @available(iOS 18.0, *)
         private func fetch(
             type: HKSampleType,
             anchor: HKQueryAnchor?
-        ) async throws -> (samples: [HKStateOfMind], newAnchor: HKQueryAnchor?) {
+        ) async throws -> MoodAnchoredPage {
             try await withCheckedThrowingContinuation { continuation in
                 let query = HKAnchoredObjectQuery(
                     type: type,
                     predicate: nil,
                     anchor: anchor,
                     limit: HKObjectQueryNoLimit
-                ) { _, samples, _, newAnchor, error in
+                ) { _, samples, deleted, newAnchor, error in
                     if let error {
                         continuation.resume(throwing: error)
                         return
                     }
                     let moods = (samples as? [HKStateOfMind]) ?? []
-                    continuation.resume(returning: (moods, newAnchor))
+                    continuation.resume(returning: MoodAnchoredPage(
+                        samples: moods,
+                        deletedIDs: (deleted ?? []).map(\.uuid.uuidString),
+                        newAnchor: newAnchor
+                    ))
                 }
                 store.execute(query)
             }
@@ -453,12 +456,11 @@ import Foundation
 
         /// The anchor this account's partition committed, or the legacy per-user
         /// value when no durable store is wired.
-        @available(iOS 18.0, *)
         private func committedAnchor(requiring lease: HealthSyncAuthenticatedLease) async -> HKQueryAnchor? {
             if let cursors, let key = Self.cursorKey(for: lease) {
                 return await cursors.queryAnchor(for: key)
             }
-            // W-HK-RELIABILITY H-2 — surface decode failures + controlled reset.
+            // Surface decode failures + controlled reset.
             return HealthKitAnchorArchive.loadAnchor(forKey: anchorKey, from: defaults, label: "stateOfMind")
         }
 
@@ -470,7 +472,6 @@ import Foundation
         /// directly, so a context without a cursor store is never *more*
         /// permissive than production — which is exactly how the pre-Phase-07
         /// sweep lost samples.
-        @available(iOS 18.0, *)
         private func commitAnchor(
             _ anchor: HKQueryAnchor?,
             page: HealthSyncPageOutcome,

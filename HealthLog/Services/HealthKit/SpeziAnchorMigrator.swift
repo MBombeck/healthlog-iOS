@@ -1,4 +1,4 @@
-// Phase 07 Wave 2 — the Spezi sample-collection cutover.
+// The Spezi sample-collection cutover.
 //
 // The `SpeziAnchorStoring` seam and its `LocalStorage`-backed conformance are
 // gone with the collectors they served: no production path writes into
@@ -11,7 +11,7 @@
     import HealthKit
     import SpeziHealthKit
 
-    /// Phase 07 Wave 2 — the account cutover away from installation-global
+    /// The account cutover away from installation-global
     /// sample cursors.
     ///
     /// Before this phase the app's per-sample cursor lived in two installation

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.11 — the canonical scrubber's snap contract + the unified range-picker
+/// The canonical scrubber's snap contract + the unified range-picker
 /// option conformances. The scrubber is the ONE primitive every time-series
 /// chart now uses to read a value, so its nearest-point lookup is the
 /// load-bearing logic worth pinning.

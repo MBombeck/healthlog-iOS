@@ -119,7 +119,7 @@ struct CycleHealthKitMappingTests {
     func routeSkips() {
         #expect(CycleHealthKitMapping.route(identifier: CycleHealthKitMapping.menstrualFlow, value: 99) == .skip)
         #expect(CycleHealthKitMapping.route(identifier: CycleHealthKitMapping.pregnancy, value: 1) == .skip)
-        // v0.14.8 — an unrecognised contraceptive codepoint still skips…
+        // An unrecognised contraceptive codepoint still skips…
         #expect(CycleHealthKitMapping.route(identifier: CycleHealthKitMapping.contraceptive, value: 99) == .skip)
         #expect(CycleHealthKitMapping.route(identifier: CycleHealthKitMapping.contraceptive, value: nil) == .skip)
     }

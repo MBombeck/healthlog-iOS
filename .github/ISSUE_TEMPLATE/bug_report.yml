@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in the iOS app, a widget or the Apple Watch app is broken or behaves unexpectedly.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Before you submit:
+
+        - Search the [open issues](https://github.com/MBombeck/healthlog-iOS/issues) first.
+        - Security problems never go into a public issue, see [SECURITY.md](https://github.com/MBombeck/healthlog-iOS/blob/main/SECURITY.md).
+        - Please use no real health values, names, server addresses or tokens. Describe the shape of the data instead, or invent values.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version and build
+      description: Settings, About.
+      placeholder: "1.6.0 (310)"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and iOS version
+      placeholder: "iPhone 16 Pro, iOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: HealthLog server version
+      description: Shown in the web app under Settings, About, or at `/api/version`. Say "demo" if you use demo.healthlog.dev.
+      placeholder: "1.48.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Where the app came from
+      options:
+        - App Store
+        - TestFlight
+        - Built from source
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: support-info
+    attributes:
+      label: Support info
+      description: Settings, About, "Copy support info". It is redacted (no names, emails, values or tokens); read it before you paste.
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or screen recording
+      description: Please blur anything personal first.

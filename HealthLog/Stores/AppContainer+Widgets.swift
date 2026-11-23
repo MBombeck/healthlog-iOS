@@ -1,7 +1,7 @@
 import Foundation
 
 extension AppContainer {
-    /// **v0.8.4 WWIDGET-2 — drive the Home / Lock-Screen widgets from the
+    /// **Drive the Home / Lock-Screen widgets from the
     /// store.**
     ///
     /// Chains onto `MedicationsStore.onIntakesDidChange` (composing with
@@ -34,7 +34,7 @@ extension AppContainer {
     }
 
     /// **The account-level percentage the compliance widget's ring tracks —
-    /// only when the server has one to give (#115 · 1.3).**
+    /// only when the server has one to give.**
     ///
     /// The server's canonical compliance lives PER medication
     /// (`complianceCardSnapshots`, from `GET /api/medications/compliance`).
@@ -92,7 +92,7 @@ extension AppContainer {
         Set(snapshots.filter { activeIDs.contains($0.key) && $0.value.applicable }.keys)
     }
 
-    /// **v0.10.0 W-Mood-B** — drive the interactive mood widget glance from
+    /// Drive the interactive mood widget glance from
     /// the mood store. Chains onto `MoodStore.onEntriesDidChange` (composing
     /// with any pre-existing closure) and refreshes ONLY the mood field of the
     /// App Group snapshot (`refreshMood`) — the med refresh path owns dose +
@@ -106,7 +106,7 @@ extension AppContainer {
         moodStore.onEntriesDidChange = { [weak moodStore] in
             previous?()
             guard let moodStore else { return }
-            // Audit B-4 — the widget answers "your latest mood" with ONE row,
+            // The widget answers "your latest mood" with ONE row,
             // and a newer entry whose level this build cannot name has no
             // number to put in that slot. It must not displace the person's
             // real latest reading, so the glance takes the latest NAMEABLE one
@@ -156,19 +156,27 @@ extension AppContainer {
         unitPreferences: @escaping @MainActor () -> UnitPreferences
     ) {
         let previous = measurementsStore.onRecentDidChange
+        let lastPage = RecentPageMemory()
         measurementsStore.onRecentDidChange = { recent in
             previous?(recent)
-            // Audit B-4 — the newest NAMED reading: a row on the unknown
+            let deleted = WidgetSnapshot.MetricGlance.deletedKinds(previous: lastPage.rows, current: recent)
+            lastPage.rows = recent
+            // The newest NAMED reading: a row on the unknown
             // sentinel must never displace the person's real latest value in
             // the one slot the widget has for a number.
             let latest = Measurement.latestNamedReading(in: recent)
+            let units = unitPreferences()
             writer.refreshLatestMeasurement(
-                WidgetSnapshot.LatestMeasurement.make(from: latest, units: unitPreferences())
+                WidgetSnapshot.LatestMeasurement.make(from: latest, units: units),
+                glances: WidgetSnapshot.MetricGlance.makeAll(from: recent, units: units),
+                // The newest page holds at most `load(limit:)` rows; a full one may have cut kinds off.
+                pageMayBeTruncated: recent.count >= 400,
+                discardingKinds: deleted
             )
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — reconcile the iOS-local evening mood reminder on
+    /// Reconcile the iOS-local evening mood reminder on
     /// every mood entry change. Chains onto `MoodStore.onEntriesDidChange`
     /// (composing with the widget refresh wired above) so logging a mood while
     /// the app is open immediately cancels the pending reminder — it never
@@ -184,7 +192,7 @@ extension AppContainer {
             previous?()
             guard moodStore != nil, let notifications, let settingsStore else { return }
             let enabled = settingsStore.profile?.moodReminderEnabled ?? false
-            // v0.14.1 H2 — repeating trigger; the "logged today" suppression is a
+            // Repeating trigger; the "logged today" suppression is a
             // foreground `willPresent` concern, not a re-arm input.
             Task {
                 await notifications.reconcileMoodReminder(
@@ -193,7 +201,7 @@ extension AppContainer {
                 )
             }
         }
-        // Build 272 — the toggle itself re-arms/cancels immediately. Until now
+        // The toggle itself re-arms/cancels immediately. Until now
         // only the next foreground pass did, so "off" at 21:50 still fired at
         // 22:00 and "on" armed nothing until the app was reopened.
         settingsStore.onMoodReminderEnabledChanged = { [weak notifications] enabled in
@@ -207,7 +215,7 @@ extension AppContainer {
         }
     }
 
-    /// Build 272 — re-arm the iOS-local evening reminder the moment the user
+    /// Re-arm the iOS-local evening reminder the moment the user
     /// picks a new hour on the Notifications screen (the store is screen-owned,
     /// so it is wired at construction, not in the composition root).
     func wireMoodReminderHourChanges(on store: NotificationsStore) {
@@ -219,4 +227,11 @@ extension AppContainer {
             }
         }
     }
+}
+
+/// The newest page as the widget wiring saw it last, to tell a deleted reading
+/// from one that only rolled off the end of the page.
+@MainActor
+private final class RecentPageMemory {
+    var rows: [Measurement] = []
 }

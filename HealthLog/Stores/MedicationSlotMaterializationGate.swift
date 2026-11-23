@@ -1,6 +1,6 @@
 import Foundation
 
-/// **audit-v0162 M-7 — "does the configured server materialise today's dose
+/// **"does the configured server materialise today's dose
 /// slots itself?", cached across launches.**
 ///
 /// `MedicationsStore.derivedIntakeSynthesisEnabledProvider` is **synchronous**

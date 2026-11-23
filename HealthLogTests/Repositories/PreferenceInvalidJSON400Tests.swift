@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#110 — malformed-JSON refusal moved from `422` to `400` on seven
+/// **Malformed-JSON refusal moved from `422` to `400` on seven
 /// preference operations.**
 ///
 /// The server answers a body that is not JSON at all with

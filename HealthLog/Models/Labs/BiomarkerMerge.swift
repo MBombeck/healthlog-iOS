@@ -26,6 +26,10 @@ public struct BiomarkerMergeResult: Decodable, Sendable, Equatable {
     public let aliasesAdded: [String]
     /// `nil` on a dry run.
     public let mergeId: String?
+    /// The panel the kept marker takes over from a merged one when it had
+    /// none (server v1.47.1, #164; also on a dry run). `nil` when nothing
+    /// is adopted or on an older server.
+    public let adoptedPanel: String?
 
     public init(
         dryRun: Bool,
@@ -34,7 +38,8 @@ public struct BiomarkerMergeResult: Decodable, Sendable, Equatable {
         movedReadings: Int,
         convertedReadings: Int,
         aliasesAdded: [String] = [],
-        mergeId: String? = nil
+        mergeId: String? = nil,
+        adoptedPanel: String? = nil
     ) {
         self.dryRun = dryRun
         self.target = target
@@ -43,6 +48,7 @@ public struct BiomarkerMergeResult: Decodable, Sendable, Equatable {
         self.convertedReadings = convertedReadings
         self.aliasesAdded = aliasesAdded
         self.mergeId = mergeId
+        self.adoptedPanel = adoptedPanel
     }
 
     /// One source marker as the server sees it.
@@ -91,7 +97,7 @@ public struct BiomarkerMergeResult: Decodable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dryRun, target, sources, movedReadings, convertedReadings, aliasesAdded, mergeId
+        case dryRun, target, sources, movedReadings, convertedReadings, aliasesAdded, mergeId, adoptedPanel
     }
 
     public init(from decoder: Decoder) throws {
@@ -103,6 +109,9 @@ public struct BiomarkerMergeResult: Decodable, Sendable, Equatable {
         convertedReadings = (try? c.decodeIfPresent(Int.self, forKey: .convertedReadings)) ?? 0
         aliasesAdded = (try? c.decodeIfPresent([String].self, forKey: .aliasesAdded)) ?? []
         mergeId = try? c.decodeIfPresent(String.self, forKey: .mergeId)
+        let panel = (try? c.decodeIfPresent(String.self, forKey: .adoptedPanel))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        adoptedPanel = panel?.isEmpty == false ? panel : nil
     }
 
     /// A merge the server would refuse: any source it cannot convert. The

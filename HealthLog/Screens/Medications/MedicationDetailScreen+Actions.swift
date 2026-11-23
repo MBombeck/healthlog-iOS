@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Retro-mutate + ledger-row actions + low-supply alert
 
-/// W-FILELEN — the retro-mutate / ledger-row write actions + the MED-4/C3
+/// The retro-mutate / ledger-row write actions + the MED-4/C3
 /// low-supply alert reconcile, lifted verbatim out of `MedicationDetailScreen`
 /// into this same-module extension to keep the screen body under the 600-line
 /// `file_length` swiftlint budget. Pure move, no behaviour change. The `@State` /
@@ -13,9 +13,9 @@ extension MedicationDetailScreen {
 
     /// Re-evaluate the **server's** runway against the user's threshold and
     /// (re)arm the local low-supply alert. No-op when notifications aren't
-    /// wired (standalone / macOS) or before the inventory fetch has landed.
+    /// wired (macOS) or before the inventory fetch has landed.
     ///
-    /// ROUTE-06: the day count is `Medication.runwayDays` verbatim — the same
+    /// The day count is `Medication.runwayDays` verbatim — the same
     /// figure the server's own low-stock engine evaluates, so the local alert
     /// and the server push cannot disagree about when supply is low. The only
     /// local step is `runwayWithinThreshold`, which *filters*: `nil` means
@@ -31,7 +31,7 @@ extension MedicationDetailScreen {
         guard let notifications = appContainer?.notifications else { return }
         guard items != nil else { return }
         let medication = store.medication
-        // v1.39.1 (#1033) — the server's low-stock pass skips a medication kept
+        // v1.39.1 — the server's low-stock pass skips a medication kept
         // as a record; `nil` here clears any alert armed before the switch.
         let runway = medication.tracksIntake
             ? MedicationInventorySection.runwayWithinThreshold(
@@ -48,7 +48,7 @@ extension MedicationDetailScreen {
         }
     }
 
-    // MARK: - T-4 retro-mutate wiring
+    // MARK: - Retro-mutate wiring
 
     /// Apply the optimistic patch locally, dispatch the network call, and
     /// either accept the result (success / queued) or roll back the
@@ -72,14 +72,14 @@ extension MedicationDetailScreen {
                 store.rollbackOptimisticMark(eventId: event.id, original: original)
             })
             if case .success = outcome {
-                // W3-MEDCONTRACT — converge the ledger Verlauf onto the
+                // Converge the ledger Verlauf onto the
                 // server's re-attributed truth (no-op when no ledger).
                 await store.reloadDoseHistory()
             }
         }
     }
 
-    /// **15-01 (B1)** — the operator corrects WHEN a logged dose was taken.
+    /// The operator corrects WHEN a logged dose was taken.
     /// Same shape as `retroMark` above: patch the row the user is looking at
     /// first, then send `takenAt` alone over the intake PUT the retro-mark path
     /// already uses; `.failed` puts the row back, `.queued` keeps it standing
@@ -108,7 +108,7 @@ extension MedicationDetailScreen {
     }
 
     func deleteIntake(_ event: PaginatedIntakeEvent) {
-        // W3-MEDCONTRACT — the optimistic snapshot is best-effort now: a
+        // The optimistic snapshot is best-effort now: a
         // ledger-rendered row may not sit in the legacy `intakes` page set
         // (e.g. older than the drained pages), and the delete must still go
         // through. The legacy section is unaffected (its rows always exist
@@ -127,6 +127,10 @@ extension MedicationDetailScreen {
             })
             if case .success = outcome {
                 await store.reloadDoseHistory()
+                // #188 (7): deleted at once, with the way back in the toast.
+                medicationsStore.offerUndoForDeletedIntake(event, medicationId: medicationId) {
+                    await store.reloadDoseHistory()
+                }
             }
         }
     }

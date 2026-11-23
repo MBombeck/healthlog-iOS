@@ -55,7 +55,7 @@ struct CorrelationLabelPrecedenceTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the server label overrules the complete German table
+            the server label overrules the complete German table
 
             C2. Fuer kuratierte Kanaele gewinnt ab E6 die lokale deutsche Tabelle, nicht das \
             Server-Label. \(violations.count) von \(Self.curatedChannels.count) Kanaelen \

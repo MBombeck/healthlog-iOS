@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **1.4 B4 — the "30 Tage Durchschnitt" card reads the server's mean.**
+/// **The "30 Tage Durchschnitt" card reads the server's mean.**
 ///
 /// The metric page's 30-day card took its number from the comprehensive digest
 /// and fell back to the latest reading. The digest is consent-gated, so for

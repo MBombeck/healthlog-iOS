@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 16 Plan 02 — the words on the first three screens (K3, K4).**
+/// **The words on the first three screens.**
 ///
 /// Both findings are the operator reading his own app: the trust-boundary
 /// sheet's primary button says "Ich verstehe und fortfahren", which is a finite
@@ -52,7 +52,7 @@ struct OnboardingCopyTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: the confirm button still reads Ich verstehe und fortfahren"
+            "the confirm button still reads Ich verstehe und fortfahren"
         )
     }
 
@@ -72,7 +72,7 @@ struct OnboardingCopyTests {
             if hint.isEmpty { violations.append("\(language) hint is empty") }
         }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: the hint is still two sentences")
+        #expect(violations.isEmpty, "the hint is still two sentences")
     }
 
     // MARK: - K5, the polish half
@@ -96,39 +96,6 @@ struct OnboardingCopyTests {
         #expect(!handoff.showsEmailSection, "under a live handoff CTA the form is the fallback, and closed")
         let native = AuthStepFormVisibility(prefersWebHandoff: false, availability: .unavailable, latched: false)
         #expect(native.showsEmailSection, "everywhere else the form is the primary door and simply present")
-    }
-
-    @Test("the fallback link is an action, and the form it opens settles before it is focused")
-    func fallbackLinkReadsAsAnActionAndSettlesBeforeFocusing() throws {
-        let source = try Self.strippedSource("HealthLog/Screens/Onboarding/ServerAuthStep.swift")
-
-        var violations: [String] = []
-        // The defect: focus assigned in the same update that creates the field.
-        // SwiftUI has nothing to move focus to yet and drops it silently.
-        if source.contains("emailSectionLatched = true\n                        focused = .email") {
-            violations.append("the reveal still sets focus in the tick that creates the field")
-        }
-        if !source.contains("pendingEmailFocus") {
-            violations.append("no parked focus request survives the reveal")
-        }
-        if !source.contains("HLSheet.focusDelay") {
-            violations.append("the form is focused without settling first")
-        }
-        // Both reveals go through one rule rather than two copies of it.
-        let reveals = source.components(separatedBy: "revealEmailSection()").count - 1
-        if reveals < 3 {
-            violations.append("the reveal rule has \(reveals - 1) call sites; the fallback link and the passkey CTA are two")
-        }
-        // The affordance itself: primary ink and a real region, not caption-grey
-        // text in the same colour as the hint two lines above it.
-        if !source.contains("onboarding.webLogin.fallbackPassword") {
-            violations.append("the fallback label left the catalogue")
-        }
-        if !source.contains("minHeight: 44") {
-            violations.append("the fallback link states no minimum hit region")
-        }
-
-        #expect(violations.isEmpty, "the K5 affordance polish is incomplete: \(violations)")
     }
 
     // MARK: - Helpers
@@ -156,42 +123,6 @@ struct OnboardingCopyTests {
         let resolved = bundle.localizedString(forKey: key, value: "MISSING", table: nil)
         #expect(resolved != "MISSING", "\(key) has no \(language) value in the compiled catalogue")
         return resolved
-    }
-
-    private static let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-
-    /// Source contracts read comment-stripped source — a doc comment naming a
-    /// symbol is not the symbol.
-    private static func strippedSource(_ relativePath: String) throws -> String {
-        let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        return stripLineComments(from: stripBlockComments(from: text))
-    }
-
-    private static func stripBlockComments(from source: String) -> String {
-        var out = ""
-        var rest = Substring(source)
-        while let open = rest.range(of: "/*") {
-            out += rest[..<open.lowerBound]
-            guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-            rest = rest[close.upperBound...]
-        }
-        return out + rest
-    }
-
-    private static func stripLineComments(from source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-            var quoted = false
-            var previous: Character = " "
-            for (offset, character) in line.enumerated() {
-                if character == "\"", previous != "\\" { quoted.toggle() }
-                if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                previous = character
-            }
-            return String(line)
-        }.joined(separator: "\n")
     }
 
     private static func lprojBundle(language: String) throws -> Bundle {

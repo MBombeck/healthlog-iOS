@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v1.28 (GH iOS #45) — the medication-efficacy ("Wirkung") repository seam.
+/// v1.28 — the medication-efficacy ("Wirkung") repository seam.
 ///
 /// Uses the **real `APIClient` over a stubbed `URLSession`** (`MockURLProtocol`),
 /// per PROJECT_GUIDE.md — never a mock server — so the DTO decodes against the exact

@@ -14,17 +14,17 @@ public actor OutboxReplayService {
     let measurementsRepo: MeasurementsRepository
     private let moodRepo: MoodRepository
     private let medicationsRepo: MedicationsRepository
-    /// v0.7.1 W-TARGETS-EDITOR — optional so existing call sites (and the
+    /// Optional so existing call sites (and the
     /// outbox-replay unit tests) keep compiling without wiring it. When `nil`,
     /// a `.updateThresholds` op is treated as non-retriable and dropped (same
     /// behaviour as an unknown kind) so it can never block the queue.
     private let userThresholdsRepo: UserThresholdsRepository?
-    /// v0.8.0 W10 — optional so existing call sites + replay tests keep
+    /// Optional so existing call sites + replay tests keep
     /// compiling. When `nil`, an `.updateInsightsLayout` op is treated as
     /// non-retriable and dropped (same as an unknown kind) so it can never
     /// block the queue.
     private let insightsLayoutRepo: InsightsLayoutRepository?
-    /// **v0.10.0 W10 M1 — bidirectional HK mood mirror on the replay path.**
+    /// **Bidirectional HK mood mirror on the replay path.**
     ///
     /// A successfully-replayed offline mood create/update must be mirrored into
     /// HKStateOfMind and a replayed delete must remove the mirror — closing the
@@ -40,7 +40,7 @@ public actor OutboxReplayService {
     public typealias MoodMirrorDelete = @Sendable (String) async -> Void
     private let mirrorMood: MoodMirror?
     private let mirrorMoodDelete: MoodMirrorDelete?
-    /// v0.12 SP3+SP4 — replay seam for the GLP-1 side-effect logbook + pen
+    /// Replay seam for the GLP-1 side-effect logbook + pen
     /// inventory CRUD. Optional so the widget extension + legacy tests that
     /// don't wire it leave it `nil`; an unwired replay of one of those kinds is
     /// dropped as non-retriable so it can't wedge the queue.
@@ -49,11 +49,11 @@ public actor OutboxReplayService {
     /// existing callers (tests) compile unchanged; the cycle arm dead-letters
     /// when unwired (matching the `.syncHealthKitSample` posture).
     let cycleRepo: CycleRepository?
-    /// v0.14.8 audit Wave A (C4.1) — drains `.uploadWorkoutBatch`. Optional so
+    /// Drains `.uploadWorkoutBatch`. Optional so
     /// existing callers (tests, widget extension) compile unchanged; the arm
     /// dead-letters when unwired so it can never wedge the queue.
     let workoutsRepo: WorkoutsRepository?
-    /// W-B187 COACH-3 — drains the coach clarifying-question writes
+    /// Drains the coach clarifying-question writes
     /// (adopt / dismiss). Optional so existing callers (tests, widget
     /// extension) compile unchanged; the arm dead-letters when unwired so it
     /// can never wedge the queue.
@@ -81,13 +81,13 @@ public actor OutboxReplayService {
     /// create/update/delete). Optional (same posture as `labsRepo`); the
     /// `+CustomMetrics` dispatch extension reads it, so it is `internal`.
     let customMetricsRepo: CustomMetricsRepository?
-    /// Build 7.6 (GH #48) — drains the `logNutrientWater` quick-add kind.
+    /// Build 7.6 — drains the `logNutrientWater` quick-add kind.
     /// Optional (same posture as `labsRepo`); the `+Nutrients` dispatch
     /// extension reads it, so it is `internal`.
     let nutrientReadRepo: NutrientReadRepository?
     let decoder: JSONDecoder
     let maxAttempts: Int
-    /// **v0.13 WS — cross-user outbox binding.** Resolves the *currently*
+    /// **Cross-user outbox binding.** Resolves the *currently*
     /// signed-in `KeychainKey.userID` at replay time. A row whose stamped
     /// owner differs from this value belongs to a different account (shared
     /// device, User A's queued write surviving into User B's session) and is
@@ -121,6 +121,10 @@ public actor OutboxReplayService {
     /// `nil` (tests / widget) reads as "not degraded".
     var serverHealthDegraded: (@Sendable () async -> Bool)?
 
+    /// #6 — whether a pass may send at all, renewing an expired access token
+    /// first (`+Session`). `nil` (tests, widget) admits every pass.
+    let sessionGate: OutboxReplaySessionGate?
+
     /// **audit-v0162 H1 (Opt 2) — honest DLQ signal.** Invoked with the count of
     /// rows NEWLY dead-lettered in a pass so the sync footer can surface
     /// "N Einträge konnten nicht übermittelt werden" instead of a false
@@ -128,42 +132,44 @@ public actor OutboxReplayService {
     /// ``attachDeadLetterSink(_:)`` (the store is built after this service).
     var onDeadLettered: (@Sendable (Int) async -> Void)?
 
-    /// **Audit B-3 — honest discard signal.** Invoked with the writes a pass
+    /// **Honest discard signal.** Invoked with the writes a pass
     /// stopped carrying, each named by kind + machine reason. Wired to
     /// `SyncStateStore.noteDiscarded` via ``attachDiscardSink(_:)``; `nil`
     /// (tests / widget) buffers instead of losing the event.
     var onDiscarded: (@Sendable ([OutboxDiscardNotice]) async -> Void)?
 
-    /// Audit B-3 — discards from a pass that ran before a sink was attached
+    /// Discards from a pass that ran before a sink was attached
     /// (same race, same remedy, as ``deadLetteredBeforeSink``).
     var discardedBeforeSink: [OutboxDiscardNotice] = []
-    /// #10 — see ``setHealthKitDeliveryNotifier(_:)`` (`+HealthKit.swift`).
+    /// See ``setHealthKitDeliveryNotifier(_:)`` (`+HealthKit.swift`).
     let healthKitDeliverySlot = Mutex<HealthKitDeliveryNotifier?>(nil)
+    /// See ``setAlreadyTakenNotifier(_:)`` (`+AlreadyTaken.swift`).
+    let alreadyTakenSlot = Mutex<AlreadyTakenNotifier?>(nil)
 
-    /// **Audit B-2 — operations the server took during THIS process' lifetime.**
+    /// **Operations the server took during THIS process' lifetime.**
     /// Belt to the persisted ``OutboxQueue/Operation/delivered`` brace: when even
     /// the delivered stamp could not be written, this still stops the drain from
     /// sending the same operation twice. `internal`, like `idRemap` above.
     var deliveredIDs: Set<UUID> = []
 
-    /// Phase 09 / plan 09-05 — rows dead-lettered by a pass before a sink was attached (`+DeadLetterSink`).
+    /// Rows dead-lettered by a pass before a sink was attached (`+DeadLetterSink`).
     var deadLetteredBeforeSink = 0
 
-    /// #110 — rate-limit hold and in-pass pause budget (see `+RateLimit`).
+    /// Rate-limit hold and in-pass pause budget (see `+RateLimit`).
     var rateLimit = OutboxRateLimitState()
 
-    /// **audit-v0162 H-4 — in-pass optimistic→server id remap.** Populated when a
+    /// **In-pass optimistic→server id remap.** Populated when a
     /// queued `create` replays and the server assigns a real id; a dependent
     /// `update`/`delete` on the same optimistic id (same pass) is retargeted
     /// through it. Cleared at the start of every pass; cross-pass persistence is
     /// carried by the on-disk `clientEntityId` column (see `applyEntityRemap`).
-    /// Written only by the pass that owns the queue (1.4, S5).
+    /// Written only by the pass that owns the queue.
     var idRemap: [String: String] = [:]
 
-    // 1.4 (S5) — no shared "last created server id" any more: `dispatch(_:)`
+    // No shared "last created server id" any more: `dispatch(_:)`
     // returns it to the pass that sent the request (see `+Pass`).
 
-    /// W1 (1.3.0) — the pass guard, its watchdog state and the one-time 1.2.0
+    /// The pass guard, its watchdog state and the one-time 1.2.0
     /// update path; all explained in `+Watchdog`.
     var isRunning = false
     var runGeneration: UInt64 = 0
@@ -171,9 +177,15 @@ public actor OutboxReplayService {
     var runPhase = "idle"
     let runWatchdogTimeout: TimeInterval
     let updatePathDefaults: (@Sendable () -> UserDefaults)?
-    /// SYNC-TRIG (1.5) — decides whether a parked batch may replay under the
+    /// Decides whether a parked batch may replay under the
     /// trigger it kept (``SyncTriggerContext/replayValue(_:)``).
     let syncTriggerGate: SyncTriggerContext
+
+    /// How the service waits before the pass it arms for itself (`+Rerun`).
+    /// `nil` (tests, widget) arms nothing: a pass then only ever starts from
+    /// an outside trigger.
+    let rerunSleep: (@Sendable (TimeInterval) async throws -> Void)?
+    var rerun = OutboxRerunState()
 
     public init(
         outbox: OutboxQueue,
@@ -205,8 +217,11 @@ public actor OutboxReplayService {
         onDiscarded: (@Sendable ([OutboxDiscardNotice]) async -> Void)? = nil,
         runWatchdogTimeout: TimeInterval = OutboxReplayService.defaultRunWatchdogTimeout,
         updatePathDefaults: (@Sendable () -> UserDefaults)? = nil,
-        syncTriggerGate: SyncTriggerContext = .shared
+        syncTriggerGate: SyncTriggerContext = .shared,
+        rerunSleep: (@Sendable (TimeInterval) async throws -> Void)? = nil,
+        sessionGate: OutboxReplaySessionGate? = nil
     ) {
+        self.sessionGate = sessionGate
         self.outbox = outbox
         self.measurementsRepo = measurementsRepo
         self.moodRepo = moodRepo
@@ -237,6 +252,7 @@ public actor OutboxReplayService {
         self.runWatchdogTimeout = runWatchdogTimeout
         self.updatePathDefaults = updatePathDefaults
         self.syncTriggerGate = syncTriggerGate
+        self.rerunSleep = rerunSleep
         // Single source of truth: `JSONDecoder.hlDefault`. Vorher hatte der
         // Replay-Service eine eigene Strategie (`.iso8601` ohne fractional +
         // `.convertFromSnakeCase`) — ein latenter Footgun (Outbox-Payload wird
@@ -245,7 +261,7 @@ public actor OutboxReplayService {
         decoder = .hlDefault
     }
 
-    /// **audit-v0162 H-4 — resolve the entity id to actually send.** Prefers an
+    /// **Resolve the entity id to actually send.** Prefers an
     /// in-pass remap (the create landed earlier this same pass), then a persisted
     /// column remap (the create landed in an earlier pass and rewrote this row's
     /// `clientEntityId` to the server id), else the payload id verbatim.
@@ -330,12 +346,12 @@ public actor OutboxReplayService {
             return try await dispatchCustomMetrics(op)
         case .logNutrientWater:
             try await dispatchNutrients(op)
-        case .syncHealthKitSample:
-            // Phase 07 — operational. Re-POSTs the persisted measurement batch
+        case .syncHealthKitSample, .uploadAppleHealthSymptoms, .deleteAppleHealthRecords:
+            // Operational. Re-POSTs the persisted measurement batch
             // under the row's own owner lease and its own idempotency key; a
             // response that does not prove exact per-index acceptance stays
             // retryable. See `OutboxReplayService+HealthKit.swift`.
-            try await dispatchHealthKitBatch(op)
+            try await (op.kind == .syncHealthKitSample ? dispatchHealthKitBatch(op) : dispatchAppleHealthIngest(op))
         case .unrecognized:
             // Unreachable: the quarantine gate in `runOnce` skips this row
             // before dispatch. Kept exhaustive and fail-closed so a future
@@ -356,7 +372,7 @@ public actor OutboxReplayService {
         case .logMood:
             let entry = try decoder.decode(MoodEntry.self, from: op.payload)
             let saved = try await moodRepo.replay(entry, idempotencyKey: op.idempotencyKey)
-            // v0.10.0 W10 M1 — mirror the now-synced offline mood into Apple
+            // Mirror the now-synced offline mood into Apple
             // Health (server id assigned). Self-gated on the user's sync toggle
             // (no auth → swallowed no-op); anti-duped via externalUUID = server
             // id, matching the online `MoodStore.log` write path.
@@ -406,13 +422,13 @@ public actor OutboxReplayService {
             let p = try decoder.decode(OutboxQueue.Payloads.DeleteMeasurement.self, from: op.payload)
             try await measurementsRepo.replayDelete(id: p.id, idempotencyKey: op.idempotencyKey)
         case .bulkDeleteMeasurements:
-            // v0.14.8 W3 — re-POSTs one ≤200-id chunk under the persisted key.
+            // Re-POSTs one ≤200-id chunk under the persisted key.
             // Tombstone-idempotent server-side, so a replay after the original
             // actually landed is a silent no-op.
             let p = try decoder.decode(OutboxQueue.Payloads.BulkDeleteMeasurements.self, from: op.payload)
             _ = try await measurementsRepo.replayBulkDelete(ids: p.ids, idempotencyKey: op.idempotencyKey)
         case .deleteHealthKitSamples:
-            // A5 (1.4, R3 S4) — Apple Health deletions kept while the server was
+            // Apple Health deletions kept while the server was
             // out of reach. The route takes no idempotency key (a DELETE carries
             // none) and needs none: it touches a row once, so a replay after the
             // original landed is a no-op.
@@ -421,13 +437,13 @@ public actor OutboxReplayService {
         case .updateMood:
             let p = try decoder.decode(OutboxQueue.Payloads.UpdateMood.self, from: op.payload)
             let saved = try await moodRepo.replayUpdate(id: p.id, patch: p.patch, idempotencyKey: op.idempotencyKey)
-            // v0.10.0 W10 M1 — mirror the edit into Apple Health too (re-save of
+            // Mirror the edit into Apple Health too (re-save of
             // the same externalUUID = update). Self-gated on the sync toggle.
             await mirrorMood?(saved)
         case .deleteMood:
             let p = try decoder.decode(OutboxQueue.Payloads.DeleteMood.self, from: op.payload)
             try await moodRepo.replayDelete(id: p.id, idempotencyKey: op.idempotencyKey)
-            // v0.10.0 W10 M1 — delete the mirrored HK sample so a mood deleted
+            // Delete the mirrored HK sample so a mood deleted
             // offline doesn't linger in Apple Health once the delete syncs.
             await mirrorMoodDelete?(p.id)
         default:
@@ -460,6 +476,7 @@ public actor OutboxReplayService {
             try await medicationsRepo.replayDeleteIntake(
                 medicationId: p.medicationId,
                 eventId: p.eventId,
+                expected: p.expected,
                 idempotencyKey: op.idempotencyKey
             )
         case .logMedicationIntake:
@@ -492,7 +509,7 @@ public actor OutboxReplayService {
         }
     }
 
-    /// v0.7.1 W-TARGETS-EDITOR — replay path for `updateThresholds`. Re-issues
+    /// Replay path for `updateThresholds`. Re-issues
     /// `PUT /api/user/thresholds` with the persisted idempotency key so the
     /// server dedupes a write that may already have landed before app-kill.
     /// When the repo is unwired (tests / legacy call sites) the op is dropped
@@ -505,7 +522,7 @@ public actor OutboxReplayService {
         _ = try await userThresholdsRepo.replayUpdate(p.patch, idempotencyKey: op.idempotencyKey)
     }
 
-    /// v0.8.0 W10 — replay path for `updateInsightsLayout`. Re-issues
+    /// Replay path for `updateInsightsLayout`. Re-issues
     /// `PUT /api/insights/layout` with the persisted idempotency key so the
     /// server dedupes a write that may already have landed before app-kill.
     /// When the repo is unwired (tests / legacy call sites) the op is dropped

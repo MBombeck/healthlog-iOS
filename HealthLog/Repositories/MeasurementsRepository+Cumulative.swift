@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - v0.7.0 W-STEPS Layer 3 — cumulative-kind series routing
+// MARK: - Cumulative-kind series routing
 
 extension MeasurementsRepository {
     /// Series-backed `recent(kind:)` for cumulative kinds — see the routing

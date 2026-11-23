@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **B5 (1.4) — waist circumference from Apple Health.**
+    /// **Waist circumference from Apple Health.**
     ///
     /// The server maps `HKQuantityTypeIdentifierWaistCircumference` to
     /// `WAIST_CIRCUMFERENCE` since v1.25.0, with `hkUnit: "m"` and a ×100

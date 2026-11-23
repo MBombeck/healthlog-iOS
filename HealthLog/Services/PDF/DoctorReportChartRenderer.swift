@@ -24,12 +24,12 @@ import SwiftUI
     enum DoctorReportChartRenderer {
         /// Pre-renders every chart series in the block into a UIImage list,
         /// suitable for tiling on a single PDF page.
-        /// #115 B5 — `glucoseUnit` is the unit the glucose tile plots in (the
+        /// `glucoseUnit` is the unit the glucose tile plots in (the
         /// spec's series stay canonical mg/dL for the FHIR bundle).
-        /// #115 P2 — `units` (the spec's `printUnits`) wins over `glucoseUnit`
+        /// `units` (the spec's `printUnits`) wins over `glucoseUnit`
         /// when given: weight / temperature / waist tiles plot in the account's
         /// unit too.
-        /// L10N-REPORT — `reportLocale` names the tiles and formats the axis
+        /// `reportLocale` names the tiles and formats the axis
         /// dates in the report language; `nil` keeps the interface language.
         static func renderImages(
             _ block: DoctorReportSpec.ChartsBlock,
@@ -104,12 +104,12 @@ import SwiftUI
     /// VoiceOver path for free.
     struct ChartTile: View {
         let series: DoctorReportSpec.ChartsBlock.Series
-        /// #115 B5 — names the glucose tile's unit (its points are already in it).
+        /// Names the glucose tile's unit (its points are already in it).
         var glucoseUnit: GlucoseUnit = .mgdL
-        /// #115 P2 — the units the tile's points are in (glucose from
+        /// The units the tile's points are in (glucose from
         /// ``glucoseUnit`` when not given).
         var units: UnitPreferences?
-        /// L10N-REPORT — the report language of the tile title; `nil` reads
+        /// The report language of the tile title; `nil` reads
         /// the interface language.
         var reportLocale: ReportLocale?
 
@@ -140,7 +140,7 @@ import SwiftUI
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     // Fixed print size — renders onto a fixed-metrics PDF page,
-                    // Dynamic Type has no meaning for print output (audit-01 M1).
+                    // Dynamic Type has no meaning for print output.
                     // swiftlint:disable:next dynamic_type_bypass
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Self.printInk)
@@ -165,7 +165,7 @@ import SwiftUI
                     }
                 }
                 .chartXAxis {
-                    // POLISH-A F-PDF-2 — whole days only. The automatic marks
+                    // Whole days only. The automatic marks
                     // fell to half days on a short window and printed "12 mei,
                     // 12" in Dutch, an hour without a unit.
                     AxisMarks(values: .stride(by: .day, count: Self.dayStride(for: series.points))) { _ in

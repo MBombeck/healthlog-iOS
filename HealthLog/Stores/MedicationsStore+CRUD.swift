@@ -41,7 +41,7 @@ public extension MedicationsStore {
         do {
             let created = try await repo.create(body)
             try sessionLease.requireCurrent()
-            bumpMutationGeneration() // H-3 — protect this optimistic insert
+            bumpMutationGeneration() // Protect this optimistic insert
             medications.insert(created, at: 0)
             // Patch through to the SWR list-cache so the next observe on
             // `.medicationsList` sees the new row immediately instead of
@@ -84,7 +84,7 @@ public extension MedicationsStore {
         do {
             let updated = try await repo.update(id: id, patch: patch)
             try sessionLease.requireCurrent()
-            bumpMutationGeneration() // H-3 — protect this optimistic swap
+            bumpMutationGeneration() // Protect this optimistic swap
             if let i = medications.firstIndex(where: { $0.id == id }) {
                 medications[i] = updated
             } else {
@@ -134,7 +134,7 @@ public extension MedicationsStore {
             return .failed(.unknown("Medication not found"))
         }
         let original = medications[originalIndex]
-        bumpMutationGeneration() // H-3 — protect this optimistic archive patch
+        bumpMutationGeneration() // Protect this optimistic archive patch
         medications[originalIndex] = archiving(original, at: now)
         // Compliance-window must invalidate too — archive removes the
         // medication from the active set so today's ring needs to drop
@@ -245,7 +245,7 @@ public extension MedicationsStore {
     @discardableResult
     func endMedication(id: String, on date: Date = .now) async -> WriteOutcome {
         guard medications.first(where: { $0.id == id })?.serverEndsCourseNow == true else {
-            return await update(id: id, patch: .init(endsOn: ProfileDay.key(for: date))) // #115 1.5: the account's day
+            return await update(id: id, patch: .init(endsOn: ProfileDay.key(for: date))) // The account's day
         }
         guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
         let result: EndMedicationCourseResult
@@ -264,7 +264,7 @@ public extension MedicationsStore {
             self.error = wrapped
             return .failed(wrapped)
         }
-        bumpMutationGeneration() // H-3 — protect this optimistic end
+        bumpMutationGeneration() // Protect this optimistic end
         medications = medications.map { $0.id == id ? $0.endingCourse(result, now: date) : $0 }
         reconcileSpeziSchedulerIfAvailable()
         guard let swr else { return .success }
@@ -300,8 +300,8 @@ public extension MedicationsStore {
         return authenticatedEffectIsCurrent(sessionLease) ? .success : .failed(.canceled)
     }
 
-    /// **M2** — best-effort fetch of the saved list layout. Quietly keeps the
-    /// current value on any failure (offline / standalone / older server) so
+    /// Best-effort fetch of the saved list layout. Quietly keeps the
+    /// current value on any failure (offline / older server) so
     /// the list falls back to the plain server order rather than erroring.
     func fetchListLayout() async {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return }
@@ -314,17 +314,12 @@ public extension MedicationsStore {
         }
     }
 
-    // 08-13 — there is no list-presentation setter any more. `setListView` was
-    // made inert by 08-05 (one enum case, so its guard returned before any
-    // state moved) and retained only because 06-AUTHENTICATED-EFFECT-INVENTORY
-    // froze six scanner hits on `setListView#1`. Those six rows are attested
-    // `removed-hit` under owner 08-13 in 06-EFFECT-INVENTORY-DISPOSITIONS.tsv,
-    // so the function is deleted rather than documented. `setListOrder` below
-    // is the only medication-layout write the app performs, and it is
-    // order-only — which is what keeps whatever presentation the server may
-    // still have stored from being overwritten by anything this app sends.
+    // There is no list-presentation setter. `setListOrder` below is the only
+    // medication-layout write the app performs, and it is order-only, so
+    // whatever presentation the server has stored is never overwritten by
+    // anything this app sends.
 
-    /// **W-B184 MED-1** — persist a new manual medication order.
+    /// Persist a new manual medication order.
     ///
     /// `order` is the full top-to-bottom id sequence the user dragged into
     /// place. It is capped at `MedicationListLayout.orderMaxEntries` (the
@@ -334,7 +329,7 @@ public extension MedicationsStore {
     /// stored for this account is preserved rather than overwritten, which is
     /// what keeps a legacy value from being rewritten by an order change.
     ///
-    /// **08-05 — this is the only medication-layout write the app performs.**
+    /// **This is the only medication-layout write the app performs.**
     @discardableResult
     func setListOrder(_ order: [String]) async -> WriteOutcome {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
@@ -390,10 +385,10 @@ public extension MedicationsStore {
 
     /// Void-returning mark entry point for the Today-section swipe-actions.
     ///
-    /// W-DEDUP-INTAKE — this is now a thin delegate to the canonical
+    /// This is now a thin delegate to the canonical
     /// `markIntakeQuick`, the single source of truth for the optimistic
     /// patch + rollback + `takenAt = min(scheduledAt, now)` clamp (the b198
-    /// phantom-dose fix) + synth-id routing + standalone-mirror handling.
+    /// phantom-dose fix) + synth-id routing.
     /// The only difference vs. `markIntakeQuick` is that this surface
     /// discards the `WriteOutcome` (the swipe-action UI has no `.queued`
     /// vs. `.failed` branch to drive); `markIntakeQuick` is
@@ -447,14 +442,14 @@ public extension MedicationsStore {
             // + tap).
             return SynthesizedMarkReceipt(outcome: .success, serverEventID: nil, queuedOperationID: nil)
         }
-        // v0.8.2 W1b (B5): coalesce a rapid second tap — the first mark
+        // Coalesce a rapid second tap — the first mark
         // owns the real outcome + the single CREATE; the duplicate is a
         // benign no-op (mirrors the malformed-id soft-success above).
         guard beginMark(intakeId) else {
             return SynthesizedMarkReceipt(outcome: .success, serverEventID: nil, queuedOperationID: nil)
         }
         defer { endMark(intakeId) }
-        // M3 — clamp TAKEN to `min(scheduledAt, now)` (canonical), as above.
+        // Clamp TAKEN to `min(scheduledAt, now)` (canonical), as above.
         let resolvedTakenAt = status == .taken ? min(parsed.scheduledAt, now) : nil
         let optimistic = MedicationIntake(
             id: intakeId,
@@ -466,23 +461,26 @@ public extension MedicationsStore {
         )
         appendOrReplaceOptimisticSynth(intake: optimistic)
         let operationID = UUID()
+        let idempotencyKey = IdempotencyKey()
         do {
-            let serverEventID = try await repo.recordFromReminder(
+            let written = try await repo.recordFromReminderReturningReceipt(
                 medicationId: parsed.medicationId,
                 scheduledFor: parsed.scheduledAt,
                 status: status,
                 takenAt: resolvedTakenAt ?? now,
                 injectionSite: injectionSite,
-                operationID: operationID
+                operationID: operationID,
+                idempotencyKey: idempotencyKey
             )
             try sessionLease.requireCurrent()
             await invalidateAfterSynthMark(sessionLease: sessionLease)
             try sessionLease.requireCurrent()
-            // v0.6.1.4 Y4.2 — re-fetch the server-canonical snapshot
+            // Re-fetch the server-canonical snapshot
             // for the affected medication on the synth-mark path too.
             // PRN / weekly meds (Trulicity) take this branch since they
             // have no today-intake row before the operator marks one.
             let affectedMedicationID = parsed.medicationId
+            refreshResolvedSlotsAfterWrite(medicationId: affectedMedicationID) // D3 #4: maybe another day's slot
             complianceRefreshTask?.cancel()
             complianceRefreshTask = _Concurrency.Task { @MainActor [weak self] in
                 await self?.refreshCardComplianceSnapshot(
@@ -492,9 +490,22 @@ public extension MedicationsStore {
             }
             return SynthesizedMarkReceipt(
                 outcome: .success,
-                serverEventID: serverEventID,
-                queuedOperationID: nil
+                serverEventID: written?.rowID,
+                queuedOperationID: nil,
+                idempotencyKey: idempotencyKey.raw,
+                syncVersion: written?.syncVersion
             )
+        } catch let already as MedicationAlreadyTaken {
+            // #189 (6): the slot was taken elsewhere. Nothing was written and
+            // nothing may be undone; the reload shows the first take.
+            let notice = already.notice
+            guard authenticatedEffectIsCurrent(sessionLease) else {
+                return SynthesizedMarkReceipt(outcome: .failed(.canceled), serverEventID: nil, queuedOperationID: nil)
+            }
+            removeOptimisticSynth(id: intakeId)
+            error = notice
+            await invalidateAfterSynthMark(sessionLease: sessionLease)
+            return SynthesizedMarkReceipt(outcome: .failed(notice), serverEventID: nil, queuedOperationID: nil)
         } catch let err as HLError {
             guard authenticatedEffectIsCurrent(sessionLease) else {
                 return SynthesizedMarkReceipt(outcome: .failed(.canceled), serverEventID: nil, queuedOperationID: nil)
@@ -503,10 +514,13 @@ public extension MedicationsStore {
             if err.shouldPersistToOutbox {
                 // Outbox replays (incl. `.unauthorized` token-expiry, WW/F1) —
                 // keep the optimistic patch visible.
+                // The queued row carries this key once it lands, so a take
+                // noted for undo (R1 (1)) can find exactly that row.
                 return SynthesizedMarkReceipt(
                     outcome: .queued,
                     serverEventID: nil,
-                    queuedOperationID: operationID
+                    queuedOperationID: operationID,
+                    idempotencyKey: idempotencyKey.raw
                 )
             }
             removeOptimisticSynth(id: intakeId)
@@ -532,10 +546,10 @@ public extension MedicationsStore {
     /// every render so the original placeholder is suppressed by its
     /// own optimistic shadow.
     ///
-    /// v0.6.1.3 Y4.1 — fires `onIntakesDidChange` so the App-Badge
+    /// Fires `onIntakesDidChange` so the App-Badge
     /// recomputes the moment the optimistic synth row lands.
     private func appendOrReplaceOptimisticSynth(intake: MedicationIntake) {
-        // audit-v0162 H-3 — bump so an in-flight revalidation can't drop this
+        // Bump so an in-flight revalidation can't drop this
         // optimistic synth row (which would re-surface the placeholder + climb
         // the badge back up).
         bumpMutationGeneration()
@@ -544,7 +558,7 @@ public extension MedicationsStore {
         } else {
             todayIntakes.append(intake)
         }
-        // W-COMPLIANCE-INV — no cache invalidate here (PRN / weekly meds
+        // No cache invalidate here (PRN / weekly meds
         // take this path): the last server snapshot keeps painting until the
         // post-mark `refreshCardComplianceSnapshot` lands the canonical value.
         onIntakesDidChange?()
@@ -554,10 +568,10 @@ public extension MedicationsStore {
     /// the original synth placeholder re-surfaces in
     /// `derivedTodayIntakes`.
     ///
-    /// v0.6.1.3 Y4.1 — fires `onIntakesDidChange` so the App-Badge
+    /// Fires `onIntakesDidChange` so the App-Badge
     /// catches up to the rollback.
     internal func removeOptimisticSynth(id: String) {
-        bumpMutationGeneration() // H-3 — protect this optimistic rollback removal
+        bumpMutationGeneration() // Protect this optimistic rollback removal
         todayIntakes.removeAll { $0.id == id }
         onIntakesDidChange?()
     }
@@ -577,7 +591,7 @@ public extension MedicationsStore {
         guard authenticatedEffectIsCurrent(sessionLease) else { return }
         await swr.invalidate([
             todayIntakesKey,
-            // 15-03 (B4) — the medication row carries `lastTakenAt`; a
+            // The medication row carries `lastTakenAt`; a
             // synthesised-slot mark is an intake write like any other.
             .medicationsList,
             .medicationsCompliance(days: Self.complianceDaysWindow),

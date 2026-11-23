@@ -6,7 +6,7 @@ import Testing
 /// own domain Measurement.
 private typealias Measurement = HealthLog.Measurement
 
-/// v0.5.5.1 — pin the contract of `MeasurementListFilter.apply(...)`. The
+/// Pin the contract of `MeasurementListFilter.apply(...)`. The
 /// drill-down `MeasurementListScreen(kind:)` mounts both a `.searchable`
 /// query and a per-source chip row; the filter pipeline restricts by
 /// source first, then by the trimmed lowercased query needle. Locking the

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **SYMPTOM (1.5.0, #144, server #1237)** — the symptom occurrences filed
+/// The symptom occurrences filed
 /// against an illness episode, and the symptoms they name.
 ///
 /// - `GET /api/symptoms/events?episodeId=`: the occurrences linked to one
@@ -55,6 +55,20 @@ public actor SymptomEventsRepository {
         // The route already narrows to the link; this keeps a wider answer
         // from ever showing another episode's occurrence here.
         return collected.filter { $0.episodeId == episodeId }
+    }
+
+    /// How many of the newest occurrences the last-intensity read takes, as
+    /// the web does (`LATEST_EVENTS_LIMIT`).
+    static let latestEventsLimit = 200
+
+    /// Each symptom's last intensity, from the newest occurrences of the
+    /// whole record: the value a picked symptom starts on.
+    public func latestIntensities() async throws -> [String: Int] {
+        let request: APIRequest<SymptomEventPage> = .get(
+            Self.eventsPath,
+            query: [("limit", String(Self.latestEventsLimit))]
+        )
+        return try await SymptomUsage.latestIntensities(api.send(request).events)
     }
 
     public func definitions() async throws -> [SymptomDefinition] {

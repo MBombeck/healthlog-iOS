@@ -20,7 +20,7 @@ struct AuthenticatedSessionLeaseTests {
 
         #expect(
             !oldLease.isCurrent,
-            "EXPECTED_RED: old lease remained current after replacement"
+            "old lease remained current after replacement"
         )
     }
 

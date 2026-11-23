@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.5.3-F3 — Workouts surface contract tests.
+/// Workouts surface contract tests.
 ///
 /// Pins the layout-descriptor strings + the pure `WorkoutFormatter`
 /// helpers so a future wave can't silently rename the navigation title or
@@ -40,7 +40,7 @@ struct WorkoutsScreenTests {
 
     @Test("Server sport-type enum tokens (our own ingest) render mapped titles")
     func sportTitleServerEnumTokens() {
-        // W-WORKOUT-E2E: `WorkoutHealthKitMapping` uploads these exact tokens
+        // `WorkoutHealthKitMapping` uploads these exact tokens
         // (server `workoutSportTypeEnum`); the list must not render raw
         // fallbacks like "Hiit" / "Mindandbody" for rows we wrote ourselves.
         #expect(WorkoutFormatter.sportTitle("strength") == "Krafttraining")
@@ -153,7 +153,7 @@ struct WorkoutDetailViewSourceLabelTests {
         #expect(WorkoutDetailView.sourceLabel("WITHINGS") == "Withings")
         #expect(WorkoutDetailView.sourceLabel("MANUAL") == "Manuell")
         #expect(WorkoutDetailView.sourceLabel("IMPORT") == "Import")
-        // W-WORKOUT-E2E — server ingests WHOOP (v1.11.0) + Fitbit (v1.12.0)
+        // Server ingests WHOOP (v1.11.0) + Fitbit (v1.12.0)
         // workouts; brand spellings, not `.capitalized` ("Whoop").
         #expect(WorkoutDetailView.sourceLabel("WHOOP") == "WHOOP")
         #expect(WorkoutDetailView.sourceLabel("FITBIT") == "Fitbit")

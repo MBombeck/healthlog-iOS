@@ -26,7 +26,7 @@ public struct CycleDayLogWrite: Codable, Sendable, Equatable {
     public var protectedSex: Bool?
     public var pregnancyTest: CycleTestResult?
     public var progesteroneTest: CycleTestResult?
-    /// v0.14.8 — the active contraceptive method on the day (HK
+    /// The active contraceptive method on the day (HK
     /// `HKCategoryTypeIdentifierContraceptive` ingest; server folds it onto
     /// the day-log timeline, `contraceptiveKindEnum`).
     public var contraceptive: CycleContraceptiveKind?

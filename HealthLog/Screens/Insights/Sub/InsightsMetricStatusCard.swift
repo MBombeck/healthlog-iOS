@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.3 C4 — the **ONE canonical "30 Tage Durchschnitt" status card** rendered
+/// The **ONE canonical "30 Tage Durchschnitt" status card** rendered
 /// on EVERY per-metric Insights page (Blutdruck, Puls, Gewicht, BMI, Ruhepuls, …).
 ///
 /// Before this, the per-metric primary card forked on `kind == .bloodPressure`:
@@ -22,10 +22,10 @@ import SwiftUI
 ///   1. header row — title + optional guideline caption (BP "ESH 2023") +
 ///      `Spacer` + optional classification chip (`HLBadge`) top-right;
 ///   2. headline value — the 30-day average (BP: sys/dia pair) + unit caption;
-///   3. the shared `InsightsInTargetBar` ("Im Zielbereich"), when a pct exists;
+///   3. the in-range rail (`RangeBandRow(share:window:)`), when a pct exists;
 ///   4. the Zielband caption, when a target band exists.
 ///
-/// **C2:** the in-card "· 30-day avg" hint was removed from the unit caption —
+/// The in-card "· 30-day avg" hint was removed from the unit caption —
 /// the screen now renders a "30 Tage Durchschnitt" section heading ABOVE the
 /// card, so repeating it inside is redundant.
 ///
@@ -79,7 +79,7 @@ struct InsightsMetricStatusCard: View {
         var inTargetWindowLabel: String?
         /// The Zielband caption ("Ziel: 120–129 mmHg"). `nil` → no band line.
         let targetBandCaption: String?
-        /// v0.14.4 D1 — a target-less **Verlauf** sparkline for kinds the server
+        /// A target-less **Verlauf** sparkline for kinds the server
         /// emits no clinical band for (Aktive Energie + the other ~25 non-targeted
         /// kinds, plus BMI). Honest: a trend line only, never a fabricated Zielband
         /// or "Im Zielbereich" bar. `nil` → no sparkline (the targeted kinds keep
@@ -99,7 +99,7 @@ struct InsightsMetricStatusCard: View {
                 || showsSparkline
         }
 
-        /// v0.14.4 D1 — render the target-less Verlauf only when there is no
+        /// Render the target-less Verlauf only when there is no
         /// "Im Zielbereich" bar (targeted kinds already carry the richer in-target
         /// fill; a sparkline would be redundant) AND at least two points exist.
         var showsSparkline: Bool {
@@ -142,20 +142,17 @@ struct InsightsMetricStatusCard: View {
                     chipCaptionRow
                     headlineRow
                     if let pct = descriptor.pctInTarget {
-                        InsightsInTargetBar(pct: pct, windowLabel: descriptor.inTargetWindowLabel)
+                        RangeBandRow(share: pct, window: descriptor.inTargetWindowLabel)
                     }
                     if let band = descriptor.targetBandCaption {
                         Text(band)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                     }
-                    // v0.14.4 D1 — the target-less Verlauf. Monochrome (no tone:
-                    // there is no clinical band → no in/out-of-band colour), so the
-                    // line rides the neutral series tint. Only paints for the
-                    // non-targeted kinds (BMI + Aktive Energie + …) that the
-                    // operator flagged as "der Verlauf ist nicht mitgekommen".
+                    // The target-less Verlauf, in the one sparkline tint (there
+                    // is no clinical band, so no in/out-of-band colour). Only
+                    // for the kinds without a target (BMI, active energy, …).
                     if descriptor.showsSparkline, let values = descriptor.sparklineValues {
-                        HLSparkline(values: values, tint: HLText.secondary)
+                        HLSparkline(values: values)
                             .frame(height: HLChartStyle.heightCompact)
                             .accessibilityLabel(Text("Trend"))
                     }
@@ -191,8 +188,7 @@ struct InsightsMetricStatusCard: View {
     private var headerRow: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(descriptor.title)
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
+                .hlText(.tileLabel)
             // 1.4.1 — a guideline name IS a citation. When the catalog knows the
             // topic behind it, the caption stops being decoration and becomes the
             // way into the sources sheet; without a topic it stays plain text.
@@ -200,7 +196,7 @@ struct InsightsMetricStatusCard: View {
                 HLSourcesGuidelineCaption(caption: guideline, topic: descriptor.sourcesTopic)
             }
             Spacer()
-            // C3 — the chip lives in the header row. Both the Letzte-Messung
+            // The chip lives in the header row. Both the Letzte-Messung
             // delta tick (HeroDeltaChip, pinned to the top of its HStack) and
             // this chip now anchor to the top of their respective cards' header
             // rows, so they sit at the SAME vertical position across both cards.
@@ -210,27 +206,16 @@ struct InsightsMetricStatusCard: View {
         }
     }
 
+    /// The 30-day average as a fact row of the assessment, not as a second
+    /// large figure: the page has one, "Letzte Messung". Label and value in
+    /// body text, stacked at the accessibility sizes (``HLFactRow``).
     @ViewBuilder
     private var headlineRow: some View {
         if let value = descriptor.headlineValue {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-                Text(value)
-                    .font(.hlMetric(.largeTitle))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
-                    // T4 / #15 — a BP average ("128/88") stays on one line and
-                    // shrinks instead of breaking inside the number.
-                    .lineLimit(1)
-                    .minimumScaleFactor(HeroStrip.valueMinimumScaleFactor)
-                    .layoutPriority(1)
-                // C2 — unit only; the "· 30-day avg" hint moved to the section
-                // heading the screen renders ABOVE this card.
-                if !descriptor.unitCaption.isEmpty {
-                    Text(descriptor.unitCaption)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-            }
+            HLFactRow(
+                "30-day average",
+                value: descriptor.unitCaption.isEmpty ? value : "\(value) \(descriptor.unitCaption)"
+            )
         }
     }
 }

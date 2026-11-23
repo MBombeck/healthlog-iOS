@@ -23,7 +23,7 @@
 import Foundation
 
 extension MetricFHIRMapper {
-    // 09-08 — same family, same reason as `mapping(for:)`: the additive-signal
+    // Same family, same reason as `mapping(for:)`: the additive-signal
     // rows are an exhaustive table whose `switch` is the audit surface. It is
     // long because there are that many signals, not because it does too much.
     // function_body_length exception (owner: 09-08): exhaustive additive-signal FHIR table, one row per kind.
@@ -36,7 +36,7 @@ extension MetricFHIRMapper {
     /// parent switch never dispatches a non-additive kind here).
     static func additiveSignalMapping(for kind: MetricKind) -> MetricFHIRMapping? { // swiftlint:disable:this cyclomatic_complexity
         switch kind {
-        // v0.13.1 IC — v1.10.0 additive HealthKit signals. No published LOINC
+        // v1.10.0 additive HealthKit signals. No published LOINC
         // for these Apple-Watch-derived metrics, so they carry their HealthKit
         // identifier as the code (system `.healthKit`, physician-review-pending)
         // exactly like the W21 Withings additions.
@@ -124,14 +124,14 @@ extension MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "Cel")
             )
 
-        // v0.14.6 — v1.12.8 WHOOP-native aggregates have no clean FHIR mapping
+        // v1.12.8 WHOOP-native aggregates have no clean FHIR mapping
         // (avg/max HR over a day/session would mis-read as a spot heart rate;
         // sleep-disturbance count has no standard LOINC), so they are not
         // exported as FHIR Observations.
         case .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount:
             nil
 
-        // v0.14.1 W-REGFIX — v1.17.1 source-fixed render-only signals (#23) have
+        // v1.17.1 source-fixed render-only signals have
         // no published LOINC (vendor-derived autonomic / training-load / sleep
         // scores + a signed thermal baseline offset), so they carry a custom
         // HealthLog CodeSystem code, `physicianReviewPending: true` — exactly
@@ -189,7 +189,7 @@ extension MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "Cel")
             )
 
-        // v0158 — v1.25 clinical measurement types. Pain + waist carry published
+        // v1.25 clinical measurement types. Pain + waist carry published
         // LOINCs (real `.loinc` system); grip + waist-to-height have no LOINC, so
         // they carry a custom HealthLog code (`.healthKit` system,
         // `physicianReviewPending: true`) exactly like the W21 / IC additive rows.
@@ -239,7 +239,7 @@ extension MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "1")
             )
 
-        // #115 R3 — server v1.39.3 FHIR table (`expected-measurement-loinc.json`).
+        // Server v1.39.3 FHIR table (`expected-measurement-loinc.json`).
         // 96402-2 and 91557-1 do not exist, and 41957-2 / 41955-6 name other
         // gait measurements, so the HL7 validator rejected or misread all four.
         // Like the server, they now carry their HealthKit identifier on the shared
@@ -292,7 +292,7 @@ extension MetricFHIRMapper {
                 ucum: UCUMUnit(unit: "m")
             )
 
-        // POLISH-A A5 — the server-v1.44 Apple Health types, byte-aligned with
+        // The server-v1.44 Apple Health types, byte-aligned with
         // the server's FHIR rows (`signals/registry.ts`, v1.47.0). No LOINC term
         // means the same thing (the ring minutes are day totals, LOINC 55411-3
         // is one session's duration; stand hours, mindful sessions and the AFib

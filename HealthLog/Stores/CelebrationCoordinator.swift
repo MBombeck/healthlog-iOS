@@ -1,12 +1,12 @@
 import Foundation
 import Observation
 
-/// v0.5.5.6 RECONCILE-CELEBRATE — coordinates the `CelebrationOverlay`
+/// Coordinates the `CelebrationOverlay`
 /// presentation slot at the SwiftUI root.
 ///
 /// Stores publish a new personal record by calling `celebrate(_:)`; the
 /// `RootView` observes `current` and renders the existing
-/// `CelebrationOverlay` (POLISH-PR) over `AuthenticatedShell` at the
+/// `CelebrationOverlay` over `AuthenticatedShell` at the
 /// highest z-index. The coordinator schedules an auto-dismiss after a
 /// bounded TTL (default 4 s — matches the operator quote *"lass den
 /// Moment wirken, aber halt ihn nicht fest"* with a small buffer over

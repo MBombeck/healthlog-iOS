@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// #5 — the grace window that stops the SECOND rotation.
+/// The grace window that stops the SECOND rotation.
 ///
 /// At the 24 h access-token boundary every in-flight request gets `401
 /// expired` at once. Single-flight folds them onto ONE rotation (A → B), and

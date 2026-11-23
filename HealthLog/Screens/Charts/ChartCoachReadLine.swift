@@ -23,8 +23,10 @@ enum ChartCoachReadLine {
         }
         let low = number(baseline.low)
         let high = number(baseline.high)
-        let value = number(baseline.latest)
         let unit = MetricValueFormatter.unitSuffix(for: kind, units: units)
+        // The reading carries its unit: the sentence ends on it, far from the
+        // range's unit ("lag mit 175,5 darin" read as a bare number).
+        let value = unit.isEmpty ? number(baseline.latest) : "\(number(baseline.latest)) \(unit)"
         let steady = low == high
         if baseline.isSameHours {
             return sameHours(baseline.placement, low: low, high: high, unit: unit, value: value)
@@ -43,7 +45,8 @@ enum ChartCoachReadLine {
     /// "3. November" for a `YYYY-MM-DD` day, read as a calendar day (no zone shift).
     static func dayText(_ dayKey: String, calendar: Calendar = .current) -> String? {
         guard let date = TimelineRepository.date(fromDayKey: dayKey, calendar: calendar) else { return nil }
-        return date.formatted(.dateTime.day().month(.wide).locale(AppLanguage.current.formattingLocale))
+        let style = Date.FormatStyle(calendar: calendar).day().month(.wide).locale(AppLanguage.current.formattingLocale)
+        return HLDateFormat.appendingYearIfNeeded(date, base: style, calendar: calendar)
     }
 
     private typealias Placement = CoachReadStrip.Baseline.Placement

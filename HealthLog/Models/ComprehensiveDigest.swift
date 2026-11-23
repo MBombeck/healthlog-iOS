@@ -6,7 +6,7 @@ import Foundation
 // Mirrors the production envelope shape emitted by `GET /api/insights/comprehensive`
 // (server source: `src/app/api/insights/comprehensive/route.ts:377-400`).
 //
-// **Background (A8 §1):** Until v0.3.0 the iOS decoder discarded everything except
+// **Background:** Until v0.3.0 the iOS decoder discarded everything except
 // `recommendations` — `AIInsightResponse` was modelled against a Zod schema the
 // production route does not emit. The production route emits a *metric-digest*
 // envelope: per-metric summaries, BMI + classification, BP windows + ESH-2023
@@ -193,7 +193,7 @@ public enum BMIClassification: String, Codable, Sendable, CaseIterable {
     case obeseGradeI = "obese_grade_i"
     case obeseGradeII = "obese_grade_ii"
     case obeseGradeIII = "obese_grade_iii"
-    /// v0.7.0 W-API-RENDER — token the contract doesn't recognise. The
+    /// Token the contract doesn't recognise. The
     /// prior decoder coalesced any unknown wire token into `.normal`,
     /// which is **medically misleading** (an unrecognised category is not
     /// evidence of a normal BMI). We now keep the value distinct so the UI
@@ -233,7 +233,7 @@ public enum BMIClassification: String, Codable, Sendable, CaseIterable {
         case "obese_grade_i", "obesity_grade_i", "obesity_grade_1": return .obeseGradeI
         case "obese_grade_ii", "obesity_grade_ii", "obesity_grade_2": return .obeseGradeII
         case "obese_grade_iii", "obesity_grade_iii", "obesity_grade_3": return .obeseGradeIII
-        // v0.7.0 W-API-RENDER — never silently masquerade an unrecognised
+        // Never silently masquerade an unrecognised
         // token as "normal". A new WHO sub-band or a server typo surfaces
         // as `.unknown` so the operator sees "Unbekannt" rather than a
         // reassuring-but-false classification.
@@ -255,7 +255,7 @@ public enum BPClassification: String, Codable, Sendable, CaseIterable {
     case hypertensionGrade1 = "hypertension_grade_1"
     case hypertensionGrade2 = "hypertension_grade_2"
     case hypertensionGrade3 = "hypertension_grade_3"
-    /// v0.7.0 W-API-RENDER — unrecognised ESH token. See the matching
+    /// Unrecognised ESH token. See the matching
     /// `BMIClassification.unknown` rationale: coalescing an unknown blood-
     /// pressure category into `.normal` is the dangerous default for a
     /// hypertension surface. `.unknown` renders "Unbekannt" / "Unknown".
@@ -288,7 +288,7 @@ public enum BPClassification: String, Codable, Sendable, CaseIterable {
         case "hypertension_grade_1", "hypertension_grade_i": return .hypertensionGrade1
         case "hypertension_grade_2", "hypertension_grade_ii": return .hypertensionGrade2
         case "hypertension_grade_3", "hypertension_grade_iii": return .hypertensionGrade3
-        // v0.7.0 W-API-RENDER — unrecognised token surfaces as `.unknown`,
+        // Unrecognised token surfaces as `.unknown`,
         // never a false-reassuring `.normal`.
         default: return .unknown
         }

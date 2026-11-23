@@ -20,7 +20,7 @@ import Foundation
 /// (no pill, no page) rather than painting an empty box.
 ///
 /// **Server-derived (paired only).** Both reads are pure server work — no
-/// on-device fallback — so the surface hides in standalone / no-server.
+/// on-device fallback — so the surface hides without a server.
 public struct EcgListDTO: Codable, Sendable, Equatable {
     public let recordings: [EcgRecordingDTO]
     /// The server's own data gate (`recordings.length > 0`). The client mirrors
@@ -101,7 +101,7 @@ public struct EcgRecordingDTO: Codable, Sendable, Equatable, Identifiable {
 /// The device's verdict, typed. `unknown` carries the raw literal so an
 /// unrecognised value is still displayed truthfully rather than dropped.
 ///
-/// **CU-16 (A6) — the enum is `RhythmClassification`, and Prisma has SIX
+/// **The enum is `RhythmClassification`, and Prisma has SIX
 /// values**, not the three the ECG OpenAPI publishes: `IRREGULAR`,
 /// `NOT_DETECTED`, `INCONCLUSIVE`, `LOW`, `VERY_LOW`, `FIRED`.
 /// `GET /api/insights/rhythm-events` hands all six through unfiltered, and the
@@ -144,7 +144,7 @@ public enum EcgClassification: Sendable, Equatable {
     /// It is a routing decision about the device's own verdict, never a
     /// HealthLog assessment of the trace (web `ecg-section.tsx:78-80`).
     ///
-    /// **CU-16 — why `low` / `veryLow` / `fired` do NOT route here.** Those
+    /// **Why `low` / `veryLow` / `fired` do NOT route here.** Those
     /// three are EVENT verdicts leaking through the shared Prisma enum; none of
     /// them is a cardiac finding on the recording being shown. Escalating a
     /// walking-steadiness severity to "discuss this ECG with a clinician" would

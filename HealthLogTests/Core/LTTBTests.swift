@@ -7,7 +7,7 @@ import Testing
 #endif
 
 /// Unit coverage for `LTTB` — the shape-preserving downsampler that caps the
-/// plotted mark count on the chart-detail surface (v0.7.1 W-CHARTS-LTTB).
+/// plotted mark count on the chart-detail surface.
 ///
 /// Pure value-type math, no SwiftUI involved → testable without a host app.
 @Suite("LTTB")
@@ -203,5 +203,15 @@ struct LTTBTests {
         let pts = Self.seriesPoints(2000)
         let out = LTTB.downsampleSeries(pts, threshold: 100)
         #expect(out.count == 100)
+    }
+}
+
+/// The selected points themselves, the shape the chart path re-projects
+/// through ``LTTB/downsampleSeries(_:threshold:)``.
+private extension LTTB {
+    static func downsample(_ points: [Point], threshold: Int) -> [Point] {
+        let indices = selectedIndices(points, threshold: threshold)
+        guard indices.count < points.count else { return points }
+        return indices.map { points[$0] }
     }
 }

@@ -28,6 +28,10 @@ struct QuickActionsTests {
 
     @Test("Glyphs match the central CapturePicker row symbols")
     func glyphsMatchPicker() {
+        // Logging a measurement shows the symbol of the measurement list in
+        // both places; the picker row already ends in a plus.
+        #expect(HLQuickAction.measurement.systemImageName == "list.bullet.rectangle")
+        #expect(CapturePickerSheet.CaptureAction.measurement.systemImage == "list.bullet.rectangle")
         #expect(HLQuickAction.measurement.systemImageName
             == CapturePickerSheet.CaptureAction.measurement.systemImage)
         #expect(HLQuickAction.medication.systemImageName

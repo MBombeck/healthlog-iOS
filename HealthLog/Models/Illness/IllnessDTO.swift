@@ -482,7 +482,7 @@ public struct IllnessResolveBody: Codable, Sendable, Equatable {
 /// `POST /api/illness/episodes/{id}/day-logs` upsert body. `date` required; the
 /// rest optional. Upserts on `(episodeId, date)`: 201 insert / 200 update.
 ///
-/// **Full-value body, not a partial patch (parity 1.7).** The server merges
+/// **Full-value body, not a partial patch.** The server merges
 /// `functionalImpact` / `feverC` / `note` as "key omitted ⇒ keep the stored
 /// value, key present ⇒ replace (explicit `null` clears)"
 /// (`src/lib/illness/day-log-write.ts:118-143`). `encodeIfPresent` therefore
@@ -519,7 +519,7 @@ public struct IllnessDayLogUpsert: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(date, forKey: .date)
-        // Parity 1.7 — the three clearable fields are ALWAYS emitted, `nil` as
+        // The three clearable fields are ALWAYS emitted, `nil` as
         // an explicit `null`; an omitted key means "keep stored" server-side.
         try c.encode(functionalImpact, forKey: .functionalImpact)
         try c.encode(feverC, forKey: .feverC)

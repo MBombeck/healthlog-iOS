@@ -1,6 +1,6 @@
 import XCTest
 
-/// **AUDITC (1.5.0, #132)** — AUDIT-C in the alcohol section: answered in
+/// **AUDITC** — AUDIT-C in the alcohol section: answered in
 /// the card, the server's result shown, an entry removed after a question in
 /// place. The fixture server (`-uitest-life`) holds one entry from 2025, so
 /// the questionnaire is due again, and scores like the server (a woman's
@@ -54,7 +54,7 @@ final class LifeAuditCUITest: XCTestCase {
         )
     }
 
-    /// POLISH-C (C7) — the one-word answer from before AUDIT-C stands in the
+    /// The one-word answer from before AUDIT-C stands in the
     /// alcohol section, as on the web, and can be removed after a question
     /// asked in place.
     @MainActor
@@ -90,7 +90,7 @@ final class LifeAuditCUITest: XCTestCase {
         for variant in variants {
             let parts = variant.split(separator: " ").map(String.init)
             let (language, appearance, xxl) = (parts[0], parts[1], parts.count > 2)
-            let locale = ["de": "de_DE", "en": "en_US", "nl": "nl_NL"][language] ?? "en_US"
+            let locale = ["de": "de_DE", "en": "en_US", "nl": "nl_NL", "ko": "ko_KR", "es": "es_ES"][language] ?? "en_US"
             let app = XCUIApplication()
             app.launchArguments = [
                 "-AppleLanguages", "(\(language))",

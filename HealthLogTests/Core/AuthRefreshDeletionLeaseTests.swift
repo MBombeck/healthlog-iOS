@@ -471,9 +471,15 @@
                             Self.refreshedSessionBody()
                         )
                     }
-                case ("/api/auth/refresh", 2):
+                case ("/api/auth/me/devices", 2):
+                    // D3 #2: sign-out first looks up this device's row to delete.
+                    complete(
+                        HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                        Data(#"{"data":{"devices":[]},"error":null}"#.utf8)
+                    )
+                case ("/api/auth/refresh", 3):
                     complete(HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, nil)
-                case ("/api/auth/login", 3):
+                case ("/api/auth/login", 4):
                     complete(
                         HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                         Self.replacementSessionBody()

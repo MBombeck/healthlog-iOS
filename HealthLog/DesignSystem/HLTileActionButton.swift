@@ -49,6 +49,60 @@ enum HLTileAction {
         ink: .textSecondary,
         hasFill: false
     )
+
+    /// How far a title on one line may shrink before the row stacks. A word
+    /// is never split: from the first accessibility size on a title wraps
+    /// between its words only.
+    static let titleMinimumScale: CGFloat = 0.85
+
+    /// Whether a title wraps between its words instead of shrinking on one
+    /// line.
+    static func wrapsTitle(at typeSize: DynamicTypeSize) -> Bool {
+        typeSize.isAccessibilitySize
+    }
+
+    /// One quick action at the foot of an object card (a medication, a
+    /// preventive check, a cadence suggestion).
+    struct Item: Identifiable {
+        let title: LocalizedStringResource
+        let icon: String?
+        let identifier: String?
+        let action: () -> Void
+
+        init(_ title: LocalizedStringResource, icon: String? = nil, identifier: String? = nil, action: @escaping () -> Void) {
+            self.title = title
+            self.icon = icon
+            self.identifier = identifier
+            self.action = action
+        }
+
+        var id: String {
+            identifier ?? title.key
+        }
+    }
+}
+
+/// The quick actions at the foot of an object card: two or three
+/// ``HLTileActionButton``s of equal width, stacked when a label would break
+/// (``HLTileActionRow``). This is the one way to build them; a single tile
+/// action outside such a row is a secondary ``HLButton``.
+struct HLTileActions: View {
+    private let items: [HLTileAction.Item]
+    private let spacing: CGFloat
+
+    init(_ items: [HLTileAction.Item], spacing: CGFloat = HLSpace.sm) {
+        self.items = items
+        self.spacing = spacing
+    }
+
+    var body: some View {
+        HLTileActionRow(spacing: spacing) {
+            ForEach(items) { item in
+                HLTileActionButton(item.title, icon: item.icon, action: item.action)
+                    .modifier(HLOptionalIdentifier(identifier: item.identifier))
+            }
+        }
+    }
 }
 
 /// **UI-Standard R9/E2-A1 — die Kachel-Aktion (quiet tile action).**
@@ -97,6 +151,8 @@ struct HLTileActionButton: View {
         self.action = action
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         let label = String(localized: titleKey)
         return Button(action: action) {
@@ -104,8 +160,15 @@ struct HLTileActionButton: View {
                 if let icon {
                     Image(systemName: icon)
                 }
-                Text(label)
-                    .font(.hlSubhead)
+                if HLTileAction.wrapsTitle(at: dynamicTypeSize) {
+                    HLWholeWordText(label, font: .hlSubhead, alignment: .center)
+                        .padding(.vertical, HLSpace.xs)
+                } else {
+                    Text(label)
+                        .font(.hlSubhead)
+                        .lineLimit(1)
+                        .minimumScaleFactor(HLTileAction.titleMinimumScale)
+                }
             }
             .frame(minHeight: HLTileAction.tokens.minHeight)
             .frame(maxWidth: .infinity)

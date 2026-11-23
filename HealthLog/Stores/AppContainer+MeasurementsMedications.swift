@@ -29,8 +29,7 @@ extension AppContainer {
             celebrationCoordinator: celebration,
             personalRecordsSnapshot: { [personalRecordsSnapshotBox] in personalRecordsSnapshotBox.records },
             swr: swr,
-            isStandalone: standaloneModePredicate(), // v0.14 RISK-1 — suppress HK mirror in standalone (dedup B)
-            // W-HKBACKFILL — read fresh per call so the per-user run-once marker
+            // Read fresh per call so the per-user run-once marker
             // for the historical Apple-Health backfill follows the live session.
             userIDProvider: { [keychain] in keychain.getString(forKey: KeychainKey.userID) }
         )
@@ -38,8 +37,7 @@ extension AppContainer {
         let medications = MedicationsStore(
             repo: medicationsRepo,
             swr: swr,
-            undoCoordinator: undo,
-            isStandalone: standaloneModePredicate() // v0.11 W2 — intake writes → local mirror in standalone
+            undoCoordinator: undo
         )
         return (measurements, medications)
     }

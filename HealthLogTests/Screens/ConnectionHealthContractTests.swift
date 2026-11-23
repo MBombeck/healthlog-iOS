@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// #139 — integration status reads `health` (server v1.42.4+) and nothing
+    /// Integration status reads `health` (server v1.42.4+) and nothing
     /// else; the legacy fields (`state`, `lastError`, `syncHealth`,
     /// `tokenExpired`, `hasActivityScope`, …) go in v1.44.
     ///
@@ -200,13 +200,13 @@
 
         // MARK: - Resume routes
 
-        @Test("resume posts to the provider's resume route; providers without one send nothing")
+        @Test("resume posts to the provider's resume route; providers without one, retired Fitbit included, send nothing")
         func resumeRoutes() async throws {
             let api = PathRecordingAPI()
             try await OAuthIntegrationRepository(api: api, provider: .fitbit).resume()
             try await OAuthIntegrationRepository(api: api, provider: .oura).resume()
             try await WithingsRepository(api: api).resume()
-            #expect(api.paths == ["/api/integrations/fitbit/resume", "/api/integrations/withings/resume"])
+            #expect(api.paths == ["/api/integrations/withings/resume"])
         }
 
         // MARK: - Helpers

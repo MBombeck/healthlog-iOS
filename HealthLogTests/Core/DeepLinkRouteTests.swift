@@ -81,7 +81,7 @@ struct DeepLinkRouteTests {
 
     @Test("Medication-ohne-ID → .medications (Meds-Liste-Root, W0-2)")
     func medicationWithoutID() throws {
-        // v0.12 W0-2 — `healthlog://medications` (kein id) ist jetzt der Meds-
+        // `healthlog://medications` (kein id) ist jetzt der Meds-
         // Tab-Root, nicht mehr `.unknown` → Dashboard. Der med-reminder no-id
         // Fallback emittiert genau diese URL und muss auf der Meds-Liste landen.
         try #expect(DeepLinkRoute(url: url("healthlog://medications")) == .medications)
@@ -101,7 +101,7 @@ struct DeepLinkRouteTests {
         try #expect(DeepLinkRoute(url: url("HealthLog://dashboard")) == .dashboard)
     }
 
-    // MARK: - b182 W-B182-INVITE (GH #16)
+    // MARK: - b182 W-B182-INVITE
 
     /// A valid `hlv_<64 hex>` token (the server `looksLikeInviteToken` shape).
     /// Static fixture — not a real secret.
@@ -115,7 +115,7 @@ struct DeepLinkRouteTests {
         )
     }
 
-    /// W-INVITE-DEEPLINK (#16) — the custom scheme also accepts the `?invite=`
+    /// The custom scheme also accepts the `?invite=`
     /// query key (the web `buildInviteUrl` key) so a QR that encodes either shape
     /// resolves.
     @Test("Custom-scheme invite (?invite=) → .invite(token:)")
@@ -126,7 +126,7 @@ struct DeepLinkRouteTests {
         )
     }
 
-    /// W-INVITE-DEEPLINK (#16) — the path-token form `healthlog://invite/<token>`.
+    /// The path-token form `healthlog://invite/<token>`.
     @Test("Custom-scheme invite (path token) → .invite(token:)")
     func customSchemeInvitePathToken() throws {
         try #expect(
@@ -135,7 +135,7 @@ struct DeepLinkRouteTests {
         )
     }
 
-    /// W-INVITE-DEEPLINK (#16) — a malformed path-token still drops to `.unknown`
+    /// A malformed path-token still drops to `.unknown`
     /// (never routed, never logged).
     @Test("Custom-scheme invite (bad path token) → .unknown")
     func customSchemeInvitePathTokenRejected() throws {
@@ -154,7 +154,7 @@ struct DeepLinkRouteTests {
         #expect(parsed == .invite(token: Self.validToken))
     }
 
-    /// W-INVITE-DEEPLINK (#16) — the shorter `/invite?token=` universal-link shape.
+    /// The shorter `/invite?token=` universal-link shape.
     @Test("Universal-link invite (/invite?token=) → .invite(token:)")
     func universalLinkShortInviteTokenQuery() throws {
         let parsed = try DeepLinkRoute.universalLink(
@@ -164,7 +164,7 @@ struct DeepLinkRouteTests {
         #expect(parsed == .invite(token: Self.validToken))
     }
 
-    /// W-INVITE-DEEPLINK (#16) — the `/invite?invite=` universal-link shape.
+    /// The `/invite?invite=` universal-link shape.
     @Test("Universal-link invite (/invite?invite=) → .invite(token:)")
     func universalLinkShortInviteInviteQuery() throws {
         let parsed = try DeepLinkRoute.universalLink(
@@ -174,7 +174,7 @@ struct DeepLinkRouteTests {
         #expect(parsed == .invite(token: Self.validToken))
     }
 
-    /// W-INVITE-DEEPLINK (#16) — the `/invite/<token>` path-token universal link.
+    /// The `/invite/<token>` path-token universal link.
     @Test("Universal-link invite (/invite/{token}) → .invite(token:)")
     func universalLinkShortInvitePathToken() throws {
         let parsed = try DeepLinkRoute.universalLink(
@@ -184,7 +184,7 @@ struct DeepLinkRouteTests {
         #expect(parsed == .invite(token: Self.validToken))
     }
 
-    /// W-INVITE-DEEPLINK (#16) — a malformed token on the short `/invite` path
+    /// A malformed token on the short `/invite` path
     /// returns nil (stays in Safari), never a routed value.
     @Test("Universal-link short invite with bad token → nil")
     func universalLinkShortInviteBadTokenReturnsNil() throws {

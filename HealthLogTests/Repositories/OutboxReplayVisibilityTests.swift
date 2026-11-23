@@ -72,7 +72,7 @@ struct OutboxReplayVisibilityTests {
         return id
     }
 
-    // MARK: - B-3 — a non-retriable server verdict is visible, not silent
+    // MARK: - A non-retriable server verdict is visible, not silent
 
     @Test("A 422 on a create removes the row AND reports kind + machine reason")
     func nonRetriableRejectionIsReported() async throws {
@@ -107,7 +107,7 @@ struct OutboxReplayVisibilityTests {
         #expect(store.discardedWrites.first?.reason == .serverRejected)
     }
 
-    // MARK: - B-3 — our OWN payload is not a server verdict
+    // MARK: - Our OWN payload is not a server verdict
 
     @Test("A stored payload this build cannot decode is dead-lettered, not deleted")
     func undecodablePayloadIsDeadLettered() async throws {
@@ -142,7 +142,7 @@ struct OutboxReplayVisibilityTests {
         #expect(recorder.snapshot.isEmpty)
     }
 
-    // MARK: - B-2 — the idempotency signals
+    // MARK: - The idempotency signals
 
     @Test("A 2xx carrying X-Idempotent-Replay: true is delivery, not a second write")
     func idempotentReplayHitCountsAsDelivered() async throws {
@@ -202,7 +202,7 @@ struct OutboxReplayVisibilityTests {
         #expect(await notices.all.first?.reason == .serverRejected)
     }
 
-    // MARK: - B-11 — a failed remap is a replay failure
+    // MARK: - A failed remap is a replay failure
 
     @Test("A failed entity remap keeps the operation queued and counts the attempt")
     func failedRemapIsAReplayFailure() async throws {
@@ -222,7 +222,7 @@ struct OutboxReplayVisibilityTests {
         #expect(await notices.all.isEmpty)
     }
 
-    // MARK: - B-2 — delivered is marked before the local remove can fail
+    // MARK: - Delivered is marked before the local remove can fail
 
     @Test("An operation whose remove fails is not sent a second time")
     func failedRemoveDoesNotResend() async throws {

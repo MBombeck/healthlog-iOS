@@ -94,7 +94,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
         let todayEventCount = medication.todayEventCount ?? 0
         let hasUncoveredOverdue = todayEventCount < passedDoseCount
 
-        // W-B179 (v0.14.9) — server-authoritative future-due gate. When the
+        // Server-authoritative future-due gate. When the
         // server's next-due instant still lies in the FUTURE (and no open
         // overdue slot is flagged), the local wall-clock arithmetic must
         // never paint the green "Jetzt fällig" before that dose's WINDOW
@@ -107,7 +107,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
         // b175 `nextDueOverdue` flag via `serverOverdueFallback`. The local
         // per-dose band itself determines whether its window has opened.
         //
-        // W-B180 — the b179 gate compared against the SLOT instant
+        // The b179 gate compared against the SLOT instant
         // (`nextDueAt`) and was therefore too strict: with the dose's window
         // already open (now ≥ window start) but the slot instant not yet
         // reached, the card stayed neutral while the Live-Activity surface
@@ -123,7 +123,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
 
         var best: MedicationWindowStatus?
         for entry in entries {
-            // W-MEDVERIFY (v0.14.8) — gate the per-entry window check on the
+            // Gate the per-entry window check on the
             // cadence's weekday set, exactly like `countPassedSchedules`
             // already does. Without this gate the time-of-day arithmetic
             // alone made a Sunday-only weekly med (Trulicity, 08:00–10:00)
@@ -132,7 +132,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
             // Mirrors the web reducer's `daysOfWeek` filter; daily / rolling
             // / interval cadences keep evaluating every day (unchanged).
             //
-            // W-B179 (v0.14.9) — the gate was one-sided: a window whose end
+            // The gate was one-sided: a window whose end
             // wraps past midnight (e.g. Fri 22:00–02:00) is still open in the
             // early hours of the NEXT day, whose weekday is not in the set.
             // The post-midnight tail therefore gates on YESTERDAY's weekday;
@@ -149,7 +149,11 @@ public enum MedicationWindowStatus: Equatable, Sendable {
                 missedMinutes: missedMinutes,
                 firesToday: entryFiresToday,
                 firedYesterday: entryFiredYesterday
-            ) else { continue }
+            ),
+                // #191 (final): a dose whose time had already passed when the
+                // medication was created is not owed, neither due, overdue nor
+                // missed. Rolling cadences are exempt.
+                isOwed(entry: entry, band: resolved.band, createdAt: medication.createdAt, now: now, calendar: calendar) else { continue }
             let status = resolved.status
 
             // W-B179/W-B180 — the server says the next dose is still upcoming
@@ -203,7 +207,35 @@ public enum MedicationWindowStatus: Equatable, Sendable {
         return best
     }
 
-    // MARK: - v1.16.4 server overdue-flag fallback (GH issue #15)
+    // MARK: - #191 not-owed doses
+
+    /// **#191 (final) — a dose that was already past at creation is not
+    /// owed.** The server resolves it through `state`; this mirrors the rule
+    /// for the local grading (card, Live Activity, reminders): today's slot of
+    /// `band` lies before `createdAt`, so it is neither due nor overdue nor
+    /// missed, and the next dose counts as pending. A rolling cadence
+    /// re-anchors on its takes and is exempt.
+    static func isOwed(
+        entry: ScheduleEntry,
+        band: DoseBand,
+        createdAt: Date?,
+        now: Date,
+        calendar: Calendar
+    ) -> Bool {
+        if case .rolling = entry.cadence { return true }
+        guard let createdAt,
+              let slot = calendar.date(
+                  bySettingHour: band.timeOfDay.hour,
+                  minute: band.timeOfDay.minute,
+                  second: 0,
+                  of: now
+              ) else { return true }
+        // A slot later today than `now` is the next dose: owed.
+        guard slot <= now else { return true }
+        return slot >= createdAt
+    }
+
+    // MARK: - v1.16.4 server overdue-flag fallback
 
     /// Surfaces the server-authoritative `nextDueOverdue` flag as the SAME
     /// overdue affordance the local reducer emits, for the cadences the local
@@ -295,31 +327,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
         return best
     }
 
-    // MARK: - Intake coverage (mirrors `isLastIntakeInCurrentWindow`)
-
-    static func isLastIntakeInCurrentWindow(
-        lastTakenAt: Date?,
-        entry: ScheduleEntry,
-        now: Date,
-        calendar: Calendar
-    ) -> Bool {
-        guard let resolved = resolvedWindowStatus(
-            entry: entry,
-            now: now,
-            calendar: calendar,
-            lateMinutes: defaultLateMinutes,
-            missedMinutes: defaultMissedMinutes,
-            firesToday: true,
-            firedYesterday: true
-        ) else { return false }
-        return isLastIntakeInBand(
-            lastTakenAt: lastTakenAt,
-            band: resolved.band,
-            allBands: resolved.allBands,
-            now: now,
-            calendar: calendar
-        )
-    }
+    // MARK: - Intake coverage
 
     static func isLastIntakeInBand(
         lastTakenAt: Date?,
@@ -373,7 +381,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
                    let start = TimeOfDay.parse(explicit.start),
                    let end = TimeOfDay.parse(explicit.end)
                 {
-                    // 09-15 — an explicit band whose end precedes its start
+                    // An explicit band whose end precedes its start
                     // runs past midnight (23:00–02:00), exactly like the
                     // legacy `windowStart`/`windowEnd` pair below, which has
                     // always carried such an end into the next day. The
@@ -432,7 +440,7 @@ public enum MedicationWindowStatus: Equatable, Sendable {
             return minutes(end)
         }
         // No explicit end OR a zero-length `windowStart == windowEnd` shape:
-        // fall through to the engine grace. W-B179 — the zero-length case
+        // fall through to the engine grace. The zero-length case
         // previously returned `minutes(end) == startMins`, which the caller's
         // overnight-wrap then inflated to a full 24 h window ("Jetzt fällig"
         // around the clock). `graceSeconds` already maps a zero span to the

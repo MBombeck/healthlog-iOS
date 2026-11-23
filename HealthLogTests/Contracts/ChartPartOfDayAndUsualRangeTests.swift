@@ -157,11 +157,10 @@ struct ChartPartOfDayAndUsualRangeTests {
 
     @Test("the part row: blood pressure page of a 1.47 server only")
     func partGate() {
-        #expect(InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, hasServer: true, serverVersion: "1.47.0"))
-        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, hasServer: true, serverVersion: "1.46.6"))
-        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, hasServer: true, serverVersion: nil))
-        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .pulse, hasServer: true, serverVersion: "1.47.0"))
-        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, hasServer: false, serverVersion: "1.47.0"))
+        #expect(InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, serverVersion: "1.47.0"))
+        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, serverVersion: "1.46.6"))
+        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .bloodPressure, serverVersion: nil))
+        #expect(!InsightsChartExtras.partOfDayAvailable(kind: .pulse, serverVersion: "1.47.0"))
         #expect(!ChartDetailStore.partOfDayApplies(kind: .bloodPressure, range: .day))
         #expect(ChartDetailStore.partOfDayApplies(kind: .bloodPressure, range: .week))
     }
@@ -208,15 +207,15 @@ struct ChartPartOfDayAndUsualRangeTests {
             #"{"low":62,"high":70,"latest":74,"latestDate":"2026-11-05","latestIsToday":true,"placement":"above","sampleDays":30}"#
         )
         #expect(ChartCoachReadLine.text(today, kind: .pulse, units: Self.metric)
-            == String(localized: "insights.coachRead.today.above \("62") \("70") \("bpm") \("74")"))
+            == String(localized: "insights.coachRead.today.above \("62") \("70") \("bpm") \("74 bpm")"))
         let dated = try Self.strip(
             #"{"low":62,"high":70,"latest":66,"latestDate":"2026-11-03","latestIsToday":false,"placement":"within","sampleDays":30}"#
         )
         let date = try #require(ChartCoachReadLine.dayText("2026-11-03"))
         let line = try #require(ChartCoachReadLine.text(dated, kind: .pulse, units: Self.metric))
-        #expect(line == String(localized: "insights.coachRead.latest.within \("62") \("70") \("bpm") \(date) \("66")"))
+        #expect(line == String(localized: "insights.coachRead.latest.within \("62") \("70") \("bpm") \(date) \("66 bpm")"))
         #expect(line.contains(date))
-        #expect(line != String(localized: "insights.coachRead.today.within \("62") \("70") \("bpm") \("66")"))
+        #expect(line != String(localized: "insights.coachRead.today.within \("62") \("70") \("bpm") \("66 bpm")"))
     }
 
     @Test("a steady band reads as one value; a glucose day in progress says it is the range for this time of day")
@@ -225,12 +224,12 @@ struct ChartPartOfDayAndUsualRangeTests {
             #"{"low":61,"high":61,"latest":64,"latestDate":"2026-11-05","latestIsToday":true,"placement":"above","sampleDays":30}"#
         )
         #expect(ChartCoachReadLine.text(steady, kind: .pulse, units: Self.metric)
-            == String(localized: "insights.coachRead.steady.above \("61") \("bpm") \("64")"))
+            == String(localized: "insights.coachRead.steady.above \("61") \("bpm") \("64 bpm")"))
         let glucose = try Self.strip(
             #"{"low":90,"high":110,"latest":100,"latestDate":"2026-11-05","latestIsToday":true,"placement":"within","sampleDays":30,"basis":"sameHours"}"#
         )
         let line = try #require(ChartCoachReadLine.text(glucose, kind: .glucose, units: Self.metric))
-        #expect(line == String(localized: "insights.coachRead.sameHours.within \("90") \("110") \("mg/dL") \("100")"))
+        #expect(line == String(localized: "insights.coachRead.sameHours.within \("90") \("110") \("mg/dL") \("100 mg/dL")"))
     }
 
     @Test("values are the server's, converted into the account's unit only")

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **CU-32 — die Fehlerbilder der Anamnese-Fläche, benannt statt generisch.**
+/// **Die Fehlerbilder der Anamnese-Fläche, benannt statt generisch.**
 ///
 /// Diese Fläche hat vier Fehlschläge, die für den Menschen davor vier
 /// verschiedene Dinge bedeuten und vier verschiedene Auswege haben. Sie alle in
@@ -64,7 +64,7 @@ public enum AnamnesisFactFailure: Error, Sendable, Equatable {
         guard let hlError = error as? HLError else {
             return .other(.unknown(String(describing: error)))
         }
-        // Audit B-2 — since `APIClient` answers a 409 carrying
+        // Since `APIClient` answers a 409 carrying
         // `X-Idempotent-Replay: false` with `.idempotencyReplayInFlight`
         // before any route-level mapping runs, the idempotency wrapper's
         // "already in progress" 409 no longer arrives as `.server(409, nil, _)`.

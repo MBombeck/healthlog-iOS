@@ -4,7 +4,7 @@ import SwiftUI
 /// Picker shows localized labels; all three stored values plus "no answer"
 /// are offered.
 ///
-/// **Wire contract — verified 2026-07-30 (CU-17 / GH #71) against the server
+/// **Wire contract — verified 2026-07-30 against the server
 /// source, not against memory:** `profileSchema.gender` in
 /// `src/lib/validations/auth.ts` is a strict `z.enum(["MALE","FEMALE","OTHER"])`
 /// (nullable, optional) behind a `preprocess` that folds `""` into `null`.

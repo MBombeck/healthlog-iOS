@@ -78,7 +78,7 @@ struct SWRCacheTests {
         #expect(c == nil)
     }
 
-    // MARK: - AUD-8 H-1 — row-count cap + batch sweep
+    // MARK: - Row-count cap + batch sweep
 
     /// Writes `count` distinct day-keyed rows, each stamped `i` days ago so the
     /// oldest are deterministically lowest `updatedAt`.
@@ -224,7 +224,7 @@ struct CacheInvalidatorMatrixTests {
         #expect(keys.contains(.healthScore))
     }
 
-    /// **#115 1.5** — the day keys this matrix drops are the ones the stores READ:
+    /// The day keys this matrix drops are the ones the stores READ:
     /// cut in the profile zone. At 2026-06-19T03:00Z an account in Los Angeles is
     /// on 2026-06-18 while a phone in Berlin is on 2026-06-19; the matrix used to
     /// invalidate the Berlin day and leave the LA row the dashboard serves.

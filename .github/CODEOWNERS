@@ -1,0 +1,12 @@
+# Every change is reviewed by the maintainer. Listed explicitly for the paths
+# where a review is a compliance step, so a later wildcard change cannot drop
+# them silently.
+*                                   @MBombeck
+/.github/                           @MBombeck
+/scripts/git-hooks/                 @MBombeck
+**/PrivacyInfo.xcprivacy            @MBombeck
+/project.yml                        @MBombeck
+/LICENSE                            @MBombeck
+/SECURITY.md                        @MBombeck
+/PRIVACY.md                         @MBombeck
+/docs/compliance.md                 @MBombeck

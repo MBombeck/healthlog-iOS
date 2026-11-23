@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — pure-engine locks for `MoodInsights` + the correlation
+/// Pure-engine locks for `MoodInsights` + the correlation
 /// detector, validated against the MoodLog `statistics-compute.ts` oracle
 /// behaviour. No SwiftUI render pass — these pin the offline-computed stats:
 /// daily-avg spine, mean/avg30/slope/prior-period, stability band mapping,
@@ -177,7 +177,7 @@ struct MoodInsightsTests {
 
     // MARK: - Patterns
 
-    // MARK: - Phase 09 / 09-04 — the cache answers what the engine answered
+    // MARK: - The cache answers what the engine answered
 
     /// The memoization landed in 09-04 is only worth anything if the remembered
     /// answer is the *same* answer. This is the equivalence pinned in the

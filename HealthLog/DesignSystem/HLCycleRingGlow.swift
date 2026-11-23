@@ -70,7 +70,7 @@ public enum HLCycleRingGlowMath {
     }
 }
 
-// MARK: - 1.4 B4 — the ring's motion comes to rest
+// MARK: - The ring's motion comes to rest
 
 public extension HLCycleRing {
     /// How long the ring moves after it appears: the window the Insights score

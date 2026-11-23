@@ -3,8 +3,8 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **Phase 21 (21-03) — the refresh contract, stated as transport counts and
-/// wall-clock bounds (D-14-06-C).**
+/// **The refresh contract, stated as transport counts and
+/// wall-clock bounds.**
 ///
 /// 14-06 measured the mechanism behind *"das Runterziehen bringt keine Lösung
 /// … ich habe gewartet"*: `SWRCoordinator.revalidateSingleFlight` collapses
@@ -164,7 +164,7 @@ struct SWRCoordinatorRefreshContractTests {
         #expect(
             elapsed < SWRCoordinator.userInitiatedAttachBound + .seconds(1),
             """
-            EXPECTED_RED: D-14-06-C — a user-initiated refresh inherited the in-flight winner's \
+            a user-initiated refresh inherited the in-flight winner's \
             full latency with no bound of its own. It published after \
             \(String(format: "%.0f", Self.millis(elapsed))) ms against a bound of \
             \(String(format: "%.0f", Self.millis(SWRCoordinator.userInitiatedAttachBound))) ms.
@@ -201,7 +201,7 @@ struct SWRCoordinatorRefreshContractTests {
         #expect(
             seen == 2,
             """
-            EXPECTED_RED: D-14-06-C — the transport saw \(seen) request(s), not 2. \
+            the transport saw \(seen) request(s), not 2. \
             One request served two loads: the pull attached to the winner instead of issuing \
             its own, which is what makes a pull on a slow key indistinguishable from a pull \
             that did nothing.

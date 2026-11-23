@@ -27,10 +27,10 @@ struct MeasureSheetSupportedKindsTests {
     /// `MeasureSheetView`. Item 1.4a trimmed this from 25 to 16.
     private static let expectedSupportedKinds: [MetricKind] = [
         .bloodPressure, .pulse, .restingHeartRate, .hrv, .respiratoryRate, .glucose, .spo2, .bodyTemperature,
-        // v0158 — pain NRS sits with the vitals.
+        // Pain NRS sits with the vitals.
         .painNRS,
         .weight, .bodyFat, .bodyWater, .boneMass,
-        // v0158 — waist circumference + grip strength (manual clinical signals).
+        // Waist circumference + grip strength (manual clinical signals).
         .waistCircumference, .gripStrength,
         .vo2Max
     ]
@@ -125,7 +125,7 @@ struct MeasureSheetSupportedKindsTests {
     @Test("Every supported kind has a non-empty unit label")
     func everyKindHasUnit() {
         for kind in Self.expectedSupportedKinds {
-            // v0158 — `.painNRS` is dimensionless (a 0–10 NRS score), so it is
+            // `.painNRS` is dimensionless (a 0–10 NRS score), so it is
             // exempt. (`.steps`, the other dimensionless kind, left the picker
             // in item 1.4a.)
             if kind == .painNRS { continue }

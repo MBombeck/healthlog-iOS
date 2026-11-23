@@ -12,13 +12,14 @@ struct MoodTagEditSheet: View {
     let mode: Mode
 
     @Environment(MoodTagManagementStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
 
     @State private var label: String = ""
     @State private var selectedIcon: String = MoodTagCatalog.customIconAllowList.first ?? "Tag"
     @State private var selectedGroupKey: String = ""
-    /// FORM-2 (Audit v0162) — initial focus onto the label field.
+    /// Initial focus onto the label field.
     @FocusState private var labelFocused: Bool
+    /// The fields as the sheet opened, for the question before discarding.
+    @State private var seeded = (label: "", icon: "", group: "")
 
     /// 1–40 char client guard (mirrors the server) — disables submit early so a
     /// trivially-invalid label never round-trips. The 50-cap / bad-icon checks
@@ -40,57 +41,45 @@ struct MoodTagEditSheet: View {
     private let iconColumns = [GridItem(.adaptive(minimum: 52, maximum: 64), spacing: HLSpace.sm)]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: HLSpace.lg) {
-                    labelCard
-                    iconCard
-                    if let error = store.mutationError {
-                        Text(error.userFacingDescription)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLColor.statusBad)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityIdentifier("mood.tags.edit.error")
-                    }
-                    HLButton(
-                        String(localized: isEditing ? "Save" : "mood.tags.edit.create"),
-                        variant: .primary,
-                        isLoading: store.isMutating
-                    ) {
-                        Task { await save() }
-                    }
-                    .disabled(!isLabelValid || selectedGroupKey.isEmpty || store.isMutating)
-                    .accessibilityIdentifier("mood.tags.edit.save")
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.md)
-                .padding(.bottom, HLSpace.xxxl)
-            }
-            .scrollContentBackground(.hidden)
-            .background(HLSurface.primary)
-            .navigationTitle(Text(isEditing ? "mood.tags.edit.titleEdit" : "mood.tags.edit.titleCreate"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+        HLSheetScaffold(
+            isEditing ? "mood.tags.edit.titleEdit" : "mood.tags.edit.titleCreate",
+            size: .standard,
+            action: confirmAction,
+            isDirty: label != seeded.label || selectedIcon != seeded.icon || selectedGroupKey != seeded.group
+        ) {
+            HLPage {
+                labelCard
+                iconCard
+                if let error = store.mutationError {
+                    Text(error.userFacingDescription)
+                        .font(.hlSubhead)
+                        .foregroundStyle(HLColor.statusBad)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("mood.tags.edit.error")
                 }
             }
             .onAppear(perform: seed)
-            // FORM-2 — seed focus onto the label field once the sheet settles.
+            // Seed focus onto the label field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 labelFocused = true
             }
         }
-        .hlSheetPresentation(.standard)
+    }
+
+    /// Creating a tag adds it; editing one keeps the change.
+    private var confirmAction: HLSheetAction {
+        let isEnabled = isLabelValid && !selectedGroupKey.isEmpty
+        return isEditing
+            ? .save(isEnabled: isEnabled) { await save() }
+            : .add(isEnabled: isEnabled) { await save() }
     }
 
     private var labelCard: some View {
-        // 1.4 B2 — the length rule shows only when the name breaks it (the
+        // The length rule shows only when the name breaks it (the
         // save button is disabled then); an empty field needs no sentence.
-        HLSettingsCard(
-            icon: "tag",
-            title: "mood.tags.edit.label.title",
+        HLCard(
+            "mood.tags.edit.label.title",
             footer: trimmedLabel.count > 40 ? "mood.tags.edit.label.footer" : nil
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
@@ -105,10 +94,12 @@ struct MoodTagEditSheet: View {
                     .onChange(of: label) { _, _ in store.clearMutationError() }
                     .accessibilityIdentifier("mood.tags.edit.label.field")
 
-                Picker("mood.tags.edit.group", selection: $selectedGroupKey) {
+                Picker(selection: $selectedGroupKey) {
                     ForEach(store.groups) { group in
                         Text(group.localizedLabel).tag(group.key)
                     }
+                } label: {
+                    HLRowTitle("mood.tags.edit.group")
                 }
                 .pickerStyle(.menu)
                 .accessibilityIdentifier("mood.tags.edit.group")
@@ -117,7 +108,7 @@ struct MoodTagEditSheet: View {
     }
 
     private var iconCard: some View {
-        HLSettingsCard(icon: "square.grid.2x2", title: "mood.tags.edit.icon.title") {
+        HLCard("mood.tags.edit.icon.title") {
             LazyVGrid(columns: iconColumns, spacing: HLSpace.sm) {
                 ForEach(MoodTagCatalog.customIconAllowList, id: \.self) { icon in
                     iconTile(icon)
@@ -150,8 +141,8 @@ struct MoodTagEditSheet: View {
                 )
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(icon))
+        .buttonStyle(.hlRow)
+        .accessibilityLabel(Text(verbatim: MoodTagIconName.label(for: icon)))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("mood.tags.edit.icon.\(icon)")
     }
@@ -171,11 +162,13 @@ struct MoodTagEditSheet: View {
                 $0.tags.contains { $0.key == tag.key }
             })?.key ?? store.groups.first?.key ?? ""
         }
+        seeded = (label, selectedIcon, selectedGroupKey)
     }
 
-    private func save() async {
-        guard !selectedGroupKey.isEmpty else { return }
-        let success: Bool = switch mode {
+    /// `true` closes the sheet; a server error stays on the page.
+    private func save() async -> Bool {
+        guard !selectedGroupKey.isEmpty else { return false }
+        return switch mode {
         case .create:
             await store.createCustom(
                 label: trimmedLabel,
@@ -190,6 +183,5 @@ struct MoodTagEditSheet: View {
                 categoryKey: selectedGroupKey
             )
         }
-        if success { dismiss() }
     }
 }

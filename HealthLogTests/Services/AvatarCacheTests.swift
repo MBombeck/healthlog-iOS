@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// **v0.6.2 W-SEC-A — Gravatar removed.**
+/// **Gravatar removed.**
 ///
 /// `AvatarCache` is reduced to a disk-only migration shim post-W-SEC-A: it
 /// sweeps any legacy on-disk PNG bytes from pre-v0.6.2 installs and clears

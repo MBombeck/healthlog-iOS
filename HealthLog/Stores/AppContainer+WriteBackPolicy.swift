@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - B5 (1.4) — the per-type direction for writes into Apple Health
+// MARK: - The per-type direction for writes into Apple Health
 
 extension AppContainer {
     /// Hands the HealthKit writer the person's per-type direction from
@@ -17,7 +17,7 @@ extension AppContainer {
         guard let healthKit else { return }
         let provider: @Sendable () async -> HealthKitWriteBackPolicy? = {
             if let fetched = try? await swr.fetchCachingFirst(.hkSyncConfig, decoding: HealthKitSyncConfig.self, fetch: {
-                // HK-NEW (1.5) — a network answer also says which types the
+                // A network answer also says which types the
                 // server maps (`acceptedTypes`, once it publishes the list).
                 try await HealthKitAcceptedTypes.recording(settingsRepo.healthKitConfig())
             }) {

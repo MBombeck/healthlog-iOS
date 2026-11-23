@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **B5 (1.4) — a wrong current password is said in the person's language.**
+/// **A wrong current password is said in the person's language.**
 @Suite("B5 — change password outcome")
 struct ChangePasswordOutcomeTests {
     @Test("a 401 that is not a step-up is the wrong current password")

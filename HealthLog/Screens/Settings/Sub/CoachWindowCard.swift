@@ -4,18 +4,20 @@ import SwiftUI
 /// treats it as a real limit for every answer; `All` (its default) is none.
 struct CoachWindowCard: View {
     let store: AICoachSettingsStore
+    /// `stuck` is whether the chosen window held; `error` is the store's
+    /// failure, shown by the screen when it did not.
+    var onWriteFinished: (_ stuck: Bool, _ error: HLError?) -> Void = { _, _ in }
 
     var body: some View {
-        // 1.4 B2-c — the one line under the picker stays for what the label
-        // cannot say (B5, #126): older readings are kept, only out of the
-        // Coach's reach. 1.4 B4 — one row, one heading: the picker is labelled
+        // The one line under the picker stays for what the label
+        // cannot say: older readings are kept, only out of the
+        // Coach's reach. One row, one heading: the picker is labelled
         // "Reichweite des Coachs" and the card has no title over it.
-        HLSettingsCard {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.md) {
-                    Text("settings.coach.window.title")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
+                // Picker under its title at the accessibility sizes.
+                HLAdaptiveStack(spacing: HLSpace.md) { _ in
+                    HLRowTitle("settings.coach.window.title")
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if store.isWindowWriteInFlight {
@@ -27,7 +29,12 @@ struct CoachWindowCard: View {
                         String(localized: "settings.coach.window.title"),
                         selection: Binding(
                             get: { store.coachDefaultWindow ?? .allTime },
-                            set: { newValue in Task { await store.setCoachDefaultWindow(newValue) } }
+                            set: { newValue in
+                                Task {
+                                    await store.setCoachDefaultWindow(newValue)
+                                    onWriteFinished(store.coachDefaultWindow == newValue, store.error)
+                                }
+                            }
                         )
                     ) {
                         ForEach(CoachDefaultWindow.allCases) { window in
@@ -40,8 +47,7 @@ struct CoachWindowCard: View {
                     .accessibilityIdentifier("settings.coach.windowPicker")
                 }
                 Text("settings.coach.window.description")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

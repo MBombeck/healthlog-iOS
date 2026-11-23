@@ -18,9 +18,7 @@ import Observation
 /// region collapses to the calm "not enough data yet" empty state — never a
 /// fabricated correlation, never an error box.
 ///
-/// **Server-derived.** Pure server compute, no on-device fallback — the call
-/// site additionally gates on `BackendAvailability.canShowCloudInsights` so the
-/// region hides in standalone / no-server.
+/// **Server-derived.** Pure server compute, no on-device fallback.
 @MainActor
 @Observable
 public final class MoodRelationsStore {
@@ -58,7 +56,7 @@ public final class MoodRelationsStore {
         response?.betterDays ?? []
     }
 
-    /// v0.14.8 — the RATED-factor × metric crosstab rows (`factorCrosstab`,
+    /// The RATED-factor × metric crosstab rows (`factorCrosstab`,
     /// server v1.14.0), most-significant first (smallest adjusted q-value). The
     /// server already FDR-filters the family, so every row here cleared the gate;
     /// we only re-order for the lead-with-the-strongest read.
@@ -108,7 +106,7 @@ public final class MoodRelationsStore {
         stabilityByDays = [:]
     }
 
-    // MARK: - #126 P2 — stability for the chosen period
+    // MARK: - Stability for the chosen period
 
     /// The server's stability per period, as answered for `?days=`.
     public private(set) var stabilityByDays: [Int: MoodRelationsResponse] = [:]

@@ -62,11 +62,11 @@ extension AskCoachSheet {
         case "coach.provider.rate_limited":
             String(localized: "The Coach is busy right now. Try again shortly.")
         case "coach.budget.exceeded":
-            // A360 M3 — the user hit their daily AI budget. Honest + actionable
+            // The user hit their daily AI budget. Honest + actionable
             // (the budget resets) rather than the flat "Response failed".
             String(localized: "You've used today's AI budget. It resets tomorrow.")
         case "coach.provider.credential_expired":
-            // A360 M3 — the server provider's credential expired (e.g. an OAuth
+            // The server provider's credential expired (e.g. an OAuth
             // token lapsed). Point at where the user can fix it.
             String(localized: "Your AI provider needs reconnecting. Check Settings → Assistant.")
         case "coach.provider.reasoning_only":
@@ -74,6 +74,12 @@ extension AskCoachSheet {
             // answered with reasoning and no reply, even after a second ask.
             // Retrying may help; another model usually does.
             String(localized: "coach.error.reasoningOnly")
+        case "coach.provider.timeout":
+            // #184 (server 1.48.3) — a pinned provider took too long.
+            String(localized: "coach.error.providerTimeout")
+        case "coach.provider.unreachable":
+            // #184 — a pinned provider could not be reached at all.
+            String(localized: "coach.error.providerUnreachable")
         default:
             String(localized: "The Coach couldn't answer right now. Try again shortly.")
         }
@@ -84,7 +90,7 @@ extension AskCoachSheet {
     private func hlErrorCopy(_ error: HLError) -> String {
         switch error {
         case let .aiUnavailable(refusal):
-            // #115 · 0.2 — one sentence per reason. Before, every refusal read
+            // One sentence per reason. Before, every refusal read
             // "turned off for your account" and an operator-disabled Coach
             // (whose refusal was never recognised) asked for consent.
             Self.coachRefusalCopy(refusal)
@@ -99,7 +105,7 @@ extension AskCoachSheet {
                 )
             )
         case .rateLimited:
-            // A360 M2 — a TRANSPORT 429 (per-user 20/min limit) surfaced as
+            // A TRANSPORT 429 (per-user 20/min limit) surfaced as
             // `HLError.rateLimited`, distinct from the provider `error` frame
             // `coach.provider.rate_limited`. Honest "busy" copy with a retry hint.
             String(localized: "The Coach is busy right now. Try again in a moment.")
@@ -121,7 +127,7 @@ extension AskCoachSheet {
         }
     }
 
-    /// v0.13 W4 — honest, per-case copy for a BYO-key Coach failure. Maps the
+    /// Honest, per-case copy for a BYO-key Coach failure. Maps the
     /// typed ``BYOLLMError`` to an actionable message (invalid key → point at
     /// Settings; unreachable / rate-limited / provider-down → plain retry copy).
     func byoErrorCopy(_ error: BYOLLMError) -> String {
@@ -145,7 +151,7 @@ extension AskCoachSheet {
         }
     }
 
-    /// **#114 / #115 · 0.2 — one plain sentence per reason the `coach`
+    /// **One plain sentence per reason the `coach`
     /// capability is unavailable.** The reason (from `meta.reason` or the
     /// capability gate) wins; the code family is the fallback. Never renders
     /// the raw code.

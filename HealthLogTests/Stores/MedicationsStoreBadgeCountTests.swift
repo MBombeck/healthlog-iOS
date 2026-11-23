@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.6.1.3 Y4.1 — App-Badge count tests.**
+/// **App-Badge count tests.**
 ///
 /// Pins the `MedicationsStore.computeDueOrMissedCount` predicate at the
 /// window boundaries the brief calls out: just-opened, mid-window,

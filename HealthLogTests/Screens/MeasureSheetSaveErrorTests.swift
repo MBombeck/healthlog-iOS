@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.5.5.2 — MeasureSheetView save-error visibility.**
+/// **MeasureSheetView save-error visibility.**
 ///
 /// Before this fix the failure path from `MeasurementsStore.capture(...)`
 /// only fired the error-haptic. No banner, no toast, no inline text —

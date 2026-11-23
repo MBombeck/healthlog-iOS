@@ -271,7 +271,7 @@ struct DashboardEmptyTilePolicyLoadingTimeoutTests {
         #expect(DashboardEmptyTilePolicy.loadingTimeoutSeconds == 1.6)
     }
 
-    /// **REG-11 5th-attempt regression (v0.5.5.5).** Operator on 2026-05-21:
+    /// **REG-11 5th-attempt regression.** Operator on 2026-05-21:
     /// "Körperfett haben wir nicht. Es ist sowieso blöd, dass das angezeigt
     /// wird dann." Pre-fix a stale single-point server sparkline (`[22.0]`
     /// — a residue from a since-deleted measurement, common when the server

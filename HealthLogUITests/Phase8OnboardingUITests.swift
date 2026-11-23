@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Phase 08 Wave 0 — the returning login and the optional setup tail.**
+/// **The returning login and the optional setup tail.**
 ///
 /// Boots unauthenticated through `-uitest-auth-journey` + `-uitest-phase8` and
 /// drives the real login form against the fixture backend, whose `/api/auth/me`
@@ -51,7 +51,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         if !deviceLocalStep.waitForExistence(timeout: 25) {
             violations.append("a device that never granted HealthKit was not asked for it (K10)")
         } else {
-            // D-09-16-D — through the class's own helper, which declines the
+            // Through the class's own helper, which declines the
             // Password AutoFill sheet before trusting `isHittable`. A raw
             // `.tap()` here logs `Computed hit point {-1, -1}` and lands nowhere.
             tapWhenHittable(deviceLocalStep, in: app)
@@ -72,7 +72,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         record(violations, for: "returning-login")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI completed returning login replayed optional setup"
+            "UI completed returning login replayed optional setup"
         )
     }
 
@@ -96,7 +96,7 @@ final class Phase8OnboardingUITests: XCTestCase {
     /// earns, and — the actual defect — that the flow did **not** advance.
     @MainActor
     func testPermissionFailuresAreActionable() {
-        // 08-08 — this case is about what the permission steps say, and it needs
+        // This case is about what the permission steps say, and it needs
         // to *be* on them. Since the route now reads the server's completion
         // flag, reaching the tail is something a scenario has to ask for.
         let app = XCUIApplication()
@@ -145,7 +145,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         record(violations, for: "permission-failure")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI permission failure advanced without actionable feedback"
+            "UI permission failure advanced without actionable feedback"
         )
     }
 
@@ -174,7 +174,7 @@ final class Phase8OnboardingUITests: XCTestCase {
 
         var violations: [String] = []
 
-        // 08-10 — the preservation half first, walked rather than asserted from
+        // The preservation half first, walked rather than asserted from
         // the source: a plausible height makes the patch dirty, this scenario
         // refuses the write, and the step has to say so and stay.
         height.tap()
@@ -198,7 +198,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         tapWhenHittable(proceed, in: app)
 
         let stillOnStep = proceed.waitForExistence(timeout: 5)
-        // 08-10 — the clause is unchanged; how it looks is not. It used to read
+        // The clause is unchanged; how it looks is not. It used to read
         // both identifiers with a bare `.exists` on the very next line after the
         // tap, which samples the accessibility tree before SwiftUI has rendered
         // the verdict, and it read the failure surface as a `StaticText` when
@@ -217,7 +217,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         record(violations, for: "profile-validation")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI profile failure was hidden or advanced"
+            "UI profile failure was hidden or advanced"
         )
     }
 
@@ -230,7 +230,7 @@ final class Phase8OnboardingUITests: XCTestCase {
     /// the thing they actually need.
     @MainActor
     func testResolvedRouteDrivesProgressAndBackNavigation() {
-        // 08-08 — same reason as above: the second half of this case reads the
+        // Same reason as above: the second half of this case reads the
         // spoken progress *on the setup tail*, so the tail has to be reached.
         let app = XCUIApplication()
         app.launchPhase8Onboarding(.returningLoginIncomplete)
@@ -255,7 +255,7 @@ final class Phase8OnboardingUITests: XCTestCase {
             violations.append("the spoken progress did not change when the resolved route did")
         }
 
-        // 08-10 — the half this case is named after and never measured. The
+        // The half this case is named after and never measured. The
         // prior *active* route step of the notifications step is HealthKit, and
         // the control that goes there has to be worth aiming at.
         tapWhenHittable(healthKitSkip, in: app)
@@ -278,7 +278,7 @@ final class Phase8OnboardingUITests: XCTestCase {
         record(violations, for: "progress-semantics")
         XCTAssertTrue(
             violations.isEmpty,
-            "EXPECTED_RED: 08-02 UI progress did not match the resolved route"
+            "UI progress did not match the resolved route"
         )
     }
 

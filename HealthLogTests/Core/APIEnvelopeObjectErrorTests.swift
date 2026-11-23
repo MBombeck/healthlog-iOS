@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-32 — Regressionsschloss für die eine Stelle, an der `error` kein String ist.**
+/// **Regressionsschloss für die eine Stelle, an der `error` kein String ist.**
 ///
 /// Der Idempotenz-Wrapper (`src/lib/idempotency.ts`) sendet auf seinem
 /// In-Flight-409 `error: { message: "…" }`. Vorher warf `APIEnvelope.init(from:)`

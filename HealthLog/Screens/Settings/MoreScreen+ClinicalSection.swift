@@ -34,10 +34,9 @@ extension MoreScreen {
         // iOS top-level tab, not a More row, so it is omitted here). The
         // earlier iOS order (Vorsorge-first, Coach last after the gated
         // Cycle row) drifted from web parity; this restores it.
-        // v0.14.8 C5 — the women-only cycle home (mirror of web `/cycle`).
-        // The CycleGate hides this row for ineligible / opted-out users, and
-        // it is hard-gated behind `FeatureFlag.cycleTracking` (default OFF).
-        if container?.cycleGate.isCycleTrackingAvailable == true {
+        // The women-only cycle home (mirror of web `/cycle`).
+        // The CycleGate hides this row for ineligible / opted-out users.
+        if container?.cycleGate.isCycleTrackingAvailable == true, listsRow(for: .cycle) {
             NavigationLink(value: SettingsRoute.cycle) {
                 HLSettingsRow(
                     icon: Layout.cycleRow.icon,
@@ -65,10 +64,10 @@ extension MoreScreen {
             }
             .accessibilityIdentifier(Layout.cycleSettingsRow.accessibilityIdentifier)
         }
-        // v1.18.1 (#30) — Lab results + biomarker catalog. Gated behind the
+        // v1.18.1 — Lab results + biomarker catalog. Gated behind the
         // `labs` server module (default-on). Promoted out of the generic
         // "Records & achievements" drawer into the clinical spine (web parity).
-        if container?.moduleGate.isEnabled(.labs) != false {
+        if container?.moduleGate.isEnabled(.labs) != false, listsRow(for: .labs) {
             NavigationLink(value: MoreRoute.labs) {
                 HLSettingsRow(
                     icon: Layout.labsRow.icon,
@@ -78,7 +77,7 @@ extension MoreScreen {
             }
             .accessibilityIdentifier(Layout.labsRow.accessibilityIdentifier)
         }
-        // v1.18.3 (§1) — illness/condition journal, default-ON.
+        // v1.18.3 — illness/condition journal, default-ON.
         // v1.26 W-ABOUT-ME → v1.26.1 W-ABOUT-ME-RECONCILE — briefly
         // re-parented into the "Über mich" hub, then RESTORED here as a
         // direct clinical-spine row next to Labs. The operator clarified
@@ -86,7 +85,7 @@ extension MoreScreen {
         // not static self-info, so it does not belong in the hub. The
         // `IllnessJournalScreen` + its `.illness` module gate are
         // unchanged; only the entry point moved back out of the hub.
-        if container?.moduleGate.isEnabled(.illness) != false {
+        if container?.moduleGate.isEnabled(.illness) != false, listsRow(for: .illness) {
             NavigationLink(value: MoreRoute.illness) {
                 HLSettingsRow(
                     icon: Layout.illnessRow.icon,
@@ -96,10 +95,22 @@ extension MoreScreen {
             }
             .accessibilityIdentifier(Layout.illnessRow.accessibilityIdentifier)
         }
+        // The seizure diary — opt-in `seizures` module (server v1.48.0). Unlike
+        // the default-on rows it stands only when the server's map says on.
+        if SeizuresModule.isAvailable(modules: container?.moduleGate.modules), listsRow(for: .seizures) {
+            NavigationLink(value: MoreRoute.seizures) {
+                HLSettingsRow(
+                    icon: Layout.seizuresRow.icon,
+                    title: LocalizedStringKey(Layout.seizuresRow.title),
+                    subtitle: Layout.seizuresRow.subtitle.map { LocalizedStringKey($0) }
+                )
+            }
+            .accessibilityIdentifier(Layout.seizuresRow.accessibilityIdentifier)
+        }
         // Document vault ("Dokumente") — opt-in `inboundDocuments` module
         // (server ships it OFF by default). Same `!= false` gate idiom; the
         // vault self-gates to an enable-CTA if the route 403's mid-flight.
-        if container?.moduleGate.isEnabled(.inboundDocuments) != false {
+        if container?.moduleGate.isEnabled(.inboundDocuments) != false, listsRow(for: .documents) {
             NavigationLink(value: MoreRoute.documents) {
                 HLSettingsRow(
                     icon: Layout.documentsRow.icon,
@@ -109,7 +120,7 @@ extension MoreScreen {
             }
             .accessibilityIdentifier(Layout.documentsRow.accessibilityIdentifier)
         }
-        // Build 7.6 (GH #48) — nutrient read/display front door. Opt-in
+        // Build 7.6 — nutrient read/display front door. Opt-in
         // `nutrients` module (server ships it OFF by default). Same
         // default-on `!= false` idiom; the screen self-gates to the
         // enable-in-settings hint if the route 403's mid-flight.
@@ -123,7 +134,7 @@ extension MoreScreen {
             }
             .accessibilityIdentifier(Layout.nutritionRow.accessibilityIdentifier)
         }
-        // Build 7 Item 7.7 — environmental-context front door. Default-ON
+        // Environmental-context front door. Default-ON
         // `environment` module (server v1.29.1). Same `!= false` idiom as
         // the rows above; the screen self-gates to the disabled hint if the
         // `/api/environment` route 403's mid-flight.
@@ -142,12 +153,12 @@ extension MoreScreen {
         // per-metric Insights tab and NOT a Coach surface (the score
         // signals are kept off the AI).
         //
-        // Build 2 / 2.6 — gated on the `mentalHealth` module. The server
+        // Gated on the `mentalHealth` module. The server
         // grew the key in v1.29.1; until now this row mounted
         // unconditionally and the screen 403'd (`module.disabled`) for
         // anyone who had switched the module off. Same default-on
         // `!= false` idiom as the illness/documents rows above.
-        if container?.moduleGate.isEnabled(.mentalHealth) != false {
+        if container?.moduleGate.isEnabled(.mentalHealth) != false, listsRow(for: .mentalWellbeing) {
             NavigationLink(value: MentalWellbeingRoute()) {
                 HLSettingsRow(
                     icon: Layout.mentalWellbeingRow.icon,
@@ -162,24 +173,28 @@ extension MoreScreen {
         // or be free-text — gating would orphan reminders the user can
         // still create). The deep path (gear → Notifications → preventive
         // card → Manage) still works; this is the direct front door.
-        NavigationLink(value: SettingsRoute.checkups) {
-            HLSettingsRow(
-                icon: Layout.vorsorgeRow.icon,
-                title: LocalizedStringKey(Layout.vorsorgeRow.title),
-                subtitle: Layout.vorsorgeRow.subtitle.map { LocalizedStringKey($0) }
-            )
+        if listsRow(for: .checkups) {
+            NavigationLink(value: SettingsRoute.checkups) {
+                HLSettingsRow(
+                    icon: Layout.vorsorgeRow.icon,
+                    title: LocalizedStringKey(Layout.vorsorgeRow.title),
+                    subtitle: Layout.vorsorgeRow.subtitle.map { LocalizedStringKey($0) }
+                )
+            }
+            .accessibilityIdentifier(Layout.vorsorgeRow.accessibilityIdentifier)
         }
-        .accessibilityIdentifier(Layout.vorsorgeRow.accessibilityIdentifier)
         // 1.0.3 (App Review 1.4.1) — Medical sources hub. CORE, never gated.
-        NavigationLink(value: MoreRoute.medicalSources) {
-            HLSettingsRow(
-                icon: Layout.medicalSourcesRow.icon,
-                title: LocalizedStringKey(Layout.medicalSourcesRow.title),
-                subtitle: Layout.medicalSourcesRow.subtitle.map { LocalizedStringKey($0) }
-            )
+        if listsRow(for: .medicalSources) {
+            NavigationLink(value: MoreRoute.medicalSources) {
+                HLSettingsRow(
+                    icon: Layout.medicalSourcesRow.icon,
+                    title: LocalizedStringKey(Layout.medicalSourcesRow.title),
+                    subtitle: Layout.medicalSourcesRow.subtitle.map { LocalizedStringKey($0) }
+                )
+            }
+            .accessibilityIdentifier(Layout.medicalSourcesRow.accessibilityIdentifier)
         }
-        .accessibilityIdentifier(Layout.medicalSourcesRow.accessibilityIdentifier)
-        // v0152 W-COACH-CLEANUP (C2) — the "Mehr" Coach row was removed.
+        // The "Mehr" Coach row was removed.
         // The operator flagged it as a stray coach entry ("das wird auch
         // ein Fehler sein dass die da drin ist") that opened the coach
         // against his External-AI pick. The manual coach entry returns as

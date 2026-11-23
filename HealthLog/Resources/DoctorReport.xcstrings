@@ -22,6 +22,18 @@
             "state": "translated",
             "value": "Alle medicatie (%1$lld): %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 약(%1$lld개): %5$lld일간 %3$lld회 중 %2$lld회 복용(%4$@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Todos los medicamentos (%1$lld): %2$lld de %3$lld tomadas (%4$@) en %5$lld días"
+          }
         }
       }
     },
@@ -45,6 +57,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@: %2$lld van %3$lld ingenomen (%4$@) in %5$lld dagen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %5$lld일간 %3$lld회 중 %2$lld회 복용(%4$@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@: %2$lld de %3$lld tomadas (%4$@) en %5$lld días"
           }
         }
       }
@@ -70,6 +94,18 @@
             "state": "translated",
             "value": "%@: geen innameschema in HealthLog, geen therapietrouw"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: HealthLog 복용 일정 없음, 순응률 없음"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@: sin pauta en HealthLog, sin tasa de adherencia"
+          }
         }
       }
     },
@@ -93,6 +129,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Therapietrouw over de afgelopen %lld dagen, door de HealthLog-server berekend op basis van het innameschema."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 %lld일간의 복약 순응도이며, HealthLog 서버가 복용 일정을 기준으로 계산했습니다."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Adherencia de los últimos %lld días, calculada por el servidor de HealthLog a partir de la pauta de dosificación."
           }
         }
       }
@@ -118,6 +166,18 @@
             "state": "translated",
             "value": "Therapietrouw"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복약 순응도"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Adherencia"
+          }
         }
       }
     },
@@ -141,6 +201,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Therapietrouw niet beschikbaar: de HealthLog-server was bij het aanmaken van dit rapport niet bereikbaar."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복약 순응도 제공 불가: 이 리포트를 작성할 때 HealthLog 서버에 연결할 수 없었습니다."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Adherencia no disponible: no se pudo conectar con el servidor de HealthLog al crear este informe."
           }
         }
       }
@@ -166,6 +238,18 @@
             "state": "translated",
             "value": "Voor de rapportageperiode van %1$lld dagen levert de server geen therapietrouw; getoond worden de afgelopen %2$lld dagen."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버가 %1$lld일 리포트 기간의 복약 순응도를 제공하지 않아 최근 %2$lld일을 표시합니다."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El servidor no ofrece adherencia para el periodo del informe de %1$lld días; se muestran los últimos %2$lld días."
+          }
         }
       }
     },
@@ -189,6 +273,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@: %2$lld datapunten"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: 데이터 %2$lld개"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld puntos de datos"
           }
         }
       }
@@ -214,6 +310,18 @@
             "state": "translated",
             "value": "Verloop"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추이 차트"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gráficos"
+          }
         }
       }
     },
@@ -237,6 +345,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "App-versie"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 버전"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión de la app"
           }
         }
       }
@@ -262,6 +382,18 @@
             "state": "translated",
             "value": "Volledige naam"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "성명"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre completo"
+          }
         }
       }
     },
@@ -285,6 +417,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aangemaakt op"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "작성일"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generado"
           }
         }
       }
@@ -310,6 +454,18 @@
             "state": "translated",
             "value": "Verzekeringsnummer"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보험 번호"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Número de asegurado"
+          }
         }
       }
     },
@@ -333,6 +489,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zorgverzekeraar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강보험사"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguro médico"
           }
         }
       }
@@ -358,6 +526,18 @@
             "state": "translated",
             "value": "Patiënt"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "환자"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paciente"
+          }
         }
       }
     },
@@ -381,6 +561,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rapportageperiode"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "리포트 기간"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Periodo del informe"
           }
         }
       }
@@ -406,6 +598,18 @@
             "state": "translated",
             "value": "Lokale export, geen server betrokken, op het apparaat aangemaakt, geen medisch document"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 내보내기, 서버 미사용, 기기에서 생성, 의료 문서 아님"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Exportación local, sin servidor, generada en el dispositivo, no es un documento médico"
+          }
         }
       }
     },
@@ -429,6 +633,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eerder gebruikt"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이전에 복용한 약"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tomados anteriormente"
           }
         }
       }
@@ -454,6 +670,18 @@
             "state": "translated",
             "value": "Medicatie"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "약"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Medicamentos"
+          }
         }
       }
     },
@@ -477,6 +705,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld registraties, gemiddeld %.1f / 5"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 %1$lld건, 평균 %2$.1f / 5"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld registros, media %.1f / 5"
           }
         }
       }
@@ -502,6 +742,18 @@
             "state": "translated",
             "value": "Meest gebruikte tags"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주요 태그"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etiquetas principales"
+          }
         }
       }
     },
@@ -525,6 +777,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stemming"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기분"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado de ánimo"
           }
         }
       }
@@ -550,6 +814,18 @@
             "state": "translated",
             "value": "%1$@ tot %2$@"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ ~ %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del %1$@ al %2$@"
+          }
         }
       }
     },
@@ -573,6 +849,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Artsenrapport"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "진료용 리포트"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informe médico"
           }
         }
       }
@@ -598,6 +886,18 @@
             "state": "translated",
             "value": "Aantal"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건수"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cantidad"
+          }
         }
       }
     },
@@ -621,6 +921,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Max"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최대"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Máx."
           }
         }
       }
@@ -646,6 +958,18 @@
             "state": "translated",
             "value": "Gemiddelde"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "평균"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
         }
       }
     },
@@ -669,6 +993,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mediaan"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중앙값"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mediana"
           }
         }
       }
@@ -694,6 +1030,18 @@
             "state": "translated",
             "value": "Meetwaarde"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "항목"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métrica"
+          }
         }
       }
     },
@@ -718,6 +1066,18 @@
             "state": "translated",
             "value": "Min"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mín."
+          }
         }
       }
     },
@@ -741,6 +1101,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vitale waarden"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활력 징후"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Constantes vitales"
           }
         }
       }

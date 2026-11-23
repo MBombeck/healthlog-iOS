@@ -22,7 +22,7 @@ public extension AuthStore {
         await auth.webLoginAvailable()
     }
 
-    /// 13-02 — the tri-state the auth step needs. The `Bool` above cannot say
+    /// The tri-state the auth step needs. The `Bool` above cannot say
     /// "not asked yet", and the first render of `ServerAuthStep` happens while
     /// the answer is still in flight. `internal`, not `public`: the tri-state
     /// is an onboarding-surface vocabulary and has no business in the module's

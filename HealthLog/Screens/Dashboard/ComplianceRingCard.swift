@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Medication-compliance ring tile for the Dashboard's `.cards` layout.
 ///
-/// **v0.5.5.2 — hide-empty contract** (W-DATA-FLOW-AUDIT BLOCKER #3): when
+/// **Hide-empty contract**: when
 /// the server reports no scheduled intakes today AND no doses taken,
 /// the ring renders nothing useful — the previous `"—" / "Heute nichts
 /// geplant"` copy still claimed the card slot, leaving a hollow ring
@@ -11,7 +11,7 @@ import SwiftUI
 /// the user at the Medikamente tab; the dashboard reclaims the vertical
 /// space when nothing's scheduled.
 ///
-/// **v0.5.1-A B3 — `hasSchedule` distinction** (kept for the "no schedule
+/// **`hasSchedule` distinction** (kept for the "no schedule
 /// today but compliance history exists" path): when the server reports
 /// scheduledToday=0 but the user has prior intakes, the ring still renders
 /// with em-dash + "Heute nichts geplant" so the heatmap sparkline below
@@ -27,30 +27,46 @@ import SwiftUI
 struct ComplianceRingCard: View {
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(MedicationsStore.self) private var medicationsStore
-    /// 1.4 B4 — the ring grows with the text (capped), so its "heute" stays
-    /// inside the stroke; at the accessibility sizes the numbers move under
-    /// the ring instead of wrapping word by word beside it.
+    /// The ring grows with the text (capped), so its count stays inside the
+    /// stroke; at the accessibility sizes the numbers move under the ring
+    /// instead of wrapping word by word beside it.
     @ScaledMetric(relativeTo: .body) private var scaledRingSide: CGFloat = 92
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let snapshot: ComplianceSnapshot
-    /// **v0.5.6 HOME-COMPLIANCE-SHEET.** Optional tap callback wired by
+    /// Optional tap callback wired by
     /// the dashboard root to present `AnstehendeEinnahmenSheet`. When
     /// `nil`, the card stays non-interactive (previews / snapshot tests).
-    /// v0.14.8 AUDIT-HOME H3 — all three dashboard layouts (cards / hero /
+    /// All three dashboard layouts (cards / hero /
     /// list) now wire the tap to the intake sheet.
     let onTap: (() -> Void)?
-    /// Trigger value bumped on every tap to drive the haptic via
-    /// `.sensoryFeedback(.selection, trigger:)`. Local state so the
-    /// parent never has to thread it through.
-    @State private var tapTick: Int = 0
+    /// #182 A8 (server v1.48) — the day's slot instants
+    /// (`medsToday.scheduledTodayAt`); `nil` from an older server, and then
+    /// the card says nothing about the next doses.
+    let scheduledTodayAt: [Date]?
+    /// #191 point 10 — the open doses of today from the resolved `state` on
+    /// today's rows (`upcoming`, `due` or `overdue`, ordered by `dueAt`).
+    /// `nil` while the server resolves no state; then `scheduledTodayAt`.
+    let openDoses: [Date]?
+    /// 1.7: the open doses of the confirmed today rows; `nil` while only the
+    /// summary is known.
+    let openToday: Int?
 
-    init(snapshot: ComplianceSnapshot, onTap: (() -> Void)? = nil) {
+    init(
+        snapshot: ComplianceSnapshot,
+        openToday: Int? = nil,
+        scheduledTodayAt: [Date]? = nil,
+        openDoses: [Date]? = nil,
+        onTap: (() -> Void)? = nil
+    ) {
         self.snapshot = snapshot
+        self.openToday = openToday
+        self.scheduledTodayAt = scheduledTodayAt
+        self.openDoses = openDoses
         self.onTap = onTap
     }
 
     var body: some View {
-        // 1.4 B2 — without any schedule and without any history the card has
+        // Without any schedule and without any history the card has
         // nothing to say and no action, so it is not there at all (it used to
         // stay as an onboarding sentence for everyone without medications).
         // The loose "Quellen" row under it is gone too: the ring here is
@@ -58,21 +74,14 @@ struct ComplianceRingCard: View {
         // lives on the medication detail where those colours are drawn.
         if !isFullyEmpty {
             contentCard
-                .modifier(TappableComplianceModifier(
-                    isActive: onTap != nil,
-                    tapTick: tapTick,
-                    onTap: {
-                        tapTick &+= 1
-                        onTap?()
-                    }
-                ))
+                .modifier(TappableComplianceModifier(isActive: onTap != nil) { onTap?() })
         }
     }
 
     private var contentCard: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                // 1.4 B4 — Today's one card heading, the metric tiles' glyph
+                // Today's one card heading, the metric tiles' glyph
                 // and title, instead of a plain caption beside the ring.
                 HLTileHeaderRow(icon: "pills.fill", title: Text(String(localized: "Medication compliance"))) { EmptyView() }
                 if dynamicTypeSize.isAccessibilitySize {
@@ -81,14 +90,14 @@ struct ComplianceRingCard: View {
                         textColumn
                     }
                 } else {
-                    HStack(alignment: .center, spacing: HLSpace.lg) {
+                    HStack(alignment: .center, spacing: HLLayout.cardGap) {
                         ring
                         textColumn
                         Spacer()
                     }
                 }
                 if !sparklineValues.isEmpty {
-                    HLSparkline(values: sparklineValues, tint: HLText.tertiary)
+                    HLSparkline(values: sparklineValues)
                         .frame(height: HLChartStyle.heightCompact)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityHidden(true) // surface conveyed via ring/subtitle copy
@@ -102,10 +111,12 @@ struct ComplianceRingCard: View {
     }
 
     private var ring: some View {
+        // The ring carries the count only, like the score ring: "today"
+        // stands once, beside it.
         HLRing(
-            progress: snapshot.ratio,
-            label: String(localized: "today"),
-            value: snapshot.hasSchedule ? "\(snapshot.takenToday)/\(snapshot.scheduledToday)" : "—",
+            // 1.7: no count of taken doses before they are confirmed.
+            progress: unconfirmed ? 0 : snapshot.ratio,
+            value: snapshot.hasSchedule && !unconfirmed ? "\(snapshot.takenToday)/\(snapshot.scheduledToday)" : "—",
             tint: HLText.primary,
             // Audit H2 — VoiceOver otherwise reads only the bare
             // value ("4 / 6"); frame it as the compliance ring.
@@ -116,25 +127,113 @@ struct ComplianceRingCard: View {
 
     private var textColumn: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text(snapshot.hasSchedule
-                ? String(localized: "\(Self.percentLabel(snapshot.ratio)) today")
-                : String(localized: "Nothing scheduled today"))
-                .font(.hlTitle2)
-                .foregroundStyle(snapshot.hasSchedule ? HLText.primary : HLText.tertiary)
-            // v0.6.1.26 — subtitle line carries the calm
+            // The card's lead value as a tile value: the percentage in the
+            // tile face, "today" in its unit face on the same baseline.
+            if snapshot.hasSchedule {
+                HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
+                    Text(verbatim: unconfirmed ? "—" : Self.percentLabel(snapshot.ratio))
+                        .font(HLValueSize.tile.numberFont)
+                        .monospacedDigit()
+                        .foregroundStyle(HLText.primary)
+                    Text(String(localized: "today"))
+                        .font(HLValueSize.tile.unitFont)
+                        .foregroundStyle(HLText.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                HLEmptyNote(Text(String(localized: "Nothing scheduled today")))
+            }
+            // Subtitle line carries the calm
             // "X noch offen" / "Alles eingenommen" copy; the
             // overdue suffix renders only when an intake
             // crossed its scheduledAt, picking up the red
             // status-bad tint to draw the attention the
-            // top-of-Home banner used to own. 1.4 B2: nothing
+            // top-of-Home banner used to own. Nothing
             // scheduled has no subtitle, the title says it.
             if let subtitle {
                 subtitleRow(subtitle)
             }
+            if let nextDoses = Self.nextDosesLine(
+                Self.shownNextDoses(
+                    openDoses: openDoses,
+                    fallback: Self.upcomingSlots(scheduledTodayAt, snapshot: snapshot, now: .now),
+                    unconfirmed: medicationsStore.isDoseStateUnconfirmed,
+                    now: .now
+                )
+            ) {
+                Text(verbatim: nextDoses)
+                    .hlText(.rowSubtitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("dashboard.compliance.nextDoses")
+            }
         }
     }
 
-    /// **v0.5.5.2** — true when the user has no schedule today AND no
+    /// The slots still ahead today, at most `limit`, each instant once. Empty
+    /// while nothing is open (all taken) or without the server's slots.
+    /// Nothing is scheduled here: the instants are the server's.
+    nonisolated static func upcomingSlots(
+        _ slots: [Date]?,
+        snapshot: ComplianceSnapshot,
+        now: Date,
+        limit: Int = 3
+    ) -> [Date] {
+        guard let slots, snapshot.hasSchedule, snapshot.takenToday < snapshot.scheduledToday else { return [] }
+        var seen = Set<Date>()
+        return Array(slots.filter { $0 > now && seen.insert($0).inserted }.prefix(limit))
+    }
+
+    /// **#191 point 10 — which doses are open, as the server resolved them.**
+    /// The slots of today's rows whose `state` is `upcoming`, `due` or
+    /// `overdue`, ordered by `dueAt`, each instant once. `nil` when no row
+    /// carries a state (an older server, or the capability shut): the caller
+    /// then falls back to `medsToday.scheduledTodayAt`. Taken, skipped and
+    /// missed doses are never "next".
+    nonisolated static func openDoseSlots(
+        _ todayIntakes: [MedicationIntake],
+        enabled: Bool = MedicationServerResolvedSlots.isAvailable()
+    ) -> [Date]? {
+        guard enabled else { return nil }
+        let resolved = todayIntakes.compactMap { intake -> OpenDoseSlot? in
+            guard let state = intake.doseState,
+                  let phase = MedicationDosePhase(wire: state.state, takenLate: state.takenLate) else { return nil }
+            let slot = state.slotInstant ?? intake.scheduledAt
+            return OpenDoseSlot(slot: slot, due: state.dueAt ?? slot, phase: phase)
+        }
+        guard !resolved.isEmpty else { return nil }
+        var seen = Set<Date>()
+        return resolved
+            .filter(\.phase.isUpcomingOrDue)
+            .sorted { $0.due == $1.due ? $0.slot < $1.slot : $0.due < $1.due }
+            .map(\.slot)
+            .filter { seen.insert($0).inserted }
+    }
+
+    /// **1.7** — the times the card names. While today's doses are not
+    /// confirmed only times still ahead: a past "next dose" would say it is
+    /// open.
+    nonisolated static func shownNextDoses(openDoses: [Date]?, fallback: [Date], unconfirmed: Bool, now: Date) -> [Date] {
+        let slots = openDoses.map { Array($0.prefix(3)) } ?? fallback
+        return unconfirmed ? slots.filter { $0 > now } : slots
+    }
+
+    /// One today row reduced to what ``openDoseSlots(_:enabled:)`` sorts on.
+    struct OpenDoseSlot {
+        let slot: Date
+        let due: Date
+        let phase: MedicationDosePhase
+    }
+
+    /// "Next dose 13:00" / "Next doses 13:00, 20:00", in the app's clock.
+    static func nextDosesLine(_ slots: [Date], time: (Date) -> String = { HLTimeFormat.time($0) }) -> String? {
+        guard !slots.isEmpty else { return nil }
+        let times = slots.map(time).joined(separator: ", ")
+        return slots.count == 1
+            ? String(localized: "dashboard.compliance.nextDose \(times)")
+            : String(localized: "dashboard.compliance.nextDoses \(times)")
+    }
+
+    /// True when the user has no schedule today AND no
     /// compliance history with non-zero rate. Combines snapshot + store
     /// signals so we don't hide the card for users who have prior intake
     /// history (where the heatmap sparkline below still tells a story).
@@ -146,7 +245,34 @@ struct ComplianceRingCard: View {
     }
 
     private var subtitle: String? {
+        Self.subtitle(snapshot: snapshot, openToday: openToday, unconfirmed: unconfirmed)
+    }
+
+    private var unconfirmed: Bool {
+        medicationsStore.isDoseStateUnconfirmed
+    }
+
+    /// 1.7: the ring's counts, from the confirmed today rows when the store
+    /// has them, else the summary.
+    nonisolated static func snapshot(summary: ComplianceSnapshot, state: MedicationTodayState) -> ComplianceSnapshot {
+        if case let .confirmed(count) = state, count.scheduled > 0 { return count.snapshot }
+        return summary
+    }
+
+    nonisolated static func openToday(state: MedicationTodayState) -> Int? {
+        if case let .confirmed(count) = state, count.scheduled > 0 { return count.open }
+        return nil
+    }
+
+    /// The line under the percentage. **1.7:** while today's doses are not
+    /// confirmed it counts the day's doses and says nothing about which are
+    /// open; the line stays, so nothing moves when the answer lands.
+    nonisolated static func subtitle(snapshot: ComplianceSnapshot, openToday: Int? = nil, unconfirmed: Bool) -> String? {
         guard snapshot.hasSchedule else { return nil }
+        if unconfirmed { return String(localized: "dashboard.compliance.dosesToday \(snapshot.scheduledToday)") }
+        if let openToday {
+            return openToday == 0 ? String(localized: "All taken — nice.") : String(localized: "\(openToday) still open")
+        }
         return snapshot.scheduledToday == snapshot.takenToday
             ? String(localized: "All taken — nice.")
             : String(localized: "\(snapshot.scheduledToday - snapshot.takenToday) still open")
@@ -156,37 +282,47 @@ struct ComplianceRingCard: View {
     /// open dose as overdue.
     private func subtitleRow(_ subtitle: String) -> some View {
         HStack(spacing: HLSpace.xs) {
-            // U5 (1.1.1): a trailing comma joins the overdue suffix, no
+            // A trailing comma joins the overdue suffix, no
             // middle dot.
             Text(verbatim: overdueCount > 0 ? subtitle + "," : subtitle)
                 .font(.hlSubhead).foregroundStyle(HLText.secondary)
             if overdueCount > 0 {
-                Text(String(localized: "overdue"))
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLColor.statusBad)
+                HLBadge(String(localized: "overdue"), tone: .critical, form: .text)
             }
         }
     }
 
-    /// v0.6.1.26 — count of today's intakes the SERVER flags as an open
+    /// Count of today's intakes the SERVER flags as an open
     /// overdue dose. Drives the inline "überfällig" suffix that replaced the
     /// standalone Home-banner. Shares the
     /// `AnstehendeEinnahmenSheet.overdueCount` predicate so banner-era
     /// behaviour and ring-era behaviour can never drift.
     ///
-    /// Parity 1.9 — this used to count intakes whose `scheduledAt` had merely
+    /// This used to count intakes whose `scheduledAt` had merely
     /// crossed, a client recompute that could disagree with the medication card
     /// (server-flag-driven since b175) sitting one surface away. Both read the
     /// server now.
     private var overdueCount: Int {
-        AnstehendeEinnahmenSheet.overdueCount(
+        // 1.7: no overdue mark on a dose state that is not confirmed.
+        guard !medicationsStore.isDoseStateUnconfirmed else { return 0 }
+        return AnstehendeEinnahmenSheet.overdueCount(
             todayIntakes: medicationsStore.derivedTodayIntakes,
             medications: medicationsStore.medications,
             now: .now
         )
     }
 
-    /// Build 273 — the percentage as a finished *argument*, never a literal
+    /// Whether the hero above already names today's medications. Then this
+    /// card would say the same a second time, and Home leaves it out; the
+    /// hero's fact opens the same intake sheet.
+    static func heroNamesMedications(_ digest: DailyDigest?) -> Bool {
+        guard let digest, !digest.isEmptyDegrade else { return false }
+        return TodayHeroFacts.facts(digest).contains { fact in
+            fact.kind == "medication" || fact.kind == "medications" || fact.moduleKey == "medications"
+        }
+    }
+
+    /// The percentage as a finished *argument*, never a literal
     /// `%` inside the localizable string.
     ///
     /// `"\(pct)% today"` produced the key `%lld% today`, and to Foundation the
@@ -196,7 +332,7 @@ struct ComplianceRingCard: View {
     /// dropped and German users read "66% today" on the dashboard.
     /// `CatalogFormatSignatureTests` pins the class.
     ///
-    /// F1 (1.1.0) — rounded, not truncated: 2 of 3 is "67 %", where
+    /// Rounded, not truncated: 2 of 3 is "67 %", where
     /// `Int(ratio * 100)` read "66 %". The server sends only the counts for
     /// today (`medsToday.scheduledToday` / `takenToday`), no percentage, so the
     /// ratio of its two counts is the value; `hasSchedule` keeps 0/0 on the
@@ -221,13 +357,12 @@ struct ComplianceRingCard: View {
     }
 }
 
-/// **v0.5.6 HOME-COMPLIANCE-SHEET.** Wraps the card surface in a Button +
-/// pressable style + selection haptic when the dashboard root provides an
+/// Wraps the card surface in a Button with the
+/// pressable style (press feedback and its selection haptic) when the dashboard root provides an
 /// `onTap` callback. Keeps the non-interactive path identical to pre-v056
 /// behaviour for the canonical cards callsite.
 private struct TappableComplianceModifier: ViewModifier {
     let isActive: Bool
-    let tapTick: Int
     let onTap: () -> Void
 
     func body(content: Content) -> some View {
@@ -236,11 +371,9 @@ private struct TappableComplianceModifier: ViewModifier {
                 content
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .hlPressable()
+            .hlPressable(hover: .lift)
             .accessibilityIdentifier("dashboard.complianceRing.tap")
             .accessibilityHint(Text(LocalizedStringKey("dashboard.complianceRing.hint")))
-            .sensoryFeedback(.selection, trigger: tapTick)
         } else {
             content
         }
@@ -250,9 +383,8 @@ private struct TappableComplianceModifier: ViewModifier {
 // MARK: - Previews
 
 // **Public issue #6 — the 11-dose regimen.** The tester's case: eleven daily
-// doses, all taken, so the ring carries the five-glyph value "11/11" over the
-// "today" caption. Before the `HLRing` fix this broke as "11/1" + "1" with the
-// second line sitting on the caption.
+// doses, all taken, so the ring carries the five-glyph value "11/11". Before
+// the `HLRing` fix this broke as "11/1" + "1" over two lines.
 //
 // The preview renders the ring in the card's row geometry rather than
 // `ComplianceRingCard` itself: the card reads `SettingsStore` and
@@ -263,10 +395,9 @@ private struct TappableComplianceModifier: ViewModifier {
 #Preview("11/11 regimen (public issue #6)") {
     let snapshot = ComplianceSnapshot(scheduledToday: 11, takenToday: 11)
     return HLCard {
-        HStack(alignment: .center, spacing: HLSpace.lg) {
+        HStack(alignment: .center, spacing: HLLayout.cardGap) {
             HLRing(
                 progress: snapshot.ratio,
-                label: String(localized: "today"),
                 value: "\(snapshot.takenToday)/\(snapshot.scheduledToday)",
                 tint: HLText.primary,
                 accessibilityLabel: snapshot.ringAccessibilityLabel
@@ -275,8 +406,8 @@ private struct TappableComplianceModifier: ViewModifier {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 Text(String(localized: "Medication compliance"))
                     .font(.hlCaption).foregroundStyle(HLText.secondary)
-                Text(String(localized: "\(ComplianceRingCard.percentLabel(snapshot.ratio)) today"))
-                    .font(.hlTitle2)
+                Text(verbatim: ComplianceRingCard.percentLabel(snapshot.ratio))
+                    .font(HLValueSize.tile.numberFont)
                     .foregroundStyle(HLText.primary)
             }
             Spacer(minLength: 0)

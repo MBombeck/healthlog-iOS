@@ -13,13 +13,20 @@ import SwiftUI
 ///
 /// **The baseline is a reference, not data.** It renders as a dashed `RuleMark`
 /// with a label and only when the payload carries a real provenance
-/// (`drawableBaseline`). The tension window is a soft tinted `RectangleMark`
-/// behind the curve — a descriptive marker, never a verdict.
+/// (`drawableBaseline`). The tension window is two dashed edges across the
+/// day, a descriptive marker and never a verdict; the chart draws no filled
+/// area for it. The min/max envelope stays: it is the spread of the data.
+///
+/// The minute of the day rides the x-axis as a time on one fixed anchor day,
+/// so the chart scrubs like every other time series (``HLChartScrubber``).
 ///
 /// Static by construction: no draw-on animation, so Reduce Motion has nothing
 /// to suppress.
 struct IntradayPulseChartView: View {
     let day: IntradayPulseDTO
+
+    @State private var selectedDate: Date?
+    @Environment(\.unitPreferences) private var units
 
     /// Y padding around the data, mirroring the web `dataMin - 10 … dataMax + 10`.
     private static let yPadding: Double = 10
@@ -47,13 +54,13 @@ struct IntradayPulseChartView: View {
 
     var body: some View {
         Chart {
-            tensionMark
+            tensionMarks
             baselineMark
             ForEach(Array(runs.enumerated()), id: \.offset) { index, run in
                 envelope(for: run, series: index)
                 if run.count == 1, let only = run.first {
                     PointMark(
-                        x: .value("Minute", only.startMinute),
+                        x: .value("Minute", Self.date(forMinute: only.startMinute)),
                         y: .value("bpm", only.mean)
                     )
                     .symbolSize(24)
@@ -61,7 +68,7 @@ struct IntradayPulseChartView: View {
                 } else {
                     ForEach(run) { bucket in
                         LineMark(
-                            x: .value("Minute", bucket.startMinute),
+                            x: .value("Minute", Self.date(forMinute: bucket.startMinute)),
                             y: .value("bpm", bucket.mean),
                             series: .value("Run", index)
                         )
@@ -71,38 +78,71 @@ struct IntradayPulseChartView: View {
                     }
                 }
             }
+            HLChartScrubber.marks(
+                selectedDate: selectedDate,
+                in: day.series,
+                date: \.scrubDate,
+                value: \.mean
+            ) { bucket in
+                HLScrubCallout(
+                    title: IntradayPulseMath.minuteLabel(bucket.startMinute),
+                    value: HLValueFormat.number(bucket.mean, fractionDigits: 0 ... 0),
+                    unit: units.unitLabel(for: .pulse)
+                )
+            }
         }
-        .chartXScale(domain: 0 ... 1440)
+        .chartXScale(domain: Self.date(forMinute: 0) ... Self.date(forMinute: 1440))
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: IntradayPulseMath.axisTicks) { value in
+            AxisMarks(values: IntradayPulseMath.axisTicks.map(Self.date(forMinute:))) { value in
                 AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
                 AxisValueLabel {
-                    if let minute = value.as(Int.self) {
-                        Text(verbatim: IntradayPulseMath.minuteLabel(minute))
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.secondary)
+                    if let date = value.as(Date.self) {
+                        Text(verbatim: IntradayPulseMath.minuteLabel(Self.minute(of: date)))
+                            .hlText(.rowSubtitle)
                     }
                 }
             }
         }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(HLText.primary.opacity(HLChartGrid.lineOpacity))
-                AxisValueLabel {
-                    if let bpm = value.as(Double.self) {
-                        Text(verbatim: "\(Int(bpm.rounded()))")
-                            .font(.hlCaption2)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
-            }
+        // Values on the leading edge with the unit across them, like the
+        // range chart above.
+        .hlChartValueAxis()
+        .hlChartUnit(units.unitLabel(for: .pulse))
+        .hlChartScrub($selectedDate) { date in
+            scrubAnnouncement(at: date)
         }
         .frame(height: HLChartStyle.heightRegular)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("insights.intraday.title"))
         .accessibilityValue(Text(accessibilitySummary))
         .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
+    }
+
+    // MARK: - Minute axis
+
+    /// The fixed day the minutes are laid on. Only offsets from it are ever
+    /// read back, so neither its date nor the time zone shows anywhere.
+    nonisolated static let anchor = Date(timeIntervalSinceReferenceDate: 0)
+
+    /// A minute of the local day as a point on the anchor day.
+    nonisolated static func date(forMinute minute: Int) -> Date {
+        anchor.addingTimeInterval(TimeInterval(minute) * 60)
+    }
+
+    /// The minute of the day a point on the anchor day stands for.
+    nonisolated static func minute(of date: Date) -> Int {
+        Int((date.timeIntervalSince(anchor) / 60).rounded())
+    }
+
+    /// What VoiceOver reads when the scrub snaps: time, value, unit.
+    private func scrubAnnouncement(at date: Date) -> String? {
+        guard let bucket = HLChartScrubber.nearest(to: date, in: day.series, date: \.scrubDate) else { return nil }
+        return HLScrubCallout.spokenText(
+            title: IntradayPulseMath.minuteLabel(bucket.startMinute),
+            value: HLValueFormat.number(bucket.mean, fractionDigits: 0 ... 0),
+            unit: units.unitLabel(for: .pulse),
+            marksRecord: false
+        )
     }
 
     // MARK: - Marks
@@ -115,7 +155,7 @@ struct IntradayPulseChartView: View {
         if run.count > 1, run.allSatisfy({ $0.min != nil && $0.max != nil }) {
             ForEach(run) { bucket in
                 AreaMark(
-                    x: .value("Minute", bucket.startMinute),
+                    x: .value("Minute", Self.date(forMinute: bucket.startMinute)),
                     yStart: .value("Low", bucket.min ?? bucket.mean),
                     yEnd: .value("High", bucket.max ?? bucket.mean),
                     series: .value("Envelope", series)
@@ -137,7 +177,7 @@ struct IntradayPulseChartView: View {
                     dash: HLChartGrid.thresholdDash
                 ))
                 .foregroundStyle(HLText.secondary.opacity(0.7))
-                .annotation(position: .top, alignment: .leading, spacing: 2) {
+                .annotation(position: .top, alignment: .leading, spacing: HLSpace.xxs) {
                     Text("insights.intraday.baseline")
                         .font(.hlCaption2)
                         .foregroundStyle(HLText.tertiary)
@@ -145,16 +185,20 @@ struct IntradayPulseChartView: View {
         }
     }
 
-    /// The elevated-at-rest window as a soft tinted band BEHIND the curve.
-    /// Descriptive only — see ``IntradayPulseDTO/tension``.
+    /// The elevated-at-rest window as its two edges, dashed in the warning
+    /// tint. Descriptive only (see ``IntradayPulseDTO/tension``); the chart
+    /// shows limits as lines, never as filled areas.
     @ChartContentBuilder
-    private var tensionMark: some ChartContent {
+    private var tensionMarks: some ChartContent {
         if let tension = day.tension {
-            RectangleMark(
-                xStart: .value("Start", tension.startMinute),
-                xEnd: .value("End", tension.endMinute)
-            )
-            .foregroundStyle(HLColor.statusWarn.opacity(0.14))
+            ForEach([tension.startMinute, tension.endMinute], id: \.self) { minute in
+                RuleMark(x: .value("Minute", Self.date(forMinute: minute)))
+                    .lineStyle(StrokeStyle(
+                        lineWidth: HLChartGrid.thresholdWidth,
+                        dash: HLChartGrid.thresholdDash
+                    ))
+                    .foregroundStyle(HLColor.statusWarn)
+            }
         }
     }
 
@@ -206,5 +250,12 @@ struct IntradayPulseChartView: View {
             )
         }
         return String(localized: "insights.intraday.a11y \(readings) \(span)")
+    }
+}
+
+extension IntradayPulseDTO.Bucket {
+    /// The bucket's start on the chart's minute axis.
+    var scrubDate: Date {
+        IntradayPulseChartView.date(forMinute: startMinute)
     }
 }

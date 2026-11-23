@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 18 / 18-02 — the four outputs, from one state.**
+/// **The four outputs, from one state.**
 ///
 /// The unified surface consolidates the *questions*, never the *contracts*.
 /// This file is where that distinction is kept: it turns the one model state

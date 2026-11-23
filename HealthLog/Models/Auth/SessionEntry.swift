@@ -131,7 +131,7 @@ public struct SessionListResponse: Decodable, Sendable, Equatable {
 /// sign-ins); device logins are revoked too and not counted there, so the UI
 /// must not present the number as "devices signed out".
 ///
-/// R2 / #115 A7 — server v1.39.3 widened "sign out everywhere": the same call
+/// Server v1.39.3 widened "sign out everywhere": the same call
 /// now also revokes AI-assistant connections, every API token except the
 /// caller's own access token, every clinician share link (unless
 /// `?keepShareLinks=1`) and pending sharing invitations, and lists the accepted

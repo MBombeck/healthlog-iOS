@@ -1,6 +1,6 @@
 import Foundation
 
-/// Locale-aware decimal parsing for user-typed numeric input (A360-5 H-4).
+/// Locale-aware decimal parsing for user-typed numeric input.
 ///
 /// The codebase historically parsed typed numbers with
 /// `Double(text.replacingOccurrences(of: ",", with: "."))`, which has two

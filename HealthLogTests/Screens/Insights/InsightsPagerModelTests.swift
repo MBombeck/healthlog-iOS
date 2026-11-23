@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0152 I1 — unit tests for the FLAT category-aware pager state machine. The
+/// Unit tests for the FLAT category-aware pager state machine. The
 /// b198 grouped pager (one category = one page with an in-page member switch) was
 /// reversed: the pager is now a single continuous flat sequence over EVERY metric
 /// in category order, one page per metric. The strip stays category-aware (a
@@ -141,7 +141,7 @@ struct InsightsPagerModelTests {
         }
     }
 
-    // MARK: - W-RECONCILE H-1: programmatic-scroll latch self-clear
+    // MARK: - Programmatic-scroll latch self-clear
 
     @Test("mirrorSelectionIntoScroll arms the latch and bumps the generation")
     func mirrorArmsLatchAndBumpsGeneration() {
@@ -182,7 +182,7 @@ struct InsightsPagerModelTests {
         #expect(model.programmaticScrollTarget == nil)
     }
 
-    // MARK: - W-RECONCILE M-2: deep-link to the already-selected metric re-aligns
+    // MARK: - Deep-link to the already-selected metric re-aligns
 
     @Test("deep-link to the already-selected metric forces a scroll re-align")
     func deepLinkToCurrentSelectionReAlignsScroll() {

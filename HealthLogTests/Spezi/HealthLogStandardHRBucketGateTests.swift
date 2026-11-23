@@ -5,7 +5,7 @@
     import SpeziHealthKit
     import Testing
 
-    /// W-HR-BUCKET-UPLOAD / GH #34 — the HEADLINE per-day-exclusivity invariant.
+    /// The HEADLINE per-day-exclusivity invariant.
     ///
     /// The cutover boundary guarantees that no UTC day ever carries BOTH raw
     /// per-sample HR rows AND `stats:` bucket rows (the server's nightly PULSE
@@ -53,17 +53,6 @@
             func sendVoid(_: APIRequest<EmptyPayload>) async throws {}
             func download(_: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
                 throw HLError.unknown("test stub: download not implemented")
-            }
-        }
-
-        private struct FlagStub: FeatureFlagsServicing {
-            let hrBucketEnabled: Bool
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableHRBuckets: hrBucketEnabled
-                case .enableDailyStats: false // keep the cumulative gate out of the way
-                default: flag.defaultValue
-                }
             }
         }
 
@@ -120,7 +109,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -141,7 +129,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -160,7 +147,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -180,47 +166,6 @@
             #expect(bpms == [70, 71])
         }
 
-        @Test("flag OFF: cutover gate is inert — HR flows per-sample even on/after the boundary")
-        func flagOffHRAlwaysPerSample() async {
-            let api = CapturingAPI()
-            let uploader = makeUploader(api: api)
-            let standard = HealthLogStandard()
-            await standard.attachUploader(
-                uploader,
-                featureFlags: FlagStub(hrBucketEnabled: false),
-                hrCutoverGate: cutoverGate()
-            )
-
-            let sample = makeHRSample(bpm: 88, endingAt: iso("2026-06-25T10:00:00.000Z"))
-            await standard.handleNewSamples([sample], ofType: SampleType.heartRate)
-
-            #expect(api.entryCount == 1)
-        }
-
-        @Test("other sample types are UNAFFECTED by the HR gate (steps on/after cutover still flow)")
-        func otherTypesUnaffected() async throws {
-            let api = CapturingAPI()
-            let uploader = makeUploader(api: api)
-            let standard = HealthLogStandard()
-            await standard.attachUploader(
-                uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
-                hrCutoverGate: cutoverGate()
-            )
-
-            // A stepCount sample dated AFTER the cutover — must NOT be gated by
-            // the HR cutover (the HR gate is heartRate-only). dailyStats is OFF
-            // in this stub so steps ride the per-sample path.
-            let steps = makeQuantitySample(
-                identifier: .stepCount, unit: .count(), value: 500, endingAt: iso("2026-06-24T08:00:00.000Z")
-            )
-            await standard.handleNewSamples([steps], ofType: SampleType.stepCount)
-
-            #expect(api.entryCount == 1)
-            let entry = try #require(api.batches.first?.entries.first)
-            #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.stepCount.rawValue)
-        }
-
         @Test("restingHeartRate is NOT gated (different identifier than heartRate)")
         func restingHRNotGated() async throws {
             let api = CapturingAPI()
@@ -228,7 +173,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -254,7 +198,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -308,7 +251,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: gate
             )
 
@@ -332,7 +274,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 uploader,
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate()
             )
 
@@ -353,7 +294,7 @@
             #expect(entry.valueMax == nil)
         }
 
-        // MARK: - #12 — the hand-off requests the sweep
+        // MARK: - The hand-off requests the sweep
 
         private final class KickCounter: @unchecked Sendable {
             private let lock = NSLock()
@@ -374,7 +315,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: api),
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate(),
                 hrBucketKick: { counter.kick() }
             )
@@ -395,7 +335,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: api),
-                featureFlags: FlagStub(hrBucketEnabled: true),
                 hrCutoverGate: cutoverGate(),
                 hrBucketKick: { counter.kick() }
             )

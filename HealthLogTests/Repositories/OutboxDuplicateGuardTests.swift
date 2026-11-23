@@ -109,7 +109,7 @@ struct OutboxDuplicateGuardTests {
         "unconfirmed:since=\(Int(date.timeIntervalSince1970))"
     }
 
-    // MARK: - S2: "Erneut senden" keeps the window
+    // MARK: - "Erneut senden" keeps the window
 
     @Test("Erneut senden gives an unconfirmed row its budget back and keeps its marker")
     func rearmKeepsTheUnconfirmedMarker() async throws {
@@ -261,7 +261,7 @@ struct OutboxDuplicateGuardTests {
         #expect(await outbox.deadLetterCount == 0)
     }
 
-    // MARK: - S5: a superseded pass never remaps
+    // MARK: - A superseded pass never remaps
 
     /// The first call of each pause waits until the test releases it.
     actor PauseGate {
@@ -312,9 +312,9 @@ struct OutboxDuplicateGuardTests {
             order: 4
         )
 
-        // Phase 0: the first pass's create of A meets a 429 and pauses.
-        // Phase 1: the pass that replaces it creates A and Y, then pauses on
-        // Y's edit. Phase 2: everything is answered.
+        // The first pass's create of A meets a 429 and pauses.
+        // The pass that replaces it creates A and Y, then pauses on
+        // Y's edit. Everything is answered.
         let phase = Mutex(0)
         let deletes = Mutex<[String]>([])
         MockURLProtocol.install { req in

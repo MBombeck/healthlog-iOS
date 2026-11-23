@@ -10,7 +10,7 @@ import SwiftUI
 /// `InsightsRingPrism.metal` (own ~30-line `[[ stitchable ]]` shader, no vendored
 /// dependency — learned from krispuckett/SwiftUIShaders + Inferno).
 ///
-/// **W-B186 / W-B187 — strictly masked to the FILLED arc only.** The plain
+/// **Strictly masked to the FILLED arc only.** The plain
 /// `HLScoreRing` is the base; the chromatic-prism copy is OVERLAID and masked to the
 /// progressed arc (`RingFilledArcMask`, the same 0…`fraction` / 12-o'clock /
 /// clockwise trim `HLScoreRing` draws), so the spectral break-up rides ONLY the
@@ -21,7 +21,7 @@ import SwiftUI
 /// `TimelineView` clock — on the large hero "Tagesform" ring the previous two
 /// unsynchronised clocks beat against each other and read as a glow flicker.
 ///
-/// **W-B186 — geometry fix.** The shader's `center`/`radius` are derived from the
+/// **Geometry fix.** The shader's `center`/`radius` are derived from the
 /// content's OWN rendered size (measured via `onGeometryChange`, not a greedy
 /// outer `GeometryReader` that expanded to the tile and pushed the ring to the
 /// top-leading corner) so on the hero "Tagesform" tile the prism aligns to the
@@ -37,7 +37,7 @@ import SwiftUI
 struct PrismShaderRim: ViewModifier {
     /// The ring fill fraction 0…1 — masks the chromatic break-up to the filled arc.
     let fraction: Double
-    /// P5b — when `true`, a specular glow rides ALONG the filled arc on top of the
+    /// When `true`, a specular glow rides ALONG the filled arc on top of the
     /// prism (`PrismGlowArc`). `false` for plain P5.
     var glow: Bool = false
 
@@ -66,7 +66,7 @@ struct PrismShaderRim: ViewModifier {
             // the prism away (the unfilled remainder reads as the "open" ring).
             content
 
-            // W-B187 — the chromatic prism AND the optional P5b glow share ONE
+            // The chromatic prism AND the optional P5b glow share ONE
             // clock and ONE arc mask. Two separate `TimelineView`s used to drive
             // them on the hero (the prism's here + the glow's own `HLGlowDriver`),
             // beating against each other on the large ring → the flicker the
@@ -92,7 +92,7 @@ struct PrismShaderRim: ViewModifier {
                                 maxSampleOffset: CGSize(width: 4, height: 4)
                             )
 
-                        // P5b — the specular glow riding the filled arc, phase-
+                        // The specular glow riding the filled arc, phase-
                         // locked to the SAME `seconds` clock (no second timeline),
                         // so it never beats against the prism. Steady (fixed-mean
                         // bloom) inside `PrismGlowArc`.
@@ -102,7 +102,7 @@ struct PrismShaderRim: ViewModifier {
                         }
                     }
                 }
-                // W-B187 — STRICT arc mask over BOTH the prism and the glow, so the
+                // STRICT arc mask over BOTH the prism and the glow, so the
                 // colour (and the bloom halo, which would otherwise spill past the
                 // arc head) is gone EXACTLY where the white ring hasn't reached. The
                 // mask reproduces the white fill's geometry (centre / radius / round

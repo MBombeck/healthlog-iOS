@@ -1,6 +1,6 @@
 import XCTest
 
-/// L10N-MH — the questionnaire text from the server, per language: the SCI
+/// The questionnaire text from the server, per language: the SCI
 /// with HealthLog's own translation (note and the centred switch), the same
 /// step after the switch to the English original, and the first PHQ-9 step
 /// with its stem. Runs with the sweep's language, appearance and text size.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-2 — the tiny medication summary the Home / Lock-Screen
+/// **The tiny medication summary the Home / Lock-Screen
 /// widgets paint from.**
 ///
 /// The app writes this into the shared App Group container whenever the
@@ -23,7 +23,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// Today's adherence summary for the compliance ring.
     public let compliance: ComplianceSummary
 
-    /// **v0.10.0 W-Mood-B** — the most-recent mood entry, for the interactive
+    /// The most-recent mood entry, for the interactive
     /// mood widget's glance. `nil` when the user has never logged a mood (or
     /// signed out). Optional on decode so an older snapshot (pre-mood-field)
     /// still reads.
@@ -44,6 +44,12 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// plus its unit + kind id + timestamp. `nil` until a measurement has
     /// loaded (or on logout). Optional on decode so an older snapshot reads.
     public let latestMeasurement: LatestMeasurement?
+
+    /// The choosable readings of the configurable measurement widget: one glance
+    /// per named, non-cumulative kind the app holds, newest first, each with a
+    /// short trend. Empty on a snapshot written before the widget became
+    /// configurable, which is what keeps a placed widget on its old reading.
+    public let metricGlances: [MetricGlance]
 
     /// When the snapshot was written. Lets a widget show staleness if the
     /// app hasn't refreshed it in a long time (and aids debugging).
@@ -71,6 +77,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         recentMood: RecentMood? = nil,
         healthScore: HealthScoreGlance? = nil,
         latestMeasurement: LatestMeasurement? = nil,
+        metricGlances: [MetricGlance] = [],
         timeFormatRaw: String = "AUTO",
         generatedAt: Date
     ) {
@@ -79,6 +86,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         self.recentMood = recentMood
         self.healthScore = healthScore
         self.latestMeasurement = latestMeasurement
+        self.metricGlances = metricGlances
         self.timeFormatRaw = timeFormatRaw
         self.generatedAt = generatedAt
     }
@@ -94,6 +102,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         recentMood = try c.decodeIfPresent(RecentMood.self, forKey: .recentMood)
         healthScore = try c.decodeIfPresent(HealthScoreGlance.self, forKey: .healthScore)
         latestMeasurement = try c.decodeIfPresent(LatestMeasurement.self, forKey: .latestMeasurement)
+        metricGlances = (try? c.decodeIfPresent([MetricGlance].self, forKey: .metricGlances)) ?? []
         timeFormatRaw = try c.decodeIfPresent(String.self, forKey: .timeFormatRaw) ?? "AUTO"
         generatedAt = try c.decode(Date.self, forKey: .generatedAt)
     }
@@ -104,6 +113,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         case recentMood
         case healthScore
         case latestMeasurement
+        case metricGlances
         case timeFormatRaw
         case generatedAt
     }
@@ -208,7 +218,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — the user's most-recent mood entry, for the
+    /// The user's most-recent mood entry, for the
     /// mood widget glance. Carries only the 1…5 score + the timestamp — no
     /// note, no tags (those are PHI-adjacent free text and the widget never
     /// renders them).
@@ -251,7 +261,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         /// sub-line on the rectangular accessory.
         public let resolvedAt: Date
 
-        /// **v1.35.0 (GH #83)** — the server-resolved "this composition was
+        /// **v1.35.0** — the server-resolved "this composition was
         /// chosen" flag, mirrored verbatim. The widget shows the number with
         /// nothing beside it to qualify it, so it has to be able to say where
         /// the number's make-up came from. Never derived here — a widget that
@@ -266,6 +276,12 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
             self.band = band
             self.resolvedAt = resolvedAt
             self.configured = configured
+        }
+
+        /// Same score, band, and provenance. `resolvedAt` is stamped on every
+        /// load, so a plain `==` never matches and every load cost a reload.
+        public func hasSameContent(as other: Self) -> Bool {
+            score == other.score && band == other.band && configured == other.configured
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -339,6 +355,67 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         }
     }
 
+    /// One choosable reading of the measurement widget: the latest value of a
+    /// kind, formatted by the app like the dashboard tile, plus a short trend of
+    /// one point per day. Carries nothing but the reading.
+    public struct MetricGlance: Codable, Sendable, Equatable, Identifiable {
+        /// One day of the trend. The value is the day's last reading in the
+        /// kind's primary scale (systolic for blood pressure); only the shape
+        /// of the line is drawn from it, never a number.
+        public struct TrendPoint: Codable, Sendable, Equatable {
+            public let date: Date
+            public let value: Double
+
+            public init(date: Date, value: Double) {
+                self.date = date
+                self.value = value
+            }
+        }
+
+        public let kindRaw: String
+        public let title: String
+        public let symbol: String
+        public let formattedValue: String
+        public let unit: String
+        public let recordedAt: Date
+        /// Oldest first. Fewer than two points draws no line.
+        public let trend: [TrendPoint]
+
+        public var id: String {
+            kindRaw
+        }
+
+        public init(
+            kindRaw: String,
+            title: String,
+            symbol: String,
+            formattedValue: String,
+            unit: String,
+            recordedAt: Date,
+            trend: [TrendPoint]
+        ) {
+            self.kindRaw = kindRaw
+            self.title = title
+            self.symbol = symbol
+            self.formattedValue = formattedValue
+            self.unit = unit
+            self.recordedAt = recordedAt
+            self.trend = trend
+        }
+
+        /// The same reading in the shape the single-reading widget paints.
+        public var latest: LatestMeasurement {
+            LatestMeasurement(
+                kindRaw: kindRaw,
+                title: title,
+                formattedValue: formattedValue,
+                unit: unit,
+                symbol: symbol,
+                recordedAt: recordedAt
+            )
+        }
+    }
+
     /// The neutral snapshot shown before the app has written anything (or
     /// when signed out): no due dose, an empty-but-complete ring, no mood,
     /// no score, no measurement.
@@ -353,7 +430,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     )
 }
 
-/// **v0.8.4 WWIDGET-2 — atomic read / write of the widget snapshot in the
+/// **Atomic read / write of the widget snapshot in the
 /// shared App Group container.**
 ///
 /// Shared by the app (writer) and the extension (reader) via source

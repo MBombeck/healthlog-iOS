@@ -1,6 +1,6 @@
 import Foundation
 
-/// **AUD-7 H1 — logout-clearing as a protocol obligation, not a hand-list.**
+/// **Logout-clearing as a protocol obligation, not a hand-list.**
 ///
 /// The logout PHI-clearing cascade in `AppContainer+Logout.performFullLocalLogout`
 /// used to hand-list ~43 individual `store.clearOnLogout()` calls. Every new
@@ -40,7 +40,7 @@ public protocol LogoutClearable: AnyObject {
 // "add `clearOnLogout()` + conform here" — and `LogoutCompletenessTests` fails
 // until both are done.
 
-extension AccountSecurityStore: LogoutClearable {} // parity 2.1 — clears the change-password outcome
+extension AccountSecurityStore: LogoutClearable {} // Clears the change-password outcome
 extension AchievementsStore: LogoutClearable {}
 extension AIProviderStore: LogoutClearable {}
 extension AllergiesStore: LogoutClearable {} // v1.25 PHI — decrypted reaction/note
@@ -58,7 +58,6 @@ extension DisclaimerAckStore: LogoutClearable {}
 extension DocumentsStore: LogoutClearable {} // PHI — decrypted document vault snapshot
 extension DoctorReportStore: LogoutClearable {}
 extension FamilyHistoryStore: LogoutClearable {} // v1.25 PHI — decrypted note
-extension FeatureFlagsStore: LogoutClearable {}
 extension FitbitIntegrationStore: LogoutClearable {}
 extension HealthScoreStore: LogoutClearable {}
 extension HKReadinessStore: LogoutClearable {}
@@ -71,9 +70,10 @@ extension CustomMetricsStore: LogoutClearable {} // PHI — user-defined metrics
 extension LiveHealthKitTodayStore: LogoutClearable {}
 extension LocalDoctorReportStore: LogoutClearable {}
 extension MeasurementsStore: LogoutClearable {}
+extension MedicationVisibilityStore: LogoutClearable {} // local UI-pref; the per-account selection stays on disk
 extension MedicationsStore: LogoutClearable {}
 extension MentalHealthStore: LogoutClearable {} // v1.25 PHI — in-flight item answers + history
-// Parity 2.3 — the forced-enrolment verdict is per-account policy; a stale
+// The forced-enrolment verdict is per-account policy; a stale
 // `true` would gate the next user against a requirement that is not theirs.
 extension MfaEnrollmentGateStore: LogoutClearable {}
 extension MoodStore: LogoutClearable {}
@@ -84,12 +84,11 @@ extension OnboardingTourStore: LogoutClearable {}
 extension OuraIntegrationStore: LogoutClearable {}
 extension PasskeyManagementStore: LogoutClearable {}
 extension PolarIntegrationStore: LogoutClearable {}
-// Parity 2.2 — the session inventory is per-user security state; leaving it
+// The session inventory is per-user security state; leaving it
 // behind would show the previous account's devices to the next sign-in.
 extension SessionsStore: LogoutClearable {}
 extension SettingsStore: LogoutClearable {}
 extension StravaIntegrationStore: LogoutClearable {}
-extension SyncModeStore: LogoutClearable {}
 extension WellnessCardVisibilityStore: LogoutClearable {} // local UI-pref — per-card Insights score-card hide
 extension WhoopIntegrationStore: LogoutClearable {}
 extension WithingsIntegrationStore: LogoutClearable {}

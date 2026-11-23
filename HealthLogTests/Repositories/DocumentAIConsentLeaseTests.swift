@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// Phase 03-01 — the document Vision/AI routes are unusual: the request body is
+/// The document Vision/AI routes are unusual: the request body is
 /// only a document id, but that request authorizes the server to release the
 /// stored original to its external provider. These tests therefore assert the
 /// consent boundary at the repository wire choke point, not only in SwiftUI.

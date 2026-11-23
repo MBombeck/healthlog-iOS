@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Build-8 (b239) coherence guard — pins that **every catalog key is fully
+/// Build-8 coherence guard — pins that **every catalog key is fully
 /// co-named across both locales** (de + en). A "half-localized" key — one that
 /// carries a German value but no English block, or vice versa — renders the raw
 /// key or the wrong-locale source on the missing side. `sourceLanguage: en`

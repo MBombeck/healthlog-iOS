@@ -23,10 +23,10 @@ public enum TrendObservationDirection: String, Sendable, Equatable, Codable, Cas
 /// surfaced to the renderer.
 ///
 /// **Why not `@Generable` here?** Same reason as `OnDeviceBriefing` —
-/// Apple's `@Generable` macro requires `FoundationModels` (iOS 26+). The
-/// plain transport type lives here; the `@Generable` mirror used at the
-/// model call site is in `TrendObservationsService` under
-/// `#if canImport(FoundationModels)` + `@available(iOS 26.0, *)`.
+/// Apple's `@Generable` macro requires `FoundationModels`. The plain
+/// transport type lives here; the `@Generable` mirror used at the model
+/// call site is in `TrendObservationsService` under
+/// `#if canImport(FoundationModels)`.
 public struct TrendObservation: Sendable, Equatable {
     /// One short, calm sentence describing what the data shows. Never
     /// diagnostic, never predictive, never prescriptive.

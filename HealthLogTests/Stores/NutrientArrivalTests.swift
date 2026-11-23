@@ -1,4 +1,4 @@
-// 14-04 (F1) — nutrients the server already holds must reach the Ernährung screen.
+// Nutrients the server already holds must reach the Ernährung screen.
 //
 // The operator sees a nutrient entry in Apple Health and in the web app, and
 // nothing on iOS. Task 1 measured where the two clients diverge; the short
@@ -106,7 +106,7 @@
 
             #expect(
                 store.rows.isEmpty == false,
-                "EXPECTED_RED: data the account holds does not reach the Ernährung screen"
+                "data the account holds does not reach the Ernährung screen"
             )
             #expect(store.rows.first?.nutrient == .magnesium)
             #expect(store.lastError == nil)

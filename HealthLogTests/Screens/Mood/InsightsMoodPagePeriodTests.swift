@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// I-4 Item 3 — locks the data-span → default-period auto-select on the Insights
+/// Locks the data-span → default-period auto-select on the Insights
 /// Mood page. The page opens on a sensible window derived from the operator's
 /// mood history span: more than ~3 months of data → the year lens; a moderate
 /// span → 90 days; very little data → 30 days. Pure helpers, no render pass.
@@ -56,16 +56,16 @@ struct InsightsMoodPagePeriodTests {
 
     @Test("a moderate span opens on 90 days")
     func moderateSpanPicks90() {
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 90) == .days90)
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 45) == .days90)
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 31) == .days90)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 90) == .sixMonths)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 45) == .sixMonths)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 31) == .sixMonths)
     }
 
     @Test("very little data opens on 30 days")
     func shortSpanPicks30() {
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 30) == .days30)
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 7) == .days30)
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 0) == .days30)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 30) == .month)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 7) == .month)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: 0) == .month)
     }
 
     // MARK: - End-to-end (span → period)
@@ -81,6 +81,6 @@ struct InsightsMoodPagePeriodTests {
     func sparseHistoryPicks30() {
         let entries = [Self.entry(daysAgo: 14), Self.entry(daysAgo: 0)]
         let span = InsightsMoodPage.spanDays(of: entries, calendar: Self.fixedCalendar)
-        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: span) == .days30)
+        #expect(InsightsMoodPage.defaultPeriod(forSpanDays: span) == .month)
     }
 }

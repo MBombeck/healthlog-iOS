@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **K1 — a segmented picker that becomes a menu before it truncates.**
+/// **A segmented picker that becomes a menu before it truncates.**
 ///
 /// H2 photographed the cycle capture sheet with „Keine Änderu…", „Periode
 /// gesta…" and „Schmi…" on the iPhone SE, and „Schmier…" even on the large
@@ -20,19 +20,37 @@ struct HLAdaptiveSegmentedPicker<Selection: Hashable, Content: View>: View {
     private let title: LocalizedStringKey
     @Binding private var selection: Selection
     private let labels: [LocalizedStringKey]
+    private let values: [Selection]?
     private let content: Content
 
-    /// - Parameter labels: the segment labels, in order, for measuring only.
+    /// - Parameters:
+    ///   - labels: the segment labels, in order, for measuring.
+    ///   - values: the tags of the segments in the same order. With them the
+    ///     menu form draws its own label, which wraps in full at the largest
+    ///     sizes; without them the system's one-line menu label stands.
     init(
         _ title: LocalizedStringKey,
         selection: Binding<Selection>,
         labels: [LocalizedStringKey],
+        values: [Selection]? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         _selection = selection
         self.labels = labels
+        self.values = values
         self.content = content()
+    }
+
+    /// The label of the chosen value, when the values are known.
+    static func selectedLabel(_ selection: Selection, labels: [LocalizedStringKey], values: [Selection]?) -> LocalizedStringKey? {
+        guard let values, values.count == labels.count, let index = values.firstIndex(of: selection) else { return nil }
+        return labels[index]
+    }
+
+    /// How far the menu's label may shrink to stay on its line.
+    static var menuMinimumScale: CGFloat {
+        0.6
     }
 
     var body: some View {
@@ -47,8 +65,39 @@ struct HLAdaptiveSegmentedPicker<Selection: Hashable, Content: View>: View {
                 Picker(title, selection: $selection) { content }
                     .pickerStyle(.segmented)
             }
+            menu
+        }
+    }
+
+    /// The system draws a menu picker's label in a one-line button: at the
+    /// largest sizes a wrapped "Diese / Woche" was cut at top and bottom.
+    /// With the values known the label is drawn here and wraps in full.
+    @ViewBuilder
+    private var menu: some View {
+        if let chosen = Self.selectedLabel(selection, labels: labels, values: values) {
+            Menu {
+                Picker(title, selection: $selection) { content }
+                    .pickerStyle(.inline)
+            } label: {
+                HStack(spacing: HLSpace.xs) {
+                    Text(chosen)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.hlFootnote.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(HLText.primary)
+                .frame(minHeight: HLHitTarget.minimum)
+            }
+            .accessibilityLabel(Text(title))
+            .accessibilityValue(Text(chosen))
+        } else {
             Picker(title, selection: $selection) { content }
                 .pickerStyle(.menu)
+                .lineLimit(1)
+                .minimumScaleFactor(Self.menuMinimumScale)
+                .layoutPriority(1)
         }
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 3 — the dose-import half of the Apple-Health medication sweep.
+// The dose-import half of the Apple-Health medication sweep.
 //
 // An extension rather than a second type: this is the same transaction, and the
 // mirror half above it is what decides whether a dose is routable at all. It
@@ -14,7 +14,7 @@ extension AppleHealthMedicationImporter {
     struct PreparedDose {
         let identity: String
         let entry: MedicationsRepository.BulkIntakeEntry
-        /// A2 (1.4) — when the dose was logged: it decides live or history.
+        /// When the dose was logged: it decides live or history.
         var recordedAt: Date = .distantPast
     }
 
@@ -33,10 +33,14 @@ extension AppleHealthMedicationImporter {
         doses: [AppleHealthDoseRecord],
         ledger: AppleHealthDoseLedger,
         readWindow: HealthReadWindow = .unlimited,
+        knownConcepts: Set<String>? = nil,
         maxChunks: Int? = nil,
         requiring lease: HealthSyncAuthenticatedLease
     ) async -> AppleHealthMedicationSyncSummary {
         var summary = summaryIn
+        // Doses the trailing re-read sees again after they landed: observed and
+        // accounted for, never sent a second time.
+        let alreadySettled = ledger.settledIdentities()
 
         // Every dose this sweep saw, with the instant it was recorded at. This
         // is what lets the ledger keep a hole open behind a moving horizon.
@@ -51,6 +55,10 @@ extension AppleHealthMedicationImporter {
         var prepared: [PreparedDose] = []
         for dose in doses {
             observed[dose.eventUUID] = dose.recordedAt
+            if alreadySettled.contains(dose.eventUUID) {
+                accountedFor.insert(dose.eventUUID)
+                continue
+            }
             guard let medId = registry.medicationId(forConcept: dose.conceptIdentifier) else {
                 summary.dosesHeldBackNotMirrored += 1
                 continue
@@ -68,10 +76,10 @@ extension AppleHealthMedicationImporter {
             prepared.append(PreparedDose(identity: dose.eventUUID, entry: entry, recordedAt: dose.recordedAt))
         }
 
-        // W3 (1.3) — a short wake posts at most `maxChunks` chunks. The rest is
+        // A short wake posts at most `maxChunks` chunks. The rest is
         // observed but not accounted for, so the ledger keeps it pending.
         //
-        // A2 (1.4, #138) — doses of the live window (two days, as for the
+        // Doses of the live window (two days, as for the
         // sample streams) go first and under the pass's trigger; older ones
         // are history and go out as `backfill` where the server takes it, so
         // a first import of years of doses does not read as a fresh arrival.
@@ -94,7 +102,13 @@ extension AppleHealthMedicationImporter {
         // was: the next sweep re-offers the same doses and the server folds the
         // repeat on the dose UUID.
         do {
-            try ledger.commit(observed: observed, accountedFor: accountedFor, readWindow: readWindow, requiring: lease)
+            try ledger.commit(
+                observed: observed,
+                accountedFor: accountedFor,
+                readWindow: readWindow,
+                knownConcepts: knownConcepts,
+                requiring: lease
+            )
         } catch {
             HLLog.healthKit.error("APPLE-MED dose ledger not committed — sweep holds its window")
         }

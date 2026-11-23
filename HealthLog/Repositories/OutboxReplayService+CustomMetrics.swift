@@ -13,7 +13,7 @@ extension OutboxReplayService {
     /// **The H-4 remap matters more here than anywhere else.** A user can define
     /// a metric AND log its first value in one offline session; the value's
     /// payload then carries the optimistic metric id. The create arm returns
-    /// the server-assigned id to the pass (1.4, S5), and every entry arm
+    /// the server-assigned id to the pass, and every entry arm
     /// funnels its `metricID` through `resolveEntityId` — so the queued value
     /// lands on the real metric instead of 404-ing into the dead-letter table.
     func dispatchCustomMetrics(_ op: OutboxQueue.Operation) async throws -> String? {

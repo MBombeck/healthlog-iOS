@@ -1,17 +1,20 @@
 import SwiftUI
 
-/// GH-iOS #27 — the presets and the header rows, without any save button.
+/// The presets and the header rows, without any save button.
 ///
 /// Settings › Server shows it in `ServerAccessHeadersScreen`; onboarding unfolds
 /// it under "Advanced" below the address card (`ServerURLStep`), sends it with
 /// the address check and stores it with the address once the user confirms the
-/// host. Both hosts keep the rows in `OnboardingDraftStore` (#153).
+/// host. Both hosts keep the rows in `OnboardingDraftStore`.
 struct ServerAccessHeadersEditor: View {
     @Binding var rows: [Row]
     /// Called whenever the list changes, so the host can clear a stale error.
     var onChange: () -> Void = {}
 
     @State private var showsValues = false
+
+    /// The error line under the editor, in Settings and in onboarding alike.
+    static let errorIdentifier = "serverAccessHeaders.error"
 
     struct Row: Identifiable, Equatable {
         let id = UUID()
@@ -20,7 +23,7 @@ struct ServerAccessHeadersEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             presetCard
             headersCard
         }
@@ -30,10 +33,10 @@ struct ServerAccessHeadersEditor: View {
     // MARK: - Cards
 
     private var presetCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "Presets",
-            subtitle: "Fills in the header names. Paste the values from your proxy."
+        HLCard(
+            "Presets",
+            subtitle: "Fills in the header names. Paste the values from your proxy.",
+            layout: .rows
         ) {
             HLSettingsActionRow(title: "Cloudflare Access", presents: .create) {
                 add(.cloudflareAccess)
@@ -51,15 +54,12 @@ struct ServerAccessHeadersEditor: View {
     }
 
     private var headersCard: some View {
-        HLSettingsCard(
-            icon: "list.bullet.rectangle",
-            title: "Headers",
+        HLCard(
+            "Headers",
             footer: "server.accessHeaders.footer"
         ) {
             if rows.isEmpty {
-                Text("No headers. Requests go to the server unchanged.")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("No headers. Requests go to the server unchanged.")
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach($rows) { $row in
@@ -78,19 +78,15 @@ struct ServerAccessHeadersEditor: View {
     private func rowEditor(row: Binding<Row>) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             HStack(spacing: HLSpace.sm) {
+                let id = row.wrappedValue.id
+                HLDeleteButton(form: .remove, action: .undoable {
+                    rows.removeAll { $0.id == id }
+                })
                 TextField("Name", text: row.name)
                     .font(.hlHeadline)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("serverAccessHeaders.name")
-                Button {
-                    rows.removeAll { $0.id == row.wrappedValue.id }
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .foregroundStyle(HLColor.statusBad)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("Remove"))
             }
             Group {
                 if showsValues {
@@ -135,7 +131,7 @@ struct ServerAccessHeadersEditor: View {
         if let validation = error as? ServerAccessHeaders.ValidationError {
             return message(for: validation)
         }
-        return String(localized: "Couldn't save the headers: \(error.localizedDescription)")
+        return String(localized: "Couldn't save the headers: \(HLError.userFacingText(for: error))")
     }
 
     nonisolated static func message(for error: ServerAccessHeaders.ValidationError) -> String {

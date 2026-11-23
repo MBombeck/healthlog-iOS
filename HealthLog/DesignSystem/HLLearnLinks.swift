@@ -1,6 +1,6 @@
 import Foundation
 
-/// **A360-1 M2 — typed Learn-article link registry (mirror of the server's
+/// **Typed Learn-article link registry (mirror of the server's
 /// `LEARN_LINKS` / `LEARN_GUIDES`).**
 ///
 /// The public `/learn` guides are the secondary, plain-language education layer.
@@ -23,13 +23,13 @@ public struct HLLearnGuide: Sendable, Equatable {
     /// The absolute public URL.
     public let url: URL
 
-    /// 1.4 B4 — the guide's title in the app's language, as the site prints
+    /// The guide's title in the app's language, as the site prints
     /// it. ``title`` stays the English registry title the server mirrors.
     public var localizedTitle: String {
         HLLearnLinks.localizedTitle(forSlug: slug) ?? title
     }
 
-    /// 1.4 B4 — the guide in the app's language: the site publishes every
+    /// The guide in the app's language: the site publishes every
     /// guide under `/de/learn` as well, and a German reader no longer lands
     /// on the English article.
     public var localizedURL: URL {
@@ -75,7 +75,7 @@ public enum HLLearnLinks {
         return HLLearnGuide(slug: entry.slug, title: entry.title, url: url)
     }
 
-    /// 1.4 B4 — the language the app runs in (``AppLanguage/current``), which
+    /// The language the app runs in (``AppLanguage/current``), which
     /// picks the guide's edition on the site.
     static var appLanguageCode: String {
         AppLanguage.current.rawValue
@@ -89,7 +89,7 @@ public enum HLLearnLinks {
         return URL(string: "\(base)/\(slug)")
     }
 
-    /// 1.4 B4 — the site's own title of each guide, through the catalog
+    /// The site's own title of each guide, through the catalog
     /// (German and English). Medical Sources listed the English registry
     /// titles in the German app.
     static func localizedTitle(forSlug slug: String) -> String? {
@@ -165,8 +165,8 @@ public enum HLLearnLinks {
 
     /// Resolve a concept key (a ``MetricKind`` rawValue or a concept-shaped key)
     /// to its guide, or `nil` when the concept is unmapped or — defensively —
-    /// its slug is missing from the catalog. A surface passes the result
-    /// straight to ``HLLearnMoreLink``, which renders nothing on `nil`.
+    /// its slug is missing from the catalog. ``HLInfoSheet`` renders no link
+    /// on `nil`.
     public static func guide(forConcept concept: String) -> HLLearnGuide? {
         guard let slug = conceptToSlug[concept] else { return nil }
         return guideBySlug[slug]

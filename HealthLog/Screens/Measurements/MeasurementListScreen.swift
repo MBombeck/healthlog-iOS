@@ -15,28 +15,27 @@ import SwiftUI
 /// "Older" section before this — Apple-Health's solution is exactly the
 /// same per-period summary rollup we adopt here.
 ///
-/// Typography: per-row value bumped from `hlMetric(.headline)` to
-/// `hlMetric(.title3)` — the v0.4.0 review surfaced "die Daten sind viel
-/// zu klein, man kann das nicht richtig sehen". Title3 metric numerals
-/// match the dashboard tile vocabulary.
+/// Each section is one grouped block of history rows under a day, week or
+/// month header; the `List` stays so swipe-to-delete and multi-select keep
+/// working row by row.
 struct MeasurementListScreen: View {
     let kind: MetricKind
 
     @Environment(\.appContainer) private var container
-    /// QoL-4 (A360-4) — routes the empty-state CTA to the capture sheet prefilled
+    /// Routes the empty-state CTA to the capture sheet prefilled
     /// to this metric kind, so the empty list has a next step.
     @Environment(AppRouter.self) private var router
-    /// A11Y (audit-v0162 §5) — gates the edit-mode toggle animations below so
+    /// A11Y — gates the edit-mode toggle animations below so
     /// selection mode snaps instead of sliding when Reduce Motion is on.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var measurements: [Measurement] = []
     @State private var isLoading: Bool = false
     @State private var error: HLError?
-    /// A2-M4 — appear-revalidation freshness stamp. Lets a re-entry re-validate
+    /// Appear-revalidation freshness stamp. Lets a re-entry re-validate
     /// the partial-then-stale case instead of only reloading when empty.
     @State private var lastLoadedAt: Date?
     @State private var searchText: String = ""
-    /// v0.5.5.1 — optional per-source filter chip selection. `nil` means
+    /// Optional per-source filter chip selection. `nil` means
     /// "Alle Quellen" (no filter); a concrete `MeasurementSource` value
     /// restricts the list to rows whose `source` matches. The kind itself
     /// is already pinned by the screen's `kind` parameter, so a kind-filter
@@ -57,7 +56,7 @@ struct MeasurementListScreen: View {
     /// to `Double?` at filter time. Applied client-side on the loaded rows
     /// (the SWR cache the list already paints from), composing with the
     /// source chip + search needle. Empty fields = open-ended bound.
-    /// #115 P2 — the value-range filter is typed in the unit the rows show
+    /// The value-range filter is typed in the unit the rows show
     /// (the account's) and inverted to canonical before it compares.
     @Environment(\.unitPreferences) var unitPreferences
     @State private var valueMinText: String = ""
@@ -96,18 +95,15 @@ struct MeasurementListScreen: View {
     static let maxPageLimit = 4000
     @State private var expandedSummaryIDs: Set<String> = []
     @State private var editing: Measurement?
-    @State private var deleteConfirmTarget: Measurement?
-    /// v0.14.8 W3 — native multi-select bulk delete (v1.15.13
+    /// Native multi-select bulk delete (v1.15.13
     /// `POST /api/measurements/bulk-delete`). `editMode` drives the system
     /// Edit-mode selection circles; `selection` carries the picked row ids
     /// (raw `Measurement` rows only — chips / summary rows are
-    /// `selectionDisabled`); `bulkDeleteRequested` raises the bottom-anchored
-    /// destructive confirmation (b175 med-dialog pattern).
+    /// `selectionDisabled`); the delete button in the bottom bar asks first.
     @State private var editMode: EditMode = .inactive
     @State private var selection: Set<String> = []
-    @State private var bulkDeleteRequested = false
 
-    /// AUD-2 C3 — memoized filter/bucketing/sources outputs. Pre-fix these
+    /// Memoized filter/bucketing/sources outputs. Pre-fix these
     /// were computed properties (`filteredMeasurements`, `availableSources`)
     /// re-run on EVERY body pass — and `MeasurementBucketing.sections(...)`
     /// re-grouped the result inline in the `ForEach`. With 500-1000+ rows
@@ -116,9 +112,9 @@ struct MeasurementListScreen: View {
     /// only when an actual input changes (see `recomputeFiltered` / the
     /// debounced search pipeline), so typing and scrolling stay cheap.
     @State private var filteredCache: [Measurement] = []
-    @State private var bucketedSections: [MeasurementSection] = []
+    @State private var bucketedGroups: [MeasurementListGroup] = []
     @State private var availableSourcesCache: [MeasurementSource] = []
-    /// AUD-2 C3 — debounced mirror of `searchText`. The text field updates
+    /// Debounced mirror of `searchText`. The text field updates
     /// `searchText` on every keystroke (drives the system search UI), but the
     /// expensive re-filter keys off this debounced value (~250ms settle) so a
     /// fast typist re-filters once, not once per character.
@@ -127,7 +123,7 @@ struct MeasurementListScreen: View {
 
     var body: some View {
         List(selection: $selection) {
-            // v0.5.5.1 — source-filter chip row mounted as the first list
+            // Source-filter chip row mounted as the first list
             // section so the chips scroll with the content (Apple Health's
             // filter-strip pattern in the drill-down lists). Hides itself
             // entirely when there are no measurements yet so the empty
@@ -138,33 +134,29 @@ struct MeasurementListScreen: View {
                         available: availableSourcesCache,
                         selection: $selectedSource
                     )
-                    .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
+                    .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: 0, bottom: HLSpace.xs, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .selectionDisabled()
+                }
+                // The two optional filters as rows of one card, like the
+                // readings below; loose on the page they had their own inset.
+                Section {
                     ValueRangeFilterControl(
                         isExpanded: $showValueRange,
                         minText: $valueMinText,
                         maxText: $valueMaxText,
                         unit: unitPreferences.unitLabel(for: kind)
                     )
-                    .listRowInsets(EdgeInsets(top: 0, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                     .selectionDisabled()
-                    // Build 3 / item 3.3 — date-range filter, mounted directly
-                    // under the value range so the two optional filters read as
-                    // one group.
                     DateRangeFilterControl(
                         isExpanded: $showDateRange,
                         from: $dateFrom,
                         to: $dateTo
                     )
-                    .listRowInsets(EdgeInsets(top: 0, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                     .selectionDisabled()
                 }
+                .hlFormRowSurface()
             }
             if filteredCache.isEmpty, !measurements.isEmpty, !isLoading {
                 Section {
@@ -174,71 +166,30 @@ struct MeasurementListScreen: View {
                         .selectionDisabled()
                 }
             }
-            ForEach(bucketedSections, id: \.id) { section in
-                switch section {
-                case let .day(date, items):
-                    Section {
-                        ForEach(items) { m in
-                            // #42 — COMPUTED (server-derived) rows are read-only:
-                            // `MeasurementSwipeRow` drops the Edit/Delete swipe and
-                            // multi-select is gated off here too.
-                            MeasurementSwipeRow(
-                                measurement: m,
-                                onEdit: { editing = $0 },
-                                onDelete: { deleteConfirmTarget = $0 }
-                            )
-                            .selectionDisabled(m.isServerDerivedReadOnly)
-                        }
-                    } header: {
-                        MeasurementListSectionHeader(text: MeasurementBucketing.dayLabel(date: date))
+            // One card per week (readings) or per month and year (summaries),
+            // never a card per day: the day stands in each row's title.
+            ForEach(bucketedGroups) { group in
+                Section {
+                    ForEach(group.sections) { section in
+                        sectionRows(section)
                     }
-                case let .weeklySummary(weekStart, items):
-                    let id = section.id
-                    Section {
-                        MeasurementSummaryRow(
-                            period: MeasurementBucketing.weekLabel(start: weekStart),
-                            kind: kind,
-                            items: items,
-                            isExpanded: expandedSummaryIDs.contains(id),
-                            toggle: { toggle(id) }
-                        )
-                        .selectionDisabled()
-                        if expandedSummaryIDs.contains(id) {
-                            ForEach(items) { m in
-                                MeasurementRow(measurement: m)
-                                    // #42 — COMPUTED rows stay read-only here too.
-                                    .selectionDisabled(m.isServerDerivedReadOnly)
-                            }
-                        }
-                    } header: {
-                        MeasurementListSectionHeader(text: MeasurementBucketing.weekHeader(start: weekStart))
-                    }
-                case let .monthlySummary(monthStart, items):
-                    let id = section.id
-                    Section {
-                        MeasurementSummaryRow(
-                            period: MeasurementBucketing.monthLabel(start: monthStart),
-                            kind: kind,
-                            items: items,
-                            isExpanded: expandedSummaryIDs.contains(id),
-                            toggle: { toggle(id) }
-                        )
-                        .selectionDisabled()
-                        if expandedSummaryIDs.contains(id) {
-                            ForEach(items) { m in
-                                MeasurementRow(measurement: m)
-                                    // #42 — COMPUTED rows stay read-only here too.
-                                    .selectionDisabled(m.isServerDerivedReadOnly)
-                            }
-                        }
-                    } header: {
-                        MeasurementListSectionHeader(text: MeasurementBucketing.monthHeader(start: monthStart))
-                    }
+                } header: {
+                    HLSectionHeader(verbatim: MeasurementBucketing.title(of: group.header), rank: .group)
                 }
+                .hlFormRowSurface()
             }
             if measurements.isEmpty, !isLoading {
-                MeasurementListEmptyState(onLog: { router.requestMeasure(prefill: kind) })
-                    .selectionDisabled()
+                // The button names the next step; no sentence repeats it.
+                HLEmptyState(icon: "tray", title: "No measurements yet") {
+                    HLButton("Log a measurement", systemImage: "plus", variant: .secondary) {
+                        router.requestMeasure(prefill: kind)
+                    }
+                    .accessibilityIdentifier("measurements.list.empty.log")
+                }
+                .accessibilityIdentifier("measurements.list.empty")
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .selectionDisabled()
             }
             // Build 3 / item 3.3 — LOAD MORE, replacing the invisible 400-row
             // cap. NOT auto-triggered on scroll: an infinite scroll here would
@@ -246,28 +197,16 @@ struct MeasurementListScreen: View {
             // the main actor. An explicit tap keeps that cost visible.
             if canLoadMore {
                 Section {
-                    Button {
+                    HLLoadMoreRow(hasMore: true, isLoading: isLoadingMore) {
                         Task { await loadMore() }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            if isLoadingMore {
-                                ProgressView()
-                            } else {
-                                Text("measurements.list.loadMore")
-                                    .font(.hlCaption.weight(.semibold))
-                            }
-                            Spacer()
-                        }
                     }
-                    .disabled(isLoadingMore)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .selectionDisabled()
                     .accessibilityIdentifier("measurements.list.loadMore")
                 }
             }
-            // v0.14.8 W2-SYNCUX — canonical sync-status footer (same primitive
+            // Canonical sync-status footer (same primitive
             // as Dashboard/Insights). Hosted as an empty section's FOOTER so
             // the self-suppressed state collapses to zero height (no phantom
             // row).
@@ -276,26 +215,21 @@ struct MeasurementListScreen: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        // Canonical screen canvas (matches Mehr/Insights/Medis/Start) —
-        // `HLColor.background` drifted bluish in dark mode.
-        .background(HLSurface.primary)
-        // v0.5.x C-9 — iOS 26+ soft scroll-edge so List content blurs into
-        // the navigation Liquid Glass instead of clipping cleanly.
-        // iOS 18-25: no-op (system stays flat-translucent).
+        .hlPageMargins()
+        // Soft scroll edge: the rows blur into the navigation bar.
         .hlScrollEdgeSoft()
         .navigationTitle(kind.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        // v0.5.5.1 — expanded prompt reflects the wider search-scope
+        // Expanded prompt reflects the wider search-scope
         // (note + source label + date label). Old "Notiz suchen" prompt
         // misled the user into thinking only notes are searchable.
         .searchable(text: $searchText, prompt: Text("Search measurement"))
         .refreshable { await load() }
         .task { await loadIfStale() }
-        // v0.14.8 W3 — re-fetch the server-filtered page whenever the source
+        // Re-fetch the server-filtered page whenever the source
         // chip changes (and clear it when the filter is lifted).
         .task(id: selectedSource) { await loadSourceFiltered() }
-        // AUD-2 C3 — memoization triggers. Recompute the filtered/bucketed
+        // Memoization triggers. Recompute the filtered/bucketed
         // slice + source chips only when an actual input changes, not on every
         // body pass. `searchText` is funnelled through a 250ms debounce so a
         // fast typist re-filters once rather than per keystroke.
@@ -313,12 +247,7 @@ struct MeasurementListScreen: View {
         .onChange(of: dateTo) { _, _ in recomputeFiltered() }
         .overlay {
             if isLoading, measurements.isEmpty {
-                // v0.5.5.1 (W-IMPL-SKELETON) — replaces the centered
-                // spinner with a shape-aware silhouette of the upcoming
-                // list. Eight rows cover the typical fold on iPhone 16/17
-                // Pro at default Dynamic Type; the value + timestamp +
-                // source-chip rhythm matches `MeasurementRow.body` so the
-                // jump-cut to live content stays small.
+                // A silhouette of the upcoming rows instead of a spinner.
                 MeasurementListSkeletonContent()
             }
         }
@@ -331,88 +260,33 @@ struct MeasurementListScreen: View {
                     measurements[i] = updated
                 }
                 editing = nil
-            } onDismiss: {
-                editing = nil
             }
-            .hlSheetPresentation(.form)
         }
-        .hlConfirmDestructive(
-            Text("measurements.delete.confirm.title"),
-            isPresented: Binding(get: { deleteConfirmTarget != nil }, set: { if !$0 { deleteConfirmTarget = nil } }),
-            // v0.11 W26 — the delete is now reversible via the Rückgängig
-            // toast, so the old "cannot be undone" warning is dropped.
-            message: Text("measurement.delete.confirm.message"),
-            confirm: Text("Delete"),
-            cancel: Text("Cancel"),
-            onCancel: { deleteConfirmTarget = nil },
-            action: {
-                if let target = deleteConfirmTarget {
-                    Task { await performDelete(target) }
-                }
-                deleteConfirmTarget = nil
-            }
-        )
-        // v0.14.8 W3 — native Edit-mode multi-select. The trailing button
+        // Native Edit-mode multi-select. The trailing button
         // toggles edit mode (selection circles on the raw rows); the bottom
         // bar carries the destructive bulk action while editing. Swipe
         // actions are system-suppressed during edit mode.
         .environment(\.editMode, $editMode)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if !measurements.isEmpty {
-                    Button(editMode.isEditing ? String(localized: "Done") : String(localized: "Select")) {
-                        withAnimation(reduceMotion ? nil : .default) {
-                            if editMode.isEditing {
-                                editMode = .inactive
-                                selection = []
-                            } else {
-                                editMode = .active
-                            }
-                        }
-                    }
-                }
-            }
+        // Selecting is the page's one bar action: the checklist, filled
+        // while choosing; VoiceOver says "Select" and "selected".
+        .hlPageActions(HLTabHeaderActions(measurements.isEmpty ? [] : [.select(isOn: isSelecting)]))
+        // The delete of a selection rides the page's bottom bar: the list
+        // makes room for it, so it never covers the last row's value.
+        .hlBottomBar {
             if editMode.isEditing {
-                ToolbarItemGroup(placement: .bottomBar) {
+                HStack {
                     Spacer()
-                    Button(role: .destructive) {
-                        bulkDeleteRequested = true
-                    } label: {
-                        Label {
-                            Text("Delete \(selection.count) entries")
-                        } icon: {
-                            Image(systemName: "trash")
-                        }
-                    }
-                    .disabled(selection.isEmpty)
+                    bulkDeleteButton
                 }
             }
         }
-        // b175 operator fix (cf9 / MedicationDetailScreen) — on iOS 26,
-        // `confirmationDialog` anchors its Liquid-Glass bubble to the
-        // interaction source, which floats the confirmation mid-screen.
-        // Attaching the dialog to a bottom-pinned, hit-test-disabled anchor
-        // pins the presentation to the screen's bottom edge; on iOS 18–25
-        // the attachment point is ignored on iPhone (classic bottom action
-        // sheet), so the anchor is a no-op there.
-        .overlay(alignment: .bottom) {
-            Color.clear
-                .frame(maxWidth: .infinity)
-                .frame(height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .hlConfirmDestructive(
-                    Text("Delete \(selection.count) measurements?"),
-                    isPresented: $bulkDeleteRequested,
-                    message: Text("measurements.bulkDelete.confirm.message"),
-                    confirm: Text(String(localized: "Delete")),
-                    cancel: Text(String(localized: "Cancel")),
-                    action: {
-                        Task { await performBulkDelete() }
-                    }
-                )
-        }
-        // v0.11 W26 — re-sync the local list whenever the store's measurement
+        // While selecting, the tab bar gives way to the bottom bar that
+        // carries the delete; it would otherwise cover it.
+        .toolbar(editMode.isEditing ? .hidden : .visible, for: .tabBar)
+        // The question of the bar's bulk delete hangs on the screen, around
+        // the bar, so the button in the bar reaches its runner.
+        .hlDeleteConfirmation()
+        // Re-sync the local list whenever the store's measurement
         // set changes. `MeasurementsStore.delete` (and its undo-restore)
         // mutate `store.recent`; reloading from `repo.recent(kind:)` reflects
         // the server truth so a restored row re-appears on this drill-down.
@@ -421,9 +295,18 @@ struct MeasurementListScreen: View {
         }
     }
 
+    /// Several readings at once go only after the question.
+    static func bulkDeleteAction(count: Int, perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(
+            title: "Delete \(count) measurements?",
+            message: "measurements.bulkDelete.confirm.message",
+            perform: perform
+        )
+    }
+
     private func performDelete(_ measurement: Measurement) async {
         guard let container else { return }
-        // v0.11 W26 — route through `MeasurementsStore.delete`, which owns the
+        // Route through `MeasurementsStore.delete`, which owns the
         // optimistic remove + the `Rückgängig` undo-toast enqueue + the
         // server-restore-on-undo (re-POST the deleted row) + the HK-mirror
         // teardown. We mirror the optimistic remove into this screen's local
@@ -440,7 +323,7 @@ struct MeasurementListScreen: View {
         }
     }
 
-    /// v0.14.8 W3 — bulk variant of `performDelete`. Resolves the selected
+    /// Bulk variant of `performDelete`. Resolves the selected
     /// ids against the loaded rows (server-filtered page first, then the
     /// base page), removes them optimistically from this screen, and routes
     /// the write through `MeasurementsStore.bulkDelete` (chunked POST +
@@ -478,7 +361,7 @@ struct MeasurementListScreen: View {
         defer { isLoading = false }
         do {
             let rows = try await container.measurementsRepo.recent(kind: kind, limit: pageLimit)
-            // v0.14.3 E5 — series fallback. The chart-detail page synthesizes
+            // Series fallback. The chart-detail page synthesizes
             // `recentInRange` from `/series` when `recent(kind:)` is empty/threw
             // (`ChartDetailStore.measurementsFromSeriesPoints`), so the chart
             // shows data + a non-zero "N entries" badge. This list called
@@ -533,6 +416,19 @@ struct MeasurementListScreen: View {
     /// If the wider read does NOT return more rows than we already had, the
     /// server has no further history for this kind — latch `reachedEnd` so the
     /// footer retires instead of offering a button that can only disappoint.
+    /// Edit mode as the bar's select switch; leaving it clears the choice.
+    private var isSelecting: Binding<Bool> {
+        Binding(
+            get: { editMode.isEditing },
+            set: { on in
+                withAnimation(reduceMotion ? nil : .default) {
+                    editMode = on ? .active : .inactive
+                    if !on { selection = [] }
+                }
+            }
+        )
+    }
+
     private func loadMore() async {
         guard !isLoadingMore, canLoadMore else { return }
         isLoadingMore = true
@@ -545,7 +441,7 @@ struct MeasurementListScreen: View {
         }
     }
 
-    /// A2-M4 — appear-revalidation entry point: load when empty (cold) OR when
+    /// Appear-revalidation entry point: load when empty (cold) OR when
     /// the 60s freshness window elapsed (partial-then-stale). The underlying
     /// `measurementsRepo` is SWR-cached so a re-validate inside its own TTL is
     /// served from cache.
@@ -559,15 +455,15 @@ struct MeasurementListScreen: View {
     // MARK: - Filtering
 
     //
-    // v0.5.5.1 — pure filter pipeline lives in `MeasurementListFilters.swift`
+    // Pure filter pipeline lives in `MeasurementListFilters.swift`
     // (`MeasurementListFilter.apply(...)`) so tests can lock the contract
     // without a SwiftUI render context and the screen stays under the
     // 600-line file-length baseline.
 
-    /// v0.14.8 W3 — loads the `sourceEq`-scoped page for the active chip.
+    /// Loads the `sourceEq`-scoped page for the active chip.
     /// An empty or failed server read clears `sourceFilteredRows`, falling
-    /// back to the legacy client-side slice (series-synthesized rows and
-    /// standalone snapshots have no deeper server page to offer).
+    /// back to the legacy client-side slice (series-synthesized rows have no
+    /// deeper server page to offer).
     private func loadSourceFiltered() async {
         guard let container, let source = selectedSource else {
             sourceFilteredRows = nil
@@ -593,7 +489,7 @@ struct MeasurementListScreen: View {
     }
 }
 
-// MARK: - AUD-2 C3 — memoized filter / bucketing / search-debounce
+// MARK: - Memoized filter / bucketing / search-debounce
 
 /// Hosted in an extension so the C3 memoization helpers don't inflate the
 /// main `MeasurementListScreen` body past the `type_body_length` budget
@@ -606,16 +502,16 @@ extension MeasurementListScreen {
     /// `debouncedSearchText` drives the query so typing doesn't re-filter
     /// per keystroke.
     func computeFiltered() -> [Measurement] {
-        // v0.14.8 W3 — prefer the server-filtered page (`sourceEq`, as deep
+        // Prefer the server-filtered page (`sourceEq`, as deep
         // as the unfiltered page) when the chip is active and the fetch
         // landed; the client filter stays as the instant paint while the
         // fetch is in flight AND as the offline/old-deploy fallback. The
         // `source:` re-apply on the server rows is a cheap no-op guard
         // (BP-merge keeps one source per merged row) + drives the search.
-        // A360-5 H-4 — locale-aware parse (de "5,5" + grouped "1.234,5" both
+        // Locale-aware parse (de "5,5" + grouped "1.234,5" both
         // resolve); a non-empty-but-unparseable bound surfaces visibly via
         // `ValueRangeFilterControl` rather than silently dropping the filter.
-        // #115 P2 — the bounds are typed in the account's unit; the rows are
+        // The bounds are typed in the account's unit; the rows are
         // canonical SI. Invert once here so "150" on a lb account filters at
         // 68.04 kg, not at 150 kg.
         let lo = LocaleDecimalParser.parse(valueMinText).map { unitPreferences.canonicalValue(fromDisplayed: $0, kind: kind) }
@@ -648,7 +544,7 @@ extension MeasurementListScreen {
     func recomputeFiltered() {
         let rows = computeFiltered()
         filteredCache = rows
-        bucketedSections = MeasurementBucketing.sections(for: rows)
+        bucketedGroups = MeasurementBucketing.groups(MeasurementBucketing.sections(for: rows))
     }
 
     /// Debounce the search field. Each keystroke updates `searchText` (system
@@ -669,9 +565,58 @@ extension MeasurementListScreen {
     }
 }
 
-// v0.14.8 W3 — `MeasurementListSectionHeader`, `MeasurementRow`,
-// `MeasurementSummaryRow`, `MeasurementListEmptyState` and the skeleton live
-// in `MeasurementListRows.swift` so this file stays under the 600-line
-// SwiftLint `file_length` baseline after the multi-select bulk-delete
-// affordances landed (same split `MeasurementBucketing.swift` and
-// `MeasurementListFilters.swift` went through in v0.5.5.1).
+extension MeasurementListScreen {
+    /// The rows of one bucket: the readings of a day, or a summary row with
+    /// its readings under it while open. Server-derived rows stay read-only
+    /// (no swipe, no selection).
+    @ViewBuilder
+    private func sectionRows(_ section: MeasurementSection) -> some View {
+        switch section {
+        case let .day(_, items):
+            ForEach(items) { m in
+                MeasurementSwipeRow(
+                    measurement: m,
+                    title: MeasurementBucketing.rowTitle(m.recordedAt),
+                    onEdit: { editing = $0 },
+                    onDelete: { await performDelete($0) }
+                )
+                .selectionDisabled(m.isServerDerivedReadOnly)
+            }
+        case let .weeklySummary(_, items), let .monthlySummary(_, items):
+            MeasurementSummaryRow(
+                period: MeasurementBucketing.summaryTitle(of: section) ?? "",
+                kind: kind,
+                items: items,
+                isExpanded: expandedSummaryIDs.contains(section.id),
+                toggle: { toggle(section.id) }
+            )
+            .selectionDisabled()
+            if expandedSummaryIDs.contains(section.id) {
+                ForEach(items) { m in
+                    MeasurementRow(measurement: m)
+                        .selectionDisabled(m.isServerDerivedReadOnly)
+                }
+            }
+        }
+    }
+
+    /// The bottom bar's delete for the selected readings: trash and count.
+    /// It asks through the `hlDeleteConfirmation()` around the screen.
+    private var bulkDeleteButton: some View {
+        HLDeleteButton(
+            "Delete \(selection.count) entries",
+            form: .bar,
+            action: Self.bulkDeleteAction(count: selection.count) {
+                await performBulkDelete()
+            }
+        )
+        // The count is part of what the button says.
+        .labelStyle(.titleAndIcon)
+        .disabled(selection.isEmpty)
+        .accessibilityIdentifier("measurements.list.bulkDelete")
+    }
+}
+
+// `MeasurementRow`, `MeasurementSwipeRow`, `MeasurementSummaryRow` and the
+// skeleton live in `MeasurementListRows.swift` so this file stays under the
+// 600-line SwiftLint `file_length` limit.

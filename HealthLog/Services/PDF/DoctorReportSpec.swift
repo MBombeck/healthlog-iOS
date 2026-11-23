@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Local Doctor Report — Spec (T-7).**
+/// **Local Doctor Report — Spec.**
 ///
 /// Sendable plan struct that captures every byte of content destined for
 /// the PDF. The renderer-actor walks this struct top-to-bottom and emits
@@ -29,12 +29,12 @@ public struct DoctorReportSpec: Sendable, Equatable {
     /// `illness` module is off or there are no episodes.
     public let illnesses: IllnessBlock?
     public let footer: Footer
-    /// **#115 B5** — the account's glucose unit, for the PDF only: the vitals
+    /// The account's glucose unit, for the PDF only: the vitals
     /// table and the glucose chart print in it. Every glucose value in this spec
     /// stays canonical mg/dL, because the FHIR bundle built from the same spec
     /// must carry UCUM mg/dL (`DoctorReportToFHIRBundle` never reads this).
     public let glucoseUnit: GlucoseUnit
-    /// **#115 P2** — the account's unit system and weight unit, for the PDF
+    /// The account's unit system and weight unit, for the PDF
     /// only: weight, temperature and waist print in them on an imperial
     /// account. Values stay canonical here for the same FHIR reason.
     public let accountUnits: UnitPreferences
@@ -76,7 +76,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
     public struct Cover: Sendable, Equatable {
         public let patientName: String
-        /// v0.10.0 — extended patient-identity fields. A doctor report needs
+        /// Extended patient-identity fields. A doctor report needs
         /// the full legal name + insurer + KVNR; each is omitted from the
         /// cover (and the FHIR Patient) when `nil`/empty. `insuranceNumber`
         /// is sensitive PII — it lives only on this in-memory spec and the
@@ -84,7 +84,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
         public let fullName: String?
         public let insurerName: String?
         public let insuranceNumber: String?
-        /// v0.11.0 — insurer IKNR (9-digit Institutionskennzeichen). Feeds the
+        /// Insurer IKNR (9-digit Institutionskennzeichen). Feeds the
         /// FHIR `Coverage` payor → contained `Organization.identifier`
         /// (`http://fhir.de/sid/arge-ik/iknr`). Identifying PII — in-memory
         /// on the spec only, never logged.
@@ -231,7 +231,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
     // MARK: - Adherence
 
-    /// **#115 · 1.2 — adherence is the server's, for the window the server
+    /// **Adherence is the server's, for the window the server
     /// computes.** The report used to divide today's intakes by today's slots
     /// and print that as the adherence of a 30- to 365-day period. It now
     /// carries the server's cadence-aware `compliance30` per medication
@@ -243,7 +243,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
         public enum Availability: Sendable, Equatable {
             /// Rows come from the server.
             case server
-            /// The server could not be asked (offline, standalone) — the
+            /// The server could not be asked (offline) — the
             /// section says adherence is not available instead of computing it.
             case unavailable
         }
@@ -419,7 +419,7 @@ public struct DoctorReportSpec: Sendable, Equatable {
 
 // MARK: - Locale gate
 
-/// Report locale — one per interface language (DE, EN, NL). Forced at
+/// Report locale — one per interface language (DE, EN, NL, KO, ES). Forced at
 /// spec-build time so the renderer's date-formatter + section-titles agree
 /// on one language, even when the system locale differs (operator may share
 /// the PDF with an English-speaking specialist).
@@ -427,14 +427,18 @@ public enum ReportLocale: String, Sendable, Equatable, CaseIterable {
     case de
     case en
     case nl
+    case ko
+    case es
 
     /// The report language for an interface language. Exhaustive on purpose:
-    /// a fourth `AppLanguage` must not compile until the report speaks it.
+    /// a new `AppLanguage` must not compile until the report speaks it.
     public init(_ language: AppLanguage) {
         switch language {
         case .de: self = .de
         case .en: self = .en
         case .nl: self = .nl
+        case .ko: self = .ko
+        case .es: self = .es
         }
     }
 
@@ -442,7 +446,7 @@ public enum ReportLocale: String, Sendable, Equatable, CaseIterable {
         rawValue
     }
 
-    /// The language's home locale (`de_DE`, `en_US`, `nl_NL`), from
+    /// The language's home locale (`de_DE`, `en_US`, `nl_NL`, `ko_KR`, `es_ES`), from
     /// `AppLanguage`. Deliberately not the device region: the report is read
     /// by someone else, often elsewhere (see `ReportLocale+Language.swift`).
     public var foundationIdentifier: String {

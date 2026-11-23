@@ -36,7 +36,7 @@ enum AISurfaceHarness {
     }
 }
 
-/// #114 / #115 · 0.2 — every AI surface the app has follows the server's
+/// Every AI surface the app has follows the server's
 /// capability, and every mixed read renders a `null` model text calmly.
 ///
 /// Surfaces and the capability they follow (the list posted on #114):
@@ -97,7 +97,6 @@ struct AICapabilitySurfaceGatingTests {
             InsightsScreen.isCoachReengageAvailable(
                 aiMode: .none,
                 coachCapability: state,
-                hasServer: true,
                 resolvedProvider: .anthropic,
                 hasConsentForProvider: false
             )

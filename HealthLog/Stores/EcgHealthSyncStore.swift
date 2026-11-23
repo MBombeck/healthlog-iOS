@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **GH #74 — owns the "EKGs aus Apple Health übernehmen" switch.**
+/// **Owns the "EKGs aus Apple Health übernehmen" switch.**
 ///
 /// **16-03 / decision E2 (operator, 2026-08-22).** Two things used to be true
 /// here and only one still is. The ECG read type sat outside the always-on
@@ -12,14 +12,12 @@ import Observation
 /// das erste HealthKit-Sheet." A completed onboarding grant therefore switches
 /// this on through ``adoptFirstSheetGrant()``, and the drawer under
 /// Einstellungen → Apple Health → Weitere Synchronisierungen is no longer the
-/// only way to find it (J1).
+/// only way to find it.
 ///
 /// The second reason still holds, and shapes the adoption rather than the type
 /// set: the upload is a *server* act — `POST /api/insights/ecg` (no module gate
 /// since server v1.39) — so ``FirstSheetSyncAdoption`` activates it only where a
-/// paired, authenticated server exists. A standalone install is asked for the
-/// permission with everything else, and simply does not start a transfer that
-/// has no destination.
+/// paired, authenticated server exists.
 ///
 /// The switch itself stays exactly what it was: an explicit control on the
 /// Apple-Health screen, next to the other behaviour toggles (mood, medications,

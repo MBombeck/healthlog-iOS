@@ -9,7 +9,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// #115 / 0.3 (A5) — the three loss paths A3 found and named, each driven
+    /// The three loss paths A3 found and named, each driven
     /// against the real `APIClient` over `MockURLProtocol` with the envelope
     /// shapes the v1.39.0 routes send (`meta.errorCode`, or none at all for a
     /// Zod 422).
@@ -355,7 +355,6 @@ import Testing
                 statisticsService: HealthKitStatisticsService(),
                 cache: HealthKitDailyStatsCache(modelContainer: HealthKitDailyStatsCache.makeInMemory()),
                 uploader: makeUploader(),
-                featureFlags: AlwaysOnFeatureFlags(),
                 admission: { admitted.lease },
                 defaultsProvider: { defaults }
             )

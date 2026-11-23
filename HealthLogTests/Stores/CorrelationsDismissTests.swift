@@ -69,7 +69,7 @@ enum CorrelationsDismissFixtures {
     }
 }
 
-/// **CU-33** — the relevance statement on the correlation card, end to end:
+/// The relevance statement on the correlation card, end to end:
 /// the new `GET /api/insights/correlations` fields, the client-side suppression
 /// the server deliberately does NOT do, the optimistic toggle with rollback,
 /// and the calm handling of a pattern the server brings back on its own.
@@ -231,7 +231,7 @@ struct CorrelationsDismissTests {
         let all = [
             InsightsCorrelationsDiscoveryBlock.dismissLabel,
             InsightsCorrelationsDiscoveryBlock.restoreLabel,
-            // 1.4 B2 — the card no longer restates "set aside" / "came back"
+            // The card no longer restates "set aside" / "came back"
             // in a note of its own; the group and the button say it.
             InsightsCorrelationsDiscoveryBlock.dismissedToggleLabel(count: 2)
         ]
@@ -254,7 +254,7 @@ struct CorrelationsDismissTests {
     }
 }
 
-/// **CU-33 (write path)** — the relevance statement going to the server:
+/// The relevance statement going to the server:
 /// optimistic application, rollback on failure, reversal, and the calm handling
 /// of a pattern the SERVER brings back on its own after a recomputation.
 @Suite("Korrelations-Verwerfen — Schreibpfad, Rollback und Wiederkehr (CU-33)", .serialized, .mockURLSession)

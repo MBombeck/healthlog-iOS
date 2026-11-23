@@ -7,7 +7,7 @@ import Foundation
 
     /// Write-back branch table for `HealthKitService.writeMeasurement`.
     ///
-    /// **Why this lives in its own extension (v0.5.4 BF-5):**
+    /// **Why this lives in its own extension:**
     /// the write-back switch grew from 4 cases to 11 cases when we extended
     /// the round-trip coverage to every manual-entry kind in the Capture
     /// sheet (operator perception "ich erfasse was, aber Apple Health sieht
@@ -32,7 +32,7 @@ import Foundation
         /// written here at all; the server→Health mirror writes it once the
         /// outbox replay has given it a server id.
         func writeMeasurement(_ measurement: Measurement) async throws {
-            // A4 MEDIUM #3 — source-aware write-back guard. Only user-originated
+            // Source-aware write-back guard. Only user-originated
             // rows round-trip into Apple Health; device-integration rows
             // (WHOOP / Fitbit / Withings / Import) are server-authoritative and
             // must NEVER be pushed into HK with our `externalUUID`, else Apple
@@ -44,7 +44,7 @@ import Foundation
             // `performWrite` so the guard doesn't push the kind-switch over the
             // SwiftLint cyclomatic-complexity ceiling.
             guard measurement.source == .manual else { return }
-            // B5 (1.4) — only a kind the person lets HealthLog write
+            // Only a kind the person lets HealthLog write
             // (``HealthKitWriteBackPolicy``). When the direction is not known
             // right now nothing is written here; the server mirror, which
             // covers `.manual` rows since S1, writes it once it is.
@@ -53,8 +53,12 @@ import Foundation
             try await performWrite(measurement)
         }
 
-        private func performWrite(_ measurement: Measurement) async throws {
-            // S1 / public #11 — the server→Health mirror now writes `.manual`
+        private func performWrite(
+            _ measurement: Measurement,
+            syncVersion: Int? = nil,
+            userEntered: Bool = true
+        ) async throws {
+            // The server→Health mirror now writes `.manual`
             // rows too, so a row this device just created can reach the mirror
             // (a `.fresh` page right after the POST) while this write is in
             // flight. Claim its server ids before the first suspension; whoever
@@ -62,7 +66,10 @@ import Foundation
             let ids = measurement.serverMirrorLinkageIDs
             guard serverMirrorClaims.isDisjoint(with: ids) else { return }
             serverMirrorClaims.formUnion(ids)
-            let metadata = Self.createTimeMetadata(for: measurement)
+            var metadata = userEntered
+                ? Self.createTimeMetadata(for: measurement)
+                : HealthKitServerMirrorPlanner.metadata(for: measurement)
+            if let syncVersion { metadata[HKMetadataKeySyncVersion] = syncVersion }
             let samples = Self.quantitySamples(for: measurement, metadata: metadata)
             guard let first = samples.first else {
                 serverMirrorClaims.subtract(ids)
@@ -83,6 +90,114 @@ import Foundation
             }
         }
 
+        // MARK: - Own copies of changed and deleted readings
+
+        /// Replaces this app's copy of an edited reading
+        /// (``HealthKitOwnCopyEditor/replacementAction(writeAllowed:contentChanged:)``):
+        /// with the direction unknown nothing is touched and the edit waits in
+        /// the ledger; where HealthLog may write, the own copies of every server
+        /// id of the old and the new row go and the new row is written with a
+        /// higher sync version, under the mirror's own admission rule; where it
+        /// may not, the copy goes only when its value, unit or time changed.
+        func replaceOwnCopy(of old: Measurement, with new: Measurement) async {
+            let edit = Self.copyEdit(replacing: old, with: new)
+            let writeAllowed = await replacementWriteAllowed(for: edit)
+            let version = Self.replacementSyncVersion()
+            var write: (@Sendable () async throws -> Void)?
+            if writeAllowed == true {
+                write = { @Sendable [self] in
+                    try await rewriteOwnCopy(new, releasing: edit.serverIDs, syncVersion: version)
+                }
+            }
+            let action = await ownCopyEditor.replace(edit, writeAllowed: writeAllowed, write: write)
+            if action == .remove { serverMirrorClaims.subtract(edit.serverIDs) }
+        }
+
+        /// The write half of a replacement: the claims of the old copy are
+        /// released first, or the create path would treat the row as written.
+        /// A row from another source is written with the mirror's metadata.
+        private func rewriteOwnCopy(_ measurement: Measurement, releasing ids: [String], syncVersion: Int) async throws {
+            serverMirrorClaims.subtract(ids)
+            try await performWrite(measurement, syncVersion: syncVersion, userEntered: measurement.source == .manual)
+        }
+
+        /// The mirror's admission for a changed row, `nil` while the person's
+        /// direction is not known: the row's source may reach Apple Health,
+        /// the direction lets HealthLog write the kind, and the person has not
+        /// deleted its copy in Apple Health (tombstone).
+        private func replacementWriteAllowed(for edit: HealthKitPendingCopyEdit) async -> Bool? {
+            guard let policy = await Self.resolveWriteBackPolicy(writeBackPolicyProvider) else { return nil }
+            guard edit.mirrorEligible,
+                  let raw = edit.metricKind, let kind = MetricKind(rawValue: raw),
+                  policy.allowsWrite(kind) else { return false }
+            let owner = keychain.getString(forKey: KeychainKey.userID)
+            let tombstones = HealthKitMirrorTombstones(ownerID: owner).ids
+            return edit.serverIDs.allSatisfy { !tombstones.contains($0) }
+        }
+
+        /// Removes this app's copies of a deleted reading.
+        func removeOwnCopies(of measurement: Measurement) async {
+            let edit = Self.copyEdit(removing: measurement)
+            guard await ownCopyEditor.remove(edit) else { return }
+            serverMirrorClaims.subtract(edit.serverIDs)
+        }
+
+        /// Edits that could not finish, before a mirror pass plans.
+        internal func retryPendingCopyEdits() async {
+            await ownCopyEditor.retryPending { @Sendable [self] edit in
+                await replacementWriteAllowed(for: edit)
+            }
+        }
+
+        /// The editor over the live store. Stateless apart from its ledger.
+        internal var ownCopyEditor: HealthKitOwnCopyEditor {
+            HealthKitOwnCopyEditor(store: HealthStoreCopyStore(store: store), ledger: .shared)
+        }
+
+        /// The edit for a deleted reading.
+        internal static func copyEdit(removing measurement: Measurement) -> HealthKitPendingCopyEdit {
+            let scope = copyScope(for: [measurement])
+            return HealthKitPendingCopyEdit(kind: .remove, serverIDs: scope.ids, typeIdentifiers: scope.types)
+        }
+
+        /// The edit for a changed reading, with the two facts its rule reads.
+        internal static func copyEdit(replacing old: Measurement, with new: Measurement) -> HealthKitPendingCopyEdit {
+            let scope = copyScope(for: [old, new])
+            return HealthKitPendingCopyEdit(
+                kind: .replace,
+                serverIDs: scope.ids,
+                typeIdentifiers: scope.types,
+                metricKind: new.kind.rawValue,
+                contentChanged: old.kind != new.kind || old.value != new.value || old.recordedAt != new.recordedAt,
+                mirrorEligible: shouldMirrorFromServer(new)
+            )
+        }
+
+        /// Server ids and HealthKit types a reading's copies can carry: every
+        /// quantity type it maps to and, for blood pressure, the correlation.
+        internal static func copyScope(for measurements: [Measurement]) -> (ids: [String], types: [String]) {
+            var ids: [String] = []
+            var types: [String] = []
+            for measurement in measurements {
+                for id in measurement.serverMirrorLinkageIDs where !ids.contains(id) {
+                    ids.append(id)
+                }
+                var identifiers = quantitySamples(for: measurement, metadata: [:]).map(\.quantityType.identifier)
+                if measurement.kind == .bloodPressure {
+                    identifiers.append(HKCorrelationTypeIdentifier.bloodPressure.rawValue)
+                }
+                for identifier in identifiers where !types.contains(identifier) {
+                    types.append(identifier)
+                }
+            }
+            return (ids, types)
+        }
+
+        /// Grows with time, so each later edit supersedes the earlier copy.
+        internal static func replacementSyncVersion(now: Date = .now) -> Int {
+            max(HealthKitCopySyncIdentity.version + 1, Int(now.timeIntervalSince1970))
+        }
+
         /// The metadata of a reading typed in this app: the mirror's (server id
         /// and origin marker) plus "entered by the person".
         static func createTimeMetadata(for measurement: Measurement) -> [String: Any] {
@@ -91,7 +206,7 @@ import Foundation
             return metadata
         }
 
-        /// **W-HKMIRROR** — pure builder mapping a `Measurement` to the
+        /// Pure builder mapping a `Measurement` to the
         /// `HKQuantitySample`(s) it round-trips into. Shared by the manual
         /// write-back path (`performWrite`) and the server-origin mirror
         /// (`mirrorServerMeasurements`). Returns `[]` for kinds without an HK
@@ -106,7 +221,7 @@ import Foundation
         /// pipeline drops the sample on read-back (`HealthLogStandard.handleNewSamples`
         /// foreign-filter) and no re-upload loop forms.
         ///
-        /// A6 (1.4) — such a copy also gets its own sync identifier per type
+        /// Such a copy also gets its own sync identifier per type
         /// (``HealthKitCopySyncIdentity``), the one thing a deletion keeps.
         static func quantitySamples(
             for measurement: Measurement,
@@ -172,7 +287,7 @@ import Foundation
         }
 
         /// `metadata` for one object of `measurement`'s copy: with the copy's
-        /// sync identifier for `typeIdentifier` when it names the row (A6), as
+        /// sync identifier for `typeIdentifier` when it names the row, as
         /// it is otherwise (the empty probe of the eligibility checks).
         static func copyMetadata(
             _ metadata: [String: Any],
@@ -180,12 +295,16 @@ import Foundation
             typeIdentifier: String
         ) -> [String: Any] {
             guard metadata[HKMetadataKeyExternalUUID] as? String == measurement.id else { return metadata }
-            return metadata.merging(
-                HealthKitCopySyncIdentity.metadata(serverID: measurement.id, typeIdentifier: typeIdentifier)
-            ) { _, identity in identity }
+            var identity = HealthKitCopySyncIdentity.metadata(serverID: measurement.id, typeIdentifier: typeIdentifier)
+            // A replacement copy brings a higher version, so it supersedes the
+            // old copy even where the delete before it did not land.
+            if let version = metadata[HKMetadataKeySyncVersion] {
+                identity[HKMetadataKeySyncVersion] = version
+            }
+            return metadata.merging(identity) { _, identity in identity }
         }
 
-        /// **T4 / public #15** — what is actually saved for a measurement's
+        /// What is actually saved for a measurement's
         /// samples. A blood pressure is ONE `HKCorrelation` of type
         /// `.bloodPressure` holding the systolic and diastolic sample; every
         /// other kind saves its samples as they are.
@@ -199,7 +318,7 @@ import Foundation
         /// tombstones, which all query the quantity types, see them unchanged.
         /// Saving the correlation needs share authorization for the two
         /// quantity types only; the correlation type itself is not requestable.
-        /// A6 — the correlation carries its own sync identifier, so a second
+        /// The correlation carries its own sync identifier, so a second
         /// save of the same reading is ignored as a whole, never half.
         static func healthObjects(
             for measurement: Measurement,
@@ -225,9 +344,9 @@ import Foundation
             )]
         }
 
-        // MARK: - Server-origin mirror (W-HKMIRROR)
+        // MARK: - Server-origin mirror
 
-        /// **W-HKMIRROR** — mirror SERVER-ORIGIN measurements (entered on web /
+        /// Mirror SERVER-ORIGIN measurements (entered on web /
         /// another device, or imported) back into Apple Health, so the user's
         /// iPhone Health app shows readings they did NOT type on this device.
         ///
@@ -255,7 +374,7 @@ import Foundation
         /// Requires share-auth (skips silently otherwise). Runs on the actor,
         /// off the main thread; never throws into the sync path.
         ///
-        /// B5 (1.4) — and only kinds the person lets HealthLog write
+        /// And only kinds the person lets HealthLog write
         /// (``HealthKitWriteBackPolicy``). Returns `false` when the direction
         /// was not known and the pass wrote nothing for that reason.
         @discardableResult
@@ -263,7 +382,7 @@ import Foundation
             await mirrorServerMeasurements(measurements, rowLimit: .max, isExpired: { false }).decided
         }
 
-        /// **MIRROR (1.5, public #28)** — the same mirror, bounded: at most
+        /// The same mirror, bounded: at most
         /// `rowLimit` readings, and `isExpired` is asked before every reading and
         /// once more before the save. A window that closes before the save writes
         /// nothing, so a background wake never leaves half a batch; the next
@@ -274,6 +393,9 @@ import Foundation
             rowLimit: Int,
             isExpired: @escaping @Sendable () -> Bool
         ) async -> ServerMirrorWriteOutcome {
+            // Removals that failed earlier go first: the plan below skips any
+            // row whose old copy still exists.
+            await retryPendingCopyEdits()
             let plan = await HealthKitServerMirrorPlanner.plan(
                 measurements,
                 excluding: serverMirrorExclusions(),
@@ -282,7 +404,7 @@ import Foundation
                 shouldStop: isExpired
             )
             guard !plan.samples.isEmpty else { return HealthKitServerMirrorPlanner.outcome(of: plan) }
-            // S1 — a create-time write that reached the actor while the plan was
+            // A create-time write that reached the actor while the plan was
             // probing may have claimed one of these rows; it owns that row.
             guard serverMirrorClaims.isDisjoint(with: plan.linkageIDs) else {
                 return await mirrorServerMeasurements(measurements, rowLimit: rowLimit, isExpired: isExpired)
@@ -322,14 +444,14 @@ import Foundation
                 earliestAuthorizedDates: { types in
                     await HealthKitAuthorizedHistory(store: store).earliestAuthorizedSampleDates(for: types)
                 },
-                // B5 (1.4) — the person's direction per type.
+                // The person's direction per type.
                 writeBackPolicy: { [provider = writeBackPolicyProvider] in
                     await Self.resolveWriteBackPolicy(provider)
                 }
             )
         }
 
-        /// B5 (1.4) — the policy to write under: none attached means no
+        /// The policy to write under: none attached means no
         /// setting (as before 1.4), an attached provider answers or says
         /// "not known now" (`nil`).
         static func resolveWriteBackPolicy(
@@ -342,13 +464,13 @@ import Foundation
         /// Source + kind policy for the server-origin mirror. Mirrors only
         /// user-authored-elsewhere sources whose kind has an HK write-type.
         ///
-        /// **W-HKBACKFILL** — the source predicate reads the platform-free
+        /// The source predicate reads the platform-free
         /// `MeasurementSource.isServerMirrorEligible` so the latest-page mirror
         /// and the historical backfill share one policy and cannot drift. The
         /// kind half stays anchored to the authoritative `quantitySamples`
         /// switch (a kind with no HK write-type yields `[]` → skip).
         ///
-        /// **MIRROR (1.5, #152)** — the source half is now the server's
+        /// The source half is now the server's
         /// per-row answer (``Measurement/isServerMirrorAllowed``), the source
         /// rule only where the row carries no `appleHealthMirror`.
         ///
@@ -408,7 +530,7 @@ import Foundation
             }
         }
 
-        /// **v0.10.0 W10 M1 — delete the HKStateOfMind sample mirrored for a
+        /// **Delete the HKStateOfMind sample mirrored for a
         /// mood entry.** Mirrors a HealthLog mood-delete into Apple Health so a
         /// deleted mood doesn't linger in the Health app. Looks the sample up by
         /// our anti-dupe marker (`HKMetadataKeyExternalUUID == id`) and deletes
@@ -416,7 +538,6 @@ import Foundation
         /// (the `try?` at the call site swallows `HKErrorAuthorizationDenied`,
         /// same gating as the write path). iOS 18+.
         func deleteMoodEntry(id: String) async throws {
-            guard #available(iOS 18.0, *) else { return }
             let type = HKObjectType.stateOfMindType()
             let predicate = HKQuery.predicateForObjects(
                 withMetadataKey: HKMetadataKeyExternalUUID,

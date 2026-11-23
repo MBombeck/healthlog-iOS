@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// **AUDITC (1.5.0, #132, Server #614)** — the alcohol section of the life
+/// **AUDITC** — the alcohol section of the life
 /// circumstances: AUDIT-C.
 ///
 /// What the server delivered and nothing more: the newest result with its sum,
 /// the screening verdict only as `aboveCutoff` says it, with the guideline it
 /// comes from linked (without a sex in the profile the sum alone), the earlier
-/// entries each removable after a question in place, and the questionnaire,
+/// entries each removable after a question, and the questionnaire,
 /// unfolded in the card on request. The app adds nothing up, compares nothing
 /// with the cut-off and gives no advice; every sentence around the result is
 /// the server's `records.life.auditC` wording.
@@ -24,7 +24,7 @@ struct AuditCSection: View {
             if !auditC.history.isEmpty {
                 AuditCHistoryList(entries: auditC.history, store: store, model: model)
             }
-            // POLISH-C (C7) — the earlier one-word answer, where the web shows it.
+            // The earlier one-word answer, where the web shows it.
             if let legacy = store.legacyAlcohol {
                 AuditCLegacyRow(revision: legacy, store: store, model: model)
             }
@@ -49,7 +49,7 @@ struct AuditCSection: View {
                 )
             }
             HLButton(
-                auditC.latest == nil ? "life.auditC.start" : "life.auditC.again",
+                auditC.latest == nil ? LocalizedStringKey("life.auditC.start") : "life.auditC.again",
                 variant: auditC.offerDue ? .primary : .secondary
             ) {
                 withHLAnimation(.easeInOut(duration: 0.2)) { model.open(instrument) }
@@ -81,7 +81,7 @@ struct AuditCResultBlock: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        // POLISH-C (C8) — iOS 26 leaves a link out of a combined label, so
+        // iOS 26 leaves a link out of a combined label, so
         // the source line went missing for VoiceOver. The label is spelled
         // out; the link stays reachable through the combined element.
         .accessibilityLabel(Text(verbatim: Self.accessibilityText(result)))
@@ -120,25 +120,21 @@ struct AuditCResultBlock: View {
     }
 }
 
-/// The earlier entries by their sum, each removable after a question asked
-/// in place (no dialog over the record).
+/// The earlier entries by their sum, each removable after the standard
+/// question of the delete button.
 struct AuditCHistoryList: View {
     let entries: [AuditCHistoryEntry]
     let store: LifeCircumstancesStore
     @Bindable var model: AuditCModel
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text("life.auditC.history")
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-                .accessibilityAddTraits(.isHeader)
+            HLCardLabel("life.auditC.history")
             ForEach(entries) { entry in
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     row(entry)
-                    if model.confirmingRemovalID == entry.id {
-                        confirmation(entry)
+                    if model.confirmingRemovalID == entry.id, let error = model.removeError {
+                        HLFormErrorText(error)
                     }
                 }
             }
@@ -155,63 +151,21 @@ struct AuditCHistoryList: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("life.auditC.history.\(entry.id)")
-            Button {
-                withHLAnimation(.easeInOut(duration: 0.2)) { model.askRemoval(entry.id) }
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundStyle(HLColor.statusBad)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            HLDeleteButton(
+                "life.auditC.remove",
+                form: .icon,
+                action: .confirmed(
+                    title: "life.auditC.removeConfirmTitle",
+                    message: "life.auditC.removeConfirmBody",
+                    word: "life.auditC.remove"
+                ) {
+                    model.askRemoval(entry.id)
+                    await model.remove(entry.id, store: store)
+                }
+            )
             .disabled(model.removingID != nil)
-            .accessibilityLabel(Text("life.auditC.remove"))
             .accessibilityValue(Text(verbatim: date))
             .accessibilityIdentifier("life.auditC.history.remove.\(entry.id)")
         }
-    }
-
-    private func confirmation(_ entry: AuditCHistoryEntry) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("life.auditC.removeConfirmTitle")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-            Text("life.auditC.removeConfirmBody")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let error = model.removeError {
-                HLFormErrorText(error)
-            }
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.sm))
-                : AnyLayout(HStackLayout(spacing: HLSpace.lg))
-            layout {
-                Button(role: .destructive) {
-                    Task { await model.remove(entry.id, store: store) }
-                } label: {
-                    Text("life.auditC.remove")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(HLColor.statusBad)
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("life.auditC.history.confirm.\(entry.id)")
-                Button {
-                    withHLAnimation(.easeInOut(duration: 0.2)) { model.confirmingRemovalID = nil }
-                } label: {
-                    Text("Cancel")
-                        .foregroundStyle(.tint)
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("life.auditC.history.cancel.\(entry.id)")
-                if model.removingID == entry.id {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            .font(.hlSubhead)
-            .buttonStyle(.plain)
-            .disabled(model.removingID != nil)
-        }
-        .padding(.leading, HLSpace.sm)
     }
 }

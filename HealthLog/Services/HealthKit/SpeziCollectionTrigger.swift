@@ -1,47 +1,14 @@
 import Foundation
 
-/// **W-B182 (Apple-Health-Sync bulletproof) — the active pull lever for the
-/// SpeziHealthKit low-urgency collectors.**
+/// The single pull seam for HealthKit collection.
 ///
-/// ## Why this exists
-///
-/// The app moved fully onto the SpeziHealthKit `CollectSamples` observer path
-/// (W-A5). To preserve the W2 battery posture, every type except the
-/// automatic/background set (vital signs + the R3 aggressive-cadence
-/// promotions `heartRate` / `stepCount` / `sleepAnalysis`) runs with
-/// `continueInBackground: false` — i.e. it arms **no** background
-/// `HKObserverQuery`. Before W-B182 those types were collected by a single
-/// foreground `start: .automatic` continuous query that armed once at
-/// `configure()` time and was never re-triggered: the `BGProcessingTask` wake,
-/// the foreground revalidate, and the manual "Jetzt syncen" button were all
-/// no-ops for them (`runOneShotAnchorSweep()` was an empty shim). Result: mass
-/// / body-fat / VO₂ / audio / gait / respiratory / BMI synced only
-/// opportunistically and "went quiet" = the operator's "synchronisiert nicht
-/// konstant" complaint.
-///
-/// ## The fix
-///
-/// Those collectors are now declared `start: .manual` (see
-/// `HealthLogSpeziDelegate.configuration`). A manual collector does nothing
-/// until ``SpeziHealthKit/HealthKit/triggerDataSourceCollection()`` is called;
-/// the first call arms its anchored continuous query (which then re-fires for
-/// new samples for the rest of the process lifetime), and every later call is a
-/// cheap no-op for already-armed collectors. This type is the single seam that
-/// performs that trigger from all three points:
-///
-/// 1. the `BGProcessingTask` wake (`HealthKitService.runOneShotAnchorSweep`),
-/// 2. the foreground `.active` revalidate (`RootView`),
-/// 3. the manual "Jetzt syncen" path (`HKReadinessStore.triggerManualSync`).
-///
-/// On a cold launch the manual collectors re-arm from their persisted
-/// SpeziLocalStorage anchor on the first trigger and immediately deliver
-/// everything since the anchor, so each launch + first foreground catches up.
-///
-/// The automatic/background collectors (vital signs + the R3 aggressive-cadence
-/// `heartRate` / `stepCount` / `sleepAnalysis`) stay `start: .automatic` +
-/// background, so this trigger neither re-enables `.immediate` background
-/// delivery for the bulk of the type set (battery posture preserved for the
-/// low-urgency set) nor needs to touch them — they self-arm at `configure()`.
+/// Every trigger (cold activation, after sign-in, the foreground revalidate,
+/// "Jetzt syncen", the silent push, the two background tasks and every
+/// observer signal) enters here, names its own `HealthSyncTrigger`, and runs
+/// one bounded, account-scoped pass through ``AppOwnedHealthCollection``.
+/// SpeziHealthKit no longer collects anything: no `CollectSamples` is
+/// registered, the module stays only for authorization and its UI surfaces.
+/// The name is historical.
 ///
 /// Records the trigger heartbeat in ``HKSyncDiagnostics`` so the diagnostics
 /// surface can distinguish "armed, nothing new" (healthy) from "never armed".
@@ -58,7 +25,7 @@ enum SpeziCollectionTrigger {
         /// POST it causes carries `syncTrigger: "push"` on the wire.
         case push
 
-        /// **Phase 07 / plan 07-07** — the `BGAppRefreshTask` wake, which is not
+        /// The `BGAppRefreshTask` wake, which is not
         /// the `BGProcessingTask` wake.
         ///
         /// Both used to arrive here as `.background`, so the ~30-second
@@ -88,7 +55,7 @@ enum SpeziCollectionTrigger {
 
         /// The diagnostics word for a trigger, when this vocabulary has one.
         ///
-        /// **Plan 07-09** made `HealthSyncTrigger` the thing every call site
+        /// Made `HealthSyncTrigger` the thing every call site
         /// names, so this enum stopped being an input and became what it always
         /// was underneath: the diagnostics heartbeat's word. Cold activation,
         /// post-authentication, observer and teardown have no member here and
@@ -105,15 +72,8 @@ enum SpeziCollectionTrigger {
         }
     }
 
-    /// The single pull seam.
-    ///
-    /// **Phase 07 Wave 2.** This used to mean one thing — arm SpeziHealthKit's
-    /// `start: .manual` collectors — and now means two. The Spezi trigger is kept
-    /// because the module is still registered and still owns authorization, and
-    /// removing the call would change more than this plan claims to. The work that
-    /// actually collects server-bound samples is the second call:
-    /// ``AppOwnedHealthCollection``, which runs one bounded, account-scoped pass
-    /// under the budget this source names.
+    /// The single pull seam: one ``AppOwnedHealthCollection`` pass under the
+    /// budget this trigger names.
     ///
     /// Routing through here is deliberate. **Plan 07-09** made it exclusive: cold
     /// activation, post-authentication, the foreground revalidate, the manual
@@ -159,41 +119,4 @@ enum SpeziCollectionTrigger {
             return []
         #endif
     }
-
-    /// Re-arms SpeziHealthKit's `start: .manual` collectors from their persisted
-    /// anchors.
-    ///
-    /// This is the historical W-B182 job of `HealthKitService.runOneShotAnchorSweep`
-    /// and it stayed there: the Spezi module is still registered, still owns
-    /// authorization, and a manual collector that is never triggered pulls
-    /// nothing. **Plan 07-09** separated it from the pass — arming a module and
-    /// running a capability plan are two things, and conflating them is how a
-    /// trigger ended up starting a pass from inside another pass.
-    @MainActor
-    static func armManualCollectors() async {
-        #if canImport(Spezi) && canImport(SpeziHealthKit)
-            guard let healthKit = ResolvedModule.healthKit else {
-                HLLog.healthKit.info("Spezi HealthKit module unavailable — collector arming skipped")
-                return
-            }
-            await healthKit.waitForConfigurationDone()
-            await healthKit.triggerDataSourceCollection()
-        #endif
-    }
 }
-
-#if canImport(Spezi) && canImport(SpeziHealthKit)
-    @_spi(APISupport) import Spezi
-    import SpeziHealthKit
-
-    /// Tiny resolver wrapper so the `@MainActor` Spezi lookup stays in one
-    /// place (mirrors `AppContainer.attachSpeziStandardUploader`'s
-    /// `SpeziAppDelegate.spezi` → `module(_:)` pattern).
-    private enum ResolvedModule {
-        @MainActor
-        static var healthKit: HealthKit? {
-            guard let spezi = SpeziAppDelegate.spezi else { return nil }
-            return spezi.module(HealthKit.self)
-        }
-    }
-#endif

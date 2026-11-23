@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "exceptions": [
+    {
+      "type": "MedicalDisclaimerAckSheet",
+      "reason": "Pflichtbestätigung vor der App: kann nicht abgebrochen werden, hat darum keine Leiste mit Abbrechen und Bestätigen."
+    },
+    {
+      "type": "MfaEnrollmentGateSheet",
+      "reason": "Pflichtsperre vor der App bis zur Einrichtung des zweiten Faktors: kein Abbrechen, die Aktion ist der nächste Schritt."
+    },
+    {
+      "type": "TrustBoundarySheet",
+      "reason": "Pflichtbestätigung im Onboarding, bevor ein Server gespeichert wird: ein Schritt des Ablaufs, kein Eingabe-Sheet."
+    },
+    {
+      "type": "SymptomEventSheet",
+      "reason": "Gepushte Bearbeitungsseite auf dem Stapel der Episode, kein Sheet. Die Rückfrage beim Verlassen trägt die Seite über hlDiscardGuard und ein Abbrechen-Kreuz an der Stelle des Zurück-Knopfs, solange Eingaben offen sind."
+    }
+  ]
+}

@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **A4 (iOS 1.4) — the appointment action (#149), required before
+    /// **A4 (iOS 1.4) — the appointment action, required before
     /// server 1.44.0.**
     ///
     /// 1.43.11 keeps `intent: "checkup.view"` and moves `href` to

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Cadence form model (R1 §3.7)
+// MARK: - Cadence form model
 
 /// The cadence kinds the iOS wizard exposes — a superset of the web's eight
 /// (`src/components/medications/scheduling/types.ts` `CadenceKind`) plus the
@@ -96,6 +96,6 @@ struct CadenceValue: Equatable, Hashable {
     ///
     /// No anchor rides beside these: the server anchors the phase on the
     /// medication's `startsOn ?? createdAt` and publishes no per-schedule
-    /// anchor (09-14).
+    /// anchor.
     let cyclicOffWeeks: Int?
 }

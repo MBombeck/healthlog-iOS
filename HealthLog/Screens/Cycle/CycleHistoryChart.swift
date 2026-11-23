@@ -6,12 +6,19 @@ struct CycleHistoryChartModel: Equatable {
     struct Cycle: Identifiable, Equatable {
         let id: String
         let startDate: String
-        /// 1.4 B4 — what the axis shows under the bar: the start as a date in
+        /// The start as a day, where the bar stands on the time axis.
+        let date: Date
+        /// What the axis shows under the bar: the start as a date in
         /// words ("13. Mai"), not the day key cut to "2026-05-…".
         let label: String
         let lengthDays: Int
         let periodDays: Int
         let confirmedOvulationDay: Int?
+
+        /// The length as the value the scrubber reads.
+        var length: Double {
+            Double(lengthDays)
+        }
     }
 
     let cycles: [Cycle]
@@ -25,7 +32,8 @@ struct CycleHistoryChartModel: Equatable {
             .sorted { $0.startDate < $1.startDate }
         let labels = axisLabels(for: closed.map(\.startDate))
         let observed = zip(closed, labels).compactMap { cycle, label -> Cycle? in
-            guard let length = cycle.lengthDays else { return nil }
+            guard let length = cycle.lengthDays,
+                  let date = ProfileDay.startOfDay(forKey: cycle.startDate, timeZone: .current) else { return nil }
             let periodDays = cycle.periodEndDate.map {
                 max(0, min(length, CyclePredictionEngine.dayDiff($0, cycle.startDate) + 1))
             } ?? 0
@@ -37,6 +45,7 @@ struct CycleHistoryChartModel: Equatable {
             return Cycle(
                 id: cycle.id,
                 startDate: cycle.startDate,
+                date: date,
                 label: label,
                 lengthDays: length,
                 periodDays: periodDays,
@@ -46,41 +55,48 @@ struct CycleHistoryChartModel: Equatable {
         return CycleHistoryChartModel(cycles: observed, averageLength: averageLength)
     }
 
-    /// 1.4 B4 — one label per bar: day and month in the reader's language
+    /// One label per bar: day and month in the reader's language
     /// ("13. Mai", "May 13"). The bars are told apart by their label, so when
     /// two starts would read alike (the same day a year apart) every label
     /// carries the year. A key that is not a day keeps itself.
     static func axisLabels(for dayKeys: [String], locale: Locale = .autoupdatingCurrent) -> [String] {
-        let parser = DateFormatter()
-        parser.calendar = Calendar(identifier: .gregorian)
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM-dd"
-        func labels(template: String) -> [String] {
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.locale = locale
-            formatter.timeZone = TimeZone(identifier: "UTC")
-            formatter.setLocalizedDateFormatFromTemplate(template)
-            return dayKeys.map { key in parser.date(from: key).map(formatter.string(from:)) ?? key }
+        func labels(withYear: Bool) -> [String] {
+            dayKeys.map { key in
+                guard let day = ProfileDay.startOfDay(forKey: key, timeZone: .current) else { return key }
+                // Measured against the day itself the helper leaves the year
+                // off; against the distant past it adds it.
+                return HLDateFormat.dayMonth(day, relativeTo: withYear ? .distantPast : day, locale: locale)
+            }
         }
-        let short = labels(template: "dMMM")
-        return Set(short).count == short.count ? short : labels(template: "dMMMyy")
+        let short = labels(withYear: false)
+        return Set(short).count == short.count ? short : labels(withYear: true)
     }
 }
 
 struct CycleHistoryChart: View {
     let cycles: [MenstrualCycleDTO]
     let averageLength: Int?
+    /// The cycle under the finger while the chart is scrubbed.
+    @State private var selectedDate: Date?
+    /// The value axis thins itself out at the accessibility sizes.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Width of one bar: a cycle is a column, not a day-wide sliver.
+    private static let barWidth: CGFloat = HLSpace.md
 
     private var model: CycleHistoryChartModel {
         CycleHistoryChartModel.build(cycles: cycles, averageLength: averageLength)
     }
 
+    private var unit: String {
+        String(localized: "cycle.history.axis.days")
+    }
+
     var body: some View {
-        // 1.4 B2 — no completed cycle yet: the card is absent.
+        // No completed cycle yet: the card is absent.
         if !model.cycles.isEmpty {
-            HLSettingsCard(icon: "chart.bar.xaxis", title: "cycle.history.title") {
+            HLSectionHeader("cycle.history.title", rank: .area)
+            HLCard {
                 chart
             }
         }
@@ -90,20 +106,22 @@ struct CycleHistoryChart: View {
         Chart {
             ForEach(model.cycles) { cycle in
                 BarMark(
-                    x: .value(String(localized: "cycle.history.axis.cycle"), cycle.label),
+                    x: .value(String(localized: "cycle.history.axis.cycle"), cycle.date, unit: .day),
                     yStart: .value(String(localized: "cycle.history.axis.days"), 0),
-                    yEnd: .value(String(localized: "cycle.history.period"), cycle.periodDays)
+                    yEnd: .value(String(localized: "cycle.history.period"), cycle.periodDays),
+                    width: .fixed(Self.barWidth)
                 )
                 .foregroundStyle(HLChartTints.series)
                 BarMark(
-                    x: .value(String(localized: "cycle.history.axis.cycle"), cycle.label),
+                    x: .value(String(localized: "cycle.history.axis.cycle"), cycle.date, unit: .day),
                     yStart: .value(String(localized: "cycle.history.period"), cycle.periodDays),
-                    yEnd: .value(String(localized: "cycle.history.axis.days"), cycle.lengthDays)
+                    yEnd: .value(String(localized: "cycle.history.axis.days"), cycle.lengthDays),
+                    width: .fixed(Self.barWidth)
                 )
                 .foregroundStyle(HLChartTints.seriesLow)
                 if let ovulationDay = cycle.confirmedOvulationDay {
                     PointMark(
-                        x: .value(String(localized: "cycle.history.axis.cycle"), cycle.label),
+                        x: .value(String(localized: "cycle.history.axis.cycle"), cycle.date, unit: .day),
                         y: .value(String(localized: "cycle.history.ovulation.confirmed"), ovulationDay)
                     )
                     .foregroundStyle(HLText.primary)
@@ -111,8 +129,6 @@ struct CycleHistoryChart: View {
                     .symbolSize(55)
                 }
             }
-            // 1.4 B4 — the average's label sits beside the plot on the leading
-            // axis (below), not on the bars where it ran into their tops.
             if let average = model.averageLength {
                 RuleMark(y: .value(String(localized: "cycle.history.average"), average))
                     .foregroundStyle(HLText.secondary)
@@ -121,49 +137,48 @@ struct CycleHistoryChart: View {
                         dash: HLChartGrid.thresholdDash
                     ))
             }
-        }
-        .frame(height: HLChartStyle.heightRegular)
-        // 1.4 B4 — the first and the last cycle's start as dates ("14. Aug."),
-        // not a row of cut ISO keys, each kept inside the plot (the app's one
-        // date-axis rule, as in the sleep composition).
-        .chartXAxis {
-            AxisMarks(values: edgeStartKeys) { value in
-                AxisValueLabel(anchor: ChartDateAxis.labelAnchor(index: value.index, count: value.count)) {
-                    if let key = value.as(String.self) {
-                        Text(Self.startLabel(key))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
-                    }
-                }
+            HLChartScrubber.marks(selectedDate: selectedDate, in: model.cycles, date: \.date, value: \.length) { cycle in
+                HLScrubCallout(title: cycle.label, value: "\(cycle.lengthDays)", unit: unit)
             }
         }
+        .frame(height: HLChartStyle.heightRegular)
+        // The outer bars stand inside the plot, not half over its edge.
+        .chartXScale(range: .plotDimension(padding: Self.barWidth))
+        // The axes of every chart, with one addition: the average's label
+        // stands on the trailing edge, where no value label can meet it.
         .chartYAxis {
-            AxisMarks()
-            AxisMarks(position: .leading, values: model.averageLength.map { [$0] } ?? []) { value in
+            HLChartAxis.values(at: dynamicTypeSize)
+            AxisMarks(position: .trailing, values: model.averageLength.map { [$0] } ?? []) { value in
                 AxisValueLabel {
                     if let average = value.as(Int.self) {
                         Text("Ø \(String(average))")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.chartAxis)
                     }
                 }
             }
         }
-        .chartYAxisLabel("cycle.history.axis.days")
+        .chartXAxis { HLChartAxis.dates(model.cycles.map(\.date)) }
+        .hlChartUnit(unit)
+        .hlChartScrub($selectedDate) { [model] date in
+            Self.announcement(for: date, in: model.cycles)
+        }
         .accessibilityChartDescriptor(ChartDescriptor(descriptor: descriptor))
     }
 
-    /// The first and the last cycle's start key, the only labelled columns.
-    private var edgeStartKeys: [String] {
-        let keys = model.cycles.map(\.startDate)
-        guard let first = keys.first, let last = keys.last else { return [] }
-        return first == last ? [first] : [first, last]
+    /// What VoiceOver says for the cycle nearest to the scrubbed day.
+    static func announcement(for date: Date, in cycles: [CycleHistoryChartModel.Cycle]) -> String? {
+        guard let cycle = HLChartScrubber.nearest(to: date, in: cycles, date: \.date) else { return nil }
+        let days = String(format: String(localized: "cycle.history.days.value"), cycle.lengthDays)
+        return "\(cycle.label), \(days)"
     }
 
     /// A cycle's start day ("2026-08-14") as the axis shows it.
     nonisolated static func startLabel(_ key: String) -> String {
         guard let milliseconds = CyclePredictionEngine.parseDayMs(key) else { return key }
-        return Date(timeIntervalSince1970: milliseconds / 1000).formatted(.dateTime.day().month(.abbreviated))
+        let day = Date(timeIntervalSince1970: milliseconds / 1000)
+        // Day and month only, against the day itself: the axis has no room
+        // for a year.
+        return HLDateFormat.dayMonth(day, relativeTo: day)
     }
 
     private var descriptor: AXChartDescriptor {

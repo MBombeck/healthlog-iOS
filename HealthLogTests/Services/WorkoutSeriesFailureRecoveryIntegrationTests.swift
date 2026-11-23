@@ -434,7 +434,7 @@ import Testing
     }
 
     actor WorkoutSeriesLifecycleStore: WorkoutHealthKitStore {
-        func executeWorkoutObserver(onUpdate _: @escaping @Sendable () -> Void) async {}
+        func executeWorkoutObserver(onUpdate _: @escaping @Sendable () async -> Void) async {}
         func stopWorkoutObserver() async {}
         func enableWorkoutBackgroundDelivery() async throws {}
         func disableWorkoutBackgroundDelivery() async throws {}

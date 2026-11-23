@@ -62,7 +62,7 @@ public actor SourcePriorityRepository {
     /// Returns the parsed echo so the caller learns what the server
     /// actually persisted (defaults merged in).
     ///
-    /// V0.5.2 R2 / M1: the `Idempotency-Key` is generated explicitly per
+    /// The `Idempotency-Key` is generated explicitly per
     /// call (instead of relying on `APIRequest.put`'s default). Two
     /// reasons:
     ///   1. PROJECT_GUIDE.md "Idempotency-Keys auf jedem POST/PUT" is the

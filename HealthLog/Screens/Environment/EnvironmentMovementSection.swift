@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.5 MOVE (#133)** — "Unterwegs" on the environment screen: one day of
+/// "Unterwegs" on the environment screen: one day of
 /// movement from Dawarich, as `GET /api/day/{date}` reports it in its
 /// `movement` block (server v1.43).
 ///
@@ -17,78 +17,67 @@ struct EnvironmentMovementSection: View {
         case .hidden:
             EmptyView()
         case .loading:
-            Section(header: header) {
+            Section {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
                     .accessibilityIdentifier("environment.movement.loading")
+            } header: {
+                header
             }
         case .notConnected:
-            Section(header: header) {
+            Section {
                 note("environment.movement.notConnected")
                     .accessibilityIdentifier("environment.movement.notConnected")
+            } header: {
+                header
             }
         case .noData:
-            Section(header: header) {
+            Section {
                 note("environment.movement.noData")
                     .accessibilityIdentifier("environment.movement.noData")
+            } header: {
+                header
             }
         case .failed:
-            Section(header: header) {
+            Section {
                 failedRow
+            } header: {
+                header
             }
         case .ready:
-            Section(header: header) {
+            Section {
                 switcher
                 dayContent
+            } header: {
+                header
             }
         }
     }
 
     private var header: some View {
-        Text("environment.movement.section")
+        HLSectionHeader("environment.movement.section")
     }
 
     // MARK: - Switcher
 
-    /// ‹ day › with 44 pt arrows, like the sleep night header; an arrow that
-    /// would leave the stored range or reach past today is dimmed and off.
+    /// ‹ day › through the shared stepper, like the sleep night and the day
+    /// pulse; a side that would leave the stored range or reach past today
+    /// is dimmed and off.
     private var switcher: some View {
-        HStack(spacing: HLSpace.sm) {
-            arrow("chevron.left", label: "environment.movement.previousDay", enabled: store.canGoBack, id: "previous") {
-                Task { await store.step(by: -1) }
-            }
-            Text(verbatim: store.selectedDay.map(Self.dayTitle) ?? "")
-                .font(.hlBody.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("environment.movement.day")
-            arrow("chevron.right", label: "environment.movement.nextDay", enabled: store.canGoForward, id: "next") {
-                Task { await store.step(by: 1) }
-            }
-        }
-    }
-
-    private func arrow(
-        _ systemName: String,
-        label: LocalizedStringResource,
-        enabled: Bool,
-        id: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.hlBody.weight(.semibold))
-                .foregroundStyle(enabled ? HLText.primary : HLText.tertiary)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label))
-        .accessibilityIdentifier("environment.movement.\(id)")
+        HLStepperHeader(
+            verbatim: store.selectedDay.map(Self.dayTitle) ?? "",
+            previousLabel: "environment.movement.previousDay",
+            nextLabel: "environment.movement.nextDay",
+            canGoPrevious: store.canGoBack,
+            canGoNext: store.canGoForward,
+            identifier: "environment.movement",
+            previous: { Task { await store.step(by: -1) } },
+            next: { Task { await store.step(by: 1) } }
+        )
+        // A container of its own carries the day's identifier, so the
+        // chevrons keep theirs (`environment.movement.previous`, `.next`).
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("environment.movement.day")
     }
 
     // MARK: - Day
@@ -120,7 +109,7 @@ struct EnvironmentMovementSection: View {
                 .font(.hlSubhead)
                 .foregroundStyle(HLText.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HLButton("Retry", variant: .secondary) {
+            HLButton(HLControlWord.retry.key, variant: .secondary) {
                 Task { await store.retry() }
             }
             .accessibilityIdentifier("environment.movement.retry")
@@ -130,10 +119,7 @@ struct EnvironmentMovementSection: View {
     }
 
     private func note(_ key: LocalizedStringKey) -> some View {
-        Text(key)
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        HLEmptyNote(key)
             .padding(.vertical, HLSpace.xxs)
     }
 }

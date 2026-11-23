@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-B187 QOL-2 — the app-side bridge between the live stores and the
+/// **The app-side bridge between the live stores and the
 /// CoreSpotlight index writer.**
 ///
 /// `@MainActor` so the stores can call it directly from their settle hooks
@@ -16,6 +16,10 @@ import Foundation
 @MainActor
 final class SpotlightCoordinator {
     private let indexer: SpotlightIndexer
+    /// Sign-out generation: each `clearAll()` starts a new one, and every
+    /// reindex carries the one it was planned under, so a reindex of the
+    /// leaving account that runs after the teardown indexes nothing.
+    private var generation = 0
 
     /// The measured-kind title resolver — injectable so the title source
     /// (`MetricKind.displayName`) can be stubbed in tests without the full
@@ -48,8 +52,9 @@ final class SpotlightCoordinator {
             return SpotlightIndexer.Entry(kind: .medication(id: medication.id), title: name)
         }
         let indexer = indexer
+        let generation = generation
         Task.detached(priority: .utility) {
-            await indexer.replace(entries, in: .medications)
+            await indexer.replace(entries, in: .medications, generation: generation)
         }
     }
 
@@ -62,17 +67,20 @@ final class SpotlightCoordinator {
             return SpotlightIndexer.Entry(kind: .measurement(slug: slug), title: measurementTitle(kind))
         }
         let indexer = indexer
+        let generation = generation
         Task.detached(priority: .utility) {
-            await indexer.replace(entries, in: .measurements)
+            await indexer.replace(entries, in: .measurements, generation: generation)
         }
     }
 
     /// Tear down the whole HealthLog Spotlight index — called on logout so
     /// no medication name survives into a signed-out device's system search.
     func clearAll() {
+        generation += 1
         let indexer = indexer
+        let generation = generation
         Task.detached(priority: .utility) {
-            await indexer.deleteAll()
+            await indexer.deleteAll(generation: generation)
         }
     }
 }

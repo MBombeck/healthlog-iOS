@@ -12,7 +12,7 @@ import Testing
 // process-global slot is never assigned here.
 // swiftlint:disable file_length type_body_length
 
-/// **GH #86** — the catch-up sweep that re-posts already-synced workouts WITH
+/// The catch-up sweep that re-posts already-synced workouts WITH
 /// their HR series.
 ///
 /// Exercised against the real `APIClient` over a per-test
@@ -893,7 +893,7 @@ struct WorkoutHRBackfillSweepTests {
         #expect(state.nextExhaustionProbeAt == now.addingTimeInterval(WorkoutHRBackfillState.exhaustionProbeBackoff))
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-12)
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     func aLaterInstallCannotAnswerThisSuite() async throws {

@@ -20,8 +20,8 @@ import Observation
 /// gate went in server v1.38.24, the module gate in v1.39, and the app gates the
 /// page on the recordings alone (an older server's `403` still reads as
 /// "gated") — the call site
-/// additionally gates on a cloud surface being available so nothing appears in
-/// standalone / no-server.
+/// additionally gates on a cloud surface being available so nothing appears without
+/// a server.
 @MainActor
 @Observable
 public final class EcgStore {

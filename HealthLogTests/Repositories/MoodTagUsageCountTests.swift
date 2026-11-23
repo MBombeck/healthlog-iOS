@@ -7,7 +7,7 @@ import Testing
 
     @testable import HealthLog
 
-    /// **Parity 1.1 — the purge confirmation's usage count.**
+    /// **The purge confirmation's usage count.**
     ///
     /// Purging a custom mood tag hard-deletes it AND cascades away every link to
     /// the user's historical mood entries. The confirmation names how many

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Phase 09 Wave 0 — the deterministic fixture and counting-seam bench.**
+/// **The deterministic fixture and counting-seam bench.**
 ///
 /// Phase 9's whole premise is that a measurement precedes a claim. That only
 /// works if the *input* to every measurement is frozen: the same bytes, the
@@ -341,7 +341,7 @@ final class Phase09CountingAPIClient: APIClientProtocol, @unchecked Sendable {
         _ = record(call(for: request))
     }
 
-    /// The one-shot file-backed route (Plan 09-02). Records the call with **no**
+    /// The one-shot file-backed route. Records the call with **no**
     /// in-memory body byte count and the file's length instead — which is the
     /// whole assertion: this client cannot report an in-memory body for a call
     /// that never had one, and the old buffered route cannot report `nil`.

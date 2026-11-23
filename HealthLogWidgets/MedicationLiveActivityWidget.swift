@@ -4,7 +4,7 @@
     import SwiftUI
     import WidgetKit
 
-    /// **v0.8.4 WWIDGET-1 / v0.10 W-LiveActivity-POLISH — medication-reminder
+    /// **Medication-reminder
     /// Live Activity widget.**
     ///
     /// Renders ``MedicationActivityAttributes`` on the Lock Screen / banner
@@ -17,9 +17,9 @@
     ///
     /// **Layout (v0.10 / Walkthrough-2):** the Lock Screen header carries the
     /// name (own line) + dose·due-time secondary line on the left, with the loved
-    /// countdown pinned to the TOP-RIGHT corner (LA1). Below it, a primary
+    /// countdown pinned to the TOP-RIGHT corner. Below it, a primary
     /// full-width ≥44 pt ``TakenButton`` — a med-card-style filled
-    /// `RoundedRectangle` (LA3) that is a TWO-STEP tap-confirm (LA2: first tap
+    /// `RoundedRectangle` that is a TWO-STEP tap-confirm (LA2: first tap
     /// arms "Erneut tippen zum Bestätigen", second tap records). On `confirmed`
     /// the action band is replaced by a centered green-check "Genommen um HH:mm".
     ///
@@ -64,7 +64,7 @@
                 }
                 .keylineTint(LAColor.accent)
             }
-            // v0.12 W8-3 — opt into the `.small` supplemental family so the med
+            // Opt into the `.small` supplemental family so the med
             // countdown + one-tap "Genommen" surface in the watchOS Smart Stack.
             // `supplementalActivityFamilies` is iOS 18.0+ (ships to our floor, no
             // #available); the OS only requests `.small` when a paired Watch is
@@ -97,11 +97,11 @@
             case _ where confirmed:
                 ConfirmedGlyph(confirmed: state.confirmed)
             case .pending:
-                Text(timerInterval: countdownRange(to: state.countdownTarget), countsDown: true)
+                LADueClock(state: state)
                     .monospacedDigit()
                     .frame(minWidth: 44)
                     .multilineTextAlignment(.trailing)
-                    .foregroundStyle(state.isOverdue ? LAColor.danger : LAColor.text)
+                    .foregroundStyle(state.isOverdue ? LAColor.warn : LAColor.text)
                     .accessibilityLabel(LAStrings.countdownAccessibilityLabel(target: state.countdownTarget))
             case .snoozed:
                 Image(systemName: "clock.badge.fill")
@@ -112,7 +112,7 @@
             }
         }
 
-        /// Expanded trailing (LA1): the loved countdown pinned top-right while
+        /// Expanded trailing: the loved countdown pinned top-right while
         /// pending — timer + a small remaining/overdue caption — mirroring the
         /// Lock-Screen corner placement. A green check once confirmed.
         @ViewBuilder
@@ -128,26 +128,27 @@
                     Image(systemName: "clock.badge.fill")
                         .foregroundStyle(LAColor.warn)
                 default:
-                    expandedCountdown(for: state)
+                    expandedCountdown(for: state, isStale: context.isStale)
                 }
             }
         }
 
         private func expandedCountdown(
-            for state: MedicationActivityAttributes.ContentState
+            for state: MedicationActivityAttributes.ContentState,
+            isStale: Bool
         ) -> some View {
             let target = state.countdownTarget
-            // W-B183 — danger styling reads the server-gated flag, NOT
+            // Danger styling reads the server-gated flag, NOT
             // `Date.now > target`. The timer text still counts to `target`.
             let isOverdue = state.isOverdue
             return VStack(alignment: .trailing, spacing: 1) {
-                Text(timerInterval: countdownRange(to: target), countsDown: true)
+                LADueClock(state: state)
                     .font(.title3.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(isOverdue ? LAColor.danger : LAColor.text)
+                    .foregroundStyle(isOverdue ? LAColor.warn : LAColor.text)
                     .multilineTextAlignment(.trailing)
-                Text(isOverdue ? LAStrings.overdueShort : LAStrings.remainingShort)
+                Text(isStale ? LAStrings.checkStatus : LAStrings.countdownCaption(for: state))
                     .font(.caption2)
-                    .foregroundStyle(isOverdue ? LAColor.danger : LAColor.textSecondary)
+                    .foregroundStyle(isOverdue ? LAColor.warn : LAColor.textSecondary)
             }
             .frame(minWidth: 52, alignment: .trailing)
             .accessibilityElement(children: .ignore)
@@ -174,7 +175,7 @@
                         .foregroundStyle(LAColor.warn)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 default:
-                    // LA1: countdown now lives in the expanded trailing region;
+                    // Countdown now lives in the expanded trailing region;
                     // the bottom is the full-width "Genommen" affordance.
                     TakenButton(
                         attributes: context.attributes,
@@ -208,15 +209,6 @@
             )
         }
 
-        /// Clamp the countdown range so `Text(timerInterval:)` always has a
-        /// valid forward range even if the target slipped into the past.
-        private func countdownRange(to target: Date) -> ClosedRange<Date> {
-            let now = Date.now
-            let lower = min(now, target)
-            let upper = max(now, target)
-            return lower ... max(upper, lower.addingTimeInterval(1))
-        }
-
         private func confirmationLabel(takenAt: Date, confirmed: Bool, timeFormatRaw: String) -> some View {
             ConfirmationCheck(takenAt: takenAt, confirmed: confirmed, timeFormatRaw: timeFormatRaw)
         }
@@ -227,13 +219,13 @@
     /// The Live-Activity "Genommen" button — shared by the Lock Screen + the
     /// Dynamic-Island expanded bottom region.
     ///
-    /// **LA2 (anti-accidental):** when `pendingConfirm` is `false` the button
+    /// When `pendingConfirm` is `false` the button
     /// reads "Genommen"; the FIRST tap fires the intent which flips the
     /// Activity into the armed state, re-rendering this button as "Erneut
     /// tippen zum Bestätigen". Only the SECOND tap (this armed render) records
     /// the intake. One accidental tap therefore never records a dose.
     ///
-    /// **LA3 (visibility):** instead of the prior `.borderedProminent` (white
+    /// Instead of the prior `.borderedProminent` (white
     /// text on a light-gray system fill — barely legible on the dark Lock
     /// Screen), this mirrors the med-card "Genommen" affordance: a filled
     /// `RoundedRectangle` in `LAColor.accent` (the monochrome primary —
@@ -254,7 +246,7 @@
                 .font(.headline)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                // b146 — shared dark-pill construction (extracted to
+                // Shared dark-pill construction (extracted to
                 // `LAMedTakenPillStyle`), now the single source of truth this
                 // and the NextDose widget both apply.
                 .laMedTakenPill(pendingConfirm: pendingConfirm)
@@ -312,7 +304,7 @@
     private struct ConfirmationCheck: View {
         let takenAt: Date
         let confirmed: Bool
-        /// W-B187 — the user's resolved time-format preference so the
+        /// The user's resolved time-format preference so the
         /// "Genommen um HH:mm" confirmation honours 12h/24h/auto.
         let timeFormatRaw: String
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -341,7 +333,7 @@
             context.state.confirmed || context.state.status == .taken
         }
 
-        /// W-B183 — danger styling reads the server-gated flag carried in the
+        /// Danger styling reads the server-gated flag carried in the
         /// ContentState (computed in the app process via the same composition the
         /// in-app card uses), NOT `Date.now > countdownTarget`. The countdown
         /// timer text still counts to `countdownTarget`; only the red/overdue
@@ -353,7 +345,7 @@
         }
 
         var body: some View {
-            // v0.12 W8-3 — when the OS requests the supplemental `.small` family
+            // When the OS requests the supplemental `.small` family
             // (watchOS Smart Stack), render the compact countdown + one-tap
             // variant via `SmallFamilyGate`; every other presentation
             // (Lock-Screen / banner / `.medium`) keeps the full layout. The
@@ -390,7 +382,7 @@
         }
 
         /// Header band — name stands alone on the left; the loved countdown is
-        /// pinned to the TOP-RIGHT corner (LA1) so it no longer sits under the
+        /// pinned to the TOP-RIGHT corner so it no longer sits under the
         /// name and the vertical rhythm tightens.
         private var header: some View {
             HStack(alignment: .top, spacing: 12) {
@@ -417,17 +409,18 @@
             }
         }
 
-        /// LA1 — the countdown in the top-right corner: timer + a small
+        /// The countdown in the top-right corner: timer + a small
         /// "verbleibend"/"überfällig" caption beneath, right-aligned.
         private var cornerCountdown: some View {
             VStack(alignment: .trailing, spacing: 1) {
-                Text(timerInterval: clampedRange, countsDown: true)
+                LADueClock(state: context.state)
                     .font(.title3.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(isOverdue ? LAColor.danger : LAColor.text)
+                    .foregroundStyle(isOverdue ? LAColor.warn : LAColor.text)
                     .multilineTextAlignment(.trailing)
-                Text(isOverdue ? LAStrings.overdueShort : LAStrings.remainingShort)
+                // #190 5.4: a stale Activity asks to check, it never says "due".
+                Text(context.isStale ? LAStrings.checkStatus : LAStrings.countdownCaption(for: context.state))
                     .font(.caption2)
-                    .foregroundStyle(isOverdue ? LAColor.danger : LAColor.textSecondary)
+                    .foregroundStyle(isOverdue ? LAColor.warn : LAColor.textSecondary)
             }
             .frame(minWidth: 52, alignment: .trailing)
             .accessibilityElement(children: .ignore)
@@ -453,17 +446,34 @@
                 pendingConfirm: context.state.pendingConfirm
             )
         }
+    }
 
-        private var clampedRange: ClosedRange<Date> {
-            let now = Date.now
-            let target = context.state.countdownTarget
-            let lower = min(now, target)
-            let upper = max(now, target)
-            return lower ... max(upper, lower.addingTimeInterval(1))
+    // MARK: - Due clock
+
+    /// **#188 (6)** — the one countdown every surface shows. Before the due
+    /// time a forward timer, from the due time on the time since then
+    /// (`Text(target, style: .relative)`, which keeps counting without a
+    /// render), nothing while snoozed or taken. The decision is
+    /// ``MedicationActivityAttributes/ContentState/countdownPresentation(now:)``,
+    /// shared with the app so it is unit-tested there. The controller sets the
+    /// stale date to the due time, so the system renders once more at that
+    /// instant and the timer hands over to the counting-up text.
+    private struct LADueClock: View {
+        let state: MedicationActivityAttributes.ContentState
+
+        var body: some View {
+            switch state.countdownPresentation(now: .now) {
+            case .hidden:
+                EmptyView()
+            case let .countdown(range):
+                Text(timerInterval: range, countsDown: true)
+            case let .overdueSince(target):
+                Text(target, style: .relative)
+            }
         }
     }
 
-    // MARK: - v0.12 W8-3 — small supplemental family (watchOS Smart Stack)
+    // MARK: - Small supplemental family (watchOS Smart Stack)
 
     /// Reads the `activityFamily` environment (iOS 18.0+) and routes the
     /// `.small` family to the compact ``SmallFamilyView`` while every other
@@ -494,14 +504,6 @@
             context.state.confirmed || context.state.status == .taken
         }
 
-        private var clampedRange: ClosedRange<Date> {
-            let now = Date.now
-            let target = context.state.countdownTarget
-            let lower = min(now, target)
-            let upper = max(now, target)
-            return lower ... max(upper, lower.addingTimeInterval(1))
-        }
-
         var body: some View {
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
@@ -519,11 +521,12 @@
                         .foregroundStyle(LAColor.success)
                         .accessibilityLabel(LAStrings.taken)
                 } else {
-                    Text(timerInterval: clampedRange, countsDown: true)
+                    // #188 (6): hidden while snoozed, like every other surface.
+                    LADueClock(state: context.state)
                         .font(.caption.monospacedDigit())
-                        // W-B183 — server-gated overdue flag, not Date.now > target.
+                        // Server-gated overdue flag, not Date.now > target.
                         .foregroundStyle(
-                            context.state.isOverdue ? LAColor.danger : LAColor.text
+                            context.state.isOverdue ? LAColor.warn : LAColor.text
                         )
                         .multilineTextAlignment(.center)
                     if context.state.status != .snoozed {

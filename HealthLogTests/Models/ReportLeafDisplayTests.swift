@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **CU-11 — leaf labels are a lookup, never a vocabulary.**
+/// **Leaf labels are a lookup, never a vocabulary.**
 ///
 /// The point of this suite is the *last* case: an id nobody has ever seen still
 /// renders as words. That is what makes it safe for the panel to be driven

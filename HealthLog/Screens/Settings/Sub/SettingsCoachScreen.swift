@@ -17,10 +17,9 @@ import SwiftUI
 ///    server-side `assistant.coach` flag is off (operator-control
 ///    philosophy, F-1 surface-disabled pattern).
 /// 2. **About me** (moved from `SettingsAIScreen`) — server-backed
-///    `/api/coach/about-me` editor, gated on `backend.hasServer` exactly
-///    as before.
-/// 3. **Hero-restore** (COACH-COIN v0.5.5.7) — unchanged.
-/// 4. **Memory** → `CoachMemoryScreen` (FW5-C) — unchanged.
+///    `/api/coach/about-me` editor.
+/// 3. **Hero-restore** — unchanged.
+/// 4. **Memory** → `CoachMemoryScreen` — unchanged.
 /// 5. **History-clear** (destructive) — unchanged.
 ///
 /// **Confirmation:** destructive operations on chat transcripts get an explicit
@@ -30,12 +29,10 @@ import SwiftUI
 /// confirmation copy says so.
 struct SettingsCoachScreen: View {
     @Environment(\.appContainer) private var appContainer
-    /// COACH-COIN (v0.5.5.7) — drives the "Hero-Karte wiederherstellen" row.
+    /// Drives the "Hero-Karte wiederherstellen" row.
     @Environment(SettingsStore.self) private var settingsStore
-    /// SET-V2-C — gates the About-me card (server-backed editor).
-    @Environment(BackendAvailability.self) private var backend
 
-    /// v0.5.3 C6 — operator-control toggle for the Mini-Coach UI surface
+    /// Operator-control toggle for the Mini-Coach UI surface
     /// (moved from `SettingsAIScreen` in SET-V2-C). Default OFF until the
     /// C6 walkthrough is green; the toggle pushes onboarding-acknowledge
     /// before flipping ON (the sheet handles the onboarding mid-flight,
@@ -45,21 +42,22 @@ struct SettingsCoachScreen: View {
 
     @State private var presentMiniCoachOnboarding = false
 
-    /// Confirmation-alert visibility. Flipped `true` by the "Verlauf
-    /// löschen" row, `false` by either of the alert actions.
-    @State private var showDeleteConfirmation = false
+    /// Why a server switch sprang back. The store puts the old value back when
+    /// the server refuses a write; without this the person only saw the switch
+    /// move twice.
+    @State private var writeError: HLError?
 
     var body: some View {
-        // SET-V2-C — same Observation anchor as `SettingsAIScreen` (Bug 3,
+        // Same Observation anchor as `SettingsAIScreen` (Bug 3,
         // RCA v0.14.8): `aiMode` is computed from UserDefaults + Keychain
         // (neither tracked by Observation), so the toggle-card gate below
         // needs `AIConsentStore.revision` as its tracked dependency to
         // re-evaluate on mode/consent changes.
         // swiftlint:disable:next redundant_discardable_let
         let _ = appContainer?.aiConsentStore.revision
-        HLSettingsPage(title: "Coach") {
+        HLPage {
             if isOnDeviceMode {
-                // #115 · 0.2 — the on-device Coach runs only while the server's
+                // The on-device Coach runs only while the server's
                 // `coach` capability allows on-device work.
                 if appContainer?.aiCapabilityGate.allowsOnDevice(.coach) ?? true {
                     coachToggleCard
@@ -69,57 +67,50 @@ struct SettingsCoachScreen: View {
                     killSwitchCard
                 }
             }
-            // Build 9 (9.2) — server-wide coach availability (Decision A / E-3).
+            // Server-wide coach availability (Decision A / E-3).
             // In true server mode (not the on-device path) THE one server switch
             // "Coach aktiviert" = `!disableCoach`; hidden until the value resolves.
-            if backend.hasServer, !isOnDeviceMode,
+            if !isOnDeviceMode,
                let store = appContainer?.aiCoachSettingsStore, store.coachDisabled != nil
             {
                 serverCoachToggleCard(store: store)
             }
-            // #30 — proactive cadence-suggestions opt-in, now server-backed
+            // Proactive cadence-suggestions opt-in, now server-backed
             // (`reminderSuggestions.enabled`). Shown when the coach is reachable
             // (server present + `coach` capability offered) and the value has resolved.
-            if backend.hasServer, appContainer.offersCoach,
+            if appContainer.offersCoach,
                let store = appContainer?.aiCoachSettingsStore, store.reminderSuggestionsEnabled != nil
             {
                 cadenceSuggestionsCard(store: store)
             }
-            if backend.hasServer {
-                aboutMeCard
-            }
+            aboutMeCard
             // 6.6 — server-owned Coach/AI privacy flags. Both are server-first
             // settings, so the section shows only while a server is reachable;
             // the values hydrate via the `.task` below.
-            if backend.hasServer, let store = appContainer?.aiCoachSettingsStore {
-                CoachDocumentsAutoAICard(store: store)
-                CoachInsightsPrivacyCard(store: store)
-                CoachWindowCard(store: store) // #126 P2 defaultWindow
+            if let store = appContainer?.aiCoachSettingsStore {
+                CoachDocumentsAutoAICard(store: store, onWriteFinished: reportWrite)
+                CoachInsightsPrivacyCard(store: store, onWriteFinished: reportWrite)
+                CoachWindowCard(store: store, onWriteFinished: reportWrite) // #126 P2 defaultWindow
             }
-            // 1.4 B2-c — only while there is a card to bring back; a greyed
+            // Only while there is a card to bring back; a greyed
             // row without its footer said nothing.
             if settingsStore.coachHeroDismissed {
                 heroVisibilityCard
             }
             memoryCard
-            if backend.hasServer {
-                conversationsCard
-            }
+            conversationsCard
             historyCard
         }
+        .hlErrorBannerOverlay(error: writeError)
         .navigationTitle("Coach")
         .navigationBarTitleDisplayMode(.inline)
-        // 1.4 B2-c — the screen's one (i): what cadence suggestions are and
+        // The screen's one (i): what cadence suggestions are and
         // where conversations are kept, said once instead of under the cards.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HLInfoButton(content: info, accessibilityIdentifier: "settings.coach.info")
-            }
-        }
+        .hlPageActions([.info(info, identifier: "settings.coach.info")])
         // 6.6 — hydrate the Coach/AI privacy flags from the server on appear
-        // (server-first). Skipped in standalone (no store to reach).
+        // (server-first).
         .task {
-            if backend.hasServer, let store = appContainer?.aiCoachSettingsStore {
+            if let store = appContainer?.aiCoachSettingsStore {
                 await store.load()
             }
         }
@@ -131,30 +122,9 @@ struct SettingsCoachScreen: View {
                 .hlSheetPresentation(.form)
             }
         }
-        // R13 — `.alert` für eine destruktive Bestätigung ist verboten; die
-        // Leiter nach Schwere sieht für „Einzelobjekt löschen" den
-        // `confirmationDialog` vor.
-        .hlConfirmDestructive(
-            Text("Clear coach history?"),
-            isPresented: $showDeleteConfirmation,
-            // R19 — die Aussage lebt am Ort der Handlung und nennt ihren
-            // Geltungsbereich: gelöscht wird die lokale Fassung, nicht die
-            // serverseitig gehaltenen Unterhaltungen.
-            message: Text(
-                String(
-                    localized: "This clears the transcript on this iPhone. Conversations kept on your server stay — delete them under “Past conversations”."
-                )
-            ),
-            confirm: Text("Delete"),
-            cancel: Text("Cancel"),
-            onCancel: { showDeleteConfirmation = false },
-            action: {
-                appContainer?.coachConversationStore.reset()
-            }
-        )
     }
 
-    /// SET-V2-C — the on-device gate the toggle had on `SettingsAIScreen`
+    /// The on-device gate the toggle had on `SettingsAIScreen`
     /// (`displayedMode == .onDevice`), replicated semantics: a pending
     /// "Own key" intent displays as `.byoKey` there, so it must suppress
     /// the toggle here too.
@@ -164,17 +134,17 @@ struct SettingsCoachScreen: View {
         return container.aiMode == .onDevice
     }
 
-    /// SET-V2-C — the Mini-Coach on/off card (moved from `SettingsAIScreen`).
+    /// The Mini-Coach on/off card (moved from `SettingsAIScreen`).
     ///
-    /// R11 — war eine handgebaute Toggle-Zeile in derselben Datei, die daneben
+    /// War eine handgebaute Toggle-Zeile in derselben Datei, die daneben
     /// dreimal `HLSettingsToggleRow` benutzt. Jetzt überall dieselbe Geometrie.
     ///
-    /// 1.4 B4 — a card with one row has one heading. "Coach" stood over
+    /// A card with one row has one heading. "Coach" stood over
     /// "Coach aktivieren", "Rhythmus-Vorschläge" over a switch of the same
     /// name; on this screen every single-row card is now just its row.
     private var coachToggleCard: some View {
-        HLSettingsCard {
-            // R15 — der Pauschal-Schwanz („Kein medizinischer Rat.") ist eine
+        HLCard(layout: .rows) {
+            // Der Pauschal-Schwanz („Kein medizinischer Rat.") ist eine
             // von fünf Coach-Varianten desselben Satzes; sie reduzieren sich
             // auf die aktive Bestätigungszeile im Coach-Onboarding. Der
             // informative Vorderteil trägt weiter: er sagt, welche Betriebsart
@@ -188,25 +158,21 @@ struct SettingsCoachScreen: View {
         }
     }
 
-    /// SET-V2-C — rendered instead of the toggle card when the server-side
+    /// Rendered instead of the toggle card when the server-side
     /// `assistant.coach` kill-switch is OFF (moved from `SettingsAIScreen`).
-    /// #115 · 0.2 — the server's reason, one sentence (shared with the Coach sheet).
+    /// The server's reason, one sentence (shared with the Coach sheet).
     private var killSwitchText: String {
         let state = appContainer?.aiCapabilityGate.state(.coach)
             ?? AICapabilityState(available: false, reason: .operatorDisabled, onDeviceAllowed: false)
         return AskCoachSheet.coachRefusalCopy(AIRefusal.implied(by: state, for: .coach))
     }
 
-    /// 1.4 B2-c — the reason sits in the Coach card it replaces, not as a
+    /// The reason sits in the Coach card it replaces, not as a
     /// loose caption between cards.
     private var killSwitchCard: some View {
-        HLSettingsCard(
-            icon: "bubble.left.and.bubble.right",
-            title: "Coach"
-        ) {
+        HLCard("Coach") {
             Text(killSwitchText)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("settings.coach.killswitch")
         }
@@ -218,7 +184,7 @@ struct SettingsCoachScreen: View {
     /// cards. Only the parts this screen can show.
     private var info: HLInfoContent {
         var sections: [HLInfoContent.Section] = []
-        if backend.hasServer, appContainer.offersCoach {
+        if appContainer.offersCoach {
             sections.append(HLInfoContent.Section(
                 title: String(localized: "Cadence suggestions"),
                 paragraphs: [String(localized: "settings.coach.info.cadence")]
@@ -235,12 +201,11 @@ struct SettingsCoachScreen: View {
         )
     }
 
-    /// SET-V2-C — server-parity v1.16 coach self-context editor
+    /// Server-parity v1.16 coach self-context editor
     /// (`/api/coach/about-me`), moved from `SettingsAIScreen`. Server-backed
-    /// (works for every arm that can reach the server Coach), hence the
-    /// `backend.hasServer` gate at the call-site.
+    /// (works for every arm that can reach the server Coach).
     private var aboutMeCard: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "coachContext.title", presents: .push) {
                 SettingsAboutMeScreen()
             }
@@ -248,7 +213,7 @@ struct SettingsCoachScreen: View {
         }
     }
 
-    /// W-COACH-CADENCE (#30) — opt-in for the proactive cadence suggestions, with
+    /// Opt-in for the proactive cadence suggestions, with
     /// concrete copy (operator mandate: explain WHAT + HOW, plainly). The
     /// description states what cadence suggestions are (the coach noticing your
     /// logging rhythm and offering to set a reminder), that they're optional and
@@ -256,13 +221,18 @@ struct SettingsCoachScreen: View {
     /// tap. Uses the shared `HLSettingsToggleRow` so the row geometry matches every
     /// other settings toggle.
     private func cadenceSuggestionsCard(store: AICoachSettingsStore) -> some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsToggleRow(
                 title: "Cadence suggestions",
                 description: "settings.coach.cadenceSuggestions.description",
                 isOn: Binding(
                     get: { store.reminderSuggestionsEnabled ?? true },
-                    set: { newValue in Task { await store.setReminderSuggestionsEnabled(newValue) } }
+                    set: { newValue in
+                        Task {
+                            await store.setReminderSuggestionsEnabled(newValue)
+                            reportWrite(stuck: store.reminderSuggestionsEnabled == newValue, error: store.error)
+                        }
+                    }
                 ),
                 isBusy: store.isReminderWriteInFlight,
                 isEnabled: store.reminderSuggestionsEnabled != nil && !store.isReminderWriteInFlight,
@@ -271,19 +241,30 @@ struct SettingsCoachScreen: View {
         }
     }
 
-    /// **Build 9 (9.2)** — the server-wide coach availability switch. UI semantics
+    /// The server-wide coach availability switch. UI semantics
     /// are inverted from the server flag: "Coach aktivieren" ON = `!disableCoach`.
     /// Flipping it PATCHes `disable-coach` and optimistically flips the `coach`
     /// module surface. Only rendered once `coachDisabled` has resolved from the
     /// server (guard 1 — never write the iOS-default up).
+    /// Shows the store's failure when a write did not stick and clears the
+    /// banner once one did.
+    private func reportWrite(stuck: Bool, error: HLError?) {
+        writeError = stuck ? nil : error
+    }
+
     private func serverCoachToggleCard(store: AICoachSettingsStore) -> some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsToggleRow(
                 title: "settings.coach.enable.title",
                 description: "settings.coach.enable.description",
                 isOn: Binding(
                     get: { !(store.coachDisabled ?? false) },
-                    set: { newValue in Task { await store.setCoachDisabled(!newValue) } }
+                    set: { newValue in
+                        Task {
+                            await store.setCoachDisabled(!newValue)
+                            reportWrite(stuck: store.coachDisabled == !newValue, error: store.error)
+                        }
+                    }
                 ),
                 isBusy: store.isCoachWriteInFlight,
                 isEnabled: store.coachDisabled != nil && !store.isCoachWriteInFlight,
@@ -292,12 +273,12 @@ struct SettingsCoachScreen: View {
         }
     }
 
-    /// COACH-COIN (v0.5.5.7) — reset affordance for the Hero-card dismiss
-    /// flag. 1.4 B2-c: the card shows only while the Hero is dismissed (it
+    /// Reset affordance for the Hero-card dismiss
+    /// flag. The card shows only while the Hero is dismissed (it
     /// used to sit there greyed out); the row says it ("show again"), the
     /// footer and the word "hero" are gone.
     private var heroVisibilityCard: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(
                 icon: "arrow.uturn.backward.circle",
                 title: "settings.coach.heroCard.restore",
@@ -309,12 +290,12 @@ struct SettingsCoachScreen: View {
         }
     }
 
-    /// v0.14.2 (FW5-C) — entry point to the server-backed coach memory surface.
+    /// Entry point to the server-backed coach memory surface.
     /// Lists the facts the assistant has extracted about the user, with
     /// swipe-to-forget + "Forget everything". Server-only; the sub-screen degrades
-    /// to the calm placeholder in standalone or when the Coach surface is disabled.
+    /// to the calm placeholder when the Coach surface is disabled.
     private var memoryCard: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "What the assistant knows", presents: .push) {
                 CoachMemoryScreen()
             }
@@ -326,11 +307,11 @@ struct SettingsCoachScreen: View {
     /// conversation-history surface. Lists the conversations the server retains and
     /// re-hydrates a selected one's full turns, so the coach's continuity is
     /// visible across launches / devices (matching web). Server-only; the
-    /// sub-screen degrades to the calm placeholder in standalone or when the Coach
-    /// surface is disabled. Distinct from the destructive local "Clear history"
+    /// sub-screen degrades to the calm placeholder when the Coach surface is
+    /// disabled. Distinct from the destructive local "Clear history"
     /// below (which wipes the on-device transcript only).
     private var conversationsCard: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "Past conversations", presents: .push) {
                 CoachConversationsScreen()
             }
@@ -360,19 +341,23 @@ struct SettingsCoachScreen: View {
     /// `persistMessage` schreibt in **allen** Betriebsarten zusätzlich die lokale
     /// Zeile — deshalb löscht „Verlauf löschen" (`reset()` →
     /// `persistence.clear(userID:)`) ausschließlich die Fassung auf diesem
-    /// iPhone. Der Bestätigungsdialog sagt das jetzt am Ort der Handlung (R19).
+    /// iPhone. Der Bestätigungsdialog sagt das jetzt am Ort der Handlung.
     private var historyCard: some View {
-        // 1.4 B2-c — where conversations are kept per mode is in the (i);
-        // the confirmation dialog still names what the wipe reaches (R19).
-        HLSettingsCard {
-            HLSettingsActionRow(
-                icon: "trash",
-                title: "Clear history",
-                role: .destructive,
-                presents: .confirm
-            ) {
-                showDeleteConfirmation = true
-            }
+        // Where conversations are kept per mode is in the (i);
+        // the confirmation dialog still names what the wipe reaches.
+        HLCard(layout: .rows) {
+            HLDeleteButton(
+                "Clear history",
+                form: .row,
+                action: .confirmed(
+                    title: "Clear coach history?",
+                    // The scope stands at the action: the local transcript
+                    // goes, the conversations kept on the server stay.
+                    message: "This clears the transcript on this iPhone. Conversations kept on your server stay — delete them under “Past conversations”."
+                ) {
+                    appContainer?.coachConversationStore.reset()
+                }
+            )
             .accessibilityIdentifier("settings.coach.clearHistoryRow")
         }
     }
@@ -408,15 +393,22 @@ struct SettingsCoachScreen: View {
 /// server rejection.
 private struct CoachDocumentsAutoAICard: View {
     let store: AICoachSettingsStore
+    /// `stuck` is whether the new value held; `error` is the store's failure.
+    let onWriteFinished: (_ stuck: Bool, _ error: HLError?) -> Void
 
     var body: some View {
-        HLSettingsCard {
+        HLCard(layout: .rows) {
             HLSettingsToggleRow(
                 title: "settings.coach.docsAutoAi.toggle",
                 description: "settings.coach.docsAutoAi.description",
                 isOn: Binding(
                     get: { store.documentsAutoAiRead },
-                    set: { newValue in Task { await store.setDocumentsAutoAiRead(newValue) } }
+                    set: { newValue in
+                        Task {
+                            await store.setDocumentsAutoAiRead(newValue)
+                            onWriteFinished(store.documentsAutoAiRead == newValue, store.error)
+                        }
+                    }
                 ),
                 isBusy: store.isDocumentsWriteInFlight,
                 isEnabled: store.didLoad && !store.isDocumentsWriteInFlight,
@@ -432,14 +424,15 @@ private struct CoachDocumentsAutoAICard: View {
 /// the Appearance / Layout rows.
 private struct CoachInsightsPrivacyCard: View {
     let store: AICoachSettingsStore
+    let onWriteFinished: (_ stuck: Bool, _ error: HLError?) -> Void
 
     var body: some View {
-        HLSettingsCard {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.md) {
-                    Text("settings.coach.insightsPrivacy.pickerLabel")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
+                // The picker moves under its title at the accessibility
+                // sizes; beside it „Aggregiert" broke into „Ag / gre· / gie".
+                HLAdaptiveStack(spacing: HLSpace.md) { _ in
+                    HLRowTitle("settings.coach.insightsPrivacy.pickerLabel")
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if store.isInsightsWriteInFlight {
@@ -451,7 +444,12 @@ private struct CoachInsightsPrivacyCard: View {
                         String(localized: "settings.coach.insightsPrivacy.pickerLabel"),
                         selection: Binding(
                             get: { store.insightsPrivacyMode },
-                            set: { newValue in Task { await store.setInsightsPrivacyMode(newValue) } }
+                            set: { newValue in
+                                Task {
+                                    await store.setInsightsPrivacyMode(newValue)
+                                    onWriteFinished(store.insightsPrivacyMode == newValue, store.error)
+                                }
+                            }
                         )
                     ) {
                         ForEach(InsightsPrivacyMode.allCases) { mode in
@@ -464,8 +462,7 @@ private struct CoachInsightsPrivacyCard: View {
                     .accessibilityIdentifier("settings.coach.insightsPrivacyPicker")
                 }
                 Text("settings.coach.insightsPrivacy.description")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

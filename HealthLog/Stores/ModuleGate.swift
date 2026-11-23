@@ -39,7 +39,7 @@ public final class ModuleGate {
     @ObservationIgnored private var cachedDisabledKinds: Set<MetricKind>?
     @ObservationIgnored private var cachedDisabledKindsModules: [String: Bool]?
 
-    /// **Audit A-7 — why each module is (not) available** (`moduleAccess`,
+    /// **Why each module is (not) available** (`moduleAccess`,
     /// server v1.38.15). `nil` until the first `/api/auth/me` load resolves it,
     /// AND on every server older than v1.38.15, which omits the field. `nil`
     /// means "no reason known" — every surface then behaves exactly as it did
@@ -47,7 +47,7 @@ public final class ModuleGate {
     /// explains them.
     public private(set) var moduleAccess: [String: ModuleAccessState]?
 
-    /// #126 P2 — `features` from the same `/api/auth/me` load: what this
+    /// `features` from the same `/api/auth/me` load: what this
     /// server understands (`trackIntake`, `biomarkerMerge`, the X4 hourly
     /// flags). `nil` before the
     /// first load, on an older server and after logout.
@@ -55,12 +55,12 @@ public final class ModuleGate {
 
     private let repo: ModuleGateRepository?
 
-    /// **#114 / #115 · 0.2** — the AI capability gate fed from the same
+    /// The AI capability gate fed from the same
     /// `/api/auth/me` response this gate already loads (no extra request).
     /// Wired by the composition root; `nil` in unit tests that do not care.
     @ObservationIgnored public weak var aiCapabilityGate: AICapabilityGate?
 
-    /// **X4 (1.3, #138)** — receives the `features` block of every
+    /// Receives the `features` block of every
     /// successful load (`nil` from an older server). The composition root
     /// points it at ``KnownServerVersion``; `nil` in unit tests.
     @ObservationIgnored public var serverFeaturesSink: (@MainActor (ServerFeatures?) -> Void)?
@@ -102,7 +102,7 @@ public final class ModuleGate {
         return modules[wireKey] ?? true
     }
 
-    /// **Audit A-7 — the server's verdict on this module, if it sent one.**
+    /// **The server's verdict on this module, if it sent one.**
     ///
     /// `nil` when the server is older than v1.38.15, when the map has not
     /// loaded yet, or when this key is simply not in the map. `nil` is not a
@@ -112,7 +112,7 @@ public final class ModuleGate {
         accessState(wireKey: key.wireKey)
     }
 
-    /// **Audit A-7** — string-key overload for call sites holding a raw wire
+    /// String-key overload for call sites holding a raw wire
     /// key (the 403 `meta.module` mirror, a future module with no `ModuleKey`).
     public func accessState(wireKey: String) -> ModuleAccessState? {
         moduleAccess?[wireKey]
@@ -147,7 +147,7 @@ public final class ModuleGate {
         return state
     }
 
-    /// **Audit A-7 — the localized sentence saying why this module is off**, or
+    /// **The localized sentence saying why this module is off**, or
     /// `nil` when there is nothing honest to say.
     ///
     /// `nil` when the module is on, when the server sent no `moduleAccess` map,
@@ -180,7 +180,7 @@ public final class ModuleGate {
     /// the resolved-per-user map. Passing `nil` (server omitted the field)
     /// leaves the "all on" default in effect.
     ///
-    /// **Audit A-7** — the access map travels with the booleans it explains, so a
+    /// The access map travels with the booleans it explains, so a
     /// caller can never leave a stale reason attached to a fresh map.
     public func apply(modules: [String: Bool]?, moduleAccess: [String: ModuleAccessState]? = nil) {
         self.modules = modules
@@ -193,7 +193,7 @@ public final class ModuleGate {
     /// disappears without waiting on the next `/api/auth/me` refresh. Mirrors
     /// the assistant-disabled convenience hop (F-1).
     ///
-    /// **Audit A-7** — the 403 envelope carries no `moduleAccess` state, so the
+    /// The 403 envelope carries no `moduleAccess` state, so the
     /// key's stale entry is DROPPED rather than guessed at. Until the next
     /// `/api/auth/me` refresh the surface behaves exactly as it did before A-7
     /// (hidden, unexplained); an invented "you switched this off" next to an
@@ -205,14 +205,14 @@ public final class ModuleGate {
         moduleAccess?[wireKey] = nil
     }
 
-    /// **Build 9 (9.2)** — optimistically mirror a single module's availability
+    /// Optimistically mirror a single module's availability
     /// after a local toggle (the disable-coach switch). Local-only: the server
     /// write already happened on the owning route, and the resolved `/me` map
     /// already ANDs the flag; this flips the key on the same tick so the coach
     /// surfaces appear/disappear without waiting on the next refresh. The
     /// symmetric sibling of ``applyDisabled(wireKey:)`` (which only sets `false`).
     ///
-    /// **Audit A-7** — this IS the person's own switch, so the access map is
+    /// This IS the person's own switch, so the access map is
     /// mirrored along with the boolean: `enabled` / `disabled`, the only two
     /// states a local toggle can produce. The invariant therefore survives the
     /// optimistic tick, and the switchboard row keeps offering its toggle.
@@ -230,20 +230,22 @@ public final class ModuleGate {
     /// hides a valid surface. The server is the final gate (403 on a disabled
     /// route).
     ///
-    /// **Audit A-7** — reads the booleans and their `moduleAccess` reasons in
+    /// Reads the booleans and their `moduleAccess` reasons in
     /// the same hop, because `GET /api/auth/me` carries both.
     public func load() async {
         guard let repo else { return }
         if let resolved = try? await repo.fetchModuleGateState() {
             modules = resolved.modules
             moduleAccess = resolved.moduleAccess
-            // #115 · 0.2 — `ai` rides the same response. Absent → legacy.
+            // `ai` rides the same response. Absent → legacy.
             aiCapabilityGate?.apply(resolved.ai)
-            // #126 P2 — and so does `features` (what the server understands),
+            // And so does `features` (what the server understands),
             // one reader for the model layer and the HealthKit upload flags.
             serverFeatures = resolved.features
             featureMirror.store(resolved.features)
             serverFeaturesSink?(resolved.features)
+            // #191: the account's snooze span, for every "Later".
+            MedicationSnooze.record(serverMinutes: resolved.medicationSnoozeMinutes)
         }
     }
 
@@ -258,16 +260,24 @@ public final class ModuleGate {
     /// `422 modules.invalid`, so those are rejected before any network hop.
     @discardableResult
     public func setEnabled(_ key: ModuleKey, enabled: Bool) async -> Bool {
-        guard let repo else { return false }
         guard key.isUserToggleable else { return false }
+        return await setEnabled(wireKey: key.wireKey, enabled: enabled)
+    }
+
+    /// The same switch for a module this build names only by its wire key
+    /// (the opt-in `timeline`, switched on from its own page).
+    @discardableResult
+    public func setEnabled(wireKey: String, enabled: Bool) async -> Bool {
+        guard let repo else { return false }
+        guard !ModuleKey.delegated.contains(where: { $0.wireKey == wireKey }) else { return false }
         let previous = modules
         let previousAccess = moduleAccess
-        // Audit A-7 — mirrors the boolean AND the reason (this is the person's
+        // Mirrors the boolean AND the reason (this is the person's
         // own switch, so `.enabled` / `.disabled` is the whole vocabulary).
-        applyModuleOptimistic(wireKey: key.wireKey, enabled: enabled)
+        applyModuleOptimistic(wireKey: wireKey, enabled: enabled)
         do {
             // Per-key body — exactly the one key the user toggled.
-            let confirmed = try await repo.updateModules(changes: [key.wireKey: enabled])
+            let confirmed = try await repo.updateModules(changes: [wireKey: enabled])
             modules = confirmed
             // **Audit A-7 (fix round 1) — the echo replaces every boolean, so it
             // can invalidate a SIBLING key's reason.** The optimistic mirror
@@ -306,7 +316,7 @@ public final class ModuleGate {
     public func clearOnLogout() {
         modules = nil
         moduleAccess = nil
-        // #115 · 0.2 — the `ai` block rides the same `/api/auth/me` load, so it
+        // The `ai` block rides the same `/api/auth/me` load, so it
         // is dropped with it; the next account loads its own.
         aiCapabilityGate?.clearOnLogout()
         serverFeatures = nil

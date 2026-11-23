@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// L10N-5 — locale-aware **display** number formatting. Locks the behaviour the
+/// Locale-aware **display** number formatting. Locks the behaviour the
 /// locale-less `String(format: "%.1f", …)` idiom got wrong: a German user must
 /// see a decimal **comma** ("7,5 mg"), not a point, while precision stays
 /// exactly as `%.Nf` produced it.

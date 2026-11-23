@@ -1,6 +1,6 @@
 import Foundation
 
-// W1 (1.3.0) — `runOnce` and the pass body, moved out of
+// `runOnce` and the pass body, moved out of
 // `OutboxReplayService.swift` for `file_length` / `type_body_length` discipline
 // when the watchdog (`+Watchdog`) wrapped them. The pass itself is unchanged
 // apart from the three W1 marks: the guard is taken and released through
@@ -11,17 +11,48 @@ extension OutboxReplayService {
     /// One pass over the outbox. Re-entrant-safe via the `isRunning` guard,
     /// which the watchdog (`+Watchdog`) releases when a pass hangs.
     public func runOnce() async {
-        guard let generation = beginRun() else { return }
+        // An outside trigger: the self-armed passes may start counting again.
+        rerun.streak = 0
+        await runGuardedPass()
+    }
+
+    /// The pass behind every trigger, including the one the service arms for
+    /// itself (`+Rerun`).
+    func runGuardedPass() async {
+        guard let generation = beginRun() else {
+            // The running pass began with what was true then: the account
+            // signed in, the rows queued. What this trigger had to add is
+            // caught up on when that pass ends.
+            rerun.triggerTurnedAway = true
+            return
+        }
+        // A pass that begins now is later than every trigger so far.
+        rerun.triggerTurnedAway = false
+        rerun.failedThisPass = false
         let startedAt = clock()
-        defer { endRun(generation, startedAt: startedAt) }
         await requeueOverBudgetRowsOnce()
-        await runPass(generation)
+        // #6 — no pass without a session (every row would only meet a 401),
+        // and an access token past its expiry is renewed first: the
+        // owner-leased HealthKit routes never refresh on a 401 of their own.
+        if await sessionGate?.admitsPass() ?? true {
+            await runPass(generation)
+        } else {
+            HLLog.outbox.info("Outbox-Replay ohne Sitzung — Durchgang ausgelassen")
+        }
+        let ownedTheGuard = isCurrentRun(generation)
+        endRun(generation, startedAt: startedAt)
+        // One pass for all the triggers this one turned away. It is a pass
+        // like any other, so it is followed by another only when a trigger of
+        // its own was turned away: no pass arms the next by itself.
+        guard ownedTheGuard, rerun.triggerTurnedAway else { return }
+        await runGuardedPass()
     }
 
     private func runPass(_ generation: UInt64) async {
-        // W1 — `runPhase` names the step in the watchdog's log lines.
+        // `runPhase` names the step in the watchdog's log lines.
         runPhase = "snapshot"
         let snapshot = await outbox.snapshot
+        await reportUnreadableRows()
         guard !snapshot.isEmpty else {
             runPhase = "transfer unconfirmed HealthKit rows"
             return await transferUnconfirmedHealthKitRows(now: clock())
@@ -29,24 +60,25 @@ extension OutboxReplayService {
 
         HLLog.outbox.info("Outbox-Replay startet (\(snapshot.count, privacy: .public) Operations)")
 
-        // v0.13 WS — resolve the currently signed-in user ONCE per pass so a
-        // foreign-owned row is never replayed under the wrong bearer token.
-        let currentUser = currentUserProvider()
         // audit-v0162 H1 (Opt 3) — is the server confirmed-reachable but degraded?
         runPhase = "server health probe"
         let degraded = await serverHealthDegraded?() ?? false
         let now = clock()
         idRemap.removeAll()
-        // audit-v0162 M2 — entity ids whose earlier op failed retriably THIS
+        // Entity ids whose earlier op failed retriably THIS
         // pass. A later update/delete on the same entity is SKIPPED (not
         // attempted → never 404-dropped) so a dependent write can never fire
         // before its create lands. Keyed on `clientEntityId`, which a create and
         // its dependents all share while the create is still offline.
         var blockedEntities: Set<String> = []
 
-        // W1 — a pass the watchdog superseded sends nothing more.
+        // A pass the watchdog superseded sends nothing more.
         for op in snapshot where isCurrentRun(generation) {
-            // Phase 07 — quarantine gate, ahead of every other decision. Two
+            // #2 — the signed-in user is read again for every row: a sign-out
+            // and another sign-in can land while the pass works through a
+            // backlog or sits out a 429 pause.
+            let currentUser = currentUserProvider()
+            // Quarantine gate, ahead of every other decision. Two
             // on-disk shapes cannot be attributed by this build: a row with no
             // recorded owner while a named account is signed in, and a row whose
             // `kindRaw` this build cannot name. Both are health writes whose
@@ -65,7 +97,7 @@ extension OutboxReplayService {
                 continue
             }
 
-            // v0.13 WS — cross-user binding gate. A row carries the user-id that
+            // Cross-user binding gate. A row carries the user-id that
             // owned it at enqueue. On a shared device, User A's queued write can
             // survive A's sign-out (the `.userInitiated`/`.tokenExpired` paths
             // KEEP the outbox + cipher key), so when User B signs in the replay
@@ -84,7 +116,7 @@ extension OutboxReplayService {
             }
 
             // Rows this pass does not send (`holdsThisPass`, in this order):
-            // Audit B-2 — a row the server already has only owes its local
+            // A row the server already has only owes its local
             // delete, finished ahead of the hold gate on purpose (a delivered
             // row is not failing and must never age into the DLQ); C4 — a row
             // unconfirmed past the server's idempotency window is dead-lettered
@@ -94,24 +126,26 @@ extension OutboxReplayService {
             // One gate call, so the loop stays inside its complexity budget.
             if await holdsThisPass(op, now: now) { continue }
 
-            // audit-v0162 M2 — dependent-op guard: an earlier op for this entity
+            // Dependent-op guard: an earlier op for this entity
             // failed retriably this pass, so skip its dependents entirely.
             if let key = op.clientEntityId, blockedEntities.contains(key) { continue }
 
             do {
                 runPhase = "dispatch \(op.kind.rawValue)"
-                let createdServerId = try await pausingOnRateLimit(op, passStartedAt: now) { try await dispatch(op) }
+                let createdServerId = try await pausingOnRateLimit(op, passStartedAt: now) {
+                    try await dispatchBoundToOwner(op)
+                }
                 try await onReplaySuccess(op, createdServerId: createdServerId, generation: generation)
             } catch let error where Self.isInterruption(error) {
-                return onInterrupted(op) // C4 — "stopped", not "no": row untouched, the pass ends.
+                return onInterrupted(op) // "stopped", not "no": row untouched, the pass ends.
             } catch where !isCurrentRun(generation) {
-                return onSuperseded(op) // 1.4 (S5) — the pass that replaced this one owns the row.
+                return onSuperseded(op) // The pass that replaced this one owns the row.
             } catch let err as HLError where err.shouldPersistToOutbox {
-                // audit-v0162 M2 — block dependents of this entity for the pass.
+                // Block dependents of this entity for the pass.
                 if let key = op.clientEntityId { blockedEntities.insert(key) }
                 await onRetriableFailure(op, err: err, degraded: degraded, now: now)
             } catch let err as DecodingError {
-                // Audit B-3 — our own stored payload no longer decodes: retained.
+                // Our own stored payload no longer decodes: retained.
                 await onUndecodablePayload(op, error: err, now: now)
             } catch {
                 await blockedEntities.formUnion(holdingDependents(op, afterNonRetriable: error, now: now))
@@ -119,5 +153,6 @@ extension OutboxReplayService {
         }
 
         await finishPass(generation, now: now)
+        armRerunIfWaiting(after: snapshot, currentUser: currentUserProvider(), generation: generation)
     }
 }

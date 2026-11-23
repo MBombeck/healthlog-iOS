@@ -6,7 +6,6 @@ import SwiftUI
 /// from the episode's ``EpisodeDocumentsCard``.
 struct DocumentLinkPickerSheet: View {
     @Environment(\.appContainer) private var container
-    @Environment(\.dismiss) private var dismiss
 
     let episodeId: String
     let onChange: () -> Void
@@ -18,65 +17,58 @@ struct DocumentLinkPickerSheet: View {
     @State private var searchDebounce: Task<Void, Never>?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold("documents.linkPicker.title", action: .done()) {
             List {
-                if isLoading {
-                    HStack { Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                } else if documents.isEmpty {
-                    HLEmptyState(
-                        icon: "doc.text.magnifyingglass",
-                        title: "documents.linkPicker.empty"
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(documents) { document in
-                        row(document)
+                Section {
+                    if isLoading {
+                        HStack { Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    } else if documents.isEmpty {
+                        HLEmptyState(
+                            icon: "doc.text.magnifyingglass",
+                            title: "documents.linkPicker.empty"
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    } else {
+                        ForEach(documents) { document in
+                            row(document)
+                        }
                     }
                 }
+                .hlFormRowSurface()
             }
-            .navigationTitle(Text("documents.linkPicker.title"))
-            .navigationBarTitleDisplayMode(.inline)
+            .hlPageMargins()
             .searchable(text: $query, prompt: Text("documents.linkPicker.searchPlaceholder"))
             .onChange(of: query) { _, newValue in debounce(newValue) }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("documents.action.done") { dismiss() }
-                }
-            }
             .task { await reload() }
         }
     }
 
+    /// The document as the shared row: symbol, title, date; on the right the
+    /// mark of a linked document, or the spinner while it is being toggled.
     private func row(_ document: InboundDocument) -> some View {
         let isLinked = document.conditionLinks.contains { $0.episodeId == episodeId }
-        return Button {
+        return HLRowButton {
             Task { await toggle(document, isLinked: isLinked) }
         } label: {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: DocumentKindMeta.icon(document.kind))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(document.resolvedTitle ?? String(localized: "documents.card.untitled"))
-                        .foregroundStyle(HLText.primary)
-                        .lineLimit(1)
-                    Text(DocumentFormat.mediumDate(document.displayDate))
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                }
-                Spacer()
+            HLRowLayout(
+                title: Text(verbatim: document.resolvedTitle ?? String(localized: "documents.card.untitled")),
+                subtitle: Text(verbatim: DocumentFormat.mediumDate(document.displayDate))
+            ) {
                 if busyIds.contains(document.id) {
                     ProgressView().controlSize(.small)
                 } else if isLinked {
-                    Image(systemName: "checkmark").foregroundStyle(HLAccent.userBrandTint)
+                    Image(systemName: "checkmark")
+                        .font(.hlSubhead.weight(.semibold))
+                        .foregroundStyle(HLAccent.userBrandTint)
                 }
+            } leading: {
+                HLRowGlyph(symbol: DocumentKindMeta.icon(document.kind))
             }
         }
-        .buttonStyle(.plain)
         .accessibilityAddTraits(isLinked ? [.isSelected] : [])
     }
 

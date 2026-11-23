@@ -1,19 +1,20 @@
 import Foundation
 
-/// **Local Doctor Report — Spec Builder (T-7).**
+/// **Local Doctor Report — Spec Builder.**
 ///
 /// Captures a `DoctorReportSpec` from a snapshot of read-only domain
-/// data. The builder is a `MainActor`-bound type because the source
-/// stores (`MeasurementsStore`, `MedicationsStore`, `MoodStore`,
-/// `SettingsStore`) are themselves `@MainActor @Observable`. The
-/// resulting `DoctorReportSpec` is fully `Sendable` and can be passed
-/// to the renderer-actor without isolation hops.
+/// data. The source stores (`MeasurementsStore`, `MedicationsStore`,
+/// `MoodStore`, `SettingsStore`) are `@MainActor @Observable`, so the
+/// `Snapshot` is harvested there; the build itself is a pure function of that
+/// `Sendable` snapshot and is not bound to any actor (D5 #10), so the FHIR
+/// fallback can run it off the main actor. The resulting `DoctorReportSpec`
+/// is fully `Sendable` and can be passed to the renderer-actor without
+/// isolation hops.
 ///
 /// Tests construct the builder with a *snapshot* (`Snapshot`) instead
 /// of the live stores — that snapshot is the de-facto contract between
 /// the read-path and the PDF, and is the unit that
 /// `DoctorReportLocalSpecTests` exercises.
-@MainActor
 public enum DoctorReportSpecBuilder {
     /// Read-only snapshot of every store the builder needs. The view
     /// layer harvests this on the MainActor (where the stores already
@@ -21,36 +22,36 @@ public enum DoctorReportSpecBuilder {
     /// store access is required to render the PDF.
     public struct Snapshot: Sendable {
         public let patientName: String
-        /// v0.10.0 — extended patient-identity fields harvested from the live
+        /// Extended patient-identity fields harvested from the live
         /// `SettingsStore.profile`. Optional; the cover omits any that are
         /// `nil`/empty. `insuranceNumber` (KVNR) is sensitive PII — held only
         /// in-memory on the spec, never logged.
         public let fullName: String?
         public let insurerName: String?
         public let insuranceNumber: String?
-        /// v0.11.0 — insurer IKNR (9-digit). Feeds the FHIR Coverage payor.
+        /// Insurer IKNR (9-digit). Feeds the FHIR Coverage payor.
         /// Identifying PII — never logged.
         public let insurerIkNumber: String?
         public let appVersion: String
         public let measurements: [Measurement]
         public let medications: [Medication]
-        /// #115 · 1.2 — the server's per-medication adherence
+        /// The server's per-medication adherence
         /// (`GET /api/medications/compliance`), read when the report is
-        /// generated. `nil` = the server could not be asked (offline,
-        /// standalone); the report then says adherence is unavailable.
+        /// generated. `nil` = the server could not be asked (offline);
+        /// the report then says adherence is unavailable.
         public let serverCompliance: [MedicationComplianceSummaryEntry]?
         public let moodEntries: [MoodEntry]
-        /// #126 P2 — the same read with its `meta`: the account figure and the
+        /// The same read with its `meta`: the account figure and the
         /// report window (`?days=` = the report period). `nil` = not asked or
         /// an older answer; the adherence block then stays on `compliance30`.
         public let serverComplianceReport: MedicationComplianceReport?
-        /// #119 — the server's daily pulse over the report window (series-batch,
+        /// The server's daily pulse over the report window (series-batch,
         /// v1.40.1 rule). `nil` = unavailable; the pulse row then applies the
         /// same rule to the readings (``DoctorReportPulse``).
         public let serverPulseDays: [DailyPulseValue]?
-        /// #115 B5 — the account's glucose unit the PDF prints glucose in.
+        /// The account's glucose unit the PDF prints glucose in.
         public let glucoseUnit: GlucoseUnit
-        /// #115 P2 — the account's unit system + weight unit the PDF prints in.
+        /// The account's unit system + weight unit the PDF prints in.
         public let accountUnits: UnitPreferences
 
         public init(
@@ -172,7 +173,7 @@ public enum DoctorReportSpecBuilder {
     /// sample. Blood-pressure carries `secondaryMean` for the diastolic
     /// component; every other metric leaves it `nil`.
     ///
-    /// #119 — pulse follows the server's v1.40.1 rule (``DoctorReportPulse``),
+    /// Pulse follows the server's v1.40.1 rule (``DoctorReportPulse``),
     /// never a plain mean of the readings.
     static func makeVitalsSummary(
         measurements: [Measurement],
@@ -183,7 +184,7 @@ public enum DoctorReportSpecBuilder {
         guard !grouped.isEmpty else { return nil }
 
         let rows: [DoctorReportSpec.VitalsSummary.Row] = MetricKind.allCases.compactMap { kind in
-            // Audit B-4 — `.unknown` is a bucket, not a kind: two rows on it may
+            // `.unknown` is a bucket, not a kind: two rows on it may
             // carry two different server types this build cannot name, so a
             // mean/median/min/max across them is a figure about nothing. It has
             // no business in the one export a clinician reads.
@@ -240,7 +241,7 @@ public enum DoctorReportSpecBuilder {
         let grouped: [MetricKind: [Measurement]] = Dictionary(grouping: measurements, by: \.kind)
         guard !grouped.isEmpty else { return nil }
         let series: [DoctorReportSpec.ChartsBlock.Series] = MetricKind.allCases.compactMap { kind in
-            // Audit B-4 — same reason as the vitals summary: an axis implies a
+            // Same reason as the vitals summary: an axis implies a
             // shared unit and scale the sentinel cannot promise.
             guard !kind.isUnknown else { return nil }
             guard let bucket = grouped[kind], !bucket.isEmpty else { return nil }
@@ -294,7 +295,7 @@ public enum DoctorReportSpecBuilder {
 
     // MARK: - Adherence
 
-    /// #115 · 1.2 — one row per active, scheduled (non-PRN) medication with
+    /// One row per active, scheduled (non-PRN) medication with
     /// the server's `compliance30` verbatim. Returns `nil` when there is no
     /// active medication to report on. With no server answer the block is
     /// `.unavailable` and carries no rows — the drawer says so.
@@ -306,7 +307,7 @@ public enum DoctorReportSpecBuilder {
     ) -> DoctorReportSpec.AdherenceBlock? {
         let active = medications.filter(\.active)
         guard !active.isEmpty else { return nil }
-        // #126 P2 — the report's own window when the server answered for it,
+        // The report's own window when the server answered for it,
         // else `compliance30` as before (the notes then say so).
         let periodWindow = DoctorReportAdherenceWindow(report: report, periodDays: periodDays, medications: active)
         let windowDays = periodWindow?.days ?? 30
@@ -344,7 +345,7 @@ public enum DoctorReportSpecBuilder {
     /// Sparkline samples (score over time) + the three most common tags
     /// in the window. Skips entirely when the window has no entries.
     static func makeMoodBlock(entries: [MoodEntry]) -> DoctorReportSpec.MoodBlock? {
-        // **Audit B-4 — the clinician's export plots scores and states an
+        // **The clinician's export plots scores and states an
         // average.** An entry whose level this build cannot name has neither, so
         // it is not a point on the sparkline and not a term in the mean. A
         // window holding nothing but such entries has no mood block at all —

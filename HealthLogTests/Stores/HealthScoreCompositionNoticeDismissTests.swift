@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#115 B6 — the composition note can be put away.**
+/// **The composition note can be put away.**
 ///
 /// The server raises `healthScore.compositionNotice` when a pillar joins or
 /// leaves the score and takes its dismissal on `POST /api/daily/digest/dismiss`

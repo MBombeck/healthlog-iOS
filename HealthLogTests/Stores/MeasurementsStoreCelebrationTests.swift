@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.5.6 RECONCILE-CELEBRATE — `MeasurementsStore` personal-record
+/// `MeasurementsStore` personal-record
 /// detection contract.
 ///
 /// Pins the pure detection helper (`makeCelebrationEvent`) without

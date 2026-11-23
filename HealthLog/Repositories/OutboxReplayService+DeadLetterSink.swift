@@ -10,7 +10,7 @@ import Foundation
 /// `internal` rather than `private` for exactly this file, mirroring the
 /// `measurementsRepo` / `illnessRepo` seams the dispatch extensions already use.
 ///
-/// **Phase 09 / plan 09-05 — the ordering this file exists to make true.**
+/// **The ordering this file exists to make true.**
 /// `runOnce` is reachable from three production routes, and only one of them is
 /// the bootstrap task that attaches the sink:
 ///
@@ -26,7 +26,7 @@ import Foundation
 /// flagged on disk by the same pass, so no later pass ever reports them "newly"
 /// dead again, and `SyncStateStore` went on showing a drained success that never
 /// happened. The count is now retained until a sink exists.
-/// **Audit B-3 — one write the replay gave up on, in the vocabulary a surface
+/// **One write the replay gave up on, in the vocabulary a surface
 /// can render.** Before this existed, a non-retriable reply deleted the row with
 /// nothing but a log line: the dead-letter lane was counted and visible, the
 /// immediate discard was not, and a validation change on the server (422) or a
@@ -39,7 +39,7 @@ import Foundation
 public struct OutboxDiscardNotice: Sendable, Equatable {
     /// Why the replay stopped carrying this write.
     public enum Reason: String, Sendable, Equatable {
-        /// The server refused it permanently (400/404/409/422 …). C4: retained
+        /// The server refused it permanently (400/404/409/422 …). Retained
         /// as a dead-letter, removed only when that loses nothing (a delete).
         case serverRejected
         /// v1.42 — `422 medication.intake.notTracked`: the dose belongs to a
@@ -47,13 +47,15 @@ public struct OutboxDiscardNotice: Sendable, Equatable {
         /// as a dead-letter like every other refusal of a create.
         case intakeNotTracked
         /// Its response could not be read within the server's idempotency
-        /// window. C4: retained as a dead-letter, never sent again blind.
+        /// window. Retained as a dead-letter, never sent again blind.
         case responseUnreadable
         /// This build could not decode its OWN stored payload. Not a server
-        /// verdict, so the row is RETAINED as a recoverable dead-letter.
+        /// verdict, so the row is RETAINED as a recoverable dead-letter. The
+        /// one exception is a row whose outbox key is gone: nothing can open
+        /// it again, so it is removed and reported under this reason.
         case payloadUnreadable
         /// The op could not be dispatched at all by this build (an unwired
-        /// repository, a kind no arm claims). C4: retained as a dead-letter.
+        /// repository, a kind no arm claims). Retained as a dead-letter.
         case unroutable
     }
 
@@ -94,7 +96,7 @@ public extension OutboxReplayService {
         await sink(buffered)
     }
 
-    /// Audit B-3 — composition-root wiring for the discard surface, mirroring
+    /// Composition-root wiring for the discard surface, mirroring
     /// ``attachDeadLetterSink(_:)`` down to the pre-sink flush: a pass that beat
     /// the bootstrap (a `BGProcessingTask` wake, the foreground re-drain) must
     /// not be the reason a lost write goes unreported. Idempotent.
@@ -106,7 +108,7 @@ public extension OutboxReplayService {
         await sink(buffered)
     }
 
-    /// Audit B-3 — hand one discard to the surface, or retain it until a sink
+    /// Hand one discard to the surface, or retain it until a sink
     /// exists. `internal`: the per-op outcome helpers in `+CoreDispatch` call it.
     internal func publishDiscard(_ notice: OutboxDiscardNotice) async {
         guard let sink = onDiscarded else {
@@ -114,6 +116,17 @@ public extension OutboxReplayService {
             return
         }
         await sink([notice])
+    }
+
+    /// Reports what the store had to delete unread, typically every queued
+    /// row after a move to a new iPhone: the outbox file travels, its
+    /// device-only key does not. The content is gone either way; the count
+    /// reaches the same footer as a dead-letter. Only the owner hears of it.
+    internal func reportUnreadableRows() async {
+        guard let user = currentUserProvider() else { return }
+        for row in await outbox.takeUnreadableDiscards(ownedBy: user) {
+            await publishDiscard(.init(kind: row.kindRaw, reason: .payloadUnreadable))
+        }
     }
 
     /// audit-v0162 H1 (Opt 3 + Opt 1) — gated dead-letter sweep: flag (never
@@ -124,7 +137,7 @@ public extension OutboxReplayService {
     /// Split out of `runOnce` when Phase 07 added the quarantine gate, so the
     /// pass loop stays inside its complexity budget.
     internal func sweepDeadLetters(now: Date) async {
-        // INT-A — a HealthKit page that would age out goes to the skip register
+        // A HealthKit page that would age out goes to the skip register
         // first (see `transferUnconfirmedHealthKitRows`).
         await transferUnconfirmedHealthKitRows(now: now)
         guard let newlyDead = try? await outbox.markDeadLetters(

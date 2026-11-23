@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// D-1 — Smart-reminder scheduling extension for `NotificationService`.
+    /// Smart-reminder scheduling extension for `NotificationService`.
     ///
     /// Wraps the existing static-template `scheduleLocalReminder(...)` with an
     /// on-device `SmartReminderPhraseService` call. The flow is:
@@ -17,7 +17,7 @@ import Foundation
     ///    streak, missed-previous flag) plus the *static* fallback title/body
     ///    that should ship if anything in the FM path falls back.
     /// 2. We ask `SmartReminderPhraseService` for a phrase. On any fallback
-    ///    reason — device-ineligible (iOS 18-25 / non-Apple-Intelligence),
+    ///    reason — device-ineligible (non-Apple-Intelligence),
     ///    Apple Intelligence disabled, model not ready, feature flag off,
     ///    safety refused, framework unavailable, generation failed, empty
     ///    input — we use the static fallback as-is.
@@ -29,7 +29,7 @@ import Foundation
     ///    the existing `scheduleLocalReminder(id:title:body:at:)` so all
     ///    category/sound/trigger semantics stay identical.
     ///
-    /// **MDR boundary (R4 §5):** the smart phrase is a scheduling reminder,
+    /// **MDR boundary:** the smart phrase is a scheduling reminder,
     /// never a clinical instruction. The `MDRSafetyFilter` already filtered
     /// the FM output before we see it — if any forbidden pattern slipped
     /// through, the service returns `.fallback(.safetyRefused)` and we ship
@@ -37,7 +37,7 @@ import Foundation
     extension NotificationService {
         /// Schedules a local medication reminder using on-device-AI-generated
         /// phrasing where available, falling back to a static template on
-        /// older OS / disabled Apple Intelligence / off feature-flag / safety
+        /// ineligible devices / disabled Apple Intelligence / off feature-flag / safety
         /// refusal / generation error.
         ///
         /// - Parameters:
@@ -78,7 +78,7 @@ import Foundation
             HLLog.notifications.info(
                 "scheduleSmartLocalReminder fallback=\(outcome.fallbackReason?.rawValue ?? "none", privacy: .public)"
             )
-            // W-MED (v0.5.5): forward category + userInfo so the banner
+            // Forward category + userInfo so the banner
             // carries the 3-button MEDICATION_REMINDER chrome when used
             // by the medication-reminder orchestrator. Defaults preserve
             // the legacy non-categorised reminder shape.

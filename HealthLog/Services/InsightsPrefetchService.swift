@@ -8,14 +8,14 @@ import Foundation
 /// (RESEARCH §B). Without a prefetch the user pays a cold network round-trip
 /// the first time they open a per-metric page each day. This service downloads
 /// that content on **app launch** and on **scenePhase-foreground** so the
-/// per-metric screen (W2) and the Übersicht tab paint cache-first (≤100-200 ms
+/// per-metric screen and the Übersicht tab paint cache-first (≤100-200 ms
 /// budget) from the persistent `CachedSnapshot` rows the SWR layer manages.
-/// The advisor briefing is not warmed here (1.2 V5): ``DailyBriefingStore``
+/// The advisor briefing is not warmed here: ``DailyBriefingStore``
 /// loads it through its consent gate and its day-keyed cache.
 ///
 /// **Gating (no doomed fetch):** the whole warm is skipped unless the backend
-/// is paired + authenticated + online (`shouldWarm`). In standalone /
-/// backend-down there is no server to talk to, so firing would only churn the
+/// is paired + authenticated + online (`shouldWarm`). With the backend
+/// down there is no server to talk to, so firing would only churn the
 /// reachability probe and log noise. The LLM-backed status legs additionally
 /// pass through their repo's own AI-consent gate, so a closed consent never
 /// transmits health data here either.
@@ -49,7 +49,7 @@ public actor InsightsPrefetchService {
     /// `true` iff a server warm should fire right now (paired + authed +
     /// online). Evaluated on the MainActor (it reads `BackendAvailability`),
     /// so the closure hops there. Re-checked on every `warm()` so a mode flip
-    /// (standalone → paired after onboarding, or a reconnect) is honoured.
+    /// (after onboarding, or a reconnect) is honoured.
     private let shouldWarm: @Sendable () async -> Bool
     /// BCP-47 language tag for the assessment prose (de/en), resolved fresh per
     /// warm so a language change is reflected on the next foreground.
@@ -90,15 +90,11 @@ public actor InsightsPrefetchService {
     /// effort semantics as ``warm()``.
     public func warmAndAwait() async {
         guard !inFlight else { return }
-        // D-14-07-B. The claim is made BEFORE the first suspension, not after
-        // it. An actor method that awaits is reentrant (09-03's lesson, and
-        // this file's own `actor` rationale above depends on it): `shouldWarm()`
-        // hops to the MainActor, and a second warm arriving during that hop
-        // used to pass a guard the first warm had already decided to take, so
-        // both fanned out. Witnessed as `/api/insights/comprehensive` hit twice
-        // by `InsightsDailyCacheTests.reentryGuardCollapses`, which was red on
-        // roughly half of the isolated runs measured at plan 14-07 — a real
-        // race whose visibility depends on scheduling, not a flaky assertion.
+        // The claim is made BEFORE the first suspension, not after it. An actor
+        // method that awaits is reentrant: `shouldWarm()` hops to the MainActor,
+        // and a second warm arriving during that hop would pass a guard the
+        // first warm had already decided to take, so both would fan out
+        // (`InsightsDailyCacheTests.reentryGuardCollapses` pins this).
         //
         // The `defer` releases the claim on every exit, including the
         // backend-unavailable one, so a skipped warm does not latch the guard.
@@ -120,7 +116,7 @@ public actor InsightsPrefetchService {
             group.addTask { _ = try? await targetsRepo.fetch() }
             // Comprehensive digest (overview empty-gate + per-metric summaries).
             group.addTask { _ = try? await insightsRepo.comprehensive() }
-            // 1.2 V5 — no advisor-briefing leg. It POSTed `/api/insights/generate`
+            // No advisor-briefing leg. It POSTed `/api/insights/generate`
             // on every launch and foreground, past the AI-consent and briefing
             // capability gates (the repo has none; ``DailyBriefingStore`` does),
             // and threw the answer away (no SWR write). The store's own

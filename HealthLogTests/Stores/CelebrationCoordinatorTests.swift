@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.5.6 RECONCILE-CELEBRATE — `CelebrationCoordinator` contract.
+/// `CelebrationCoordinator` contract.
 ///
 /// Pins the publish + auto-dismiss + replace + manual-dismiss semantics
 /// the SwiftUI root depends on. Mirrors the `UndoCoordinator` test

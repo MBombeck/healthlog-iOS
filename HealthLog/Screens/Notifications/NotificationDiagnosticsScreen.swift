@@ -12,7 +12,7 @@ import SwiftUI
     import UIKit
     import UserNotifications
 
-    /// v0.5.5 W-MED — self-diagnosis surface for the notification
+    /// Self-diagnosis surface for the notification
     /// pipeline. Reachable for every user under Settings →
     /// Notifications → "Advanced diagnostics" so somebody whose banner
     /// never arrives can find out where it stops.
@@ -24,7 +24,7 @@ import SwiftUI
     /// - How many local reminders iOS currently holds.
     /// - A test banner gated behind a 3-second long-press.
     ///
-    /// **08-15 — what this screen deliberately no longer shows.** The APNs
+    /// **What this screen deliberately no longer shows.** The APNs
     /// registration audit, the registered banner categories with their raw
     /// action identifiers, and the individual pending-request identifiers are
     /// support instruments: they mean something next to a server log and
@@ -33,7 +33,7 @@ import SwiftUI
     /// ``SupportDiagnosticsSession``. Nothing was deleted and nothing was
     /// duplicated — the row at the bottom of this page is the way there.
     ///
-    /// **U10 — no raw literals.** Every user-visible string on this screen
+    /// **No raw literals.** Every user-visible string on this screen
     /// is an English source key with a `de` + `en` unit in
     /// `Localizable.xcstrings`; `NotificationDiagnosticsLiteralGuardTests`
     /// pins that. The labels name what the reader can check, not the
@@ -52,40 +52,33 @@ import SwiftUI
         @State private var refreshTick: Int = 0
 
         var body: some View {
-            HLSettingsPage(title: "Advanced diagnostics") {
+            HLPage {
                 authorizationCard
                 medsDataCard
                 pendingRequestsCard
+                PushRelayDiagnosticsCard()
                 testNotificationCard
                 supportDiagnosticsCard
             }
-            // 1.4 B4 — the only settings page without a title in its bar.
+            // The only settings page without a title in its bar.
             .navigationTitle("Advanced diagnostics")
             .navigationBarTitleDisplayMode(.inline)
-            // 1.4 B2 — the one (i) carries what two card footers explained.
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    HLInfoButton(
-                        content: NotificationDiagnosticsInfo.content,
-                        accessibilityIdentifier: "notifications.diagnostics.info"
-                    )
-                }
-            }
+            // The one (i) carries what two card footers explained.
+            .hlPageActions([.info(NotificationDiagnosticsInfo.content, identifier: "notifications.diagnostics.info")])
             .task { await refresh() }
             .refreshable {
                 await refresh()
                 refreshTick &+= 1
             }
-            // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
+            // Success-tick confirms pull-to-refresh round-trip.
             .sensoryFeedback(.success, trigger: refreshTick)
         }
 
         // MARK: - Cards
 
         private var authorizationCard: some View {
-            HLSettingsCard(
-                icon: "bell.badge.fill",
-                title: "Permission",
+            HLCard(
+                "Permission",
                 footer: authorizationFooter
             ) {
                 LabeledRow(
@@ -94,19 +87,15 @@ import SwiftUI
                     accessibilityIdentifier: "meds.diagnostics.authStatus"
                 )
                 if let action = authorizationAction {
-                    Divider().opacity(0.5)
-                    Button {
+                    HLSettingsActionRow(icon: action.symbol, title: action.title, presents: action.presents) {
                         Task { await runAuthorizationAction(action) }
-                    } label: {
-                        Label(action.title, systemImage: action.symbol)
-                            .font(.hlSubhead)
                     }
                     .accessibilityIdentifier("notif.diagnostics.authorize")
                 }
             }
         }
 
-        /// **UI-Standard R3/R4 (U6).** Von drei Fußnoten bleibt eine.
+        /// **UI-Standard R3/R4.** Von drei Fußnoten bleibt eine.
         ///
         /// - `denied` und `authorized` waren Wegweiser („… in den
         ///   iOS-Einstellungen"). Für `denied` steht der Absprung als Knopf in
@@ -153,7 +142,7 @@ import SwiftUI
             }
         }
 
-        /// **08-15 — the way to the detail this screen no longer carries.**
+        /// **The way to the detail this screen no longer carries.**
         ///
         /// The APNs registration audit, the registered banner categories and
         /// the pending-request identifiers used to sit inline here, three taps
@@ -163,10 +152,10 @@ import SwiftUI
         /// plain push and not a shortcut: the gate is the destination's, and it
         /// starts locked on every mount.
         private var supportDiagnosticsCard: some View {
-            HLSettingsCard(
-                icon: "lifepreserver",
-                title: "settings.support.title",
-                footer: "settings.support.entry_footer"
+            HLCard(
+                "settings.support.title",
+                footer: "settings.support.entry_footer",
+                layout: .rows
             ) {
                 HLSettingsActionRow(title: "settings.support.nav_row", presents: .push) {
                     SettingsSupportDiagnosticsScreen(topic: .notifications)
@@ -175,7 +164,7 @@ import SwiftUI
             }
         }
 
-        /// W-MED2 — the medication numbers the in-app surfaces consume,
+        /// The medication numbers the in-app surfaces consume,
         /// so a reader can answer "does today's dose list look right?"
         /// without Xcode: how many medications are active, how many
         /// doses the server has already created for today, how many the
@@ -187,31 +176,27 @@ import SwiftUI
         /// role. Both now say what the reader sees: the app added them,
         /// and this is the total the app shows.
         private var medsDataCard: some View {
-            HLSettingsCard(icon: "pills.fill", title: "Medication data") {
+            HLCard("Medication data") {
                 LabeledRow(
                     title: "Active medications",
                     value: "\(activeMedsCount)",
                     accessibilityIdentifier: "meds.diagnostics.activeMedsCount"
                 )
-                Divider().opacity(0.5)
                 LabeledRow(
                     title: "From the server (today)",
                     value: "\(serverIntakeCount)",
                     accessibilityIdentifier: "meds.diagnostics.serverIntakeCount"
                 )
-                Divider().opacity(0.5)
                 LabeledRow(
                     title: "Added by the app",
                     value: "\(synthIntakeCount)",
                     accessibilityIdentifier: "meds.diagnostics.synthIntakeCount"
                 )
-                Divider().opacity(0.5)
                 LabeledRow(
                     title: "Shown in the app",
                     value: "\(derivedIntakeCount)",
                     accessibilityIdentifier: "meds.diagnostics.derivedIntakeCount"
                 )
-                Divider().opacity(0.5)
                 LabeledRow(
                     title: "Last loaded",
                     value: medsLastRefreshLabel,
@@ -220,7 +205,7 @@ import SwiftUI
             }
         }
 
-        /// **08-15 — the count stays, the identifiers moved.**
+        /// **The count stays, the identifiers moved.**
         ///
         /// "iOS has twelve reminders queued" is the answer a user waiting for a
         /// banner needs, and it is safe to read anywhere. The individual request
@@ -228,7 +213,7 @@ import SwiftUI
         /// through it, what was scheduled. They are now redacted support detail
         /// behind ``SupportDiagnosticsSession``.
         private var pendingRequestsCard: some View {
-            HLSettingsCard(icon: "calendar", title: "Scheduled notifications") {
+            HLCard("Scheduled notifications") {
                 LabeledRow(
                     title: "Count",
                     value: "\(snapshot.pendingCount)",
@@ -238,20 +223,20 @@ import SwiftUI
         }
 
         private var testNotificationCard: some View {
-            // UI-Standard R3 (U6) — die Lokalitäts-Zusicherung („bleibt lokal,
+            // UI-Standard R3 — die Lokalitäts-Zusicherung („bleibt lokal,
             // keine Server-Daten") steht am Footer der Diagnose-Karte auf
             // „Benachrichtigungen", von der aus diese Seite geöffnet wird.
             // Hier bleibt nur die Bedienbesonderheit, die es sonst nirgends
             // gibt: der Knopf reagiert auf langes Drücken, nicht auf Tippen.
-            // 1.4 B2 — the button says how it works ("Hold 3 seconds …"); no
+            // The button says how it works ("Hold 3 seconds …"); no
             // footer under it.
-            HLSettingsCard(icon: "paperplane.fill", title: "Test banner") {
-                // 1.4 B4 — the app's secondary button. The prominent glass
+            HLCard("Test banner") {
+                // The app's secondary button. The prominent glass
                 // style filled the capsule with the app tint (near white) and
                 // set the label in white on it, which read as switched off.
                 // The card title names the banner, so the label only says how:
                 // the long-press is the trigger, a plain tap is a no-op.
-                HLButton("notifications.diagnostics.test.hold", icon: "paperplane.fill", variant: .secondary) {}
+                HLButton("notifications.diagnostics.test.hold", systemImage: "paperplane.fill", variant: .secondary) {}
                     .accessibilityIdentifier("meds.diagnostics.testTrigger")
                     .simultaneousGesture(
                         LongPressGesture(minimumDuration: 3.0)
@@ -263,17 +248,15 @@ import SwiftUI
                     Text(
                         String(
                             format: String(localized: "Sent at %@ — should appear shortly."),
-                            sentAt.formatted(.dateTime.hour().minute().second())
+                            HLTimeFormat.timeWithSeconds(sentAt)
                         )
                     )
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowStatus)
                     .accessibilityIdentifier("meds.diagnostics.testSentAt")
                 }
                 if let err = testError {
                     Text(err)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLColor.statusBad)
+                        .hlText(.rowStatus, status: HLColor.statusBad)
                         .accessibilityIdentifier("meds.diagnostics.testError")
                 }
             }
@@ -307,10 +290,8 @@ import SwiftUI
             case .notYetAttempted:
                 String(localized: "Not loaded yet")
             case let .success(at):
-                String(
-                    format: String(localized: "Loaded at %@"),
-                    at.formatted(.dateTime.hour().minute().second())
-                )
+                // The row is already called „Zuletzt geladen“; the value is the time alone.
+                HLTimeFormat.timeWithSeconds(at)
             case let .failure(message):
                 String(localized: "notifications.diagnostics.error \(message)")
             }
@@ -390,7 +371,7 @@ import SwiftUI
             case failure(message: String)
         }
 
-        /// v0.6.0.8 — tri-state CTA for the permission card. Drives
+        /// Tri-state CTA for the permission card. Drives
         /// the iOS authorization recovery flow per Issue #10 fix A:
         /// `.notDetermined` invites the System prompt; `.denied`
         /// deep-links to iOS Settings; `.authorized` / `.provisional`
@@ -409,7 +390,16 @@ import SwiftUI
             var symbol: String {
                 switch self {
                 case .requestPrompt: "bell.fill"
-                case .deepLinkSettings: "arrow.up.right.square"
+                case .deepLinkSettings: "gearshape"
+                }
+            }
+
+            /// Leaving for the system settings carries the external sign at
+            /// the trailing edge; the prompt stays in the app.
+            var presents: HLSettingsActionRow<EmptyView, EmptyView>.Presents {
+                switch self {
+                case .requestPrompt: .confirm
+                case .deepLinkSettings: .external
                 }
             }
         }
@@ -417,7 +407,7 @@ import SwiftUI
 
     // MARK: - Row primitive
 
-    /// **U10 — `title` is a `LocalizedStringKey`, not a `String`.**
+    /// **`title` is a `LocalizedStringKey`, not a `String`.**
     ///
     /// It used to be a `String`, and `Text(_ content: some StringProtocol)`
     /// is the *non*-localizing initializer: every row label on this screen
@@ -433,19 +423,9 @@ import SwiftUI
         let accessibilityIdentifier: String
 
         var body: some View {
-            HStack {
-                Text(title)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Text(value)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(accessibilityIdentifier)
+            HLSettingsStatRow(label: Text(title), value: value)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier(accessibilityIdentifier)
         }
     }
 
@@ -467,7 +447,7 @@ import SwiftUI
             }
 
             let authorizationLabel: String
-            /// v0.6.0.8 — raw `UNAuthorizationStatus` so the screen can
+            /// Raw `UNAuthorizationStatus` so the screen can
             /// pick the right re-trigger CTA without re-deriving from
             /// the localised label.
             let authorizationStatus: UNAuthorizationStatus?

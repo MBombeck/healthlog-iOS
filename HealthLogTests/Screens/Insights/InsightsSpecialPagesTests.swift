@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.11 W28c — the three special Insights pages (mood / medications / workouts)
+/// The three special Insights pages (mood / medications / workouts)
 /// as pager destinations. Pure value-type math over the selection model: no view,
 /// no store. Verifies the W29 single-source-of-truth contract holds for the new
 /// `.special` entries — every special pill in the strip has a `.special` page in
@@ -159,43 +159,34 @@ struct InsightsSpecialPagesTests {
         #expect(pagePages == [.workouts, .mood])
     }
 
-    // MARK: - Parity Build 4 / 4.4: Recovery is the FIXED second pill
+    // MARK: - Recovery is the fixed block after Übersicht
 
-    @Test("Recovery is the fixed second entry, immediately after Übersicht")
+    @Test("the recovery pages are the fixed block right after Übersicht")
     func recoveryIsFixedSecondPill() {
         // Web parity: the tab strip pushes Recovery as a hard-coded entry right
         // after Overview, before any layout-driven pill
-        // (`insights-tab-strip.tsx:540-548`). It used to be tail-appended on iOS.
-        let (flat, strip) = model(
-            visibleSlugs: [InsightsLayoutTileId.weight],
+        // (`insights-tab-strip.tsx:540-548`). On iOS it is a category of pages.
+        let tiles = [
+            InsightsLayoutTile(id: InsightsLayoutTileId.overview, visible: true, order: 0),
+            InsightsLayoutTile(id: InsightsLayoutTileId.weight, visible: true, order: 1)
+        ]
+        let flat = InsightsTabSelection.ordered(
+            layout: InsightsLayout(tiles: tiles),
             availableKinds: [.weight],
-            availableSpecials: [.recovery]
+            recoveryKinds: [.recoveryScore, .dayStrain]
         )
-        #expect(flat == [.overview, .special(.recovery), .metric(.weight)])
-        #expect(strip == [.overview, .special(.recovery), .flat(.weight)])
+        #expect(flat == [.overview, .metric(.recoveryScore), .metric(.dayStrain), .metric(.weight)])
+        #expect(InsightsStripEntry.strip(from: flat) == [
+            .overview, .group(.recovery, members: [.metric(.recoveryScore), .metric(.dayStrain)]), .flat(.weight)
+        ])
     }
 
-    @Test("Recovery keeps its fixed slot even if a stale layout also carries the tile")
+    @Test("a stale layout row named recovery produces no page")
     func recoveryNotDuplicatedByLayoutTile() {
-        // `recovery` is not a server tile id, but a stale cache could carry one —
-        // it must not produce a second pill.
+        // `recovery` is not a server tile id, but a stale cache could carry one.
         let (flat, _) = model(
             visibleSlugs: [InsightsLayoutTileId.weight, InsightsLayoutTileId.recovery],
-            availableKinds: [.weight],
-            availableSpecials: [.recovery]
-        )
-        #expect(flat == [.overview, .special(.recovery), .metric(.weight)])
-        #expect(flat.filter { $0 == .special(.recovery) }.count == 1)
-    }
-
-    @Test("Recovery absent from availableSpecials (module off) produces no pill")
-    func recoveryModuleOffSuppressed() {
-        // 4.4 dropped the DATA gate, not the module gate: `availableSpecials`
-        // still filters on the `recovery` module toggle upstream.
-        let (flat, _) = model(
-            visibleSlugs: [InsightsLayoutTileId.weight],
-            availableKinds: [.weight],
-            availableSpecials: []
+            availableKinds: [.weight]
         )
         #expect(flat == [.overview, .metric(.weight)])
     }
@@ -203,17 +194,17 @@ struct InsightsSpecialPagesTests {
     @Test("pinned specials stay flat pills, never folded into a category group")
     func pinnedSpecialsNeverGrouped() {
         // 4.4 — `workouts` DOES fold into activity now, but the pinned specials
-        // (mood / medications) never do; nor does the fixed Recovery pill.
+        // (mood / medications) never do.
         let (_, strip) = model(
             visibleSlugs: [InsightsLayoutTileId.mood, InsightsLayoutTileId.medications],
-            availableSpecials: [.mood, .medications, .recovery]
+            availableSpecials: [.mood, .medications]
         )
         for entry in strip {
             if case let .group(_, members) = entry {
                 Issue.record("a pinned special must never appear inside a group pill: \(members)")
             }
         }
-        #expect(strip == [.overview, .special(.recovery), .special(.mood), .special(.medications)])
+        #expect(strip == [.overview, .special(.mood), .special(.medications)])
     }
 
     @Test("4.4: workouts folds into the Aktivität group alongside activity metrics")
@@ -275,7 +266,7 @@ struct InsightsSpecialPagesTests {
             case let .group(_, members): stripSelections.append(contentsOf: members)
             }
         }
-        // Parity Build 4 — folding a category at its FIRST member's slot pulls that
+        // Folding a category at its FIRST member's slot pulls that
         // category's later members forward, so the strip is not order-identical to
         // the flat pager list any more (it wasn't on the web either). What must
         // hold is that the strip neither adds nor drops a selection.

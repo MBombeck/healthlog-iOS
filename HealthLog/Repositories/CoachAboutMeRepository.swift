@@ -25,7 +25,7 @@ public actor CoachAboutMeRepository {
     private let outbox: OutboxQueue?
     private let encoder: JSONEncoder
 
-    /// **CU-20 (#69)** — last `updatedAt` seen from `/api/coach/about-me`.
+    /// Last `updatedAt` seen from `/api/coach/about-me`.
     ///
     /// This is the ONE route of the eight whose token is **not** the shared
     /// `User.updatedAt`: it guards `UserHealthProfile.updatedAt`, its own table
@@ -65,7 +65,7 @@ public actor CoachAboutMeRepository {
     /// server echo — the effective state plus newly derived
     /// `pendingQuestions`.
     ///
-    /// **CU-20:** guarded by `baseUpdatedAt`; a conflict returns
+    /// Guarded by `baseUpdatedAt`; a conflict returns
     /// `409 about_me_conflict` having written nothing, and the bounded retry
     /// re-reads and re-sends. Note the server treats a *deleted* profile row
     /// specially: a PUT carrying a token whose row has since vanished does not
@@ -94,7 +94,7 @@ public actor CoachAboutMeRepository {
         }
     }
 
-    // MARK: - Clarifying-question loop (COACH-3)
+    // MARK: - Clarifying-question loop
 
     /// Adopt a clarifying-question answer (or a "remember this" chat
     /// statement) into the matching structured self-context field
@@ -114,16 +114,17 @@ public actor CoachAboutMeRepository {
         _ write: CoachAboutMeAdoptWrite,
         idempotencyKey: IdempotencyKey
     ) async throws -> CoachAboutMeAdoptResult {
-        do {
-            let request: APIRequest<CoachAboutMeAdoptResult> = try .post(
-                "/api/coach/about-me/adopt",
-                body: write,
-                idempotencyKey: idempotencyKey
-            )
-            return try await api.send(request)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueueAdopt(write, idempotencyKey: idempotencyKey)
-            throw err
+        let request: APIRequest<CoachAboutMeAdoptResult> = try .post(
+            "/api/coach/about-me/adopt",
+            body: write,
+            idempotencyKey: idempotencyKey
+        )
+        return try await writeAhead(
+            .coachAboutMeAdopt,
+            payload: OutboxQueue.Payloads.CoachAboutMeAdopt(write: write),
+            key: idempotencyKey
+        ) { [self] in
+            try await api.send(request)
         }
     }
 
@@ -140,16 +141,17 @@ public actor CoachAboutMeRepository {
         _ write: CoachAboutMeDismissWrite,
         idempotencyKey: IdempotencyKey
     ) async throws -> CoachAboutMeQuestionsResult {
-        do {
-            let request: APIRequest<CoachAboutMeQuestionsResult> = try .delete(
-                "/api/coach/about-me/questions",
-                body: write,
-                idempotencyKey: idempotencyKey
-            )
-            return try await api.send(request)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueueDismiss(write, idempotencyKey: idempotencyKey)
-            throw err
+        let request: APIRequest<CoachAboutMeQuestionsResult> = try .delete(
+            "/api/coach/about-me/questions",
+            body: write,
+            idempotencyKey: idempotencyKey
+        )
+        return try await writeAhead(
+            .coachAboutMeDismissQuestion,
+            payload: OutboxQueue.Payloads.CoachAboutMeDismissQuestion(write: write),
+            key: idempotencyKey
+        ) { [self] in
+            try await api.send(request)
         }
     }
 
@@ -186,33 +188,19 @@ public actor CoachAboutMeRepository {
 
     // MARK: - Private
 
-    private func enqueueAdopt(_ write: CoachAboutMeAdoptWrite, idempotencyKey: IdempotencyKey) async {
-        guard let outbox else { return }
-        do {
-            let payload = try encoder.encode(OutboxQueue.Payloads.CoachAboutMeAdopt(write: write))
-            try await outbox.enqueue(.init(
-                kind: .coachAboutMeAdopt,
-                payload: payload,
-                idempotencyKey: idempotencyKey.raw
-            ))
-        } catch {
-            HLLog.outbox.error("Outbox enqueue (coachAboutMeAdopt) failed: \(LogSanitizer.redact(String(describing: error)))")
-        }
-    }
-
-    private func enqueueDismiss(_ write: CoachAboutMeDismissWrite, idempotencyKey: IdempotencyKey) async {
-        guard let outbox else { return }
-        do {
-            let payload = try encoder.encode(OutboxQueue.Payloads.CoachAboutMeDismissQuestion(write: write))
-            try await outbox.enqueue(.init(
-                kind: .coachAboutMeDismissQuestion,
-                payload: payload,
-                idempotencyKey: idempotencyKey.raw
-            ))
-        } catch {
-            HLLog.outbox.error(
-                "Outbox enqueue (coachAboutMeDismissQuestion) failed: \(LogSanitizer.redact(String(describing: error)))"
-            )
-        }
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`. Without a
+    /// queue (previews, read-only wiring) the write is only sent.
+    private func writeAhead<Result: Sendable>(
+        _ kind: OutboxQueue.Operation.Kind,
+        payload: some Encodable & Sendable,
+        key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        guard let outbox else { return try await send() }
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

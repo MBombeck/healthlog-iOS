@@ -1,4 +1,4 @@
-// Parity 2.5 — `DELETE /api/settings/data` request body.
+// `DELETE /api/settings/data` request body.
 //
 // The one trap this guards: the UI asks the user to type a LOCALIZED confirm
 // phrase (`LÖSCHEN` in German, matching the `DeleteAccountScreen` idiom), but

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// H3 — an offline (durably-enqueued) clinical-record create/update must surface
+/// An offline (durably-enqueued) clinical-record create/update must surface
 /// as SUCCESS, not failure. Surfacing it as a failure invites the user's natural
 /// retry, which mints a SECOND idempotency key and creates a DUPLICATE clinical
 /// record on reconnect. These drive the REAL `APIClient` against a stub

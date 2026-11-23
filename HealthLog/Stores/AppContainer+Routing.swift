@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - v0.7.3 routing bundle (cluster C10)
+// MARK: - Routing bundle
 
 extension AppContainer {
     /// Constructs the routing pair — `AppRouter` (tab + per-tab
@@ -14,7 +14,7 @@ extension AppContainer {
     /// reports "not authenticated" and the deep link is dropped/parked rather
     /// than crashing.
     ///
-    /// Factored out of `AppContainer.init` (v0.7.3) to keep the init body
+    /// Factored out of `AppContainer.init` to keep the init body
     /// inside its lint budget. The `appRouter` / `deepLinks` handles stay on
     /// `AppContainer` so the env-injection + external call-sites are unchanged.
     /// Construction is VERBATIM from the prior inline block — same router

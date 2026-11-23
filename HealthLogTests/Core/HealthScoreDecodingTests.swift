@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-31 — locks the Health Score v2 decode (server v1.34.0).**
+/// **Locks the Health Score v2 decode (server v1.34.0).**
 ///
 /// The wire is `GET /api/dashboard/snapshot` → `healthScore`, whose eleven keys
 /// the live builder always sends but whose TypeScript type marks eight of them
@@ -178,7 +178,7 @@ struct HealthScoreDecodingTests {
         let score = try decoder.decode(HealthScore.self, from: json)
         #expect(score.score == 90)
         #expect(score.band == nil)
-        // #115 B7 — no local colour thresholds take over; the UI stays neutral.
+        // No local colour thresholds take over; the UI stays neutral.
         #expect(score.displayBand == nil)
     }
 

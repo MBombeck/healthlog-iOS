@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// MEDS-QUICK-MARK-UNDO (v0.11 W26) — store-level reversal tests for
+/// Store-level reversal tests for
 /// `MedicationsStore.markIntakeQuickReturningUndo` + `undoIntakeMark(_:)`.
 ///
 /// Real APIClient over `MockURLProtocol` (PROJECT_GUIDE.md: never a mock server on

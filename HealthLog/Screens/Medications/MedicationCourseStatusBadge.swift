@@ -37,19 +37,7 @@ struct MedicationCourseStatusBadge: View {
     let badge: MedicationCourseBadge
 
     var body: some View {
-        HStack(spacing: HLSpace.xxs) {
-            Image(systemName: badge == .ended ? "flag.checkered" : "calendar")
-                .font(.hlCaption2)
-                .foregroundStyle(HLText.tertiary)
-            Text(badge.title)
-                .font(.hlCaption2.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
-        }
-        .padding(.horizontal, HLSpace.sm)
-        .padding(.vertical, HLSpace.xxs)
-        .background(HLSurface.tertiary, in: Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(badge.title))
-        .accessibilityIdentifier("medications.course.badge")
+        HLBadge(badge.title, icon: badge == .ended ? "flag.checkered" : "calendar")
+            .accessibilityIdentifier("medications.course.badge")
     }
 }

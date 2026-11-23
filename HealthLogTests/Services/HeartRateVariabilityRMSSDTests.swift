@@ -155,8 +155,11 @@
         @Test("every other type, SDNN included, is never gated (HK-NEW: the six v1.44 types have their own gate)")
         func otherTypesPass() throws {
             let defaults = try Self.makeDefaults()
+            // 1.7: the effort and training types open by the server's own
+            // list or capability, never by default.
             for identifier in HealthLogSampleTypeRegistry.baseIdentifiers
                 where HealthKitServerTypeGate.minimumServerVersionByIdentifier[identifier] == nil
+                && !AppleHealthIngestTypes.publishedOnlyIdentifiers.contains(identifier)
             {
                 #expect(HealthKitServerTypeGate.serverAccepts(identifier, defaults: defaults), "\(identifier)")
             }
@@ -169,8 +172,11 @@
             let defaults = try Self.makeDefaults()
             let rmssd = HeartRateVariabilityRMSSD.identifier
             let sdnn = HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue
+            // The sixteen 1.7 quantity types open from 1.48.2 or by the
+            // server's own list; their own suite covers them.
             let ios27 = HealthLogSampleTypeRegistry.baseIdentifiers
                 .union(HealthLogSampleTypeRegistry.osGatedIdentifiers(rmssdAvailable: true))
+                .subtracting(AppleHealthIngestQuantityTypes.allIdentifiers)
                 .sorted()
             let gate = { (identifier: String) in HealthKitServerTypeGate.serverAccepts(identifier, defaults: defaults) }
 
@@ -182,14 +188,24 @@
 
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.42.0"), defaults: defaults)
             let new = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
-            #expect(new == ios27.filter { !HealthKitServer144Types.registryIdentifiers.contains($0) })
+            let basal = HealthKitBasalEnergy.identifier
+            #expect(new == ios27.filter { !HealthKitServer144Types.registryIdentifiers.contains($0) && $0 != basal })
             #expect(new.count == 37)
 
-            // HK-NEW (1.5) — the six v1.44 types join from v1.44 on.
+            // The six v1.44 types join from v1.44 on.
             HealthKitServerTypeGate.record(ServerVersionInfo(version: "1.44.0"), defaults: defaults)
+            let v144 = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
+            #expect(v144 == ios27.filter { $0 != basal })
+            #expect(v144.count == 43)
+
+            // Resting energy joins from v1.47.1, the first server that maps it.
+            HealthKitServerTypeGate.record(
+                ServerVersionInfo(version: HealthKitBasalEnergy.minimumServerVersion),
+                defaults: defaults
+            )
             let all = AppOwnedHealthCollectionCoordinator.serverCollectable(ios27, serverAccepts: gate)
             #expect(all == ios27)
-            #expect(all.count == 43)
+            #expect(all.count == 44)
         }
 
         @Test("on this system the pass collects the registry minus what the server cannot store")
@@ -201,6 +217,7 @@
             // Everything without a minimum server version is always collected.
             let ungated = HealthLogSampleTypeRegistry.baseIdentifiers
                 .subtracting(HealthKitServerTypeGate.minimumServerVersionByIdentifier.keys)
+                .subtracting(AppleHealthIngestTypes.publishedOnlyIdentifiers)
             #expect(ungated.isSubset(of: Set(live)))
         }
     }

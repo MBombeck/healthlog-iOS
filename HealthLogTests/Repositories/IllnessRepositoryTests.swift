@@ -57,7 +57,7 @@ struct IllnessRepositoryTests {
         """#.utf8)
         let dto = try JSONDecoder.hlDefault.decode(IllnessEpisodeDTO.self, from: json)
         #expect(dto.type == .other)
-        #expect(dto.lifecycle == .unknown) // C1: an unknown course is not claimed to be acute
+        #expect(dto.lifecycle == .unknown) // An unknown course is not claimed to be acute
         #expect(!dto.isActive) // resolvedAt set
     }
 

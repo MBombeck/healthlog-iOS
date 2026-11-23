@@ -14,7 +14,7 @@ import SwiftUI
 /// stays in memory only, is never logged, and is dropped when the host sheet clears
 /// its fresh-token state.
 ///
-/// **20-03 (R6) — the contract, corrected.** The comment here used to claim the
+/// **The contract, corrected.** The comment here used to claim the
 /// bitmap was "scaled up … so the output stays crisp at any display size". It
 /// was not: a fixed 12× scale put a 120-byte share URL at 660 px, both shipped
 /// consumers draw it into 200 pt, and `.interpolation(.none)` above the target

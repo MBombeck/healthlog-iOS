@@ -43,43 +43,27 @@ public extension View {
 
 /// **The one decision every translucent surface has to make, made once.**
 ///
-/// The rule is an ordering, not a lookup: `accessibilityReduceTransparency` is
-/// evaluated **before** `#available`. A preference the user set in Settings is
-/// not conditional on which iOS the device happens to be running — an iOS-26
-/// device must not silently opt back into glass because a newer API exists.
-/// `LiquidGlass.swift` used to branch on availability alone, which is exactly
-/// how the preference stopped reaching every glass surface on iOS 26.
+/// `accessibilityReduceTransparency` decides before any glass API is reached.
+/// A preference the user set in Settings must not be skipped because a glass
+/// API exists. `LiquidGlass.swift` used to branch on availability alone, which
+/// is exactly how the preference stopped reaching every glass surface on iOS 26.
 ///
-/// The resolution is a pure function of two booleans so all four combinations
-/// are testable without writing the (read-only) environment key. Availability
-/// is a *separate* property for the same reason: it is the only part that
-/// cannot be driven from a test.
+/// The resolution is a pure function so both answers are testable without
+/// writing the (read-only) environment key.
 public enum HLSurfaceOpacity {
     /// What a call-site must actually paint.
     public enum Resolution: String, Equatable, Sendable, CaseIterable {
-        /// The user asked for opacity — paint the semantic solid fill. This is
-        /// the answer on iOS 18 *and* on iOS 26.
+        /// The user asked for opacity — paint the semantic solid fill.
         case opaque
-        /// iOS 26+ Liquid Glass, the progressive enhancement.
+        /// Liquid Glass.
         case glass
-        /// The iOS 18–25 baseline treatment (solid surface fill / material).
-        case material
     }
 
-    /// - Parameters:
-    ///   - reduceTransparency: the accessibility preference, read by the caller
-    ///     from the environment (a `View` can; a `View` extension method cannot).
-    ///   - glassAvailable: whether the iOS 26 glass APIs exist at runtime.
-    public static func resolve(reduceTransparency: Bool, glassAvailable: Bool) -> Resolution {
-        if reduceTransparency { return .opaque }
-        return glassAvailable ? .glass : .material
-    }
-
-    /// The runtime availability the process actually has. Deliberately *not*
-    /// folded into ``resolve(reduceTransparency:glassAvailable:)`` so the policy
-    /// itself stays a pure function.
-    public static var glassAvailable: Bool {
-        if #available(iOS 26.0, *) { true } else { false }
+    /// - Parameter reduceTransparency: the accessibility preference, read by
+    ///   the caller from the environment (a `View` can; a `View` extension
+    ///   method cannot).
+    public static func resolve(reduceTransparency: Bool) -> Resolution {
+        reduceTransparency ? .opaque : .glass
     }
 }
 

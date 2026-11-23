@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **R-A1 (1.4) — the BGTask expiration handler goes in first.**
+    /// **The BGTask expiration handler goes in first.**
     ///
     /// Up to 1.3 both BGTask cores recorded the wake (a main-actor hop),
     /// re-submitted the next request and started their work before they set

@@ -1,13 +1,13 @@
-// 13-02 — `webLoginAvailable` must be a statement about the login route, not
+// `webLoginAvailable` must be a statement about the login route, not
 // about the server's version number.
 //
 // The shipped gate is `AuthService.swift:931-934`: `GET /api/version` ≥
 // 1.32.11 and nothing else. The operator's instance is comfortably past that
-// floor and its login route still dead-ends (#96), so build 266 showed a
+// floor and its login route still dead-ends, so build 266 showed a
 // brand-new user a CTA into a browser error page and called it available.
 //
 // Drives the REAL `AuthService` over the REAL `APIClient` on a session-scoped
-// `MockURLProtocolSession` (09-13), so the probe is measured through the
+// `MockURLProtocolSession`, so the probe is measured through the
 // transport it actually uses.
 
 // swiftlint:disable force_unwrapping
@@ -49,7 +49,7 @@
             Data(#"{"data":{"version":"\#(version)"},"error":null}"#.utf8)
         }
 
-        /// The address the operator's instance redirects to (#96) — a bind
+        /// The address the operator's instance redirects to — a bind
         /// address, not a routable host.
         private static let bindAddressRedirect = "https://0.0.0.0:3000/auth/login?flow=native"
 
@@ -96,7 +96,7 @@
 
             #expect(
                 available == false,
-                "EXPECTED_RED: webLoginAvailable is a version statement, not a reachability statement"
+                "webLoginAvailable is a version statement, not a reachability statement"
             )
         }
 

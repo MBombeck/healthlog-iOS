@@ -17,15 +17,18 @@ struct NutrientListScreen: View {
     @Environment(\.appContainer) private var container
 
     @State private var store: NutrientStore?
+    /// Server 1.49.0: the daily energy balance, a row above the day totals.
+    @State private var energyBalance = EnergyBalanceModel()
 
     var body: some View {
         HLAsyncListScreen(
             phase: phase,
             refresh: { await reload() },
-            loading: { HLAsyncListSkeletonRows() },
-            empty: { emptyRows },
-            content: { if let store { loadedRows(store: store) } }
+            loading: { HLAsyncListSkeletonRows().hlFormRowSurface() },
+            empty: { emptyRows.hlFormRowSurface() },
+            content: { if let store { loadedRows(store: store).hlFormRowSurface() } }
         )
+        .hlPageMargins()
         .navigationTitle(Text("nutrients.list.title"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await onAppear() }
@@ -35,7 +38,7 @@ struct NutrientListScreen: View {
 
     private var phase: HLAsyncListPhase {
         guard let store else { return .loading }
-        // N2 — a switched-off module is an empty state with an action, not a
+        // A switched-off module is an empty state with an action, not a
         // populated list and not an error. It wins over stale rows: those were
         // read before the module went off and no longer describe the account.
         if emptyState == .moduleOff { return .empty }
@@ -50,7 +53,7 @@ struct NutrientListScreen: View {
         return .loaded
     }
 
-    /// N2 — which of the three real empty states the surface is in. `403
+    /// Which of the three real empty states the surface is in. `403
     /// module.disabled` and a `ModuleGate` that says off are the same fact to
     /// the reader, so they collapse into one case here.
     private var emptyState: NutrientEmptyState {
@@ -66,25 +69,28 @@ struct NutrientListScreen: View {
     @ViewBuilder
     private func loadedRows(store: NutrientStore) -> some View {
         waterSection(store: store)
-        Section(header: Text("nutrients.list.section.today")) {
+        EnergyBalanceSection(model: energyBalance)
+        Section {
             ForEach(store.rows) { row in
-                // Audit B-4 — a code this build cannot name keeps its row and
+                // A code this build cannot name keeps its row and
                 // its amount, but has NO detail behind it: `/daily` is keyed on
                 // the catalogue code, and the sentinel is not one (the route
-                // validates the enum and answers 400). So the row renders flat,
-                // without a chevron promising a screen that cannot load.
+                // validates the enum and answers 400). So the row renders flat.
+                // A nameable row is tappable as a whole, without a chevron:
+                // it shows a value, not a menu.
                 if row.nutrient == .unknown {
                     NutrientOverviewRowView(row: row)
                         .accessibilityIdentifier("nutrients.row.\(row.id)")
                 } else {
-                    NavigationLink {
-                        NutrientDetailScreen(code: row.nutrient, store: store)
-                    } label: {
-                        NutrientOverviewRowView(row: row)
-                    }
-                    .accessibilityIdentifier("nutrients.row.\(row.nutrient.rawValue)")
+                    NutrientOverviewRowView(row: row)
+                        .hlRowLink(inList: true) {
+                            NutrientDetailScreen(code: row.nutrient, store: store)
+                        }
+                        .accessibilityIdentifier("nutrients.row.\(row.nutrient.rawValue)")
                 }
             }
+        } header: {
+            HLSectionHeader("nutrients.list.section.today")
         }
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
@@ -92,33 +98,29 @@ struct NutrientListScreen: View {
     }
 
     private func waterSection(store: NutrientStore) -> some View {
-        Section(header: Text("nutrients.water.section")) {
+        Section {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text(NutrientDisplay.formatted(amount: store.waterLatestAmountMl, wireUnit: "ml"))
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
+                HLValueText(store.waterLatestAmountMl, unit: .milliliters, size: .tile, fractionDigits: 0 ... 0)
                     .accessibilityIdentifier("nutrients.water.total")
-                HStack(spacing: HLSpace.sm) {
+                // Three equal quick-add buttons in the row's small form.
+                HLButtonRow(size: .small) {
                     ForEach(NutrientStore.waterQuickAddAmountsMl, id: \.self) { amount in
-                        Button {
+                        HLButton(Text(verbatim: "+\(Int(amount)) ml"), variant: .secondary) {
                             Task { await store.addWater(amountMl: amount) }
-                        } label: {
-                            Text(verbatim: "+\(Int(amount)) ml")
-                                .font(.hlSubhead)
-                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
                         .accessibilityIdentifier("nutrients.water.add.\(Int(amount))")
                     }
                 }
             }
             .padding(.vertical, HLSpace.xs)
+        } header: {
+            HLSectionHeader("nutrients.water.section")
         }
     }
 
     private var emptyRows: some View {
         Section {
-            // 14-04 (F1) — the window the reader is told about rides in the
+            // The window the reader is told about rides in the
             // empty state's own sentence (1.4 B2: it was a loose caption under
             // it). `GET /api/nutrients` omits every nutrient with no data in
             // the requested window, so "nothing here" is always a statement
@@ -130,7 +132,7 @@ struct NutrientListScreen: View {
             ) {
                 await store?.enableModuleAndPrepare()
             }
-            // 1.4 B4 — the lockup stands on the list, not on a row card.
+            // The lockup stands on the list, not on a row card.
             .listRowBackground(Color.clear)
         }
     }
@@ -142,7 +144,7 @@ struct NutrientListScreen: View {
             store = container?.nutrientStore
         }
         await reload()
-        // N2 — the state-driven read-authorization request. The module state
+        // The state-driven read-authorization request. The module state
         // lives on the server, so "module on, this device never asked" is a real
         // combination (a reinstall on an opted-in account) that the toggle-only
         // request never covered. Self-gates on the module + a once-per-process
@@ -152,30 +154,30 @@ struct NutrientListScreen: View {
 
     private func reload() async {
         await store?.load()
+        await reloadEnergyBalance()
+    }
+
+    /// Read only while the module is on; the route answers 403 otherwise,
+    /// and a server before 1.49 answers 404 (both hide the row).
+    private func reloadEnergyBalance() async {
+        guard let container, let store, store.isModuleEnabled, !store.isDisabled else { return }
+        let repository = EnergyBalanceRepository(api: container.api)
+        await energyBalance.load { try await repository.read() }
     }
 }
 
-/// One nutrient row — German name, latest-day total (wire unit), and the
-/// days-with-data count inside the window.
+/// One nutrient row: name, the days-with-data count inside the window, and
+/// the latest day's total (wire unit) as the row's value.
 private struct NutrientOverviewRowView: View {
     let row: NutrientOverviewRowDTO
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                // Audit B-4 — an unnameable code labels itself with the raw
-                // server string; see `NutrientDisplay.name(for:rawCode:)`.
-                Text(NutrientDisplay.name(for: row.nutrient, rawCode: row.rawNutrient))
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-                Text("nutrients.row.daysWithData \(row.daysWithData)")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-            }
-            Spacer(minLength: HLSpace.sm)
-            Text(NutrientDisplay.formatted(amount: row.latestAmount, wireUnit: row.unit))
-                .font(.hlBody.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-        }
+        HLRow(
+            // An unnameable code labels itself with the raw
+            // server string; see `NutrientDisplay.name(for:rawCode:)`.
+            title: Text(NutrientDisplay.name(for: row.nutrient, rawCode: row.rawNutrient)),
+            detail: Text("nutrients.row.daysWithData \(row.daysWithData)"),
+            value: Text(NutrientDisplay.formatted(amount: row.latestAmount, wireUnit: row.unit))
+        )
     }
 }

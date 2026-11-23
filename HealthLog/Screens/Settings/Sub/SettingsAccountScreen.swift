@@ -9,7 +9,7 @@ import SwiftUI
 /// `EditProfileScreen` so there is exactly one profile-editing surface in
 /// the app; the legacy `PersonalSettingsScreen` was deleted in Y8.
 ///
-/// **v0.11 IA — Abmelden + Konto löschen live here now.** They previously
+/// **Abmelden + Konto löschen live here now.** They previously
 /// rendered as two top-level Sections at the bottom of the Settings *hub*
 /// (`SettingsScreen`). The operator wanted both account-lifecycle actions
 /// under Profil/Konto rather than floating beside the hub navigation rows,
@@ -17,11 +17,9 @@ import SwiftUI
 /// the session locally (server data is preserved), delete wipes the account
 /// server-side via `DeleteAccountScreen`. Both stay HIG-correct — recoverable
 /// sign-out first, irreversible delete last with its cautionary footer — and
-/// keep their a11y identifiers + destructive role. As before they only
-/// surface on a server-paired install; a standalone install has no server
-/// account to sign out of or delete.
+/// keep their a11y identifiers + destructive role.
 struct SettingsAccountScreen: View {
-    /// POLISH-C (C2) — on the More stack the pushes below are values, so the
+    /// On the More stack the pushes below are values, so the
     /// page under the privacy shield comes back. The avatar sheet on Today
     /// hosts this screen in its own stack without those destinations and
     /// keeps the view pushes.
@@ -38,25 +36,24 @@ struct SettingsAccountScreen: View {
     }
 
     @Environment(AuthStore.self) private var authStore
-    @Environment(SyncModeStore.self) private var syncMode
 
-    /// v0.11 IA — Konto-löschen confirmation sheet. Relocated from
+    /// Konto-löschen confirmation sheet. Relocated from
     /// `SettingsScreen` together with the delete card so the destructive
     /// flow lives next to the action that opens it. Same `DeleteAccountScreen`
     /// the hub previously presented, same `.topBarTrailing` close button.
     @State private var showDeleteConfirmation = false
 
-    /// Parity 2.5 — the data-reset sheet, presented with the same modal idiom as
+    /// The data-reset sheet, presented with the same modal idiom as
     /// the account-deletion sheet below so the two destructive flows feel like
     /// siblings rather than two different mechanisms.
     @State private var showResetDataConfirmation = false
 
-    /// SET-6 (AUDIT-QOL-UX §5) — profile editing presented as a sheet (an edit is
+    /// Profile editing presented as a sheet (an edit is
     /// a modal transaction), matching `EditMeasurementSheet`/`EditMoodSheet`/etc.
     /// Replaces the lone push-based profile editor flagged by the QoL audit.
     @State private var showEditProfile = false
 
-    /// 08-09 — sign-out is destructive and now asks first. The row below used to
+    /// Sign-out is destructive and now asks first. The row below used to
     /// call `authStore.logout()` straight out of its tap handler: `presents:
     /// .confirm` only ever meant "paint no chevron", so a mis-tap ended the
     /// session before it could be taken back. The dialog, its copy and the
@@ -65,66 +62,35 @@ struct SettingsAccountScreen: View {
     @State private var logoutConfirmation = LogoutConfirmationState()
 
     var body: some View {
-        HLSettingsPage(title: "Account") {
-            profileCard
-            // W-B187 (Settings consolidation §A.2) — the Units card moved OUT of
-            // Account INTO the Profile editor (`EditProfileScreen`), alongside the
-            // relocated time-format picker, so "how I read my own data" (units +
-            // clock) lives in one place. Account now holds only profile-link +
-            // Passkeys + Sign-out + Delete (account-lifecycle only).
-            securityCard
-            // v0.12 W7-1 (preserved) — Sign-out + Delete-account are server
-            // account actions; a standalone install has no server account and
-            // no token, so surfacing them there would fire doomed server calls
-            // and drop the user into a dead-end delete flow. Hidden until the
-            // install is paired. Parity 2.2 (sessions) and 2.5 (data reset) are
-            // server actions for the same reason and join the same gate. 1.5
-            // (Alex, 07.11.): active sessions moved into Sicherheit.
-            if !syncMode.isStandalone {
-                signOutCard
-                if showsIrreversibleActions {
-                    resetDataCard
-                    deleteAccountCard
-                }
-            }
+        HLPage {
+            // Two row cards: the account itself (profile, security), then
+            // its lifecycle (sign out, and where allowed reset and delete).
+            // W-B187 — the Units card lives in the profile editor; 1.5
+            // (Alex, 07.11.) — active sessions moved into Sicherheit.
+            accountCard
+            lifecycleCard
         }
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
-        // v0.11 IA — Konto-löschen sheet relocated here alongside the delete
+        // Konto-löschen sheet relocated here alongside the delete
         // card it serves. Same DeleteAccountScreen the hub previously mounted.
         .sheet(isPresented: $showDeleteConfirmation) {
-            NavigationStack {
+            HLSheetScaffold("Delete account") {
                 DeleteAccountScreen()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(String(localized: "Close")) {
-                                showDeleteConfirmation = false
-                            }
-                        }
-                    }
             }
-            .hlSheetPresentation(.form)
         }
-        // Parity 2.5 — data-reset sheet, same presentation as the delete sheet.
+        // Data-reset sheet, same presentation as the delete sheet.
         .sheet(isPresented: $showResetDataConfirmation) {
-            NavigationStack {
+            HLSheetScaffold("resetData.navTitle") {
                 ResetDataScreen()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(String(localized: "Close")) {
-                                showResetDataConfirmation = false
-                            }
-                        }
-                    }
             }
-            .hlSheetPresentation(.form)
         }
-        // SET-6 — profile editor as a sheet (was a push), aligning with every
+        // Profile editor as a sheet (was a push), aligning with every
         // other edit surface in the app.
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet()
         }
-        // 08-09 — the shared destructive confirmation. `AuthStore.logout()` stays
+        // The shared destructive confirmation. `AuthStore.logout()` stays
         // the single cleanup path; the only thing that changed is that it is now
         // reached from an answered dialog instead of from a tap.
         .hlLogoutConfirmation($logoutConfirmation) {
@@ -132,22 +98,37 @@ struct SettingsAccountScreen: View {
         }
     }
 
-    /// 1.4 B4 — each of these cards has one row, so the row is the heading:
-    /// no card title above "Profil öffnen", "Sicherheit öffnen", "Abmelden".
-    private var profileCard: some View {
-        HLSettingsCard {
-            // R10 — die Zeile öffnete schon immer ein Sheet, trug aber einen
-            // Chevron. `presents: .sheet` malt jetzt das `pencil` und macht
-            // die Bearbeiten-Transaktion vor dem Tippen sichtbar.
-            HLSettingsActionRow(
-                title: "Profile",
-                subtitle: "Display name, date of birth, height, time zone.",
-                presents: .sheet
-            ) {
-                showEditProfile = true
-            }
-            .accessibilityIdentifier("settings.account.profileRow")
+    /// Profile and security in one row card. Every row carries its symbol
+    /// chip, so the rows of both cards stand on one line.
+    private var accountCard: some View {
+        HLCard(layout: .rows) {
+            profileRow
+            securityRow
         }
+    }
+
+    /// Sign out, then the lesser destruction, then the irreversible one, in
+    /// one row card: the order keeps the recoverable row away from delete.
+    private var lifecycleCard: some View {
+        HLCard(layout: .rows) {
+            signOutRow
+            if showsIrreversibleActions {
+                resetDataRow
+                deleteAccountRow
+            }
+        }
+    }
+
+    private var profileRow: some View {
+        HLSettingsActionRow(
+            icon: "person.crop.circle.fill",
+            title: "Profile",
+            subtitle: "Display name, date of birth, height, time zone.",
+            presents: .sheet
+        ) {
+            showEditProfile = true
+        }
+        .accessibilityIdentifier("settings.account.profileRow")
     }
 
     /// Entry point into Settings → Security.
@@ -157,54 +138,53 @@ struct SettingsAccountScreen: View {
     /// "how I secure my account" door instead of a lone credential list. Also
     /// retires three hardcoded English literals ("Passkeys", "Sign in with Face
     /// ID instead of a password.", "Manage passkeys") flagged by audit C12.
-    private var securityCard: some View {
-        HLSettingsCard {
-            Group {
-                if routesByValue {
-                    HLSettingsActionRow(
-                        title: "settings.security.title",
-                        subtitle: "settings.security.subtitle",
-                        presents: .push,
-                        value: SettingsRoute.security
-                    )
-                } else {
-                    HLSettingsActionRow(
-                        title: "settings.security.title",
-                        subtitle: "settings.security.subtitle",
-                        presents: .push
-                    ) {
-                        SettingsSecurityScreen()
-                    }
+    private var securityRow: some View {
+        Group {
+            if routesByValue {
+                HLSettingsActionRow(
+                    icon: "lock.shield.fill",
+                    title: "settings.security.title",
+                    subtitle: "settings.security.subtitle",
+                    presents: .push,
+                    value: SettingsRoute.security
+                )
+            } else {
+                HLSettingsActionRow(
+                    icon: "lock.shield.fill",
+                    title: "settings.security.title",
+                    subtitle: "settings.security.subtitle",
+                    presents: .push
+                ) {
+                    SettingsSecurityScreen()
                 }
             }
-            .accessibilityIdentifier("settings.account.securityRow")
         }
+        .accessibilityIdentifier("settings.account.securityRow")
     }
 
-    // MARK: - Account lifecycle (relocated from SettingsScreen, v0.11 IA)
+    // MARK: - Account lifecycle
 
-    /// Sign-out is a *recoverable* action — it drops the session locally while
-    /// the server keeps the user's data. It sits above the irreversible delete
-    /// card so the recoverable affordance is never adjacent to the destructive
-    /// one (Apple HIG destructive-action discipline). Reuses the `MoreScreen`
+    /// Sign-out is a *recoverable* action: it drops the session locally while
+    /// the server keeps the user's data. It is the first row of the lifecycle
+    /// card; the lesser destruction (reset) stands between it and the
+    /// irreversible delete, so the recoverable row never sits next to delete
+    /// (Apple HIG destructive-action discipline). Reuses the `MoreScreen`
     /// `Layout` row descriptors so the copy stays a single source of truth.
-    private var signOutCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(
-                icon: MoreScreen.Layout.signOutRow.icon,
-                title: LocalizedStringKey(MoreScreen.Layout.signOutRow.title),
-                subtitle: MoreScreen.Layout.signOutRow.subtitle.map { LocalizedStringKey($0) },
-                role: .destructive,
-                presents: .confirm
-            ) {
-                logoutConfirmation.request()
-            }
-            .disabled(logoutConfirmation.isSigningOut)
-            .accessibilityIdentifier(MoreScreen.Layout.signOutRow.accessibilityIdentifier)
+    private var signOutRow: some View {
+        HLSettingsActionRow(
+            icon: MoreScreen.Layout.signOutRow.icon,
+            title: LocalizedStringKey(MoreScreen.Layout.signOutRow.title),
+            subtitle: MoreScreen.Layout.signOutRow.subtitle.map { LocalizedStringKey($0) },
+            role: .destructive,
+            presents: .confirm
+        ) {
+            logoutConfirmation.request()
         }
+        .disabled(logoutConfirmation.isSigningOut)
+        .accessibilityIdentifier(MoreScreen.Layout.signOutRow.accessibilityIdentifier)
     }
 
-    /// Parity 2.5 — reset health data without deleting the account. Deliberately
+    /// Reset health data without deleting the account. Deliberately
     /// placed BETWEEN sign-out and delete-account: it is destructive, so it sits
     /// below the recoverable action, but it is the *lesser* destruction, so it
     /// precedes the irreversible one. That ordering also makes it discoverable
@@ -218,19 +198,20 @@ struct SettingsAccountScreen: View {
     /// Zeile darunter öffnet. Die Zusicherung steht dort in voller Stärke —
     /// am Ort der Entscheidung, und dort sogar präziser (sie nennt die
     /// Passkeys namentlich).
-    private var resetDataCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(
-                icon: "arrow.counterclockwise",
-                title: "resetData.title",
-                subtitle: "resetData.card.subtitle",
-                role: .destructive,
-                presents: .confirm
-            ) {
-                showResetDataConfirmation = true
-            }
-            .accessibilityIdentifier("settings.account.resetDataRow")
+    private var resetDataRow: some View {
+        // The promise (account and sign-in stay) is the reason to pick this
+        // row over deletion; it is the row's detail line like its neighbours'.
+        HLSettingsActionRow(
+            icon: "arrow.counterclockwise",
+            title: "resetData.title",
+            subtitle: "settings.account.resetData.rowSubtitle",
+            // hl-delete-ladder: stage-3 resetting all data goes through its own typed confirmation screen
+            role: .destructive,
+            presents: .confirm
+        ) {
+            showResetDataConfirmation = true
         }
+        .accessibilityIdentifier("settings.account.resetDataRow")
     }
 
     /// Delete-account is the irreversible action, isolated last before the user
@@ -243,18 +224,17 @@ struct SettingsAccountScreen: View {
     /// („Unwiderruflich · Server entfernt alle Daten"), die ausführliche
     /// Warnung lebt am Ort der Handlung (`DeleteAccountScreen`, Intro-Satz +
     /// Bullet „Diese Aktion kann nicht rückgängig gemacht werden.").
-    private var deleteAccountCard: some View {
-        HLSettingsCard {
-            HLSettingsActionRow(
-                icon: MoreScreen.Layout.deleteAccountRow.icon,
-                title: LocalizedStringKey(MoreScreen.Layout.deleteAccountRow.title),
-                subtitle: MoreScreen.Layout.deleteAccountRow.subtitle.map { LocalizedStringKey($0) },
-                role: .destructive,
-                presents: .confirm
-            ) {
-                showDeleteConfirmation = true
-            }
-            .accessibilityIdentifier(MoreScreen.Layout.deleteAccountRow.accessibilityIdentifier)
+    private var deleteAccountRow: some View {
+        HLSettingsActionRow(
+            icon: MoreScreen.Layout.deleteAccountRow.icon,
+            title: LocalizedStringKey(MoreScreen.Layout.deleteAccountRow.title),
+            subtitle: MoreScreen.Layout.deleteAccountRow.subtitle.map { LocalizedStringKey($0) },
+            // hl-delete-ladder: stage-3 deleting the account goes through its own typed confirmation screen
+            role: .destructive,
+            presents: .confirm
+        ) {
+            showDeleteConfirmation = true
         }
+        .accessibilityIdentifier(MoreScreen.Layout.deleteAccountRow.accessibilityIdentifier)
     }
 }

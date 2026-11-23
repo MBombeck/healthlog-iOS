@@ -73,14 +73,14 @@ struct MeasurementsRepositorySWRTests {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — count only the series
+            // The handler is process-global — count only the series
             // endpoint so a parallel suite's request cannot move this counter.
             if req.targets("/api/measurements/series") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, emptySeriesPayload())
         }
         // First call warms the cache.
         _ = try await repo.series(kind: .weight, days: 30)
-        // W-PERF-SWR C2 — the write-through is detached, so the warm-cache
+        // The write-through is detached, so the warm-cache
         // short-circuit on the second read only holds once the persist lands.
         await swr.drainPendingWrites()
         // Second call inside the staleAfter window (30s for measurementSeries)
@@ -94,15 +94,15 @@ struct MeasurementsRepositorySWRTests {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: count only the recent-list GET — a request from a suite
+            // Count only the recent-list GET — a request from a suite
             // running in parallel must not be attributed to this assertion.
             if req.targets("/api/measurements", method: "GET") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, emptyMeasurementsPayload())
         }
         _ = try await repo.recent(limit: 50)
-        // W-PERF-SWR C2 — drain the detached write-through before the warm read.
+        // Drain the detached write-through before the warm read.
         await swr.drainPendingWrites()
-        // W8-B1 — measurementsRecent now carries a 45s TTL (was staleAfter=0).
+        // measurementsRecent now carries a 45s TTL (was staleAfter=0).
         // A second call inside the window short-circuits to cache with no
         // network round-trip — this is the warm-relaunch cache-paint win.
         // Pull-to-refresh bypasses this via the `forceRevalidate` path
@@ -131,7 +131,7 @@ struct MeasurementsRepositorySWRTests {
         let (onlineRepo, onlineSWR) = try makeRepo(cache: cache, online: true)
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: count only the recent-list GET — a request from a suite
+            // Count only the recent-list GET — a request from a suite
             // running in parallel must not be attributed to this assertion.
             if req.targets("/api/measurements", method: "GET") { calls += 1 }
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, emptyMeasurementsPayload())
@@ -153,7 +153,7 @@ struct MeasurementsRepositorySWRTests {
         let (repo, swr) = try makeRepoWithCache()
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: this test counts both surfaces it drives — the series GET
+            // This test counts both surfaces it drives — the series GET
             // and the replay POST — and nothing else.
             if req.targets("/api/measurements/series") || req.targets("/api/measurements", method: "POST") {
                 calls += 1
@@ -174,7 +174,7 @@ struct MeasurementsRepositorySWRTests {
         }
         _ = try await repo.series(kind: .weight, days: 30)
         #expect(calls == 1)
-        // W-PERF-SWR C2 — drain the detached write-through before the warm hit.
+        // Drain the detached write-through before the warm hit.
         await swr.drainPendingWrites()
         // Warm hit
         _ = try await repo.series(kind: .weight, days: 30)
@@ -196,7 +196,7 @@ struct MeasurementsRepositorySWRTests {
         #expect(calls >= 3, "series() after replay must re-fetch (calls: \(calls))")
     }
 
-    // MARK: - AUD-3 D-3 — dashboardSummary invalidation uses the PROFILE timezone
+    // MARK: - dashboardSummary invalidation uses the PROFILE timezone
 
     /// After a write, the repository must invalidate the `.dashboardSummary`
     /// row keyed on the SERVER-PROFILE day — the same key `DashboardStore`

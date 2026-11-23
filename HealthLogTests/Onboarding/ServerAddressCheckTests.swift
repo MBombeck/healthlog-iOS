@@ -8,7 +8,7 @@
     @testable import HealthLog
     import Testing
 
-    /// #151 — the server's cross-site write guard reads `Origin` (and the
+    /// The server's cross-site write guard reads `Origin` (and the
     /// browser pair around it), so a user-defined header of that name could trip
     /// it. Both names are the app's, like `Authorization`.
     @Suite("Access headers: Origin and Referer are reserved (#151)")
@@ -33,7 +33,7 @@
         }
     }
 
-    /// #149 — a server that is still starting answers the address check with
+    /// A server that is still starting answers the address check with
     /// 503 (`reason: starting` on newer servers, a bare 503 on older ones). That
     /// is not "wrong address", it is "try again in a moment".
     @Suite("Address check: 503 means the server is starting (#149)")
@@ -80,7 +80,7 @@
         }
     }
 
-    /// #153 — the setup draft stays in memory until the user confirms.
+    /// The setup draft stays in memory until the user confirms.
     @MainActor
     @Suite("Setup draft stays in memory (#153)", .serialized)
     struct OnboardingDraftMemoryOnlyTests {
@@ -94,7 +94,7 @@
             let draft = OnboardingDraftStore()
 
             draft.step = .serverURL
-            draft.chosenMode = .server
+            draft.hasStartedServerSetup = true
             draft.server.address = "health-\(Self.secret).example.com"
             draft.server.showsAdvanced = true
             draft.server.headerRows = [ServerAccessHeadersEditor.Row(name: "CF-Access-Client-Secret", value: Self.secret)]
@@ -121,7 +121,7 @@
             #expect(draft.server == ServerAddressDraft())
 
             draft.step = .anamnesis
-            draft.chosenMode = .server
+            draft.hasStartedServerSetup = true
             draft.prepareForAppearance(phase: .unauthenticated)
             #expect(draft.step == OnboardingFlow.initialStep, "past the sign-in without a session is an orphan")
         }

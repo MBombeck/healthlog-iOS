@@ -12,24 +12,15 @@ struct CycleStartNoticeRow: View {
 
     var body: some View {
         let sentence = notice.sentence()
-        // 1.4 B2 — a plain line in the calendar card: no decorative info
-        // glyph and no box inside the card, a 44 pt close target.
+        // A plain line in the calendar card: no decorative info
+        // glyph and no box inside the card, the shared close button.
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
             Text(sentence)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.tertiary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("cycle.startNotice.dismiss"))
-            .accessibilityIdentifier("cycle.startNotice.dismiss")
+            HLIconButton(systemImage: "xmark", label: "cycle.startNotice.dismiss", action: onDismiss)
+                .accessibilityIdentifier("cycle.startNotice.dismiss")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cycle.startNotice")

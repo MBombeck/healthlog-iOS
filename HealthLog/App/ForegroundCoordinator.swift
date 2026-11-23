@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-// **Phase 09 / plan 09-06 — the foreground pass, as one bounded structure.**
+// **The foreground pass, as one bounded structure.**
 //
 // Until this plan the `.active` scene-phase transition fanned out into a dozen
 // free-standing `Task { … }` siblings inside `RootView.handle(scenePhase:)`.
@@ -29,7 +29,7 @@ import Synchronization
 //
 // **What it may claim.** Counts and orderings — how many passes ran, in which
 // order the members started and finished, how many children were still in
-// flight when the pass returned. The `≤ 300 ms p95` foreground budget (B2) is a
+// flight when the pass returned. The `≤ 300 ms p95` foreground budget is a
 // *duration* and stays physical-device evidence for plan 09-09. What is
 // claimable here is that the pass is **bounded by construction** at
 // ``Budget/deadline`` plus ``Budget/drainAllowance``, and that a pass which hit
@@ -124,7 +124,7 @@ struct ForegroundLeg: Sendable {
 /// Everything one foreground pass will do.
 struct ForegroundPlan: Sendable {
     let legs: [ForegroundLeg]
-    /// **14-05 (D-09-06-A) — what the plan owes its gates once the pass is over.**
+    /// **What the plan owes its gates once the pass is over.**
     ///
     /// A plan is built by reading gates, and reading a throttle gate STAMPS it —
     /// before a single member has run. Only the pass knows whether that stamp
@@ -334,7 +334,7 @@ final class ForegroundCoordinator: Sendable {
             // and *awaited* here, so two passes can never be in flight at once.
             _ = await predecessor?.value
             guard let self, currentGeneration == generation, !Task.isCancelled else {
-                // 14-05 — the pass never ran. That is still an outcome its plan
+                // The pass never ran. That is still an outcome its plan
                 // has to hear about: whatever the plan stamped when it was
                 // built was stamped for work that did not happen.
                 await plan.onSettle?(nil)
@@ -401,7 +401,7 @@ final class ForegroundCoordinator: Sendable {
             events: ledger.events,
             drainOverran: drain.overran
         )
-        // 14-05 (J3) — say out loud what the pass did. Until now the ledger knew
+        // Say out loud what the pass did. Until now the ledger knew
         // which members never ran and nothing read it, so "did the dashboard
         // refresh run?" was answerable only from vibes. One line per pass, in
         // the diagnostics vocabulary 13-03 introduced: an outcome word, two

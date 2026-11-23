@@ -12,8 +12,6 @@ import SwiftUI
 /// onto the row at write time (historical truth). The sheet shows it read-only
 /// so the user knows what they are typing in.
 struct CustomMetricEntrySheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: CustomMetricsStore
     let metric: CustomMetricDTO
     /// `nil` → log a new value; non-nil → edit that value.
@@ -24,7 +22,6 @@ struct CustomMetricEntrySheet: View {
     @State private var note: String
     @State private var isSaving = false
     @State private var inlineError: String?
-    @State private var showDiscardConfirm = false
     @FocusState private var focusedField: Field?
 
     /// Future bound for the picker, frozen when the sheet opens so the range
@@ -77,7 +74,11 @@ struct CustomMetricEntrySheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "customMetric.entry.edit.title" : "customMetric.entry.add.title",
+            action: isEditing ? .save(isEnabled: canSave) { await save() } : .add(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
                 Section {
                     HStack {
@@ -87,65 +88,54 @@ struct CustomMetricEntrySheet: View {
                             .accessibilityIdentifier("customMetric.entry.value")
                         if !unitForDisplay.isEmpty {
                             Text(verbatim: unitForDisplay)
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                         }
                     }
                 } header: {
-                    Text("customMetric.entry.value.section")
+                    HLSectionHeader("customMetric.entry.value.section")
                 } footer: {
                     if let band = metric.targetBandDescription {
                         Text("customMetric.entry.target.hint \(band)")
                     }
                 }
+                .hlFormRowSurface()
 
                 // Backdating. Bounded to "not in the future", matching the
-                // measurement sheet. 1.4 B2-c: the picker shows it can be
+                // measurement sheet. The picker shows it can be
                 // changed and refuses the future itself; no hint footer.
                 Section {
                     DatePicker(
-                        "customMetric.entry.measuredAt.label",
                         selection: $measuredAt,
                         in: ...measuredAtBound,
                         displayedComponents: [.date, .hourAndMinute]
-                    )
+                    ) {
+                        HLRowTitle("customMetric.entry.measuredAt.label")
+                    }
                     .accessibilityIdentifier("customMetric.entry.measuredAt.picker")
                 } header: {
-                    Text("customMetric.entry.measuredAt.section")
+                    HLSectionHeader("customMetric.entry.measuredAt.section")
                 }
+                .hlFormRowSurface()
 
-                Section("customMetric.entry.note.section") {
+                Section {
                     TextField("customMetric.entry.note", text: $note, axis: .vertical)
                         .lineLimit(2 ... 5)
                         .focused($focusedField, equals: .note)
+                } header: {
+                    HLSectionHeader("customMetric.entry.note.section")
                 }
+                .hlFormRowSurface()
 
                 if let inlineError {
                     Section { HLFormErrorText(inlineError) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(Text(isEditing ? "customMetric.entry.edit.title" : "customMetric.entry.add.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("customMetric.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("customMetric.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave || isSaving)
-                }
-            }
+            .hlPageMargins()
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = .value
             }
-        }
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
         }
     }
 
@@ -156,8 +146,8 @@ struct CustomMetricEntrySheet: View {
         existing?.unit ?? metric.unit
     }
 
-    private func save() async {
-        guard let value = parsedValue else { return }
+    private func save() async -> Bool {
+        guard let value = parsedValue else { return false }
         isSaving = true
         inlineError = nil
         defer { isSaving = false }
@@ -166,7 +156,7 @@ struct CustomMetricEntrySheet: View {
         let resolvedNote: String? = trimmedNote.isEmpty ? nil : trimmedNote
         if trimmedNote.count > CustomMetricValidation.noteMaxLength {
             inlineError = String(localized: "customMetric.validation.noteTooLong")
-            return
+            return false
         }
         let iso = ISO8601DateFormatter.fractional.string(from: measuredAt)
 
@@ -184,9 +174,10 @@ struct CustomMetricEntrySheet: View {
         }
 
         if ok {
-            dismiss()
+            return true
         } else {
             inlineError = store.lastError ?? String(localized: "customMetric.save.failed")
         }
+        return false
     }
 }

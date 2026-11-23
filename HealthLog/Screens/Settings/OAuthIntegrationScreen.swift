@@ -6,21 +6,19 @@ import SwiftUI
 /// Connect / manage surface for the server-OAuth wearables **Oura**, **Polar**
 /// and **Fitbit** (Google Health). Mirrors ``WithingsIntegrationScreen`` — a
 /// pure backend (B) surface: the connect flow is a server-brokered 3-leg OAuth
-/// (`GET /api/<provider>/connect`, a 302 redirect), impossible without a
-/// backend. In standalone we render the calm ``HLCloudDerivedPlaceholder``
-/// instead of a "Connect" button that opens a doomed browser tab.
+/// (`GET /api/<provider>/connect`, a 302 redirect).
 ///
 /// The data these providers sync (`MeasurementSource`) already flows
 /// server-side; this is the missing iOS manage card (web-parity ❌-7).
 ///
-/// **UI-Standard U2 (R12) — Gerüst C→A.** Diese Seite lief bis U2 auf einem
+/// **UI-Standard U2 — Gerüst C→A.** Diese Seite lief bis U2 auf einem
 /// handgebauten `ScrollView` + `HLCard` im `.elevated`-Stil: anderes Karten-
 /// Primitive (16 pt statt 14 pt Innenabstand, 1 pt volle Kontur statt 0,5 pt
 /// bei 0,6), handgebauter 17-pt-Kartenkopf und **kein** unterer Seitenrand.
-/// Sie liegt jetzt auf `HLSettingsPage` + `HLSettingsCard` wie ihr migriertes
+/// Sie liegt jetzt auf `HLPage` + `HLCard` wie ihr migriertes
 /// fünftes Geschwister ``AppleHealthIntegrationDetailScreen``.
 ///
-/// **R3 — der durchgereichte Provider-Satz ist weg.** „Schlaf, Readiness und
+/// **Der durchgereichte Provider-Satz ist weg.** „Schlaf, Readiness und
 /// Aktivität aus deinem Oura-Konto importieren." stand als Karten-Untertitel
 /// auf der Integrationen-Liste *und* wurde als `subtitle:`-Parameter hierher
 /// durchgereicht und erneut gemalt (Audit-Gruppe 2, 8 Fundstellen / 4 Sätze).
@@ -29,13 +27,9 @@ import SwiftUI
 /// dasselbe Thema hier konkret.
 struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable & AnyObject>: View {
     @Environment(\.appContainer) private var container
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(Store.self) private var store
 
     let displayName: String
-    /// Localized cloud-derived placeholder surface name for standalone mode.
-    let placeholderSurface: String
 
     @State private var refreshTick: Int = 0
     /// BYO-credential form drafts — held transiently only; the secret never
@@ -44,27 +38,13 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     @State private var clientSecretDraft: String = ""
 
     var body: some View {
-        if backend.hasServer {
-            liveBody
-        } else {
-            ScrollView {
-                HLCloudDerivedPlaceholder(
-                    variant: .hero,
-                    surfaceName: placeholderSurface,
-                    onConnect: { authStore.beginServerPairing() }
-                )
-                .padding(HLSpace.lg)
-            }
-            .background(HLColor.background)
-            .navigationTitle(Text(displayName))
-            .navigationBarTitleDisplayMode(.inline)
-        }
+        liveBody
     }
 
     private var liveBody: some View {
-        // 1.4 B2-c — no sync footer: the card's "Last sync" line is the
+        // No sync footer: the card's "Last sync" line is the
         // provider's sync, the app's own sync state has no bearing here.
-        HLSettingsPage(title: LocalizedStringKey(displayName)) {
+        HLPage {
             connectionCard
             if showsCredentialsCard {
                 credentialsCard
@@ -89,25 +69,25 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     /// Status + Aktionen in einer Karte: der Kartenkopf trägt den Provider, die
     /// `HLStatusPill` den Zustand (vorher ein handgebauter 17-pt-Titel
     /// „Verbunden" / „Nicht verbunden"), der Footer die Datenschutz-Aussage.
-    /// 1.4 B2-c: die Aussage ist ein Satz (Anmeldung im Browser, das Passwort
+    /// Die Aussage ist ein Satz (Anmeldung im Browser, das Passwort
     /// sieht HealthLog nie) und steht nur, solange noch nicht verbunden ist;
     /// Token und Server sind aus dem Text.
     private var connectionCard: some View {
-        HLSettingsCard(
-            icon: "link.circle.fill",
-            title: LocalizedStringKey(displayName),
+        HLCard(
+            // The page is named after the service; the card says its state.
+            "Status",
             footer: store.isConnected == true || store.isRetired ? nil : "integration.oauth.howItWorks",
             trailing: { statusPill },
             content: { connectionBody }
         )
     }
 
-    /// 1.4 B2-c — the own-credentials card is an instance-admin tool: it shows
+    /// The own-credentials card is an instance-admin tool: it shows
     /// while the provider is not connected (the instance may need its own app)
     /// or while own credentials are stored (so they can be removed), never
     /// beside a connection that already works without them.
     private var showsCredentialsCard: Bool {
-        // KONTO (#149) — after the Fitbit turndown there is nothing left
+        // After the Fitbit turndown there is nothing left
         // to connect, so no own-app form either; stored credentials can still
         // be removed.
         if store.isRetired { return store.hasOwnCredentials == true }
@@ -127,7 +107,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     private var connectionPill: some View {
         switch store.isConnected {
         case .some(true):
-            // #139 — a connected provider's pill follows `health.state`; a
+            // A connected provider's pill follows `health.state`; a
             // server without `health` keeps the plain "Connected".
             if let health = store.status?.health {
                 HLStatusPill(ConnectionHealthPresentation(health: health).pill)
@@ -137,7 +117,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         case .some(false):
             HLStatusPill(.disconnected(label: String(localized: "Not connected")))
         case .none:
-            // 1.4 B4 — "Checking" only while it is, not after a failed read.
+            // "Checking" only while it is, not after a failed read.
             if store.error == nil {
                 HLStatusPill(.unknown(label: String(localized: "Checking")))
             }
@@ -154,9 +134,11 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
             // im Nicht-verbunden-Zweig (Audit-Gruppe 3) ist ersatzlos gefallen:
             // der Knopf darunter beschriftet sich selbst.
             if let status = store.status, status.connected {
-                Text("Last sync \(status.lastSync?.formatted(.relative(presentation: .named)) ?? "—")")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                // Without a sync there is nothing to say; a dash read as a gap.
+                if let lastSync = status.lastSync {
+                    Text("Last sync \(lastSync.formatted(.relative(presentation: .named)))")
+                        .hlText(.rowSubtitle)
+                }
                 if let health = status.health, !store.isRetired {
                     ConnectionHealthSection(
                         health: health,
@@ -172,7 +154,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 testResultRow(result)
             }
             if let error = store.error {
-                // 1.4 B4 — a sentence for people, never the decoder's text; the
+                // A sentence for people, never the decoder's text; the
                 // route and error id are in "Support-Info kopieren".
                 Text(error.userFacingDescription)
                     .font(.hlCaption)
@@ -188,9 +170,8 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     /// flow works on an instance without a shared env app. On managed cloud this
     /// is optional (the env app is the default); the copy says so.
     private var credentialsCard: some View {
-        HLSettingsCard(
-            icon: "key.horizontal.fill",
-            title: "integration.byo.title",
+        HLCard(
+            "integration.byo.title",
             subtitle: "integration.byo.subtitle"
         ) {
             if store.hasOwnCredentials == true {
@@ -198,22 +179,28 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(HLColor.statusOK)
                     Text("integration.byo.set")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.prose)
                 }
-                HLButton("integration.byo.remove", variant: .destructive, isLoading: store.isWorking) {
-                    Task { await store.deleteCredentials() }
-                }
+                HLDeleteButton(
+                    "integration.byo.remove",
+                    form: .page,
+                    action: .confirmed(title: "settings.integration.removeCredentials.confirm.title") {
+                        await store.deleteCredentials()
+                    }
+                )
+                .disabled(store.isWorking)
                 .accessibilityIdentifier("integration.byo.remove")
             } else {
                 TextField(String(localized: "integration.byo.clientId.placeholder"), text: $clientIdDraft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .hlFieldPlate()
                     .accessibilityIdentifier("integration.byo.clientId")
                 SecureField(String(localized: "integration.byo.clientSecret.placeholder"), text: $clientSecretDraft)
                     .hlSecretEntry()
+                    .hlFieldPlate()
                     .accessibilityIdentifier("integration.byo.clientSecret")
-                // R9 — nachgeordnete Vollbreiten-Aktion: das `.primary` dieses
+                // Nachgeordnete Vollbreiten-Aktion: das `.primary` dieses
                 // Screens ist „Verbinden" in der Karte darüber.
                 HLButton("integration.byo.save", variant: .secondary, isLoading: store.isWorking) {
                     Task { await saveCredentials() }
@@ -247,7 +234,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 .foregroundStyle(result.ok ? HLColor.statusOK : HLColor.statusBad)
             if result.ok, let latency = result.latencyMs {
                 Text(
-                    // W-I18N: interpolates a runtime latency number.
+                    // Interpolates a runtime latency number.
                     verbatim: String(
                         format: NSLocalizedString(
                             "integration.test.ok_latency",
@@ -256,12 +243,10 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                         latency
                     )
                 )
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
             } else {
                 Text(result.ok ? "integration.test.ok" : "integration.test.failed")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
             }
         }
     }
@@ -269,7 +254,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
     @ViewBuilder
     private var actions: some View {
         if store.isRetired {
-            // KONTO (#149) — Google turned Fitbit off: connect, sync and
+            // Google turned Fitbit off: connect, sync and
             // test are gone for good. Disconnecting stays; the data stays too.
             if store.status?.connected == true {
                 HLButton("Disconnect", variant: .destructive) {
@@ -282,7 +267,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 // /api/<provider>/sync` since v1.32.28, not just Fitbit.
                 HLButton(
                     "integration.sync.button",
-                    icon: "arrow.triangle.2.circlepath",
+                    systemImage: "arrow.triangle.2.circlepath",
                     variant: .secondary,
                     isLoading: store.isWorking
                 ) {
@@ -294,7 +279,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
             if store.supportsConnectionTest {
                 HLButton(
                     "integration.test.button",
-                    icon: "checkmark.shield",
+                    systemImage: "checkmark.shield",
                     variant: .secondary,
                     isLoading: store.isWorking
                 ) {
@@ -306,19 +291,19 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
                 Task { await store.disconnect() }
             }
         } else {
-            // R9 — „Verbinden" ist auf jedem Integrations-Screen die
+            // „Verbinden" ist auf jedem Integrations-Screen die
             // abschließende Commit-Aktion und damit das eine `.primary`.
             HLButton(
-                // W-I18N: interpolates the runtime provider name (server
+                // Interpolates the runtime provider name (server
                 // value) — paint verbatim, never re-resolve as a key.
-                verbatim: String(
+                Text(verbatim: String(
                     format: NSLocalizedString(
                         "integration.connectProvider",
                         comment: "Connect button label; %@ is the provider name (Oura/Polar/Fitbit)."
                     ),
                     displayName
-                ),
-                icon: "link",
+                )),
+                systemImage: "link",
                 variant: .primary,
                 isLoading: store.isWorking
             ) {
@@ -327,7 +312,7 @@ struct OAuthIntegrationScreen<Store: OAuthIntegrationStoreProtocol & Observable 
         }
     }
 
-    /// #139 — reconnect is the browser connect flow every provider has; resume
+    /// Reconnect is the browser connect flow every provider has; resume
     /// only where the server has a resume route.
     private var supportedHealthActions: Set<ConnectionHealth.Action> {
         store.supportsResume ? [.reconnect, .resume] : [.reconnect]

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **v1.18.6 (CCH-03)** — `@MainActor @Observable` driver behind the discreet
+/// **v1.18.6** — `@MainActor @Observable` driver behind the discreet
 /// unread dot on the Coach entry points (the floating button + the More-tab
 /// "Coach" row). Holds the server-authoritative unread signal from
 /// `GET /api/insights/coach/nudge-status` and exposes ``unread`` for the dot.
@@ -39,7 +39,7 @@ public final class CoachNudgeStore {
     private let fetchStatus: (@Sendable () async throws -> CoachNudgeStatus)?
     private let postSeen: (@Sendable () async throws -> Void)?
 
-    /// W-FOCUS-FILTER — resolves the live Focus-filter config. Injected (not a
+    /// Resolves the live Focus-filter config. Injected (not a
     /// direct `FocusFilterConfigStore.current()` read) so tests stay isolated
     /// from the shared App Group suite; production reads the shared store.
     private let focusFilterConfig: @MainActor () -> FocusFilterConfig
@@ -88,7 +88,7 @@ public final class CoachNudgeStore {
             nudgedAt = nil
             return
         }
-        // W-FOCUS-FILTER — while a HealthLog Focus filter pauses coach nudges,
+        // While a HealthLog Focus filter pauses coach nudges,
         // keep the proactive-nudge dot dark. The server unread state is
         // untouched; the next refresh after the Focus ends re-surfaces it.
         if focusFilterConfig().suppressesCoachNudges {

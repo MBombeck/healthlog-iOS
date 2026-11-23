@@ -11,7 +11,7 @@
     #endif
     @testable import HealthLog
 
-    /// **v0.6.2.3 F3-SEC (A-SEC NEW-M-1) — outbox AES-GCM key hygiene.**
+    /// **Outbox AES-GCM key hygiene.**
     ///
     /// Pre-v0.6.2.3 the per-install outbox-payload key
     /// (`KeychainKey.outboxPayloadKey`) survived both `handleLocalLogout()`
@@ -59,7 +59,7 @@
             #expect(KeychainKey.outboxPayloadKey == "outbox.payload.key")
         }
 
-        // MARK: - Same-account row-preserving logout KEEPS the key (v0.7.1 C-1)
+        // MARK: - Same-account row-preserving logout KEEPS the key
 
         @Test("performFullLocalLogout(.userInitiated) keeps the outbox-payload key")
         func userInitiatedLogoutKeepsOutboxKey() async throws {
@@ -95,7 +95,7 @@
             #expect(keychain.getData(forKey: KeychainKey.outboxPayloadKey) != nil)
         }
 
-        // MARK: - Outbox-clearing logout DROPS the key (v0.7.1 C-1)
+        // MARK: - Outbox-clearing logout DROPS the key
 
         @Test("handleLocalLogout() (.switchServer) drops the outbox-payload key")
         func switchServerLogoutWipesOutboxKey() async throws {

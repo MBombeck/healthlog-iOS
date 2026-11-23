@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #103 / #115 · 1.3 — a one-area Health Score must not render like a full one.
+/// A one-area Health Score must not render like a full one.
 /// `scoreBasis` and `compositionNotice` ride `GET /api/dashboard/snapshot` →
 /// `healthScore` (server v1.38, `HealthScoreBasis` in `docs/api/openapi.yaml`
 /// at `v1.39.0`); the app shows "based on N of M areas" beside the number.

@@ -10,7 +10,7 @@ import Foundation
 /// All non-essential fields are optional so additional server fields never
 /// break iOS decoding — same tolerant shape as ``WithingsStatus``.
 ///
-/// **#139 — the connection state is `health` only.** The ledger `state` and
+/// **The connection state is `health` only.** The ledger `state` and
 /// `lastError` this struct used to decode are deprecated in server v1.43 and
 /// removed in v1.44; nothing here reads them any more. A server before v1.42.4
 /// sends no `health`, and the surface then shows no state line rather than a
@@ -24,7 +24,7 @@ public struct OAuthIntegrationStatus: Codable, Sendable, Hashable {
     public let connectedAt: Date?
     public let tokenExpiresAt: Date?
     public let scope: String?
-    /// #139 — the server's unified connection state (v1.42.4+).
+    /// The server's unified connection state (v1.42.4+).
     public let health: ConnectionHealth?
 
     public init(
@@ -136,7 +136,7 @@ public struct ConnectionTestResult: Codable, Sendable, Hashable {
 /// self-hoster pastes their instance URL (+ optional API token) which the
 /// server stores encrypted; `configured` is whether a URL is stored.
 ///
-/// #139 — like ``OAuthIntegrationStatus`` it reads the connection state from
+/// Like ``OAuthIntegrationStatus`` it reads the connection state from
 /// `health` only; the deprecated ledger `state` / `lastError` are gone.
 public struct NightscoutStatus: Codable, Sendable, Hashable {
     public let connected: Bool
@@ -145,7 +145,7 @@ public struct NightscoutStatus: Codable, Sendable, Hashable {
     public let allowPrivateHost: Bool?
     public let lastSuccessAt: Date?
     public let lastAttemptAt: Date?
-    /// #139 — the server's unified connection state (v1.42.4+).
+    /// The server's unified connection state (v1.42.4+).
     public let health: ConnectionHealth?
 
     public init(

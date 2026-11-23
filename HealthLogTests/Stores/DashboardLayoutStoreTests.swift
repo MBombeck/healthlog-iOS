@@ -11,7 +11,7 @@ struct DashboardLayoutStoreTests {
     /// for PUT — mirrors the real server's `setWidgetLayout` shape.
     actor LayoutStubAPI: APIClientProtocol {
         private(set) var lastPutPayload: DashboardWidgetLayout?
-        /// Parity 1.2 — the reset path is a DELETE now, so the stub has to be
+        /// The reset path is a DELETE now, so the stub has to be
         /// able to see one (and to fail one).
         private(set) var deleteCount = 0
         var getResponse: DashboardWidgetLayout
@@ -118,7 +118,7 @@ struct DashboardLayoutStoreTests {
 
         await store.load()
 
-        // v0.4.1: defaults are tile-visible. Use `achievements` which stays
+        // Defaults are tile-visible. Use `achievements` which stays
         // hidden by default (has a dedicated tile, not a metric tile) — the
         // flip exercises the same code path in both directions.
         let achievementsBefore = store.layout.widgets.first { $0.id == "achievements" }
@@ -156,7 +156,7 @@ struct DashboardLayoutStoreTests {
         #expect(store.error != nil)
     }
 
-    /// v0.14 b147 — a user-pinned id is exempt from the empty-tile auto-hide
+    /// A user-pinned id is exempt from the empty-tile auto-hide
     /// so a freshly pinned, zero-data synth tile still appears on the home
     /// strip. The exemption signal is `DashboardLayoutStore.recentlyPinnedIds`.
     @Test("setPinned tracks the id for the auto-hide exemption; even with no data the pin is NOT hidden")
@@ -237,7 +237,7 @@ struct DashboardLayoutStoreTests {
         #expect(store.error == nil)
     }
 
-    /// **Parity 1.2 — reset must DELETE, and must not PUT anything.**
+    /// **Reset must DELETE, and must not PUT anything.**
     ///
     /// The old implementation PUT the materialised `DashboardWidgetLayout
     /// .default`. That local default is missing twelve ids the server knows, and
@@ -333,7 +333,7 @@ struct DashboardLayoutStoreTests {
         #expect(store.lastUpdatedAt == nil)
     }
 
-    // MARK: - v0.5.3 D-4 — defaults-merge migration
+    // MARK: - Defaults-merge migration
 
     /// Restore the migration flag in `UserDefaults.standard` to its
     /// pre-test value. Extracted to a helper so the defer-block stays a
@@ -370,7 +370,7 @@ struct DashboardLayoutStoreTests {
         // v0.7.0 HK adopt-and-stream
         "walkingDoubleSupport", "respiratoryRate",
         "audioExposureEnvironment", "audioExposureHeadphone",
-        // v0158 — v1.25 clinical measurement types
+        // v1.25 clinical measurement types
         "painNRS", "gripStrength", "waistCircumference", "waistToHeight"
     ]
 
@@ -452,7 +452,7 @@ struct DashboardLayoutStoreTests {
 
         let merged = DashboardLayoutStore.mergedWithDefaults(existing)
         let bmiAfter = merged.widgets.first { $0.id == "bmi" }
-        // GH #81 — `bmi` is NOT one of the seven v0.4.1 ids, so a hide on it
+        // `bmi` is NOT one of the seven v0.4.1 ids, so a hide on it
         // is a person's decision and survives the merge. Until b249 this
         // expectation read `== true` and codified the defect.
         #expect(bmiAfter?.effectiveTileVisible == false)
@@ -460,7 +460,7 @@ struct DashboardLayoutStoreTests {
         #expect(merged.widgets.count == existing.widgets.count)
     }
 
-    // MARK: - GH #81 — a web-side hide must survive the defaults migration
+    // MARK: - A web-side hide must survive the defaults migration
 
     /// The reporter's exact case: `weight` hidden from the web UI, so the
     /// server stores `visible: false, tileVisible: false` on that row alone.

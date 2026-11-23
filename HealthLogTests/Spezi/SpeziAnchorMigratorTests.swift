@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// Phase 07 Wave 2 — the account cutover, restated.
+    /// The account cutover, restated.
     ///
     /// **This suite replaces `SpeziAnchorMigrator — legacy → Spezi seed`.** The old
     /// suite pinned four properties of a migration that ran in the opposite

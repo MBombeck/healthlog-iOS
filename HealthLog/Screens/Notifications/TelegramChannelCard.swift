@@ -22,17 +22,16 @@ struct TelegramChannelCard: View {
     @State private var testTick = 0
 
     var body: some View {
-        // 1.4 B2 — the fields name what to enter; no footer repeats them.
-        HLSettingsCard(icon: "paperplane.fill", title: "notifications.telegram.title") {
-            Toggle(isOn: $enabled) {
-                Text("notifications.telegram.enable")
-                    .font(.hlSubhead.weight(.semibold))
-            }
-            .accessibilityIdentifier("notifications.telegram.enableToggle")
+        // The fields name what to enter; no footer repeats them.
+        HLCard("notifications.telegram.title") {
+            HLSettingsToggleRow(
+                title: "notifications.telegram.enable",
+                description: nil,
+                isOn: $enabled,
+                accessibilityID: "notifications.telegram.enableToggle"
+            )
 
             if enabled {
-                Divider().opacity(0.5)
-
                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                     Text("notifications.telegram.token")
                         .font(.hlCaption)
@@ -55,35 +54,32 @@ struct TelegramChannelCard: View {
 
                 if let invalid = validationMessage {
                     Text(invalid)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLColor.statusBad)
+                        .hlText(.rowStatus, status: HLColor.statusBad)
                         .accessibilityIdentifier("notifications.telegram.validation")
                 }
             }
 
-            HLButton(
-                String(localized: "notifications.channel.save"),
-                variant: .secondary,
-                isLoading: store.telegramWorking
-            ) {
-                Task { await save() }
-            }
-            .disabled(store.telegramWorking || validationMessage != nil)
-            .accessibilityIdentifier("notifications.telegram.saveButton")
-
+            // Save and test belong together: one pair, save as the main
+            // action; without a channel to test, save stands alone.
             if enabled {
-                HLButton(
-                    String(localized: "notifications.channel.test"),
-                    icon: "paperplane",
-                    // UI-Standard R9 (U6) — siehe NtfyChannelCard: Test und
-                    // Speichern sind hier beide `.secondary`.
-                    variant: .secondary,
-                    isLoading: store.telegramWorking
-                ) {
-                    Task { await test() }
+                HLButtonPair {
+                    saveButton
+                } secondary: {
+                    HLButton(
+                        "notifications.channel.test",
+                        systemImage: "paperplane",
+                        // UI-Standard R9 — siehe NtfyChannelCard: Test und
+                        // Speichern sind hier beide `.secondary`.
+                        variant: .secondary,
+                        isLoading: store.telegramWorking
+                    ) {
+                        Task { await test() }
+                    }
+                    .disabled(store.telegramWorking)
+                    .accessibilityIdentifier("notifications.telegram.testButton")
                 }
-                .disabled(store.telegramWorking)
-                .accessibilityIdentifier("notifications.telegram.testButton")
+            } else {
+                saveButton
             }
 
             if store.telegramTestSucceeded {
@@ -91,10 +87,9 @@ struct TelegramChannelCard: View {
             }
 
             if let error = store.telegramError {
-                // v0.14.1 #3 — generic copy for 5xx; never raw server text.
+                // Generic copy for 5xx; never raw server text.
                 Text(error.userFacingDescription)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLColor.statusBad)
+                    .hlText(.rowStatus, status: HLColor.statusBad)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("notifications.telegram.error")
             }
@@ -102,6 +97,18 @@ struct TelegramChannelCard: View {
         .onAppear { hydrate() }
         .onChange(of: store.telegram) { _, _ in hydrate() }
         .sensoryFeedback(.success, trigger: testTick)
+    }
+
+    private var saveButton: some View {
+        HLButton(
+            "notifications.channel.save",
+            variant: .secondary,
+            isLoading: store.telegramWorking
+        ) {
+            Task { await save() }
+        }
+        .disabled(store.telegramWorking || validationMessage != nil)
+        .accessibilityIdentifier("notifications.telegram.saveButton")
     }
 
     // MARK: - Derived
@@ -132,8 +139,7 @@ struct TelegramChannelCard: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLText.primary)
             Text("notifications.channel.test.sent")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowStatus)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)

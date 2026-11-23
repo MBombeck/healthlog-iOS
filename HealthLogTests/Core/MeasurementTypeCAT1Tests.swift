@@ -48,7 +48,7 @@ struct MeasurementTypeCAT1Tests {
         #expect(decoded == .audioExposureEvent)
     }
 
-    /// Audit B-4 — `serverCases`, not `allCases`: `.unknown` is a decode-only
+    /// `serverCases`, not `allCases`: `.unknown` is a decode-only
     /// sentinel whose `encode` deliberately throws, so it has no round trip.
     @Test("Every server case survives round-trip", arguments: ServerMeasurementType.serverCases)
     func allCasesRoundTrip(type: ServerMeasurementType) throws {
@@ -62,19 +62,19 @@ struct MeasurementTypeCAT1Tests {
         let all = Set(ServerMeasurementType.allCases.map(\.rawValue))
         #expect(all.contains("WALKING_STEADINESS"))
         #expect(all.contains("AUDIO_EXPOSURE_EVENT"))
-        // v0.5.2 F2 — three new server-backed types
+        // Three new server-backed types
         #expect(all.contains("RESTING_HEART_RATE"))
         #expect(all.contains("HEART_RATE_VARIABILITY"))
         #expect(all.contains("VO2_MAX"))
-        // v0.8.3 W-D — four render-backlog activity aggregates
+        // Four render-backlog activity aggregates
         #expect(all.contains("ACTIVE_ENERGY_BURNED"))
         #expect(all.contains("FLIGHTS_CLIMBED"))
         #expect(all.contains("WALKING_RUNNING_DISTANCE"))
         #expect(all.contains("TIME_IN_DAYLIGHT"))
-        // v0.8.4 W-WALK — two gait aggregates, server-persisted since v1.6.0
+        // Two gait aggregates, server-persisted since v1.6.0
         #expect(all.contains("WALKING_SPEED"))
         #expect(all.contains("WALKING_STEP_LENGTH"))
-        // v0.11 W21 — eight web-parity body-composition + cardio additions.
+        // Eight web-parity body-composition + cardio additions.
         #expect(all.contains("FAT_FREE_MASS"))
         #expect(all.contains("LEAN_BODY_MASS"))
         #expect(all.contains("MUSCLE_MASS"))
@@ -83,9 +83,9 @@ struct MeasurementTypeCAT1Tests {
         #expect(all.contains("VASCULAR_AGE"))
         #expect(all.contains("VISCERAL_FAT"))
         #expect(all.contains("WALKING_HEART_RATE_AVERAGE"))
-        // v0.11 reconcile (F3) — 9th type Withings FAT_MASS.
+        // v0.11 reconcile — 9th type Withings FAT_MASS.
         #expect(all.contains("FAT_MASS"))
-        // v0.13.1 IC — seven v1.10.0 additive HealthKit signals.
+        // Seven v1.10.0 additive HealthKit signals.
         #expect(all.contains("CARDIO_RECOVERY"))
         #expect(all.contains("WRIST_TEMPERATURE"))
         #expect(all.contains("FALL_COUNT"))
@@ -103,48 +103,54 @@ struct MeasurementTypeCAT1Tests {
         #expect(all.contains("AUDIO_EXPOSURE_HEADPHONE"))
         #expect(all.contains("WALKING_ASYMMETRY"))
         #expect(all.contains("WALKING_DOUBLE_SUPPORT"))
-        // v0.14.6 — three v1.12.8 WHOOP-native read-only aggregates.
+        // Three v1.12.8 WHOOP-native read-only aggregates.
         #expect(all.contains("AVERAGE_HEART_RATE"))
         #expect(all.contains("MAX_HEART_RATE"))
         #expect(all.contains("SLEEP_DISTURBANCE_COUNT"))
-        // v0.14.1 W-B189 — four v1.17.1 source-fixed render-only signals (#23).
+        // Four v1.17.1 source-fixed render-only signals.
         #expect(all.contains("ANS_CHARGE"))
         #expect(all.contains("CARDIO_LOAD"))
         #expect(all.contains("SLEEP_SCORE"))
         #expect(all.contains("BODY_TEMPERATURE_DEVIATION"))
-        // v0158 — four v1.25 clinical measurement types.
+        // Four v1.25 clinical measurement types.
         #expect(all.contains("PAIN_NRS"))
         #expect(all.contains("GRIP_STRENGTH"))
         #expect(all.contains("WAIST_CIRCUMFERENCE"))
         #expect(all.contains("WAIST_TO_HEIGHT"))
         // 12 base + 9 (F2/W-D/W-WALK groups above) + 9 (W21 + FAT_MASS)
-        // + 7 (IC v1.10.0) + 6 (v0.11 sleep + siblings) + 3 (v0.14.6 WHOOP)
+        // + 7 (IC v1.10.0) + 6 (v0.11 sleep + siblings) + 3
         // + 4 (v0.14.1 W-B189 v1.17.1 source-fixed) + 4 (v0158 v1.25 clinical)
         // + 23 (Build 3 / 3.3 — der Decoder-Nachzug: ACTIVITY_STEPS, die vier
         //   Screener-Scores, die WHOOP/Oura-Score-Klassen und die kategorialen
         //   Herz-/Atem-Events; verifiziert als Mengendifferenz gegen das
         //   77-gliedrige Server-Enum) = 77.
         //
-        // Audit B-4 — die Zahl steht weiter für das Server-Enum, deshalb zählt
+        // Die Zahl steht weiter für das Server-Enum, deshalb zählt
         // sie `serverCases`: `__UNKNOWN__` ist kein Server-Wert, sondern der
         // Sammelfall, auf dem ein 78. Server-Typ landet statt verworfen zu
         // werden. `allCases` ist um genau diesen einen Fall größer.
         //
-        // #162 — + 4 Garmin-Typen aus Server v1.47.0 (BODY_BATTERY,
+        // + 4 Garmin-Typen aus Server v1.47.0 (BODY_BATTERY,
         // STRESS_LEVEL, TRAINING_READINESS, ACUTE_TRAINING_LOAD) = 81.
         #expect(all.contains("BODY_BATTERY"))
         #expect(all.contains("STRESS_LEVEL"))
         #expect(all.contains("TRAINING_READINESS"))
         #expect(all.contains("ACUTE_TRAINING_LOAD"))
         //
-        // HK-NEW (1.5) — + 6 Apple-Health-Typen, die der Server seit v1.44.0
+        // + 6 Apple-Health-Typen, die der Server seit v1.44.0
         // abbildet (EXERCISE_MINUTES, STAND_MINUTES, STAND_HOURS,
         // MINDFUL_MINUTES, STATE_OF_MIND_VALENCE, AFIB_BURDEN) = 87.
         for wire in ["EXERCISE_MINUTES", "STAND_MINUTES", "STAND_HOURS", "MINDFUL_MINUTES", "STATE_OF_MIND_VALENCE", "AFIB_BURDEN"] {
             #expect(all.contains(wire))
         }
-        #expect(Set(ServerMeasurementType.serverCases.map(\.rawValue)).count == 87)
-        #expect(all.count == 88)
+        //
+        // + 5 read-only types (BLOOD_KETONES, BASAL_ENERGY_BURNED, INDOOR_CO2,
+        // INDOOR_TEMPERATURE, INDOOR_HUMIDITY) = 92, the server enum of v1.47.2.
+        for wire in ["BLOOD_KETONES", "BASAL_ENERGY_BURNED", "INDOOR_CO2", "INDOOR_TEMPERATURE", "INDOOR_HUMIDITY"] {
+            #expect(all.contains(wire))
+        }
+        #expect(Set(ServerMeasurementType.serverCases.map(\.rawValue)).count == 92)
+        #expect(all.count == 93)
         #expect(all.contains("__UNKNOWN__"))
     }
 }

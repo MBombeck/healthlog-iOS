@@ -102,7 +102,7 @@ enum DoctorReportToFHIRBundle {
 
         if let vitals = spec.vitals {
             for row in vitals.rows {
-                // AUD-4 M1 — a row whose value is non-finite / out-of-range is
+                // A row whose value is non-finite / out-of-range is
                 // dropped (nil) rather than emitting a corrupt Quantity.
                 if let observation = makeSummaryObservation(
                     row: row,
@@ -117,7 +117,7 @@ enum DoctorReportToFHIRBundle {
         if let charts = spec.charts {
             for series in charts.series {
                 for point in series.points {
-                    // AUD-4 M1 — drop non-finite / out-of-range points.
+                    // Drop non-finite / out-of-range points.
                     if let observation = makePointObservation(
                         kind: series.kind,
                         point: point,
@@ -264,7 +264,7 @@ enum DoctorReportToFHIRBundle {
         let patient = Patient()
         patient.id = FHIRString(patientID).asPrimitive()
 
-        // v0.10.0 — prefer the full legal name for the FHIR HumanName; fall
+        // Prefer the full legal name for the FHIR HumanName; fall
         // back to the cover's display patientName when no full name is set.
         let raw = (cover.fullName?.trimmingCharacters(in: .whitespacesAndNewlines))
             .flatMap { $0.isEmpty ? nil : $0 }
@@ -282,7 +282,7 @@ enum DoctorReportToFHIRBundle {
             patient.name = [name]
         }
 
-        // v0.10.0 — KVNR as the patient's statutory-insurance identifier. The
+        // KVNR as the patient's statutory-insurance identifier. The
         // insurer (Krankenkasse) is the assigner of that number, so it rides
         // as `identifier.assigner.display` — semantically exact in FHIR R4 and
         // keeps everything inside the single Patient resource. The KVNR value
@@ -404,7 +404,7 @@ enum DoctorReportToFHIRBundle {
     /// valid `effective[x]` (FHIR-R4 conformance — audit B6).
     /// Returns `nil` when the row's value is non-finite / out-of-range so the
     /// caller drops it from the bundle rather than emitting a corrupt /
-    /// encode-aborting Quantity (AUD-4 M1).
+    /// encode-aborting Quantity.
     private static func makeSummaryObservation(
         row: DoctorReportSpec.VitalsSummary.Row,
         patientID: String,
@@ -429,7 +429,7 @@ enum DoctorReportToFHIRBundle {
         if row.kind == .bloodPressure { // summary row
             // Systolic always present; emit the diastolic component only when
             // a secondary mean exists — never fabricate a `0 mm[Hg]` reading
-            // (FHIR-R4 data-correctness — audit B4-edge). AUD-4 M1: a non-finite
+            // (FHIR-R4 data-correctness — audit B4-edge). A non-finite
             // systolic drops the whole row.
             guard let sysComponent = makeBPComponent(
                 loinc: MetricFHIRMapper.bloodPressureSystolicLOINC, value: row.mean
@@ -468,7 +468,7 @@ enum DoctorReportToFHIRBundle {
     /// `value = .quantity(point.value)`.
     /// Returns `nil` when the point's value is non-finite / out-of-range so the
     /// caller drops it from the bundle rather than emitting a corrupt /
-    /// encode-aborting Quantity (AUD-4 M1).
+    /// encode-aborting Quantity.
     private static func makePointObservation(
         kind: MetricKind,
         point: DoctorReportSpec.ChartsBlock.Point,
@@ -487,7 +487,7 @@ enum DoctorReportToFHIRBundle {
 
         if kind == .bloodPressure {
             // Emit the diastolic component only when present — never a
-            // fabricated `0 mm[Hg]` reading (audit B4-edge). AUD-4 M1: a
+            // fabricated `0 mm[Hg]` reading (audit B4-edge). A
             // non-finite systolic drops the whole point.
             guard let sysComponent = makeBPComponent(
                 loinc: MetricFHIRMapper.bloodPressureSystolicLOINC, value: point.value
@@ -709,7 +709,7 @@ enum DoctorReportToFHIRBundle {
         coding.code = FHIRString(loinc.code).asPrimitive()
         coding.display = FHIRString(loinc.display).asPrimitive()
         let concept = CodeableConcept()
-        concept.coding = [coding] + companionCodings(for: loinc) // #115 R3 — R4 vital-signs magic code
+        concept.coding = [coding] + companionCodings(for: loinc) // R4 vital-signs magic code
         concept.text = FHIRString(loinc.display).asPrimitive()
         return concept
     }
@@ -741,7 +741,7 @@ enum DoctorReportToFHIRBundle {
     ///
     /// Vitals (mm[Hg], Cel, /min, kg, …) are all canonical, so the vitals path
     /// is unchanged — they keep their coded system+code.
-    /// Returns `nil` for a non-finite / out-of-range `value` (AUD-4 M1) so the
+    /// Returns `nil` for a non-finite / out-of-range `value` so the
     /// caller can DROP the observation rather than emit a corrupt / encode-
     /// aborting Quantity.
     static func makeQuantity(value: Double, ucum: UCUMUnit) -> Quantity? {
@@ -765,7 +765,7 @@ enum DoctorReportToFHIRBundle {
         return quantity
     }
 
-    /// Returns `nil` for a non-finite / out-of-range `value` (AUD-4 M1).
+    /// Returns `nil` for a non-finite / out-of-range `value`.
     private static func makeBPComponent(loinc: LOINCCode, value: Double) -> ObservationComponent? {
         guard let quantity = makeQuantity(value: value, ucum: UCUMUnit(unit: "mm[Hg]")) else { return nil }
         let component = ObservationComponent(code: makeCodeableConcept(loinc: loinc))
@@ -786,12 +786,12 @@ enum FHIRPrimitiveFactory {
     }
 
     static func dateTime(from date: Date) -> FHIRPrimitive<DateTime> {
-        // A2-L4 — non-throwing construction (no `try!` on runtime dates).
+        // Non-throwing construction (no `try!` on runtime dates).
         FHIRDateConverter.dateTime(from: date).asPrimitive()
     }
 
     static func instant(from date: Date) -> FHIRPrimitive<Instant> {
-        // A2-L4 — non-throwing construction (no `try!` on runtime dates).
+        // Non-throwing construction (no `try!` on runtime dates).
         FHIRDateConverter.instant(from: date).asPrimitive()
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - v0.5.2 A6 / Mini-Coach wiring
+// MARK: - Mini-Coach wiring
 
 //
 // AppContainer.swift is at its 600-line ceiling, so the Mini-Coach
@@ -8,14 +8,14 @@ import Foundation
 // actor-bound classifier, history, and safety-filter — the container
 // just owns the singleton lifetime + DI seam.
 //
-// **UX-surface is deferred to v0.5.2 C4-C6.** This wave (C1+C2+C3)
+// **UX-surface is deferred to v0.5.2 C4-C6.** This wave
 // ships the foundation: an actor-bound coach the eventual chat surface
 // can resolve from `@Environment(\.miniCoach)` without touching this
 // extension.
 
 public extension AppContainer {
     /// Lazy-instantiated singleton — first read on the MainActor wires
-    /// the service against the live AI capability gate (#115 · 0.2). Cached on the
+    /// the service against the live AI capability gate. Cached on the
     /// associated-object box so subsequent reads return the same
     /// actor (state — conversation history etc. — persists across
     /// reads for the session, per C3).
@@ -42,7 +42,7 @@ public extension AppContainer {
         return created
     }
 
-    /// **W-B187 COACH-3** — shared driver for the coach self-context +
+    /// Shared driver for the coach self-context +
     /// clarifying-question loop (adopt / dismiss / remember). Lazily cached on
     /// the same `MiniCoachBox` so the Settings "About me" editor and the chat
     /// "remember this" action operate on the SAME store instance — a question
@@ -98,7 +98,7 @@ final class MiniCoachBox {
         aboutMeStoreByContainer[ObjectIdentifier(container)] = store
     }
 
-    /// **W-PHI-HARDENING (G5) / 06-05** — the box-backed PHI stores currently
+    /// The box-backed PHI stores currently
     /// cached for `container`, type-erased to the marker protocol. This is the
     /// SINGLE, EXPLICIT collection point ``clearStores(for:)`` drains and the
     /// `LogoutCompletenessTests` box-coverage invariant inspects. A NEW
@@ -127,7 +127,7 @@ final class MiniCoachBox {
     /// Mini-Coach store for this container on logout.
     ///
     /// `MiniCoachBox` is the ONE per-user store cache the logout cascade did
-    /// not touch (B1): the `coachAboutMeStore` / `miniCoachStore` are
+    /// not touch: the `coachAboutMeStore` / `miniCoachStore` are
     /// *computed* (box-backed) properties, invisible to the reflection-based
     /// `LogoutCompletenessTests` registry, so the leak slipped through. After
     /// an A→B account switch the cached ``CoachAboutMeStore`` kept
@@ -144,7 +144,7 @@ final class MiniCoachBox {
     /// ``MiniCoachHistory`` carried the previous user's turns.
     func clearStores(for container: AppContainer) async {
         let key = ObjectIdentifier(container)
-        // W-PHI-HARDENING (G5) — wipe every cached box-backed PHI store through
+        // Wipe every cached box-backed PHI store through
         // the single ``boxBackedPHIStores(for:)`` registry the completeness
         // suite enforces, BEFORE dropping the caches. Routing the wipe through
         // the same collection the test inspects means a new conformer added to

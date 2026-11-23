@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-31 — the Health Score v2 wire, end to end through the real `APIClient`.**
+/// **The Health Score v2 wire, end to end through the real `APIClient`.**
 ///
 /// Two things are pinned here.
 ///
@@ -13,7 +13,7 @@ import Testing
 ///    while `/api/analytics.healthScore` became the server's internal
 ///    `HealthScoreReport` (`{ composite, pillars, weightGoal, … }` — no
 ///    top-level `score`). The repository must read the snapshot.
-/// 2. **Ring semantics (GH #42).** `MED_COMPLIANCE` carries today's dose
+/// 2. **Ring semantics.** `MED_COMPLIANCE` carries today's dose
 ///    progress plus the `{ taken, scheduled }` tally, its band is green or
 ///    yellow but never red, and a day with nothing scheduled produces NO ring
 ///    at all. Every number is rendered as the server sent it — the client
@@ -149,7 +149,7 @@ struct HealthScoreV2SnapshotTests {
         #expect(slot.briefingState == .ready)
     }
 
-    // MARK: - Ring semantics (GH #42) — no client recompute
+    // MARK: - Ring semantics — no client recompute
 
     /// The proof that nothing is recomputed on device: the fixture's dose tally
     /// (1 of 3 ≈ 33 %) deliberately disagrees with the server's `score` of 42.
@@ -187,9 +187,6 @@ struct HealthScoreV2SnapshotTests {
         """#.utf8)
         let slot = try JSONDecoder.hlDefault.decode(DashboardSnapshotBriefing.self, from: json)
         #expect(slot.scoreRings.contains { $0.id == .medCompliance } == false)
-        // Rendering reads the array — an absent ring simply has no row.
-        let rows = DashboardHeroRingReconciler.reconcile(snapshotRings: slot.scoreRings, derived: [])
-        #expect(rows.contains { $0.id == .medCompliance } == false)
     }
 
     /// The dose ring is a progress reading, not an adherence judgement: the
@@ -213,35 +210,6 @@ struct HealthScoreV2SnapshotTests {
         #expect(ring.score == score)
         // A zero-progress morning is yellow, not a red failure.
         if score == 0 { #expect(ring.band == "yellow") }
-    }
-
-    /// The derived rings keep the snapshot value only until the live derived
-    /// source lands; either way the number comes from a server, never from an
-    /// on-device blend.
-    @Test("derived rings adopt the live server value and never a local computation")
-    func derivedRingsUseServerValues() {
-        let ring = DashboardScoreRing(id: .recovery, score: 55, band: "yellow")
-        let live = DerivedMetricDTO(
-            metric: "RECOVERY_SCORE",
-            status: "ok",
-            value: DerivedMetricDTO.Value(score: 61, band: "yellow"),
-            coverage: DerivedMetricDTO.Coverage(
-                requiredInputs: 5, presentInputs: 4, historyDays: 14, missing: []
-            ),
-            confidence: DerivedMetricDTO.Confidence(score: 80, band: "high"),
-            provenance: DerivedMetricDTO.Provenance(
-                inputs: ["RESTING_HEART_RATE"], source: "DAY", windowDays: 14, computedAt: .now
-            ),
-            reason: nil
-        )
-        let rows = DashboardHeroRingReconciler.reconcile(snapshotRings: [ring], derived: [live])
-        #expect(rows.first?.displayScore == 61)
-        #expect(rows.first?.source == .live)
-
-        // Without the live read the snapshot value stands — still a server number.
-        let cold = DashboardHeroRingReconciler.reconcile(snapshotRings: [ring], derived: [])
-        #expect(cold.first?.displayScore == 55)
-        #expect(cold.first?.source == .snapshot)
     }
 }
 

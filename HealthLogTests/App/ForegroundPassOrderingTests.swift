@@ -75,7 +75,7 @@
 
             #expect(
                 starved + orderedBehindTheSweep == 0,
-                "EXPECTED_RED: the summary step is starved behind the HealthKit sweep"
+                "the summary step is starved behind the HealthKit sweep"
             )
             #expect(report?.count(.dashboardSummary, .skipped) == 0)
             // 09-06's invariants, unchanged: one member per pass, nothing left

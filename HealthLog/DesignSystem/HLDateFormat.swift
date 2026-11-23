@@ -1,6 +1,6 @@
 import Foundation
 
-/// **A360-1 H1 / A360-4 QoL-3 — date-format preference (auto / DMY / MDY / YMD).**
+/// **Date-format preference (auto / DMY / MDY / YMD).**
 ///
 /// Mirrors the server's `User.dateFormat` Prisma enum
 /// (`src/lib/format-locale.ts` `DateFormatPreference`): `AUTO` defers to the
@@ -101,7 +101,19 @@ public enum HLDateFormat: String, CaseIterable, Sendable {
     /// field order follows the server pick while the device timezone governs
     /// the calendar day.
     public func formatDate(_ date: Date, style: Style = .abbreviated) -> String {
-        date.formatted(Self.formatStyle(for: style).locale(formattingLocale))
+        date.formatted(Self.formatStyle(for: style).locale(locale(for: style)))
+    }
+
+    /// The locale a style renders through. Korean spells a date year first
+    /// whatever the pick ("2026년 6월 17일"), and every pinned locale would
+    /// spell its month, weekday and AM/PM in another language. Under a Korean
+    /// interface the pick therefore governs the numeric style only, and the
+    /// spelled-out styles read Korean.
+    func locale(for style: Style) -> Locale {
+        guard self != .auto, style != .numeric, AppLanguage.current == .ko else {
+            return formattingLocale
+        }
+        return AppLanguage.current.formattingLocale
     }
 
     /// Format `date` honouring BOTH the date-order preference AND the
@@ -120,7 +132,7 @@ public enum HLDateFormat: String, CaseIterable, Sendable {
         defaults: UserDefaults = .standard
     ) -> String {
         let locale = Self.dateTimeLocale(
-            dateOrder: formattingLocale,
+            dateOrder: locale(for: style),
             timeFormat: HLTimeFormat.current(defaults: defaults)
         )
         return date.formatted(
@@ -176,7 +188,7 @@ public enum HLDateFormat: String, CaseIterable, Sendable {
         current(defaults: defaults).formatDateTime(date, style: style, defaults: defaults)
     }
 
-    // MARK: - Compact day+month with conditional year (b215)
+    // MARK: - Compact day+month with conditional year
 
     /// Compact **day + month** for historical list rows, appending the **year**
     /// only when `date` falls outside `now`'s calendar year. Same-year dates keep

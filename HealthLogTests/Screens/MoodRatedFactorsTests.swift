@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.1 §7 — Mood v2 rated factors (server v1.12.0 ingestion contract).
+/// Mood v2 rated factors (server v1.12.0 ingestion contract).
 /// Covers the additive `MoodTag.kind`/`scale`/`inverse` decode, the RATED
 /// detection the picker branches on, the client-side scale clamp, and the
 /// `MoodEntryPatch` wire encoding (omit empty `ratedFactors`).
@@ -188,7 +188,7 @@ struct MoodRatedFactorsTests {
         #expect(!MoodTagPicker.isVisibleBinary(rated))
     }
 
-    // MARK: - v0.14.7 — rated-factor READ-BACK decode + qualitative mapping
+    // MARK: - Rated-factor READ-BACK decode + qualitative mapping
 
     @Test("MoodEntry decodes the server ratedFactors read field")
     func moodEntryDecodesRatedFactors() throws {

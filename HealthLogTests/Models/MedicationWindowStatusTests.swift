@@ -147,7 +147,7 @@ struct MedicationWindowStatusTests {
         #expect(status == .late)
     }
 
-    // MARK: - W-MEDVERIFY (v0.14.8) — weekday gate on the per-entry window
+    // MARK: - Weekday gate on the per-entry window
 
     /// Sunday-only weekly med (demo Trulicity: `FREQ=WEEKLY;BYDAY=SU`,
     /// window 08:00–10:00). 2026-05-20 is a Wednesday.
@@ -201,7 +201,7 @@ struct MedicationWindowStatusTests {
         #expect(status == .inWindow)
     }
 
-    // MARK: - W-B179 — "Jetzt fällig" must NOT fire before the window start
+    // MARK: - "Jetzt fällig" must NOT fire before the window start
 
     /// A wall-clock instant on the fixed reference Wednesday (2026-05-20)
     /// shifted by `dayOffset` days. Used for the overnight-tail vectors.
@@ -435,7 +435,7 @@ struct MedicationWindowStatusTests {
     }
 }
 
-/// W-B180 — green from WINDOW start, not from the slot instant.
+/// Green from WINDOW start, not from the slot instant.
 ///
 /// Daily med, window `[20:30, 22:00]`, server slot 21:00. The b179
 /// future-due gate compared against the SLOT instant, so the card stayed

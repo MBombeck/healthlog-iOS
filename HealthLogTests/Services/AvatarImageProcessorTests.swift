@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import UIKit
 
-/// **v0.8.0 W11 — client-side downscale respects the server limits.**
+/// **Client-side downscale respects the server limits.**
 ///
 /// The server caps uploads at 2 MiB + 2048×2048. The processor must shrink an
 /// oversized image's longest edge to ≤ `maxDimension` and recompress under the

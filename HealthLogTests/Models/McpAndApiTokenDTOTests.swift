@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **MCP + API-token wire contract (Build 2 / 2.7 + 2.8).**
+/// **MCP + API-token wire contract.**
 ///
 /// These DTOs back the surface a user reaches for when they want to cut an
 /// external assistant's access to their health record. A decode that throws on

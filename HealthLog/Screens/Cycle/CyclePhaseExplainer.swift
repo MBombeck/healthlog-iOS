@@ -15,13 +15,11 @@ import SwiftUI
 /// art swaps in with zero layout churn. See ``PhaseHighlightSlot``.
 ///
 /// Monochrome doctrine: the body copy is monochrome `HLText`; the only colour is
-/// the sparse warm phase tint in the highlight motif + the small phase chip.
+/// the sparse warm phase tint in the highlight motif.
 struct CyclePhaseExplainer: View {
     let phase: CyclePhasePalette.Phase
-    /// The 1-based day-of-cycle, surfaced in the chip ("Day N · Phase").
+    /// The 1-based day-of-cycle, surfaced in the badge ("Day N, Phase").
     let dayOfCycle: Int?
-
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         // v0.14.1 polish — framed as a TILE in `HLCard` (operator: the
@@ -29,52 +27,35 @@ struct CyclePhaseExplainer: View {
         // section title leads as a heading ABOVE the card; the warm headline +
         // body copy + the bottom-anchored highlight image live inside the card.
         //
-        // 1.4 B2 — the card keeps the picture, the chip and the headline; the
+        // The card keeps the picture, the badge and the headline; the
         // longer text about the phase moved behind the screen's (i)
         // (`CycleInfo`), and so did the guide link. The references stay at the
         // card's foot, outside the combined element so VoiceOver reaches them
         // as their own control (1.0.3, App Review 1.4.1).
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Text("cycle.explain.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-            HLCard {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    VStack(alignment: .leading, spacing: HLSpace.lg) {
-                        PhaseHighlightSlot(phase: phase)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 120)
-                            .clipShape(RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-                            .overlay(alignment: .bottomLeading) { phaseChip }
-                        Text(Self.headlineKey(for: phase))
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .accessibilityElement(children: .combine)
-                    HLSourcesLink(topic: .cycle)
+        HLSectionHeader("cycle.explain.title", rank: .area)
+        HLCard {
+            VStack(alignment: .leading, spacing: HLLayout.rowSpacing) {
+                VStack(alignment: .leading, spacing: HLLayout.rowSpacing) {
+                    PhaseHighlightSlot(phase: phase)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+                    // The phase as the one status of the card, under the
+                    // picture: a capsule on a photo would lose its contrast.
+                    HLBadge(Self.badgeText(phase: phase, dayOfCycle: dayOfCycle), icon: "circle.fill", tone: .neutral)
+                    Text(Self.headlineKey(for: phase))
+                        .hlText(.objectName)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .accessibilityElement(children: .combine)
+                HLSourcesLink(topic: .cycle)
             }
         }
     }
 
-    private var phaseChip: some View {
-        let tint = CyclePhasePalette.tint(for: phase, scheme: colorScheme)
-        return HStack(spacing: HLSpace.xs) {
-            Circle().fill(tint).frame(width: 7, height: 7)
-            Text(chipText)
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-        }
-        .padding(.horizontal, HLSpace.sm)
-        .padding(.vertical, HLSpace.xs)
-        .hlGlassEffect(in: Capsule(), fallback: HLSurface.secondary)
-        .padding(HLSpace.sm)
-    }
-
-    private var chipText: String {
-        let phaseName = String(localized: Self.nameKey(for: phase))
+    /// "Tag 12, Follikelphase", or the phase alone without a day count.
+    nonisolated static func badgeText(phase: CyclePhasePalette.Phase, dayOfCycle: Int?) -> String {
+        let phaseName = String(localized: nameKey(for: phase))
         if let day = dayOfCycle {
             return String(
                 format: String(localized: "cycle.explain.chip.dayPhase"),
@@ -86,7 +67,7 @@ struct CyclePhaseExplainer: View {
 
     // MARK: - Deterministic per-phase copy keys (de + en)
 
-    /// Phase name (chip + a11y).
+    /// Phase name (badge + a11y).
     nonisolated static func nameKey(for phase: CyclePhasePalette.Phase) -> LocalizedStringResource {
         switch phase {
         case .menstrual: "cycle.phase.menstrual.name"
@@ -107,7 +88,7 @@ struct CyclePhaseExplainer: View {
     }
 
     /// The warm, honest body of copy explaining what's happening right now.
-    /// 1.4 B2: read in the cycle screen's info sheet (`CycleInfo`).
+    /// Read in the cycle screen's info sheet (`CycleInfo`).
     nonisolated static func bodyKey(for phase: CyclePhasePalette.Phase) -> LocalizedStringResource {
         switch phase {
         case .menstrual: "cycle.explain.menstrual.body"
@@ -142,7 +123,7 @@ struct PhaseHighlightSlot: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    /// v0.14.10 §4 — the part of a scaled-to-fill highlight image kept in frame.
+    /// The part of a scaled-to-fill highlight image kept in frame.
     /// Default `.center`; the **menstrual** asset is black at the top + colour at
     /// the bottom, so it bottom-anchors to reveal the colourful lower portion (the
     /// other three phases stay centred/fill as before). Pure + `static` so it's
@@ -159,7 +140,7 @@ struct PhaseHighlightSlot: View {
         // `UIImage(named:)` returns nil when the asset isn't in the catalog yet,
         // so we cleanly fall back without a broken-image placeholder.
         if UIImage(named: assetName) != nil {
-            // v0.14.10 §4 — fill the slot, then anchor the overflow per phase: the
+            // Fill the slot, then anchor the overflow per phase: the
             // menstrual art is bottom-anchored (colour at the bottom) while the
             // others keep the centred fill. The frame + `.clipped()` crop the
             // scaled image to the slot at the chosen anchor.

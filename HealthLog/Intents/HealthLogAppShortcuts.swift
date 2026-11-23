@@ -1,6 +1,6 @@
 import AppIntents
 
-/// **v0.7.1 W-APPINTENTS** — exposes the HealthLog App Intents to Siri,
+/// Exposes the HealthLog App Intents to Siri,
 /// Spotlight, and the Shortcuts app.
 ///
 /// `AppShortcutsProvider` is the system entry point: iOS reads
@@ -13,7 +13,7 @@ import AppIntents
 /// (key = the English phrase with `${applicationName}` / `${parameter}`
 /// tokens); Siri never reads them from `Localizable.xcstrings`. Short titles
 /// stay in `Localizable`. `AppShortcutPhraseCatalogTests` keeps code and
-/// catalog in step (1.5 SIRI-L10N).
+/// catalog in step.
 struct HealthLogAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -27,7 +27,7 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             shortTitle: "Log blood glucose",
             systemImageName: "drop.fill"
         )
-        // v0.15 W-SIRI — the generic scalar-measurement write intent. Closes
+        // The generic scalar-measurement write intent. Closes
         // the voice/Shortcut gap for every hand-logged scalar metric (weight,
         // pulse, body temperature, SpO₂, respiratory rate, body fat) that had
         // no dedicated intent. The `\(\.$kind)` token lets Siri / Shortcuts
@@ -45,7 +45,7 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             shortTitle: "Log a measurement",
             systemImageName: "square.and.pencil"
         )
-        // 1.5 SHORTCUT (#155, public #1295) — a value for one of the
+        // A value for one of the
         // person's own metrics. `\(\.$metric)` lets Siri fill the metric by
         // name from `CustomMetricEntityQuery`.
         AppShortcut(
@@ -68,7 +68,7 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             shortTitle: "Log blood pressure",
             systemImageName: "heart.fill"
         )
-        // v0.10.0 W-Mood-B — the mood-log write intent. The lowest-friction
+        // The mood-log write intent. The lowest-friction
         // entry in the app: a one-second voice/Shortcut log. Natural "log my
         // mood" phrasings register for Siri + Spotlight; EN + DE phrasings
         // both register via the xcstrings catalogue.
@@ -93,7 +93,7 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             shortTitle: "Mark medication taken",
             systemImageName: "pills.fill"
         )
-        // v0.8.4 WWIDGET-3 — the compliance READ intent. The first read /
+        // The compliance READ intent. The first read /
         // query intent in the surface (the others are all writes). Natural
         // "did I take my meds today?" phrasings register for Siri + Spotlight;
         // the intent is `isDiscoverable` so Spotlight can surface it as an
@@ -110,7 +110,7 @@ struct HealthLogAppShortcuts: AppShortcutsProvider {
             shortTitle: "Check today’s adherence",
             systemImageName: "checklist"
         )
-        // W-B187 QOL-1 — the per-medication READ intent ("Did I take
+        // The per-medication READ intent ("Did I take
         // Lisinopril?"). The compliance query above answers the AGGREGATE
         // ("X of Y doses today"); this one answers about ONE medication by
         // name. `isDiscoverable` so Spotlight can surface it as an action.

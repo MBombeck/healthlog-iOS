@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **S2 (#115) — confirmed progress survives every way a sweep can end, and
+/// **Confirmed progress survives every way a sweep can end, and
 /// never crosses an account.**
 ///
 /// Abort in the background, 5xx, a 429 longer than the wake, an account switch

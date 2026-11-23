@@ -1,6 +1,6 @@
 import XCTest
 
-/// **08-11 — the Insights score grid, at both text sizes, plus its own audit.**
+/// **The Insights score grid, at both text sizes, plus its own audit.**
 ///
 /// Split into its own file for the same reason `+Logout` and `+SupportGate` are:
 /// `Phase8AccessibilityUITests` is close enough to the `type_body_length` budget
@@ -137,7 +137,7 @@ extension Phase8AccessibilityUITests {
     ) throws -> [String] {
         var mine: [String] = []
         var elsewhere: [String] = []
-        // **K1 — what sits behind the tab bar is not measured as the grid.**
+        // **What sits behind the tab bar is not measured as the grid.**
         // At AccessibilityXXXL the overview's title and description fill the
         // first screen and the grid's heading starts at y=910.7 — below the fold
         // of the iPhone 17 Pro this case was green on (874 pt, Phase 22/25),
@@ -148,7 +148,7 @@ extension Phase8AccessibilityUITests {
         // an element the tab bar overlaps is therefore printed, not asserted —
         // every other finding type, and every contrast finding in the open,
         // still fails the case.
-        let chrome = app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame : .null
+        let chrome = ShellNavigator.tabBarFrame(in: app)
         var underChrome: [String] = []
         // The screen the audit actually looks at, recorded before it runs: a
         // finding's coordinates only mean something against this picture.
@@ -160,7 +160,7 @@ extension Phase8AccessibilityUITests {
         var details: [String] = []
         try app.performAccessibilityAudit(for: [.contrast, .dynamicType, .hitRegion, .textClipped]) { issue in
             let frame = issue.element?.frame ?? .null
-            // K1 — a contrast reading taken through the tab bar's glass is a
+            // A contrast reading taken through the tab bar's glass is a
             // reading of the fold, not of the element (see `underChrome`).
             let throughGlass = issue.auditType == .contrast && !frame.isNull && chrome.intersects(frame)
             // The element's IDENTIFIER and type, never its label: a label on

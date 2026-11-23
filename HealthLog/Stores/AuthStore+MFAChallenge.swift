@@ -1,6 +1,6 @@
 import Foundation
 
-/// #37 — the observable second-factor challenge. Kept outside the primary type
+/// The observable second-factor challenge. Kept outside the primary type
 /// body so the release lint gate holds the store below its structural size
 /// ceiling; the nested name `AuthStore.MfaChallenge` is unchanged.
 public extension AuthStore {

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-THRESHOLD-NUDGE (v0.15.2) — the MDR-safe out-of-range nudge.**
+/// **The MDR-safe out-of-range nudge.**
 ///
 /// This is the app's most regulatory-sensitive surface, so the suite pins every
 /// safety invariant as an executable contract:
@@ -177,7 +177,7 @@ struct ThresholdNudgeTests {
         // States the reading + the range factually.
         #expect(content.body.contains("250"))
         #expect(content.body.contains("70") && content.body.contains("180"))
-        // Carries the non-diagnostic disclaimer. UI-Standard R16 (U1) — die
+        // Carries the non-diagnostic disclaimer. UI-Standard R16 — die
         // Push ist die EINE Fläche, auf der der Hinweis den Ack-Schalter
         // überlebt (der Nutzer hat seine Bestätigung auf dem Sperrbildschirm
         // nicht dabei). Gekürzt wurde er auf eine Halbzeile:

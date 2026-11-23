@@ -141,7 +141,7 @@ struct HealthKitBackfillWindowStoreTests {
 
     @Test("Disallowed chars im UserId werden gestripped (Key-Shape-Sicherheit, M-6)")
     func dottedUserIdSanitized() {
-        // v0.6.2 (M-6): allowlist `[A-Za-z0-9_-]` strips everything else,
+        // Allowlist `[A-Za-z0-9_-]` strips everything else,
         // including dots. Legacy behaviour replaced dots with underscores.
         #expect(HealthKitBackfillWindowStore.partitionToken(for: "a.b.c") == "abc")
     }

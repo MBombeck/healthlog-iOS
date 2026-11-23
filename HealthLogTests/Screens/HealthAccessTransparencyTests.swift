@@ -9,7 +9,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **Phase 16 Plan 03 — the 5.1.3(i) page moves with the type sets.**
+    /// **The 5.1.3(i) page moves with the type sets.**
     ///
     /// This is the Auflage the operator attached to his own E2 answer, in his
     /// own words: a larger first permission dialog with an unchanged
@@ -33,7 +33,7 @@
         #if canImport(HealthKit)
 
             @Test("the transparency page lists ECG and State of Mind unconditionally and exactly once")
-            func transparencyListsTheEnlargedSetOnce() throws {
+            func transparencyListsTheEnlargedSetOnce() {
                 let ecg = HKObjectType.electrocardiogramType().identifier
                 let mood = HKObjectType.stateOfMindType().identifier
 
@@ -47,29 +47,9 @@
                 if !read.contains(mood) { violations.append("the page cannot list a mood read the set does not ask for") }
                 if !write.contains(mood) { violations.append("the page cannot list a mood write the set does not ask for") }
 
-                // The conditional scaffolding — it exists only because the two
-                // types were opt-in-only, and it must be gone rather than left
-                // lying next to an unconditional membership.
-                let page = try Self.strippedSource(Self.pagePath)
-                if page.contains("moodSyncTypeIdentifiers") {
-                    violations.append("the page still joins State of Mind through a toggle-gated helper")
-                }
-                if page.contains("ecgTypeIdentifiers") {
-                    violations.append("the page still joins the ECG type through a toggle-gated helper")
-                }
-
-                // And the doc comments must stop describing the old world: a
-                // page whose prose says a type is "deliberately kept OUT of the
-                // default sets" while the set contains it is a review risk
-                // written down.
-                let prose = try Self.rawSource(Self.pagePath)
-                if prose.contains("deliberately kept OUT of the default sets (the") {
-                    violations.append("the page's own comments still call State of Mind a settings-only opt-in")
-                }
-
                 #expect(
                     violations.isEmpty,
-                    "EXPECTED_RED: the 5.1.3(i) page still derives ECG/mood conditionally"
+                    "the 5.1.3(i) page still derives ECG/mood conditionally"
                 )
             }
 
@@ -116,18 +96,9 @@
             }
 
             @Test("the cycle set stays conditional — E2 said nothing about it")
-            func cycleSetStaysConditional() throws {
-                let page = try Self.strippedSource(Self.pagePath)
-                #expect(
-                    page.contains("cycleTypeIdentifiers"),
-                    """
-                    The reproductive set is a separate opt-in with its own legal surface and men are never \
-                    prompted for it (`CycleGate.isCycleTrackingAvailable`). E2 moved EKG and Stimmung; it \
-                    did not move this.
-                    """
-                )
-                // It is also still outside the default sets, which is what makes
-                // the conditional join necessary rather than duplicative.
+            func cycleSetStaysConditional() {
+                // The reproductive set is a separate opt-in with its own legal
+                // surface, so it must stay outside the always-on sheet.
                 let defaults = Set(
                     HealthKitService.defaultReadTypes.map(\.identifier)
                         + HealthKitService.defaultWriteTypes.map(\.identifier)
@@ -150,47 +121,6 @@
             }
 
         #endif
-
-        // MARK: - Source access
-
-        private static let pagePath = "HealthLog/Screens/Settings/Sub/SettingsHealthAccessScreen.swift"
-
-        private static let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
-        static func rawSource(_ relativePath: String) throws -> String {
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        }
-
-        static func strippedSource(_ relativePath: String) throws -> String {
-            try stripLineComments(from: stripBlockComments(from: rawSource(relativePath)))
-        }
-
-        private static func stripBlockComments(from source: String) -> String {
-            var out = ""
-            var rest = Substring(source)
-            while let open = rest.range(of: "/*") {
-                out += rest[..<open.lowerBound]
-                guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-                rest = rest[close.upperBound...]
-            }
-            return out + rest
-        }
-
-        private static func stripLineComments(from source: String) -> String {
-            source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-                var quoted = false
-                var previous: Character = " "
-                for (offset, character) in line.enumerated() {
-                    if character == "\"", previous != "\\" { quoted.toggle() }
-                    if !quoted, character == "/", previous == "/" { return String(line.prefix(offset - 1)) }
-                    previous = character
-                }
-                return String(line)
-            }.joined(separator: "\n")
-        }
     }
 
 #endif

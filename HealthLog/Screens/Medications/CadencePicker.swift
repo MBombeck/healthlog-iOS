@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.10 R1 §3.7 — the medication cadence picker. Mirrors the web oracle
+/// The medication cadence picker. Mirrors the web oracle
 /// (`src/components/medications/scheduling/CadencePicker.tsx`): one kind picker
 /// driving conditional sub-controls (weekday chips, interval steppers,
 /// day-of-month, yearly date, rolling-days, cyclic on/off weeks + anchor). The
@@ -16,9 +16,18 @@ struct CadencePicker: View {
     @Binding var sub: CadenceSubControls
 
     var body: some View {
-        Picker("med.schedule.cadence.label", selection: $kind) {
-            ForEach(CadenceKind.allCases) { kind in
-                Text(Self.kindLabelKey(kind)).tag(kind)
+        // The weekday chips belong to "How often" and share its row, so no
+        // row gap opens between the question and its answer.
+        VStack(alignment: .leading, spacing: HLSpace.sm) {
+            Picker(selection: $kind) {
+                ForEach(CadenceKind.allCases) { kind in
+                    Text(Self.kindLabelKey(kind)).tag(kind)
+                }
+            } label: {
+                HLRowTitle("med.schedule.cadence.label")
+            }
+            if kind == .weekdays {
+                CadenceWeekdayChips(selection: $sub.weekdays)
             }
         }
         subControls
@@ -29,10 +38,8 @@ struct CadencePicker: View {
     @ViewBuilder
     private var subControls: some View {
         switch kind {
-        case .daily:
+        case .daily, .weekdays:
             EmptyView()
-        case .weekdays:
-            CadenceWeekdayChips(selection: $sub.weekdays)
         case .everyNWeeks:
             HLIntStepperRow(
                 titleKey: "med.schedule.cadence.intervalWeeks.label",
@@ -63,10 +70,11 @@ struct CadencePicker: View {
             )
         case .yearly:
             DatePicker(
-                "med.schedule.cadence.yearly.date.label",
                 selection: $sub.yearlyDate,
                 displayedComponents: [.date]
-            )
+            ) {
+                HLRowTitle("med.schedule.cadence.yearly.date.label")
+            }
         case .rolling:
             HLIntStepperRow(
                 titleKey: "med.schedule.cadence.rollingDays.label",
@@ -74,11 +82,11 @@ struct CadencePicker: View {
                 range: 1 ... 365,
                 unitKey: "med.schedule.cadence.rollingDays.suffix"
             )
-            // 1.4 B2 — one line: the preview names the count from the last
+            // One line: the preview names the count from the last
             // intake, which is what the explainer used to say beside it.
             preview(Text("med.schedule.cadence.rolling.preview \(sub.rollingDays)"))
         case .cyclic:
-            // 09-14 — the anchor DatePicker that used to sit here is gone. It
+            // The anchor DatePicker that used to sit here is gone. It
             // wrote to a `cycleAnchor` wire key that appears zero times in the
             // published contract, and it duplicated a control the sheets
             // already show: the cycle is counted from the course start in
@@ -95,7 +103,7 @@ struct CadencePicker: View {
                 range: 0 ... 52,
                 unitKey: "med.schedule.cadence.intervalWeeks.suffix"
             )
-            // 1.4 B2 — the steppers show the weeks; the one line left says
+            // The steppers show the weeks; the one line left says
             // what the choice does and where the cycle counts from.
             explainer("med.schedule.cadence.cyclic.explainer")
         case .oneShot:
@@ -108,8 +116,7 @@ struct CadencePicker: View {
 
     private func explainer(_ key: LocalizedStringKey) -> some View {
         Text(key)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
     }
 
     /// Live cadence preview — rendered with the monochrome tertiary text so it
@@ -117,8 +124,7 @@ struct CadencePicker: View {
     /// signal only).
     private func preview(_ text: Text) -> some View {
         text
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
     }
 
     static func kindLabelKey(_ kind: CadenceKind) -> LocalizedStringKey {
@@ -140,51 +146,39 @@ struct CadencePicker: View {
 // MARK: - Weekday chips
 
 /// Multi-select weekday chip row — Mon→Sun ordering (the wizard's canonical
-/// layout). Selected chips use `.tint`; unselected stay on the monochrome
-/// surface. Mirrors the web `WeekdayChips` (`CadencePicker.tsx`) + the existing
-/// `WeekdayPicker` chip style so the two add/edit surfaces never drift.
+/// layout). Seven chips share one line evenly; VoiceOver reads the full day
+/// for each abbreviation. Mirrors the web `WeekdayChips` (`CadencePicker.tsx`).
 struct CadenceWeekdayChips: View {
     @Binding var selection: Set<Weekday>
 
-    private static let order: [Weekday] = [.mon, .tue, .wed, .thu, .fri, .sat, .sun]
+    static let order: [Weekday] = [.mon, .tue, .wed, .thu, .fri, .sat, .sun]
 
     var body: some View {
-        HStack(spacing: HLSpace.xs) {
+        HLChipRow {
             ForEach(Self.order, id: \.rawValue) { day in
-                Button {
-                    toggle(day)
-                } label: {
-                    Text(Self.shortKey(day))
-                        .font(.hlMetric(.subheadline))
-                        // 44 pt min tap target (HIG / WCAG 2.5.5) — matches the
-                        // web oracle's `h-11` chip height.
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(
-                            RoundedRectangle(cornerRadius: HLRadius.xs)
-                                .fill(selection.contains(day)
-                                    ? AnyShapeStyle(.tint.opacity(0.18))
-                                    : AnyShapeStyle(HLColor.surface))
-                        )
-                        .foregroundStyle(selection.contains(day)
-                            ? AnyShapeStyle(.tint)
-                            : AnyShapeStyle(HLText.secondary))
+                HLChip(
+                    Self.shortKey(day),
+                    spokenTitle: Self.longKey(day),
+                    isSelected: selection.contains(day)
+                ) {
+                    selection = Self.toggled(selection, day)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(Self.longKey(day)))
-                .accessibilityAddTraits(selection.contains(day) ? .isSelected : [])
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("med.schedule.weekday.group.label"))
     }
 
-    private func toggle(_ day: Weekday) {
-        if selection.contains(day) {
-            // Keep at least one weekday selected (mirror server: BYDAY ≥ 1).
-            if selection.count > 1 { selection.remove(day) }
+    /// The selection after a tap on `day`. The last chosen day stays chosen,
+    /// as the server needs at least one (BYDAY ≥ 1).
+    static func toggled(_ selection: Set<Weekday>, _ day: Weekday) -> Set<Weekday> {
+        var next = selection
+        if next.contains(day) {
+            if next.count > 1 { next.remove(day) }
         } else {
-            selection.insert(day)
+            next.insert(day)
         }
+        return next
     }
 
     static func shortKey(_ day: Weekday) -> LocalizedStringKey {
@@ -226,11 +220,10 @@ struct HLIntStepperRow: View {
     var body: some View {
         Stepper(value: $value, in: range) {
             HStack {
-                Text(titleKey)
+                HLRowTitle(titleKey)
                 Spacer()
                 valueText
-                    .font(.hlMetric(.subheadline))
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                     .monospacedDigit()
             }
         }
@@ -239,7 +232,7 @@ struct HLIntStepperRow: View {
     @ViewBuilder
     private var valueText: some View {
         if let unitKey {
-            Text("\(value) ") + Text(unitKey)
+            Text("\(value) \(Text(unitKey))")
         } else {
             Text("\(value)")
         }

@@ -3,7 +3,7 @@ import Foundation
 /// `GET /api/mood/analytics` — the canonical daily mood series (server
 /// `MoodDailySeries`, `docs/api/openapi.yaml` at `v1.39.0`): one mean per
 /// profile-zone day (`YYYY-MM-DD`) plus the shared summary over the daily
-/// means. #115 · 1.3 — the Mood analysis takes its day means from here.
+/// means. The Mood analysis takes its day means from here.
 ///
 /// The summary's `slope7` / `slope30` are `TrendSlope` objects on the wire
 /// (`{ slope, direction, confidence }`); the decoder used to expect bare

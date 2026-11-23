@@ -2,7 +2,7 @@
     import ActivityKit
     import Foundation
 
-    /// **v0.8.4 WWIDGET-1 — Medication-reminder Live Activity attributes.**
+    /// **Medication-reminder Live Activity attributes.**
     ///
     /// Drives the Lock-Screen banner + Dynamic Island for a single due
     /// medication dose. The type is intentionally a small, self-contained
@@ -75,7 +75,7 @@
             /// label without the process having to tick a timer.
             var countdownTarget: Date
 
-            /// **v0.10 W-LiveActivity-POLISH** — set `true` the instant the
+            /// Set `true` the instant the
             /// in-place "Genommen" Live-Activity intent records the dose,
             /// *before* the Activity ends. Drives the green-check success
             /// transition the user sees on the Lock Screen WITHOUT the app
@@ -109,7 +109,7 @@
             /// countdown-to-revert hint.
             var pendingConfirmStartedAt: Date?
 
-            /// **W-B183 (dose-safety coherence)** — the server-gated overdue
+            /// The server-gated overdue
             /// truth, computed in the APP process and carried into the widget.
             ///
             /// The widget extension is a SEPARATE process that cannot reach the
@@ -129,7 +129,7 @@
             /// already-running activity decoded without this key stay neutral.
             var isOverdue: Bool = false
 
-            /// **W-B187 (time-format coherence)** — the user's resolved
+            /// The user's resolved
             /// `HLTimeFormat` raw value ("AUTO" / "H12" / "H24"), computed in the
             /// APP process and carried into the widget so the Live-Activity dose
             /// time ("fällig um HH:mm" / "Genommen um HH:mm") honours the SAME
@@ -150,6 +150,68 @@
             /// call-sites and any already-running activity decoded without this
             /// key fall back to the device locale's own hour cycle.
             var timeFormatRaw: String = "AUTO"
+
+            /// The wire keys. Spelled out so the hand-written decoder below and
+            /// the synthesized encoder agree on one list, and so the golden
+            /// fixture (`HealthLogTests/Fixtures/LiveActivity/`) has a single
+            /// place to be compared against.
+            enum CodingKeys: String, CodingKey {
+                case status
+                case countdownTarget
+                case confirmed
+                case pendingConfirm
+                case pendingConfirmStartedAt
+                case isOverdue
+                case timeFormatRaw
+            }
+        }
+    }
+
+    extension MedicationActivityAttributes.ContentState {
+        /// **#188 (2) — a content state the server sends must always decode.**
+        ///
+        /// ActivityKit decodes the `content-state` of every remote `update` and
+        /// `end` push with this initializer. The synthesized decoder required
+        /// every key, defaults included, so the `"content-state": {}` an `end`
+        /// carried failed with `keyNotFound "status"` and the end was dropped:
+        /// the countdown kept running after the dose was taken on the web.
+        ///
+        /// Every key is optional now. A missing or unknown `status` reads as
+        /// `.pending` (the state the server cannot have ended from anything
+        /// else), a missing `countdownTarget` as the moment of decoding, and the
+        /// flags keep their declared defaults. Lives in an extension so the
+        /// memberwise initializer the controller and the intents call stays.
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let rawStatus = try? container.decodeIfPresent(String.self, forKey: .status)
+            status = rawStatus.flatMap(Status.init(rawValue:)) ?? .pending
+            countdownTarget = try container.decodeIfPresent(Date.self, forKey: .countdownTarget) ?? Date()
+            confirmed = try container.decodeIfPresent(Bool.self, forKey: .confirmed) ?? false
+            pendingConfirm = try container.decodeIfPresent(Bool.self, forKey: .pendingConfirm) ?? false
+            pendingConfirmStartedAt = try container.decodeIfPresent(Date.self, forKey: .pendingConfirmStartedAt)
+            isOverdue = try container.decodeIfPresent(Bool.self, forKey: .isOverdue) ?? false
+            timeFormatRaw = try container.decodeIfPresent(String.self, forKey: .timeFormatRaw) ?? "AUTO"
+        }
+
+        /// **#188 (6) — what the countdown corner shows at `now`.**
+        enum CountdownPresentation: Equatable {
+            /// Nothing: the dose is snoozed, taken or confirmed.
+            case hidden
+            /// Counting down to the due time.
+            case countdown(ClosedRange<Date>)
+            /// The due time has passed; counts up from it
+            /// (`Text(target, style: .relative)`).
+            case overdueSince(Date)
+        }
+
+        /// Before the due time a forward timer; from the due time on the time
+        /// since then, which keeps counting on its own. The clamped range the
+        /// views used before showed the seconds since the last render once the
+        /// target had passed. While snoozed nothing counts, on every surface.
+        func countdownPresentation(now: Date) -> CountdownPresentation {
+            guard status == .pending, !confirmed else { return .hidden }
+            guard countdownTarget > now else { return .overdueSince(countdownTarget) }
+            return .countdown(now ... countdownTarget)
         }
     }
 #endif

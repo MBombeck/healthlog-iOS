@@ -6,17 +6,18 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Locks the 401-cascade classification (v0.10.0). `RefreshOutcome.classify`
+/// Locks the 401-cascade classification. `RefreshOutcome.classify`
 /// is the seam that decides whether a failed `POST /api/auth/refresh` tears
 /// down the session (`authFailure`) or leaves it intact (`transient`).
 ///
 /// Contract:
-///   - Server 4xx on the refresh route (incl. the v1.7.0 stable errorCodes
-///     `auth.refresh.{revoked,reuse,invalid}` which arrive as 401/403) →
-///     `authFailure` → logout.
+///   - A `401` on the refresh route, or a `4xx` carrying one of the stable
+///     errorCodes `auth.refresh.{revoked,reuse,invalid}` → `authFailure` →
+///     logout.
 ///   - `HLError.unauthorized` → `authFailure`.
 ///   - Everything else (offline / network / timeout / 5xx / rate-limit /
-///     decode) → `transient` → NO logout.
+///     decode, and any other `4xx`, which is a proxy or a malformed request
+///     and no verdict on the token) → `transient` → NO logout.
 @Suite("RefreshOutcome.classify (401-cascade gating)")
 struct RefreshOutcomeTests {
     @Test("Unauthorized → authFailure")
@@ -26,17 +27,33 @@ struct RefreshOutcomeTests {
     }
 
     @Test(
-        "Server 4xx (incl. auth.refresh.* errorCodes) → authFailure",
+        "A refresh verdict named by the server → authFailure",
         arguments: [
             HLError.server(status: 401, code: "auth.refresh.revoked", message: "revoked"),
             HLError.server(status: 401, code: "auth.refresh.reuse", message: "reuse detected"),
             HLError.server(status: 401, code: "auth.refresh.invalid", message: "invalid"),
-            HLError.server(status: 403, code: nil, message: "forbidden"),
-            HLError.server(status: 400, code: nil, message: "bad request"),
+            HLError.server(status: 401, code: nil, message: "unauthorized"),
+            HLError.server(status: 403, code: "auth.refresh.revoked", message: "revoked"),
         ]
     )
-    func server4xx(_ error: HLError) {
+    func namedVerdict(_ error: HLError) {
         #expect(RefreshOutcome.classify(error) == .authFailure)
+    }
+
+    @Test(
+        "Any other 4xx is no verdict on the token → transient (NO logout)",
+        arguments: [
+            HLError.server(status: 400, code: nil, message: "bad request"),
+            HLError.server(status: 403, code: nil, message: "forbidden"),
+            HLError.server(status: 403, code: "auth.forbidden", message: "forbidden"),
+            HLError.server(status: 404, code: nil, message: "not found"),
+            HLError.server(status: 413, code: nil, message: "too large"),
+            HLError.server(status: 422, code: "validation.failed", message: "invalid body"),
+        ]
+    )
+    func otherClientErrors(_ error: HLError) {
+        #expect(RefreshOutcome.classify(error) == .transient)
+        #expect(!RefreshOutcome.classify(error).shouldLogout)
     }
 
     @Test(

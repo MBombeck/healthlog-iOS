@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-2 — pure medications/intakes → `WidgetSnapshot` map.**
+/// **Pure medications/intakes → `WidgetSnapshot` map.**
 ///
 /// Deterministic given `(medications, derivedIntakes, now, calendar)` so
 /// the widget snapshot stays unit-testable without a store or network. The
@@ -47,7 +47,7 @@ public extension WidgetSnapshot {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> WidgetSnapshot {
-        // v1.39.1 (#1033) — a medication kept as a record has no dose here.
+        // v1.39.1 — a medication kept as a record has no dose here.
         let derivedIntakes = MedicationIntake.excludingUntrackedMedications(derivedIntakes, medications: medications)
         let scheduled = derivedIntakes.count
         let taken = derivedIntakes.filter { $0.status == .taken }.count
@@ -80,7 +80,7 @@ public extension WidgetSnapshot {
     }
 }
 
-// MARK: - v0.15 companion-#3 — latest-measurement glance
+// MARK: - Latest-measurement glance
 
 public extension WidgetSnapshot.LatestMeasurement {
     /// Build the latest-measurement glance from a domain `Measurement`,
@@ -106,7 +106,7 @@ public extension WidgetSnapshot.LatestMeasurement {
     }
 
     /// The unit-aware suffix for a kind (mirrors `DashboardMetric.unitSuffix`):
-    /// the account's display unit for a converted family (#115 P2), else the
+    /// the account's display unit for a converted family, else the
     /// descriptor's canonical unit label.
     private static func unitSuffix(for kind: MetricKind, units: UnitPreferences) -> String {
         units.transform(for: kind).suffix ?? String(localized: kind.descriptor.unitLabel)
@@ -135,7 +135,7 @@ public extension WidgetSnapshot.LatestMeasurement {
         case .none:
             return formattedByStyle(measurement.primaryValue, style: kind.descriptor.formatStyle)
         case .some:
-            // #115 P2 — the one account-unit formatter the tile uses.
+            // The one account-unit formatter the tile uses.
             return MetricValueFormatter.account(measurement.primaryValue, kind: kind, units: units) { converted in
                 formattedByStyle(converted, style: kind.descriptor.formatStyle)
             }
@@ -145,7 +145,7 @@ public extension WidgetSnapshot.LatestMeasurement {
     /// Descriptor-`FormatStyle` routing for non-re-unitable kinds — a verbatim
     /// mirror of `DashboardMetric.formattedPrimary()` for a single scalar.
     private static func formattedByStyle(_ value: Double, style: MetricKindDescriptor.FormatStyle) -> String {
-        // W-CRASHGUARD — reject non-finite at the gate; route every integer
+        // Reject non-finite at the gate; route every integer
         // conversion through `Int(safeServer:)` so a finite-but-out-of-range
         // value em-dashes instead of trapping.
         guard value.isFinite else { return "—" }
@@ -168,7 +168,7 @@ public extension WidgetSnapshot.LatestMeasurement {
     }
 }
 
-// MARK: - v0.15 companion-#3 — Personal Health Score glance
+// MARK: - Personal Health Score glance
 
 public extension WidgetSnapshot.HealthScoreGlance {
     /// Build the score glance from the server `HealthScore`. Mirrors the value +
@@ -181,7 +181,7 @@ public extension WidgetSnapshot.HealthScoreGlance {
             score: score.score,
             band: score.displayBand?.rawValue,
             resolvedAt: now,
-            // v1.35.0 (GH #83) — mirrored, never derived. A missing flag on the
+            // v1.35.0 — mirrored, never derived. A missing flag on the
             // wire means the server did not say, and an untold flag must not
             // travel into the widget as a claim about the account.
             configured: score.runsOnChosenComposition

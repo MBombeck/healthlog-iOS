@@ -4,7 +4,7 @@ import Foundation
 /// more than ``HLError/server(status:code:message:)`` can hold.
 ///
 /// Two routes need it today:
-/// - `PUT /api/auth/me/report-selection` (#110): `422
+/// - `PUT /api/auth/me/report-selection`: `422
 ///   report-selection.leaves.unknown` names the refused ids in
 ///   `meta.unknownLeaves`.
 /// - `POST /api/settings/{webhook,ntfy}/test` (#112, server v1.38.21+): a

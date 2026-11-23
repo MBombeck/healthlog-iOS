@@ -265,20 +265,19 @@ struct LabLinesTests {
 
     // MARK: - Gate (Regel 10)
 
-    @Test("only with the timeline module on, a paired server and v1.46.3 or later")
+    @Test("only with the timeline module on and a v1.46.3 or later server")
     func gate() {
-        #expect(InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: "1.46.3", timelineModule: true))
-        #expect(InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: "1.47.0", timelineModule: true))
+        #expect(InsightsChartExtras.labOverlayAvailable(serverVersion: "1.46.3", timelineModule: true))
+        #expect(InsightsChartExtras.labOverlayAvailable(serverVersion: "1.47.0", timelineModule: true))
         // Module off, or a map without the opt-in key.
-        #expect(!InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: "1.47.0", timelineModule: false))
-        #expect(!InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: "1.47.0", timelineModule: nil))
+        #expect(!InsightsChartExtras.labOverlayAvailable(serverVersion: "1.47.0", timelineModule: false))
+        #expect(!InsightsChartExtras.labOverlayAvailable(serverVersion: "1.47.0", timelineModule: nil))
         // Older or unknown server.
-        #expect(!InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: "1.46.2", timelineModule: true))
-        #expect(!InsightsChartExtras.labOverlayAvailable(hasServer: true, serverVersion: nil, timelineModule: true))
-        #expect(!InsightsChartExtras.labOverlayAvailable(hasServer: false, serverVersion: "1.47.0", timelineModule: true))
+        #expect(!InsightsChartExtras.labOverlayAvailable(serverVersion: "1.46.2", timelineModule: true))
+        #expect(!InsightsChartExtras.labOverlayAvailable(serverVersion: nil, timelineModule: true))
     }
 
-    // MARK: - Shared records (POLISH-A A6)
+    // MARK: - Shared records
 
     private nonisolated static func grant(sections: String) throws -> AccountAccessEntry {
         let json = #"""

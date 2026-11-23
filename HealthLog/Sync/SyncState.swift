@@ -4,7 +4,7 @@ import Foundation
 /// R9 hard-spec. Read by the iOS client to determine per-entity high-water-marks
 /// for incremental-sync resume.
 ///
-/// **Specced in:** `.planning/v05x-marathon/STANDALONE-ARCHITECTURE-SPEC.md` §0 (R9)
+/// **Specced in:** `.planning/v05x-marathon/STANDALONE-ARCHITECTURE-SPEC.md` §0
 /// and §4.3 (first-pair pull phase).
 ///
 /// **Server response shape (R9 verbatim):**
@@ -49,7 +49,7 @@ public struct SyncState: Sendable, Equatable, Codable {
     /// `CycleDayLog` rows (the `changes.cycleDays` block, contract §3).
     public let cycleDays: Date?
 
-    /// v0.14.8 — server's max `updatedAt` across the user's `MenstrualCycle`
+    /// Server's max `updatedAt` across the user's `MenstrualCycle`
     /// rows (the `changes.cycles` block).
     public let cycles: Date?
 
@@ -79,20 +79,6 @@ public struct SyncState: Sendable, Equatable, Codable {
     }
 }
 
-/// Sync cursor schema version. The server bumps `CURSOR_VERSION` → 2 with the
-/// cycle domains (contract §3); a client holding an older cursor must clean
-/// re-init (drop persisted HWMs + full re-pull) on mismatch.
-public enum SyncCursorVersion {
-    /// The version this client speaks. Bumped from 1 → 2 for `cycleDays`/`cycles`.
-    public static let current = 2
-
-    /// True when a persisted cursor version differs from `current` and the
-    /// client must wipe its HWMs and re-initialise from scratch.
-    public static func requiresReinit(persisted: Int?) -> Bool {
-        persisted != current
-    }
-}
-
 /// Canonical entity-kind keys mirroring `SyncState`'s field names. Used as the
 /// suffix in `UserDefaults` HWM keys (`hl.hwm.<entityKind>`) and as the
 /// path-segment in `GET /api/<entity>?since=...` URLs.
@@ -104,10 +90,10 @@ public enum SyncEntityKind: String, Sendable, CaseIterable, Codable {
     case moodEntry
     case medication
     case medicationIntake
-    /// v0.14.8 — `CycleDayLog` rows. Tombstone identity keys on `externalId`
+    /// `CycleDayLog` rows. Tombstone identity keys on `externalId`
     /// when present, else `id` (contract §3); apply tombstones before upserts.
     case cycleDays
-    /// v0.14.8 — `MenstrualCycle` rows. Tombstone identity keys on `id`.
+    /// `MenstrualCycle` rows. Tombstone identity keys on `id`.
     case cycles
 
     /// Path-segment for the per-entity REST endpoint. Used as

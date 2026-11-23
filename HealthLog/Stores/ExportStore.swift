@@ -34,7 +34,7 @@ public final class ExportStore {
     private let api: APIClientProtocol
     private let outbox: OutboxQueue
     private let moduleGate: ModuleGate
-    /// **Phase 09 / plan 09-03** — the write boundary. `ExportStore` stays
+    /// The write boundary. `ExportStore` stays
     /// `@MainActor` for its UI state; the bytes land through here, off the main
     /// actor, and only the resulting URL crosses back to be published.
     private let persistence: ExportPersistence
@@ -134,7 +134,7 @@ public final class ExportStore {
     /// on-device emitter otherwise (or on a server-fetch failure). Fails soft: a
     /// labs / illness fetch error just omits that block.
     ///
-    /// **CU-13 — an empty server Bundle is not an export.** Since v1.34.2 the
+    /// **An empty server Bundle is not an export.** Since v1.34.2 the
     /// server scopes the Bundle to the owner's saved report selection, so an
     /// account that never saved one gets `200` with zero entries. Writing those
     /// bytes out would hand the user a file that looks like an export and
@@ -188,7 +188,7 @@ public final class ExportStore {
         // bundle carries them too. Each is gated by its module and fails soft.
         let labs = await fetchLabsBlock()
         let illnesses = await fetchIllnessBlock()
-        guard let json = Self.makeLocalBundleJSON(
+        guard let json = await Self.makeLocalBundleJSON(
             periodDays: periodDays,
             snapshot: snapshot,
             generatedAt: generatedAt,
@@ -262,7 +262,7 @@ public final class ExportStore {
     }
 
     // Build + encode the iOS-local FHIR Bundle from the in-memory store
-    // snapshot — the offline / standalone fallback. Folds in the gated labs /
+    // snapshot — the offline fallback. Folds in the gated labs /
     // illness blocks (already module-checked + fetched by the caller). Returns
     // `nil` if the local emitter or encode throws. Implemented in
     // `ExportStore+FHIR.swift` (`makeLocalBundleJSON`) — see that file's note on
@@ -270,7 +270,7 @@ public final class ExportStore {
 
     // MARK: - PHI write
 
-    /// **Phase 09 / plan 09-03 — the awaited export write.**
+    /// **The awaited export write.**
     ///
     /// The bytes leave the main actor, land atomically under complete file
     /// protection, and only then does the share URL come back to be published.
@@ -399,7 +399,7 @@ public final class ExportStore {
     /// Owns the poll task and the terminal mapping; publishes progress through
     /// ``importPhase``.
     ///
-    /// **Phase 09 / plan 09-02 — the security scope moved out of here.** This
+    /// **The security scope moved out of here.** This
     /// wrapper used to hold `startAccessingSecurityScopedResource()` for the
     /// whole `upload` **plus** `poll` span, which for a 1.5 GiB archive is a
     /// multi-minute hold on somebody else's file provider — long after the last
@@ -453,7 +453,7 @@ public final class ExportStore {
     }
 }
 
-/// **Phase 09 Wave 0 — the export byte-write seam.**
+/// **The export byte-write seam.**
 ///
 /// Both PHI writes above are `@MainActor`-reachable synchronous `Data.write`
 /// calls today, and Plan 09-03 moves them off the main actor. Moving a write is

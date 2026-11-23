@@ -196,15 +196,12 @@ public struct MeasurementReminderRow: Codable, Sendable, Identifiable, Equatable
 
 // MARK: - Completion ledger (v1.37.20)
 
-/// The ledger types a reminder's history page is made of, reachable from the
-/// reminder they belong to. Both are defined in `MeasurementReminderHistory.swift`
-/// — the row file names them so the reminder and its ledger are one vocabulary.
+/// The ledger row a reminder's history is made of, reachable from the reminder
+/// it belongs to. Defined in `MeasurementReminderHistory.swift`.
 public extension MeasurementReminderRow {
     /// One row of this reminder's completion ledger
     /// (`GET /api/measurement-reminders/{id}/history`).
     typealias Event = MeasurementReminderEvent
-    /// One page of this reminder's completion ledger, newest first.
-    typealias HistoryPage = MeasurementReminderHistoryPage
 }
 
 // MARK: - Cadence input

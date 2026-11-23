@@ -23,8 +23,8 @@
     ///   the deprecated `stopButton` init covers 26.0 (wrapped so the
     ///   warnings-as-errors build stays clean).
     ///
-    /// `@available(iOS 26.0, *)` throughout; callers reach it only through
-    /// the version-gated reconcile pass.
+    /// Callers reach it only through the `canImport(AlarmKit)`-gated
+    /// reconcile pass.
     /// The outcome of a ``CriticalMedAlarmService/reconcile(alarmMeds:)`` pass.
     ///
     /// **audit-release 05 C-1 — surface silent scheduling failures.** A
@@ -43,7 +43,6 @@
         let failedMedicationIDs: Set<String>
     }
 
-    @available(iOS 26.0, *)
     @MainActor
     final class CriticalMedAlarmService {
         /// Shared instance so the out-of-process `MedSnoozeAlarmIntent` can
@@ -60,10 +59,13 @@
         }
 
         /// Snooze interval — parity with the UNNotification path
-        /// (`NotificationService.snoozeIntervalSeconds`, 15 min). Duplicated
+        /// (`NotificationService.snoozeIntervalSeconds`, the account's span,
+        /// #191). Duplicated
         /// as a constant here because that symbol is gated behind
         /// `UserNotifications`, and the alarm path must not depend on it.
-        nonisolated static let snoozeIntervalSeconds: TimeInterval = 15 * 60
+        nonisolated static var snoozeIntervalSeconds: TimeInterval {
+            MedicationSnooze.interval
+        }
 
         // MARK: - Authorization
 
@@ -113,56 +115,45 @@
         /// failure never blocks the medication load path — but it is no longer
         /// invisible: the failed medication ids ride back in the
         /// ``CriticalMedAlarmReconcileOutcome`` so the caller can raise a
-        /// persistent user-facing warning (C-1).
+        /// persistent user-facing warning.
+        ///
+        /// **#188 (5):** `resolvedSlots` (today's taken or skipped slots) keep
+        /// today's occurrence of those doses silent, and the recurrence is read
+        /// in `accountTimeZone`, the profile zone, not the device's.
         @discardableResult
         func reconcile(
-            alarmMeds: [Medication]
+            alarmMeds: [Medication],
+            resolvedSlots: [MedicationReminderCompletion.ResolvedSlot] = [],
+            accountTimeZone: TimeZone = .current
         ) async -> CriticalMedAlarmReconcileOutcome {
-            let scheduled = await scheduleDesired(alarmMeds: alarmMeds)
-            cancelOrphans(keeping: scheduled.desiredIDs, activeMedIDs: alarmMeds.map(\.id))
+            let scheduled = await scheduleDesired(
+                alarmMeds: alarmMeds,
+                resolvedSlots: resolvedSlots,
+                accountTimeZone: accountTimeZone
+            )
+            // D3 #1 — a snoozed dose taken or skipped since loses its snooze.
+            let resolvedSnoozes = CriticalMedAlarmRouting.resolvedSnoozes(
+                snoozeLedger.read(),
+                resolvedSlots: resolvedSlots,
+                deviceTimeZone: .current,
+                accountTimeZone: accountTimeZone
+            )
+            cancelOrphans(
+                keeping: scheduled.desiredIDs,
+                activeMedIDs: alarmMeds.map(\.id),
+                resolvedSnoozeMedIDs: resolvedSnoozes
+            )
             return CriticalMedAlarmReconcileOutcome(
                 ownedMedicationIDs: Set(alarmMeds.map(\.id)),
                 failedMedicationIDs: scheduled.failedMedicationIDs
             )
         }
 
-        /// Schedule (or refresh) every alarm slot for the alarm-owned meds.
-        /// Returns the set of `Alarm.ID`s now desired plus the ids of any
-        /// medication whose alarm(s) failed to arm (C-1).
-        private func scheduleDesired(
-            alarmMeds: [Medication]
-        ) async -> (desiredIDs: Set<UUID>, failedMedicationIDs: Set<String>) {
-            var desired: Set<UUID> = []
-            var failedMedicationIDs: Set<String> = []
-            for medication in alarmMeds {
-                // v0.10 R1 §3.5 — route every cadence through the generalised
-                // planner: recurring weekly slots stay recurring; rolling /
-                // monthly / yearly / biweekly land as single-shot .fixed
-                // alarms at the engine's next occurrence (re-armed each
-                // reconcile / intake).
-                let planned = CriticalMedAlarmRouting.plannedAlarms(for: medication)
-                for (index, plan) in planned.enumerated() {
-                    let id = CriticalMedAlarmRouting.alarmID(
-                        medicationID: medication.id,
-                        slotIndex: index
-                    )
-                    desired.insert(id)
-                    let armed = await schedulePlan(id: id, medication: medication, plan: plan)
-                    if !armed {
-                        // C-1 — any slot failing marks the whole med as not
-                        // reliably armed so the user warning names it.
-                        failedMedicationIDs.insert(medication.id)
-                    }
-                }
-            }
-            return (desired, failedMedicationIDs)
-        }
-
         /// `nonisolated` for the same region-isolation reason as
         /// `scheduleSlot` — builds + schedules the alarm in a disconnected
         /// region from `Sendable` value inputs.
         /// - Returns: `true` when the alarm armed, `false` when scheduling threw.
-        private nonisolated func schedulePlan(
+        fileprivate nonisolated func schedulePlan(
             id: UUID,
             medication: Medication,
             plan: CriticalMedAlarmRouting.PlannedAlarm
@@ -222,34 +213,6 @@
             }
         }
 
-        /// Cancel every HealthLog-owned alarm that is genuinely orphaned.
-        /// Mirrors the Spezi scheduler's orphan-purge but — crucially — does
-        /// NOT purge the pending snooze alarm (slot
-        /// ``CriticalMedAlarmRouting/snoozeSlotIndex``) of a med that is still
-        /// alarm-owned: a routine reconcile (load / foreground / intake change)
-        /// must not silently drop a user's pending snooze (HIGH-1). The orphan
-        /// decision is the pure ``CriticalMedAlarmRouting/orphanIDs(existing:desiredScheduledIDs:activeMedIDs:)``.
-        /// The `alarms` property is throwing (not async) per the SDK.
-        private func cancelOrphans(keeping desiredIDs: Set<UUID>, activeMedIDs: [String]) {
-            let existing: [Alarm]
-            do {
-                existing = try manager.alarms
-            } catch {
-                HLLog.notifications.error(
-                    "CriticalMedAlarmService: alarms read failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
-                )
-                return
-            }
-            let orphans = CriticalMedAlarmRouting.orphanIDs(
-                existing: existing.map(\.id),
-                desiredScheduledIDs: desiredIDs,
-                activeMedIDs: activeMedIDs
-            )
-            for id in orphans {
-                cancel(id: id)
-            }
-        }
-
         // MARK: - Cancel / Stop
 
         private func cancel(id: UUID) {
@@ -277,12 +240,17 @@
             scheduledFor: Date
         ) async {
             guard isAuthorized else { return }
+            let occurrence = CriticalMedAlarmRouting.occurrence(of: scheduledFor, now: .now)
             await scheduleSnoozeAlarm(
                 medicationId: medicationId,
                 medicationName: medicationName,
                 dose: dose,
                 scheduledFor: scheduledFor
             )
+            // D3 #1 — note the dose once the alarm exists, so a take elsewhere
+            // cancels the snooze (a reconcile keeps a record only while its
+            // snooze alarm is scheduled).
+            snoozeLedger.note(CriticalMedAlarmRouting.SnoozedDose(medicationId: medicationId, occurrence: occurrence))
         }
 
         /// `nonisolated` for the same region-isolation reason as
@@ -343,7 +311,7 @@
             )
         }
 
-        /// **v0.10 R1 §3.5 — build a single-shot `.fixed` alarm configuration**
+        /// **Build a single-shot `.fixed` alarm configuration**
         /// for a rolling / monthly / yearly / biweekly cadence. The fire
         /// instant is the engine's next occurrence; the stop/snooze intents
         /// carry it as `scheduledFor` so the server intake row aligns with the
@@ -415,13 +383,19 @@
         private nonisolated static func buildAttributes(
             metadata: MedAlarmMetadata
         ) -> AlarmAttributes<MedAlarmMetadata> {
+            // Term list (#191): the action as a verb, the snooze with the
+            // account's span, the same words as the notification.
             let stopButton = AlarmButton(
-                text: "alarm.action.taken",
+                text: "med.dose.action.take",
                 textColor: .white,
                 systemImageName: "checkmark.circle.fill"
             )
+            let minutes = MedicationSnooze.minutes
             let snoozeButton = AlarmButton(
-                text: "alarm.action.snooze",
+                text: LocalizedStringResource(
+                    "med.dose.action.snooze",
+                    defaultValue: "Remind me later (\(minutes) min)"
+                ),
                 textColor: .white,
                 systemImageName: "clock"
             )
@@ -430,7 +404,7 @@
             return AlarmAttributes<MedAlarmMetadata>(
                 presentation: AlarmPresentation(alert: alert),
                 metadata: metadata,
-                // b146 — monochrome doctrine: alarm accent was purple; use the
+                // Monochrome doctrine: alarm accent was purple; use the
                 // neutral primary tint (never lila).
                 tintColor: HLText.primary
             )
@@ -441,9 +415,18 @@
         /// breakthrough alert is otherwise ambiguous (QA-design / i18n #5).
         /// Falls back to the generic "Medikament fällig" key when the name is
         /// empty (defensive — schedule-time metadata always has a name).
-        private nonisolated static func alertTitle(name: String, dose: String) -> LocalizedStringResource {
+        ///
+        /// With "hide medication names" on, the generic key too: the alarm
+        /// fills the locked screen and the paired watch, and the switch
+        /// promises reminders without the name. Read when the alarm is
+        /// scheduled; flipping the switch reconciles every alarm again.
+        nonisolated static func alertTitle(
+            name: String,
+            dose: String,
+            hidesName: Bool = LockScreenPrivacy.hideMedicationName()
+        ) -> LocalizedStringResource {
             let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedName.isEmpty else { return "alarm.med.title" }
+            guard !hidesName, !trimmedName.isEmpty else { return "alarm.med.title" }
             let trimmedDose = dose.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedDose.isEmpty {
                 return "\(trimmedName) due"
@@ -534,6 +517,90 @@
                 }
             }
             return todayAtTime
+        }
+    }
+
+    fileprivate extension CriticalMedAlarmService {
+        /// Cancel every HealthLog-owned alarm that is genuinely orphaned.
+        /// Mirrors the Spezi scheduler's orphan-purge but — crucially — does
+        /// NOT purge the pending snooze alarm (slot
+        /// ``CriticalMedAlarmRouting/snoozeSlotIndex``) of a med that is still
+        /// alarm-owned: a routine reconcile (load / foreground / intake change)
+        /// must not silently drop a user's pending snooze. The orphan
+        /// decision is the pure ``CriticalMedAlarmRouting/orphanIDs(existing:desiredScheduledIDs:activeMedIDs:)``.
+        /// The `alarms` property is throwing (not async) per the SDK.
+        func cancelOrphans(
+            keeping desiredIDs: Set<UUID>,
+            activeMedIDs: [String],
+            resolvedSnoozeMedIDs: Set<String> = []
+        ) {
+            let existing: [Alarm]
+            do {
+                existing = try manager.alarms
+            } catch {
+                HLLog.notifications.error(
+                    "CriticalMedAlarmService: alarms read failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                )
+                return
+            }
+            let orphans = CriticalMedAlarmRouting.orphanIDs(
+                existing: existing.map(\.id),
+                desiredScheduledIDs: desiredIDs,
+                activeMedIDs: activeMedIDs,
+                resolvedSnoozeMedIDs: resolvedSnoozeMedIDs
+            )
+            for id in orphans {
+                cancel(id: id)
+            }
+            // A snooze record lives only as long as its snooze alarm.
+            let cancelled = Set(orphans)
+            let pendingSnoozes = Set(existing.map(\.id)).subtracting(cancelled)
+            snoozeLedger.keep(Set(activeMedIDs.filter {
+                pendingSnoozes.contains(CriticalMedAlarmRouting.snoozeAlarmID(medicationID: $0))
+            }))
+        }
+
+        /// D3 #1 — the dose each pending snooze alarm defers.
+        var snoozeLedger: CriticalAlarmSnoozeLedger {
+            CriticalAlarmSnoozeLedger()
+        }
+
+        /// Schedule (or refresh) every alarm slot for the alarm-owned meds.
+        /// Returns the set of `Alarm.ID`s now desired plus the ids of any
+        /// medication whose alarm(s) failed to arm.
+        func scheduleDesired(
+            alarmMeds: [Medication],
+            resolvedSlots: [MedicationReminderCompletion.ResolvedSlot],
+            accountTimeZone: TimeZone
+        ) async -> (desiredIDs: Set<UUID>, failedMedicationIDs: Set<String>) {
+            var desired: Set<UUID> = []
+            var failedMedicationIDs: Set<String> = []
+            for medication in alarmMeds {
+                // Route every cadence through the generalised
+                // planner: recurring weekly slots stay recurring; rolling /
+                // monthly / yearly / biweekly land as single-shot .fixed
+                // alarms at the engine's next occurrence (re-armed each
+                // reconcile / intake).
+                let planned = CriticalMedAlarmRouting.plannedAlarms(
+                    for: medication,
+                    timeZone: accountTimeZone,
+                    resolvedSlots: resolvedSlots
+                )
+                for (index, plan) in planned.enumerated() {
+                    let id = CriticalMedAlarmRouting.alarmID(
+                        medicationID: medication.id,
+                        slotIndex: index
+                    )
+                    desired.insert(id)
+                    let armed = await schedulePlan(id: id, medication: medication, plan: plan)
+                    if !armed {
+                        // Any slot failing marks the whole med as not
+                        // reliably armed so the user warning names it.
+                        failedMedicationIDs.insert(medication.id)
+                    }
+                }
+            }
+            return (desired, failedMedicationIDs)
         }
     }
 #endif

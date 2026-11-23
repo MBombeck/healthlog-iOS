@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 0 — the deployed measurement-batch result contract.
+/// The deployed measurement-batch result contract.
 ///
 /// The immutable `v1.37.3` baseline cannot express what the deployed server
 /// (tag `v1.37.12`, revision `d21fe48`) actually returns: `updated` is a
@@ -134,7 +134,7 @@ struct MeasurementBatchResponseContractTests {
 
         #expect(
             violations.isEmpty,
-            "EXPECTED_RED: deployed result vocabulary was not classified exactly"
+            "deployed result vocabulary was not classified exactly"
         )
     }
 }

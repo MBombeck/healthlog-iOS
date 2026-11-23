@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Contract tests for the W-MEDS-VISUAL-IMPL row component (Issue #7).
+/// Contract tests for the W-MEDS-VISUAL-IMPL row component.
 /// SwiftUI bodies are notoriously awkward to introspect in unit tests,
 /// so this suite anchors on the pure presentation logic that the row
 /// reads from its inputs — `ActiveMedicationDisplayState.badgeTitle`,
@@ -12,14 +12,6 @@ import Testing
 /// derivations also moving.
 @Suite("ActiveMedicationRow — display-state contract")
 struct ActiveMedicationRowDisplayStateTests {
-    private static var medicationCardSource: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("HealthLog/Screens/Medications/ActiveMedicationRow.swift")
-    }
-
     @Test("Aktiv state suppresses the badge title (chip not rendered)")
     func aktivHasNoBadge() {
         let state = ActiveMedicationDisplayState.aktiv
@@ -63,16 +55,6 @@ struct ActiveMedicationRowDisplayStateTests {
         #expect(ActiveMedicationDisplayState.from(medication: med) == .beendet)
         #expect(ActiveMedicationDisplayState.from(medication: med).badgeTitle == "Beendet")
     }
-
-    @Test("Category and overdue state share one adaptive accessibility-ordered row")
-    func categoryAndOverdueShareAdaptiveRow() throws {
-        let source = try String(contentsOf: Self.medicationCardSource, encoding: .utf8)
-
-        #expect(source.contains("categoryStatusRow(windowStatus: status)"))
-        #expect(source.contains("ViewThatFits(in: .horizontal)"))
-        #expect(source.contains("accessibilityCategoryStatusLabel"))
-        #expect(!source.contains("categoryPill\n                    // v0.11 #24"))
-    }
 }
 
 @Suite("ActiveMedicationsSection — schedule preview formatting")
@@ -80,7 +62,7 @@ struct ActiveMedicationsSectionScheduleTests {
     @Test("Single scheduled time renders as 'HH:mm' without separator")
     func singleTime() {
         let schedule = MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0)])
-        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00")
+        #expect(ActiveMedicationsSection.scheduleSummary(schedule, locale: Locale(identifier: "de_DE")) == "08:00")
     }
 
     @Test("Multiple times join with the brief's `·` separator")
@@ -89,7 +71,7 @@ struct ActiveMedicationsSectionScheduleTests {
             TimeOfDay(hour: 8, minute: 0),
             TimeOfDay(hour: 20, minute: 0)
         ])
-        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00, 20:00")
+        #expect(ActiveMedicationsSection.scheduleSummary(schedule, locale: Locale(identifier: "de_DE")) == "08:00, 20:00")
     }
 
     @Test("Times are sorted ascending regardless of input order")
@@ -99,7 +81,7 @@ struct ActiveMedicationsSectionScheduleTests {
             TimeOfDay(hour: 8, minute: 0),
             TimeOfDay(hour: 13, minute: 15)
         ])
-        #expect(ActiveMedicationsSection.scheduleSummary(schedule) == "08:00, 13:15, 22:30")
+        #expect(ActiveMedicationsSection.scheduleSummary(schedule, locale: Locale(identifier: "de_DE")) == "08:00, 13:15, 22:30")
     }
 
     @Test("Empty schedule yields an empty string (no separator artefacts)")

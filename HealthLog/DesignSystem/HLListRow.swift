@@ -1,8 +1,11 @@
 import SwiftUI
 
+/// A list row from plain strings: symbol, title, subtitle, value. It is the
+/// shared row grid with runtime text; new code uses ``HLRow``. It shows a
+/// value, so it draws no chevron unless the caller names one.
 public struct HLListRow: View {
     private let icon: String?
-    /// v0.5.2-A8 / v0.8.0-W6: `nil` means "use the live user accent"
+    /// `nil` means "use the live user accent"
     /// (`HLAccent.userBrandTint`, resolved at body-eval from
     /// `SettingsStore.preferredTint`). The prior `.accentColor` default read
     /// the *asset-catalog* AccentColor, not the live tint, so it could
@@ -20,7 +23,7 @@ public struct HLListRow: View {
         title: String,
         subtitle: String? = nil,
         value: String? = nil,
-        trailingSymbol: String? = "chevron.right"
+        trailingSymbol: String? = nil
     ) {
         self.icon = icon
         self.iconColor = iconColor
@@ -31,54 +34,33 @@ public struct HLListRow: View {
     }
 
     public var body: some View {
-        HStack(spacing: HLSpace.md) {
-            if let icon {
-                IconChip(name: icon, color: iconColor ?? HLAccent.userBrandTint)
-            }
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(title)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .lineLimit(2)
+        HLRowLayout(
+            title: Text(title),
+            subtitle: subtitle.map { Text($0) },
+            indicator: indicator,
+            configuration: .standard,
+            leading: {
+                if let icon {
+                    HLSettingsIconChip(symbol: icon, tint: iconColor ?? HLAccent.userBrandTint)
+                }
+            },
+            trailing: {
+                if let value {
+                    HLRowValue(value)
                 }
             }
-            Spacer(minLength: HLSpace.sm)
-            if let value {
-                Text(value)
-                    .font(.hlMetric(.body))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
-            }
-            if let trailingSymbol {
-                Image(systemName: trailingSymbol)
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.tertiary)
-            }
-        }
-        .padding(.vertical, HLSpace.sm)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        )
     }
-}
 
-private struct IconChip: View {
-    let name: String
-    let color: Color
-
-    var body: some View {
-        // Intentional fixed size:
-        // Icon sits inside a fixed 32×32 chip; size locked to match chip frame.
-        Image(systemName: name)
-            // swiftlint:disable:next dynamic_type_bypass
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(color)
-            .frame(width: 32, height: 32)
-            .background(color.opacity(0.18))
-            .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+    private var indicator: HLRowIndicator {
+        guard let trailingSymbol else { return .hidden }
+        switch trailingSymbol {
+        case "chevron.right": return .disclosure
+        // Maps the old external sign of existing callers onto the one sign.
+        // swiftlint:disable:next hl_one_external_sign
+        case "arrow.up.right.square": return .symbol(HLRowIndicator.externalSymbol)
+        default: return .symbol(trailingSymbol)
+        }
     }
 }
 

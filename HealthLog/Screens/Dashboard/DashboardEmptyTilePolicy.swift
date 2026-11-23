@@ -9,7 +9,7 @@ import Foundation
 /// anything about it. The 8-tile strip on a fresh device read as
 /// "broken card wall," not "Apple-Health-style coverage."
 ///
-/// **New contract (v0.5.5.2):**
+/// **New contract:**
 /// - `state == .ready` → tile visible.
 /// - `state == .empty(.outsideRange)` → tile visible (carries the
 ///   "Letzte Messung vor X Tagen" sublabel signal).
@@ -36,7 +36,7 @@ import Foundation
 /// the dashboard is still in its initial load and hiding tiles before
 /// any fan-out result has landed is indistinguishable from "broken."
 ///
-/// **v0.6.2.2 W-TILE-AUDIT — structural fix.** Operator on build 71
+/// **Structural fix.** Operator on build 71
 /// (2026-05-25, third report): "Dann refreshe ich die Seite, indem ich
 /// mit meinem Daumen runterziehe, und dann sehe ich auch so was wie
 /// Körperfett, Ruhepuls, Temperatur, wo ich überhaupt keine Daten habe."
@@ -58,7 +58,7 @@ import Foundation
 /// `metricStates` map change itself, not via a timer. A time-based grace
 /// for synth tiles is unconditional flicker waiting to happen.
 ///
-/// **New rule (v0.6.2.2).** Synth tiles (`id.hasPrefix("synth-")`) are
+/// **New rule.** Synth tiles (`id.hasPrefix("synth-")`) are
 /// visibility-from-data only, NO TIMING. A synth tile is visible iff:
 ///   - state == `.ready` (fan-out promoted it), OR
 ///   - it carries server-snapshot data (`latestValue != nil` OR sparkline
@@ -115,7 +115,7 @@ public enum DashboardEmptyTilePolicy {
         if isSynthPlaceholder(metric) {
             return shouldAutoHideSynth(metric, states: states)
         }
-        // Server-emitted path — v0.5.5.2 + REG-11 (v0.5.5.5) verbatim.
+        // Server-emitted path — v0.5.5.2 + REG-11 verbatim.
         return shouldAutoHideServerEmitted(
             metric,
             states: states,
@@ -165,7 +165,7 @@ public enum DashboardEmptyTilePolicy {
             // the per-kind derivation lands. Never hide during fan-out.
             return false
         case .empty(.noData):
-            // **REG-11 v0.5.5.5.** Multi-point server sparkline keeps the
+            // Multi-point server sparkline keeps the
             // tile; single-point residue does not (renders as a hairline
             // that the operator reads as broken).
             if metric.latestValue != nil { return false }

@@ -7,12 +7,9 @@ import UniformTypeIdentifiers
 /// confirmation. Mirrors the web import's trust-first "preview before you write"
 /// flow — a bulk restore should never surprise the user.
 ///
-/// Server-only: gated on `BackendAvailability.hasServer` (standalone has no
-/// import route). Orchestration lives in ``ImportStore``; this view owns only
+/// Orchestration lives in ``ImportStore``; this view owns only
 /// the picker flag and renders the store's published phase.
 struct ImportDataScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: ImportStore?
@@ -35,31 +32,18 @@ struct ImportDataScreen: View {
             }
     }
 
-    @ViewBuilder private var content: some View {
-        if backend.hasServer {
-            HLSettingsPage(title: "import.title") {
-                actionCard
-            }
-        } else {
-            ScrollView {
-                HLCloudDerivedPlaceholder(
-                    variant: .hero,
-                    surfaceName: String(localized: "import.placeholder.surface"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-                .padding(HLSpace.lg)
-            }
-            .background(HLColor.background)
+    private var content: some View {
+        HLPage {
+            actionCard
         }
     }
 
-    /// 1.4 B2-c — one card: the subtitle names the rows a file needs (the
+    /// One card: the subtitle names the rows a file needs (the
     /// text-only "CSV format" card above it is gone), and "we show a preview
     /// first" went, because the preview step shows itself.
     private var actionCard: some View {
-        HLSettingsCard(
-            icon: "square.and.arrow.down.on.square",
-            title: "import.action.title",
+        HLCard(
+            "import.action.title",
             subtitle: "import.action.subtitle"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
@@ -86,9 +70,9 @@ struct ImportDataScreen: View {
 
     private var pickButton: some View {
         HLButton(
-            String(localized: "import.pick.button"),
-            icon: "doc.badge.plus",
-            // R9 — die Commit-Aktion dieses Flows; `.primary` und
+            "import.pick.button",
+            systemImage: "doc.badge.plus",
+            // Die Commit-Aktion dieses Flows; `.primary` und
             // `import.commit.button` rendern nie gleichzeitig (Phasen).
             variant: .primary
         ) {
@@ -100,12 +84,12 @@ struct ImportDataScreen: View {
 
     private var commitButtons: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLButton(String(localized: "import.commit.button"), icon: "square.and.arrow.down", variant: .primary) {
+            HLButton("import.commit.button", systemImage: "square.and.arrow.down", variant: .primary) {
                 Task { await store?.commit() }
             }
             .accessibilityIdentifier("import.commit.button")
 
-            HLButton(String(localized: "import.cancel.button"), variant: .secondary) {
+            HLButton("import.cancel.button", variant: .secondary) {
                 store?.reset()
             }
             .accessibilityIdentifier("import.cancel.button")
@@ -113,7 +97,7 @@ struct ImportDataScreen: View {
     }
 
     private var importAnotherButton: some View {
-        HLButton(String(localized: "import.another.button"), icon: "arrow.clockwise", variant: .secondary) {
+        HLButton("import.another.button", systemImage: "arrow.clockwise", variant: .secondary) {
             store?.reset()
         }
         .accessibilityIdentifier("import.another.button")
@@ -123,9 +107,7 @@ struct ImportDataScreen: View {
 
     private func previewSummary(_ result: CSVImportResult) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            Text("import.preview.heading")
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle("import.preview.heading")
             countRow(label: String(localized: "import.count.total"), value: result.total)
             countRow(label: String(localized: "import.count.willWrite"), value: result.writeCount)
             countRow(label: String(localized: "import.count.skipped"), value: result.skipped)
@@ -152,16 +134,7 @@ struct ImportDataScreen: View {
     }
 
     private func countRow(label: String, value: Int) -> some View {
-        HStack {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer()
-            Text(value.formatted(.number))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
-        }
+        HLRow(title: Text(verbatim: label), value: Text(value.formatted(.number)))
     }
 
     private enum Tone { case ok, bad }
@@ -173,8 +146,7 @@ struct ImportDataScreen: View {
                 .foregroundStyle(tone == .ok ? HLColor.statusOK : HLColor.statusBad)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -183,8 +155,7 @@ struct ImportDataScreen: View {
         HStack(spacing: HLSpace.md) {
             ProgressView().controlSize(.small)
             Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
         }
     }
 

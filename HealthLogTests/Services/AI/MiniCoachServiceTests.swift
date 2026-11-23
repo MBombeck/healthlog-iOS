@@ -6,16 +6,16 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// Primary test suite for the Mini-Coach foundation (C1).
+/// Primary test suite for the Mini-Coach foundation.
 ///
 /// Covers the classifier matrix, the prompt builder, and the data
-/// binder. The MDR-filter extensions (C2), the history (C3), and the
+/// binder. The MDR-filter extensions, the history, and the
 /// service-level gating live in ``MiniCoachSafetyAndHistoryTests``
 /// to keep each struct under the type-body-length lint cap.
 @Suite("MiniCoach — classifier + prompt + binder (C1)")
 @MainActor
 struct MiniCoachServiceTests {
-    // MARK: - Classifier (C1)
+    // MARK: - Classifier
 
     @Test("Classifier allows data-lookup phrasing (DE)")
     func classifierAllowsDataLookupDE() async {
@@ -166,7 +166,7 @@ struct MiniCoachServiceTests {
         #expect(MiniCoachAskClassifier.denyPatternCount >= 6)
     }
 
-    // MARK: - Prompt builder (C1)
+    // MARK: - Prompt builder
 
     @Test("Prompt builder uses German for DE locale")
     func promptUsesGermanLocale() {
@@ -229,14 +229,14 @@ struct MiniCoachServiceTests {
         #expect(de != en)
     }
 
-    // UI-Standard R15 (U1) — `promptDisclaimerLocalised` ist mit
+    // UI-Standard R15 — `promptDisclaimerLocalised` ist mit
     // `MiniCoachPrompt.periodicDisclaimer` entfallen. Der Satz war App-Text,
     // den `MiniCoachService` NACH der Generierung an jede fünfte Antwort
     // klebte; er stand nie in den `instructions` und konnte das Modell nicht
     // beeinflussen. Die echten Leitplanken sind weiterhin getestet: der
     // Klassifizierer (`ask…`-Tests oben) und der `MDRSafetyFilter`.
 
-    // MARK: - Data binder (C1)
+    // MARK: - Data binder
 
     @Test("Binder renders empty digest for empty input")
     func binderEmpty() {

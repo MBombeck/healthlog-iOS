@@ -51,7 +51,7 @@ struct ProfilePatchEncodingTests {
 
     @Test("displayName .none omits the key entirely")
     func displayNameAbsent() throws {
-        // CU-17 / #71 — canonical server spelling is uppercase; the encoder is
+        // Canonical server spelling is uppercase; the encoder is
         // a verbatim pass-through, so the fixture uses the real literal.
         let json = try encode(ProfilePatch(gender: .some("MALE")))
         #expect(!json.keys.contains("displayName"))

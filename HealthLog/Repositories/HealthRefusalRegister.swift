@@ -1,6 +1,6 @@
 import Foundation
 
-// #115 / 0.3 — the UserDefaults refusal list A3 introduced for nutrients.
+// The UserDefaults refusal list A3 introduced for nutrients.
 //
 // INT-A folded every refusal into ONE register, `HealthKitSkippedRowRegister`
 // (file-backed, owner-partitioned, bounded, re-offered, wiped at sign-out).
@@ -61,7 +61,7 @@ struct HealthRefusalRegister<Record: HealthRefusalRecord>: Sendable {
 
 // MARK: - How a whole-batch HTTP refusal is read
 
-/// #115 / 0.3 — what a thrown `/api/measurements/batch` call means for the
+/// What a thrown `/api/measurements/batch` call means for the
 /// rows it carried.
 ///
 /// A whole-batch 4xx used to be treated like a transport failure: the page
@@ -96,13 +96,20 @@ enum HealthKitBatchRejection: Equatable {
         MeasurementBatchInvalid.code
     ]
 
-    /// INT-A — the skip-register reason of rows released after
+    /// The skip-register reason of rows released after
     /// `maxHeldSweeps`: the HTTP status the server kept answering without a
-    /// code (`unclassified_4xx:422`). A2 (1.4) — also the reason of a row the
+    /// code (`unclassified_4xx:422`). Also the reason of a row the
     /// replay's halving found refused on its own. Here rather than beside
     /// `maxHeldSweeps` because the replay compiles into the core module.
     static func unclassifiedReason(status: Int) -> String {
         "unclassified_4xx:\(status)"
+    }
+
+    /// A row the server refused on its own while a refused page was split
+    /// in halves. A verdict of the server's, so it counts towards the skip
+    /// register's bound, unlike a whole page that never got one.
+    static func individuallyRefusedReason(status: Int) -> String {
+        "refused_4xx:\(status)"
     }
 
     static func classify(_ error: Error) -> Self {

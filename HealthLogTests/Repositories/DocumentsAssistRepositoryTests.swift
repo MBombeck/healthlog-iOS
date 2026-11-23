@@ -40,7 +40,7 @@ struct DocumentsAssistRepositoryTests {
         (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
     }
 
-    // MARK: - Phase 2 — hasContentIndex + usage assist/contentIndex decode
+    // MARK: - hasContentIndex + usage assist/contentIndex decode
 
     @Test("Document decodes hasContentIndex; an older server omitting it → false")
     func decodeHasContentIndex() throws {
@@ -91,14 +91,14 @@ struct DocumentsAssistRepositoryTests {
         #expect(usage.contentIndex == nil)
     }
 
-    // MARK: - Phase 2 — suggest / summary / index / reindex
+    // MARK: - Suggest / summary / index / reindex
 
     @Test("Suggest posts to /suggest and decodes the draft; unknown kind → nil")
     func suggestHappyPath() async throws {
         MockURLProtocol.install { req in
             #expect(req.url?.path == "/api/documents/inbound/d1/suggest")
             #expect(req.httpMethod == "POST")
-            // Root-cause guard (issue #43): VISION mode must send NO JSON body /
+            // Root-cause guard: VISION mode must send NO JSON body /
             // Content-Type. The server dispatches on Content-Type — an
             // `application/json` request is routed to the TEXT (local-OCR)
             // handler, which fails immediately for a vision-only document. A

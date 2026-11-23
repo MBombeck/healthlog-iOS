@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-B180 — pure hypnogram layout decisions** behind ``SleepHypnogramScreen``.
+/// **Pure hypnogram layout decisions** behind ``SleepHypnogramScreen``.
 ///
 /// RCA "alle Phasen-Balken kleben rechts": the chart always mapped each
 /// segment's real `start`/`end` (render-verified) — but a SUMMARY-shaped

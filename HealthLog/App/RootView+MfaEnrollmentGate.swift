@@ -11,10 +11,6 @@ import SwiftUI
 /// enrol before they have even accepted the terms — and then bouncing them to a
 /// browser — is the worse first run, and the enrolment gate loses nothing by
 /// waiting one screen.
-///
-/// **Standalone is never gated.** A standalone install has no server, therefore
-/// no operator policy and no enrolment endpoint. Gating there would be a dead
-/// end with no possible exit.
 extension RootView {
     /// Resolve the forced-enrolment requirement on the authentication tick.
     /// Server-phase only; fail-soft inside the store (see
@@ -23,7 +19,7 @@ extension RootView {
         switch authStore.phase {
         case .authenticated:
             await mfaEnrollmentGate.refresh()
-        case .standalone, .unknown, .unauthenticated, .authenticating:
+        case .unknown, .unauthenticated, .authenticating:
             break
         }
     }
@@ -40,7 +36,7 @@ extension RootView {
                 hasLoaded: mfaEnrollmentGate.hasLoaded,
                 isRequired: mfaEnrollmentGate.isRequired
             )
-        case .standalone, .unknown, .unauthenticated, .authenticating:
+        case .unknown, .unauthenticated, .authenticating:
             return false
         }
     }

@@ -6,7 +6,7 @@ import SwiftUI
 
 // MARK: - Custom transcript + input row
 
-// Split out of `AskCoachSheet.swift` (v0.14.1) to keep that file under the
+// Split out of `AskCoachSheet.swift` to keep that file under the
 // SwiftLint 600-line ceiling after the External-AI consent dead-end fix added
 // the provider-needed step. These transcript views were `private` to
 // `AskCoachSheet.swift`; moving them to their own file in the same module they
@@ -21,8 +21,8 @@ import SwiftUI
     /// SpeziChat's `MessageStyleModifier` produced.
     struct CoachTranscriptView: View {
         let store: CoachConversationStore
-        var seed: String? // v0.13 WP — one-shot composer seed from a prompt chip
-        /// POLISH-B B1 — the welcome and the suggestion chips while the
+        var seed: String? // One-shot composer seed from a prompt chip
+        /// The welcome and the suggestion chips while the
         /// transcript is empty. They live inside the scroll view, so the
         /// composer above the keyboard always keeps its place: at the
         /// accessibility sizes the two are taller than the room the keyboard
@@ -35,12 +35,10 @@ import SwiftUI
         /// QoL-A2 (Felt-craft #5) — gate the transcript auto-scroll on
         /// reduce-motion (instant jump to tail when motion is disabled).
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-        /// W-B187 COACH-3 — reach the shared about-me store + server gate so a
+        /// Reach the shared about-me store + server gate so a
         /// "remember this" on a user turn folds the statement into the coach
-        /// self-context. Only offered on a paired install (server present).
+        /// self-context.
         @Environment(\.appContainer) private var appContainer
-        @Environment(BackendAvailability.self) private var backend
         /// Quiet inline confirmation after a remember-this action.
         @State private var rememberNote: RememberNote?
 
@@ -54,7 +52,7 @@ import SwiftUI
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        // POLISH-B B1 — a plain stack, not a lazy one. On iOS
+                        // A plain stack, not a lazy one. On iOS
                         // 26.5 at the accessibility sizes the lazy stack kept
                         // re-estimating its rows while the scroll view adjusted
                         // its offset for the bottom anchor (keyboard open, each
@@ -68,21 +66,19 @@ import SwiftUI
                             if let emptyHeader {
                                 emptyHeader
                                     .id("coach-empty-header")
-                            }
-                            // A11Y (1.5) — the "AI-generated, not medical
-                            // advice" line stands here, whole, at the
-                            // accessibility sizes (see `CoachInputRow`).
-                            if dynamicTypeSize.isAccessibilitySize {
+                                // The "AI-generated, not medical advice" line
+                                // greets a new conversation under the welcome
+                                // and leaves with it once the first message
+                                // stands (App Review 1.2, 5.1.1, 1.4.1).
                                 CoachAIGeneratedNote()
                                     .id("coach-ai-note")
                             }
                             ForEach(visibleEntries) { entity in
                                 VStack(alignment: .leading, spacing: HLSpace.xs) {
                                     CoachMessageBubble(entity: entity)
-                                        // W-B187 COACH-3 — long-press a user turn
+                                        // Long-press a user turn
                                         // to fold the statement into the coach
                                         // self-context (server matches the field).
-                                        // Paired-install only (needs the server).
                                         .contextMenu {
                                             if canRemember(entity) {
                                                 Button {
@@ -98,19 +94,17 @@ import SwiftUI
                                     // 1.0.3 (App Review 1.4.1, audit row 7) — the
                                     // citation under EVERY assistant reply, on
                                     // every arm, visible without expanding
-                                    // anything. 1.4 B2-c: it shares one row with
-                                    // "What I'm looking at" and the thumbs
-                                    // (`CoachReplyActions`); the per-turn token
-                                    // count is gone.
+                                    // anything. It shares one row with the one
+                                    // disclosure (`CoachReplyActions`).
                                     if isAssistant(entity) {
                                         CoachReplyActions(store: store, entityID: entity.id)
-                                        // 1.5 COACH-R — proposal and trail link.
+                                        // The proposal, under the row.
                                         CoachAnswerExtras(store: store, entityID: entity.id)
                                     }
                                 }
                                 .id(entity.id)
                             }
-                            // v1.18.1 (§3) — coach cadence suggestion: an
+                            // v1.18.1 — coach cadence suggestion: an
                             // actionable card under the latest reply, or a quiet
                             // "created" confirmation after the user accepts.
                             if let suggestion = store.pendingSuggestion {
@@ -129,7 +123,7 @@ import SwiftUI
                                 CoachTypingBubble()
                                     .id("typing-indicator")
                             }
-                            // 1.5 COACH-R — one quiet line while the turn runs.
+                            // One quiet line while the turn runs.
                             if let line = store.live.statusLine {
                                 CoachLiveStatusLine(text: line)
                                     .id("coach-live-status")
@@ -143,6 +137,9 @@ import SwiftUI
                         .padding(.horizontal, HLSpace.lg)
                         .padding(.vertical, HLSpace.md)
                     }
+                    // The transcript fades out above the composer instead of
+                    // ending on a hard edge.
+                    .mask { CoachTranscriptFade() }
                     .onChange(of: store.chat) { _, _ in
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                             proxy.scrollTo("transcript-tail", anchor: .bottom)
@@ -153,7 +150,7 @@ import SwiftUI
                             proxy.scrollTo("transcript-tail", anchor: .bottom)
                         }
                     }
-                    // 1.5 COACH-R — the proposal and the trail link arrive after
+                    // The proposal and the trail link arrive after
                     // the answer; bring them up above the keyboard, which stays
                     // open after sending like everywhere else in the chat.
                     // The views they need are inserted in the same pass, so the
@@ -172,7 +169,7 @@ import SwiftUI
                             }
                         }
                     }
-                    // v1.18.1 (§3) — bring a freshly-arrived cadence card into view.
+                    // v1.18.1 — bring a freshly-arrived cadence card into view.
                     .onChange(of: store.pendingSuggestion) { _, _ in
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                             proxy.scrollTo("transcript-tail", anchor: .bottom)
@@ -196,12 +193,11 @@ import SwiftUI
             }
         }
 
-        // MARK: - Remember-this (COACH-3)
+        // MARK: - Remember-this
 
-        /// `true` for a user turn on a paired install — only then can the
-        /// statement be folded into the server-stored self-context.
+        /// `true` for a user turn — only then can the statement be folded into the server-stored self-context.
         private func canRemember(_ entity: ChatEntity) -> Bool {
-            guard backend.hasServer, appContainer != nil else { return false }
+            guard appContainer != nil else { return false }
             if case .user = entity.role {
                 return !entity.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
@@ -233,10 +229,12 @@ import SwiftUI
             .foregroundStyle(HLText.primary)
             .padding(.horizontal, HLSpace.md)
             .padding(.vertical, HLSpace.sm)
-            // 08-14 — the toast floats over the transcript, so its translucency
+            // The toast floats over the transcript, so its translucency
             // is exactly the kind Reduce Transparency asks to be swapped for a
             // solid fill. `HLMaterialBackground` is that swap, made once.
             .background(
+                // A toast floating over the transcript, not a content card.
+                // swiftlint:disable:next hl_no_glass_in_content
                 HLMaterialBackground(.thinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: HLRadius.button, style: .continuous))
             )
@@ -270,8 +268,8 @@ import SwiftUI
             }
         }
 
-        /// Plain assistant prose turns — the only role that can carry the
-        /// feedback row (tool-call/response rows are never server-persisted
+        /// Plain assistant prose turns — the only role that carries the row
+        /// under an answer (tool-call/response rows are never server-persisted
         /// messages).
         private func isAssistant(_ entity: ChatEntity) -> Bool {
             if case .assistant = entity.role { return true }
@@ -333,7 +331,7 @@ import SwiftUI
         /// User text = adaptive `HLText.primary` (high contrast on
         /// tertiary). Assistant text = white on always-dark surface.
         private var bubbleForeground: Color {
-            // FW1-C (M6): assistant bubble ink routes through the tokenized
+            // Assistant bubble ink routes through the tokenized
             // AI-hero white (HLColor.aiHeroInk) instead of a raw white literal.
             isUser ? HLText.primary : HLColor.aiHeroInk
         }
@@ -364,7 +362,7 @@ import SwiftUI
     /// bubble — visually unmistakable as "Coach is composing".
     private struct CoachTypingBubble: View {
         @State private var phase: Int = 0
-        /// v0.12 W4-6 — the doc previously CLAIMED this indicator honoured
+        /// The doc previously CLAIMED this indicator honoured
         /// reduce-motion "automatically"; it did not — the phase loop pulsed
         /// unconditionally. Gate the loop on the live preference: reduce-motion
         /// renders the three dots STATIC (all at the dim opacity) and skips the
@@ -403,107 +401,63 @@ import SwiftUI
         }
     }
 
-    /// **1.4 B2-c — the one row under an assistant reply.** Sources (every
-    /// arm, App Review 1.4.1), the server arm's "What I'm looking at" toggle and
-    /// the thumbs share a line; the evidence opens below it. Where the line is
-    /// too narrow, the toggle moves to a second line. The sources link stays
-    /// outside the bubble's combined accessibility element.
+    /// **The one row under an assistant reply.** In front the sources link
+    /// (every arm, App Review 1.4.1, never behind a disclosure), behind it one
+    /// disclosure for the evidence and the trail when either exists. Where the
+    /// line is too narrow, the disclosure moves under the link. The sources
+    /// link stays outside the bubble's combined accessibility element.
     private struct CoachReplyActions: View {
         let store: CoachConversationStore
         let entityID: UUID
-        @State private var showsEvidence = false
+        @State private var expanded = false
 
         var body: some View {
-            let provenance = store.provenanceByEntity[entityID]
-            let hasEvidence = provenance.map(CoachProvenanceBody.hasContent) ?? false
-            let canRate = store.feedback.canRate(entityID: entityID)
+            let provenance = store.provenanceByEntity[entityID].flatMap { envelope in
+                CoachProvenanceBody.hasContent(envelope) ? envelope : nil
+            }
+            let hasTrail = store.live.hasTrail(entityID)
+            let canExpand = provenance != nil || hasTrail
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: HLSpace.md) {
                         HLSourcesLink(topic: .aiAssistant)
-                        if hasEvidence {
-                            CoachProvenanceToggle(expanded: $showsEvidence)
-                        }
                         Spacer(minLength: 0)
-                        if canRate {
-                            CoachFeedbackRow(store: store, entityID: entityID)
-                        }
+                        if canExpand { disclosure }
                     }
-                    VStack(alignment: .leading, spacing: HLSpace.xs) {
-                        HStack(spacing: HLSpace.md) {
-                            HLSourcesLink(topic: .aiAssistant)
-                            Spacer(minLength: 0)
-                            if canRate {
-                                CoachFeedbackRow(store: store, entityID: entityID)
-                            }
-                        }
-                        if hasEvidence {
-                            CoachProvenanceToggle(expanded: $showsEvidence)
-                        }
+                    VStack(alignment: .leading, spacing: 0) {
+                        HLSourcesLink(topic: .aiAssistant)
+                        if canExpand { disclosure }
                     }
                 }
-                if showsEvidence, let provenance {
-                    CoachProvenanceBody(provenance: provenance)
-                        .transition(.opacity)
+                if expanded, canExpand {
+                    CoachAnswerDetails(
+                        store: store,
+                        entityID: entityID,
+                        provenance: provenance,
+                        showsTrail: hasTrail
+                    )
+                    .transition(.opacity)
                 }
             }
             .padding(.leading, HLSpace.md)
         }
-    }
 
-    /// **Server-parity (v1.4.23 H7 route)** — subtle thumbs-up/down under a
-    /// server-persisted assistant reply. Secondary-styled (tertiary ink,
-    /// icon-only) so it never competes with the prose; the selected thumb
-    /// fills + tints. The server contract is one-shot (409 on a repeat), so
-    /// both buttons disable once a rating landed.
-    private struct CoachFeedbackRow: View {
-        let store: CoachConversationStore
-        let entityID: UUID
-
-        var body: some View {
-            let rating = store.feedback.rating(forEntity: entityID)
-            HStack(spacing: HLSpace.md) {
-                thumb(
-                    .helpful,
-                    symbol: "hand.thumbsup",
-                    label: String(localized: "coach.feedback.helpful.label"),
-                    current: rating
-                )
-                thumb(
-                    .unhelpful,
-                    symbol: "hand.thumbsdown",
-                    label: String(localized: "coach.feedback.unhelpful.label"),
-                    current: rating
-                )
-            }
+        private var disclosure: some View {
+            CoachAnswerDisclosureToggle(expanded: $expanded, onExpand: loadTrailIfNeeded)
         }
 
-        private func thumb(
-            _ value: CoachFeedbackRating,
-            symbol: String,
-            label: String,
-            current: CoachFeedbackRating?
-        ) -> some View {
-            let isSelected = current == value
-            return Button {
-                Task { await store.submitFeedback(value, forEntity: entityID) }
-            } label: {
-                Image(systemName: isSelected ? symbol + ".fill" : symbol)
-                    .font(.hlIcon(HLIconSize.sm))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(HLText.tertiary))
-                    // Comfortable tap target around the small glyph without
-                    // growing the visual footprint.
-                    .padding(HLSpace.xs)
-                    .contentShape(Rectangle())
+        /// The steps load on the first opening, and again after a failure.
+        /// Evidence alone needs no request.
+        private func loadTrailIfNeeded() {
+            guard store.live.hasTrail(entityID) else { return }
+            let trail = store.live.trails[entityID]
+            if trail == nil || trail == .failed {
+                Task { await store.loadTrail(for: entityID) }
             }
-            .buttonStyle(.plain)
-            .disabled(current != nil || store.feedback.isSubmitting(entityID: entityID))
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
     }
 
-    /// **v1.18.1 (§3)** — actionable coach cadence-suggestion card. Quiet,
+    /// **v1.18.1** — actionable coach cadence-suggestion card. Quiet,
     /// monochrome; renders under the latest reply when the server emitted a
     /// `suggestion` frame. Accept creates a `MeasurementReminder` (origin COACH)
     /// server-side; it then appears in the native list (Settings → Notifications
@@ -514,7 +468,15 @@ import SwiftUI
         let onDismiss: () -> Void
         let onStop: () -> Void
 
+        /// Outlined like the Coach's other offers in the transcript.
         var body: some View {
+            HLCard(style: .outline) {
+                content
+            }
+            .accessibilityElement(children: .contain)
+        }
+
+        private var content: some View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 Label(String(localized: "coach.reminderSuggestion.title"), systemImage: "bell.badge")
                     .font(.hlCaption)
@@ -526,34 +488,14 @@ import SwiftUI
                 // Canonical HLButton CTAs (44pt-floored, monochrome) — never raw
                 // bordered/controlSize(.small), which dropped the hit target below
                 // the a11y floor + drifted from every other CTA (QA D-H1/D-M1).
-                HStack(spacing: HLSpace.sm) {
-                    HLButton(
-                        String(localized: "coach.reminderSuggestion.accept"),
-                        variant: .primary,
-                        size: .compact,
-                        action: onAccept
-                    )
-                    HLButton(
-                        String(localized: "coach.reminderSuggestion.dismiss"),
-                        variant: .secondary,
-                        size: .compact,
-                        action: onDismiss
-                    )
+                HLButtonPair {
+                    HLButton("coach.reminderSuggestion.accept", variant: .primary, action: onAccept)
+                } secondary: {
+                    HLButton("coach.reminderSuggestion.dismiss", variant: .secondary, action: onDismiss)
                 }
-                HLButton(
-                    String(localized: "coach.reminderSuggestion.stop"),
-                    variant: .ghost,
-                    size: .compact,
-                    action: onStop
-                )
+                HLLinkButton("coach.reminderSuggestion.stop", action: onStop)
             }
-            .padding(HLSpace.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                HLSurface.secondary,
-                in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-            )
-            .accessibilityElement(children: .contain)
         }
 
         /// Resolve the server-supplied i18n key. `String(localized:)` returns the
@@ -567,7 +509,7 @@ import SwiftUI
         }
     }
 
-    /// **v1.18.1 (§3)** — quiet confirmation after the user accepts a cadence
+    /// **v1.18.1** — quiet confirmation after the user accepts a cadence
     /// suggestion; points at where the new reminder now lives.
     private struct CoachSuggestionAcceptedNote: View {
         var body: some View {
@@ -581,9 +523,8 @@ import SwiftUI
     // `CoachInputRow` (the composer input row + iOS-26 GlassEffectContainer
     // morph) lives in `AskCoachSheet+InputRow.swift`.
     //
-    // `CoachProvenanceDisclosure` (CO4 — the collapsed "what I'm looking at"
-    // evidence block), `ProvenanceChip`, `CoachTokenFooter` (CO5 — quiet token
-    // caption), and the `CoachProvenanceLabels` resolver live in
+    // `CoachProvenanceBody` (CO4 — the evidence the row's disclosure opens),
+    // `ProvenanceChip` and the `CoachProvenanceLabels` resolver live in
     // `AskCoachSheet+Provenance.swift` (split out v0154 to keep this file under
     // the 600-line ceiling).
 #endif

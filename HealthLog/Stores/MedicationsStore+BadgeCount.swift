@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.6.1.3 Y4.1 — App-Badge source-of-truth for fällige + verpasste meds.**
+/// **App-Badge source-of-truth for fällige + verpasste meds.**
 ///
 /// The Home-screen app icon surfaces a numeric badge that counts the
 /// medication doses the operator still needs to act on. The source of

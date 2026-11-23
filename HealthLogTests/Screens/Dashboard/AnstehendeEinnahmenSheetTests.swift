@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.5.6 HOME-COMPLIANCE-SHEET — sheet snapshot contract.**
+/// **Sheet snapshot contract.**
 ///
 /// Pins the pure snapshot/sort/overdue rules for
 /// `AnstehendeEinnahmenSheet`. The view layer is exercised at the
@@ -19,7 +19,7 @@ import Testing
 struct AnstehendeEinnahmenSheetTests {
     // MARK: - Fixtures
 
-    /// Parity 1.9 — `nextDueAt` + `nextDueOverdue` are how the SERVER says
+    /// `nextDueAt` + `nextDueOverdue` are how the SERVER says
     /// "this slot is overdue". The sheet reads that flag now instead of
     /// comparing `scheduledAt` against the wall clock, so every fixture that
     /// wants an overdue row has to say so the way the server would.
@@ -131,7 +131,7 @@ struct AnstehendeEinnahmenSheetTests {
         ])
     }
 
-    /// **Parity 1.9 — the doctrine test.** A pending slot whose time has passed
+    /// **The doctrine test.** A pending slot whose time has passed
     /// is NOT overdue unless the SERVER says so. The old implementation read
     /// `scheduledAt < now` and painted this row red; the server, which knows the
     /// catch-up band, considers it closed and ships no flag.
@@ -212,7 +212,7 @@ struct AnstehendeEinnahmenSheetTests {
         #expect(snap.subtitleKey.contains("2"))
     }
 
-    /// **v0.14.1 DOSE-SAFETY.** A `.taken` intake scheduled LATER than `now`
+    /// A `.taken` intake scheduled LATER than `now`
     /// (the server's ±6h afternoon→19:00 snap, or a clock-skew edge) must not
     /// read as done: the row is flagged `isFutureTaken` so the glyph shows the
     /// neutral empty circle and it sorts with the upcoming-pending doses, never
@@ -264,7 +264,7 @@ struct AnstehendeEinnahmenSheetTests {
     }
 }
 
-// MARK: - v0.6.1.7 Y7 — Compliance-Haken trailing-glyph contract
+// MARK: - Compliance-Haken trailing-glyph contract
 
 /// Locks the `TrailingPresentation` descriptor for the five
 /// `IntakeStatus` cases. Operator-facing rule (handbook §5.5 / AP-014):
@@ -291,35 +291,59 @@ struct AnstehendeEinnahmenSheetTrailingPresentationTests {
         let p = Presentation.resolve(status: .taken)
         #expect(p.symbolName == "checkmark.circle.fill")
         #expect(p.tint == Tint.statusOK)
-        #expect(p.accessibilityLabelKey == "dashboard.intakesSheet.status.taken")
+        #expect(p.accessibilityLabelKey == "med.dose.state.taken")
     }
 
-    @Test("Skipped → outlined xmark.circle (no .fill) in secondary tint")
-    func skippedIsOutlinedXmark() {
+    @Test("#191: taken late → the check in amber, named 'taken late'")
+    func takenLateIsAmberCheck() {
+        let p = Presentation.resolve(status: .taken, takenLate: true)
+        #expect(p.symbolName == "checkmark.circle.fill")
+        #expect(p.tint == Tint.statusWarn)
+        #expect(p.accessibilityLabelKey == "med.dose.state.taken_late")
+    }
+
+    @Test("#191: skipped → skip-forward in secondary tint")
+    func skippedIsSkipForward() {
         let p = Presentation.resolve(status: .skipped)
-        #expect(p.symbolName == "xmark.circle")
-        #expect(p.symbolName.hasSuffix(".fill") == false)
+        #expect(p.symbolName == "forward.end")
         #expect(p.tint == Tint.secondary)
-        #expect(p.accessibilityLabelKey == "dashboard.intakesSheet.status.skipped")
+        #expect(p.accessibilityLabelKey == "med.dose.state.skipped")
     }
 
-    @Test("Snoozed → outlined moon.zzz in tertiary tint")
-    func snoozedIsOutlinedMoon() {
+    @Test("#191: snoozed is still to take → the empty circle, never a check")
+    func snoozedIsStillToTake() {
         let p = Presentation.resolve(status: .snoozed)
-        #expect(p.symbolName == "moon.zzz")
+        #expect(p.symbolName == "circle")
         #expect(p.tint == Tint.tertiary)
-        #expect(p.accessibilityLabelKey == "dashboard.intakesSheet.status.snoozed")
+        #expect(p.accessibilityLabelKey == "dashboard.intakesSheet.action.markTaken")
     }
 
-    @Test("Missed → filled xmark in statusBad and stays read-only")
+    @Test("#191: an overdue pending dose turns its circle amber, still no check")
+    func overduePendingIsAmberCircle() {
+        let p = Presentation.resolve(status: .pending, isOverdue: true)
+        #expect(p.symbolName == "circle")
+        #expect(p.tint == Tint.statusWarn)
+    }
+
+    @Test("#191: missed → the triangle in statusBad and stays read-only")
     func missedIsTerminalStatusBad() {
         let p = Presentation.resolve(status: .missed)
-        #expect(p.symbolName == "xmark.circle.fill")
+        #expect(p.symbolName == "exclamationmark.triangle")
         #expect(p.tint == Tint.statusBad)
-        #expect(p.accessibilityLabelKey == "med.heatmap.status.missed")
+        #expect(p.accessibilityLabelKey == "med.dose.state.missed")
     }
 
-    /// **Audit B-5.** A stored status this build cannot name renders as a row
+    @Test("#191: no state still to take ever carries a check")
+    func neverACheckOnADoseToTake() {
+        for status in [IntakeStatus.pending, .snoozed] {
+            for overdue in [false, true] {
+                #expect(!Presentation.resolve(status: status, isOverdue: overdue).symbolName.contains("checkmark"))
+            }
+        }
+        #expect(!Presentation.resolve(status: .taken, isFutureScheduled: true).symbolName.contains("checkmark"))
+    }
+
+    /// A stored status this build cannot name renders as a row
     /// that states nothing: no Haken (it is not taken), no missed-red (it is
     /// not a terminal miss), and no tap target — the view wires an action on
     /// `.pending` alone.
@@ -345,7 +369,7 @@ struct AnstehendeEinnahmenSheetTrailingPresentationTests {
         #expect(pending.tint != taken.tint)
     }
 
-    /// **v0.14.1 DOSE-SAFETY.** A `.taken` intake whose scheduled time is still
+    /// A `.taken` intake whose scheduled time is still
     /// in the future must render the neutral empty-circle "upcoming" glyph —
     /// never the green checkmark — so a not-yet-due dose is never shown done.
     @Test("DOSE-SAFETY: future-scheduled taken resolves to the empty-circle upcoming glyph")
@@ -354,7 +378,7 @@ struct AnstehendeEinnahmenSheetTrailingPresentationTests {
         #expect(p.symbolName == "circle")
         #expect(p.symbolName.hasSuffix(".fill") == false)
         #expect(p.tint == Tint.tertiary)
-        #expect(p.accessibilityLabelKey == "dashboard.intakesSheet.status.upcoming")
+        #expect(p.accessibilityLabelKey == "med.dose.state.pending")
     }
 
     /// The future guard is opt-in: a `.taken` row that is NOT future (the

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **08-15 — the inventory half of `productionRawHeartRatePolicyFailsClosed`.**
+/// **The inventory half of `productionRawHeartRatePolicyFailsClosed`.**
 ///
 /// Until this plan, the release guard read
 /// `SettingsHKSyncDiagnosticsScreen+PulseUpload.swift` and asserted that the

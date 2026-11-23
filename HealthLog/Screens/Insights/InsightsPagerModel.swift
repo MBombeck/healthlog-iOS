@@ -31,7 +31,7 @@ final class InsightsPagerModel {
     /// exactly like web (`pathname === "/insights"`).
     var selection: InsightsTabSelection = .overview
 
-    /// #39 — the scroll-driven page position bound to the horizontal pager's
+    /// The scroll-driven page position bound to the horizontal pager's
     /// `.scrollPosition(id:)`. Bridged to `selection` by two GUARDED one-way
     /// mirrors (never a feedback loop): a settled swipe lands this on a page id →
     /// we mirror it into `selection` so the strip pill follows; a pill tap sets
@@ -39,7 +39,7 @@ final class InsightsPagerModel {
     /// no-ops when the two already agree, so a swipe is never met by a competing
     /// programmatic scroll. Starts on `.overview`.
     ///
-    /// v0152 I1 — typed as `InsightsPagerPageID`, which now mirrors
+    /// Typed as `InsightsPagerPageID`, which now mirrors
     /// `InsightsTabSelection` 1:1 (the flat-pager contract): every metric is its
     /// own page, so a swipe between two members of the same category IS a page
     /// change that moves this scroll position.
@@ -53,14 +53,14 @@ final class InsightsPagerModel {
     /// anchor-safe. Seeded on first reconcile (`.onAppear`).
     var pagerOrder: [InsightsTabSelection] = []
 
-    /// V0150 (H2) — the page a PROGRAMMATIC scroll (pill tap / deep link) is
+    /// The page a PROGRAMMATIC scroll (pill tap / deep link) is
     /// driving `scrolledID` toward. While set, the `scrolledID → selection` mirror
     /// ignores resolver echoes that don't match it, so a layout-resolver write
     /// cannot bounce `selection` to a neighbour. Cleared when the resolver settles
     /// on the target. `nil` = a free user swipe drives the mirror.
     var programmaticScrollTarget: InsightsPagerPageID?
 
-    /// v0152 W-RECONCILE H-1 — monotonic token bumped every time
+    /// Monotonic token bumped every time
     /// `mirrorSelectionIntoScroll` arms `programmaticScrollTarget`. The timeout
     /// backstop captures the token it armed and only clears the latch if no newer
     /// arming has happened since (and the same target is still latched). This stops
@@ -70,7 +70,7 @@ final class InsightsPagerModel {
     /// page reshape that changes `scrollIdentity` between the set and the settle).
     var programmaticScrollGeneration = 0
 
-    /// W-RECONCILE H-1 — clear the programmatic-scroll latch if it is still the
+    /// Clear the programmatic-scroll latch if it is still the
     /// SAME arming (`generation` unchanged) and still pointing at `target`. Called
     /// by the View's timeout backstop after a short deadline. A newer
     /// `mirrorSelectionIntoScroll` (bumped generation) or an already-cleared latch
@@ -90,13 +90,42 @@ final class InsightsPagerModel {
     /// hydrating). Held so the retry can apply it once the page exists.
     var pendingMetricTarget: InsightsTabSelection?
 
+    /// A deep link to a whole category (`healthlog://insights/recovery`, the
+    /// address of the former recovery page) whose members are not known yet.
+    /// Resolved to the category's first page as soon as the live order holds
+    /// one (`tryApplyStagedMetric`).
+    var pendingCategoryTarget: InsightsMetricCategory?
+
+    /// `true` while a finger or the deceleration moves the pager. A page the
+    /// pager passes on the way is not a choice yet; `selection` follows the
+    /// page it comes to rest on (`adoptScrolledPage`). Not observed: no view
+    /// draws from it, so a phase change never runs a body.
+    @ObservationIgnored var isPagerScrolling = false
+
+    /// The page a swipe is passing, while the pager still moves; `nil` at
+    /// rest and during a programmatic scroll. Only the strip reads it
+    /// (``stripSelection``), so its pill follows the finger at once while
+    /// the selection, and with it every page, changes once, at rest.
+    private(set) var passingSelection: InsightsTabSelection?
+
+    /// The pill the strip shows chosen: the page a swipe is passing, else
+    /// the selection.
+    var stripSelection: InsightsTabSelection {
+        passingSelection ?? selection
+    }
+
+    /// One chart store per metric page, made the first time the page is
+    /// built. The page keeps the first store it is handed anyway; making a
+    /// new one on every container update only cost time.
+    @ObservationIgnored private var chartStores: [MetricKind: ChartDetailStore] = [:]
+
     /// W-NAVANIM (operator-walk b190) — one-shot "the NEXT `selection` change is a
     /// DEEP-LINK jump". Set by the deep-link appliers before they mutate
     /// `selection`; `mirrorSelectionIntoScroll` reads+clears it to choose an
     /// INSTANT jump over the calm slide (the "gehetzte Blätter-Animation" fix).
     var pendingDeepLinkJump = false
 
-    /// W29 — metric pages that have entered the build window at least once. Once a
+    /// Metric pages that have entered the build window at least once. Once a
     /// metric page is built we keep it built even after it leaves the ±1 window,
     /// so a visited page's vertical scroll position + warm `ChartDetailStore`
     /// survive the operator swiping several pages away and back (page-aliveness).
@@ -110,12 +139,15 @@ final class InsightsPagerModel {
     /// it during a revalidation.
     var seenKinds: Set<MetricKind> = []
 
-    /// W28c — the same latch, for the three special pages. The union only ever
+    /// The same latch, for the three special pages. The union only ever
     /// grows within a session, so once a special has shown data it keeps its pill
     /// + page.
     var seenSpecials: Set<InsightsSpecialPage> = []
 
-    /// 1.4 C1 — the data-gated special pages whose source has answered this
+    /// The same latch, for the recovery family's pages.
+    var seenRecoveryKinds: Set<MetricKind> = []
+
+    /// The data-gated special pages whose source has answered this
     /// session (mood / medications / ECG). A deep link to one of them that is
     /// still empty after its source answered opens the page with its own empty
     /// state (`admitStagedSpecialIfSettled`) instead of waiting for data that
@@ -236,7 +268,7 @@ final class InsightsPagerModel {
 
     // MARK: - Impure transitions (own the state, take live inputs as params)
 
-    /// V0150 — reconcile `pagerOrder` from the live list, adopting a new order only
+    /// Reconcile `pagerOrder` from the live list, adopting a new order only
     /// when it cannot move the current anchor (see `reconciledPagerOrder`). Required
     /// targets = current selection + pending deep-link target, so a programmatic
     /// page is always reachable even while a disruptive reorder is deferred.
@@ -263,7 +295,7 @@ final class InsightsPagerModel {
     /// monotonic: a page never reverts to a placeholder, preserving its scroll +
     /// warm store once visited.
     ///
-    /// v0152 I1 — the window is over the FLAT pages (one page per metric). For a
+    /// The window is over the FLAT pages (one page per metric). For a
     /// metric page in the window we realize its kind; overview / special pages
     /// carry no `ChartDetailStore`, so they're skipped. `pages` is the
     /// View-computed flat list.
@@ -296,25 +328,63 @@ final class InsightsPagerModel {
         pages: [InsightsPagerPage],
         reduceMotion: Bool
     ) {
-        // v0152 I1 — map the selection to its own flat page id (1:1 per metric).
+        // Map the selection to its own flat page id (1:1 per metric).
         guard let targetID = InsightsPagerPage.page(for: newValue, in: pages)?.scrollIdentity else { return }
         guard scrolledID != targetID else { return }
         let source: PageSelectionSource = pendingDeepLinkJump ? .deepLink : .interactive
         pendingDeepLinkJump = false
-        // V0150 — a programmatic scroll is now in flight; mark it so the
+        // A programmatic scroll is now in flight; mark it so the
         // `scrolledID → selection` mirror ignores the resolver echo this write
-        // provokes (H2). Cleared when the resolver settles back on `targetID`, OR
-        // by the timeout backstop (W-RECONCILE H-1) if the settle never lands the
+        // provokes. Cleared when the resolver settles back on `targetID`, OR
+        // by the timeout backstop if the settle never lands the
         // exact target id. Bump the generation so the backstop only clears THIS
         // arming.
         programmaticScrollTarget = targetID
         programmaticScrollGeneration &+= 1
+        clearPassingSelection()
         switch Self.pageScrollTransition(source: source, reduceMotion: reduceMotion) {
         case .instant:
             scrolledID = targetID
         case .animated:
             withAnimation(.easeInOut(duration: 0.25)) { scrolledID = targetID }
         }
+    }
+
+    /// The pager's width changed from `oldWidth` to `newWidth`. At rest the
+    /// page of the selection comes back under the snap: it is latched as the
+    /// target of a programmatic scroll, so the position reports the resize
+    /// provokes on the way cannot move the selection, and `scrolledID` names
+    /// it again. Returns the page the view scrolls to without animation, or
+    /// `nil` when nothing needs to move (see ``InsightsPagerAnchor``).
+    @discardableResult
+    func reanchorAfterWidthChange(
+        oldWidth: CGFloat,
+        newWidth: CGFloat,
+        pages: [InsightsPagerPage]
+    ) -> InsightsPagerPageID? {
+        guard InsightsPagerAnchor.needsReanchor(oldWidth: oldWidth, newWidth: newWidth, isScrolling: isPagerScrolling),
+              let anchor = InsightsPagerAnchor.anchor(for: selection, in: pages) else { return nil }
+        // Where the position still names the page, nothing is in flight: the
+        // view only puts the offset back under it, and no latch waits for a
+        // report that never comes (a swipe right after would be swallowed).
+        guard scrolledID != anchor else { return anchor }
+        clearPassingSelection()
+        programmaticScrollTarget = anchor
+        programmaticScrollGeneration &+= 1
+        scrolledID = anchor
+        return anchor
+    }
+
+    /// The backstop after a snap-back: if no report landed the latch in
+    /// time, release it, and at rest let the page the pager shows be the
+    /// selection, so page and pill never part.
+    func releaseStaleReanchor(
+        generation: Int,
+        pages: [InsightsPagerPage],
+        liveOrderedSelections: [InsightsTabSelection]
+    ) {
+        guard clearStaleProgrammaticScroll(generation: generation), !isPagerScrolling else { return }
+        adoptScrolledPage(scrolledID, pages: pages, liveOrderedSelections: liveOrderedSelections)
     }
 
     /// Fold the live availability into the latched union. Monotonic: only ever
@@ -326,7 +396,81 @@ final class InsightsPagerModel {
         }
     }
 
-    /// W28c — fold the live special availability into the latched union. Monotonic,
+    /// Fold the live recovery members into their latch. Monotonic, same
+    /// contract as `mergeSeenKinds`.
+    func mergeSeenRecoveryKinds(_ live: [MetricKind]) {
+        let merged = seenRecoveryKinds.union(live)
+        if merged != seenRecoveryKinds {
+            seenRecoveryKinds = merged
+        }
+    }
+
+    /// The chart store for `kind`'s page, made once.
+    func chartStore(for kind: MetricKind, make: () -> ChartDetailStore) -> ChartDetailStore {
+        if let store = chartStores[kind] { return store }
+        let store = make()
+        chartStores[kind] = store
+        return store
+    }
+
+    // MARK: - Swipe → selection
+
+    /// A write to `scrolledID`. A programmatic scroll (pill tap, deep link)
+    /// only clears its latch when it lands. A swipe moves `selection` once the
+    /// pager rests: the page that passes under the finger is not chosen yet,
+    /// so the page activation and the neighbour window change once per
+    /// swipe, after the motion, instead of during it. The strip's pill
+    /// follows the passing page at once (``passingSelection``), as in 1.5.
+    func adoptScrolledPage(
+        _ newID: InsightsPagerPageID?,
+        pages: [InsightsPagerPage],
+        liveOrderedSelections: [InsightsTabSelection]
+    ) {
+        guard let newID else { return }
+        // A programmatic scroll is in flight: accept ONLY the write that
+        // lands on the intended target (which clears the guard); ignore echoes.
+        if let target = programmaticScrollTarget {
+            if newID == target { programmaticScrollTarget = nil }
+            return
+        }
+        guard !isPagerScrolling else {
+            let passing = selectionForLandedPage(newID, pages: pages)
+            if passing != passingSelection { passingSelection = passing }
+            return
+        }
+        // A genuine settled user swipe → follow it. No-op when the selection
+        // already lives on this page. The strip already shows it.
+        if let landed = selectionForLandedPage(newID, pages: pages), landed != selection {
+            selection = landed
+        }
+        clearPassingSelection()
+        // Settled back at overview: safe to adopt deferred growth.
+        if newID == .overview, selection == .overview {
+            reconcilePagerOrder(liveOrderedSelections: liveOrderedSelections)
+        }
+    }
+
+    private func clearPassingSelection() {
+        if passingSelection != nil { passingSelection = nil }
+    }
+
+    /// The pager's scroll phase changed. At rest, the page it rests on
+    /// becomes the selection.
+    /// A finger on the pager (`isUserDriven`) ends any programmatic scroll
+    /// it was waiting for: the person's swipe decides the page from here.
+    func pagerScrollPhaseChanged(
+        isIdle: Bool,
+        isUserDriven: Bool = false,
+        pages: [InsightsPagerPage],
+        liveOrderedSelections: [InsightsTabSelection]
+    ) {
+        isPagerScrolling = !isIdle
+        if isUserDriven, programmaticScrollTarget != nil { programmaticScrollTarget = nil }
+        guard isIdle else { return }
+        adoptScrolledPage(scrolledID, pages: pages, liveOrderedSelections: liveOrderedSelections)
+    }
+
+    /// Fold the live special availability into the latched union. Monotonic,
     /// same contract as `mergeSeenKinds`.
     func mergeSeenSpecials(_ live: Set<InsightsSpecialPage>) {
         let merged = seenSpecials.union(live)
@@ -335,7 +479,7 @@ final class InsightsPagerModel {
         }
     }
 
-    /// 1.4 C1 — record that `page`'s data source has answered (see
+    /// Record that `page`'s data source has answered (see
     /// `settledSpecials`).
     func markSpecialSettled(_ page: InsightsSpecialPage) {
         if !settledSpecials.contains(page) {
@@ -343,7 +487,7 @@ final class InsightsPagerModel {
         }
     }
 
-    /// 1.4 C1 — a deep link asked for a special page the strip does not offer
+    /// A deep link asked for a special page the strip does not offer
     /// because it has no data. Once that page's source has answered, admit the
     /// page into the latched special set so the link lands on it and the page
     /// shows its empty state. The pill then stays for the session, like any
@@ -358,7 +502,7 @@ final class InsightsPagerModel {
         return true
     }
 
-    /// v0152 I1 — the `selection` a SETTLED swipe to a page id should produce. The
+    /// The `selection` a SETTLED swipe to a page id should produce. The
     /// pager is flat (one page per metric), so each landed page id maps 1:1 to its
     /// own selection. `nil` if the landed page id isn't in the current flat list.
     func selectionForLandedPage(_ id: InsightsPagerPageID, pages: [InsightsPagerPage]) -> InsightsTabSelection? {
@@ -377,11 +521,11 @@ final class InsightsPagerModel {
 
     // MARK: - Inbound deep-link resolution
 
-    /// v0.12 W0-1 — resolve the router's parked Insights metric slug onto the pager
+    /// Resolve the router's parked Insights metric slug onto the pager
     /// `selection`. Chartable slugs map to `.metric(kind)`; the special slugs map
     /// to `.special(page)`; an unknown or `nil` slug falls back to `.overview`.
     ///
-    /// W0-fix (H1) — consumes a FRESH deep-linked metric request from the router
+    /// Consumes a FRESH deep-linked metric request from the router
     /// (one-shot per `insightsMetricRequestCount` bump). A bare re-appear with no
     /// new bump returns `.none` and is a no-op. `router` is the View's
     /// `@Environment(AppRouter.self)`, passed in; `liveOrderedSelections`/`pages`
@@ -403,17 +547,37 @@ final class InsightsPagerModel {
             target = .metric(kind)
         } else if let page = InsightsSpecialPage.page(forSlug: slug) {
             target = .special(page)
+        } else if InsightsLayoutTileId.normalize(slug) == InsightsLayoutTileId.recovery {
+            // The recovery page became the Recovery category; its old address
+            // opens the category's first page.
+            pendingMetricTarget = nil
+            pendingCategoryTarget = .recovery
+            tryApplyStagedMetric(liveOrderedSelections: liveOrderedSelections, pages: pages)
+            return
         } else {
             pendingMetricTarget = nil
             if selection != .overview { pendingDeepLinkJump = true } // W-NAVANIM jump
             selection = .overview
             return
         }
+        pendingCategoryTarget = nil
         pendingMetricTarget = target
         tryApplyStagedMetric(liveOrderedSelections: liveOrderedSelections, pages: pages)
     }
 
-    /// W0-fix (M2) — apply the staged deep-link target once its page exists in the
+    /// A staged category link whose category turned out to have no page
+    /// (no recovery reading, module off) lands on Übersicht instead of waiting
+    /// for a page that will not come. Called once the category's source has
+    /// answered.
+    func abandonStagedCategoryIfEmpty(_ category: InsightsMetricCategory, liveOrderedSelections: [InsightsTabSelection]) {
+        guard pendingCategoryTarget == category else { return }
+        guard !liveOrderedSelections.contains(where: { InsightsCategoryGroups.category(for: $0) == category }) else { return }
+        pendingCategoryTarget = nil
+        if selection != .overview { pendingDeepLinkJump = true }
+        selection = .overview
+    }
+
+    /// Apply the staged deep-link target once its page exists in the
     /// ordered set. Never strands the pager on a missing page: if the target isn't
     /// available yet it stays staged and retries on the next ordered-set change.
     ///
@@ -423,13 +587,19 @@ final class InsightsPagerModel {
         liveOrderedSelections: [InsightsTabSelection],
         pages: [InsightsPagerPage]
     ) {
+        if let category = pendingCategoryTarget,
+           let first = liveOrderedSelections.first(where: { InsightsCategoryGroups.category(for: $0) == category })
+        {
+            pendingCategoryTarget = nil
+            pendingMetricTarget = first
+        }
         guard let target = pendingMetricTarget else { return }
         let ordered = pagerOrder.isEmpty ? liveOrderedSelections : pagerOrder
-        // V0150 — a deep link is an INSTANT jump, so a relayout under it is
+        // A deep link is an INSTANT jump, so a relayout under it is
         // invisible: force the frozen order to adopt the full live list now, so the
         // target page is guaranteed present before the jump.
         //
-        // 1.4 C1 — but only when the live list HAS the target. Without it the
+        // But only when the live list HAS the target. Without it the
         // full adoption brings no target, and no jump follows to hide the
         // relayout: pages inserted before the current one shift under the
         // pager's scroll offset, which then rests on an unrealized metric
@@ -439,17 +609,17 @@ final class InsightsPagerModel {
         }
         let resolvedOrder = pagerOrder.isEmpty ? liveOrderedSelections : pagerOrder
         guard resolvedOrder.contains(target) else { return }
-        // v0152 I1 — a deep link to a metric lands on that metric's OWN flat page
+        // A deep link to a metric lands on that metric's OWN flat page
         // (the pager is one-page-per-metric); the strip then highlights the metric's
         // owning category pill, derived from the current selection. No per-group
         // member bookkeeping is needed any more.
-        // W-NAVANIM — deep-link application: tag the selection change a one-shot
+        // Deep-link application: tag the selection change a one-shot
         // jump so the pager lands on the target page INSTANTLY (no riffle).
         if selection != target {
             pendingDeepLinkJump = true
             selection = target
         } else {
-            // W-RECONCILE M-2 — deep-link to the metric that is ALREADY the
+            // Deep-link to the metric that is ALREADY the
             // selection. `selection = target` would be a no-op `@Observable`
             // write, so the `onChange(of: selection)` mirror never fires and a
             // drifted `scrolledID` (mid-swipe / page reshape) is never re-aligned —

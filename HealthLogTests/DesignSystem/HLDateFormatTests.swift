@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// A360-1 H1 — locks the date-format primitive that mirrors the server's
+/// Locks the date-format primitive that mirrors the server's
 /// `User.dateFormat` (`AUTO | DMY | MDY | YMD`). Verifies each preference renders
 /// the numeric field order its server counterpart pins (DMY → dd.MM.yyyy,
 /// MDY → MM/dd/yyyy, YMD → yyyy-MM-dd) and that the raw values round-trip the
@@ -75,6 +75,95 @@ struct HLDateFormatTests {
         #expect(s.contains("17"))
     }
 
+    private static let pinnedOrders: [HLDateFormat] = [.dayMonthYear, .monthDayYear, .yearMonthDay]
+    private static let styles: [(HLDateFormat.Style, Date.FormatStyle.DateStyle)] = [
+        (.numeric, .numeric), (.abbreviated, .abbreviated), (.long, .long), (.complete, .complete)
+    ]
+
+    @Test("Korean numeric dates keep the pinned field order", arguments: Self.pinnedOrders)
+    func koreanNumericOrder(_ order: HLDateFormat) throws {
+        let suite = "HLDateFormatTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        AppLanguage.$pinned.withValue(.ko) {
+            #expect(AppLanguage.ko.dayMonthYearLocale.identifier == "en_GB")
+            let expected: [Int] = switch order {
+            case .auto: []
+            case .dayMonthYear: [17, 6, 2026]
+            case .monthDayYear: [6, 17, 2026]
+            case .yearMonthDay: [2026, 6, 17]
+            }
+            for text in [
+                order.formatDate(sample, style: .numeric),
+                order.formatDateTime(sample, style: .numeric, defaults: defaults)
+            ] {
+                let fields = text.split { !$0.isNumber }.prefix(3).compactMap { Int($0) }
+                #expect(fields == expected, "\(order) must keep numeric field order (\(text))")
+            }
+        }
+    }
+
+    @Test("Korean spelled-out dates and date-times stay Korean for every pinned order", arguments: Self.pinnedOrders)
+    func koreanSpelledOutStyles(_ order: HLDateFormat) throws {
+        let suite = "HLDateFormatTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        AppLanguage.$pinned.withValue(.ko) {
+            for (style, _) in Self.styles.dropFirst() {
+                for text in [
+                    order.formatDate(sample, style: style),
+                    order.formatDateTime(sample, style: style, defaults: defaults)
+                ] {
+                    #expect(text.contains("2026년"), "\(order)/\(style) must use the Korean year (\(text))")
+                    #expect(text.contains("6월"), "\(order)/\(style) must use the Korean month (\(text))")
+                    #expect(text.contains("17일"), "\(order)/\(style) must include the day (\(text))")
+                }
+            }
+        }
+    }
+
+    @Test("AUTO keeps the device locale under a Korean interface")
+    func koreanAutoKeepsDeviceLocale() throws {
+        let suite = "HLDateFormatTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        AppLanguage.$pinned.withValue(.ko) {
+            #expect(HLDateFormat.auto.formattingLocale == Locale.current)
+            for (style, dateStyle) in Self.styles {
+                let date = sample.formatted(Date.FormatStyle(date: dateStyle, time: .omitted).locale(.current))
+                let dateTime = sample.formatted(Date.FormatStyle(date: dateStyle, time: .shortened).locale(.current))
+                #expect(HLDateFormat.auto.formatDate(sample, style: style) == date)
+                #expect(HLDateFormat.auto.formatDateTime(sample, style: style, defaults: defaults) == dateTime)
+            }
+        }
+    }
+
+    @Test("German, English, Dutch and Spanish keep their pinned locales for all styles", arguments: [AppLanguage.de, .en, .nl, .es])
+    func existingLanguagesKeepPinnedLocales(_ language: AppLanguage) throws {
+        let suite = "HLDateFormatTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let dayFirst = switch language {
+        case .de: Locale(identifier: "de_DE")
+        case .en: Locale(identifier: "en_GB")
+        case .nl: Locale(identifier: "nl_NL")
+        case .ko: Locale(identifier: "en_GB")
+        case .es: Locale(identifier: "es_ES")
+        }
+        AppLanguage.$pinned.withValue(language) {
+            let locales = [dayFirst, Locale(identifier: "en_US"), Locale(identifier: "en_CA")]
+            for (order, locale) in zip(Self.pinnedOrders, locales) {
+                #expect(order.formattingLocale == locale)
+                for (style, dateStyle) in Self.styles {
+                    let date = sample.formatted(Date.FormatStyle(date: dateStyle, time: .omitted).locale(locale))
+                    let dateTime = sample.formatted(Date.FormatStyle(date: dateStyle, time: .shortened).locale(locale))
+                    #expect(order.formatDate(sample, style: style) == date, "\(language)/\(order)/\(style)")
+                    #expect(order.formatDateTime(sample, style: style, defaults: defaults) == dateTime)
+                }
+            }
+        }
+    }
+
     @Test("static convenience reads the UserDefaults mirror")
     func staticConvenienceReadsMirror() throws {
         let suite = "HLDateFormatTests.\(UUID().uuidString)"
@@ -99,7 +188,7 @@ struct HLDateFormatTests {
     }
 }
 
-/// b215 — locks the compact **day + month** helper that appends the year ONLY
+/// Locks the compact **day + month** helper that appends the year ONLY
 /// when the date isn't in `now`'s calendar year, so historical rows (the
 /// workouts overview, the measurement feed) are never ambiguous about which
 /// year they belong to. `now`, `locale` and `calendar` are all injected so the

@@ -74,7 +74,7 @@ public extension AppContainer {
             keychain: keychain,
             isOptedIn: { EcgHealthSyncStore.isOptedIn(in: defaultsProvider()) },
             defaultsProvider: defaultsProvider,
-            // Plan 07-06 — the account authority the reset's partition is
+            // The account authority the reset's partition is
             // named by. Passed at construction rather than bound later:
             // a coordinator that learns its account after its first sweep
             // has already had a window in which it had none.

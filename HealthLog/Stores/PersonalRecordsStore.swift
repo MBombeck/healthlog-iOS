@@ -3,7 +3,7 @@ import Observation
 
 /// `@Observable` wrapper over `PersonalRecordsRepository`. Surfaces the
 /// per-user PR list to the chart-detail PR strip + the redesigned
-/// `PersonalRecordsScreen` (v0.5.5.6 POLISH-PR).
+/// `PersonalRecordsScreen`.
 ///
 /// **Production state (2026-05-17):** the server route is schema-only;
 /// the detection worker that populates rows lands in v1.4.26 / v1.5.
@@ -19,7 +19,7 @@ import Observation
 /// moment the server worker ships, the same screen lights up with the
 /// authoritative rows and the derived rows fall back automatically.
 ///
-/// **v0.5.5.6 POLISH-PR:** the store now also publishes a parallel
+/// The store now also publishes a parallel
 /// `enrichedRecords` list (`PersonalRecord` view model) and a
 /// `selectedBucket` toggle so the new screen can render the hero, the
 /// 2-col grid, the streak rail and the milestones strip without
@@ -32,7 +32,7 @@ public final class PersonalRecordsStore {
     public private(set) var error: HLError?
     public private(set) var currentMetricType: String?
 
-    /// v0.5.5.6 POLISH-PR — enriched UI-facing records (sparkline +
+    /// Enriched UI-facing records (sparkline +
     /// bucket + delta + impressiveness). Populated alongside `records`
     /// by `load(...)`; the redesigned `PersonalRecordsScreen` reads
     /// this list, the legacy chart-detail PR badge keeps reading the
@@ -40,20 +40,20 @@ public final class PersonalRecordsStore {
     public private(set) var enrichedRecords: [PersonalRecord] = []
 
     /// The selected time bucket on the Records screen. Driven by the
-    /// segmented picker. v0.14.1 (#139) — defaults to `.week` ("Diese Woche")
+    /// segmented picker. Defaults to `.week` ("Diese Woche")
     /// so the screen opens on the most-recent, most-relevant window (the
     /// operator's "what did I just achieve" view) instead of the unfiltered
     /// all-time list. Reset to the same default on logout.
     public var selectedBucket: TimeBucket = .week
 
     private let repo: PersonalRecordsRepository
-    /// v0.5.4-BF7 — client-side derivation source. Optional so the
+    /// Client-side derivation source. Optional so the
     /// existing test composition (`PersonalRecordsStore(repo:)`) keeps
     /// compiling without a second dependency, and so the
     /// `clearOnLogout`-pathway stays simple. When `nil` the store
     /// behaves exactly like v0.5.3 (server-only).
     private let derivedSource: PersonalRecordsDerivedSource?
-    /// v0.5.5.6 POLISH-PR — sparkline-trajectory provider. Optional so
+    /// Sparkline-trajectory provider. Optional so
     /// the existing test composition keeps compiling; the redesigned
     /// screen wires the live `PersonalRecordsSparklineProviderLive`
     /// at the composition root. When `nil` the enriched records carry
@@ -61,7 +61,7 @@ public final class PersonalRecordsStore {
     private let sparklineProvider: PersonalRecordsSparklineProvider?
     private let clock: @MainActor () -> Date
 
-    /// A2-M4 — appear-revalidation freshness gate (60s TTL).
+    /// Appear-revalidation freshness gate (60s TTL).
     @ObservationIgnored private var revalidationGate = RevalidationGate(ttl: 60)
 
     public init(
@@ -108,7 +108,7 @@ public final class PersonalRecordsStore {
         await load(metricType: currentMetricType)
     }
 
-    /// A2-M4 — appear-revalidation entry point: reload when empty (cold) OR
+    /// Appear-revalidation entry point: reload when empty (cold) OR
     /// stale (partial-then-stale), no-op inside the freshness window. Preserves
     /// the current `metricType` filter.
     public func revalidateIfStale() async {
@@ -128,10 +128,10 @@ public final class PersonalRecordsStore {
         enrichedRecords = []
         error = nil
         currentMetricType = nil
-        selectedBucket = .week // v0.14.1 (#139) — match the new default
+        selectedBucket = .week // Match the new default
     }
 
-    /// v0.5.5.6 POLISH-PR — hero pick. Returns the most impressive
+    /// Hero pick. Returns the most impressive
     /// enriched record according to `impressivenessScore`. `nil` when
     /// the user has no records (the screen renders the empty-state).
     public var heroRecord: PersonalRecord? {
@@ -145,19 +145,20 @@ public final class PersonalRecordsStore {
     }
 
     /// Streak-class records surfaced by `StreakComputer` (derived rows
-    /// with `metricSlot` containing "Serie" / "streak"). The Streak rail
-    /// hoists them out of the main grid so the visual rhythm reads as
+    /// with `metricSlot` containing "Serie" / "streak" / "reeks" / "연속" / "racha"). The
+    /// Streak rail hoists them out of the main grid so the visual rhythm reads as
     /// "Records · Streaks · Milestones" rather than mixing all three.
     public var streakRecords: [PersonalRecord] {
         enrichedRecords.filter { record in
             let slot = (record.base.metricSlot ?? "").lowercased()
-            return slot.contains("serie") || slot.contains("streak")
+            return slot.contains("serie") || slot.contains("streak") || slot.contains("연속") || slot.contains("reeks")
+                || slot.contains("racha")
         }
     }
 
     // MARK: - Enrichment
 
-    /// v0.5.5.6 POLISH-PR — build the enriched view-model list from the
+    /// Build the enriched view-model list from the
     /// raw `records`, fetching a 30-day sparkline trajectory per record
     /// from `sparklineProvider` when one is wired. The fetch fans out
     /// in parallel so the screen paints quickly even with many records
@@ -232,7 +233,7 @@ public final class PersonalRecordsStore {
         serverRecords + derived
     }
 
-    // MARK: - Pure helpers (POLISH-PR)
+    // MARK: - Pure helpers
 
     /// Pure helper — for each metric-type bucket, the runner-up `value`
     /// becomes the `previousValue` of the bucket's top record. When a
@@ -322,7 +323,7 @@ public protocol PersonalRecordsDerivedSource: Sendable {
     ) async -> [PersonalRecordDTO]
 }
 
-// MARK: - Sparkline-provider seam (v0.5.5.6 POLISH-PR)
+// MARK: - Sparkline-provider seam
 
 /// 30-day trajectory snapshot for the `RecordCard` mini-sparkline.
 ///

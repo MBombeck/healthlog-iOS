@@ -5,8 +5,8 @@ import Foundation
 
 #if canImport(AuthenticationServices)
     extension AppContainer {
-        /// **13-04.** The one web-auth driver both interactive legs share — OIDC
-        /// SSO (#49) and the web-handoff login (#65) — resolved in one place so
+        /// The one web-auth driver both interactive legs share — OIDC
+        /// SSO and the web-handoff login — resolved in one place so
         /// there is exactly one statement about which driver a build gets.
         ///
         /// Production always gets the real `ASWebAuthenticationSession` driver.

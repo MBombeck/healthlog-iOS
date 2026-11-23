@@ -21,7 +21,7 @@ enum EcgPresentation {
         case .notDetected: String(localized: "insights.ecg.result.notDetected")
         case .inconclusive: String(localized: "insights.ecg.result.inconclusive")
         case .none: String(localized: "insights.ecg.result.none")
-        // CU-16 — the three EVENT verdicts of the shared `RhythmClassification`
+        // The three EVENT verdicts of the shared `RhythmClassification`
         // enum. They describe the notification the device raised, not a rhythm
         // finding, so the copy states exactly that and stops. Rendering them as
         // a cardiac result would be an invention; rendering the raw token

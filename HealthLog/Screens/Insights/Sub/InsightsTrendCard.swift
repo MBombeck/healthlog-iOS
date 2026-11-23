@@ -17,21 +17,25 @@ struct InsightsTrendCard<Plot: View>: View {
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: symbol)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .frame(width: 22)
-                    Text(title)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
+                // The head of a Today tile and the compact cell value, as
+                // on the overview's Vitals cards. The value is a finished
+                // text ("12,4 von 21"), so it takes the compact number font
+                // rather than a number and a unit.
+                HLAdaptiveStack(spacing: HLSpace.sm) { stacked in
+                    HStack(spacing: HLSpace.xs) {
+                        HLTileHeaderGlyph(systemName: symbol)
+                            .accessibilityHidden(true)
+                        HLTileTitleLabel(Text(title))
+                    }
+                    if !stacked {
+                        Spacer(minLength: HLSpace.sm)
+                    }
                     Text(valueText)
-                        .font(.hlHeadline)
+                        .font(HLValueSize.compact.numberFont)
                         .monospacedDigit()
                         .foregroundStyle(HLText.primary)
                 }
-                // 1.4 B2 — no sentence under the line: the overview's trend
+                // No sentence under the line: the overview's trend
                 // sentence is spoken with the card, not painted under it.
                 plot()
             }

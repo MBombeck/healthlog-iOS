@@ -1,15 +1,13 @@
 import SwiftUI
 
-// Parity Build 4 · Items 4.2 / 4.5 / 4.6 — the overview section slots added or
-// split in Build 4, kept in their own file for file-length discipline (the
-// sibling `InsightsOverviewSlots.swift` owns the composition + the pre-existing
-// slots). Same store-scoped-leaf idiom as that file: each slot reads the
-// SMALLEST set of `@Observable` stores it needs, so a refresh invalidates only
-// that slot.
+// Further overview section slots; the sibling `InsightsOverviewSlots.swift`
+// owns the composition. Same store-scoped-leaf idiom as that file: each slot
+// reads the SMALLEST set of `@Observable` stores it needs, so a refresh
+// invalidates only that slot.
 
 // MARK: - Rhythm-events slot (RhythmEventsStore + Backend)
 
-/// **Parity Build 4 · 4.6 — the `rhythm-events` overview section.**
+/// **The `rhythm-events` overview section.**
 ///
 /// The card (device-flagged categorical-event timeline + the permanent
 /// regulatory disclaimer) has existed since v0.12 and was mounted inside
@@ -25,10 +23,9 @@ struct InsightsRhythmEventsSlot: View {
     let appContainer: AppContainer?
 
     @Environment(RhythmEventsStore.self) private var rhythmEventsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.rhythmEvents, appContainer) {
+        if InsightsOverviewGate.isVisible(.rhythmEvents, appContainer) {
             InsightsRhythmEventsCard(events: rhythmEventsStore.events)
         }
     }
@@ -36,10 +33,10 @@ struct InsightsRhythmEventsSlot: View {
 
 // MARK: - Clinical-signals slots (ClinicalSignalsStore + Backend + owning module)
 
-/// v1.25 (GH iOS #38) — the baseline-drift health-status card. Self-suppresses
-/// when the server read is absent (server-authoritative, paired-only).
+/// v1.25 — the baseline-drift health-status card. Self-suppresses
+/// when the server read is absent (server-authoritative).
 ///
-/// Parity Build 4 · 4.5 — split out of the former combined
+/// Split out of the former combined
 /// `InsightsClinicalSignalsSlot` because web models `health-status` and
 /// `breathing` as two INDEPENDENT overview sections; keeping them fused would
 /// have made one of the two section toggles a lie.
@@ -47,25 +44,23 @@ struct InsightsHealthStatusSlot: View {
     let appContainer: AppContainer?
 
     @Environment(ClinicalSignalsStore.self) private var clinicalSignalsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.healthStatus, appContainer) {
+        if InsightsOverviewGate.isVisible(.healthStatus, appContainer) {
             InsightsHealthStatusCard(status: clinicalSignalsStore.healthStatus)
         }
     }
 }
 
-/// v1.25 (GH iOS #38) — the sleep-breathing screening card. See
+/// v1.25 — the sleep-breathing screening card. See
 /// ``InsightsHealthStatusSlot`` for why the two are separate slots.
 struct InsightsBreathingSlot: View {
     let appContainer: AppContainer?
 
     @Environment(ClinicalSignalsStore.self) private var clinicalSignalsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.breathing, appContainer) {
+        if InsightsOverviewGate.isVisible(.breathing, appContainer) {
             InsightsBreathingScreeningCard(screening: clinicalSignalsStore.breathing)
         }
     }
@@ -73,7 +68,7 @@ struct InsightsBreathingSlot: View {
 
 // MARK: - Labs-changes slot (ClinicalSignalsStore + Backend + `labs` module)
 
-/// **Parity Build 4 · 4.6 — the `labs-changes` overview section.**
+/// **The `labs-changes` overview section.**
 ///
 /// `LabsChangesCard` was built for v1.25 but mounted in exactly one place
 /// (`LabsScreen.swift:202`). The web renders it on the Insights overview too,
@@ -90,10 +85,9 @@ struct InsightsLabsChangesSlot: View {
     let appContainer: AppContainer?
 
     @Environment(ClinicalSignalsStore.self) private var clinicalSignalsStore
-    @Environment(BackendAvailability.self) private var backend
 
     var body: some View {
-        if backend.hasServer, InsightsOverviewGate.isVisible(.labsChanges, appContainer) {
+        if InsightsOverviewGate.isVisible(.labsChanges, appContainer) {
             LabsChangesCard(changes: clinicalSignalsStore.labsChanges)
         }
     }
@@ -101,7 +95,7 @@ struct InsightsLabsChangesSlot: View {
 
 // MARK: - Vitals slot (DashboardStore)
 
-/// **Parity Build 4 · 4.2 — the `vitals` overview section, remounted.**
+/// **The `vitals` overview section, remounted.**
 ///
 /// `InsightsVitalsDashboard` was written for W52 and then orphaned: the v0.14.1
 /// §4 overview rework dropped its call site and never restored one, leaving a

@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// **v0.5.5.2 — MeasureSheetView per-kind range validation.**
+/// **MeasureSheetView per-kind range validation.**
 ///
 /// Before this fix the MeasureSheet's submit-gate only checked
 /// `Double(input) != nil`. A `-500` weight or a `99999` glucose passed
@@ -146,7 +146,7 @@ struct MeasureSheetRangeValidationTests {
         let formatted = MeasurementRanges.formatRange(0.1 ... 600, unit: "kg")
         // We don't assert the exact decimal separator (locale-dependent in
         // CI), but both endpoints + unit surface, joined by a word, never by
-        // an en dash (U5, 1.1.1).
+        // an en dash.
         #expect(formatted.contains("0"))
         #expect(formatted.contains("600"))
         #expect(formatted.contains("kg"))

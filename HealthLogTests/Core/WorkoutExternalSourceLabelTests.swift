@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 R3 — server v1.39.6 stores workouts posted through the narrow
+/// Server v1.39.6 stores workouts posted through the narrow
 /// `workouts:write` token with `source: "EXTERNAL"`, and they reach
 /// `GET /api/workouts/{id}`. The detail screen's source row used to fall
 /// through to `raw.capitalized` and print "External" untranslated (and any

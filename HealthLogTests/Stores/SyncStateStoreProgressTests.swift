@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// b177 W-SYNCPROGRESS — locks the honest sync-progress aggregation on
+/// Locks the honest sync-progress aggregation on
 /// `SyncStateStore`:
 ///
 /// - `pendingOutboxCount` mirrors the live outbox backlog (sinks on dequeue),

@@ -41,7 +41,7 @@ enum MedFixtures {
         return { UserDefaults(suiteName: suite)! }
     }
 
-    /// **Phase 07 / plan 07-05.** The importer now refuses a sweep it cannot
+    /// The importer now refuses a sweep it cannot
     /// admit an account for, so the fixture supplies a real Phase-06 lease
     /// registry rather than a stub — which also makes every one of these tests a
     /// statement about the owner-bound path production actually runs. The dose
@@ -59,8 +59,9 @@ enum MedFixtures {
     static func makeImporter(
         api: APIClientProtocol,
         keychain: InMemoryKeychain,
-        reader: FakeMedicationReader,
-        syncTrigger: SyncTriggerContext = SyncTriggerContext()
+        reader: any AppleHealthMedicationReading,
+        syncTrigger: SyncTriggerContext = SyncTriggerContext(),
+        deletesRouteOpen: @escaping @Sendable () -> Bool = { false }
     ) throws -> Fixture {
         let repo = try MedicationsRepository(api: api, outbox: OutboxQueue(inMemory: true))
         let defaultsProvider = isolatedDefaults()
@@ -76,7 +77,8 @@ enum MedFixtures {
             registry: registry,
             admission: admission.provider(for: .appleMedication),
             ledgerStorage: storage,
-            syncTrigger: syncTrigger
+            syncTrigger: syncTrigger,
+            deletesRouteOpen: deletesRouteOpen
         )
         let ledger = try AppleHealthDoseLedger(
             storage: storage,
@@ -181,7 +183,7 @@ final class MedicationRequestRecorder: @unchecked Sendable {
         return requests.count
     }
 
-    /// CU-10 — mirror **creates** only. The sweep now also GETs `/api/medications`
+    /// Mirror **creates** only. The sweep now also GETs `/api/medications`
     /// to reconcile server truth, so counting the path alone would conflate the
     /// read with the write this suite is asserting about.
     var mirrorPostCount: Int {
@@ -209,7 +211,7 @@ final class MedicationRequestRecorder: @unchecked Sendable {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// W3 — the whole last bulk body, for its top-level `syncTrigger`.
+    /// The whole last bulk body, for its top-level `syncTrigger`.
     var lastBulkBody: [String: Any]? {
         lock.lock()
         defer { lock.unlock() }
@@ -217,7 +219,7 @@ final class MedicationRequestRecorder: @unchecked Sendable {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// W3 — entry counts of every bulk POST, in order.
+    /// Entry counts of every bulk POST, in order.
     var bulkEntryCounts: [Int] {
         lock.lock()
         defer { lock.unlock() }
@@ -229,7 +231,16 @@ final class MedicationRequestRecorder: @unchecked Sendable {
             }
     }
 
-    /// A2 (1.4) — the top-level `syncTrigger` of every bulk POST, in order.
+    /// Every bulk body, in order.
+    var bulkBodies: [[String: Any]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
+            .filter { $0.path == "/api/medications/intake/bulk" }
+            .compactMap { (try? JSONSerialization.jsonObject(with: $0.body)) as? [String: Any] }
+    }
+
+    /// The top-level `syncTrigger` of every bulk POST, in order.
     var bulkSyncTriggers: [String?] {
         lock.lock()
         defer { lock.unlock() }

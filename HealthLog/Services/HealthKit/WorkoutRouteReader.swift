@@ -6,7 +6,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **1.5 ROUTES (#149) — reading the GPS track of a new workout.**
+    /// **Reading the GPS track of a new workout.**
     ///
     /// Reached only through ``WorkoutRouteAttachment``, which asks
     /// ``WorkoutRouteOptIn`` first: without the opt-in no route query runs at

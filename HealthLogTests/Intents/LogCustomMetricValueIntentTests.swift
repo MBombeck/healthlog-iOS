@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 SHORTCUT (#155, public #1295)** — the custom-metric value intent
+/// The custom-metric value intent
 /// and its entity query, against a stub API and an in-memory outbox and cache.
 ///
 /// Every way a run can end has its own answer: online, offline (outbox),

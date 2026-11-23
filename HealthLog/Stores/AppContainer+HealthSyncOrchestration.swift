@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 5 — the routing half of the orchestrator.
+// The routing half of the orchestrator.
 //
 // `AppContainer+HealthSyncOrchestrator.swift` builds the one orchestrator and
 // installs it behind `AppOwnedHealthCollection`. This file is the other end:
@@ -43,12 +43,14 @@ extension AppContainer {
         observedSource: HealthSyncSource? = nil,
         isExpired: @escaping @Sendable () -> Bool = { false }
     ) async -> [HealthSyncCapability] {
+        // A device that reads no HealthKit (the iPad) runs no pass at all.
+        guard HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).readsHealthKit else { return [] }
         // Arm SpeziHealthKit's `start: .manual` collectors first. That module is
         // still registered and still owns authorization; a collector nobody
         // triggers pulls nothing. Arming is not a pass, which is exactly the
         // distinction that was missing while `runOneShotAnchorSweep` started one.
         await healthKit?.runBackgroundSyncPass()
-        // V1 — the pass names its own wire trigger, bound to its task tree, so
+        // The pass names its own wire trigger, bound to its task tree, so
         // every batch it causes (and every sweep it kicks) carries it, however
         // long after the caller's window it posts. Triggers that cannot know
         // whether the app is in front leave it to the context's fallback.

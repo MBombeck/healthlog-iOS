@@ -16,7 +16,7 @@ import Foundation
 /// server's own conservative, descriptive framing; iOS mirrors that tone
 /// verbatim and adds no causal language of its own.
 ///
-/// **HONEST-ONLY.** The block renders ONLY the pairs the server returns; it
+/// The block renders ONLY the pairs the server returns; it
 /// never fabricates a correlation. An empty `discovered` array is a valid
 /// "nothing statistically defensible yet" state — the block self-suppresses
 /// rather than inventing a pair.
@@ -27,7 +27,7 @@ import Foundation
 public struct CorrelationDiscoveryResponse: Codable, Sendable, Equatable {
     /// Pairs surviving `n ≥ minPairs`, `pValue < 0.05`, AND the BH-FDR control.
     ///
-    /// **CU-33 — dismissed pairs are NOT filtered out here.** The route returns
+    /// **Dismissed pairs are NOT filtered out here.** The route returns
     /// pairs the person marked as not relevant inline, carrying
     /// `dismissed: true`; suppressing them is the client's job (the web client
     /// does the same). `var` so an optimistic dismissal can be applied — and
@@ -79,21 +79,21 @@ public struct DiscoveredCorrelation: Codable, Sendable, Equatable, Identifiable 
     /// RENDERS it rather than re-deriving a label of its own, and falls back to
     /// the local curated table only when it is absent.
     public let behaviourLabel: String?
-    /// **CU-33** — the outcome channel's server-resolved, server-localized
+    /// The outcome channel's server-resolved, server-localized
     /// name. Same contract as ``behaviourLabel``.
     public let outcomeLabel: String?
-    /// **CU-33** — the persisted pattern row's id (cuid), the ONLY identifier
+    /// The persisted pattern row's id (cuid), the ONLY identifier
     /// `PATCH /api/insights/patterns/{id}` accepts. Optional on the wire: the
     /// server attaches it only when a stored decision exists for the evidence,
     /// and an older server omits it entirely. No `patternId` → no dismiss
     /// affordance (the app never invents a handle).
     public let patternId: String?
-    /// **CU-33** — `p1:<64 hex>`, the user-independent identity of the
+    /// `p1:<64 hex>`, the user-independent identity of the
     /// `(behaviour, outcome, lagDays)` triple. Stable across recomputations and
     /// across surfaces (correlations, analytics and mood crosstabs mint the
     /// same key for the same triple), so it is the right local identity.
     public let canonicalKey: String?
-    /// **CU-33** — whether the person has marked this pair as not relevant for
+    /// Whether the person has marked this pair as not relevant for
     /// them. **Server-authoritative and re-read on every fetch**: the GET that
     /// returns it is also the recomputation that may clear a dismissal, so the
     /// app never treats a local dismissal as durable truth. `var` so an

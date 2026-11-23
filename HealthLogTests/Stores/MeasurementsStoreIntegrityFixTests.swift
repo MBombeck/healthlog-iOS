@@ -9,24 +9,9 @@ import Testing
 /// - **H-1** QuickCapture optimistic insert must survive a concurrent `load()`
 ///   that replaces `recent` during the in-flight `repo.create` (the saved row
 ///   must never vanish from the cache).
-/// - **H-2** A blood-pressure edit must preserve the diastolic peer id on the
-///   merged optimistic row even when the write path returns a row WITHOUT it,
-///   so the pair stays linked for the next edit.
 @MainActor
 @Suite("MeasurementsStore — A360-5 integrity fixes", .serialized, .mockURLSession)
 struct MeasurementsStoreIntegrityFixTests {
-    /// HK read stub — no samples (isolates the mirror; HK is unavailable in the
-    /// unit host anyway).
-    private struct EmptyHK: StandaloneHealthKitReadServing {
-        func standaloneRecentSamples(kind _: MetricKind, days _: Int, limit _: Int) async -> [SeriesPoint] {
-            []
-        }
-
-        func standaloneDailySeries(kind _: MetricKind, days _: Int) async -> [SeriesPoint] {
-            []
-        }
-    }
-
     private func makeAPI() -> APIClient {
         let keychain = InMemoryKeychain()
         try? keychain.setString("token", forKey: KeychainKey.authToken)
@@ -48,7 +33,7 @@ struct MeasurementsStoreIntegrityFixTests {
         )!
     }
 
-    // MARK: - H-1 — optimistic row survives a concurrent load
+    // MARK: - Optimistic row survives a concurrent load
 
     /// While `captureReturningOutcome` is suspended on its create POST, a
     /// concurrent `load()` replaces the whole `recent` array (dropping the temp
@@ -60,12 +45,11 @@ struct MeasurementsStoreIntegrityFixTests {
         let api = makeAPI()
         let outbox = try OutboxQueue(inMemory: true)
         let repo = MeasurementsRepository(api: api, outbox: outbox)
-        // `isStandalone: { true }` only suppresses the store's HK mirror write;
-        // the repo still hits the (mocked) wire so the create round-trips.
+        // No HealthKit writer: the repo hits the (mocked) wire so the create
+        // round-trips, and there is no mirror write to wait for.
         let store = MeasurementsStore(
             repo: repo,
-            undoCoordinator: UndoCoordinator(),
-            isStandalone: { true }
+            undoCoordinator: UndoCoordinator()
         )
 
         // Delay the create POST on its (background) URLProtocol thread so the
@@ -110,56 +94,6 @@ struct MeasurementsStoreIntegrityFixTests {
         )
         // The clobbering row must also remain — the fix INSERTS, never replaces.
         #expect(store.recent.contains { $0.id == "other-1" })
-    }
-
-    // MARK: - H-2 — BP edit preserves the diastolic peer id
-
-    /// Editing a blood-pressure pair through a write path that returns a row
-    /// WITHOUT the diastolic peer id (the standalone mirror collapses sys+dia
-    /// onto one row) must keep the pair linked on the merged optimistic row —
-    /// otherwise the next edit drops to the systolic-only PATCH path and the
-    /// diastolic row drifts. Post-fix the original `dia-1` is carried forward.
-    @Test("H-2: BP edit preserves the diastolic peer id when the write omits it")
-    func bpEditPreservesDiastolicId() async throws {
-        let local = try LocalRepository(store: LocalStore(modelContainer: LocalStore.makeInMemory()))
-        let gate = StandaloneGate(local: local, healthKit: EmptyHK(), isStandalone: { true })
-        let api = makeAPI()
-        let repo = try MeasurementsRepository(api: api, outbox: OutboxQueue(inMemory: true), standalone: gate)
-        let store = MeasurementsStore(repo: repo, undoCoordinator: UndoCoordinator(), isStandalone: { true })
-
-        // Create a BP row through the mirror so a real externalId exists.
-        let created = try await repo.create(
-            Measurement(
-                id: "bp-temp",
-                kind: .bloodPressure,
-                recordedAt: Date(timeIntervalSince1970: 1_700_000_000),
-                value: .bloodPressure(systolic: 128, diastolic: 82)
-            )
-        )
-        // Seed the store's cache with the row, manually carrying a diastolic
-        // peer id the next edit must preserve.
-        let seeded = Measurement(
-            id: created.id,
-            kind: .bloodPressure,
-            recordedAt: created.recordedAt,
-            value: .bloodPressure(systolic: 128, diastolic: 82),
-            source: .manual,
-            bloodPressureDiastolicId: "dia-1"
-        )
-        store.recent = [seeded]
-
-        let ok = await store.update(
-            seeded,
-            value: .bloodPressure(systolic: 130, diastolic: 84),
-            recordedAt: seeded.recordedAt,
-            note: nil
-        )
-        #expect(ok)
-        let merged = try #require(store.recent.first { $0.kind == .bloodPressure })
-        #expect(
-            merged.bloodPressureDiastolicId == "dia-1",
-            "H-2: diastolic peer id must survive the edit merge"
-        )
     }
 }
 

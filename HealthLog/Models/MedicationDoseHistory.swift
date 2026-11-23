@@ -1,6 +1,6 @@
 import Foundation
 
-// v0.14.8 W3-MEDCONTRACT — server dose-history ledger (server v1.15.18+,
+// Server dose-history ledger (server v1.15.18+,
 // schedule-eras v1.16.3).
 //
 // `GET /api/medications/{id}/dose-history?from&to` returns the ONE unified
@@ -85,6 +85,12 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
     /// The intake event attributed to this row, if any. `nil` on projected
     /// slots no DB row exists for (pure miss / upcoming).
     public let intake: Intake?
+    /// **#191 — the slot's resolved dose state** in the wire vocabulary
+    /// (`upcoming`, `due`, `overdue`, `taken`, `skipped`, `missed`); `nil` on
+    /// ad-hoc rows and from an older server.
+    public let stateRaw: String?
+    /// #191 — a take after the on-time window (`state` is then `taken`).
+    public let takenLate: Bool?
 
     /// Stable identity for SwiftUI lists: the intake row id when one exists,
     /// else the slot anchor (unique per medication + window).
@@ -180,6 +186,8 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
         case pinned
         case nearestSlot
         case intake
+        case stateRaw = "state"
+        case takenLate
     }
 
     public init(
@@ -189,7 +197,9 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
         statusRaw: String,
         pinned: Bool? = nil,
         nearestSlot: NearestSlot? = nil,
-        intake: Intake? = nil
+        intake: Intake? = nil,
+        stateRaw: String? = nil,
+        takenLate: Bool? = nil
     ) {
         self.kind = kind
         self.at = at
@@ -198,6 +208,8 @@ public struct MedicationDoseHistoryRow: Codable, Sendable, Hashable, Identifiabl
         self.pinned = pinned
         self.nearestSlot = nearestSlot
         self.intake = intake
+        self.stateRaw = stateRaw
+        self.takenLate = takenLate
     }
 
     /// **Build 6.3 / Issue #64 — typed provenance read.** `nil` when the row

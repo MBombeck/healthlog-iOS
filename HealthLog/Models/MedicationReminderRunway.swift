@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// **R5 — how far ahead the local medication reminders reach.**
 ///
@@ -31,6 +32,44 @@ enum MedicationReminderRunway {
     /// pins the two together). Planning more tasks than this would let
     /// SpeziScheduler's round robin pick a later occurrence over an earlier one.
     static let notificationBudget = 48
+
+    /// iOS's per-app ceiling of pending local requests.
+    static let pendingCeiling = 64
+
+    /// The identifier prefix of SpeziScheduler's own requests
+    /// (`ResolvedDoseLedger`'s `schedulerPrefix`).
+    static let schedulerRequestPrefix = "edu.stanford.spezi.scheduler.notification"
+
+    /// **D3 #9 — the budget SpeziScheduler really has.** Spezi lowers its own
+    /// limit by the requests other parts of the app hold
+    /// (`SchedulerNotifications.scheduleNotifications`: `min(limit, 64 −
+    /// foreign)`): follow-ups, snoozes, reopened reminders, the extension's
+    /// stand-ins, mood and measurement reminders. A plan against a fixed 48
+    /// then promised more than Spezi armed: the "open the app" hint sat on a
+    /// dose that never became a request, and `clientManaged` was claimed for a
+    /// reach the device did not have.
+    static func budget(foreignPending: Int) -> Int {
+        max(0, min(notificationBudget, pendingCeiling - foreignPending))
+    }
+
+    /// The last count of pending requests that are not Spezi's, refreshed on
+    /// every Spezi reconcile and every gated local add.
+    private static let foreignPendingCount = Mutex(0)
+
+    static func noteForeignPending(in identifiers: [String]) {
+        let foreign = foreignCount(in: identifiers)
+        foreignPendingCount.withLock { $0 = foreign }
+    }
+
+    /// The pending requests that are not SpeziScheduler's.
+    static func foreignCount(in identifiers: [String]) -> Int {
+        identifiers.count { !$0.hasPrefix(schedulerRequestPrefix) }
+    }
+
+    /// The budget for the next plan, from the last count of foreign requests.
+    static var currentBudget: Int {
+        budget(foreignPending: foreignPendingCount.withLock { $0 })
+    }
 
     /// The window SpeziScheduler materializes (`schedulingInterval`, 8 weeks).
     /// An occurrence past it would not become a pending request yet, so only the
@@ -86,7 +125,7 @@ enum MedicationReminderRunway {
         for medications: [Medication],
         now: Date,
         timeZone: TimeZone = .current,
-        budget: Int = notificationBudget
+        budget: Int = currentBudget
     ) -> Plan {
         var sources: [Source] = []
         var repeatingSlots = 0
@@ -164,7 +203,7 @@ enum MedicationReminderRunway {
         now: Date
     ) -> Bool {
         if context.endsOn != nil { return false }
-        // R1 — the start DAY on the clock, not `startsOn`'s UTC midnight
+        // The start DAY on the clock, not `startsOn`'s UTC midnight
         // (which west of UTC is the evening before the course starts).
         if let start = MedicationRecurrenceEngine.startOfCourse(context), start > now { return false }
         return true

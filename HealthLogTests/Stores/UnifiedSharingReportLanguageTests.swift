@@ -3,7 +3,7 @@ import Foundation
 import PDFKit
 import Testing
 
-/// **L10N-REPORT (1.5) — the report language on the sharing screen.**
+/// **The report language on the sharing screen.**
 ///
 /// The PDF starts in the interface language and can be switched under
 /// "Advanced". The same value goes to the server report and to the on-device

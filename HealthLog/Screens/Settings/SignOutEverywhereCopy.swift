@@ -52,6 +52,6 @@ enum SignOutEverywhereCopy {
         let names = store.keptGrantNames
         guard !names.isEmpty else { return Text(doneBody(store)) }
         let list = names.formatted(.list(type: .and))
-        return Text(doneBody(store)) + Text(verbatim: "\n\n") + Text("sessions.signOutAll.grantsKept \(list)")
+        return Text("\(Text(doneBody(store)))\n\n\(Text("sessions.signOutAll.grantsKept \(list)"))")
     }
 }

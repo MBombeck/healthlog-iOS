@@ -44,15 +44,20 @@ public extension MedicationsRepository {
         /// (non-skipped) entry; `nil` records the take under the configured
         /// dose. Default-tolerant decode keeps older outbox payloads replayable.
         public let doseTaken: String?
-        /// **v1.28 (GH #47) — Apple Health dose provenance.** `"APPLE_HEALTH"`
+        /// **v1.28 — Apple Health dose provenance.** `"APPLE_HEALTH"`
         /// when this entry mirrors a HealthKit dose event. Both-or-neither with
         /// ``externalId``; omitted (nil) on the app-managed reminder path so its
         /// wire body is byte-unchanged. Decode-tolerant / optional.
         public let source: String?
-        /// **v1.28 (GH #47) — the HK dose-event UUID (≤128).** Drives
+        /// **v1.28 — the HK dose-event UUID (≤128).** Drives
         /// first-write-wins dedup so an Apple dose re-sync is idempotent.
         /// Both-or-neither with ``source``.
         public let externalId: String?
+        /// **D3 #6 — the pin onto the account slot** (`forceSlotInstant`) of
+        /// a take booked away from the account zone
+        /// (``MedicationReminderSlot/booking(deliveredAt:deviceTimeZone:accountTimeZone:)``).
+        /// Optional on decode, so an older outbox entry replays unchanged.
+        public let forceSlotInstant: Date?
 
         public init(
             medicationId: String,
@@ -63,7 +68,8 @@ public extension MedicationsRepository {
             injectionSite: String? = nil,
             doseTaken: String? = nil,
             source: String? = nil,
-            externalId: String? = nil
+            externalId: String? = nil,
+            forceSlotInstant: Date? = nil
         ) {
             self.medicationId = medicationId
             self.scheduledFor = scheduledFor
@@ -74,9 +80,10 @@ public extension MedicationsRepository {
             self.doseTaken = doseTaken
             self.source = source
             self.externalId = externalId
+            self.forceSlotInstant = forceSlotInstant
         }
 
-        /// **GH #47** — build an Apple-Health dose entry from a HK dose record
+        /// Build an Apple-Health dose entry from a HK dose record
         /// targeting a mirrored medication. Returns `nil` for a dose whose log
         /// status is neither taken nor skipped (not imported by contract). A
         /// `taken` entry carries `takenAt`; a `skipped` entry sets `skipped:true`.
@@ -155,8 +162,37 @@ public extension MedicationsRepository {
         takenAt: Date = .now,
         injectionSite: InjectionSite? = nil,
         doseTaken: String? = nil,
-        operationID: UUID = UUID()
+        forceSlotInstant: Date? = nil,
+        operationID: UUID = UUID(),
+        idempotencyKey: IdempotencyKey = IdempotencyKey()
     ) async throws -> String? {
+        try await recordFromReminderReturningReceipt(
+            medicationId: medicationId,
+            scheduledFor: scheduledFor,
+            status: status,
+            takenAt: takenAt,
+            injectionSite: injectionSite,
+            doseTaken: doseTaken,
+            forceSlotInstant: forceSlotInstant,
+            operationID: operationID,
+            idempotencyKey: idempotencyKey
+        )?.rowID
+    }
+
+    /// ``recordFromReminder(medicationId:scheduledFor:status:takenAt:injectionSite:doseTaken:operationID:idempotencyKey:)``
+    /// with the row's `syncVersion`, for the app's own undo (#191).
+    @discardableResult
+    func recordFromReminderReturningReceipt(
+        medicationId: String,
+        scheduledFor: Date,
+        status: IntakeStatus,
+        takenAt: Date = .now,
+        injectionSite: InjectionSite? = nil,
+        doseTaken: String? = nil,
+        forceSlotInstant: Date? = nil,
+        operationID: UUID = UUID(),
+        idempotencyKey: IdempotencyKey = IdempotencyKey()
+    ) async throws -> ReminderIntakeReceipt? {
         guard status == .taken || status == .skipped else {
             throw HLError.server(
                 status: 422,
@@ -164,10 +200,11 @@ public extension MedicationsRepository {
                 message: "Only taken or skipped reminder dispositions can be recorded."
             )
         }
-        let idempotencyKey = IdempotencyKey()
+        // The caller may hold the key: an undo sends it back as
+        // `expectedIdempotencyKey` (#191).
         // v1.8.5 — only a TAKEN entry carries a site.
         let site = status == .taken ? injectionSite.flatMap(\.serverRawValue) : nil
-        // H6 — the actual-dose override is meaningful only on a taken entry
+        // The actual-dose override is meaningful only on a taken entry
         // (the server drops it on a skip); trim empties to nil so an empty
         // field records under the configured dose, not a blank string.
         let resolvedDose = status == .taken ? doseTaken?.trimmedNonEmpty : nil
@@ -178,7 +215,9 @@ public extension MedicationsRepository {
             skipped: status == .skipped,
             idempotencyKey: idempotencyKey.raw,
             injectionSite: site,
-            doseTaken: resolvedDose
+            doseTaken: resolvedDose,
+            // The pin rides only on a take (the server ignores it elsewhere).
+            forceSlotInstant: status == .taken ? forceSlotInstant : nil
         )
         // G-1 write-ahead — this is the worst-case lost-write window: a
         // background notification action with NO UI recovery. Persist the
@@ -189,7 +228,7 @@ public extension MedicationsRepository {
         // retriable failure it stays durably queued and we re-throw so the
         // caller surfaces the queued state. If the write-ahead persist itself
         // failed and the send then fails retriably, `writeAhead` throws
-        // `HLError.notPersisted` (G-2) — honest "couldn't save", no silent loss.
+        // `HLError.notPersisted` — honest "couldn't save", no silent loss.
         let payload = try encoder.encode(
             OutboxQueue.Payloads.ReminderIntake(entry: entry)
         )
@@ -220,10 +259,16 @@ public extension MedicationsRepository {
         entry: BulkIntakeEntry,
         idempotencyKey: String
     ) async throws {
-        _ = try await postBulkIntakeInternal(
-            entries: [entry],
-            idempotencyKey: IdempotencyKey(raw: idempotencyKey)
-        )
+        do {
+            _ = try await postBulkIntakeInternal(
+                entries: [entry],
+                idempotencyKey: IdempotencyKey(raw: idempotencyKey)
+            )
+        } catch is MedicationAlreadyTaken {
+            // The slot was taken elsewhere while the write waited. Nothing is
+            // left to deliver, and nothing was lost: the row is done, not a
+            // non-retriable refusal that reports a discarded write.
+        }
     }
 
     /// Internal wire-call. Shared by the live and replay paths so the
@@ -233,7 +278,7 @@ public extension MedicationsRepository {
     private func postBulkIntakeInternal(
         entries: [BulkIntakeEntry],
         idempotencyKey: IdempotencyKey
-    ) async throws -> String? {
+    ) async throws -> ReminderIntakeReceipt? {
         let body = BulkIntakeBody(entries: entries)
         let req: APIRequest<BulkIntakeResponse> = try .post(
             "/api/medications/intake/bulk",
@@ -241,6 +286,16 @@ public extension MedicationsRepository {
             idempotencyKey: idempotencyKey
         )
         let response = try await api.send(req)
+        if let first = response.entries.first, let already = MedicationAlreadyTaken(entry: first) {
+            throw already
+        }
+        if let first = response.entries.first, first.status == "skipped",
+           first.reason == MedicationAlreadyTaken.pinOccupiedReason
+        {
+            // D3 #6: the pinned slot already holds another dose. Nothing was
+            // written; it reads as "already taken", never as a failure.
+            throw MedicationAlreadyTaken(takenAt: nil, source: nil)
+        }
         if let first = response.entries.first, first.status == "skipped" {
             // Server-side reject (e.g. medication_not_found) — surface
             // as a non-retriable validation error so the caller does
@@ -256,7 +311,8 @@ public extension MedicationsRepository {
                 message: first.reason ?? "intake_rejected"
             )
         }
-        return response.entries.first?.id
+        guard let first = response.entries.first else { return nil }
+        return ReminderIntakeReceipt(rowID: first.rowID, syncVersion: first.rowSyncVersion)
     }
 }
 
@@ -279,17 +335,154 @@ private struct BulkIntakeBody: Codable {
 }
 
 /// Server response shape for the bulk endpoint — we treat the outer
-/// counts as informational and only act on `entries[0].status`.
-private struct BulkIntakeResponse: Codable {
-    struct Entry: Codable {
-        let index: Int
+/// counts as informational and only act on the first entry.
+///
+/// **#191 (final).** The envelope stays as in 1.48:
+/// `data: { processed, inserted, updated, duplicates, skipped, entries: [...] }`.
+/// Each entry is `{ index, status, id }`; only `status` gains
+/// `alreadyTaken`, and such an entry carries the recorded row in `intake`
+/// with its `takenAt` and `takenVia` next to it. `duplicate` keeps its old
+/// meaning, an idempotent replay of the same key. There is no `results`.
+/// `syncVersion` is read from `intake` (and a flat one, should the server
+/// add it), so an undo can name the version it saw.
+private struct BulkIntakeResponse: Decodable {
+    struct Row: Decodable {
+        let id: String?
+        let syncVersion: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, syncVersion
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? c.decodeIfPresent(String.self, forKey: .id)
+            syncVersion = try? c.decodeIfPresent(Int.self, forKey: .syncVersion)
+        }
+    }
+
+    struct Entry: Decodable {
+        let index: Int?
         let status: String
         let id: String?
         let reason: String?
+        let intake: Row?
+        let takenAt: String?
+        let takenVia: String?
+        let syncVersion: Int?
+
+        /// The row the entry wrote, or the first take it found.
+        var rowID: String? {
+            id ?? intake?.id
+        }
+
+        /// The row's version as the server last wrote it, when sent.
+        var rowSyncVersion: Int? {
+            intake?.syncVersion ?? syncVersion
+        }
     }
 
-    let processed: Int
-    let inserted: Int
-    let duplicates: Int
     let entries: [Entry]
+}
+
+/// What a bulk take or skip from the app wrote: the row and, when the server
+/// sent it, the row's `syncVersion` (#191). An undo sends both preconditions.
+public struct ReminderIntakeReceipt: Sendable, Equatable {
+    public let rowID: String?
+    public let syncVersion: Int?
+
+    public init(rowID: String?, syncVersion: Int?) {
+        self.rowID = rowID
+        self.syncVersion = syncVersion
+    }
+}
+
+/// **#189 (6) — the slot was already taken.**
+///
+/// Server 1.49.0 never overwrites a taken slot (#191): the single routes
+/// answer 200 with `alreadyTaken: true` and the first take, and the bulk
+/// route will answer the same per entry. Nothing was written, nothing is
+/// queued; every take path shows "Already taken at 07:12 (pill box)" instead
+/// of a success. The bulk entry says it with `status: "alreadyTaken"`.
+public struct MedicationAlreadyTaken: Error, Sendable, Equatable {
+    public let takenAt: Date?
+    public let source: String?
+
+    public init(takenAt: Date?, source: String?) {
+        self.takenAt = takenAt
+        self.source = source
+    }
+
+    static let markers: Set<String> = ["alreadytaken", "already_taken", "already-taken"]
+
+    /// The bulk entry's skip reason for a pin onto a slot another dose holds
+    /// (`force_slot_occupied`, `intake-bulk/entry-attribution.ts`).
+    static let pinOccupiedReason = "force_slot_occupied"
+
+    /// The `HLError` code the app's surfaces carry it under.
+    public static let errorCode = "medications.intake.alreadyTaken"
+
+    fileprivate init?(entry: BulkIntakeResponse.Entry) {
+        let said = [entry.status, entry.reason ?? ""].map { $0.lowercased() }
+        guard said.contains(where: Self.markers.contains) else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let takenAt = entry.takenAt.flatMap { fractional.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) }
+        self.init(takenAt: takenAt, source: entry.takenVia)
+    }
+
+    /// The notice the in-app surfaces show (a 409 under ``errorCode``).
+    public var notice: HLError {
+        .server(status: 409, code: Self.errorCode, message: message)
+    }
+
+    /// "Already taken at 07:12 (Telegram)", the source left out when unknown.
+    public var message: String {
+        guard let takenAt else {
+            return String(localized: "med.already_taken", defaultValue: "Already taken")
+        }
+        let time = takenAt.formatted(date: .omitted, time: .shortened)
+        guard let label = Self.sourceLabel(source) else {
+            return String(format: String(localized: "med.already_taken.time", defaultValue: "Already taken at %@"), time)
+        }
+        return String(
+            format: String(localized: "med.already_taken.time_source", defaultValue: "Already taken at %1$@ (%2$@)"),
+            time,
+            label
+        )
+    }
+
+    /// `takenVia` as the person reads it (#191, final). INTEGRATION is the
+    /// pill box or another connected device; an unknown value is "another
+    /// device".
+    static func sourceLabel(_ raw: String?) -> String? {
+        switch MedicationTakenVia(wire: raw) {
+        case .web: String(localized: "med.already_taken.source.web", defaultValue: "web")
+        case .app: String(localized: "med.already_taken.source.iphone", defaultValue: "iPhone")
+        case .integration: String(localized: "med.already_taken.source.integration", defaultValue: "pill box or connected device")
+        case .telegram: String(localized: "med.already_taken.source.telegram", defaultValue: "Telegram")
+        case .appleHealth: String(localized: "med.already_taken.source.apple_health", defaultValue: "Apple Health")
+        case .importer: String(localized: "med.already_taken.source.import", defaultValue: "import")
+        case .auto: String(localized: "med.already_taken.source.auto", defaultValue: "automatic")
+        case .other: String(localized: "med.already_taken.source.other", defaultValue: "another device")
+        case nil: nil
+        }
+    }
+}
+
+/// **#191 — "taken at 07:12 (pill box)" on today's rows.** Built from the
+/// row's `takenAt` and `takenVia`. Only a take another device or service
+/// recorded gets a note; the app's own take (`APP`) and a row without a
+/// source stay as they were.
+public enum MedicationTakenNote {
+    public static func text(for intake: MedicationIntake) -> String? {
+        guard intake.status == .taken, let takenAt = intake.takenAt,
+              let via = MedicationTakenVia(wire: intake.takenVia), via != .app,
+              let label = MedicationAlreadyTaken.sourceLabel(intake.takenVia) else { return nil }
+        return String(
+            format: String(localized: "med.today.taken_via", defaultValue: "taken at %1$@ (%2$@)"),
+            takenAt.formatted(date: .omitted, time: .shortened),
+            label
+        )
+    }
 }

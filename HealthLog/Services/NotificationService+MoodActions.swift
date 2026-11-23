@@ -8,7 +8,7 @@ import Foundation
 
 #if canImport(UserNotifications) && canImport(UIKit)
 
-    /// v0.5.4.3 HP5 — `MOOD_REMINDER` action handlers split out from
+    /// `MOOD_REMINDER` action handlers split out from
     /// `NotificationService.swift` to keep the parent file under the
     /// 600-LOC SwiftLint warning ceiling.
     ///
@@ -50,7 +50,7 @@ import Foundation
         func handleMoodSnooze(payload: APNsPayload?) async {
             let req = Self.buildMoodSnoozeRequest(payload: payload)
             do {
-                // Build 273 — through the shared gate (Focus filter + pending
+                // Through the shared gate (Focus filter + pending
                 // budget), like the original evening nudge.
                 try await addLocalNotification(req)
                 // Locally generated random snooze id ("mood-snooze-<UUID>"); the UUID
@@ -77,7 +77,7 @@ import Foundation
             content.body = payload?.body ?? String(localized: "Log your mood quickly.")
             content.sound = .default
             content.categoryIdentifier = Self.categoryMood
-            // Build 273 — the evening mood nudge is a ROUTINE `.active`
+            // The evening mood nudge is a ROUTINE `.active`
             // reminder by design (App-Review rationale in `+MoodReminder`);
             // a snooze must not escalate it past the level the original
             // respected, or it breaks through a Focus the original did not.
@@ -92,6 +92,8 @@ import Foundation
                 userInfo["eventType"] = Self.categoryMood
             }
             content.userInfo = userInfo
+            // Hide content in notifications: only the neutral text is stored.
+            NotificationContentPrivacy.apply(to: content, kind: .reminder)
             let trigger = UNTimeIntervalNotificationTrigger(
                 timeInterval: Self.moodSnoozeIntervalSeconds,
                 repeats: false

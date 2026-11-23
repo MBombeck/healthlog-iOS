@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// SP3 + SP4 (v0.12) — server round-trip for the GLP-1 side-effect logbook and
+/// Server round-trip for the GLP-1 side-effect logbook and
 /// pen/vial inventory. These tests use the **real `APIClient` over a stubbed
 /// `URLSession`** (`MockURLProtocol`), per PROJECT_GUIDE.md — never a mock server — so
 /// the Outbox-replay path is exercised against the exact server wire shape and
@@ -157,7 +157,7 @@ struct MedicationTherapyLogRepositoryTests {
         #expect(created.containerType == .pen)
     }
 
-    // MARK: - Optimistic write + Outbox enqueue + replay (SP3)
+    // MARK: - Optimistic write + Outbox enqueue + replay
 
     @Test("Side-effect create: retriable failure enqueues + replay reuses the key")
     func sideEffectOutboxReplayUsesOriginalKey() async throws {
@@ -211,7 +211,7 @@ struct MedicationTherapyLogRepositoryTests {
         await #expect(outbox.snapshot.isEmpty, "successful replay clears the outbox")
     }
 
-    // MARK: - Optimistic write + Outbox enqueue + replay (SP4)
+    // MARK: - Optimistic write + Outbox enqueue + replay
 
     @Test("Inventory create: retriable failure enqueues + replay reuses the key")
     func inventoryOutboxReplayUsesOriginalKey() async throws {

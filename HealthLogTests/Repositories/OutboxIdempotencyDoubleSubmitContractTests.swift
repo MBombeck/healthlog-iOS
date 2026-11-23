@@ -4,9 +4,9 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// audit-v0162 CRITICAL-2 — generic idempotency double-submit contract.
+/// Generic idempotency double-submit contract.
 ///
-/// The recurring bug class (v0157 M2 / v0158 H3 / v0160 #39): a retriable
+/// The recurring bug class: a retriable
 /// failure followed by a (manual or automatic) retry MINTS A FRESH KEY, so the
 /// server sees two distinct writes → a duplicate clinical row. Each *instance*
 /// is now tested individually; nothing locked the *pattern* for the next new

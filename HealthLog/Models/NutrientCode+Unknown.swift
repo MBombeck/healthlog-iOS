@@ -19,14 +19,14 @@ import Foundation
 // what the amount is of.
 
 public extension NutrientCode {
-    /// Audit B-4 — decodes an unrecognised catalogue code onto ``unknown``
+    /// Decodes an unrecognised catalogue code onto ``unknown``
     /// instead of throwing.
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self.init(tolerant: raw)
     }
 
-    /// Audit B-4 — resolves a raw catalogue string onto a case, noting the
+    /// Resolves a raw catalogue string onto a case, noting the
     /// first sighting of anything unrecognised.
     ///
     /// Split out of ``init(from:)`` because the read DTOs decode the raw string
@@ -43,7 +43,7 @@ public extension NutrientCode {
         self = known
     }
 
-    /// Audit B-4 — every code the SERVER can actually send: `allCases` minus the
+    /// Every code the SERVER can actually send: `allCases` minus the
     /// decode-only ``unknown`` sentinel. The HealthKit catalogue map and the
     /// manual add surfaces read this, so the sentinel is never offered.
     static var serverCases: [NutrientCode] {
@@ -61,7 +61,7 @@ public extension NutrientCode {
         }
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire. It rides the
+    /// Refuses to put ``unknown`` back on the wire. It rides the
     /// `POST /api/nutrients/batch` body and the `/daily` query string, and a
     /// client that sent `__UNKNOWN__` there would be inventing a catalogue
     /// member (the route validates against the server enum and answers 400).

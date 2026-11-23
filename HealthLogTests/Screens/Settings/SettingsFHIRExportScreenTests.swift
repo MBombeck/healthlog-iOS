@@ -13,7 +13,7 @@ import Testing
 ///   - the temp filename uses the `.fhir.json` extension so the
 ///     receiving doctor-system sniffs the right MIME
 ///
-/// **18-03 — the host moved, the contract did not.** `SettingsFHIRExportScreen`
+/// **The host moved, the contract did not.** `SettingsFHIRExportScreen`
 /// was one of four cards asking overlapping questions; FHIR is now one of four
 /// output forms on `UnifiedSharingScreen`. Everything below the first case is
 /// about the bundle and the PHI write, neither of which ever belonged to the
@@ -55,7 +55,7 @@ struct SettingsFHIRExportScreenTests {
         #expect(decoded.type.value == bundle.type.value)
     }
 
-    /// **v0.8.0 W9 L-2 — FHIR export PHI write must use complete file
+    /// **FHIR export PHI write must use complete file
     /// protection.** The exported bundle carries health observations, so
     /// the temp file has to land under `.completeFileProtection`, matching
     /// every sibling PHI export path (`DoctorReportStore`, `SettingsExportScreen`,
@@ -80,7 +80,7 @@ struct SettingsFHIRExportScreenTests {
         )
         let bundle = try DoctorReportToFHIRBundle.bundle(from: spec)
 
-        // audit v0162 H2 — the PHI-write helpers moved from the screen into
+        // The PHI-write helpers moved from the screen into
         // `ExportStore` (the store owns the full artifact lifecycle now).
         let url = try ExportStore.writeBundle(bundle, generatedAt: now)
         defer { try? FileManager.default.removeItem(at: url) }
@@ -104,7 +104,7 @@ struct SettingsFHIRExportScreenTests {
         #expect(protection != URLFileProtection.none)
     }
 
-    /// **v0.8.0 W9 L-2 (source-level guard).** Because the iOS Simulator
+    /// Because the iOS Simulator
     /// collapses every protection class to
     /// `.completeUntilFirstUserAuthentication` at runtime (see the test
     /// above), the runtime check cannot distinguish `.completeFileProtection`
@@ -114,7 +114,7 @@ struct SettingsFHIRExportScreenTests {
     /// passes `.completeFileProtection`, matching the sibling PHI writers. A
     /// drift back to plain `[.atomic]` breaks here.
     ///
-    /// audit v0162 H2 — the PHI-write seam now lives in `ExportStore`, so this
+    /// The PHI-write seam now lives in `ExportStore`, so this
     /// guard scans the store source (where `writeData` / `persist` write).
     @Test("FHIR export source passes .completeFileProtection to the write")
     func fhirExportSourceUsesCompleteFileProtection() throws {

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-36 — Sleep Condition Indicator (SCI) on `POST /api/mental-health/assessments`.**
+/// **Sleep Condition Indicator (SCI) on `POST /api/mental-health/assessments`.**
 ///
 /// Two properties of this instrument are load-bearing and are pinned here rather
 /// than left to review:
@@ -179,7 +179,7 @@ struct MentalHealthSciWireTests {
     }
 }
 
-/// **CU-36 — the localisation stance for a questionnaire validated in English only.**
+/// **The localisation stance for a questionnaire validated in English only.**
 ///
 /// The SCI's redistributed validated wording exists in English alone
 /// (``MentalHealthInstrument/validatedItemLocales`` == `["en"]`). Re-wording a
@@ -190,7 +190,7 @@ struct MentalHealthSciWireTests {
 ///
 /// Pure catalog / source / bundle reads, no network → no `.serialized`.
 ///
-/// 1.5.0 (L10N-MH): the SCI has a published validated text only in English.
+/// The SCI has a published validated text only in English.
 /// German and Dutch readers now see the server's own translation (marked
 /// `validated: false`), with a note and a switch to the English original,
 /// instead of the English text under a German interface.

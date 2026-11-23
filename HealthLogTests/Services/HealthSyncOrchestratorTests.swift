@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 4 — the orchestrator's contract.
+/// The orchestrator's contract.
 ///
 /// The thing under test is not "does a capability work" — Waves 1-3 own that.
 /// It is "can a capability disappear", and the answer has to be no under every
@@ -61,7 +61,8 @@ struct HealthSyncOrchestratorTests {
             cycleImport: make(.cycleImport),
             heartHealthEvents: make(.heartHealthEvents),
             outboxDrain: make(.outboxDrain),
-            serverMirror: make(.serverMirror)
+            serverMirror: make(.serverMirror),
+            clinicalLabRecords: make(.clinicalLabRecords)
         )
     }
 
@@ -190,7 +191,8 @@ struct HealthSyncOrchestratorTests {
             cycleImport: { _ in .disabled(.cycleImport) },
             heartHealthEvents: { _ in .disabled(.heartHealthEvents) },
             outboxDrain: capture,
-            serverMirror: { _ in .disabled(.serverMirror) }
+            serverMirror: { _ in .disabled(.serverMirror) },
+            clinicalLabRecords: { _ in .disabled(.clinicalLabRecords) }
         )
         let orchestrator = HealthSyncOrchestrator(registry: registry)
         _ = await orchestrator.run(.appRefresh)
@@ -230,7 +232,9 @@ struct HealthSyncOrchestratorTests {
         for capability in shared {
             #expect(registry.adapter(for: capability).lane == .sharedUpload, "\(capability.rawValue)")
         }
-        for capability in [HealthSyncCapability.ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport] {
+        for capability in [
+            HealthSyncCapability.ecgUpload, .moodStateOfMindImport, .appleMedicationImport, .cycleImport, .clinicalLabRecords
+        ] {
             #expect(registry.adapter(for: capability).lane == .independent, "\(capability.rawValue)")
         }
     }

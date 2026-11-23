@@ -1,4 +1,4 @@
-// Plan 06-05 — four-terminal-path teardown ordering matrix.
+// Four-terminal-path teardown ordering matrix.
 //
 // One awaited teardown orchestrator must own user logout, terminal 401,
 // successful deletion, and switch-server: invalidate the shared authenticated
@@ -207,7 +207,6 @@
             return AuthStore(
                 auth: auth,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: container.authenticatedSessionRegistry
             )
@@ -294,7 +293,7 @@
                 + "drained \(parkedLogoutWork.isFinished), tail \(cascadeTail.entries.count))"
             let bridgeFacts = "bridge(leaseInvalidated \(!bridgeLease.isCurrent), "
                 + "drained \(parkedBridgeWork.isFinished), anchorCleanups \(anchorCleanup.count))"
-            let orderingReason = "EXPECTED_RED: terminal cleanup outlived replacement admission — "
+            let orderingReason = "terminal cleanup outlived replacement admission — "
                 + "\(logoutFacts) \(bridgeFacts)"
             #expect(logoutOrderingHolds && bridgeOrderingHolds, "\(orderingReason)")
         }
@@ -361,7 +360,7 @@
 
             let successFacts = "success(deleted \(deleted), leaseInvalidated \(!leaseA.isCurrent), "
                 + "drained \(parkedWork.isFinished), admitted \(admitted))"
-            let deletionReason = "EXPECTED_RED: deletion boundary admitted replacement before drain — "
+            let deletionReason = "deletion boundary admitted replacement before drain — "
                 + "\(successFacts) failurePreservesA \(failurePreservesA)"
             #expect(successOrderingHolds && failurePreservesA, "\(deletionReason)")
         }
@@ -423,7 +422,7 @@
 
             #expect(
                 oldSessionQuiescent && mutationFollowedDrain,
-                "EXPECTED_RED: server replacement preceded old-session drain — leaseInvalidated \(!lease.isCurrent), drained \(parkedWork.isFinished), coordinatorMutationFollowedDrain \(mutationFollowedDrain)"
+                "server replacement preceded old-session drain — leaseInvalidated \(!lease.isCurrent), drained \(parkedWork.isFinished), coordinatorMutationFollowedDrain \(mutationFollowedDrain)"
             )
         }
     }

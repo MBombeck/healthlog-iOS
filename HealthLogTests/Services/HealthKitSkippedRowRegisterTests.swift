@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    // #113 / 0.3 — doubles shared by the skip-register suites.
+    // Doubles shared by the skip-register suites.
 
     /// Batch API stub that answers every posted row with a verdict chosen by a
     /// closure, the way the deployed route answers: `entries[]` always, and a
@@ -207,12 +207,6 @@
     /// pass it, and the counts are honest.
     @Suite("HealthKit skip register — page consumption (#113)")
     struct HealthKitSkipRegisterConsumptionTests {
-        private struct FlagStub: FeatureFlagsServicing {
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                flag == .enableDailyStats ? false : flag.defaultValue
-            }
-        }
-
         private func consumption(
             api: VerdictBatchAPI,
             register: HealthKitSkippedRowRegister?
@@ -295,7 +289,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 MeasurementBatchUploader(api: VerdictBatchAPI { _ in SkipFixture.outOfRange }, throttle: BatchSyncThrottle()),
-                featureFlags: FlagStub(),
                 skipRegister: register
             )
             let before = HKSyncDiagnostics.shared.byIdentifier[SkipFixture.spo2]

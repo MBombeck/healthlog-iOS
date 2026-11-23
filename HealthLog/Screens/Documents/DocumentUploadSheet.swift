@@ -25,31 +25,19 @@ struct DocumentUploadSheet: View {
     @State private var retryDrafts: [DocumentUploadDraft] = []
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    header
-                    if let usage = store.usage {
-                        DocumentUsageBar(usage: usage)
-                    }
-                    sourceButtons
-                    if isUploading {
-                        ProgressView("documents.upload.uploading")
-                            .frame(maxWidth: .infinity)
-                    }
-                    failureText
-                    retryAction
+        HLSheetScaffold("documents.pageUpload") {
+            HLPage {
+                header
+                if let usage = store.usage {
+                    DocumentUsageBar(usage: usage)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(HLSpace.lg)
-            }
-            .hlScreenBackground()
-            .navigationTitle(Text("documents.pageUpload"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("documents.action.cancel") { dismiss() }
+                sourceButtons
+                if isUploading {
+                    ProgressView("documents.upload.uploading")
+                        .frame(maxWidth: .infinity)
                 }
+                failureText
+                retryAction
             }
             .photosPicker(
                 isPresented: $showPhotos,
@@ -105,7 +93,7 @@ struct DocumentUploadSheet: View {
     @ViewBuilder
     private var retryAction: some View {
         if !retryDrafts.isEmpty, !isUploading {
-            HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .secondary) {
+            HLButton("async.list.error.retry", systemImage: "arrow.clockwise", variant: .secondary) {
                 Task { await uploadAll(retryDrafts, unreadable: 0) }
             }
             .accessibilityIdentifier("documents.upload.retry")
@@ -137,7 +125,7 @@ struct DocumentUploadSheet: View {
     // MARK: - Header
 
     /// The add-sheet convention shared with the app's other create sheets: a
-    /// clear heading above the action buttons. 1.4 B2-c: the line under it
+    /// clear heading above the action buttons. The line under it
     /// names the file types (it stood loose under the buttons); the sentence
     /// that listed the three buttons is gone.
     private var header: some View {
@@ -160,21 +148,21 @@ struct DocumentUploadSheet: View {
     /// modifier so it can wear the same button styling as the others.
     private var sourceButtons: some View {
         VStack(spacing: HLSpace.sm) {
-            HLButton("documents.upload.browse", icon: "folder", variant: .primary) {
+            HLButton("documents.upload.browse", systemImage: "folder", variant: .primary) {
                 showFileImporter = true
             }
             .disabled(sourcesRefused)
 
             #if canImport(UIKit) && canImport(VisionKit)
                 if DocumentScannerView.isSupported {
-                    HLButton("documents.upload.scan", icon: "doc.viewfinder", variant: .secondary) {
+                    HLButton("documents.upload.scan", systemImage: "doc.viewfinder", variant: .secondary) {
                         showScanner = true
                     }
                     .disabled(sourcesRefused)
                 }
             #endif
 
-            HLButton("documents.upload.photos", icon: "photo.on.rectangle", variant: .secondary) {
+            HLButton("documents.upload.photos", systemImage: "photo.on.rectangle", variant: .secondary) {
                 showPhotos = true
             }
             .disabled(sourcesRefused)
@@ -184,8 +172,7 @@ struct DocumentUploadSheet: View {
     private func acceptedTypesCaption(_ usage: DocumentUsage) -> some View {
         let extensions = usage.acceptedExtensions.isEmpty ? Self.fallbackExtensions : usage.acceptedExtensions
         return Text(verbatim: extensions.joined(separator: ", "))
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.factLabel)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

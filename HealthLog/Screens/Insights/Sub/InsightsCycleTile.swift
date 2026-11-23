@@ -8,14 +8,14 @@ import SwiftUI
 /// card pushes the full ``CycleScreen`` on the shared Insights navigation stack.
 ///
 /// **Hard-gated.** Renders nothing unless ``CycleGate/isCycleTrackingAvailable``
-/// is true (women-only resolution + explicit opt-in, behind
-/// `FeatureFlag.cycleTracking`), AND the cycle surface is not disabled, AND a
+/// is true (women-only resolution + explicit opt-in), AND the cycle surface is
+/// not disabled, AND a
 /// prediction exists — so an ineligible / opted-out / still-learning user never
 /// sees a hollow tile. It self-loads the cycle store on appear (SWR cache-first;
 /// the on-device engine fills the prediction offline), so it paints from cache.
 ///
 /// Monochrome doctrine: the body is monochrome `HLText`; the only colour is the
-/// single sparse warm phase-tint dot in the chip, matching the cycle surface.
+/// phase-tint dot in the symbol column, matching the cycle surface.
 ///
 /// **Privacy:** cycle data is highly sensitive — this view logs nothing.
 struct InsightsCycleTile: View {
@@ -26,16 +26,11 @@ struct InsightsCycleTile: View {
 
     var body: some View {
         if isAvailable, let store, !store.isDisabled, let summary {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("cycle.insights.tile.heading")
-                NavigationLink {
-                    CycleScreen()
-                } label: {
-                    card(summary)
-                }
-                .hlPressable() // QOL-AUDIT H1: press feedback
-                .accessibilityIdentifier("insights.overview.cycleTile")
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("cycle.insights.tile.heading", rank: .area)
+                card(summary)
             }
+            .hlContainerGap(HLLayout.cardGap)
             .task { await store.load() }
         } else if isAvailable, let store, !store.isDisabled {
             // Eligible but still learning (no prediction yet): warm the store so the
@@ -44,32 +39,20 @@ struct InsightsCycleTile: View {
         }
     }
 
+    /// One data row: the phase with its dot, the countdown under it. The
+    /// whole row opens the cycle page, without a chevron.
     private func card(_ summary: Summary) -> some View {
-        HLCard {
-            HStack(spacing: HLSpace.md) {
-                phaseDot
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(summary.phaseName)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Text(summary.subtitle)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-                Spacer(minLength: HLSpace.sm)
-                HLDisclosureChevron()
+        HLCard(layout: .rows) {
+            HLRow(title: Text(verbatim: summary.phaseName), detail: Text(verbatim: summary.subtitle)) {
+                HLRowGlyph(
+                    symbol: "circle.fill",
+                    tint: CyclePhasePalette.tint(for: summary.phase, scheme: colorScheme)
+                )
             }
+            .accessibilityElement(children: .combine)
+            .hlRowLink { CycleScreen() }
+            .accessibilityIdentifier("insights.overview.cycleTile")
         }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var phaseDot: some View {
-        let tint = summary.map { CyclePhasePalette.tint(for: $0.phase, scheme: colorScheme) } ?? HLText.tertiary
-        return ZStack {
-            Circle().fill(tint.opacity(colorScheme == .dark ? 0.22 : 0.16))
-            Circle().fill(tint).frame(width: 10, height: 10)
-        }
-        .frame(width: 34, height: 34)
     }
 
     // MARK: - Summary derivation
@@ -84,7 +67,7 @@ struct InsightsCycleTile: View {
     /// resolvable phase) so the tile self-suppresses rather than show a hollow card.
     private var summary: Summary? {
         guard let store, let verdict = store.verdict?.verdict else { return nil }
-        // Z1 (#72) — the phase is the SERVER's. `nil` in OVERDUE and
+        // The phase is the SERVER's. `nil` in OVERDUE and
         // INSUFFICIENT_DATA, and the tile then self-suppresses: a glance surface
         // has no room for the caveat an overdue state needs, and the phase-tinted
         // dot would assert a phase the record does not hold.
@@ -117,7 +100,7 @@ struct InsightsCycleTile: View {
         ) {
             return dayLine ?? String(localized: "cycle.insights.tile.learning")
         }
-        // Z1 (#72) — the countdown is the verdict's `daysUntilNext`, resolved
+        // The countdown is the verdict's `daysUntilNext`, resolved
         // server-side against the profile timezone. Nothing is subtracted here.
         if let days = verdict.daysUntilNext {
             if days == 0 { return String(localized: "cycle.insights.tile.dueToday") }

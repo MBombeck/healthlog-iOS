@@ -1,13 +1,13 @@
 import Foundation
 
-/// v0.5.4-BF7 — Client-side personal-records derivation.
+/// Client-side personal-records derivation.
 ///
 /// **Why:** the server-side `GET /api/personal-records` route exists since
 /// v1.4.25 W8d but the detection worker that populates rows lands in
 /// v1.4.26 / v1.5. Until then the route returns `[]` for every user. The
 /// operator (2026-05-17) confirmed the iOS surface looks broken because of
 /// it — "Schritte"-records never appear even though the underlying daily
-/// totals are uploaded via the HK-STATS pipeline (V052-A5).
+/// totals are uploaded via the HK-STATS pipeline.
 ///
 /// **What we derive locally:** for the canonical cumulative-kind set
 /// (Schritte / Active Energy / Stockwerke / Distanz) we hold the daily
@@ -98,7 +98,7 @@ public enum StreakComputer {
     /// streak-record is omitted; when the series is empty the result is
     /// empty.
     ///
-    /// **v0.5.5.3 REG-9 — daily-sum bucketing:** the server `series`
+    /// **Daily-sum bucketing:** the server `series`
     /// endpoint emits one `SeriesPoint` per `Measurement` row, not one
     /// per calendar day. Cumulative kinds (steps / energy / distance)
     /// can have multiple rows per day from
@@ -261,8 +261,8 @@ public enum StreakComputer {
             id: "\(config.idPrefix).streak",
             userId: userId,
             metricType: config.metricType,
-            // L1 — catalog copy. Both locales keep the word the streak
-            // classifiers match on ("Serie" / "streak",
+            // Catalog copy. Every locale keeps the word the streak
+            // classifiers match on ("Serie" / "streak" / "reeks" / "연속" / "racha",
             // `PersonalRecordsStore.streakRecords`, `MilestoneStrip`).
             metricSlot: String(
                 localized: "records.streak.slot \(formatThreshold(config.streakThreshold)) \(bestLength)"

@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Audit v0162 H2 — ExportStore contract.**
+/// **ExportStore contract.**
 ///
 /// Pins the store that now owns the repository/service calls + FHIR/export
 /// artifact assembly the four PHI-export/import screens previously did inline.
@@ -115,10 +115,10 @@ struct ExportStoreTests {
     // MARK: - FHIR assembly
 
     @Test("makeLocalBundleJSON produces a non-empty, round-tripping bundle")
-    func localBundleRoundTrips() throws {
+    func localBundleRoundTrips() async throws {
         let now = Date(timeIntervalSince1970: 1_716_000_000)
         let json = try #require(
-            ExportStore.makeLocalBundleJSON(
+            await ExportStore.makeLocalBundleJSON(
                 periodDays: 90,
                 snapshot: emptySnapshot(),
                 generatedAt: now,
@@ -173,7 +173,7 @@ struct ExportStoreTests {
         #expect(!assembly.json.isEmpty)
     }
 
-    // MARK: - CU-13 — new route + the selection-scoped empty bundle
+    // MARK: - New route + the selection-scoped empty bundle
 
     /// Answers the two routes the server arm touches: the moved
     /// `Patient/$everything` and the saved-profile route CU-11 owns. Records
@@ -202,7 +202,7 @@ struct ExportStoreTests {
         nonisolated(unsafe) var paths: [String] = []
         MockURLProtocol.install(serverArmHandler(
             bundleJSON: Self.emptyBundleJSON,
-            // The honest "this account has never saved one" answer (CU-01).
+            // The honest "this account has never saved one" answer.
             profileJSON: #"{"data":{"profile":null},"error":null}"#,
             record: { paths.append($0) }
         ))
@@ -320,7 +320,7 @@ struct ExportStoreTests {
         #expect(stamp == "2024-05-18")
     }
 
-    // MARK: - Phase 09 / plan 09-03 — the write leaves the main actor
+    // MARK: - The write leaves the main actor
 
     /// **The counted contract.** A protected atomic write of a multi-megabyte
     /// PHI export is a blocking file operation; performed on the main actor it
@@ -360,7 +360,7 @@ struct ExportStoreTests {
 
         #expect(
             counting.mainThreadWriteCount == 0,
-            "EXPECTED_RED: export persistence ran on MainActor"
+            "export persistence ran on MainActor"
         )
     }
 

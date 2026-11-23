@@ -29,20 +29,20 @@ struct V052I18nKeysTests {
     /// strings; the regression intent is unchanged (catalogue presence +
     /// DE/EN parity), only the key spelling is now English.
     static let r4Keys: [String] = [
-        // A1 — chart detail empty-states
+        // Chart detail empty-states
         "No measurements in the selected range",
         "No measurements for the selected source",
         "Enable assistant insight",
-        // 1.4 B2 — "Show insights" left the catalogue with the metric page's
+        // "Show insights" left the catalogue with the metric page's
         // consent card, an arm that page could never reach.
-        // A3 — more-tab section titles (v0.13 WP: renamed from the stale
+        // More-tab section titles (v0.13 WP: renamed from the stale
         // "Mental health & vital signs" after the v0.11 IA cut its vital-signs row)
         "Mood & achievements",
         "App",
-        // A5 — metric kind units
+        // Metric kind units
         "bpm",
         "%",
-        // A6 — mood custom-tag surface
+        // Mood custom-tag surface
         "My tags",
         "Add custom tag",
         "New",
@@ -54,20 +54,20 @@ struct V052I18nKeysTests {
         // Medications
         "Archived",
         "Reminder times",
-        // 1.4 B4 — "Add your first medication. Reminders, …" left with the
+        // "Add your first medication. Reminders, …" left with the
         // Insights medications page's empty sentence; the "Add medication"
         // button under the title says it.
         "At least one time. Up to eight per day.",
         "No medications yet",
-        // 1.4 B2-b — the photo-section footer of the add sheet left with its
+        // The photo-section footer of the add sheet left with its
         // key: the photo sheet makes the on-device promise where the photo is
         // taken.
-        // #115 1.3 — "Weekdays" left the catalogue with the last screen that
+        // "Weekdays" left the catalogue with the last screen that
         // used it (the device-calendar mood pattern cards).
         // AI consent
         "Accept",
         "Enable assistant insights",
-        // 1.4 B2-c — "You can change this choice at any time in Settings."
+        // "You can change this choice at any time in Settings."
         // left with the consent sheet's line under the buttons; the sheet's
         // last point already names the withdrawal.
         // Theme picker

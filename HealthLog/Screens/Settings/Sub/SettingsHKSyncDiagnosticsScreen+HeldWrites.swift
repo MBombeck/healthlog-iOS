@@ -11,11 +11,8 @@ extension SettingsHKSyncDiagnosticsScreen {
     @ViewBuilder
     var heldWritesCard: some View {
         if !heldGroups.isEmpty || rearmedCount != nil {
-            // 1.4 B2-c — why these rows wait is in the (i).
-            HLSettingsCard(
-                icon: "tray.full",
-                title: "settings.hkdiag.held_title"
-            ) {
+            // Why these rows wait is in the (i).
+            HLCard("settings.hkdiag.held_title") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     ForEach(heldGroups, id: \.self) { group in
                         heldRow(group)
@@ -33,8 +30,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                     }
                     if let rearmedCount {
                         Text(String(localized: "settings.hkdiag.held_resend_result \(rearmedCount)"))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -44,17 +40,8 @@ extension SettingsHKSyncDiagnosticsScreen {
     }
 
     private func heldRow(_ group: OutboxHeldGroup) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(Self.heldReasonText(group.reason))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: HLSpace.md)
-            Text("\(group.count)")
-                .font(.hlBody.monospacedDigit())
-                .foregroundStyle(HLText.secondary)
-        }
-        .accessibilityElement(children: .combine)
+        HLSettingsStatRow(label: Text(verbatim: Self.heldReasonText(group.reason)), value: "\(group.count)")
+            .accessibilityElement(children: .combine)
     }
 
     static func heldReasonText(_ reason: OutboxHoldReason) -> String {

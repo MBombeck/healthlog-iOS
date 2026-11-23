@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// GH-iOS #27 — extra headers for a server behind Cloudflare Access, Pangolin
+/// Extra headers for a server behind Cloudflare Access, Pangolin
 /// or a similar proxy: validation, Keychain round trip, the merge with the
 /// build-time Cloudflare pair, and what survives a redirect.
 @Suite("Server access headers")

@@ -28,12 +28,12 @@ struct LifeCircumstancesStoreTests {
     }
 
     private func writes(_ server: LifeServerStub) -> [LifeServerStub.Recorded] {
-        // POLISH-C (C7): the page also reads `GET /api/anamnesis/facts` for
+        // The page also reads `GET /api/anamnesis/facts` for
         // the earlier alcohol answer; only the writes count here.
         server.requests.filter { $0.path.hasPrefix("/api/anamnesis/facts") && $0.method != "GET" }
     }
 
-    // MARK: - Server #1334: former smoker with a quit date
+    // MARK: - Former smoker with a quit date
 
     @Test("a former smoker with a quit month is saved and comes back on the next load (Server #1334)")
     func formerSmokerWithDateRoundTrips() async throws {

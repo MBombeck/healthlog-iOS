@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.15 W-FRONTDOORS — pure next-due selection + capture-prefill mapping for
+/// **Pure next-due selection + capture-prefill mapping for
 /// the Home Vorsorge tile.**
 ///
 /// Split out of the view so the two decisions the tile rests on are unit-tested

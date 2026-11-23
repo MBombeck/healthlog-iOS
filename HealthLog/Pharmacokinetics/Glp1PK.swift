@@ -10,7 +10,7 @@ import Foundation
 /// **qualitative** display surfaces — the "shot phase" chip (rising / peak /
 /// fading) on the dashboard tile and the drug-level AreaChart on
 /// `MedicationDetailScreen`, which the server made unconditional when it
-/// retired Research Mode (D-12-05-A).
+/// retired Research Mode.
 ///
 /// Two-compartment math is **explicitly out of scope**. Per
 /// `glp1-pk.ts:18–43`:
@@ -41,7 +41,7 @@ import Foundation
 /// `asOf` so callers can render deterministic charts and tests can replay
 /// the same dose history at any reference time.
 public enum Glp1PK {
-    // D-12-05-A — `researchModeDisclaimerVersionFallback` is gone. It stamped a
+    // `researchModeDisclaimerVersionFallback` is gone. It stamped a
     // disclaimer the user acknowledged to unlock this curve; the server deleted
     // that acknowledgment, its endpoint and its own
     // `RESEARCH_MODE_DISCLAIMER_VERSION` in `0160052289e4`. The disclaimer that

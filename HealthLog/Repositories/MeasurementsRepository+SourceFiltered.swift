@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.8 W3 — v1.15.13 adoption: server-side source filter for the
+/// v1.15.13 adoption: server-side source filter for the
 /// measurement management lists (`GET /api/measurements?sourceEq=…`,
 /// RESEARCH-SERVER-PARITY A2).
 ///
@@ -12,7 +12,7 @@ import Foundation
 /// `(userId, source, measuredAt)` index — migration 0136), so the filtered
 /// list is as deep as the unfiltered one.
 ///
-/// Client-side filtering deliberately REMAINS for offline / standalone
+/// Client-side filtering deliberately REMAINS for offline
 /// snapshots (no server reachable) and as the defensive fallback on older
 /// deploys — see the per-arm fallbacks below.
 public extension MeasurementsRepository {
@@ -22,7 +22,6 @@ public extension MeasurementsRepository {
     /// callers can pass their optional filter state straight through.
     ///
     /// Routing mirrors `recent(kind:limit:)` arm-for-arm:
-    /// - **standalone** → on-device union, filtered locally (no `/api/*`).
     /// - **cumulative / series-routed kinds** (steps, active energy, flights,
     ///   walking-distance, daylight) → the server's `groupBy=day` collapse
     ///   with `sourceEq`, because `/api/measurements/series` has no source
@@ -37,10 +36,6 @@ public extension MeasurementsRepository {
     ) async throws -> [Measurement] {
         guard let source else {
             return try await recent(kind: kind, limit: limit)
-        }
-        if standalone?.isActive == true {
-            let union = try await standaloneRecentUnion(kind: kind, limit: limit)
-            return union.filter { $0.source == source }
         }
         // Steps (`prefersSeriesForRecent`) stays on the series-synthesized
         // path + a local slice: its wire type (`ACTIVITY_STEPS`) is not in

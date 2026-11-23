@@ -8,16 +8,87 @@ enum RootPrivacyShieldReason: Equatable, Sendable {
     case biometricLocked
 }
 
+/// What the window root shows. Only the biometric lock decides it: the locked
+/// session unmounts the whole tree behind the shield. An inactive or
+/// backgrounded scene keeps its tree; the scene's cover window
+/// (``PrivacyCoverPolicy``) hides it from the app switcher instead, so a
+/// fold, a resize or a trip to the switcher loses no screen, sheet or input.
 enum RootPrivacyShieldPolicy {
     enum Resolution: Equatable, Sendable {
+        /// The shield is the only view at the window root; the content is
+        /// unmounted.
         case protected(RootPrivacyShieldReason)
+        /// The content is mounted.
         case unprotected
     }
 
+    /// `RootView` branches on exactly this. While locked, an inactive scene
+    /// (the Face ID sheet itself) shows the plain brand face.
     static func resolve(sceneIsActive: Bool, biometricLocked: Bool) -> Resolution {
-        if !sceneIsActive { return .protected(.inactive) }
-        if biometricLocked { return .protected(.biometricLocked) }
-        return .unprotected
+        guard biometricLocked else { return .unprotected }
+        return .protected(sceneIsActive ? .biometricLocked : .inactive)
+    }
+}
+
+/// When the cover window of a scene hides the app.
+///
+/// The system snapshots a scene for the app switcher as it leaves the
+/// foreground. On the phone (the Duo included) the switcher and the Control
+/// Centre show it inactive first, so the cover comes at `.inactive`. An iPad
+/// scene is also inactive while it merely lost focus to another window in
+/// Stage Manager and stays fully visible; a cover there would lie
+/// permanently over a window the user is looking at. So the iPad covers at
+/// `.background`, and at `.inactive` when no other scene of the app is active
+/// and the scene is not a window that stays on screen beside others: a scene
+/// filling the screen that goes inactive is on its way into the app switcher
+/// (``PrivacyCoverController/staysOnScreen(phase:sceneSize:screenSize:)``).
+enum PrivacyCoverPolicy {
+    enum Idiom: Equatable, Sendable {
+        case phone
+        case pad
+    }
+
+    enum Phase: Equatable, Sendable {
+        case active
+        case inactive
+        case background
+    }
+
+    /// - Parameters:
+    ///   - idiom: the scene's device idiom; injected, so the rule is testable.
+    ///   - phase: the scene's phase.
+    ///   - anotherSceneActive: some other scene of the app is foreground active.
+    ///   - visibleInForeground: the scene is still on screen.
+    static func covers(
+        idiom: Idiom,
+        phase: Phase,
+        anotherSceneActive: Bool,
+        visibleInForeground: Bool
+    ) -> Bool {
+        switch (idiom, phase) {
+        case (_, .active): false
+        case (_, .background): true
+        case (.phone, .inactive): true
+        case (.pad, .inactive): !anotherSceneActive && !visibleInForeground
+        }
+    }
+}
+
+/// The window root's one branch: the shield while the biometric lock holds,
+/// the content otherwise. The content keeps its identity, and so its state,
+/// through every scene phase; only the lock unmounts it.
+struct RootPrivacyComposition<Shield: View, Content: View>: View {
+    let resolution: RootPrivacyShieldPolicy.Resolution
+    @ViewBuilder let shield: (RootPrivacyShieldReason) -> Shield
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        switch resolution {
+        case let .protected(reason):
+            shield(reason)
+        case .unprotected:
+            content()
+        }
     }
 }
 
@@ -86,9 +157,8 @@ struct RootPrivacyShield: View {
                     .accessibilityIdentifier(LockOverlay.unlockButtonIdentifier)
                 HLButton(
                     "Sign out",
-                    icon: "rectangle.portrait.and.arrow.right",
+                    systemImage: "rectangle.portrait.and.arrow.right",
                     variant: .secondary,
-                    size: .regular,
                     action: onSignOut
                 )
                 .accessibilityIdentifier(LockOverlay.signOutButtonIdentifier)

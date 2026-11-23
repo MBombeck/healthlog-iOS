@@ -50,7 +50,7 @@
                 "device: iPhone",
                 "language: de",
                 "server version: 1.43.0 (build d06ce36)",
-                // A4 (#134) — the account and Apple Health lines, here as
+                // The account and Apple Health lines, here as
                 // they read before anything was loaded (`A4DiagnosticsSupportInfoTests`
                 // pins them loaded).
                 "time zone: unknown",

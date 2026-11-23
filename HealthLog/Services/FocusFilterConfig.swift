@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-FOCUS-FILTER (v0.15.2)** — the app-side mirror of the HealthLog *Focus
+/// The app-side mirror of the HealthLog *Focus
 /// filter* config the user attaches to a system Focus (Sleep, Work, …).
 ///
 /// **What the filter does.** While the Focus is on, HealthLog holds back its
@@ -63,7 +63,7 @@ public struct FocusFilterConfig: Sendable, Equatable, Codable {
     }
 }
 
-/// **W-FOCUS-FILTER** — shared App Group store for ``FocusFilterConfig``.
+/// Shared App Group store for ``FocusFilterConfig``.
 ///
 /// Reads/writes the JSON-encoded config under one key in the shared suite so
 /// the app + the Focus-filter intent agree on the live value. Defaults to

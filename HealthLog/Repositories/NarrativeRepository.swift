@@ -31,7 +31,7 @@ public actor NarrativeRepository {
     /// query override (`de`/`en`); the server still narrows from the session
     /// when omitted, but passing it keeps the cache key + prose locale aligned.
     ///
-    /// `bypassCache` (#115 · 0.2): read the network directly and write nothing
+    /// `bypassCache`: read the network directly and write nothing
     /// back — used while the `periodNarrative` capability is unavailable, so a
     /// cached model-written narrative cannot be painted.
     public func fetch(
@@ -61,14 +61,14 @@ public actor NarrativeRepository {
             // Route absent / unknown period rejected / assistant surface gated
             // off (403 `requireAssistantSurface` → `assistant.disabled.*`) →
             // hide the card with the calm empty state, never an error.
-            // v0.14.3 B5: a provider-less account previously landed in the
+            // A provider-less account previously landed in the
             // card's error arm and showed nothing; a 403 now maps to nil.
             return nil
         } catch HLError.aiUnavailable {
             // The APIClient intercepts a 403 + `assistant.disabled.<surface>`
             // and re-throws it as `HLError.aiUnavailable(refusal)` BEFORE the
             // `.server(403,…)` arm above can see it — so map that surfaced shape
-            // to nil too (v0.14.3 B5). Provider-less ⇒ calm empty, not error.
+            // to nil too. Provider-less ⇒ calm empty, not error.
             return nil
         } catch HLError.decoding {
             // v0.14.7 A2 defence-in-depth: a payload-shape drift (the

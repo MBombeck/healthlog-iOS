@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #67 — dashboard partial-failure resilience contract.
+/// Dashboard partial-failure resilience contract.
 ///
 /// Locks the decision the Home metrics section makes while `summary == nil`: a
 /// failed summary subrequest with no cached fallback shows an honest error +

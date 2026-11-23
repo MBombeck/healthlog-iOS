@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 — the BYO-key ("bring your own") LLM provider identity for the
+/// The BYO-key ("bring your own") LLM provider identity for the
 /// **client-side, device→provider** AI path (`AIMode.byoKey`).
 ///
 /// Deliberately distinct from the server-side ``AIProvider`` enum: the server
@@ -38,8 +38,8 @@ public enum BYOProviderID: String, Codable, Sendable, CaseIterable, Identifiable
 
     /// The default model identifier used when the user does not override it.
     /// Cheap, fast, widely-available defaults — the user can override via the
-    /// free-form model field (W3). Kept here so the model picker and the
-    /// request adapters (W2) read one source of truth.
+    /// free-form model field. Kept here so the model picker and the
+    /// request adapters read one source of truth.
     public var defaultModel: String {
         switch self {
         case .openAI: "gpt-4o-mini"

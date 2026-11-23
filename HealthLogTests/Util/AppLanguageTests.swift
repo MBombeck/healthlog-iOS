@@ -31,6 +31,8 @@ struct AppLanguageTests {
         #expect(AppLanguage.resolve(Locale(identifier: "nl_NL")) == .nl)
         #expect(AppLanguage.resolve(Locale(identifier: "de_CH")) == .de)
         #expect(AppLanguage.resolve(Locale(identifier: "it_IT")) == .en)
+        #expect(AppLanguage.resolve(Locale(identifier: "es_MX")) == .es)
+        #expect(AppLanguage.resolve("es-419") == .es)
     }
 
     @Test("Open endpoints get every language as its own code")
@@ -73,6 +75,11 @@ struct AppLanguageTests {
         #expect(AppLanguage.resolve(belgian) == .nl)
         let austrian = Bundle.preferredLocalizations(from: shipped, forPreferences: ["de-AT"]).first
         #expect(AppLanguage.resolve(austrian) == .de)
+        // One Spanish bundle serves Spain and Latin America alike.
+        for spanish in [["es-ES"], ["es-MX"], ["es-419"], ["es-US", "en-US"]] {
+            let resolved = Bundle.preferredLocalizations(from: shipped, forPreferences: spanish).first
+            #expect(AppLanguage.resolve(resolved) == .es, "\(spanish) resolved \(resolved ?? "nil")")
+        }
     }
 
     @Test("Every language the gates know has a case in AppLanguage")
@@ -157,8 +164,8 @@ struct AppLanguageTests {
         components.timeZone = TimeZone(identifier: "UTC")
         let date = try #require(Calendar(identifier: .gregorian).date(from: components))
         let style = try Date.FormatStyle(date: .long, time: .omitted, timeZone: #require(TimeZone(identifier: "UTC")))
-        let expectations: [AppLanguage: String] = [.de: "Juni", .en: "June", .nl: "juni"]
-        for language in AppLanguage.allCases {
+        let expectations: [AppLanguage: String] = [.de: "Juni", .en: "June", .nl: "juni", .es: "junio"]
+        for language in [AppLanguage.de, .en, .nl, .es] {
             let text = date.formatted(style.locale(language.dayMonthYearLocale))
             let month = try #require(expectations[language])
             #expect(text.contains(month), "\(language): \(text)")
@@ -166,9 +173,15 @@ struct AppLanguageTests {
             let monthIndex = try #require(text.range(of: month)?.lowerBound)
             #expect(day < monthIndex, "\(language) must put the day first: \(text)")
         }
+        // Korean has no day-first locale: only numeric DMY uses en_GB.
+        // HLDateFormatTests covers Korean month names in spelled-out styles.
+        let numeric = try Date.FormatStyle(date: .numeric, time: .omitted, timeZone: #require(TimeZone(identifier: "UTC")))
+        #expect(date.formatted(numeric.locale(AppLanguage.ko.dayMonthYearLocale)) == "17/06/2026")
         #expect(AppLanguage.$pinned.withValue(.en) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "en_GB")
         #expect(AppLanguage.$pinned.withValue(.de) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "de_DE")
+        #expect(AppLanguage.$pinned.withValue(.ko) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "en_GB")
         #expect(AppLanguage.$pinned.withValue(.nl) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "nl_NL")
+        #expect(AppLanguage.$pinned.withValue(.es) { HLDateFormat.dayMonthYear.formattingLocale.identifier } == "es_ES")
     }
 
     // MARK: - Call sites that used to decide on their own
@@ -184,7 +197,7 @@ struct AppLanguageTests {
     @Test("Mid-sentence casing and the screener locale follow the interface language")
     @MainActor
     func formerCallSites() {
-        // L10N-MH: the screener sends the interface language with the device
+        // The screener sends the interface language with the device
         // region (`regionTag`), so the server can pick the country's crisis set.
         #expect(AppLanguage.$pinned.withValue(.nl) { MentalHealthStore.deviceDisplayLocale() } == AppLanguage.nl.regionTag)
         #expect(AppLanguage.$pinned.withValue(.en) { MentalHealthStore.deviceDisplayLocale() } == AppLanguage.en.regionTag)

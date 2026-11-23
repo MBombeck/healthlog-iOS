@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit B-8 — a time-zone change re-arms the reminders.**
+/// **A time-zone change re-arms the reminders.**
 ///
 /// Reminders are projected with the zone that was current at registration time
 /// (`NotificationService+Registration`, `MedicationsSchedulerModule`). Nothing
@@ -74,7 +74,7 @@ struct MedicationsStoreTimeZoneChangeTests {
         #expect(reconciles == 2, "travelling back is a change again")
     }
 
-    /// 1.0.4 (INT-A) — the system may post the change from any thread. The
+    /// The system may post the change from any thread. The
     /// observer is registered on the main queue, so a background post still
     /// reconciles exactly once, on the main thread, and the post returns only
     /// after the reconcile ran (no unowned task left behind).

@@ -16,7 +16,7 @@ import Foundation
 // rest of the Coach stack honours. A foreign / unknown id maps to **404** on the
 // detail route (the existence channel never leaks across accounts).
 //
-// **Read-only (b182).** iOS chat is local-first; these DTOs back a *re-hydration*
+// **Read-only.** iOS chat is local-first; these DTOs back a *re-hydration*
 // read path so server-retained conversations (and ones started on web) are
 // browsable on iOS again — the adopt/forget write-loop stays a follow-up.
 

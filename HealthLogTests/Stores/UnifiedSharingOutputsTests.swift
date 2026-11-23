@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 18 / 18-02 — the four outputs run from one state, and the wire does
+/// **The four outputs run from one state, and the wire does
 /// not move.**
 ///
 /// Each case drives the SAME service or store the corresponding old card drove,
@@ -90,7 +90,7 @@ struct UnifiedSharingOutputsTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the unified model does not yet drive the PDF export
+            the unified model does not yet drive the PDF export
 
             The PDF and the ZIP are the same server route differing in `format`; consolidating \
             the questions must not consolidate the contracts. Offen: \(violations)
@@ -123,7 +123,7 @@ struct UnifiedSharingOutputsTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the unified model does not yet drive the ZIP export
+            the unified model does not yet drive the ZIP export
 
             The ZIP already contains the PDF and the FHIR bundle; that is why it is one output \
             of one flow and not a fourth surface. Offen: \(violations)
@@ -142,7 +142,7 @@ struct UnifiedSharingOutputsTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the unified model does not yet drive link creation
+            the unified model does not yet drive link creation
 
             The empty selection is the documents-only link and the full one is the whole record; \
             both have to leave the device exactly as they did before. Offen: \(violations)
@@ -218,7 +218,7 @@ struct UnifiedSharingOutputsTests {
         #expect(
             violations.isEmpty,
             """
-            EXPECTED_RED: the unified model does not yet drive the FHIR export
+            the unified model does not yet drive the FHIR export
 
             FHIR was the one surface with no selection of its own; it inherited the stored \
             profile invisibly. Offen: \(violations)

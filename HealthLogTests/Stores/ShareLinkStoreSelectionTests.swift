@@ -8,7 +8,7 @@
 
     // swiftlint:disable force_unwrapping
 
-    /// **CU-12 — the two states the share-link surface was blind to.**
+    /// **The two states the share-link surface was blind to.**
     ///
     /// Driven through the real ``ShareLinkStore`` over the real `APIClient` with a
     /// stubbed `URLSession` (`MockURLProtocol`), never a mock server. Two

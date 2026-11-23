@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Daylio-style structured mood-tag picker (v0.14). After the user picks one
+/// Daylio-style structured mood-tag picker. After the user picks one
 /// of the 5 moods, this surface lets them tap **context tags grouped by
 /// category** — each an **icon above a short label**, multi-select across
 /// categories. Fast, low-friction (daily-use), **monochrome** (graphite ink +
@@ -16,6 +16,7 @@ import SwiftUI
 struct MoodTagPicker: View {
     @Environment(MoodTagCatalogStore.self) private var catalogStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The selected structured-tag keys (multi-select across categories).
     @Binding var selectedKeys: Set<String>
@@ -25,7 +26,7 @@ struct MoodTagPicker: View {
     private let columns = [GridItem(.adaptive(minimum: 76, maximum: 120), spacing: HLSpace.sm)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             // Skip categories with no BINARY tags — a category that holds only
             // RATED factors (the `factors` group) is rendered by the slider
             // section, so an empty toggle grid + bare header would read broken.
@@ -49,25 +50,37 @@ struct MoodTagPicker: View {
                     .font(.hlFootnote.weight(.semibold))
                     .foregroundStyle(HLText.tertiary)
                     .accessibilityHidden(true)
-                HLSectionLabel(verbatim: category.localizedLabel)
+                HLCardLabel(verbatim: category.localizedLabel)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
-            LazyVGrid(columns: columns, alignment: .leading, spacing: HLSpace.sm) {
-                // v0.14.1 §7 — only BINARY tags render as toggle tiles here.
-                // RATED factors (Mood v2) are scored via sliders in a dedicated
-                // section (`MoodScreen.ratedFactorsSection`), not as on/off chips.
-                ForEach(category.tags.filter(Self.isVisibleBinary)) { tag in
-                    MoodTagTile(
-                        tag: tag,
-                        categoryLabel: category.localizedLabel,
-                        selected: selectedKeys.contains(tag.key),
-                        reduceMotion: reduceMotion
-                    ) {
-                        toggle(tag.key)
-                    }
+            // From the accessibility sizes on the tiles flow as wholes; a
+            // fixed column width cut the feelings' names off.
+            if dynamicTypeSize.isAccessibilitySize {
+                HLFlowLayout(spacing: HLSpace.sm) {
+                    tiles(category)
                 }
+            } else {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: HLSpace.sm) {
+                    tiles(category)
+                }
+            }
+        }
+    }
+
+    /// Only BINARY tags render as toggle tiles here. RATED factors (Mood v2)
+    /// are scored via sliders in a dedicated section
+    /// (`MoodScreen.ratedFactorsSection`), not as on/off chips.
+    private func tiles(_ category: MoodTagCategoryDTO) -> some View {
+        ForEach(category.tags.filter(Self.isVisibleBinary)) { tag in
+            MoodTagTile(
+                tag: tag,
+                categoryLabel: category.localizedLabel,
+                selected: selectedKeys.contains(tag.key),
+                reduceMotion: reduceMotion
+            ) {
+                toggle(tag.key)
             }
         }
     }
@@ -123,11 +136,13 @@ struct MoodTagTile: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
             }
+            // Symbol at the top of every tile: centred, a one-line name put
+            // its symbol lower than the two-line neighbours'.
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 68)
+            .frame(minHeight: 68, alignment: .top)
             .padding(.vertical, HLSpace.sm)
             .padding(.horizontal, HLSpace.xs)
-            // v0.14.7 B2 — unselected tiles read from the SAME dark ramp as the
+            // Unselected tiles read from the SAME dark ramp as the
             // sheet (`HLSurface.primary` canvas → `HLSurface.secondary` panel →
             // `HLSurface.tertiary` wells). The old `HLColor.surface.opacity(0.5)`
             // was a translucent off-black from a different ramp that read as an
@@ -150,7 +165,7 @@ struct MoodTagTile: View {
             .contentShape(Rectangle())
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selected)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hlRow)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(Text("mood.tagPicker.tile.hint"))
@@ -166,7 +181,7 @@ struct MoodTagTile: View {
 
 /// v0.14.5 §R1–R3 — one Mood v2 **rated factor** as a **monochrome slider**.
 ///
-/// **Continuous feel, fixed polarity (R2):** the slider always reads RIGHT =
+/// **Continuous feel, fixed polarity:** the slider always reads RIGHT =
 /// good, LEFT = bad. The wire `rating` (raw `scaleMin…scaleMax`) is *derived*
 /// from the thumb position honouring the catalog `inverse` flag:
 ///   - non-inverse (higher raw = better, e.g. work / sleep_quality) → RIGHT
@@ -176,14 +191,14 @@ struct MoodTagTile: View {
 /// Pure mapping in ``MoodRatedFactorScale`` (unit-tested for both polarities,
 /// clamp, and the `scaleMax == 2` two-state case).
 ///
-/// **Untouched (R2):** `rating == nil` ⇒ the thumb sits centred + the track is
+/// **Untouched:** `rating == nil` ⇒ the thumb sits centred + the track is
 /// dimmed, and the factor is omitted on save. The first drag/tap rates it.
 ///
-/// **Monochrome-dark (R3):** graphite/ink track + ink thumb, HLText hierarchy.
+/// **Monochrome-dark:** graphite/ink track + ink thumb, HLText hierarchy.
 /// No `.tint` / `Color.accentColor` (those resolve to the user-picked tint =
 /// the blue "Fremdkörper"); selection is shown by ink fill + active track.
 ///
-/// **scaleMax == 2 (R2):** rendered as a clean two-position slider (snaps to
+/// **scaleMax == 2:** rendered as a clean two-position slider (snaps to
 /// the two endpoints) with unmistakable good/bad end labels.
 struct MoodRatedFactorRow: View {
     let factor: MoodTagDTO
@@ -191,7 +206,7 @@ struct MoodRatedFactorRow: View {
     @Binding var rating: Int?
     var reduceMotion = false
 
-    /// v0.14.6 M3 — per-drag direction lock. `nil` before the first significant
+    /// Per-drag direction lock. `nil` before the first significant
     /// move; set once to whether the gesture is predominantly HORIZONTAL. A
     /// vertical gesture (page scroll started on the thumb) is ignored so the
     /// slider never jumps when the user is actually scrolling the sheet. Reset
@@ -290,7 +305,7 @@ struct MoodRatedFactorRow: View {
             // also shrinks the residual vertical-scroll dead-zone over the band.
             .frame(height: 44)
             .contentShape(Rectangle())
-            // M3 — a deliberate HORIZONTAL drag scrubs the value; a tap sets it
+            // A deliberate HORIZONTAL drag scrubs the value; a tap sets it
             // at the touch point. `minimumDistance: 8` + the horizontal lock let
             // a vertical page-scroll that happens to start on the thumb pass
             // through to the ScrollView instead of yanking the slider fully to
@@ -314,7 +329,7 @@ struct MoodRatedFactorRow: View {
                         commit(position: min(max(p, 0), 1))
                     }
             )
-            // M3 — premium detent feel: a subtle selection tick each time the
+            // Premium detent feel: a subtle selection tick each time the
             // discrete rating changes (and the two-state snap), not a continuous
             // buzz. Untouched→nil never fires (trigger only changes on a value).
             .sensoryFeedback(.selection, trigger: rating)
@@ -439,13 +454,8 @@ struct MoodFreeTextTagInput: View {
                     .onSubmit(add)
                     .onChange(of: input) { _, _ in result = nil }
                     .accessibilityIdentifier("mood.tags.free.input")
-                Button(action: add) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.hlIcon(HLIconSize.rowAction))
-                }
-                .buttonStyle(.plain)
-                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel(Text("mood.tags.free.add"))
+                HLIconButton(systemImage: "plus", label: "mood.tags.free.add", size: .inline, action: add)
+                    .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(HLSpace.md)
             .background(HLSurface.tertiary)
@@ -459,19 +469,15 @@ struct MoodFreeTextTagInput: View {
                 Spacer()
                 Text("\(tags.count)/\(MoodFreeTextTagRules.maximumCount)")
             }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
+            .hlText(.footnote)
 
             if !tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: HLSpace.sm) {
-                        ForEach(tags, id: \.self) { tag in
-                            TagChip(label: tag, selected: true) {
-                                tags.removeAll { $0 == tag }
-                            }
+                HLFlowLayout {
+                    ForEach(tags, id: \.self) { tag in
+                        HLChip(verbatim: tag, systemImage: "checkmark", isSelected: true) {
+                            tags.removeAll { $0 == tag }
                         }
                     }
-                    .padding(.vertical, HLSpace.xxs)
                 }
             }
         }

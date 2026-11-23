@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-THRESHOLD-NUDGE — device-local opt-in for the out-of-range nudge.**
+/// **Device-local opt-in for the out-of-range nudge.**
 ///
 /// **Default OFF (opt-in).** The nudge is the app's most regulatory-sensitive
 /// surface, so it never fires unless the user explicitly turns it on in

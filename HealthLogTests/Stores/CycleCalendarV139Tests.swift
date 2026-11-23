@@ -294,16 +294,16 @@ struct CycleCalendarV139Tests {
         #expect(chosen.cycleDay == 4)
     }
 
-    // MARK: - DELETE of an already-deleted cycle
+    // MARK: - DELETE of an already-deleted day log
 
-    @Test("a 204 without a body is a successful delete, also for an already-deleted cycle")
+    @Test("a 204 without a body is a successful delete, also for an already-deleted day log")
     func deleteOfTombstoneIsSuccess() async throws {
         let session = MockURLProtocolSession()
         defer { session.invalidate() }
         let ledger = Ledger()
         session.install { request in
             _ = ledger.record(request)
-            // `cycles/[id]/route.ts` at v1.39.0: `existing.deletedAt !== null`
+            // `day-logs/[id]` at v1.39.0: `existing.deletedAt !== null`
             // → `new Response(null, { status: 204 })`.
             return Self.respond(request, 204, nil)
         }
@@ -311,15 +311,11 @@ struct CycleCalendarV139Tests {
         let api = APIClient(environment: env, keychain: InMemoryKeychain(), sessionConfiguration: session.configuration)
         let repo = try CycleRepository(api: api, outbox: OutboxQueue(inMemory: true))
 
-        try await repo.deleteCycle(id: "cyc-0917")
-        try await repo.deleteCycle(id: "cyc-0917")
-        // `day-logs/[id]` answers the same way; its Outbox replay goes the same path.
-        try await repo.deleteDayLog(id: "dl-0917")
+        // The Outbox replay of a day-log delete; a repeat finds a tombstone.
+        try await repo.replayDeleteDayLog(id: "dl-0917", idempotencyKey: "idem-dl-0917")
         try await repo.replayDeleteDayLog(id: "dl-0917", idempotencyKey: "idem-dl-0917")
 
         #expect(ledger.requests == [
-            "DELETE /api/cycle/cycles/cyc-0917",
-            "DELETE /api/cycle/cycles/cyc-0917",
             "DELETE /api/cycle/day-logs/dl-0917",
             "DELETE /api/cycle/day-logs/dl-0917"
         ])

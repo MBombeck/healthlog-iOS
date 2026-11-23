@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Plan 09-02 — the one-shot, from-file transport
+// MARK: - The one-shot, from-file transport
 
 /// Delegate for the one-shot upload session.
 ///
@@ -78,6 +78,10 @@ public extension APIClient {
     /// See ``APIClientProtocol/uploadFile(_:)``.
     func uploadFile<T: Decodable & Sendable>(_ request: APIFileUploadRequest<T>) async throws -> T {
         let started = ContinuousClock.now
+        // An upload is a write (an avatar, a document): the `/api/auth/me`
+        // snapshot may no longer be the server's state.
+        invalidateAuthMeSnapshot()
+        defer { invalidateAuthMeSnapshot() }
         do {
             let (data, response) = try await executeOneShotFileUpload(request)
             return try recordingFailure(method: request.method, path: request.path, response: response, data: data) {

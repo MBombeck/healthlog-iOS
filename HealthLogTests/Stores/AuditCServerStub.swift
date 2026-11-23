@@ -1,7 +1,7 @@
 import Foundation
 @testable import HealthLog
 
-/// **AUDITC (1.5.0)** — the AUDIT-C half of ``LifeServerStub``, modelled on
+/// **AUDITC** — the AUDIT-C half of ``LifeServerStub``, modelled on
 /// `src/app/api/anamnesis/audit-c/route.ts` of server v1.47.0: a `locale`
 /// other than the offered one is 422, a `takenAt` more than five minutes ahead
 /// is 422, a repeated `externalId` answers 200 with the stored result, and

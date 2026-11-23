@@ -1,6 +1,6 @@
 import Foundation
 
-/// **#115 P2 — the target editor in the account's unit.**
+/// **The target editor in the account's unit.**
 ///
 /// `PUT /api/user/thresholds` and `METRIC_BOUNDS` stay canonical (kg, mg/dL).
 /// The web converts at the editor boundary with `resolveTargetUnitAdapter`

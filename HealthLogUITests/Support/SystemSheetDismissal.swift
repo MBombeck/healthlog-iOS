@@ -1,6 +1,6 @@
 import XCTest
 
-/// **22-02 (D-09-16-D) — the handling contract for a sheet the app does not own.**
+/// **The handling contract for a sheet the app does not own.**
 ///
 /// `09-16-final`'s only non-audit failure was
 /// `AuthJourneyUITest/testPasswordLoginWithHealthKitDeniedReachesShell`:
@@ -80,6 +80,8 @@ enum SystemSheetDismissal {
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> Bool {
+        // The pad presents the same prompt as a centered alert, not a sheet.
+        if dismissPasswordAlertIfPresent(in: app) { return true }
         let sheet = app.sheets.firstMatch
         guard sheet.exists else { return false }
 
@@ -137,7 +139,26 @@ enum SystemSheetDismissal {
         return false
     }
 
-    /// **FLAKES (1.3.0).** Waits for the step a tap was meant to reveal, and
+    /// The password-save prompt as the pad shows it: an `Alert` titled
+    /// "Save Password?" (any app language) with two buttons, the first of which
+    /// declines. Any other alert is left alone, so an unexpected one still
+    /// surfaces as the caller's failure.
+    @MainActor
+    private static func dismissPasswordAlertIfPresent(in app: XCUIApplication) -> Bool {
+        let alert = app.alerts.matching(NSPredicate(
+            format: "label CONTAINS[c] 'password' OR label CONTAINS[c] 'passwort' OR label CONTAINS[c] 'wachtwoord'"
+        )).firstMatch
+        guard alert.exists, alert.buttons.count == 2, !alert.textFields.firstMatch.exists else { return false }
+        let decline = alert.buttons.element(boundBy: 0)
+        guard decline.isHittable else { return false }
+        let label = alert.label
+        decline.tap()
+        guard alert.waitForNonExistence(timeout: 3) else { return false }
+        print("\(logPrefix) label=\(label) attempt=1")
+        return true
+    }
+
+    /// Waits for the step a tap was meant to reveal, and
     /// recovers the one way that tap can be lost without the app being wrong.
     ///
     /// INT-Q's red iteration (`AuthJourneyUITest.swift:94`) is the case the

@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// **W-VORSORGE-DETAIL (b244) — the bottom-to-top detail sheet a Vorsorge card
+/// **The bottom-to-top detail sheet a Vorsorge card
 /// opens on tap.**
 ///
 /// Its anatomy mirrors `MentalHealthInstrumentDetail` 1:1 so the two families
-/// feel identical: a `NavigationStack` + `ScrollView`, the Next/Last block on
+/// feel identical: a sheet scaffold + `ScrollView`, the Next/Last block on
 /// top, the primary action (the SAME `VorsorgeCard.primaryAction` branch as the
 /// card), then the shared ``HistoryLineChart`` of the linked metric's readings
-/// with the recent "date · value" rows below. Presented via
-/// `.hlSheetPresentation(.standard)` → rises bottom-to-top and expands medium →
+/// with the recent "date · value" rows below. Presented at the scaffold's
+/// `.standard` size → rises bottom-to-top and expands medium →
 /// large on swipe, exactly like the mental-health card the operator loves.
 ///
 /// Three arms (``VorsorgeCard/detailArm(for:)``):
@@ -19,7 +19,7 @@ import SwiftUI
 /// - **free-text** — no chart: Next/Last + location (if set) + mark-done.
 struct VorsorgeReminderDetailSheet: View {
     let row: MeasurementReminderRow
-    /// **ROUTE-07 (08-22)** — the shared store, passed **explicitly** rather than
+    /// The shared store, passed **explicitly** rather than
     /// read from the environment. `row` is the snapshot `.sheet(item:)` captured,
     /// and a skip or a snooze replaces it with the server's canonical row, which
     /// only the store has. An `@Environment` lookup would have made the whole
@@ -28,7 +28,7 @@ struct VorsorgeReminderDetailSheet: View {
     let store: MeasurementRemindersStore
     /// Measure-now — closes the sheet and opens the prefilled capture sheet.
     let onMeasure: (MetricKind) -> Void
-    /// #42 — a screening reminder starts the mental-health check-in.
+    /// A screening reminder starts the mental-health check-in.
     let onCheckIn: () -> Void
     /// Free-text / scale-only — mark the reminder done server-side.
     let onMarkDone: () -> Void
@@ -54,9 +54,10 @@ struct VorsorgeReminderDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // The title is the reminder's own label, shown as it is.
+        HLSheetScaffold(verbatim: headerTitle, size: .standard, action: .done()) {
             ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
+                VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     nextLastBlock
                     primaryButton
                     VorsorgeReminderLedgerActions(row: currentRow, store: store)
@@ -65,23 +66,14 @@ struct VorsorgeReminderDetailSheet: View {
                     }
                     VorsorgeReminderLedgerSection(row: currentRow, store: store)
                         // Loads here, not inside the section: the section is
-                        // absent while the ledger is empty (1.4 B2).
+                        // absent while the ledger is empty.
                         .task { await store.loadHistory(id: row.id) }
                 }
-                .padding(HLSpace.lg)
+                .padding(HLLayout.cardInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(HLSurface.primary)
-            .navigationTitle(headerTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
             }
             .task { await onAppear() }
         }
-        .hlSheetPresentation(.standard)
     }
 
     // MARK: - Header / Next-Last
@@ -92,7 +84,7 @@ struct VorsorgeReminderDetailSheet: View {
     }
 
     private var nextLastBlock: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
+        HLFactGroup {
             detailRow(
                 label: String(localized: "vorsorge.card.nextDue"),
                 value: VorsorgeCard.dueDisplayText(nextDueAt: currentRow.nextDueAt)
@@ -101,13 +93,13 @@ struct VorsorgeReminderDetailSheet: View {
                 label: String(localized: "vorsorge.card.lastDone"),
                 value: VorsorgeCard.lastDoneDisplayText(lastSatisfiedAt: currentRow.lastSatisfiedAt)
             )
-            // ROUTE-07 — both are server instants formatted, never computed. The
+            // Both are server instants formatted, never computed. The
             // snooze row appears only while the cursor is still ahead of the
             // clock, which is the comparison the accepted DTO prescribes.
             if let until = currentRow.snoozedUntil, VorsorgeCard.isSnoozed(currentRow) {
                 detailRow(
                     label: String(localized: "vorsorge.card.snoozed"),
-                    value: until.formatted(.dateTime.day().month().year())
+                    value: HLDateFormat.date(until, style: .abbreviated)
                 )
             }
             if currentRow.skipCount > 0 {
@@ -123,16 +115,7 @@ struct VorsorgeReminderDetailSheet: View {
     }
 
     private func detailRow(label: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-            Text(label)
-                .font(.hlSubhead.weight(.medium))
-                .foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(value)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.trailing)
-        }
+        HLFactRow(label: Text(verbatim: label), value: Text(verbatim: value))
     }
 
     // MARK: - Primary action (same branch as the card)
@@ -141,19 +124,19 @@ struct VorsorgeReminderDetailSheet: View {
     private var primaryButton: some View {
         switch primaryAction {
         case let .measure(kind):
-            HLButton(String(localized: "vorsorge.card.measureNow"), icon: "plus", variant: .secondary) {
+            HLButton("vorsorge.card.measureNow", systemImage: "plus", variant: .secondary) {
                 dismiss()
                 onMeasure(kind)
             }
             .accessibilityIdentifier("vorsorge.detail.measureNow")
         case .checkIn:
-            HLButton(String(localized: "vorsorge.card.checkIn"), icon: "brain.head.profile", variant: .secondary) {
+            HLButton("vorsorge.card.checkIn", systemImage: "brain.head.profile", variant: .secondary) {
                 dismiss()
                 onCheckIn()
             }
             .accessibilityIdentifier("vorsorge.detail.checkIn")
         case .markDone:
-            HLButton(String(localized: "vorsorge.card.markDone"), icon: "checkmark", variant: .secondary) {
+            HLButton("vorsorge.card.markDone", systemImage: "checkmark", variant: .secondary) {
                 onMarkDone()
                 dismiss()
             }
@@ -177,7 +160,7 @@ struct VorsorgeReminderDetailSheet: View {
 
     // MARK: - Metric arm
 
-    /// 1.4 B2 — under two readings there is no chart and no "history appears
+    /// Under two readings there is no chart and no "history appears
     /// later" block with a retry; a single reading still shows in the list.
     @ViewBuilder
     private func metricBody(model: VorsorgeDetailModel) -> some View {
@@ -205,18 +188,12 @@ struct VorsorgeReminderDetailSheet: View {
         screeningReferenceRow
     }
 
+    /// The way to the check-in is a row of this reminder, not a menu entry:
+    /// the whole row is the button, without a chevron.
     private var screeningReferenceRow: some View {
-        Button(action: onCheckIn) {
-            HStack(spacing: HLSpace.md) {
-                Text("vorsorge.detail.screening.reference")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                Spacer(minLength: HLSpace.sm)
-                HLDisclosureChevron()
-            }
-            .contentShape(Rectangle())
+        HLRowButton(action: onCheckIn) {
+            HLRow("vorsorge.detail.screening.reference")
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("vorsorge.detail.screening.reference")
     }
 
@@ -237,7 +214,7 @@ struct VorsorgeReminderDetailSheet: View {
 
     // MARK: - Free-text arm
 
-    /// 1.4 B2 — the location when there is one; a free-text reminder needs no
+    /// The location when there is one; a free-text reminder needs no
     /// line saying it has no linked measurement.
     @ViewBuilder
     private var freeTextBody: some View {
@@ -249,7 +226,7 @@ struct VorsorgeReminderDetailSheet: View {
     // MARK: - Chart
 
     private func chart(model: VorsorgeDetailModel, bandByID: [String: String]) -> some View {
-        // #115 P2 — a metric arm plots in the account's unit (the axis shows
+        // A metric arm plots in the account's unit (the axis shows
         // the numbers). The annotation still formats the CANONICAL point,
         // looked up by id, because `chartValueText` converts it itself.
         let canonicalByID = Dictionary(model.points.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -299,22 +276,12 @@ struct VorsorgeReminderDetailSheet: View {
     @ViewBuilder
     private func recentReadings(model: VorsorgeDetailModel) -> some View {
         if !model.metricMeasurements.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("vorsorge.detail.recent")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
+            HLCard("vorsorge.detail.recent", layout: .rows) {
                 ForEach(model.metricMeasurements.prefix(7).map { $0 }) { measurement in
-                    HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                        Text(HLDateFormat.date(measurement.recordedAt, style: .abbreviated))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                        Spacer(minLength: HLSpace.sm)
-                        Text(MetricValueFormatter.formattedValue(measurement, units: units))
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
-                            .monospacedDigit()
-                    }
-                    Divider()
+                    HLHistoryRow(
+                        date: Text(verbatim: HLDateFormat.date(measurement.recordedAt, style: .abbreviated)),
+                        value: Text(verbatim: MetricValueFormatter.formattedValue(measurement, units: units))
+                    )
                 }
             }
         }
@@ -348,7 +315,7 @@ struct VorsorgeReminderDetailSheet: View {
 ///
 /// The three ways a ledger can be absent stay three different states: not
 /// asked yet (a spinner), honestly empty and not offered for this reminder at
-/// all. 1.4 B2: the last two show no section rather than a sentence each.
+/// all. The last two show no section rather than a sentence each.
 private struct VorsorgeReminderLedgerSection: View {
     let row: MeasurementReminderRow
     let store: MeasurementRemindersStore
@@ -357,7 +324,7 @@ private struct VorsorgeReminderLedgerSection: View {
         VorsorgeCard.ledgerState(store.ledger(for: row.id))
     }
 
-    /// 1.4 B2 — an empty ledger and one not offered for this reminder show no
+    /// An empty ledger and one not offered for this reminder show no
     /// section: no heading over a sentence about app versions. The host starts
     /// the load (`.task` at the call site), because an absent section cannot.
     var body: some View {
@@ -365,13 +332,9 @@ private struct VorsorgeReminderLedgerSection: View {
         case .empty, .unsupported:
             EmptyView()
         default:
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Text("vorsorge.history.title")
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
+            HLCard("vorsorge.history.title") {
                 content
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("vorsorge.detail.history")
         }
     }
@@ -396,65 +359,51 @@ private struct VorsorgeReminderLedgerSection: View {
     }
 
     private func entryList(_ entries: [VorsorgeCard.LedgerEntry]) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(entries) { entry in
                 entryRow(entry)
-                Divider()
             }
         }
     }
 
-    /// One ledger row. Kind and date on the first line, provenance and the
-    /// server-derived punctuality below. An unrecognised `kind`/`source` renders
-    /// its neutral label **and** the raw token the server sent, because a
-    /// silently dropped row is a hole in a history nobody can otherwise see.
+    /// One ledger row: the kind with its date at the right, provenance and
+    /// the server-derived punctuality in one line under it. An unrecognised
+    /// `kind`/`source` renders its neutral label **and** the raw token the
+    /// server sent, because a silently dropped row is a hole in a history
+    /// nobody can otherwise see.
     private func entryRow(_ entry: VorsorgeCard.LedgerEntry) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Text(LocalizedStringKey(entry.kindKey))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
-                Spacer(minLength: HLSpace.sm)
-                Text(HLDateFormat.date(entry.occurredAt, style: .abbreviated))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                    .monospacedDigit()
-            }
-            HStack(spacing: HLSpace.xs) {
-                Text(LocalizedStringKey(entry.sourceKey))
-                Text(LocalizedStringKey(entry.punctualityKey))
-                if let raw = entry.unknownWireValue {
-                    Text(verbatim: raw)
-                }
-            }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        var row = HLRow(
+            title: Text(LocalizedStringKey(entry.kindKey)),
+            detail: HLRowDetail.text([
+                NSLocalizedString(entry.sourceKey, comment: "Vorsorge ledger entry source"),
+                NSLocalizedString(entry.punctualityKey, comment: "Vorsorge ledger entry punctuality"),
+                entry.unknownWireValue
+            ]),
+            value: Text(verbatim: HLDateFormat.date(entry.occurredAt, style: .abbreviated))
+        )
+        row.valueEmphasis = .setting
+        return row
+            .accessibilityElement(children: .combine)
     }
 
+    /// The page's one way to the next entries: the link under the list, the
+    /// small progress in its place while they load.
     private var loadMoreButton: some View {
-        HLButton(String(localized: "vorsorge.history.loadMore"), variant: .secondary) {
+        HLLoadMoreRow(hasMore: true, isLoading: store.ledger(for: row.id).isLoading) {
             Task { await store.loadHistory(id: row.id) }
         }
-        .disabled(store.ledger(for: row.id).isLoading)
-        .accessibilityIdentifier("vorsorge.detail.history.loadMore")
     }
 
     private func retryButton(hasMore: Bool) -> some View {
-        HLButton(String(localized: "vorsorge.history.retry"), variant: .secondary) {
+        HLButton("vorsorge.history.retry", variant: .secondary) {
             Task { await store.loadHistory(id: row.id, reset: !hasMore) }
         }
         .disabled(store.ledger(for: row.id).isLoading)
         .accessibilityIdentifier("vorsorge.detail.history.retry")
     }
 
-    /// 1.4 B2 — plain caption, no decorative info glyph.
+    /// Plain caption, no decorative info glyph.
     private func note(_ key: LocalizedStringKey) -> some View {
-        Text(key)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HLEmptyNote(key)
     }
 }

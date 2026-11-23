@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **LIFE (1.5.0, #132, Server #614)** — state of the "Life circumstances"
+/// State of the "Life circumstances"
 /// screen.
 ///
 /// Built per screen in its `.task` and gone with it, like
@@ -39,7 +39,7 @@ public final class LifeCircumstancesStore {
     public private(set) var sectionErrors: [LifeSectionKey: String] = [:]
     /// One sentence about the page as a whole (the AI switch conflict).
     public private(set) var notice: String?
-    /// POLISH-C (C7) — the one-word alcohol answer from before AUDIT-C, when
+    /// The one-word alcohol answer from before AUDIT-C, when
     /// the record still holds one this build can name. Read only from a
     /// server that has AUDIT-C (``LifeCircumstancesStore/loadLegacyAlcohol()``).
     public internal(set) var legacyAlcohol: AnamnesisFactRevision?

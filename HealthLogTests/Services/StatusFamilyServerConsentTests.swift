@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B7 — the status family's client consent gate is coupled to the `ai` block.**
+/// **The status family's client consent gate is coupled to the `ai` block.**
 ///
 /// Server v1.39 resolves consent for the per-metric status notes itself: the
 /// `statusText` capability reads `consent_required` and the route answers

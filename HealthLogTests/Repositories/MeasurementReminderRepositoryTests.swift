@@ -233,7 +233,7 @@ extension MeasurementReminderRepositoryTests {
         let idempotencyKey: String?
     }
 
-    /// Endpoint-scoped call log (CU-07): only reminder requests are recorded, so
+    /// Endpoint-scoped call log: only reminder requests are recorded, so
     /// a suite running in parallel cannot add a row to this one's assertions.
     private final class WireLog: @unchecked Sendable {
         private let lock = NSLock()

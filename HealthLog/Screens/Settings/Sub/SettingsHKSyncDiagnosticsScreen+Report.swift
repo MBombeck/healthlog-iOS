@@ -3,14 +3,14 @@ import SwiftUI
     import UIKit
 #endif
 
-// W5 (1.3.0, #126 1.4) — "Bericht kopieren": the screen's story as plain
+// "Bericht kopieren": the screen's story as plain
 // text on the clipboard (``SyncDiagnosticsReport``), a precursor to the
 // support info of #134. Copying is the whole effect: nothing is sent.
 
 extension SettingsHKSyncDiagnosticsScreen {
     var reportCard: some View {
-        // 1.4 B4 — one row, one heading: "Bericht kopieren" names it.
-        HLSettingsCard(footer: "settings.hkdiag.report.footer") {
+        // One row, one heading: "Bericht kopieren" names it.
+        HLCard(footer: "settings.hkdiag.report.footer") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 HLSettingsActionRow(
                     icon: "doc.on.doc",
@@ -22,8 +22,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                 .accessibilityIdentifier("settings.hkdiag.copyReport")
                 if reportCopied {
                     Text("settings.hkdiag.report.copied")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -39,7 +38,7 @@ extension SettingsHKSyncDiagnosticsScreen {
                 build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
             ),
             osVersion: Self.osVersion,
-            serverVersion: UserDefaults.standard.string(forKey: KnownServerVersion.defaultsKey),
+            serverVersion: serverVersion ?? UserDefaults.standard.string(forKey: KnownServerVersion.defaultsKey),
             server: serverSummary,
             serverLoadFailed: serverLoadFailed,
             heldGroups: heldGroups,
@@ -52,6 +51,26 @@ extension SettingsHKSyncDiagnosticsScreen {
             hourly: hourlyStatus(),
             hrBuckets: hrBucketSnapshot
         )
+    }
+
+    /// The report names the server as it is now, not as the last throttled
+    /// foreground saw it: a server update would otherwise read as missing.
+    func loadServerVersion() async {
+        guard let api = container?.api else { return }
+        serverVersion = await Self.refreshedServerVersion { try await api.fetchServerVersion() }
+    }
+
+    /// Asks `GET /api/version` and records the answer for every gate that
+    /// reads it; offline, the last recorded version stays and is returned.
+    static func refreshedServerVersion(
+        defaults: UserDefaults = .standard,
+        fetch: () async throws -> ServerVersionInfo
+    ) async -> String? {
+        if let info = try? await fetch() {
+            HealthKitServerTypeGate.record(info, defaults: defaults)
+            return info.version
+        }
+        return defaults.string(forKey: KnownServerVersion.defaultsKey)
     }
 
     private func copyReport() {

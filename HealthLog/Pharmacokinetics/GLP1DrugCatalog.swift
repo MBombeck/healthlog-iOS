@@ -237,7 +237,7 @@ public enum GLP1DrugCatalog {
 // pin a value to its EMA EPAR section without hopping to the TS source.
 
 private extension GLP1DrugCatalog {
-    /// §1.1 — Tirzepatide. EMA EPAR cross-validated against Schneck & Urva
+    /// Tirzepatide. EMA EPAR cross-validated against Schneck & Urva
     /// 2024 (psp4.13099). Two-compartment per the journal-of-record, but the
     /// PK module renders the one-compartment closed form (MDR boundary).
     static let tirzepatide = DrugRecord(
@@ -306,7 +306,7 @@ private extension GLP1DrugCatalog {
         sourceJournal: nil
     )
 
-    /// §1.4 — Liraglutide (Saxenda weight-mgmt, Victoza T2DM). Daily SC.
+    /// Liraglutide (Saxenda weight-mgmt, Victoza T2DM). Daily SC.
     static let liraglutide = DrugRecord(
         id: .liraglutide,
         inn: "Liraglutide",
@@ -336,7 +336,7 @@ private extension GLP1DrugCatalog {
         sourceJournal: nil
     )
 
-    /// §1.5 — Dulaglutide (Trulicity). Weekly SC, half-life ~5 d.
+    /// Dulaglutide (Trulicity). Weekly SC, half-life ~5 d.
     static let dulaglutide = DrugRecord(
         id: .dulaglutide,
         inn: "Dulaglutide",

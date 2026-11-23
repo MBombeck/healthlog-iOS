@@ -3,7 +3,7 @@ import Foundation
     import WidgetKit
 #endif
 
-/// **v0.8.4 WWIDGET-2 — writes the medication widget snapshot + kicks the
+/// **Writes the medication widget snapshot + kicks the
 /// widget timeline reload.**
 ///
 /// App-only (the extension never writes). Pulls the current medication +
@@ -21,12 +21,12 @@ import Foundation
 /// never break a medication mark.
 @MainActor
 public struct WidgetSnapshotWriter {
-    /// **Phase 09 Wave 0** — the timeline-reload seam. `WidgetCenter` is
+    /// The timeline-reload seam. `WidgetCenter` is
     /// invisible to a unit test, which is why "an unchanged value must not burn
     /// a reload" has never been assertable; Plan 09-03 needs exactly that. The
     /// live default is WidgetKit, so production behaviour is unchanged.
     private let reloader: WidgetTimelineReloader
-    /// **Phase 09 / plan 09-03** — the one shared admission + sequencing facade.
+    /// The one shared admission + sequencing facade.
     ///
     /// This type is a `struct` on purpose (a source guard from 09-01 pins that,
     /// and every call site copies it into a store callback), so the state that
@@ -36,7 +36,7 @@ public struct WidgetSnapshotWriter {
     /// same sequencer; there is exactly one queue per writer, never one per
     /// callback.
     private let sequencer: WidgetWriteSequencer
-    /// The one app-side read/modify/encode/write boundary (09-03). Shared with
+    /// The one app-side read/modify/encode/write boundary. Shared with
     /// ``sequencer`` by construction — one boundary per writer.
     private let persistence: WidgetSnapshotPersistence
 
@@ -71,24 +71,25 @@ public struct WidgetSnapshotWriter {
         timeZone: TimeZone = .current,
         now: Date = .now
     ) {
-        // **09-03 — the value is snapshotted here, the file is touched there.**
+        // **The value is snapshotted here, the file is touched there.**
         // The pure map runs at the callback, where the (small: < 20 meds,
         // < 10 intakes) arrays already are, and where `HLTimeFormat.current()`
         // legitimately reads the app's own `.standard` mirror. `recentMood` is a
         // pass-through in `make`, so leaving it `nil` here and filling it from
         // the on-disk snapshot inside the boundary is the same value — read
         // against the snapshot the write will actually land on top of.
+        let calendar = MedicationLiveActivityPlan.calendar(in: timeZone)
         let mapped = WidgetSnapshot.make(
             medications: medications,
             derivedIntakes: derivedIntakes,
             serverCompliancePercent: serverCompliancePercent,
-            // W-B183 — the app's resolved time-format, so the widget renders
+            // The app's resolved time-format, so the widget renders
             // dose times with the same clock (the widget process can't see it).
             timeFormatRaw: HLTimeFormat.current().rawValue,
             now: now,
-            // 1.4 B4 — the account zone, so the widget names the dose the Live
+            // The account zone, so the widget names the dose the Live
             // Activity and the medication card name.
-            calendar: MedicationLiveActivityPlan.calendar(in: timeZone)
+            calendar: calendar
         )
         enqueueWrite(failureNote: "widget-snapshot write failed") { current in
             // v0.15 companion-#3 — the med path owns dose + compliance and
@@ -99,10 +100,11 @@ public struct WidgetSnapshotWriter {
                 recentMood: current?.recentMood,
                 healthScore: current?.healthScore,
                 latestMeasurement: current?.latestMeasurement,
+                metricGlances: current?.metricGlances ?? [],
                 timeFormatRaw: mapped.timeFormatRaw,
                 generatedAt: mapped.generatedAt
             )
-            // v0.12 W8-7 — diff before reload. `onIntakesDidChange` fires on
+            // Diff before reload. `onIntakesDidChange` fires on
             // every store load (incl. idempotent revalidations that return
             // identical data); `generatedAt` always differs, so only the
             // widget-bearing fields are compared. Byte-identical → skip the
@@ -110,7 +112,13 @@ public struct WidgetSnapshotWriter {
             // per-day reload budget nor extension wake energy.
             let doseChanged = current?.nextDose != snapshot.nextDose
             let complianceChanged = current?.compliance != snapshot.compliance
-            guard current == nil || doseChanged || complianceChanged else { return .skip }
+            // Unchanged content still moves the stamp once it ages: the widgets
+            // read `generatedAt` as "the app looked", and an old stamp on a quiet
+            // day would turn into "open the app" although the app just ran.
+            let stampAging = current.map {
+                WidgetTimelinePolicy.needsFreshStamp(previous: $0.generatedAt, now: snapshot.generatedAt, calendar: calendar)
+            } ?? false
+            guard current == nil || doseChanged || complianceChanged || stampAging else { return .skip }
             // First write (current == nil) reloads both kinds; otherwise only
             // the timeline whose data actually moved.
             guard current != nil else {
@@ -119,18 +127,20 @@ public struct WidgetSnapshotWriter {
             var kinds: [String] = []
             if doseChanged { kinds.append(WidgetKind.nextDose) }
             if complianceChanged { kinds.append(WidgetKind.compliance) }
+            // Only the stamp moved: both timelines re-judge their staleness.
+            if kinds.isEmpty { kinds = [WidgetKind.nextDose, WidgetKind.compliance] }
             return .write(snapshot, reloadKinds: kinds)
         }
     }
 
-    /// **v0.10.0 W-Mood-B** — update only the mood glance, preserving the
+    /// Update only the mood glance, preserving the
     /// medication fields the med refresh path owns. Called when the mood
     /// store's entries change (see `AppContainer+Widgets`). Re-reads the
     /// current snapshot so a concurrent med write isn't clobbered.
     public func refreshMood(recentMood: WidgetSnapshot.RecentMood?, now: Date = .now) {
         enqueueWrite(failureNote: "widget-snapshot mood write failed") { snapshot in
             let current = snapshot ?? .placeholder
-            // v0.12 W8-7 — skip the mood-timeline reload when the glance is
+            // Skip the mood-timeline reload when the glance is
             // unchanged (the mood store fires `onEntriesDidChange` on every load).
             guard current.recentMood != recentMood else { return .skip }
             return .write(
@@ -142,6 +152,7 @@ public struct WidgetSnapshotWriter {
                     // glances (owned by their own paths) on a mood-only write.
                     healthScore: current.healthScore,
                     latestMeasurement: current.latestMeasurement,
+                    metricGlances: current.metricGlances,
                     // Preserve the med-refresh-owned time-format so a mood-only
                     // write doesn't reset the widget's clock to AUTO.
                     timeFormatRaw: current.timeFormatRaw,
@@ -160,7 +171,11 @@ public struct WidgetSnapshotWriter {
     public func refreshHealthScore(_ glance: WidgetSnapshot.HealthScoreGlance?, now: Date = .now) {
         enqueueWrite(failureNote: "widget-snapshot score write failed") { snapshot in
             let current = snapshot ?? .placeholder
-            guard current.healthScore != glance else { return .skip }
+            switch (current.healthScore, glance) {
+            case (nil, nil): return .skip
+            case let (old?, new?) where old.hasSameContent(as: new): return .skip
+            default: break
+            }
             return .write(
                 WidgetSnapshot(
                     nextDose: current.nextDose,
@@ -168,6 +183,7 @@ public struct WidgetSnapshotWriter {
                     recentMood: current.recentMood,
                     healthScore: glance,
                     latestMeasurement: current.latestMeasurement,
+                    metricGlances: current.metricGlances,
                     timeFormatRaw: current.timeFormatRaw,
                     generatedAt: now
                 ),
@@ -180,10 +196,23 @@ public struct WidgetSnapshotWriter {
     /// preserving the other fields. Called when the measurements list loads /
     /// changes (see `AppContainer+Widgets`). Diff-skips a no-op and reloads only
     /// the latest-measurement timeline.
-    public func refreshLatestMeasurement(_ latest: WidgetSnapshot.LatestMeasurement?, now: Date = .now) {
+    public func refreshLatestMeasurement(
+        _ latest: WidgetSnapshot.LatestMeasurement?,
+        glances: [WidgetSnapshot.MetricGlance]? = nil,
+        pageMayBeTruncated: Bool = false,
+        discardingKinds: Set<String> = [],
+        now: Date = .now
+    ) {
         enqueueWrite(failureNote: "widget-snapshot measurement write failed") { snapshot in
             let current = snapshot ?? .placeholder
-            guard current.latestMeasurement != latest else { return .skip }
+            // `nil` glances leave the choosable readings as they were.
+            let glances = glances.map {
+                WidgetSnapshot.MetricGlance.merged(
+                    stored: current.metricGlances, fresh: $0, pageMayBeTruncated: pageMayBeTruncated,
+                    discarding: discardingKinds
+                )
+            } ?? current.metricGlances
+            guard current.latestMeasurement != latest || current.metricGlances != glances else { return .skip }
             return .write(
                 WidgetSnapshot(
                     nextDose: current.nextDose,
@@ -191,6 +220,7 @@ public struct WidgetSnapshotWriter {
                     recentMood: current.recentMood,
                     healthScore: current.healthScore,
                     latestMeasurement: latest,
+                    metricGlances: glances,
                     timeFormatRaw: current.timeFormatRaw,
                     generatedAt: now
                 ),
@@ -220,7 +250,7 @@ public struct WidgetSnapshotWriter {
     /// empty still happens. `reloadAllTimelines()` (not the per-kind list) so a
     /// future widget kind can never be silently skipped by this reset.
     ///
-    /// **09-03 — the account boundary.** `reset()` closes admission and adopts
+    /// **The account boundary.** `reset()` closes admission and adopts
     /// the next account epoch *before* it awaits everything already queued, so
     /// an update that was enqueued by the signed-out account cannot land after
     /// the placeholder: it is either drained before the placeholder is written,
@@ -294,7 +324,7 @@ public struct WidgetSnapshotWriter {
     }
 }
 
-/// **Phase 09 Wave 0 — the WidgetKit reload seam.**
+/// **The WidgetKit reload seam.**
 ///
 /// `WidgetCenter.shared` reaches straight into the system from inside a
 /// `@MainActor` struct, so from a test there is no way to tell a reload that

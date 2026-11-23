@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **K1 — a row of equal tile actions that stacks when a label would break.**
+/// **A row of equal tile actions that stacks when a label would break.**
 ///
 /// The medication card and its Vorsorge twin put two `HLTileActionButton`s side
 /// by side at equal widths. H2 photographed what that does when the equal share

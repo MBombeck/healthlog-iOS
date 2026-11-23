@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v1.39.1 (#1033) — a medication kept as a record plans nothing.**
+/// **v1.39.1 — a medication kept as a record plans nothing.**
 ///
 /// Server v1.39.1 adds `trackIntake` (default true). With it off the medication
 /// keeps its dose, dates and schedule as information, but nothing is ever due:
@@ -120,10 +120,10 @@ struct MedicationTrackIntakeV1391Tests {
         // Defence in depth: give the record a live schedule the server never sends.
         let withSchedule = rec.replacingSchedule(rec.displaySchedule)
         #expect(!CriticalMedAlarmRouting.isAlarmEligible(
-            medication: withSchedule, alarmEnabled: { _ in true }, authorized: true, osAvailable: true
+            medication: withSchedule, alarmEnabled: { _ in true }, authorized: true
         ))
         #expect(try CriticalMedAlarmRouting.isAlarmEligible(
-            medication: Self.tracked(), alarmEnabled: { _ in true }, authorized: true, osAvailable: true
+            medication: Self.tracked(), alarmEnabled: { _ in true }, authorized: true
         ))
     }
 
@@ -193,7 +193,7 @@ struct MedicationTrackIntakeV1391Tests {
             medication: Self.recordOnly(), lastTakenAt: nil, scheduleSummary: "21:00",
             windowStatus: nil, nextDose: nil, now: .now
         )
-        // 1.4 B2: the "Nur dokumentiert" badge carries it; no line repeats it.
+        // The "Nur dokumentiert" badge carries it; no line repeats it.
         #expect(strip.next == nil)
     }
 
@@ -218,7 +218,7 @@ struct MedicationTrackIntakeV1391Tests {
 }
 
 #if canImport(SpeziScheduler) && canImport(UserNotifications)
-    /// **The update path (#1033):** reminders armed while the medication was
+    /// **The update path:** reminders armed while the medication was
     /// tracked are REMOVED on the next reconcile once the server reports it as a
     /// record. `reconcile` deletes every stored `med-` task its desired set does
     /// not name; these tests pin both halves without a live `Scheduler`.

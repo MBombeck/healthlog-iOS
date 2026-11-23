@@ -2,17 +2,18 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// audit-v0162 L10N-3 — regression lock for the user-facing count keys that
+/// Regression lock for the user-facing count keys that
 /// were converted from a flat `%lld` form to a proper `variations.plural`
 /// (one/other) block so German + English read grammatically at count 1
 /// ("1 Eintrag", not "1 Einträge"; "1 entry", not "1 entries").
 ///
 /// Two invariants:
-///  1. The curated set of count keys keeps a well-formed one/other plural in
+///  1. The curated set of count keys keeps a well-formed CLDR plural in
 ///     every `required` language (CatalogLanguages) — so a future xcstrings reflow cannot silently
-///     re-flatten them back to the count-1-wrong form.
+///     re-flatten languages with a singular back to the count-1-wrong form.
+///     Languages with only `other` may use a non-empty flat value instead.
 ///  2. Any key in the catalog that carries a plural variation is well-formed
-///     (non-empty `one` AND `other` in every localization it declares).
+///     (non-empty `other`, plus `one` where CLDR requires it).
 ///
 /// Parses the source `Localizable.xcstrings` JSON directly (via `#filePath`
 /// anchoring), same strategy as `EmptyTranslationGuardTests`, because the
@@ -20,13 +21,18 @@ import Testing
 /// malformed block.
 @Suite("xcstrings plural-variation guard — L10N-3 count keys")
 struct PluralVariationGuardTests {
+    /// Mirrors CLDR_PLURALS in scripts/l10n/check-catalog-format.py for shipped languages.
+    private static let pluralCategories: [String: Set<String>] = [
+        "de": ["one", "other"], "en": ["one", "other"],
+        "nl": ["one", "other"], "ko": ["other"], "es": ["one", "many", "other"]
+    ]
+
     /// Keys that MUST carry a one/other plural in DE + EN. Superset of the
     /// v0162 additions plus the pre-existing count plurals we depend on.
     static let requiredPluralKeys: [String] = [
         "%lld entries",
         "%lld entries in the period",
         // 1.4 B4 removed "briefing.entries %lld" with StatistikModeBriefingService.
-        "Show all measurements, %lld entries",
         "%lld measurements this minute",
         "%lld values",
         "%lld heart rate values",
@@ -35,18 +41,15 @@ struct PluralVariationGuardTests {
         "Streak: %lld days",
         "Based on %lld days",
         "Last measurement %lld days ago",
-        "cycle.stats.daysFormat",
         "med.lowstock.threshold.value",
         "med.inventory.runway",
-        "illness.insights.sickCount",
         // Pre-existing (do not regress)
         "insights.workoutsCount %lld",
-        "insights.medicationsCount %lld",
         "med.schedule.cadence.rolling.preview %lld",
         "workout.hrZones.a11y.summary %lld"
     ]
 
-    @Test("Required count keys carry a well-formed one/other plural in every required language")
+    @Test("Required count keys respect each required language's CLDR plural categories")
     func requiredKeysArePluralized() throws {
         let catalog = try Self.loadCatalog()
         var problems: [String] = []
@@ -55,14 +58,17 @@ struct PluralVariationGuardTests {
                 problems.append("\(key): missing from catalog")
                 continue
             }
-            // 1.5 L10N-CORE: every `AppLanguage` the language list marks
-            // `required` (de, en today; nl once L10N-FINAL flips it).
             for lang in CatalogLanguages.required {
+                let categories = try #require(Self.pluralCategories[lang], "Missing CLDR plural categories for \(lang)")
                 guard let plural = Self.plural(entry: entry, language: lang) else {
-                    problems.append("\(key)/\(lang): no plural variation")
+                    if categories.contains("one") {
+                        problems.append("\(key)/\(lang): no plural variation")
+                    } else if entry.localizations?[lang]?.stringUnit?.value?.isEmpty ?? true {
+                        problems.append("\(key)/\(lang): empty flat value")
+                    }
                     continue
                 }
-                if plural.one?.isEmpty ?? true { problems.append("\(key)/\(lang): empty `one`") }
+                if categories.contains("one"), plural.one?.isEmpty ?? true { problems.append("\(key)/\(lang): empty `one`") }
                 if plural.other?.isEmpty ?? true { problems.append("\(key)/\(lang): empty `other`") }
             }
         }
@@ -82,7 +88,7 @@ struct PluralVariationGuardTests {
         #expect(same.isEmpty, "English one/other should differ:\n\(same.joined(separator: "\n"))")
     }
 
-    @Test("Every plural block in the catalog is well-formed (one + other non-empty)")
+    @Test("Every plural block in the catalog has non-empty required CLDR categories")
     func allPluralBlocksWellFormed() throws {
         let catalog = try Self.loadCatalog()
         var malformed: [String] = []
@@ -90,7 +96,8 @@ struct PluralVariationGuardTests {
             guard let locs = entry.localizations else { continue }
             for (lang, loc) in locs {
                 guard let plural = loc.variations?.plural else { continue }
-                if plural.one?.value?.isEmpty ?? true { malformed.append("\(key)/\(lang): empty `one`") }
+                let categories = try #require(Self.pluralCategories[lang], "Missing CLDR plural categories for \(lang)")
+                if categories.contains("one"), plural.one?.value?.isEmpty ?? true { malformed.append("\(key)/\(lang): empty `one`") }
                 if plural.other?.value?.isEmpty ?? true { malformed.append("\(key)/\(lang): empty `other`") }
             }
         }
@@ -108,6 +115,7 @@ struct PluralVariationGuardTests {
     }
 
     private struct Localization: Decodable {
+        let stringUnit: StringUnit?
         let variations: Variations?
     }
 

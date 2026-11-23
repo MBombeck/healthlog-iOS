@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Audit v0162 H-5 — locks the **entry-path** inverse-unit conversion contract.
+/// Locks the **entry-path** inverse-unit conversion contract.
 ///
 /// The DISPLAY path (`UnitPreferences.convert*`, routed via `MetricKind.unitFamily`)
 /// turns canonical SI values into the user's preferred unit. Before this fix the

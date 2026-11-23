@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Build 273 (A9) — a revalidation that was in flight when an optimistic
+/// A revalidation that was in flight when an optimistic
 /// write-through landed must not persist its (older) payload over the written
 /// one. Only the session epoch guarded the disk write; per key nothing moved.
 /// Scenario: foreground GET in flight → "Taken" POST lands and writes through →

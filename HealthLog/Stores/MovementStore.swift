@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **1.5 MOVE (#133)** — the state behind ``EnvironmentMovementSection``,
+/// The state behind ``EnvironmentMovementSection``,
 /// "Unterwegs" on the environment screen.
 ///
 /// Owned by the section, so it lives as long as the open screen and never

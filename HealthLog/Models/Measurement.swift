@@ -4,29 +4,11 @@ import Foundation
 /// `src/app/api/dashboard/summary/route.ts:25-35` +
 /// `src/app/api/measurements/series/route.ts:20-31`.
 ///
-/// **v0.4.0 alignment (A4-Audit row 5 + row 20):**
-/// - Added `.sleep` / `.steps` cases — server emits tiles for these as
-///   soon as the user has SLEEP_DURATION / ACTIVITY_STEPS data. Before
-///   this, decoding the dashboard summary threw `dataCorrupted` on
-///   unknown enum case and the whole dashboard fell back to skeleton.
-/// - Renamed raw values of `.spo2` → `"oxygenSaturation"` and
-///   `.bodyWater` → `"totalBodyWater"` to match the server kindEnum.
-/// - `.bodyTemperature` stays for HK readbacks (server doesn't have it
-///   in its series-kind enum — we never query the series endpoint with
-///   it, only use it as a display label for HK-write-through samples).
-///
-/// **v0.5.2 HK-completeness (F2):** added seven HK-backed kinds so the
-/// dashboard surfaces every meaningful sample Apple Health emits today:
-/// `restingHeartRate`, `hrv` (SDNN), `vo2Max` are server-backed (Prisma
-/// enum has `RESTING_HEART_RATE` / `HEART_RATE_VARIABILITY` / `VO2_MAX`
-/// since v1.4.30); `walkingSpeed`, `walkingAsymmetry`, `walkingStepLength`,
-/// `bmi` are iOS-local for now — they read off HK directly and post into
-/// the per-sample batch path with an HK identifier the server may not yet
-/// recognise (server returns `skipped`, anchor still advances). When the
-/// server's `MeasurementType`-enum picks these up, the `/api/measurements/
-/// series`-endpoint route enables for them too; until then `kindSupportsSeries`
-/// stays false for the four iOS-local kinds and the tile renders HK-cached
-/// sparkline only.
+/// Raw values match the server kind enum (`.spo2` is `"oxygenSaturation"`,
+/// `.bodyWater` is `"totalBodyWater"`). Every kind the server emits needs a
+/// case: an unknown one would make the dashboard summary fail to decode.
+/// `.bodyTemperature` is a display label for HK write-through samples; the
+/// server has no series kind for it, so the series endpoint is never asked.
 public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     case weight
     case bloodPressure
@@ -51,7 +33,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     case hrv = "heartRateVariability"
     /// Cardio fitness — VO₂ max (mL/(kg·min)). Server enum `VO2_MAX`.
     case vo2Max
-    /// Walking speed (m/s). **Server-persisted since v1.6.0** (W-WALK) —
+    /// Walking speed (m/s). **Server-persisted since v1.6.0** —
     /// Prisma `WALKING_SPEED`, mapped from `HKQuantityTypeIdentifierWalking-
     /// Speed`. Collected via the HK observer + uploaded over the
     /// `hkIdentifier` batch path; the `/api/measurements` list decodes the
@@ -61,7 +43,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     case walkingSpeed
     /// Walking asymmetry percentage (%). **Server-persisted since v1.5.5.**
     case walkingAsymmetry = "walkingAsymmetryPercentage"
-    /// Average step length (m). **Server-persisted since v1.6.0** (W-WALK) —
+    /// Average step length (m). **Server-persisted since v1.6.0** —
     /// Prisma `WALKING_STEP_LENGTH`, mapped from `HKQuantityTypeIdentifier-
     /// WalkingStepLength`. Same list/HK-cache surface semantics as
     /// `walkingSpeed`.
@@ -140,7 +122,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// `activeEnergy`.
     case timeInDaylight
 
-    // MARK: - v0.11 W21 — web-parity body-composition + cardio additions
+    // MARK: - Web-parity body-composition + cardio additions
 
     //
     // The web app fully supports these eight kinds (dedicated insights
@@ -203,7 +185,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// identifier; not collected via the HK registry (read/display-only).
     case fatMass
 
-    // MARK: - v0.13.1 IC — v1.10.0 web-parity additive HealthKit signals
+    // MARK: - v1.10.0 web-parity additive HealthKit signals
 
     //
     // The web app gained dedicated Insights sub-pages for these seven signals
@@ -256,7 +238,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// `SLEEP_DISTURBANCE_COUNT` (v1.12.8). Joins the sleep cluster.
     case sleepDisturbanceCount
 
-    // MARK: - v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23)
+    // MARK: - v1.17.1 source-fixed render-only signals
 
     //
     // Four new server-stored `MeasurementType`s landed LIVE in v1.17.1
@@ -289,7 +271,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// bucket would corrupt analytics and mislead clinically). Read/display-only.
     case bodyTemperatureDeviation
 
-    // MARK: - v0158 — v1.25 clinical measurement types
+    // MARK: - v1.25 clinical measurement types
 
     //
     // Four net-new server `MeasurementType`s landed in v1.25
@@ -328,7 +310,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// height source is decided.
     case waistToHeight
 
-    // MARK: - v0.14.1 Build 3 / item 3.3 — the 23 wire types the list decoder dropped
+    // MARK: - Further server wire types
 
     //
     // Parity audit `05-measurements-labs.md` A2 counted 23 server
@@ -429,7 +411,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Breathing-disturbance EVENT, distinct from the `.breathingDisturbances`
     /// COUNT. Server enum `BREATHING_DISTURBANCE_EVENT`, categorical (`1…1`).
     case breathingDisturbanceEvent
-    /// Audit B-4 — Apple-Health audio-exposure EVENT (the loud-listening
+    /// Apple-Health audio-exposure EVENT (the loud-listening
     /// notification Apple fires when the rolling 7-day average crosses the WHO
     /// 80-dBA threshold), distinct from the `.audioExposureEnvironment` /
     /// `.audioExposureHeadphone` dBA READINGS. Server enum
@@ -445,7 +427,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// exactly like them — `isCategoricalEvent`, unitless, read-only.
     case audioExposureEvent
 
-    // MARK: - #162 — Garmin (server v1.47.0), read/display-only
+    // MARK: - Garmin (server v1.47.0), read/display-only
 
     /// Garmin Body Battery, the day's highest charge (0–100). `BODY_BATTERY`.
     case bodyBattery
@@ -457,7 +439,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Garmin seven-day acute training load (unit `load`, 0–3000), bridged in.
     case acuteTrainingLoad
 
-    // MARK: - HK-NEW (1.5) — Apple Health types the server maps since v1.44.0
+    // MARK: - Apple Health types the server maps since v1.44.0
 
     /// Exercise ring minutes per day. `EXERCISE_MINUTES`.
     case exerciseMinutes
@@ -472,11 +454,24 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// AFib burden, percent of the week. `AFIB_BURDEN`, privacy-sensitive.
     case afibBurden
 
+    // MARK: - Server types the app shows but does not collect
+
+    /// Blood ketones (beta-hydroxybutyrate), mmol/L. `BLOOD_KETONES`.
+    case bloodKetones
+    /// Resting energy, kcal per day. `BASAL_ENERGY_BURNED`.
+    case basalEnergy
+    /// Room CO₂, ppm. `INDOOR_CO2`.
+    case indoorCO2
+    /// Room temperature, °C. `INDOOR_TEMPERATURE`.
+    case indoorTemperature
+    /// Room relative humidity, percent. `INDOOR_HUMIDITY`.
+    case indoorHumidity
+
     // MARK: - Build 7 / item 7.3 — mood dashboard tile
 
     //
     // The `/api/dashboard/summary` route emits a `kind: "mood"` tile since server
-    // v1.31.0 (#51). Mood is the ONE dashboard metric that is NOT a `Measurement`
+    // v1.31.0. Mood is the ONE dashboard metric that is NOT a `Measurement`
     // — the server derives it from the canonical `buildMoodDailySeries` output
     // (the same daily series the web mood analytics reads), emitted only when the
     // account has ever logged a mood (`entryCount > 0`). It therefore has NO
@@ -489,9 +484,9 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     // token — that alias is bridged in `DashboardMetric.init(from:)`.
     case mood
 
-    // MARK: - Audit B-4 — the generic arm for a type this build does not know
+    // MARK: - The generic arm for a type this build does not know
 
-    /// Audit B-4 — a server `MeasurementType` that postdates this build.
+    /// A server `MeasurementType` that postdates this build.
     ///
     /// A decode-only sentinel, never a metric. `ServerMeasurementType` maps any
     /// raw value it does not recognise onto its own `.unknown`, which lands
@@ -514,7 +509,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         rawValue
     }
 
-    /// Audit B-4 — `true` only for the ``unknown`` sentinel: a row whose server
+    /// `true` only for the ``unknown`` sentinel: a row whose server
     /// type postdates this build. Most gates that must not compute with it are
     /// exhaustive switches the compiler forces to take a position; this
     /// predicate serves the callers with no switch to hang the decision on —
@@ -524,7 +519,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         self == .unknown
     }
 
-    /// Audit B-4 — every kind this build can actually name: `allCases` minus the
+    /// Every kind this build can actually name: `allCases` minus the
     /// ``unknown`` decode sentinel. Read it wherever kinds are ENUMERATED rather
     /// than looked up, so the sentinel never presents itself as a metric someone
     /// could choose. Surfaces mapping an *existing* row still read `allCases`.
@@ -540,7 +535,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
-             // Audit B-4 — the sixth, added when the type stopped being dropped.
+             // The sixth, added when the type stopped being dropped.
              .audioExposureEvent:
             true
         default:
@@ -576,14 +571,14 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         case .flightsClimbed: ""
         case .distanceWalkingRunning: "m"
         case .timeInDaylight: "min"
-        // v0.11 W21 — web-parity additions.
+        // Web-parity additions.
         case .fatFreeMass, .leanBodyMass, .muscleMass, .fatMass: "kg"
         case .skinTemperature: "°C"
         case .pulseWaveVelocity: "m/s"
         case .vascularAge: "years"
         case .visceralFat: ""
         case .walkingHeartRate: "bpm"
-        // v0.13.1 IC — v1.10.0 additive signals (units mirror the server
+        // v1.10.0 additive signals (units mirror the server
         // `measurementTypeEnum` unit map + the metric-status registry).
         case .falls: ""
         case .sixMinuteWalk: "m"
@@ -591,16 +586,16 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         case .breathingDisturbances: ""
         case .cardioRecovery: "bpm"
         case .wristTemperature: "°C"
-        // v0.14.6 — v1.12.8 WHOOP-native types (read-only display parity).
+        // v1.12.8 WHOOP-native types (read-only display parity).
         case .averageHeartRate, .maxHeartRate: "bpm"
         case .sleepDisturbanceCount: ""
-        // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+        // v1.17.1 source-fixed render-only signals.
         // ANS-charge / cardio-load / sleep-score are unitless scores; the
         // body-temperature DEVIATION carries °C but is a SIGNED offset (see
         // `MetricKindDescriptor.FormatStyle.signedDecimal1`).
         case .ansCharge, .cardioLoad, .sleepScore: ""
         case .bodyTemperatureDeviation: "°C"
-        // v0158 — v1.25 clinical types. Pain NRS + waist-to-height ratio are
+        // v1.25 clinical types. Pain NRS + waist-to-height ratio are
         // dimensionless (no unit suffix); grip is kg, waist is cm.
         case .painNRS, .waistToHeight: ""
         case .gripStrength: "kg"
@@ -615,7 +610,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
              .dayStrain, .workoutStrain, .resilience,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent,
-             // Audit B-4 — the audio-exposure EVENT is the sixth categorical
+             // The audio-exposure EVENT is the sixth categorical
              // occurrence (band `1…1`), unitless like its five siblings.
              .audioExposureEvent: ""
         case .hrvRMSSD: "ms"
@@ -625,14 +620,20 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
         // Build 7 / item 7.3 — mood is a unitless daily score; the summary tile
         // reads its label from the server `unitKey` anyway (empty here).
         case .mood: ""
-        // #162 — Garmin scores and the load are unitless (`score` / `load`).
+        // Garmin scores and the load are unitless (`score` / `load`).
         case .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad: ""
-        // HK-NEW (1.5) — server `unit-map.ts`: minutes, hours, valence (bare), %.
+        // Server `unit-map.ts`: minutes, hours, valence (bare), %.
         case .exerciseMinutes, .standMinutes, .mindfulMinutes: "min"
         case .standHours: "h"
         case .stateOfMindValence: ""
         case .afibBurden: "%"
-        // Audit B-4 — the unknown sentinel has no unit, because this build does
+        // Server `unit-map.ts`: mmol/L, kcal, ppm, celsius, percent.
+        case .bloodKetones: "mmol/L"
+        case .basalEnergy: "kcal"
+        case .indoorCO2: "ppm"
+        case .indoorTemperature: "°C"
+        case .indoorHumidity: "%"
+        // The unknown sentinel has no unit, because this build does
         // not know what the number is. An invented one would be a lie printed
         // next to a health value.
         case .unknown: ""
@@ -646,7 +647,7 @@ public enum MetricKind: String, Codable, CaseIterable, Sendable, Identifiable {
     /// both DE (source) and EN (translation) — see
     /// `HealthLog/Resources/Localizable.xcstrings`.
     ///
-    /// **v0.7.0 / W-LOC-CRITICAL C-1:** prior versions hard-coded the
+    /// Prior versions hard-coded the
     /// German strings here, which surfaced "Gewicht" / "Blutdruck" /
     /// "Schlaf" as nav-titles + chart axes on every EN locale. App-Store
     /// EN review would have flagged this; the descriptor route fixes
@@ -689,10 +690,13 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     /// werfen, die Zeile bleibt erhalten und wird ohne Kontext-Label
     /// gerendert.
     public let glucoseContext: GlucoseContext?
-    /// #146 — a sleep row's night and naps (``SleepNightSplit``), else `nil`.
+    /// A sleep row's night and naps (``SleepNightSplit``), else `nil`.
     public internal(set) var sleepSplit: SleepNightSplit?
     /// MIRROR (1.5) — the server's `appleHealthMirror`, `nil` without the key (``isServerMirrorAllowed``).
     public internal(set) var appleHealthMirror: Bool?
+    /// #181 (server 1.49.0) — the IANA zone the reading was taken in, `nil`
+    /// for the profile zone and on an older server (``ReadingTimeZone``).
+    public internal(set) var timeZone: String?
 
     public init(
         id: String,
@@ -716,7 +720,7 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
         self.glucoseContext = glucoseContext
     }
 
-    /// **v1.27.6 (#42) / v1.28.11 (#46) — server-owned rows are read-only.** A `COMPUTED` measurement
+    /// **v1.27.6 / v1.28.11 — server-owned rows are read-only.** A `COMPUTED` measurement
     /// (e.g. a PHQ-9 / GAD-7 screening sum score, re-attributed from `MANUAL` by server migration 0225) is
     /// derived server-side; the provider-ingest sources `STRAVA` / `OURA` / `POLAR` / `NIGHTSCOUT` are
     /// wearable/CGM rows the server owns and never accepts on a client write path (not in
@@ -750,14 +754,14 @@ public struct Measurement: Codable, Sendable, Identifiable, Hashable {
     /// decision here (compiler-enforced), so a new read-only ingest can't slip
     /// through as accidentally editable. `whoop` / `fitbit` / `googleHealth` stay
     /// in the editable column to preserve their pre-#46 behaviour, even though
-    /// the server refuses their value edits too. #115 R3: a synthetic id
+    /// the server refuses their value edits too. A synthetic id
     /// (`day:` / `hour:` / `sleep:`) names no row, whatever its source.
     var isServerDerivedReadOnly: Bool {
         if isSyntheticServerRow { return true }
         return switch source {
         case .computed, .strava, .oura, .polar, .nightscout, .healthConnect, .garmin, .telegram, .mcp: true
         case .manual, .appleHealth, .external, .withings, .whoop, .fitbit, .googleHealth, .import_: false
-        // Audit B-4 — a source we cannot name is server-owned until proven
+        // A source we cannot name is server-owned until proven
         // otherwise: `WRITABLE_MEASUREMENT_SOURCES` is `{MANUAL, APPLE_HEALTH}`
         // and every value added since is outside it, so offering a value edit
         // the server would refuse with 409 is the likelier mistake.
@@ -883,7 +887,7 @@ public enum MeasurementSource: String, Codable, Sendable {
     /// ``Measurement/isServerDerivedReadOnly``.
     case external
     case import_ = "import"
-    /// Audit B-4 — a source value this build does not know (see
+    /// A source value this build does not know (see
     /// `MeasurementDTO+UnknownType.swift`). Four times running, a source the
     /// server had shipped cost every row that carried it: `COMPUTED`, then
     /// `STRAVA`/`OURA`/`POLAR`/`NIGHTSCOUT`, then `TELEGRAM`/`MCP`, then

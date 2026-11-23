@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.8 — locks the FIX-1 behaviour: the Insights/History `EditMoodSheet`
+/// Locks the FIX-1 behaviour: the Insights/History `EditMoodSheet`
 /// now brings the legacy editor up to the Mood-v2 contract — it prefills the
 /// rated sliders + structured tag-keys from the entry and re-sends them on save
 /// (mirroring `MoodScreen`'s inline annotate panel), so editing an entry no

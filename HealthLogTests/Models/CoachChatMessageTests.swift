@@ -118,7 +118,7 @@ struct CoachChatMessageTests {
     @Test("standalone sentinel partitions just like a user id")
     func standaloneSentinelPartitionsCleanly() throws {
         let store = try makeStore()
-        let sentinel = CoachChatMessage.standaloneUserID
+        let sentinel = CoachChatMessage.signedOutUserID
         store.insert(CoachChatMessage(userID: sentinel, role: .user, text: "standalone Q"))
         store.insert(CoachChatMessage(userID: "user-A", role: .user, text: "paired Q"))
 

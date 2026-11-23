@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 / Plan 07-04 — the skip-reason vocabulary exists in two places and
+/// The skip-reason vocabulary exists in two places and
 /// must never drift.
 ///
 /// `MeasurementBatchAcceptance` is part of the platform-free core, so it cannot
@@ -52,7 +52,7 @@ struct MeasurementBatchAcceptanceReasonPinTests {
         // is complete and no retry of the same batch changes it. The one index it
         // affects is held separately by the sample importers, which is why it may
         // be in the allowlist without letting a stalled type advance.
-        // X4 (1.3): the three hour-bucket reasons of server v1.43 are
+        // The three hour-bucket reasons of server v1.43 are
         // deterministic refusals of one hourly row, terminal like the rest.
         #expect(MeasurementBatchAcceptance.Policy.deployedMeasurementRoute.terminalSkipReasons == [
             HealthKitServerSupportConfig.reasonUnmappableIdentifier,

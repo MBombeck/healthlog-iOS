@@ -5,7 +5,7 @@ import Testing
 
 /// Contract tests for the `avatarInitials` extension chain.
 ///
-/// v0.11 N4 — the dead `AvatarBadge` view was removed; its composition tests
+/// The dead `AvatarBadge` view was removed; its composition tests
 /// went with it. The initials ladder stays load-bearing (DashboardHeader /
 /// EditProfileScreen render it), so we keep locking the deterministic letters
 /// the design depends on.
@@ -17,7 +17,7 @@ struct AvatarBadgeTests {
     @Test(
         "UserProfile.avatarInitials extracts deterministic letters",
         arguments: [
-            // v0.6.2.3 bug-fix: hyphenated given names collapse to one
+            // Hyphenated given names collapse to one
             // initial — `"Anna-Lena Fischer"` reads as one person named
             // "Anna-Lena", so the badge owes the surname's letter next.
             ("Anna-Lena Fischer", nil as String?, "AF"),

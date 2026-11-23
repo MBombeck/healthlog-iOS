@@ -1,8 +1,8 @@
 import SwiftUI
 
-// 1.4 B2-c — "Was bedeutet das?" for Sync Diagnostics.
+// "Was bedeutet das?" for Sync Diagnostics.
 //
-// The screen carried nine explanations under or above its cards (R2 1.3):
+// The screen carried nine explanations under or above its cards:
 // a source line at the top of every card, the session note, a card that only
 // held a glossary, a card that only held the background limits, the reading
 // guide of the server view, the legend of its times, and the long footer of

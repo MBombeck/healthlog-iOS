@@ -129,7 +129,7 @@ struct BatchSkipReasonToleranceTests {
 
     @Test("Ein völlig unbekannter Skip-Grund dekodiert als String — verbraucht aber keinen Anchor")
     func unknownReasonDecodesButFailsAcceptance() async throws {
-        // **Phase 07 / 07-04 — Restatement.** Bis 07-04 verbrauchte JEDER
+        // **Restatement.** Bis 07-04 verbrauchte JEDER
         // `skipped`-Index den Cursor, egal mit welchem Grund. Die eine Hälfte
         // dieser Zusicherung bleibt und ist der eigentliche Punkt der Suite: ein
         // unbekannter Grund dekodiert als String und kippt die Antwort nicht.
@@ -188,7 +188,7 @@ struct BatchSkipReasonToleranceTests {
 
     @Test("Ein Skip ohne `reason` bekommt einen Platzhalter statt einen Decoding-Fehler — und hält")
     func skipWithoutReason() async throws {
-        // **Phase 07 / 07-04 — Restatement.** Der Platzhalter bleibt (kein
+        // **Restatement.** Der Platzhalter bleibt (kein
         // Decoding-Fehler), aber er ist kein Grund: ein grundloser Skip ist per
         // Konstruktion nicht allowlistet und hält damit den Cursor.
         let json = """

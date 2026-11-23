@@ -18,7 +18,6 @@ import SwiftUI
 /// error banner is rendered above the toolbar.
 struct AddMedicationSheet: View {
     let onSaved: () -> Void
-    let onDismiss: () -> Void
 
     @Environment(MedicationsStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -28,7 +27,7 @@ struct AddMedicationSheet: View {
     @State private var dose: String = ""
     @State private var times: [ScheduleTimeRow] = [ScheduleTimeRow(time: TimeOfDay(hour: 8, minute: 0))]
 
-    // v0.10 — cadence + course window
+    // Cadence + course window
     @State private var cadenceKind: CadenceKind = .daily
     @State private var cadenceSub: CadenceSubControls = .makeDefault()
     @State private var startsOn: Date?
@@ -46,30 +45,35 @@ struct AddMedicationSheet: View {
     @State private var deliveryForm: MedicationDeliveryFormOption = .unspecified
     @State private var graceEnabled: Bool = false
     @State private var graceMinutes: Int = 60
-    // v0.11 — injection-site tracking (only meaningful for INJECTION route).
+    // Injection-site tracking (only meaningful for INJECTION route).
     @State private var trackInjectionSites: Bool = false
     @State private var allowedInjectionSites: Set<InjectionSite> = []
-    /// v1.39.1 (#1033) — the intake-tracking switch, offered when the server knows it (E1).
+    /// v1.39.1 — the intake-tracking switch, offered when the server knows it.
     @State private var trackIntake: Bool = true
 
     // UI state
     @State private var isSaving: Bool = false
     @State private var saveError: HLError?
     @State private var showPhotoOfMedSheet: Bool = false
-    /// QoL-1 (A360-4) — Save haptic drivers. The primary Save fired no haptic
+    /// Save haptic drivers. The primary Save fired no haptic
     /// (the operator-flagged ship-criterion area). `saveTick` bumps on a
     /// successful/queued write, `saveErrorTick` on a failure, mirroring the
     /// `MedicationQuickIntakeSheet` `.success`/`.error` pattern exactly.
     @State private var saveTick: Int = 0
     @State private var saveErrorTick: Int = 0
-    /// FORM-2 (Audit v0162) — initial focus + name→dose submit chain.
-    /// 20-04 (D-15-02-A) — the SAME vocabulary the editor focuses through, not
+    @State private var baseline: [AnyHashable]? // the form as it opened, for the discard guard
+    /// Initial focus + name→dose submit chain.
+    /// The SAME vocabulary the editor focuses through, not
     /// a second private copy of it. `MedicationEditorFocus` owns every decision
     /// that moves focus; the sheet keeps the only copy of where focus IS.
     @FocusState private var focusedField: MedicationEditorFocus.Field?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "med.add.title",
+            action: .add(isEnabled: isValid) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
                 photoOfMedSection
                 requiredSection
@@ -85,82 +89,83 @@ struct AddMedicationSheet: View {
                         HLFormErrorText(saveError.userFacingDescription)
                             .font(.hlSubhead)
                     }
+                    .hlFormRowSurface()
                 }
             }
+            .hlPageMargins()
             .hlScrollEdgeSoft()
-            // 20-04 (B3) — a drag puts the keyboard away as it goes.
+            // A drag puts the keyboard away as it goes.
             .scrollDismissesKeyboard(.interactively)
-            // 1.4 B4 — its own key: between "Abbrechen" and "Speichern" the
+            // Its own key: between "Abbrechen" and "Speichern" the
             // German "Medikament hinzufügen" was cut to "Medikament…".
-            .navigationTitle("med.add.title")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await save() }
-                    }
-                    .disabled(isSaving || !isValid)
-                }
-            }
             .sheet(isPresented: $showPhotoOfMedSheet) {
                 PhotoOfMedSheet { draft in
                     await prefillFields(from: draft)
                     showPhotoOfMedSheet = false
                 }
             }
-            // QoL-1 — Save success/error haptic, mirroring the intake path.
+            // Save success/error haptic, mirroring the intake path.
             .sensoryFeedback(.success, trigger: saveTick)
             .sensoryFeedback(.error, trigger: saveErrorTick)
-            // FORM-2 — seed focus onto the name field once the sheet settles.
+            // Seed focus onto the name field once the sheet settles.
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = MedicationEditorFocus.resolve(.sheetSettled, from: focusedField)
             }
         }
-        .interactiveDismissDisabled(isSaving)
-        // v0.5.5.1 — HIG Befund 4: heavy-form sheet intentionally
-        // stays full-screen. Keyboard avoidance + DatePicker + cadence
-        // sub-controls don't fit a `.medium` detent without truncation.
-        .hlSheetPresentation(.form)
+        .onAppear { if baseline == nil { baseline = formFingerprint } }
+    }
+
+    /// Every field the person can change; differs from `baseline` once edited.
+    private var formFingerprint: [AnyHashable] {
+        [
+            name, dose, ScheduleTimeRow.times(times), cadenceKind, cadenceSub, startsOn, endsOn, isOneShot, category,
+            treatmentClass, dosesPerUnitText, unitsPerDose, notificationsEnabled, deliveryForm, graceEnabled,
+            graceMinutes, trackInjectionSites, allowedInjectionSites, trackIntake
+        ]
+    }
+
+    private var isDirty: Bool {
+        baseline.map { $0 != formFingerprint } ?? false
     }
 
     // MARK: - Sections
 
-    /// Optional entry-point into the Photo-of-Med pipeline (T-6). Rendered
+    /// Optional entry-point into the Photo-of-Med pipeline. Rendered
     /// above the required fields so users can quickly OCR-prefill the form
-    /// from a medication-package photo before manual completion. 1.4 B2: no
+    /// from a medication-package photo before manual completion. No
     /// footer; the photo sheet states its on-device promise where the photo is
     /// taken.
     private var photoOfMedSection: some View {
         Section {
-            Button {
+            HLSettingsActionRow(icon: "camera.viewfinder", title: "Analyse photo", presents: .sheet) {
                 showPhotoOfMedSheet = true
-            } label: {
-                Label("Analyse photo", systemImage: "camera.viewfinder")
             }
             .disabled(isSaving)
             .accessibilityIdentifier("add-medication-photo-button")
         }
+        .hlFormRowSurface()
     }
 
     private var requiredSection: some View {
-        Section("Name & dose") {
-            TextField("med.form.name.placeholder", text: $name)
-                .textInputAutocapitalization(.words)
-                .disableAutocorrection(true)
-                .focused($focusedField, equals: .name)
-                .submitLabel(.next)
-                .onSubmit { focusedField = MedicationEditorFocus.resolve(.submitted(.name), from: focusedField) }
-            TextField("med.form.dose.placeholder", text: $dose)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
-                .focused($focusedField, equals: .dose)
-                .submitLabel(.done)
+        Section {
+            HLFormField("med.form.name.label") {
+                TextField("med.form.name.placeholder", text: $name)
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .focused($focusedField, equals: .name)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = MedicationEditorFocus.resolve(.submitted(.name), from: focusedField) }
+            }
+            HLFormField("med.form.dose.label") {
+                TextField("med.form.dose.placeholder", text: $dose)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .focused($focusedField, equals: .dose)
+                    .submitLabel(.done)
+            }
         }
+        .hlFormRowSurface()
     }
 
     private var cadenceSection: some View {
@@ -171,11 +176,12 @@ struct AddMedicationSheet: View {
                 }
                 .simultaneousGesture(scheduleEngagement, including: .all)
         } header: {
-            Text("med.schedule.cadence.section")
+            HLSectionHeader("med.schedule.cadence.section")
         }
+        .hlFormRowSurface()
     }
 
-    /// 20-04 (B3) — the Zeitplan row became the interaction target, reported on
+    /// The Zeitplan row became the interaction target, reported on
     /// the way DOWN so the picker's own tap handling stays untouched. Copied
     /// from `EditMedicationSheet`, not re-derived.
     private var scheduleEngagement: some Gesture {
@@ -186,6 +192,12 @@ struct AddMedicationSheet: View {
         Section {
             ForEach(Array(times.enumerated()), id: \.element.id) { idx, row in
                 HStack {
+                    // The red minus stands first, as in the system's edit mode.
+                    if times.count > 1 {
+                        HLDeleteButton("Remove time", form: .remove, action: .undoable {
+                            times.removeAll { $0.id == row.id }
+                        })
+                    }
                     DatePicker(
                         String(localized: "med.form.time.label \(idx + 1)"),
                         selection: bindingForTime(rowID: row.id),
@@ -193,30 +205,19 @@ struct AddMedicationSheet: View {
                     )
                     .labelsHidden()
                     Spacer()
-                    if times.count > 1 {
-                        Button {
-                            times.removeAll { $0.id == row.id }
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(HLColor.statusBad)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Remove time"))
-                    }
-                    // 1.4 B4 — the picker shows the time; the second "08:00"
+                    // The picker shows the time; the second "08:00"
                     // beside it repeated it in wire form.
                 }
             }
             if times.count < MedicationCadenceLogic.maxTimes(for: cadenceKind) {
-                Button {
+                HLSettingsActionRow(title: "med.schedule.times.add", presents: .create) {
                     times.append(ScheduleTimeRow(time: TimeOfDay(hour: 12, minute: 0)))
-                } label: {
-                    Label("med.schedule.times.add", systemImage: "plus.circle")
                 }
             }
         } header: {
-            Text("med.schedule.times.header")
+            HLSectionHeader("med.schedule.times.header")
         }
+        .hlFormRowSurface()
     }
 
     private var courseWindowSection: some View {
@@ -226,69 +227,67 @@ struct AddMedicationSheet: View {
                     if oneShot { enforceTimeConstraints(for: cadenceKind) }
                 }
         } header: {
-            Text("med.schedule.course.section")
+            HLSectionHeader("med.schedule.course.section")
         }
+        .hlFormRowSurface()
     }
 
-    /// 1.4 B4 — the optional fields fold out as rows of this one section, at
-    /// the same inset as every other row. A `DisclosureGroup` indented them a
-    /// second time inside the card.
+    /// The optional fields wait behind the centred „Erweitert" link under the
+    /// card above and fold out in a card of their own beneath it.
+    @ViewBuilder
     private var advancedSection: some View {
         Section {
-            Button {
+            HLLinkButton("Advanced", isExpanded: showAdvanced) {
                 withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { showAdvanced.toggle() }
-            } label: {
-                HStack {
-                    Text("med.form.advanced.section")
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
-                    Image(systemName: "chevron.down")
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                        .rotationEffect(.degrees(showAdvanced ? 0 : -90))
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            if showAdvanced {
+            .accessibilityIdentifier("med.add.advanced")
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+        }
+        if showAdvanced {
+            Section {
                 advancedRows
             }
+            .hlFormRowSurface()
         }
-        // v0.9.0 — delivery toggles (Live Activity / Kritischer Alarm) are
+        // Delivery toggles (Live Activity / Kritischer Alarm) are
         // edit-only by design: their prefs are keyed by med-id, which doesn't
-        // exist before the med is created. 1.4 B2: the footer that pointed at
+        // exist before the med is created. The footer that pointed at
         // the edit sheet is gone.
     }
 
     @ViewBuilder
     private var advancedRows: some View {
-        Picker("Category", selection: $category) {
-            ForEach(MedicationCategoryOption.allCases) { option in
-                Text(option.displayName).tag(option)
-            }
+        // Form rows that stack at the accessibility sizes instead of cutting
+        // their value in the middle.
+        HLFormPicker("Category", selection: $category, options: MedicationCategoryOption.allCases) { option in
+            Text(verbatim: option.displayName)
         }
-        Picker("Class", selection: $treatmentClass) {
-            ForEach(MedicationTreatmentClassOption.allCases) { option in
-                Text(option.displayName).tag(option)
-            }
+        HLFormPicker("Class", selection: $treatmentClass, options: MedicationTreatmentClassOption.allCases) { option in
+            Text(verbatim: option.displayName)
         }
-        Picker("med.schedule.advanced.deliveryForm.label", selection: $deliveryForm) {
-            ForEach(MedicationDeliveryFormOption.allCases) { option in
-                Text(option.labelKey).tag(option)
-            }
+        HLFormPicker(
+            "med.schedule.advanced.deliveryForm.label",
+            selection: $deliveryForm,
+            options: MedicationDeliveryFormOption.allCases
+        ) { option in
+            Text(option.labelKey)
         }
         InjectionSiteTrackingSection(
             isInjection: .constant(deliveryForm == .injection),
             trackInjectionSites: $trackInjectionSites,
             allowedInjectionSites: $allowedInjectionSites
         )
-        TextField("med.form.dosesPerUnit.optional", text: $dosesPerUnitText)
-            .keyboardType(.numberPad)
+        MedicationDosesPerUnitField(text: $dosesPerUnitText)
         UnitsPerDosePicker(selection: $unitsPerDose)
-        Toggle("Notifications", isOn: $notificationsEnabled)
+        Toggle(isOn: $notificationsEnabled) {
+            HLRowTitle("Notifications")
+        }
         if cadenceKind != .asNeeded {
-            Toggle("med.schedule.advanced.grace.toggle", isOn: $graceEnabled)
+            Toggle(isOn: $graceEnabled) {
+                HLRowTitle("med.schedule.advanced.grace.toggle")
+            }
             if graceEnabled {
                 HLIntStepperRow(
                     titleKey: "med.schedule.advanced.grace.label",
@@ -347,15 +346,15 @@ struct AddMedicationSheet: View {
 
     // MARK: - Save
 
-    private func save() async {
-        guard !isSaving, isValid else { return }
+    private func save() async -> Bool {
+        guard !isSaving, isValid else { return false }
         isSaving = true
         defer { isSaving = false }
         saveError = nil
 
         let value = MedicationCadenceLogic.encode(cadenceKind, cadenceSub)
         let effectiveTimes = cadenceKind == .asNeeded ? [] : ScheduleTimeRow.times(times)
-        // 09-14 — `schedules` and the medication-level `asNeeded` flag are one
+        // `schedules` and the medication-level `asNeeded` flag are one
         // decision, and the route 422s either half without the other. They are
         // built together so they cannot drift.
         let write = MedicationCadenceLogic.scheduleWrite(
@@ -377,7 +376,7 @@ struct AddMedicationSheet: View {
             startsOn: startsOn.map { MedicationCadenceLogic.courseDay($0) },
             endsOn: value.oneShot ? nil : endsOn.map { MedicationCadenceLogic.courseDay($0) },
             deliveryForm: deliveryForm.wireValue,
-            // v0.11 — only send injection-site fields for an INJECTION med.
+            // Only send injection-site fields for an INJECTION med.
             trackInjectionSites: deliveryForm == .injection ? trackInjectionSites : nil,
             allowedInjectionSites: deliveryForm == .injection && trackInjectionSites
                 ? allowedInjectionSites.compactMap(\.serverRawValue).sorted()
@@ -389,19 +388,21 @@ struct AddMedicationSheet: View {
         let outcome = await store.create(body)
         switch outcome {
         case .success, .queued:
-            saveTick &+= 1 // QoL-1 — success haptic before dismiss.
+            saveTick &+= 1 // Success haptic before dismiss.
             onSaved()
+            return true
         case let .failed(err):
             saveError = err
-            saveErrorTick &+= 1 // QoL-1 — error haptic, sheet stays open.
+            saveErrorTick &+= 1 // Error haptic, sheet stays open.
         }
+        return false
     }
 
     private var parsedDosesPerUnit: Int? {
         MedicationFormLogic.parseDosesPerUnit(dosesPerUnitText)
     }
 
-    /// Binds a `DatePicker` to the time-row identified by `rowID` (A360-5 H-3).
+    /// Binds a `DatePicker` to the time-row identified by `rowID`.
     /// Resolving by stable id — not array offset — means a remove that shifts
     /// indices can never re-point an open picker at a different row.
     private func bindingForTime(rowID: UUID) -> Binding<Date> {
@@ -421,7 +422,7 @@ struct AddMedicationSheet: View {
     }
 }
 
-// MARK: - Schedule-time row identity (A360-5 H-3)
+// MARK: - Schedule-time row identity
 
 /// Stable-identity wrapper for an editable reminder time. The Add/Edit medication
 /// sheets render the `times` list with `ForEach` — keying that on the array
@@ -483,6 +484,8 @@ enum MedicationFormLogic {
     }
 
     static func formatTime(_ time: TimeOfDay) -> String {
+        // The server's "HH:mm" schedule key, never shown to anyone.
+        // swiftlint:disable:next hl_date_via_helper
         String(format: "%02d:%02d", time.hour, time.minute)
     }
 
@@ -537,7 +540,7 @@ enum MedicationCategoryOption: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    /// J1 / F2 — the picker rendered these as plain `String`s, i.e. never
+    /// The picker rendered these as plain `String`s, i.e. never
     /// through the catalog: an English build showed "Nahrungsergänzung", a
     /// German one "Blood pressure". The catalog already carries the
     /// `medications.category*` family (en + de); the picker now reads it.
@@ -557,27 +560,6 @@ enum MedicationCategoryOption: String, CaseIterable, Identifiable {
         case .antibiotic: String(localized: "medications.categoryAntibiotic")
         case .mentalHealth: String(localized: "medications.categoryMentalHealth")
         case .other: String(localized: "medications.categoryOther")
-        }
-    }
-}
-
-/// Picker-friendly enumeration of `MedicationTreatmentClass` server values.
-enum MedicationTreatmentClassOption: String, CaseIterable, Identifiable {
-    case generic = "GENERIC"
-    case glp1 = "GLP1"
-
-    var id: String {
-        rawValue
-    }
-
-    var wireValue: String {
-        rawValue
-    }
-
-    var displayName: String {
-        switch self {
-        case .generic: String(localized: "med.treatmentClass.generic")
-        case .glp1: "GLP-1" // drug-class name, identical in every locale
         }
     }
 }

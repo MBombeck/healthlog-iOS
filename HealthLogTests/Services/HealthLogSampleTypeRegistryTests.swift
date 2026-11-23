@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// Phase 07 Wave 2 — the registry is the definition of "server-bound sample
+    /// The registry is the definition of "server-bound sample
     /// type", so it gets a contract rather than a comment.
     ///
     /// Before this plan the registry's own doc comment said "the 23 entries" while
@@ -18,18 +18,20 @@
     struct HealthLogSampleTypeRegistryTests {
         @Test("the registry holds exactly the declared number of server-bound types")
         func cardinalityMatchesTheDeclaredContract() {
-            #expect(HealthLogSampleTypeRegistry.baseExpectedCount == 42)
+            #expect(HealthLogSampleTypeRegistry.baseExpectedCount == 57)
             #expect(HealthLogSampleTypeRegistry.baseIdentifiers.count == HealthLogSampleTypeRegistry.baseExpectedCount)
             #expect(HealthLogSampleTypeRegistry.knownIdentifiers.count == HealthLogSampleTypeRegistry.expectedCount)
         }
 
-        @Test("1.2 V4 + B5 + HK-NEW: the count is 42 without RMSSD and 43 with it, and SDNN is in both")
+        @Test(
+            "1.2 V4 + B5 + HK-NEW + resting energy + 1.7 quantity types: the count is 57 without RMSSD and 58 with it, and SDNN is in both"
+        )
         func cardinalityFollowsRMSSDAvailability() {
             let base = HealthLogSampleTypeRegistry.baseIdentifiers
             let older = base.union(HealthLogSampleTypeRegistry.osGatedIdentifiers(rmssdAvailable: false))
             let ios27 = base.union(HealthLogSampleTypeRegistry.osGatedIdentifiers(rmssdAvailable: true))
-            #expect(older.count == 42)
-            #expect(ios27.count == 43)
+            #expect(older.count == 57)
+            #expect(ios27.count == 58)
             #expect(!older.contains(HeartRateVariabilityRMSSD.identifier))
             #expect(ios27.contains(HeartRateVariabilityRMSSD.identifier))
             #expect(older.contains(HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue))
@@ -37,7 +39,7 @@
             // The running system decides which of the two shapes is live.
             let available = HeartRateVariabilityRMSSD.sampleType != nil
             #expect(HealthLogSampleTypeRegistry.knownIdentifiers == (available ? ios27 : older))
-            #expect(HealthLogSampleTypeRegistry.expectedCount == (available ? 43 : 42))
+            #expect(HealthLogSampleTypeRegistry.expectedCount == (available ? 58 : 57))
         }
 
         @Test("every identifier is unique and non-blank")

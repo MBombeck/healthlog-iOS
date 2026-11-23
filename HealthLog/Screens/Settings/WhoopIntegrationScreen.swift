@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// `/settings/integrations/whoop` — WHOOP integration detail. Mirrors
-/// ``WithingsIntegrationScreen`` (server-brokered OAuth, `hasServer` gate, same
-/// card style) plus the BYO-key delta: a credentials-entry step precedes the
+/// ``WithingsIntegrationScreen`` (server-brokered OAuth, same card style) plus the BYO-key delta: a credentials-entry step precedes the
 /// Connect CTA.
 ///
 /// **State machine** (driven by ``WhoopIntegrationStore/stage``):
@@ -15,50 +14,31 @@ import SwiftUI
 /// straight to `store.saveCredentials` and never logged or persisted.
 struct WhoopIntegrationScreen: View {
     @Environment(WhoopIntegrationStore.self) private var store
-    /// WHOOP is a pure (B) surface — the OAuth connect is impossible without a
-    /// backend. Standalone renders the calm placeholder instead of a doomed
-    /// browser tab. `hasServer` is always `true` in paired mode → inert there.
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @State private var clientIdDraft: String = ""
     @State private var clientSecretDraft: String = ""
     @State private var refreshTick: Int = 0
 
     var body: some View {
-        if backend.hasServer {
-            liveBody
-        } else {
-            ScrollView {
-                HLCloudDerivedPlaceholder(
-                    variant: .hero,
-                    surfaceName: String(localized: "cloud_derived.surface.whoop"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-                .padding(HLSpace.lg)
-            }
-            .background(HLColor.background)
-            .navigationTitle("WHOOP")
-            // SET-V2-C (C-4) — integrations detail canon is `.inline` (uniform with AppleHealthIntegrationDetailScreen).
-            .navigationBarTitleDisplayMode(.inline)
-        }
+        liveBody
     }
 
-    /// **UI-Standard U2 (R12) — Gerüst C→A.** Bis U2 ein handgebautes
+    /// **UI-Standard U2 — Gerüst C→A.** Bis U2 ein handgebautes
     /// `ScrollView` + `HLCard` im `.elevated`-Stil: anderes Karten-Primitive
     /// (16 pt statt 14 pt Innenabstand, 1 pt volle Kontur statt 0,5 pt bei
     /// 0,6), handgebauter 17-pt-Kartenkopf und **kein** unterer Seitenrand.
-    /// Liegt jetzt auf `HLSettingsPage` + `HLSettingsCard`.
+    /// Liegt jetzt auf `HLPage` + `HLCard`.
     private var liveBody: some View {
-        HLSettingsPage(title: "WHOOP") {
-            // 1.4 B4 — the credentials step lives in the WHOOP card. A second
+        HLPage {
+            // The credentials step lives in the WHOOP card. A second
             // card below left this one with a title, a pill and an empty body.
             connectionCard
-            // 1.4 B2-c — no app sync footer; the card says when WHOOP last
+            // No app sync footer; the card says when WHOOP last
             // synced.
         }
         .navigationTitle("WHOOP")
-        // SET-V2-C (C-4) — integrations detail canon is `.inline` (uniform with AppleHealthIntegrationDetailScreen).
+        // Integrations detail canon is `.inline` (uniform with AppleHealthIntegrationDetailScreen).
         .navigationBarTitleDisplayMode(.inline)
+        .hlConfirmBar(saveCredentialsAction, identifier: "settings.whoop.saveCredentialsButton")
         .task { await store.loadStatus() }
         .refreshable {
             await store.loadStatus()
@@ -73,9 +53,9 @@ struct WhoopIntegrationScreen: View {
     /// („Verbunden" / „Nicht konfiguriert" / …) ist jetzt die `HLStatusPill`
     /// im Trailing-Slot der Karte, wie auf der Integrationen-Liste.
     private var connectionCard: some View {
-        HLSettingsCard(
-            icon: "link.circle.fill",
-            title: "WHOOP",
+        HLCard(
+            // The page is named after the service; the card says its state.
+            "Status",
             trailing: { statusPill },
             content: { connectionBody }
         )
@@ -85,7 +65,7 @@ struct WhoopIntegrationScreen: View {
     private var statusPill: some View {
         switch store.stage {
         case .loading:
-            // 1.4 B4 — "Checking" only while it is; after a failed read the
+            // "Checking" only while it is; after a failed read the
             // card's sentence says what happened.
             if store.error == nil {
                 HLStatusPill(.unknown(label: String(localized: "Checking")))
@@ -97,7 +77,7 @@ struct WhoopIntegrationScreen: View {
         case .tokenExpired:
             HLStatusPill(.error(label: String(localized: "Reconnect needed")))
         case .connected:
-            // #139 — limited / degraded show as such; the plain "Connected"
+            // Limited / degraded show as such; the plain "Connected"
             // stays for a server without `health`.
             if let health = store.status?.health {
                 HLStatusPill(ConnectionHealthPresentation(health: health).pill)
@@ -111,11 +91,10 @@ struct WhoopIntegrationScreen: View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             if let statusSubtitle {
                 Text(statusSubtitle)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // #139 — the reason in one sentence. The one button for
+            // The reason in one sentence. The one button for
             // `health.action` is the reconnect / resume button of the stage
             // content below, so the section itself carries none.
             if store.stage == .connected, let health = store.status?.health {
@@ -144,14 +123,14 @@ struct WhoopIntegrationScreen: View {
     private var statusSubtitle: String? {
         switch store.stage {
         case .loading:
-            // 1.4 B2-c — the "Checking" pill says it.
+            // The "Checking" pill says it.
             return nil
         case .needsCredentials:
             return nil
         case .needsConnect:
             return String(localized: "whoop.status.credentialsSaved")
         case .tokenExpired:
-            // #139 — the server's own reason when it sends one.
+            // The server's own reason when it sends one.
             if let health = store.status?.health {
                 return ConnectionHealthPresentation(health: health).sentence
             }
@@ -188,33 +167,29 @@ struct WhoopIntegrationScreen: View {
         Text(
             "Create a WHOOP developer app at developer.whoop.com, then paste its Client ID and Client Secret here. They are stored encrypted on your server and never on this iPhone."
         )
-        .font(.hlCaption)
-        .foregroundStyle(HLText.secondary)
+        .hlText(.rowSubtitle)
         .fixedSize(horizontal: false, vertical: true)
 
         TextField(String(localized: "Client ID"), text: $clientIdDraft)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
+            .hlFieldPlate()
             .accessibilityIdentifier("settings.whoop.clientIdField")
 
         SecureField(String(localized: "Client Secret"), text: $clientSecretDraft)
             .hlSecretEntry()
+            .hlFieldPlate()
             .accessibilityIdentifier("settings.whoop.clientSecretField")
+    }
 
-        // v0.14.1 #6 — was "Save credentials" / "Zugangsdaten
-        // speichern"; shortened to the canonical "Save" / "Speichern"
-        // (operator: too long/confusing on credential screens).
-        // R9 — „Speichern" am Formularende ist das Commit dieses Schritts;
-        // in dieser Stufe rendert kein zweites `.primary`.
-        HLButton(
-            String(localized: "Save"),
-            variant: .primary,
-            isLoading: store.isWorking
-        ) {
-            Task { await saveCredentials() }
+    /// Saving the credentials is the check mark in the bar, only while the
+    /// step asks for them.
+    private var saveCredentialsAction: HLSheetAction {
+        guard store.stage == .needsCredentials else { return .none }
+        return .save(isEnabled: canSaveCredentials && !store.isWorking) {
+            await saveCredentials()
+            return false
         }
-        .disabled(!canSaveCredentials || store.isWorking)
-        .accessibilityIdentifier("settings.whoop.saveCredentialsButton")
     }
 
     private var canSaveCredentials: Bool {
@@ -237,11 +212,11 @@ struct WhoopIntegrationScreen: View {
 
     private var connectActions: some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
-            // R9 — „Verbinden" ist auf jedem Integrations-Screen das eine
+            // „Verbinden" ist auf jedem Integrations-Screen das eine
             // `.primary`.
             HLButton(
-                String(localized: "Connect WHOOP"),
-                icon: "link",
+                "Connect WHOOP",
+                systemImage: "link",
                 variant: .primary,
                 isLoading: store.isWorking
             ) {
@@ -264,8 +239,8 @@ struct WhoopIntegrationScreen: View {
                 // Synchronisierung pausiert.") und zum Pill „Erneut verbinden
                 // nötig". Ersatzlos gefallen; die Statuszeile trägt die Folge.
                 HLButton(
-                    String(localized: "Reconnect WHOOP"),
-                    icon: "link",
+                    "Reconnect WHOOP",
+                    systemImage: "link",
                     variant: .primary,
                     isLoading: store.isWorking
                 ) {
@@ -274,13 +249,13 @@ struct WhoopIntegrationScreen: View {
                 .accessibilityIdentifier("settings.whoop.reconnectButton")
             }
             if store.isRateLimitParked {
-                // #139 — with `health` the section above already says why.
+                // With `health` the section above already says why.
                 if store.status?.health == nil {
                     rateLimitedParkedNotice
                 }
                 HLButton(
-                    String(localized: "Resume sync"),
-                    icon: "play.circle",
+                    "Resume sync",
+                    systemImage: "play.circle",
                     variant: .secondary,
                     isLoading: store.isWorking
                 ) {
@@ -293,8 +268,8 @@ struct WhoopIntegrationScreen: View {
             }
 
             HLButton(
-                String(localized: "Sync now"),
-                icon: "arrow.triangle.2.circlepath",
+                "Sync now",
+                systemImage: "arrow.triangle.2.circlepath",
                 variant: .secondary,
                 isLoading: store.isWorking
             ) {
@@ -303,8 +278,8 @@ struct WhoopIntegrationScreen: View {
             .accessibilityIdentifier("settings.whoop.syncButton")
 
             HLButton(
-                String(localized: "Test connection"),
-                icon: "checkmark.shield",
+                "Test connection",
+                systemImage: "checkmark.shield",
                 variant: .secondary,
                 isLoading: store.isWorking
             ) {
@@ -316,7 +291,7 @@ struct WhoopIntegrationScreen: View {
                 testOkRow(result)
             }
 
-            HLButton(String(localized: "Disconnect"), variant: .destructive) {
+            HLButton("Disconnect", variant: .destructive) {
                 Task { await store.disconnect() }
             }
             .accessibilityIdentifier("settings.whoop.disconnectButton")
@@ -331,8 +306,7 @@ struct WhoopIntegrationScreen: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLColor.statusBad)
             Text("WHOOP rate-limited the connection and paused syncing. Resume to continue.")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -345,8 +319,7 @@ struct WhoopIntegrationScreen: View {
                 .font(.hlIcon(HLIconSize.sm))
                 .foregroundStyle(HLColor.statusOK)
             Text(testOkText(result))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
@@ -365,30 +338,20 @@ struct WhoopIntegrationScreen: View {
     /// leiseste destruktive Form der App. Jetzt die kanonische destruktive
     /// Zeile: 15 pt semibold rot mit rotem Chip.
     private var removeCredentialsRow: some View {
-        HLSettingsActionRow(
-            icon: "trash",
-            title: "Remove credentials",
-            role: .destructive,
-            presents: .confirm
-        ) {
-            Task { await store.removeCredentials() }
-        }
+        HLDeleteButton(
+            "Remove credentials",
+            form: .row,
+            action: .confirmed(title: "settings.integration.removeCredentials.confirm.title") {
+                await store.removeCredentials()
+            }
+        )
         .disabled(store.isWorking)
         .accessibilityIdentifier("settings.whoop.removeCredentialsButton")
     }
 
     private func detailRow(label: String, value: String) -> some View {
-        HStack(spacing: HLSpace.sm) {
-            Text(label)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(value)
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.trailing)
-        }
-        .accessibilityElement(children: .combine)
+        HLSettingsStatRow(label: Text(verbatim: label), value: value)
+            .accessibilityElement(children: .combine)
     }
 
     // MARK: - Error mapping
@@ -411,12 +374,12 @@ struct WhoopIntegrationScreen: View {
             case "timeout":
                 return String(localized: "WHOOP took too long to respond. Try again.")
             default:
-                // 1.4 B4 — a 4xx message as the server words it, a 5xx as
+                // A 4xx message as the server words it, a 5xx as
                 // the calm sentence (userFacingDescription decides).
                 return error.userFacingDescription
             }
         }
-        // 1.4 B4 — never the decoder's text; the technical detail is in
+        // Never the decoder's text; the technical detail is in
         // "Support-Info kopieren" (RecentFailureLog).
         return error.userFacingDescription
     }

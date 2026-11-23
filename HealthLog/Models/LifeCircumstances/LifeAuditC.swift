@@ -1,6 +1,6 @@
 import Foundation
 
-/// **AUDITC (1.5.0, #132, Server #614)** — the alcohol section of the life
+/// **AUDITC** — the alcohol section of the life
 /// circumstances: AUDIT-C, as `GET /api/anamnesis/life-circumstances` delivers
 /// it in `auditC` (server v1.43).
 ///

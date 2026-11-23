@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #110 — the wait a 429 names reaches the caller, in every form server
+/// The wait a 429 names reaches the caller, in every form server
 /// v1.39.0 (or a proxy in front of it) can send, and a long wait is handed to
 /// the caller instead of being cut short by an early in-request retry.
 @Suite("429 Retry-After reaches the caller (#110)", .serialized, .mockURLSession)
@@ -149,7 +149,7 @@ struct RateLimitRetryAfterTests {
     }
 }
 
-/// #110 — Siri / Shortcuts write straight to the per-record routes. A write
+/// Siri / Shortcuts write straight to the per-record routes. A write
 /// the repository queued after a 429 is saved; the dialog says so without
 /// claiming the phone is offline.
 @Suite("Intent dialog for a rate-limited write (#110)")

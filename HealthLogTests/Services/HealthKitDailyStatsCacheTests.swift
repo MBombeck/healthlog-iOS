@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// Phase 07 / Plan 07-04 — the daily-stat cache is owner-partitioned.
+/// The daily-stat cache is owner-partitioned.
 ///
 /// **Restatement.** Every read/write/plan test below used to be keyed by
 /// `(hkIdentifier, dayKey)` alone. That key was installation-global, which is

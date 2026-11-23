@@ -1,4 +1,4 @@
-// 15-01 (B1) — a history entry can be marked taken, but its time cannot be
+// A history entry can be marked taken, but its time cannot be
 // corrected.
 //
 // The operator's B1 is "eine Einnahme lässt sich als genommen markieren, aber
@@ -88,7 +88,7 @@
                 lock.unlock()
             }
 
-            /// FLAKES (1.3.0) — the in-flight window is held open by the test,
+            /// The in-flight window is held open by the test,
             /// not by a fixed park: the answer leaves only after the test has
             /// looked (or the hang guard ran out), so a loaded machine can no
             /// longer close the window before the test's actor gets a turn.
@@ -263,7 +263,7 @@
 
             #expect(
                 sawOptimisticEdit,
-                "EXPECTED_RED: the history offers mark and delete but no time edit"
+                "the history offers mark and delete but no time edit"
             )
             // The wire half already works — this is the half B1 does not need.
             #expect(recorder.body.contains(Self.wireISO(Self.corrected)), "the PUT carries the corrected instant")
@@ -304,7 +304,7 @@
 
             #expect(
                 sawOptimisticEdit,
-                "EXPECTED_RED: no edit path exists to roll back"
+                "no edit path exists to roll back"
             )
             if case .failed = outcome {} else {
                 Issue.record("a 422 on the edit path must be .failed, was \(outcome)")

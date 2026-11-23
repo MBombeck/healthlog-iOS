@@ -1,9 +1,12 @@
+import Foundation
+#if canImport(UserNotifications)
+    import UserNotifications
+#endif
 #if canImport(AlarmKit)
     import AlarmKit
     import AppIntents
-    import Foundation
 
-    // **v0.9.0 W3 — AlarmKit critical-med alarm buttons → App Intents.**
+    // **AlarmKit critical-med alarm buttons → App Intents.**
     //
     // The AlarmKit breakthrough alert fires its buttons **out-of-process**
     // (the app may be suspended). Per the iOS 26.5 SDK, both `stopIntent`
@@ -21,9 +24,8 @@
 
     /// Primary "Genommen" button — stops the alarm and records the dose
     /// taken against the server (or enqueues on the Outbox offline).
-    @available(iOS 26.0, *)
     struct MedTakenAlarmIntent: LiveActivityIntent {
-        static let title: LocalizedStringResource = "alarm.action.taken"
+        static let title: LocalizedStringResource = "med.dose.action.take"
         static let openAppWhenRun: Bool = false
 
         @Parameter(title: "Medication ID")
@@ -43,12 +45,30 @@
         func perform() async throws -> some IntentResult {
             let deps = IntentDependencies.resolve()
             guard IntentDependencies.isSignedIn(deps) else { return .result() }
+            let idempotencyKey = IdempotencyKey()
+            // D3 #6: the dose that rang, booked onto the account slot when the
+            // phone is away from the account zone.
+            let occurrence = CriticalMedAlarmRouting.occurrence(of: scheduledFor, now: .now)
+            let booking = MedicationReminderSlot.booking(deliveredAt: occurrence)
             do {
-                try await deps.medicationsRepo.recordFromReminder(
+                let receipt = try await deps.medicationsRepo.recordFromReminderReturningReceipt(
+                    medicationId: medicationId,
+                    scheduledFor: booking.pin ?? scheduledFor,
+                    status: .taken,
+                    forceSlotInstant: booking.pin,
+                    idempotencyKey: idempotencyKey
+                )
+                // R1 (1): the undo finds exactly the row this tap wrote.
+                ExternalTakeLog().record(
                     medicationId: medicationId,
                     scheduledFor: scheduledFor,
-                    status: .taken
+                    source: .alarm,
+                    binding: ExternalTakeLog.Binding.forCommit(error: nil, receipt: receipt, idempotencyKey: idempotencyKey.raw)
                 )
+            } catch let already as MedicationAlreadyTaken {
+                // D3 #13: taken elsewhere already; nothing was recorded. The
+                // alarm is gone, so a quiet notice says when the first dose was.
+                await MedicationAlarmActions.confirmAlreadyTaken(already)
             } catch {
                 // Retriable errors already enqueued on the Outbox inside
                 // recordFromReminder; non-retriable are logged + swallowed so
@@ -58,17 +78,19 @@
                     "MedTakenAlarmIntent: recordFromReminder failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
                 )
             }
+            // D3 #8: reload and reconcile, so a suspended weekday comes back.
+            await MedicationAlarmActions.didAct()
             return .result()
         }
     }
 
-    /// Secondary "Snooze" button — re-arms a one-shot alarm 15 min later
+    /// Secondary "Remind me later" button — re-arms a one-shot alarm after
+    /// the account's snooze span (#191)
     /// (parity with the UNNotification snooze,
     /// `NotificationService.snoozeIntervalSeconds`). **No server call:** the
     /// bulk intake endpoint can't express a `.snoozed` status, so this intent
     /// only re-arms locally; the server intake row stays `pending` until the
     /// re-fired alarm is actioned ("Genommen" → `.taken`).
-    @available(iOS 26.0, *)
     struct MedSnoozeAlarmIntent: LiveActivityIntent {
         static let title: LocalizedStringResource = "alarm.action.snooze"
         static let openAppWhenRun: Bool = false
@@ -98,7 +120,7 @@
         func perform() async throws -> some IntentResult {
             let deps = IntentDependencies.resolve()
             guard IntentDependencies.isSignedIn(deps) else { return .result() }
-            // Re-arm a one-shot alarm 15 min later. NO server call is made
+            // Re-arm a one-shot alarm after the snooze span. NO server call is made
             // here (matches the UN snooze): the bulk endpoint has no
             // `.snoozed` status, so the server intake row stays `pending`
             // until the re-fired alarm is actioned. The signed-in guard is
@@ -110,7 +132,51 @@
                 dose: dose,
                 scheduledFor: scheduledFor
             )
+            await MedicationAlarmActions.didAct()
             return .result()
         }
     }
 #endif
+
+/// **D3 #8 / #13 — what follows an action on a critical alarm.**
+///
+/// The alarm's buttons run their intent without the app on screen, and
+/// nothing reloaded the medications afterwards: a weekday the alarm had left
+/// out after a take in the app stayed out until the app ran again, so someone
+/// who then only used the alarm lost that day's alarm for good. The app wires
+/// ``onAction`` to a forced load, which reconciles the alarms; outside the
+/// app process it stays `nil`.
+@MainActor
+enum MedicationAlarmActions {
+    static var onAction: (@MainActor () async -> Void)?
+
+    static func didAct() async {
+        await onAction?()
+    }
+
+    #if canImport(UserNotifications)
+        /// The quiet "Already taken at 07:12 (pill box)" notice, the same one a
+        /// banner's Take shows (`NotificationService.confirmAlreadyTaken`).
+        static func confirmAlreadyTaken(_ already: MedicationAlreadyTaken) async {
+            do {
+                try await UNUserNotificationCenter.current().add(alreadyTakenRequest(already))
+            } catch {
+                HLLog.notifications.error(
+                    "alarm.taken: already-taken notice failed err=\(LogSanitizer.redact(String(describing: error)), privacy: .public)"
+                )
+            }
+        }
+
+        nonisolated static func alreadyTakenRequest(_ already: MedicationAlreadyTaken) -> UNNotificationRequest {
+            let content = UNMutableNotificationContent()
+            content.title = String(localized: "med.already_taken.title")
+            content.body = already.message
+            content.interruptionLevel = .passive
+            return UNNotificationRequest(
+                identifier: "med-already-taken-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+        }
+    #endif
+}

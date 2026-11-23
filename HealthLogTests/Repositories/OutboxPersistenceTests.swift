@@ -199,7 +199,7 @@ struct OutboxPersistenceTests {
         let api = makeAPI()
         let container = try sharedInMemoryContainer()
 
-        // Phase 1: enqueue via OutboxQueue-equivalent on container.
+        // Enqueue via OutboxQueue-equivalent on container.
         let outboxA = OutboxQueue(testContainer: container)
         let payload = try encodeMeasurement()
         try await outboxA.enqueue(.init(
@@ -211,7 +211,7 @@ struct OutboxPersistenceTests {
         ))
         // Drop outboxA, simulate process death.
 
-        // Phase 2: fresh OutboxQueue against the same container, run replay.
+        // Fresh OutboxQueue against the same container, run replay.
         let outboxB = OutboxQueue(testContainer: container)
         let snap = await outboxB.snapshot
         #expect(snap.first?.idempotencyKey == "key-d-stable")
@@ -269,11 +269,11 @@ struct OutboxPersistenceTests {
         ))
         // Simulate repeated retriable failures by manually bumping attempts to
         // the threshold — far cheaper than running the replay loop 8 times, and
-        // sufficient to exercise `markDeadLetters` (audit-v0162) which is the SUT.
+        // sufficient to exercise `markDeadLetters` which is the SUT.
         for _ in 0 ..< 3 {
             try await outbox.incrementAttempts(id: id, lastError: "503")
         }
-        // audit-v0162 H1 — `minAge: 0` so the row is immediately eligible; the
+        // `minAge: 0` so the row is immediately eligible; the
         // row is FLAGGED (recoverable) not deleted, and drops out of the live
         // snapshot but is counted + re-submittable.
         let dropped = try await outbox.markDeadLetters(maxAttempts: 3, minAge: 0, now: .now)

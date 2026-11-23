@@ -26,6 +26,7 @@ Stand: 2026-05-14. Voraussetzung: aktiver Apple Developer Program Account ($99/J
 4. **Capabilities** anhaken (kritisch — diese bestimmen, welche Entitlements das Provisioning Profile signiert):
    - ☑ **HealthKit**
      - ☑ **HealthKit Background Delivery** (sub-capability — ohne diese funktioniert Background-Sync NICHT in Production)
+     - Clinical Health Records (seit 1.7, `com.apple.developer.healthkit.access = [health-records]`): kein eigener Haken noetig. Die HealthKit-Capability der App-ID traegt es schon; Entwicklungs- und App-Store-Profil von `dev.healthlog.app` listen den Wert (geprueft 21.11.2026 per `security cms -D`).
    - ☑ **Push Notifications** (auch wenn Phase 8 — gleich anhaken, App-ID-Edits sind nervig)
    - ☑ **Sign In with Apple** (fuer Passkey-Faellback wenn benoetigt)
    - ☑ **Background Modes** (kommt aus `UIBackgroundModes` in Info.plist, kein expliziter Capability-Toggle hier)

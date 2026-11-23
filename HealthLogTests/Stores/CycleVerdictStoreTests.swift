@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Z1 (#72) — the cut between forecast and judgement, at the store.**
+/// **The cut between forecast and judgement, at the store.**
 ///
 /// The on-device engine keeps computing the FORECAST offline (dates, bands,
 /// expected next start), labelled ``CyclePredictionProvenance/onDevice``. It no
@@ -41,12 +41,6 @@ struct CycleVerdictStoreTests {
         return APIClient(environment: env, keychain: InMemoryKeychain(), sessionConfiguration: .mock())
     }
 
-    private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let store = FeatureFlagsStore()
-        store.setOverride(.cycleTracking, enabled: true)
-        return store
-    }
-
     private func makeFemaleSettings() async -> SettingsStore {
         let defaults = UserDefaults(suiteName: "CycleVerdictStoreTests.\(UUID().uuidString)")!
         let settings = SettingsStore(repo: SettingsRepository(api: makeClient()), defaults: defaults)
@@ -73,9 +67,8 @@ struct CycleVerdictStoreTests {
     }
 
     private func makeGate() async -> CycleGate {
-        let flags = await makeFlagsEnabled()
         let settings = await makeFemaleSettings()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable)
         return gate
@@ -173,11 +166,11 @@ struct CycleVerdictStoreTests {
         #expect(online.verdict?.verdict.dayOfCycle == 9)
 
         // Second run on the same device, now offline: a fresh store, cold
-        // memory, no network. `BackendAvailability(nil, nil)` is unreachable.
+        // memory, no network. `BackendAvailability(authStore: nil)` is unreachable.
         let offline = CycleStore(
             repository: repo,
             gate: gate,
-            availability: BackendAvailability(syncMode: nil, authStore: nil)
+            availability: BackendAvailability(authStore: nil)
         )
         MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
@@ -214,7 +207,7 @@ struct CycleVerdictStoreTests {
         let offline = CycleStore(
             repository: repo,
             gate: gate,
-            availability: BackendAvailability(syncMode: nil, authStore: nil)
+            availability: BackendAvailability(authStore: nil)
         )
         MockURLProtocol.install { _ in
             throw URLError(.notConnectedToInternet)
@@ -235,7 +228,7 @@ struct CycleVerdictStoreTests {
         let store = CycleStore(
             repository: repo,
             gate: gate,
-            availability: BackendAvailability(syncMode: nil, authStore: nil)
+            availability: BackendAvailability(authStore: nil)
         )
         // Seed a real history so the engine has something to forecast from.
         let today = CycleCalendarWindow.todayKey()

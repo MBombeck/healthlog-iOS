@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - KONTO (#151) — the deletion grace window for the confirmation screens
+// MARK: - The deletion grace window for the confirmation screens
 
 extension AuthStore {
     /// What the delete and reset screens may promise. The window length the

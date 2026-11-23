@@ -7,7 +7,7 @@ import Testing
 /// 7.8 (#67 enrichment + #42/#46 source growth) — the richer
 /// `GET /api/workouts/{id}` payload fields the detail surface now consumes:
 /// `hrSeries`, `zones`, `splits`, `sportContext`, plus the `GOOGLE_HEALTH`
-/// (#42) / `STRAVA` (#46) workout-source labels and the unit-adaptive pace
+/// (#42) / `STRAVA` workout-source labels and the unit-adaptive pace
 /// formatter.
 ///
 /// Decode is exercised through the real `JSONDecoder.hlDefault` (the same
@@ -140,17 +140,17 @@ struct WorkoutEnrichmentDecodeTests {
     }
 }
 
-/// #42 / #46 — the workout-source enum grew `GOOGLE_HEALTH` and `STRAVA`; the
+/// The workout-source enum grew `GOOGLE_HEALTH` and `STRAVA`; the
 /// detail surface must render brand labels, not `.capitalized` fallbacks.
 @Suite("Workout source labels — GOOGLE_HEALTH / STRAVA parity")
 @MainActor
 struct WorkoutSourceLabelEnrichmentTests {
     @Test("Provider sources decode and render their brand spellings")
     func providerSourceLabels() {
-        // #42 — Google Health API provider; wire token would otherwise fall
+        // Google Health API provider; wire token would otherwise fall
         // through to "Google_health".
         #expect(WorkoutDetailView.sourceLabel("GOOGLE_HEALTH") == "Google Health")
-        // #46 — Strava OAuth workout ingest.
+        // Strava OAuth workout ingest.
         #expect(WorkoutDetailView.sourceLabel("STRAVA") == "Strava")
         #expect(WorkoutDetailView.sourceLabel("OURA") == "Oura")
         #expect(WorkoutDetailView.sourceLabel("POLAR") == "Polar")
@@ -211,7 +211,7 @@ struct WorkoutSourceLabelEnrichmentTests {
 
 /// 7.8 — unit-adaptive pace formatter (min/km · min/mi).
 ///
-/// #115 P2 — the account's unit system decides, not the device locale.
+/// The account's unit system decides, not the device locale.
 @Suite("WorkoutFormatter — pace formatter (metric + imperial)")
 struct WorkoutPaceFormatterTests {
     @Test("Metric account renders min/km")

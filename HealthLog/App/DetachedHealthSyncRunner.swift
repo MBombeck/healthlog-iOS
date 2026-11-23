@@ -37,7 +37,7 @@ actor DetachedHealthSyncRunner {
     /// keep the trailing pass waiting for minutes.
     static let defaultBudget: TimeInterval = 90
 
-    /// SYNC-HR — three minutes: the budget plus the longest capability
+    /// Three minutes: the budget plus the longest capability
     /// deadline a pass admitted just before it closed may still run into.
     static let defaultStaleAfter: TimeInterval = 180
 

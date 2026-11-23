@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.12 W8-7** — pins the widget-writer diff: an idempotent `refresh` that
+/// Pins the widget-writer diff: an idempotent `refresh` that
 /// produces byte-identical dose + compliance data must NOT re-write the
 /// snapshot (and therefore must not reload the timelines), while a genuine
 /// change still writes through. Proxy for "skipped reload": the persisted
@@ -56,7 +56,7 @@ struct WidgetWriterDiffTests {
         let meds = [med(times: [TimeOfDay(hour: 9, minute: 0)])]
         let intakes = [intake(hour: 9, status: .pending)]
 
-        // 09-03 — the write is queued now, so the assertion waits for the
+        // The write is queued now, so the assertion waits for the
         // operation it is about, not for a synchronous side effect.
         writer.refresh(medications: meds, derivedIntakes: intakes, now: now)
         await writer.drainPendingWrites()
@@ -98,7 +98,7 @@ struct WidgetWriterDiffTests {
         #expect(store.read()?.generatedAt == firstStamp)
     }
 
-    // MARK: - Phase 09 / plan 09-03 — the app-side boundary is serialized
+    // MARK: - The app-side boundary is serialized
 
     /// **Why this is a real property and not a hypothetical one.**
     ///
@@ -162,7 +162,7 @@ struct WidgetWriterDiffTests {
         let everyLatestFieldSurvived = lost.isEmpty
         #expect(
             everyLatestFieldSurvived,
-            "EXPECTED_RED: interleaved widget updates lost a latest field"
+            "interleaved widget updates lost a latest field"
         )
     }
 
@@ -195,7 +195,9 @@ struct WidgetWriterDiffTests {
                 lastMood = WidgetSnapshot.RecentMood(score: (index % 5) + 1, loggedAt: stamp)
                 writer.refreshMood(recentMood: lastMood, now: stamp)
             case 2:
-                lastScore = WidgetSnapshot.HealthScoreGlance(score: 40 + index, band: "amber", resolvedAt: stamp)
+                // Distinct scores below the 100 clamp: a repeated score is a
+                // no-op write by design and would keep the earlier stamp.
+                lastScore = WidgetSnapshot.HealthScoreGlance(score: index, band: "amber", resolvedAt: stamp)
                 writer.refreshHealthScore(lastScore, now: stamp)
             default:
                 lastMeasurement = WidgetSnapshot.LatestMeasurement(

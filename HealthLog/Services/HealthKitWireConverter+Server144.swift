@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// HK-NEW (1.5) — the two category types the server maps since v1.44.0.
+    /// The two category types the server maps since v1.44.0.
     /// Kept apart from the main table so the converter file does not grow with
     /// every family.
     extension HealthKitWireConverter {

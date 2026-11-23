@@ -100,7 +100,7 @@ actor LabsOCRRepository {
         return try DocumentsRepository.decodeEnvelope(data)
     }
 
-    /// POLISH-A A4 — sends the trigger under a short background grace window.
+    /// Sends the trigger under a short background grace window.
     /// Switching apps right after "read" used to cut the upload, which then
     /// ended as "no connection". The window keeps the upload alive for the
     /// time iOS grants; when that runs out first, the upload is cancelled and
@@ -169,7 +169,7 @@ actor LabsOCRRepository {
     }
 }
 
-// MARK: - Upload grace (POLISH-A A4)
+// MARK: - Upload grace
 
 /// The upload of a lab report ran out of background time before it finished.
 enum LabUploadInterrupted: Error, Equatable {

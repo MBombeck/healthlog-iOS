@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B5 — Siri and Shortcuts take glucose in the account's unit.**
+/// **Siri and Shortcuts take glucose in the account's unit.**
 ///
 /// `LogBloodGlucoseIntent` and the glucose arm of `LogMeasurementIntent` wrote
 /// the spoken number verbatim as mg/dL. An mmol/L account saying "5.3" got a

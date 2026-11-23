@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.8.2 W1a (A2) — pure reorder math for the server-first dashboard widget
+/// Pure reorder math for the server-first dashboard widget
 /// layout. The dashboard grid feeds `reordering(_:)` only the VISIBLE,
 /// mappable widget ids; the hidden rows must keep their relative sequence in
 /// the unmatched tail so the AddTileSheet ordering + future un-hide position

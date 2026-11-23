@@ -33,41 +33,15 @@ public enum LTTB {
         }
     }
 
-    /// Downsamples `points` to at most `threshold` samples using LTTB.
-    ///
-    /// **Contract:**
-    /// - The first and last input points are always retained verbatim
-    ///   (LTTB anchors the endpoints).
-    /// - Input is assumed already sorted ascending by `x`; the relative
-    ///   order is preserved (the output `x` sequence stays monotonic when
-    ///   the input is).
-    /// - No-op (`points` returned unchanged) when `threshold < 3` or when
-    ///   `points.count <= threshold` — there is nothing to gain by bucketing
-    ///   a series that is already at or below the target.
-    ///
-    /// - Parameters:
-    ///   - points: the full-resolution series, ascending by `x`.
-    ///   - threshold: the maximum number of points to keep. Values `< 3`
-    ///     short-circuit to the identity (LTTB needs at least the two
-    ///     endpoints plus one bucket).
-    /// - Returns: a series of `count <= threshold` points preserving the
-    ///   visual shape, or the input unchanged when no downsampling applies.
-    public static func downsample(_ points: [Point], threshold: Int) -> [Point] {
-        let indices = selectedIndices(points, threshold: threshold)
-        // Identity short-circuit: `selectedIndices` returns the full index
-        // range when no downsampling applies, so reuse the input directly.
-        guard indices.count < points.count else { return points }
-        return indices.map { points[$0] }
-    }
-
     /// Core LTTB: returns the **indices** of the points to keep, in ascending
     /// order. Exposed so a domain mapper (``downsampleSeries(_:threshold:)``)
     /// can re-project the survivors onto their original rich points by index —
     /// avoiding any fragile value-equality / x-matching round-trip.
     ///
-    /// Same contract as ``downsample(_:threshold:)``: endpoints always
-    /// retained; identity (`0 ..< points.count` mapped to an array) when
-    /// `threshold < 3` or `points.count <= threshold`.
+    /// Contract: the first and last input points are always retained; input is
+    /// assumed sorted ascending by `x` and its order is preserved; identity
+    /// (`0 ..< points.count` mapped to an array) when `threshold < 3` or
+    /// `points.count <= threshold`.
     public static func selectedIndices(_ points: [Point], threshold: Int) -> [Int] {
         guard threshold >= 3, points.count > threshold else {
             return Array(points.indices)
@@ -185,5 +159,20 @@ public enum LTTB {
         let projected = points.map { Point(x: $0.at.timeIntervalSinceReferenceDate, y: $0.value) }
         let kept = selectedIndices(projected, threshold: threshold)
         return kept.map { points[$0] }
+    }
+
+    /// Generic convenience: downsample any value series for plotting by
+    /// projecting each element onto `x` / `y`. Survivors are the original
+    /// elements, in order; the input comes back unchanged at or below
+    /// `threshold`.
+    public static func downsample<Element>(
+        _ elements: [Element],
+        threshold: Int = seriesPlotThreshold,
+        x: (Element) -> Double,
+        y: (Element) -> Double
+    ) -> [Element] {
+        guard threshold >= 3, elements.count > threshold else { return elements }
+        let projected = elements.map { Point(x: x($0), y: y($0)) }
+        return selectedIndices(projected, threshold: threshold).map { elements[$0] }
     }
 }

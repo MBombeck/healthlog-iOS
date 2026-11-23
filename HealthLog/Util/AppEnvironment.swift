@@ -8,8 +8,7 @@ public struct AppEnvironment: Sendable {
     /// Die App bringt bewusst keinen eingebauten Server mit: es gibt keinen
     /// Default-Host, keine Vorbelegung und keinen Rückfall. Wer die App
     /// startet, trägt im Onboarding (`ServerURLStep`) die Adresse der eigenen
-    /// Instanz ein; bis dahin — und dauerhaft im Standalone-Modus, der ohne
-    /// Server läuft — ist dieser Wert `nil`.
+    /// Instanz ein; bis dahin ist dieser Wert `nil`.
     ///
     /// `nil` ist damit ein legitimer Dauerzustand, kein Fehler. Der Typ macht
     /// ihn sichtbar, damit jeder Aufrufer ihn behandeln muss statt an einer
@@ -59,7 +58,7 @@ public struct AppEnvironment: Sendable {
         ServerAccessHeaders.apply(accessHeaders, to: &request)
     }
 
-    /// #153 — the same environment with the user's stored list replaced
+    /// The same environment with the user's stored list replaced
     /// and merged again over the build-time pair. Address and app metadata
     /// stay as they are, so a header edit is never a host change.
     public func replacingStoredAccessHeaders(_ stored: [ServerAccessHeader]) -> AppEnvironment {
@@ -150,7 +149,7 @@ public extension AppEnvironment {
         retiredServerHostFingerprints: Set<String> = Self.retiredServerHostFingerprints
     ) -> AppEnvironment {
         let bundled = loadFromBundle(bundle)
-        // GH-iOS #27 — proxy headers apply with or without a stored address:
+        // Proxy headers apply with or without a stored address:
         // a build that ships `HLBaseURL` still needs them.
         let bundleEnv = AppEnvironment(
             baseURL: bundled.baseURL,
@@ -307,7 +306,7 @@ public extension AppEnvironment {
     /// Prüft, ob dieses Build für `host` überhaupt einen Passkey
     /// registrieren oder abfragen **kann**.
     ///
-    /// Hintergrund (GH #65): Passkeys sind an die `rpId` des Servers
+    /// Hintergrund: Passkeys sind an die `rpId` des Servers
     /// gebunden, und iOS lässt eine Assertion nur zu, wenn diese `rpId` von
     /// einer `webcredentials:`-Domain des Builds gedeckt ist. Die frühere
     /// Schranke prüfte stattdessen den Namen des Hosts gegen eine

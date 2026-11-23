@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - ExportStore factory (audit v0162 H2)
+// MARK: - ExportStore factory
 
 public extension AppContainer {
     /// Builds an ``ExportStore`` wired to the container's API client, outbox, and
@@ -11,7 +11,7 @@ public extension AppContainer {
         ExportStore(api: api, outbox: outbox, moduleGate: moduleGate)
     }
 
-    /// Builds a ``ReportSelectionStore`` (CU-11) wired to the live capabilities
+    /// Builds a ``ReportSelectionStore`` wired to the live capabilities
     /// route and the saved-profile route. Called on demand by the two surfaces
     /// that post a `selection` — the doctor-report PDF and the health-record
     /// package — so both read the same live leaf vocabulary and the same saved
@@ -24,15 +24,15 @@ public extension AppContainer {
         )
     }
 
-    /// **Phase 18 / E1.1** — builds the unified sharing surface's model.
+    /// Builds the unified sharing surface's model.
     ///
     /// It wraps the SAME ``ReportSelectionStore`` the old export surfaces used,
     /// which is the point: the scope, the period and the presentation flags are
-    /// the account's one saved report profile, not a fifth private copy. The
-    /// caller passes the output form its entry point implied.
+    /// the account's one saved report profile, not a fifth private copy. A
+    /// caller whose entry point implies a form passes it; otherwise none is set.
     @MainActor
     func makeUnifiedSharingStore(
-        form: UnifiedSharingStore.OutputForm = .link
+        form: UnifiedSharingStore.OutputForm? = nil
     ) -> UnifiedSharingStore {
         UnifiedSharingStore(profile: makeReportSelectionStore(), form: form)
     }

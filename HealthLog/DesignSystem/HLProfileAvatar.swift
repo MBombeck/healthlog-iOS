@@ -62,7 +62,7 @@ struct HLProfileAvatar: View {
     /// 1-2 letters rendered in the initials-fallback layer. Pass an empty
     /// string to render `"?"`.
     let initials: String
-    /// **v0.8.0 W11.** Resolved self-hosted avatar image, or `nil` to render
+    /// Resolved self-hosted avatar image, or `nil` to render
     /// the initials monogram. The caller (`AvatarStore`) fetches the bytes
     /// through the authenticated, cert-pinned `APIClient` and hands the
     /// decoded `Image` here — this view never issues a network request.

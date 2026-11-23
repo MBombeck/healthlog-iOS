@@ -3,13 +3,13 @@ import Observation
 
 /// Backing store for the pen-inventory section.
 ///
-/// **v0.12 SP4 — server round-trip.** `GLP1LocalRepository` is the optimistic
+/// **Server round-trip.** `GLP1LocalRepository` is the optimistic
 /// on-device cache; when a server pairing exists (`serverRepo != nil`) every
 /// add / mark-finished / delete is *also* mirrored to
 /// `…/medications/[id]/inventory` through the Outbox + idempotency-key pipeline
 /// (`MedicationTherapyLogRepository`). The authoritative running-low math +
 /// state machine live server-side; iOS posts the user intent and reconciles the
-/// computed rows on load. **Standalone** (no pairing → `serverRepo == nil`)
+/// computed rows on load. Without a server repo (`serverRepo == nil`) it
 /// stays purely local: nothing is enqueued, nothing replays.
 @MainActor
 @Observable
@@ -43,7 +43,7 @@ public final class PenInventoryStore {
         defer { isLoading = false }
         do {
             pens = try await repo.pens(medicationID: medicationID)
-            // **#52 — back-fill from the server (v1.31.0).** The reason the
+            // **Back-fill from the server (v1.31.0).** The reason the
             // back-fill was skipped in v0.12 is gone: `MedicationInventoryItem`
             // carries `manufacturer` + `doseStrength` since migration 0256, so a
             // pen registered on the web is a complete pen row, not a blank card.
@@ -62,15 +62,22 @@ public final class PenInventoryStore {
         }
     }
 
+    /// Logs a new pen. Answers `nil` once the pen is on the device (and on the
+    /// server, queued for it, or kept local because the server could not take
+    /// it) and the failure otherwise, so the sheet can stay open with the
+    /// entry. A pen the server refused as invalid is taken back off the device:
+    /// left there it would never sync, and saving again would log it twice.
+    @discardableResult
     public func add(
         manufacturer: String,
         doseStrength: String,
         dispensedAt: Date,
         firstUsedAt: Date?,
         notes: String?
-    ) async {
+    ) async -> HLError? {
+        let inserted: PenInventoryEntrySnapshot
         do {
-            let inserted = try await repo.addPen(
+            inserted = try await repo.addPen(
                 medicationID: medicationID,
                 manufacturer: manufacturer,
                 doseStrength: doseStrength,
@@ -78,61 +85,69 @@ public final class PenInventoryStore {
                 firstUsedAt: firstUsedAt,
                 notes: notes
             )
-            pens = mergeSortedDescending(existing: pens, inserted: inserted)
-            if let serverRepo {
-                // #52 — the pen detail travels to the server (v1.31.0) instead of
-                // staying device-local, so the same pen renders on the web.
-                let body = MedicationInventoryCreate(
-                    unitsTotal: Double(Self.defaultDosesPerPen),
-                    containerType: .pen,
-                    manufacturer: manufacturer,
-                    doseStrength: doseStrength,
-                    printedExpiry: nil,
-                    purchasedAt: dispensedAt,
-                    notes: notes
-                )
-                do {
-                    let created = try await serverRepo.createInventoryItem(medicationID: medicationID, body: body)
-                    try? await repo.setPenServerID(localID: inserted.id, serverID: created.id)
-                    // If the pen was logged as already-started, sync first-use.
-                    //
-                    // Audit B-1 — this used to be `try?`. The pen itself is safe
-                    // either way (it is already in the on-device store and its
-                    // server row was created on the line above), but a dropped
-                    // first-use flip means the server-side running-low math
-                    // counts from the wrong date, and the user was never told.
-                    // A durably queued failure stays silent — the outbox will
-                    // replay it — everything else is logged and surfaced.
-                    if let firstUsedAt {
-                        do {
-                            _ = try await serverRepo.updateInventoryItem(
-                                medicationID: medicationID,
-                                itemID: created.id,
-                                patch: MedicationInventoryPatch(markAsFirstUseAt: .set(firstUsedAt))
-                            )
-                        } catch let err as HLError where err.shouldPersistToOutbox {
-                            // Queued for replay — the flip is not lost.
-                        } catch let err as HLError {
-                            HLLog.ui.error("Pen first-use sync failed: \(String(describing: err))")
-                            error = err
-                        } catch {
-                            HLLog.ui.error("Pen first-use sync failed: \(String(describing: error))")
-                            self.error = .unknown(String(describing: error))
-                        }
-                    }
-                } catch let err as HLError where err.shouldPersistToOutbox {
-                    // Queued for replay (incl. a transient-refresh 401 the
-                    // repo durably enqueued) — keep the optimistic row, no banner.
-                }
-            }
-        } catch let err as HLError {
-            error = err
         } catch {
-            self.error = .unknown(String(describing: error))
+            return Self.hlError(error)
+        }
+        if let serverRepo {
+            // The pen detail travels to the server (v1.31.0) instead of
+            // staying device-local, so the same pen renders on the web.
+            let body = MedicationInventoryCreate(
+                unitsTotal: Double(Self.defaultDosesPerPen),
+                containerType: .pen,
+                manufacturer: manufacturer,
+                doseStrength: doseStrength,
+                printedExpiry: nil,
+                purchasedAt: dispensedAt,
+                notes: notes
+            )
+            do {
+                let created = try await serverRepo.createInventoryItem(medicationID: medicationID, body: body)
+                try? await repo.setPenServerID(localID: inserted.id, serverID: created.id)
+                if let firstUsedAt {
+                    await syncFirstUse(itemID: created.id, firstUsedAt: firstUsedAt)
+                }
+            } catch let err as HLError where err.shouldPersistToOutbox {
+                // Queued for replay (incl. a transient-refresh 401 the
+                // repo durably enqueued) — keep the optimistic row, no banner.
+            } catch where Self.isFinalRejection(error) {
+                try? await repo.deletePen(id: inserted.id)
+                return Self.hlError(error)
+            } catch {
+                // Not a refusal of the entry: an answer that would not decode
+                // after a 2xx, or a server without the route. The pen stays on
+                // the device as in 1.5.0, and the banner says what happened.
+                self.error = Self.hlError(error)
+            }
+        }
+        pens = mergeSortedDescending(existing: pens, inserted: inserted)
+        return nil
+    }
+
+    /// The pen itself is saved either way (its server row exists),
+    /// but a dropped first-use flip means the server-side running-low math
+    /// counts from the wrong date. A durably queued failure stays silent (the
+    /// outbox replays it); everything else is logged and shown on the screen.
+    private func syncFirstUse(itemID: String, firstUsedAt: Date) async {
+        guard let serverRepo else { return }
+        do {
+            _ = try await serverRepo.updateInventoryItem(
+                medicationID: medicationID,
+                itemID: itemID,
+                patch: MedicationInventoryPatch(markAsFirstUseAt: .set(firstUsedAt))
+            )
+        } catch let err as HLError where err.shouldPersistToOutbox {
+            // Queued for replay — the flip is not lost.
+        } catch {
+            HLLog.ui.error("Pen first-use sync failed: \(String(describing: error))")
+            self.error = Self.hlError(error)
         }
     }
 
-    public func markFinished(id: String) async {
+    /// Marks a pen as used up. A failure lands in ``error`` for the screen's
+    /// banner; the answer tells the caller whether it worked.
+    @discardableResult
+    public func markFinished(id: String) async -> Bool {
+        error = nil
         do {
             let serverID = try? await repo.penServerID(localID: id)
             try await repo.markPenFinished(id: id, finishedAt: .now)
@@ -148,14 +163,17 @@ public final class PenInventoryStore {
                     // Queued for replay (incl. a transient-refresh 401) — no banner.
                 }
             }
-        } catch let err as HLError {
-            error = err
+            return true
         } catch {
-            self.error = .unknown(String(describing: error))
+            self.error = Self.hlError(error)
+            return false
         }
     }
 
-    public func delete(id: String) async {
+    /// Deletes a pen. A failure lands in ``error`` for the screen's banner.
+    @discardableResult
+    public func delete(id: String) async -> Bool {
+        error = nil
         do {
             let serverID = try? await repo.penServerID(localID: id)
             try await repo.deletePen(id: id)
@@ -167,11 +185,23 @@ public final class PenInventoryStore {
                     // Queued for replay (incl. a transient-refresh 401) — no banner.
                 }
             }
-        } catch let err as HLError {
-            error = err
+            return true
         } catch {
-            self.error = .unknown(String(describing: error))
+            self.error = Self.hlError(error)
+            return false
         }
+    }
+
+    /// The server read the entry and refused it for good (400, 422: what the
+    /// GLP-1 routes answer a body they reject). Only then is the local row
+    /// taken back; every other failure keeps it.
+    nonisolated static func isFinalRejection(_ error: Error) -> Bool {
+        guard case let HLError.server(status, _, _) = error else { return false }
+        return status == 400 || status == 422
+    }
+
+    nonisolated static func hlError(_ error: Error) -> HLError {
+        (error as? HLError) ?? .unknown(String(describing: error))
     }
 
     // MARK: - Server back-fill (#52)

@@ -6,7 +6,7 @@ import Testing
 
     // swiftlint:disable force_unwrapping
 
-    /// **W-B189 (#23) — `MEASUREMENT_REMINDER` (preventive-care / Vorsorge)
+    /// **`MEASUREMENT_REMINDER` (preventive-care / Vorsorge)
     /// category + "Erledigt" action + routing.**
     ///
     /// Pins the contract the server (v1.17.1) welcomed for parity:
@@ -69,7 +69,7 @@ import Testing
             let appRouter = AppRouter()
             _ = makeService(appRouter: appRouter)
             // setNotificationCategories serialises on UNUserNotificationCenter's
-            // own queue. T1 (1.4) — awaited, not a 50 ms sleep (see the helper).
+            // own queue. Awaited, not a 50 ms sleep (see the helper).
             await awaitNotificationCategory(NotificationService.categoryMeasurementReminder)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             guard let cat = categories.first(
@@ -155,7 +155,7 @@ import Testing
     // swiftlint:enable force_unwrapping
 #endif
 
-/// **W-B189 (#23)** — decode contract for the preventive-care reminder opt-in
+/// Decode contract for the preventive-care reminder opt-in
 /// block on `GET /api/auth/me/notification-prefs`. Mirrors the medication block
 /// shape (forward-compat: unknown siblings ignored, missing block → nil).
 @Suite("AuthNotificationPrefsPayload — measurementReminder decode", .mockURLSession)

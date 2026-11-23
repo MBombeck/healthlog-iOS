@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Cadence encode / infer / validate (R1 §3.7)
+// MARK: - Cadence encode / infer / validate
 
 /// Pure cadence helpers backing `CadencePicker` + the Add/Edit sheets. Mirrors
 /// the web oracle's `encodeCadence` (`CadencePicker.tsx`) and
@@ -74,7 +74,7 @@ enum MedicationCadenceLogic {
         if medication.oneShot {
             return (.oneShot, sub)
         }
-        // 09-14 — as-needed is medication-level too, and it has to be read
+        // As-needed is medication-level too, and it has to be read
         // BEFORE the entries: a PRN medication is defined by having none, so
         // the guard below would otherwise re-select it as a daily plan and the
         // next save would give the user a reminder every morning.
@@ -254,7 +254,7 @@ enum MedicationCadenceLogic {
     /// calendar/rolling kinds carry every time in one row's `timesOfDay` array
     /// (the server fans them out per matched day).
     ///
-    /// **09-14 — the cyclic row now carries `scheduleType: CYCLIC`.** Without
+    /// **The cyclic row now carries `scheduleType: CYCLIC`.** Without
     /// the discriminator the published schema says the two week counts are
     /// "ignored otherwise", so a cyclic save was created as a plain SCHEDULED
     /// row that the create route then stamped `rrule = "FREQ=DAILY"`.
@@ -270,7 +270,7 @@ enum MedicationCadenceLogic {
         let timeStrings = sortedTimes.map(MedicationFormLogic.formatTime)
         let primary = sortedTimes.first ?? TimeOfDay(hour: 8, minute: 0)
         let windowStart = MedicationFormLogic.formatTime(primary)
-        // #219 — the raw per-slot inventory dose is subject to exactly the
+        // The raw per-slot inventory dose is subject to exactly the
         // same REPLACE hazard as the dose windows below: a rebuilt row that
         // omits it is created with `unitsPerDose` NULL, i.e. the user's
         // explicit ½-tablet slot silently falls back to inheritance. The
@@ -377,7 +377,7 @@ enum MedicationCadenceLogic {
         return (schedules, value.asNeeded)
     }
 
-    /// W3-MEDCONTRACT (v0.14.8) — RMW echo of the per-dose on-time windows
+    /// RMW echo of the per-dose on-time windows
     /// (v1.15.18): a `schedules` REPLACE re-creates the rows server-side and
     /// resets an omitted `doseWindows` to NULL, wiping bands the user
     /// configured on the web. Echo every window whose dose time survives this
@@ -427,7 +427,7 @@ enum MedicationCadenceLogic {
     /// The emitted bare date string carries no time zone; the server's `@db.Date`
     /// stores exactly this calendar day. Mirrors the noon-UTC day anchoring in
     /// ``RecordsDateFormat/onsetInstant(forDay:)``.
-    /// #115 1.5 — the `YYYY-MM-DD` of a course day held as a UTC-midnight day
+    /// The `YYYY-MM-DD` of a course day held as a UTC-midnight day
     /// anchor (``CourseWindowRow`` / a decoded `Medication.startsOn`). The anchor
     /// is read back in UTC, the calendar it lives in, so no device zone can
     /// move the day.
@@ -440,6 +440,8 @@ enum MedicationCadenceLogic {
         let y = comps.year ?? 2000
         let m = comps.month ?? 1
         let d = comps.day ?? 1
+        // The server's "YYYY-MM-DD" day, never shown to anyone.
+        // swiftlint:disable:next hl_number_via_helper
         return String(format: "%04d-%02d-%02d", y, m, d)
     }
 

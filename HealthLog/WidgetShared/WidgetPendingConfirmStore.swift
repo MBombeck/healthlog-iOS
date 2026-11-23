@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.10.0 W-Widget-2Tap — the Home-screen next-dose widget's two-step
+/// **The Home-screen next-dose widget's two-step
 /// "Genommen" confirm state, shared between the widget extension and itself
 /// across timeline reloads via the App Group container.**
 ///

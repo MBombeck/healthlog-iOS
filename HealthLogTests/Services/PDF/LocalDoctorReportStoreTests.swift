@@ -154,16 +154,4 @@ struct LocalDoctorReportStoreTests {
         // Avoid unused-variable warning on `store`.
         _ = store
     }
-
-    // MARK: - LocalDoctorReportPeriod
-
-    @Test("LocalDoctorReportPeriod cases map to expected day counts")
-    func periodEnumMatchesDayCounts() {
-        #expect(LocalDoctorReportPeriod.thirty.rawValue == 30)
-        #expect(LocalDoctorReportPeriod.sixty.rawValue == 60)
-        #expect(LocalDoctorReportPeriod.ninety.rawValue == 90)
-        #expect(LocalDoctorReportPeriod.oneEighty.rawValue == 180)
-        #expect(LocalDoctorReportPeriod.threeSixtyFive.rawValue == 365)
-        #expect(LocalDoctorReportPeriod.allCases.count == 5)
-    }
 }

@@ -122,7 +122,7 @@ struct MeasurementReminderRowDecodeTests {
         #expect(decoded == original)
     }
 
-    // MARK: - The accepted v1.37.20 ledger fields (ROUTE-07)
+    // MARK: - The accepted v1.37.20 ledger fields
 
     // The payloads come from Plan 08-18's frozen fixture, read through that
     // plan's own loader, so nothing here is a second transcription of the

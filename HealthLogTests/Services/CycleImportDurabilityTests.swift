@@ -9,7 +9,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **Phase 07 / plan 07-06 — what a cycle bulk response is allowed to prove.**
+    /// **What a cycle bulk response is allowed to prove.**
     ///
     /// The shipped importer read a 2xx as acceptance and saved the type's anchor,
     /// so an index the response skipped — or never mentioned at all — consumed the

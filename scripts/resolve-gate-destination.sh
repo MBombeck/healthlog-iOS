@@ -9,6 +9,9 @@
 # the generated HealthLog project/scheme. Without one, prefer a booted iPhone
 # simulator and otherwise select the first available iPhone simulator. UUIDs
 # are discovered at runtime; none are persisted in project state.
+#
+# A watchOS simulator is accepted only when the operator names it explicitly
+# (`platform=watchOS Simulator,...`); it is never picked on its own.
 
 _healthlog_gate_project="${PROJECT:-HealthLog.xcodeproj}"
 _healthlog_gate_scheme="${SCHEME:-HealthLog}"
@@ -57,20 +60,33 @@ _healthlog_simulator_udid() {
           [key, value] if key && value
         end.compact.to_h
 
-        if !requested.empty? && fields["platform"] != "iOS Simulator"
+        if !requested.empty? && !["iOS Simulator", "watchOS Simulator"].include?(fields["platform"])
           exit 3
         end
+
+        # The watch test bundle runs on a watch simulator; everything else
+        # keeps the iPhone inventory.
+        watch = fields["platform"] == "watchOS Simulator"
+        device_marker = watch ? ".Apple-Watch-" : ".iPhone-"
+        runtime_os = watch ? "watchOS" : "iOS"
 
         devices = payload.fetch("devices", {}).flat_map do |runtime, entries|
           entries.map do |device|
             next unless device.fetch("isAvailable", true)
-            next unless device.fetch("deviceTypeIdentifier", "").include?(".iPhone-")
+            next unless device.fetch("deviceTypeIdentifier", "").include?(device_marker)
+            next if watch && !runtime.include?(".watchOS-")
             device.merge("runtime" => runtime)
           end.compact
         end
 
         selected = if requested.empty?
-          devices.find { |device| device["state"] == "Booted" } || devices.first
+          # The app and its extensions deploy from iOS 26.0; an older runtime
+          # cannot install the build, so it is never picked on its own.
+          supported = devices.select do |device|
+            major = device.fetch("runtime", "")[/iOS-(\d+)/, 1]
+            major && major.to_i >= 26
+          end
+          supported.find { |device| device["state"] == "Booted" } || supported.first
         else
           matches = devices
           matches = matches.select { |device| device["udid"] == fields["id"] } if fields["id"]
@@ -79,7 +95,7 @@ _healthlog_simulator_udid() {
           if requested_os && requested_os != "latest"
             normalized_os = requested_os.tr(".", "-")
             matches = matches.select do |device|
-              device.fetch("runtime", "").end_with?("iOS-#{normalized_os}")
+              device.fetch("runtime", "").end_with?("#{runtime_os}-#{normalized_os}")
             end
           end
           matches.find { |device| device["state"] == "Booted" } || matches.first
@@ -134,7 +150,7 @@ else
         return 1
     fi
     if [[ -z "$_healthlog_gate_udid" ]]; then
-        _healthlog_gate_error "no available iPhone simulator exists; install an iOS runtime or supply GATE_DESTINATION"
+        _healthlog_gate_error "no available iPhone simulator with iOS 26 or later exists; install an iOS 26+ runtime or supply GATE_DESTINATION"
         return 1
     fi
 

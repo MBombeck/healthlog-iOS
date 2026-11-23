@@ -4,173 +4,122 @@ import SwiftUI
 /// schedule up to the dose they have reached. Embedded as a child section of
 /// `MedicationDetailScreen` behind an `isGLP1` gate.
 ///
-/// **1.4.2 boundary (ruling R10):** the "Usual next step: X mg" line — a mg
-/// figure computed from the user's own dose — was removed in 1.0.3, together
-/// with the forward ladder it introduced. Nothing here projects a dose the
-/// user has not recorded; every visible string is journal / informational and
-/// defers to the prescribing physician.
+/// **App Review 1.4.2 boundary:** nothing here projects a dose the user has
+/// not recorded (no "usual next step" mg figure, no forward ladder); every
+/// visible string is journal / informational and defers to the prescribing
+/// physician.
 public struct TitrationLadderSection: View {
     @State private var store: TitrationLadderStore
     @State private var editorEntry: TitrationLadderEntry?
-    @State private var showingAdd: Bool = false
-    /// 1.4 B2 — with nothing recorded the section is one row in the GLP-1
+    /// Opens the add sheet. The sheet lives on `GLP1DetailStack`, which stays
+    /// on screen when this section swaps between its add row and its full form.
+    private let onAdd: () -> Void
+    /// The step waiting for the delete confirmation.
+    /// With nothing recorded the section is one row in the GLP-1
     /// stack's shared "add" card (``GLP1DetailStack``) instead of a label over
     /// an empty card.
     private let showsAddRowOnly: Bool
 
-    public init(store: TitrationLadderStore, showsAddRowOnly: Bool = false) {
+    public init(store: TitrationLadderStore, showsAddRowOnly: Bool = false, onAdd: @escaping () -> Void) {
         _store = State(initialValue: store)
+        self.onAdd = onAdd
         self.showsAddRowOnly = showsAddRowOnly
     }
 
     public var body: some View {
         Group {
             if showsAddRowOnly {
-                GLP1AddRow(title: "Add titration step", systemImage: "stairs") { showingAdd = true }
+                GLP1AddRow(title: "Add titration step", systemImage: "stairs", identifier: "glp1.add.titrationStep") { onAdd() }
             } else {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // The page's gap, so the header keeps its own room.
+                VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     header
                     content
                 }
             }
         }
-        .sheet(isPresented: $showingAdd) {
-            TitrationStepEditSheet(
-                mode: .add,
-                onSave: { effective, doseMg, note in
-                    Task { await store.add(effectiveFrom: effective, doseMg: doseMg, note: note) }
-                }
-            )
-            .hlSheetPresentation(.form)
-        }
         .sheet(item: $editorEntry) { entry in
             TitrationStepEditSheet(
                 mode: .edit(entry),
                 onSave: { effective, doseMg, note in
-                    Task {
-                        await store.update(
-                            id: entry.id,
-                            effectiveFrom: effective,
-                            doseMg: doseMg,
-                            note: note
-                        )
-                    }
+                    await store.update(
+                        id: entry.id,
+                        effectiveFrom: effective,
+                        doseMg: doseMg,
+                        note: note
+                    )
                 }
             )
-            .hlSheetPresentation(.form)
         }
+        // Each row's delete asks first; the question hangs here, not on the menu.
+        .hlDeleteConfirmation()
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            // T2-4: section label Withings rhythm.
-            HLSectionLabel("glp1.titration.section.label")
-            Spacer()
-            Button {
-                showingAdd = true
-            } label: {
-                Label(String(localized: "medications.section.active.empty.cta"), systemImage: "plus.circle.fill")
-                    .labelStyle(.iconOnly)
-                    .font(.hlTitle3)
-                    .foregroundStyle(.tint)
-            }
-            .accessibilityLabel(Text(String(localized: "Add titration step")))
-        }
+        HLSectionHeader("glp1.titration.section.label", rank: .area)
     }
 
     /// Without a recorded dose change there is nothing to anchor the label's
     /// schedule to, and the stack shows the add row instead of this content —
     /// no ladder is drawn from a dose guessed out of the medication's name.
+    /// The label's schedule is free content; the recorded steps are rows of
+    /// their own card.
     private var content: some View {
         let catalogSteps = store.catalogTimelineSteps
-        return HLCard {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                if let drugID = store.catalogDrug?.id, !catalogSteps.isEmpty {
+        return VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+            if let drugID = store.catalogDrug?.id, !catalogSteps.isEmpty {
+                HLCard {
                     TitrationCatalogTimelineView(steps: catalogSteps, drugID: drugID)
-                    Divider().background(HLColor.separator)
                 }
-                timeline
             }
+            timeline
         }
     }
 
     private var timeline: some View {
-        VStack(spacing: 0) {
-            let entries = store.mergedTimeline
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                TitrationRow(entry: entry) {
-                    if entry.source == .local {
-                        editorEntry = entry
+        HLCard(layout: .rows) {
+            ForEach(store.mergedTimeline, id: \.id) { entry in
+                TitrationRow(entry: entry, isEditable: entry.source == .local || store.canEditServerSteps) {
+                    editorEntry = entry
+                } delete: {
+                    .confirmed(title: "Delete entry?", message: "The history entry will be removed. This action cannot be undone.") {
+                        await store.delete(id: entry.id)
                     }
-                } onDelete: {
-                    Task { await store.delete(id: entry.id) }
-                }
-                if index < entries.count - 1 {
-                    Divider().background(HLColor.separator)
                 }
             }
+            // Adding is the card's last row with the plus in front, as
+            // everywhere something is created (Z18).
+            HLSettingsActionRow(title: "Add titration step", presents: .create) { onAdd() }
+                .accessibilityIdentifier("glp1.titration.add")
         }
     }
 
     static func formatDose(_ mg: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.locale = Locale.current
-        let raw = formatter.string(from: NSNumber(value: mg)) ?? String(format: "%.2f", mg)
-        return "\(raw) mg"
+        HLValueFormat.string(mg, unit: .milligrams, fractionDigits: 0 ... 2)
     }
 }
 
 // MARK: - Row
 
+/// One recorded step: the date it took effect, the note, the dose as the
+/// value. Since #169 a step the server holds is edited and removed like a
+/// local one; only without a server seam (previews) is it read-only.
 private struct TitrationRow: View {
     let entry: TitrationLadderEntry
+    let isEditable: Bool
     let onEdit: () -> Void
-    let onDelete: () -> Void
+    let delete: () -> HLDeleteAction
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                HStack(spacing: HLSpace.xs) {
-                    Text(TitrationLadderSection.formatDose(entry.doseMg))
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .monospacedDigit()
-                    if entry.source == .server {
-                        HLBadge(String(localized: "Server"), tone: .neutral)
-                    }
-                }
-                Text(HLDateFormat.date(entry.effectiveFrom, style: .abbreviated))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                if let note = entry.note, !note.isEmpty {
-                    Text(note)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer()
-            if entry.source == .local {
-                Menu {
-                    Button {
-                        onEdit()
-                    } label: {
-                        Label(String(localized: "Edit"), systemImage: "pencil")
-                    }
-                    Button(role: .destructive, action: onDelete) {
-                        Label(String(localized: "Delete"), systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundStyle(HLText.secondary)
-                }
-                .accessibilityLabel(Text(String(localized: "Titration step actions")))
-            }
-        }
-        .padding(.vertical, HLSpace.sm)
-        .accessibilityElement(children: .combine)
+        HLHistoryRow(
+            date: Text(verbatim: HLDateFormat.date(entry.effectiveFrom, style: .abbreviated)),
+            detail: entry.note.flatMap { note in
+                HLRowDetail.text([note.replacingOccurrences(of: "\n", with: " ")])
+            },
+            value: Text(verbatim: TitrationLadderSection.formatDose(entry.doseMg)),
+            status: isEditable ? nil : HLRowStatus(String(localized: "Server"))
+        )
+        .glp1RowActions(edit: isEditable ? onEdit : nil, delete: isEditable ? delete() : nil)
     }
 }
 
@@ -183,67 +132,99 @@ struct TitrationStepEditSheet: View {
     }
 
     let mode: Mode
-    let onSave: (Date, Double, String?) -> Void
+    /// Saves the step; `nil` means saved, otherwise the sheet stays open and
+    /// shows the failure.
+    let onSave: (Date, Double, String?) async -> HLError?
 
-    @Environment(\.dismiss) private var dismiss
     @State private var effectiveFrom: Date
     @State private var doseString: String
     @State private var note: String
+    @State private var saveGate = FormSaveGate()
+    private let initialEffectiveFrom: Date
+    private let initialDoseString: String
+    private let initialNote: String
 
-    init(mode: Mode, onSave: @escaping (Date, Double, String?) -> Void) {
+    init(mode: Mode, onSave: @escaping (Date, Double, String?) async -> HLError?) {
         self.mode = mode
         self.onSave = onSave
+        let effective: Date
+        let dose: String
+        let note: String
         switch mode {
         case .add:
-            _effectiveFrom = State(initialValue: .now)
-            _doseString = State(initialValue: "")
-            _note = State(initialValue: "")
+            effective = .now
+            dose = ""
+            note = ""
         case let .edit(entry):
-            _effectiveFrom = State(initialValue: entry.effectiveFrom)
-            _doseString = State(initialValue: TitrationStepEditSheet.formatInputDose(entry.doseMg))
-            _note = State(initialValue: entry.note ?? "")
+            effective = entry.effectiveFrom
+            dose = TitrationStepEditSheet.formatInputDose(entry.doseMg)
+            note = entry.note ?? ""
         }
+        initialEffectiveFrom = effective
+        initialDoseString = dose
+        initialNote = note
+        _effectiveFrom = State(initialValue: effective)
+        _doseString = State(initialValue: dose)
+        _note = State(initialValue: note)
+    }
+
+    private var isDirty: Bool {
+        !Calendar.current.isDate(effectiveFrom, inSameDayAs: initialEffectiveFrom)
+            || doseString != initialDoseString
+            || note != initialNote
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            titleKey,
+            action: isAdding ? .add(isEnabled: parsedDose != nil) { await save() } : .save(isEnabled: parsedDose != nil) { await save() },
+            isDirty: isDirty,
+            confirmIdentifier: "glp1.sheet.save"
+        ) {
             Form {
-                Section(String(localized: "Effective from")) {
+                Section {
                     DatePicker(
-                        String(localized: "glp1.titration.date.label"),
                         selection: $effectiveFrom,
                         displayedComponents: [.date]
-                    )
+                    ) {
+                        HLRowTitle("glp1.titration.date.label")
+                    }
+                } header: {
+                    HLSectionHeader("Effective from")
                 }
-                Section(String(localized: "Dose (mg)")) {
+                .hlFormRowSurface()
+                Section {
                     TextField(String(localized: "glp1.titration.dose.placeholder"), text: $doseString)
                         .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("glp1.titration.dose")
                         .monospacedDigit()
+                } header: {
+                    HLSectionHeader("Dose (mg)")
                 }
-                Section(String(localized: "Note")) {
+                .hlFormRowSurface()
+                Section {
                     TextField(String(localized: "Optional"), text: $note, axis: .vertical)
                         .lineLimit(3 ... 6)
+                } header: {
+                    HLSectionHeader("Note")
+                }
+                .hlFormRowSurface()
+                if let error = saveGate.error {
+                    Section { HLFormErrorText(error.userFacingDescription) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Save")) { save() }
-                        .disabled(parsedDose == nil)
-                }
-            }
+            .hlPageMargins()
         }
     }
 
-    private var navigationTitle: String {
-        switch mode {
-        case .add: String(localized: "Titration step")
-        case .edit: String(localized: "Edit step")
-        }
+    private var isAdding: Bool {
+        if case .add = mode { return true }
+        return false
+    }
+
+    private var titleKey: LocalizedStringKey {
+        isAdding ? "Titration step" : "Edit step"
     }
 
     private var parsedDose: Double? {
@@ -251,11 +232,13 @@ struct TitrationStepEditSheet: View {
         return value
     }
 
-    private func save() {
-        guard let dose = parsedDose else { return }
+    /// `true` once the entry went out and the sheet may close.
+    private func save() async -> Bool {
+        guard let dose = parsedDose else { return false }
         let cleanedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(effectiveFrom, dose, cleanedNote.isEmpty ? nil : cleanedNote)
-        dismiss()
+        return await saveGate.submit {
+            await onSave(effectiveFrom, dose, cleanedNote.isEmpty ? nil : cleanedNote)
+        }
     }
 
     static func formatInputDose(_ mg: Double) -> String {
@@ -265,6 +248,6 @@ struct TitrationStepEditSheet: View {
         // the running locale supplies the decimal separator, so the prefilled
         // value round-trips cleanly through `LocaleDecimalParser`. Grouping is
         // disabled — an input field must not carry thousands separators.
-        mg.formatted(.number.precision(.fractionLength(0 ... 2)).grouping(.never))
+        HLValueFormat.number(mg, fractionDigits: 0 ... 2, grouping: .never)
     }
 }

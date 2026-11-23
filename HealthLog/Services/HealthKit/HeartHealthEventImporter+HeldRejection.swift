@@ -1,7 +1,7 @@
 #if canImport(HealthKit)
     import Foundation
 
-    // INT-A (#115 / 0.3) — an unexplained whole-batch 4xx may hold one event
+    // An unexplained whole-batch 4xx may hold one event
     // type's anchor only for a bounded run of sweeps (see
     // `HealthKitBatchRejection.page(for:requiring:heldSweeps:)`).
 

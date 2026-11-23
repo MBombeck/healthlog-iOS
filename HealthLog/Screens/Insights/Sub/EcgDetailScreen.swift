@@ -27,20 +27,14 @@ struct EcgDetailScreen: View {
     @State private var loadFailed = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                resultLine
-                waveformSlot
-                metadataGrid
-                if EcgPresentation.showsClinicianNote(for: recording.verdict) {
-                    clinicianNote
-                }
+        HLPage {
+            resultLine
+            waveformSlot
+            metadataGrid
+            if EcgPresentation.showsClinicianNote(for: recording.verdict) {
+                clinicianNote
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .background(HLSurface.primary.ignoresSafeArea())
         .navigationTitle(Text("insights.ecg.title"))
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("insights.ecg.detail")
@@ -50,15 +44,16 @@ struct EcgDetailScreen: View {
     // MARK: - Sections
 
     /// The device's result, explicitly attributed to the device that produced
-    /// it. 1.4 B2 — the attribution footer is that statement; the line that
+    /// it. The attribution footer is that statement; the line that
     /// repeated the result "as reported by the recording device" between the
     /// title and the old separate disclaimer card is gone.
     private var resultLine: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
+                // A card head's weight: the result is the card's subject, not
+                // a second page title.
                 Text(EcgPresentation.resultLabel(for: recording.verdict))
-                    .font(.hlTitle3)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 EcgAttributionFooter()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -85,8 +80,7 @@ struct EcgDetailScreen: View {
             }
         } else if loadFailed {
             Text("insights.ecg.waveform.loadFailed")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("insights.ecg.detail.waveformFailed")
         }
@@ -112,34 +106,15 @@ struct EcgDetailScreen: View {
     /// an honest dash where the device reported nothing.
     private var metadataGrid: some View {
         HLCard {
-            VStack(spacing: 0) {
-                metaRow("insights.ecg.meta.recorded", HLDateFormat.dateTime(recording.recordedAt))
-                Divider().overlay(HLColor.separator)
-                metaRow("insights.ecg.meta.duration", EcgPresentation.durationValue(recording.durationSeconds))
-                Divider().overlay(HLColor.separator)
-                metaRow("insights.ecg.meta.lead", EcgPresentation.leadValue(recording.lead))
-                Divider().overlay(HLColor.separator)
-                metaRow("insights.ecg.meta.averageHeartRate", EcgPresentation.bpmValue(recording.averageHeartRate))
-                Divider().overlay(HLColor.separator)
-                metaRow("insights.ecg.meta.samplingRate", EcgPresentation.hzValue(recording.samplingFrequency))
+            HLFactGroup {
+                HLFactRow("insights.ecg.meta.recorded", value: HLDateFormat.dateTime(recording.recordedAt))
+                HLFactRow("insights.ecg.meta.duration", value: EcgPresentation.durationValue(recording.durationSeconds))
+                HLFactRow("insights.ecg.meta.lead", value: EcgPresentation.leadValue(recording.lead))
+                HLFactRow("insights.ecg.meta.averageHeartRate", value: EcgPresentation.bpmValue(recording.averageHeartRate))
+                HLFactRow("insights.ecg.meta.samplingRate", value: EcgPresentation.hzValue(recording.samplingFrequency))
             }
         }
         .accessibilityIdentifier("insights.ecg.detail.meta")
-    }
-
-    private func metaRow(_ label: LocalizedStringKey, _ value: String) -> some View {
-        HStack(spacing: HLSpace.md) {
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-            Spacer(minLength: HLSpace.sm)
-            Text(value)
-                .font(.hlSubhead.weight(.medium))
-                .foregroundStyle(HLText.primary)
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.vertical, HLSpace.sm)
-        .accessibilityElement(children: .combine)
     }
 
     /// Shown ONLY for a non-normal DEVICE verdict. It points at a conversation
@@ -148,13 +123,11 @@ struct EcgDetailScreen: View {
         HLCard {
             HStack(alignment: .top, spacing: HLSpace.sm) {
                 Image(systemName: "stethoscope")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.note)
                     .accessibilityHidden(true)
-                // 1.4 B2 — the references sit once, with the result above.
+                // The references sit once, with the result above.
                 Text("insights.ecg.clinicianNote")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

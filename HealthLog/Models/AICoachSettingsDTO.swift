@@ -1,6 +1,6 @@
 import Foundation
 
-// **Build 6 / Item 6.6 — Coach/AI privacy settings wire shapes.**
+// **Coach/AI privacy settings wire shapes.**
 //
 // Two server-owned per-user AI flags that had **zero** iOS bindings before this
 // item (handover-verified). Both are decoded tolerantly — a missing field
@@ -52,7 +52,7 @@ public struct DocumentsAutoAiReadWrite: Codable, Sendable {
     }
 }
 
-// MARK: - disableCoach (Build 9 / 9.2)
+// MARK: - disableCoach
 
 /// Wire shape for `GET / PATCH /api/auth/me/disable-coach`. The server always
 /// echoes the resolved next state as `{ disableCoach: Bool }` (`?? false`).

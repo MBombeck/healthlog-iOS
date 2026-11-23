@@ -13,19 +13,19 @@ import SwiftUI
 /// (see the agent's reconcile spec); the lazy fallback keeps the build green in
 /// the meantime.
 struct LabsScreen: View {
-    @Environment(\.appContainer) private var container
-    /// v1.25 (GH iOS #38) — the "what changed since your last panel" awareness
-    /// card's store. Server-authoritative, paired-only; the card self-suppresses
-    /// when there are fewer than two panels.
+    @Environment(\.appContainer) var container
+    /// v1.25 — the "what changed since your last panel" awareness
+    /// card's store. Server-authoritative; the card self-suppresses when there
+    /// are fewer than two panels.
     @Environment(ClinicalSignalsStore.self) private var clinicalSignalsStore
-    @Environment(BackendAvailability.self) private var backend
     /// AUD-6 High — Labs is neither on the RootView foreground fan-out nor had a
     /// `scenePhase` handler, so a web/2nd-device lab edit was not picked up on
     /// return until a manual pull-to-refresh or cold launch. Drives a foreground
     /// revalidate, mirroring the Insights/Meds idiom.
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// v0.15.3 LR1 — the two sort axes, mirroring Messwerte's
+    /// The two sort axes, mirroring Messwerte's
     /// `MeasurementsPickerScreen.Mode`. `.byType` groups by `analyte` (the
     /// closest analogue to Messwerte's per-`MetricKind` grouping); `.chronological`
     /// flattens to a single date-sorted list. In-memory like the Messwerte picker
@@ -36,18 +36,33 @@ struct LabsScreen: View {
     }
 
     @State private var store: LabsStore?
-    /// FW-LABS-BANNER (b210) — the panel date the labs-changes banner is currently
+    /// The panel date the labs-changes banner is currently
     /// dismissed for (seeded from `LabsChangesDismissStore`). While this equals the
     /// live `latestDate`, the banner stays hidden; a newer panel re-shows it.
     @State private var dismissedLabsPanelDate: String? = LabsChangesDismissStore.dismissedPanelDate()
     @State private var sortMode: SortMode = .byType
     @State private var showAddSheet = false
-    /// Item 3.4 — the on-device lab-report scan (`labs.scan.*`). Sits beside
+    /// The on-device lab-report scan (`labs.scan.*`). Sits beside
     /// manual entry in the add menu, mirroring the web add-menu split
     /// (`app/labs/page.tsx:117-144`).
     @State private var showScanSheet = false
     @State private var showCatalog = false
     @State private var editingResult: LabResultDTO?
+    /// The marker whose history stands beside the table. Screen state, not a
+    /// second navigation stack: it survives a change of width and resolves to
+    /// nothing once the marker is gone from the list.
+    @State var selection = HLPaneSelection<String>()
+    /// Categories the person opened or closed by hand on this screen, by
+    /// the server's opaque key. The `groupsOpen` choice sets the start.
+    @State var openGroups: [String: Bool] = [:]
+    /// The editor, spellings and merge of the marker beside the table. They
+    /// stand here, on the screen, so an open sheet survives the pane leaving
+    /// the tree when the window narrows.
+    @State private var markerSheet: BiomarkerSheet?
+    /// Whether the history stands beside the table: then the selected
+    /// marker's (i) and edit stand in this screen's bar, the history has no
+    /// head of its own.
+    @State private var showsDetailBeside = false
 
     var body: some View {
         // v0151 nav-scroll RCA-2: STABLE SCROLL ROOT. The body used to swap its
@@ -56,28 +71,17 @@ struct LabsScreen: View {
         // shifted down after load. `HLAsyncListScreen` always renders the `List`
         // root from frame 1 (skeleton / empty / loaded are rows INSIDE it), so the
         // bar binds once. See `.planning/v0151-audit/RCA-nav-scroll-2.md`.
-        HLAsyncListScreen(
-            phase: phase,
-            refresh: store.map { store in { await store.load() } },
-            loading: { HLAsyncListSkeletonRows() },
-            empty: { emptyRows },
-            content: { if let store { loadedRows(store: store) } }
-        )
-        // LR1 — match the Messwerte canvas so the two surfaces feel like siblings:
-        // the same `HLSurface.primary` token under a hidden list background + the
-        // soft scroll-edge (`MeasurementListScreen.swift:181-189`,
-        // `MeasurementsPickerScreen.swift:114-117`). `HLAsyncListScreen` renders the
-        // `List` root but does not paint these; apply them here.
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
-        .hlScrollEdgeSoft()
-        .navigationTitle(Text("labs.list.title"))
-        // V1 — `.inline` (not `.large`). A `.large` title + trailing toolbar
-        // pushed onto the titleless More root forces a navigation-bar inset
-        // re-resolution on pop that shifts the More list down. `.inline` matches
-        // the non-triggering screens (e.g. Vorsorge) and removes the reflow.
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        HLListDetail(detailAvailable: hasDetail) { layout in
+            listRoot(layout)
+                .onChange(of: layout.isSideBySide, initial: true) { _, beside in showsDetailBeside = beside }
+        } detail: {
+            detailPane
+        }
+        // Inline when pushed; as a sidebar tab the list heads itself.
+        .hlSectionRootTitle(Text("labs.list.title"), headsItself: !phase.isError)
+        .hlPageActions(pageActions)
+        // Asks before the delete in the marker's more menu (#191 QoL).
+        .hlDeleteConfirmation()
         .task {
             // v1.18.6 PHI — prefer the container-owned singleton (joins the
             // logout cascade + SWR-dedupes loads); the factory is the fallback
@@ -87,9 +91,9 @@ struct LabsScreen: View {
             }
             await store?.load()
         }
-        // v1.25 — warm the labs-changes awareness card (paired-only, daily SWR).
+        // v1.25 — warm the labs-changes awareness card (daily SWR).
         .task {
-            if backend.hasServer, !clinicalSignalsStore.hasSettledOnce {
+            if !clinicalSignalsStore.hasSettledOnce {
                 await clinicalSignalsStore.load()
             }
         }
@@ -99,7 +103,7 @@ struct LabsScreen: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task { await store?.load() }
-            if backend.hasServer { Task { await clinicalSignalsStore.refresh() } }
+            Task { await clinicalSignalsStore.refresh() }
         }
         .sheet(isPresented: $showAddSheet) {
             if let store {
@@ -116,6 +120,30 @@ struct LabsScreen: View {
                 LabScanSheet(labsStore: store)
             }
         }
+        .sheet(item: $markerSheet) { sheet in
+            if let store, let marker = presentedMarker(in: store) {
+                switch sheet {
+                case .editor: BiomarkerEditorSheet(store: store, existing: marker)
+                case .aliases: BiomarkerAliasesSheet(store: store, marker: marker)
+                case .merge: BiomarkerMergeSheet(store: store, target: marker)
+                }
+            }
+        }
+        .navigationDestination(for: LabMarkerRoute.self) { route in
+            if let store {
+                BiomarkerDetailScreen(
+                    store: store,
+                    analyte: route.analyte,
+                    biomarker: route.biomarkerId.flatMap { id in store.biomarkers.first { $0.id == id } },
+                    overviewLatest: route.latest
+                )
+            }
+        }
+        .navigationDestination(for: LabHistoryRoute.self) { route in
+            if let store {
+                BiomarkerHistoryScreen(title: route.title, store: store) { route.liveRows(in: store) }
+            }
+        }
         .navigationDestination(isPresented: $showCatalog) {
             if let store {
                 BiomarkerCatalogScreen(store: store)
@@ -123,37 +151,95 @@ struct LabsScreen: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showCatalog = true
-            } label: {
-                Label("biomarker.catalog.title", systemImage: "list.bullet.rectangle")
+    /// The list: the stable root of the screen, in a table once it is wide
+    /// enough.
+    private func listRoot(_ layout: HLListDetailLayout.Resolution) -> some View {
+        HLAsyncListScreen(
+            phase: phase,
+            refresh: store.map { store in { await store.load() } },
+            loading: {
+                SectionRootHeader("labs.list.title", inList: true)
+                HLAsyncListSkeletonRows()
+            },
+            empty: {
+                SectionRootHeader("labs.list.title", inList: true)
+                emptyRows
+            },
+            content: {
+                SectionRootHeader("labs.list.title", inList: true)
+                if let store { loadedRows(store: store, layout: layout) }
             }
-            .accessibilityIdentifier("labs.toolbar.catalog")
+        )
+        // The page's margins, row grid and canvas on the stable list root.
+        .hlPageMargins()
+        .hlScrollEdgeSoft()
+    }
+
+    /// Whether a history stands beside the list: only in the by-type view
+    /// (its rows are markers) and while there is a marker to show.
+    private var hasDetail: Bool {
+        guard phase == .loaded, sortMode == .byType, let store else { return false }
+        return !store.markerIndex.isEmpty
+    }
+
+    /// The history of the selected marker beside the table: the marker page
+    /// as the pushed screen shows it, under its own heading.
+    @ViewBuilder
+    private var detailPane: some View {
+        if let store, let entry = LabMarkerSections.resolvedEntry(selection: selection, in: store.markerSections) {
+            let marker = entry.biomarkerId.flatMap { id in store.biomarkers.first { $0.id == id } }
+            BiomarkerDetailScreen(
+                store: store,
+                analyte: entry.analyte,
+                biomarker: marker,
+                overviewLatest: entry.latest,
+                overviewCount: entry.count,
+                isEmbedded: true,
+                externalSheet: $markerSheet
+            )
+            // One page per marker: its period and history start over.
+            .id(entry.id)
+        } else {
+            Color.clear.background(HLSurface.primary)
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            // Item 3.4 — manual entry and the on-device scan are siblings, as on
-            // the web. A Menu (not a second toolbar button) keeps the bar at two
-            // items and makes "Wert hinzufügen" the first, default-reading option.
-            Menu {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Label("labs.add.title", systemImage: "square.and.pencil")
-                }
-                .accessibilityIdentifier("labs.menu.add")
-                Button {
+    }
+
+    /// The catalog marker the open sheet is about: the one beside the table.
+    private func presentedMarker(in store: LabsStore) -> BiomarkerDTO? {
+        guard let entry = LabMarkerSections.resolvedEntry(selection: selection, in: store.markerSections),
+              let id = entry.biomarkerId,
+              let marker = store.biomarkers.first(where: { $0.id == id }) else { return nil }
+        return store.resolvedBiomarker(marker)
+    }
+
+    /// Adding a value is the plus at the outer edge; the scan and the
+    /// catalog wait in the more menu beside it.
+    private var pageActions: HLTabHeaderActions {
+        HLTabHeaderActions(selectedMarkerActions + [
+            .more(identifier: "labs.toolbar.more") {
+                Button("labs.scan.title", systemImage: "doc.viewfinder") {
                     showScanSheet = true
-                } label: {
-                    Label("labs.scan.title", systemImage: "doc.viewfinder")
                 }
                 .accessibilityIdentifier("labs.menu.scan")
-            } label: {
-                Label("labs.add.title", systemImage: "plus")
+                Button("biomarker.catalog.title", systemImage: "list.bullet.rectangle") {
+                    showCatalog = true
+                }
+                .accessibilityIdentifier("labs.toolbar.catalog")
+            },
+            .add(label: "labs.add.title", identifier: "labs.toolbar.add") {
+                showAddSheet = true
             }
-            .accessibilityIdentifier("labs.toolbar.add")
+        ])
+    }
+
+    /// The (i) and the edit of the marker beside the table, ahead of the
+    /// screen's own actions; none while no history stands beside it.
+    private var selectedMarkerActions: [HLTabHeaderAction] {
+        guard showsDetailBeside, let store,
+              let entry = LabMarkerSections.resolvedEntry(selection: selection, in: store.markerSections) else { return [] }
+        let marker = entry.biomarkerId.flatMap { id in store.biomarkers.first { $0.id == id } }.map(store.resolvedBiomarker)
+        return BiomarkerDetailScreen.markerActions(marker: marker, analyte: entry.analyte, sheet: $markerSheet) { id in
+            if await store.deleteBiomarker(id: id) { selection.select(nil) }
         }
     }
 
@@ -166,7 +252,7 @@ struct LabsScreen: View {
         if store.isDisabled { return .empty }
         if store.labs.isEmpty {
             if store.isLoading { return .loading }
-            // AUD-5 H1 — a failed fetch with no cached rows is an ERROR, not an
+            // A failed fetch with no cached rows is an ERROR, not an
             // empty list. Offer Retry instead of the misleading "Add your first
             // lab result" + plus button.
             if store.lastError != nil {
@@ -201,26 +287,23 @@ struct LabsScreen: View {
                         .listRowBackground(Color.clear)
                 case .offerOptIn:
                     LabsOptInView { await enableAndReload() }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
+                        .hlFreeAreaListRow()
                 }
             }
         } else {
+            healthRecordsSection
             Section {
+                // The one action adds the first value where the eye already
+                // is; the plus in the bar stays.
                 HLEmptyState(
                     icon: "testtube.2",
                     title: "labs.empty.title",
                     message: "labs.empty.subtitle"
                 ) {
-                    // 1.4 B4 — one empty-state form, one action. The scan
-                    // (item 3.4) stays one tap away in the toolbar's add menu
-                    // right above, next to this same entry.
-                    HLButton("labs.add.title", icon: "plus", variant: .secondary) {
-                        showAddSheet = true
-                    }
+                    HLButton("labs.add.title", systemImage: "plus", variant: .secondary) { showAddSheet = true }
+                        .accessibilityIdentifier("labs.empty.add")
                 }
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+                .hlFreeAreaListRow()
             }
         }
     }
@@ -228,10 +311,10 @@ struct LabsScreen: View {
     /// Loaded-phase rows: the sort-mode toggle, the sorted lab results + the
     /// trailing sync footer.
     @ViewBuilder
-    private func loadedRows(store: LabsStore) -> some View {
+    private func loadedRows(store: LabsStore, layout: HLListDetailLayout.Resolution) -> some View {
         // v1.25 — "what changed since your last panel" awareness card. Self-
         // suppresses (renders nothing) when there are fewer than two panels.
-        // FW-LABS-BANNER (b210) — also suppressed once the user dismisses it for
+        // Also suppressed once the user dismisses it for
         // the current panel; a newer panel (different `latestDate`) re-shows it.
         if let changes = clinicalSignalsStore.labsChanges,
            changes.hasContent,
@@ -248,6 +331,8 @@ struct LabsScreen: View {
                 .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: 0, bottom: HLSpace.xs, trailing: 0))
             }
         }
+        // #180 — lab results from Health Records, offered once.
+        healthRecordsSection
         // 14-03 (E1 / #67, Labs edition) — the failed half states itself beside
         // the healthy one. The rows below are real and current; only the
         // biomarker catalogue is missing, which is a statement about the
@@ -255,7 +340,8 @@ struct LabsScreen: View {
         // retry vocabulary as `DashboardMetricsErrorState`.
         if store.biomarkerCatalogError != nil {
             Section {
-                LabsBiomarkerCatalogErrorState { await store.reloadBiomarkers() }
+                HLErrorState("labs.biomarkerCatalog.error.message") { await store.reloadBiomarkers() }
+                    .accessibilityIdentifier("labs.biomarkerCatalogErrorState")
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
             }
@@ -263,45 +349,56 @@ struct LabsScreen: View {
         sortModeSection
         switch sortMode {
         case .byType:
-            // v0154 LR-REDO — the "by type" mode is a biomarker INDEX, not an
-            // inline expansion of every reading (the b200 overcrowding bug). Each
-            // analyte is ONE tappable item row → an Insights-class
-            // `BiomarkerDetailScreen`. The named-analyte buckets are the index;
-            // the blank-analyte bucket (legacy free-text rows with no analyte)
-            // still renders its readings inline since they have no detail page.
-            //
-            // #130 — the index rows come from `markerIndex`: the server's
-            // per-marker overview (whole history, never cut at a page size),
-            // or the grouped `labs` page against an older server.
-            Section {
-                ForEach(store.markerIndex) { entry in
-                    biomarkerIndexRow(entry, store: store)
-                }
-            }
-            if let blank = store.groupedByAnalyte.first(where: { $0.analyte == nil }) {
-                Section {
-                    ForEach(blank.rows) { row in
-                        resultRow(row, store: store)
-                    }
-                } header: {
-                    MeasurementListSectionHeader(
-                        text: String(localized: "labs.analyte.none")
-                    )
-                }
-            }
+            byTypeRows(store: store, layout: layout)
         case .chronological:
             Section {
                 ForEach(store.sortedByDate) { row in
                     resultRow(row, store: store)
                 }
             }
+            .hlFormRowSurface()
         }
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
     }
 
-    /// FW-LABS-BANNER — the stable dismissal key for the labs-changes banner: the
+    /// The rows of the "by type" mode.
+    @ViewBuilder
+    private func byTypeRows(store: LabsStore, layout: HLListDetailLayout.Resolution) -> some View {
+        // The "by type" mode is a biomarker INDEX, not an
+        // inline expansion of every reading (the b200 overcrowding bug). Each
+        // marker is ONE row: it opens the Insights-class `BiomarkerDetailScreen`,
+        // or, with the table beside its history, selects it there. The
+        // blank-analyte bucket (legacy free-text rows with no analyte)
+        // still renders its readings inline since they have no detail page.
+        //
+        // The rows come from `markerSections`: the server's categories
+        // over the per-marker overview (whole history, never cut at a page
+        // size), or one flat alphabetical list when the server does not
+        // group or is older than the overview.
+        let columns = LabsTableLayout.columns(layout, typeSize: dynamicTypeSize)
+        let sections = store.markerSections
+        let selectedID = layout.isSideBySide
+            ? LabMarkerSections.resolvedEntry(selection: selection, in: sections)?.id
+            : nil
+        ForEach(sections) { section in
+            markerSection(section, store: store, layout: layout, columns: columns, selectedID: selectedID)
+        }
+        let blank = store.blankAnalyteRows
+        if !blank.isEmpty {
+            Section {
+                ForEach(blank) { row in
+                    resultRow(row, store: store)
+                }
+            } header: {
+                HLSectionHeader(verbatim: String(localized: "labs.analyte.none"), rank: .group)
+            }
+            .hlFormRowSurface()
+        }
+    }
+
+    /// The stable dismissal key for the labs-changes banner: the
     /// panel's `latestDate`, or a sentinel when the wire omitted it (rare, but a
     /// nil key must still be dismissable). A newer panel yields a different key, so
     /// the dismissal auto-expires and the banner returns.
@@ -316,60 +413,41 @@ struct LabsScreen: View {
     /// over the empty/disabled states — same gating intent as Messwerte's chips).
     private var sortModeSection: some View {
         Section {
-            Picker(selection: $sortMode) {
-                Text("labs.sort.byType").tag(SortMode.byType)
-                Text("labs.sort.chronological").tag(SortMode.chronological)
-            } label: {
-                Text("labs.sort.label")
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("labs.screen.sortModeSwitch")
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+            sortModePicker
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                // On the card edge, not on the text inset of a row.
+                .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: 0, bottom: HLSpace.xs, trailing: 0))
         }
+    }
+
+    private var sortModePicker: some View {
+        HLAdaptiveSegmentedPicker(
+            "labs.sort.label",
+            selection: $sortMode,
+            labels: ["labs.sort.byType", "labs.sort.chronological"]
+        ) {
+            Text("labs.sort.byType").tag(SortMode.byType)
+            Text("labs.sort.chronological").tag(SortMode.chronological)
+        }
+        .accessibilityIdentifier("labs.screen.sortModeSwitch")
     }
 
     /// One lab-result navigation row with its swipe actions. Shared by both sort
     /// modes so the row presentation never diverges across the toggle.
     private func resultRow(_ row: LabResultDTO, store: LabsStore) -> some View {
-        NavigationLink {
-            LabResultDetailScreen(store: store, resultID: row.id, summary: row)
-        } label: {
-            LabResultRow(row: row)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                Task { await deleteRow(row, store: store) }
-            } label: {
-                Label("labs.delete.action", systemImage: "trash")
+        LabResultRow(row: row)
+            .hlRowLink(inList: true) {
+                LabResultDetailScreen(store: store, resultID: row.id, summary: row)
             }
-            Button {
-                editingResult = row
-            } label: {
-                Label("labs.edit.action", systemImage: "pencil")
-            }
-            .tint(HLAccent.userBrandTint)
-        }
-    }
-
-    /// v0154 LR-REDO — one biomarker index row (the "by type" item). Tapping it
-    /// opens the Insights-class ``BiomarkerDetailScreen`` for the analyte. The
-    /// matching catalog ``BiomarkerDTO`` (if the group's rows are linked) is
-    /// passed through so the detail page can drive the editor gear + explainer.
-    @ViewBuilder
-    private func biomarkerIndexRow(_ entry: LabsStore.MarkerIndexEntry, store: LabsStore) -> some View {
-        let marker = entry.biomarkerId.flatMap { id in store.biomarkers.first { $0.id == id } }
-        NavigationLink {
-            BiomarkerDetailScreen(
-                store: store,
-                analyte: entry.analyte,
-                biomarker: marker,
-                overviewLatest: entry.latest
-            )
-        } label: {
-            BiomarkerIndexRow(name: entry.name, latest: entry.latest, count: entry.count)
-        }
-        .accessibilityIdentifier("labs.byType.item")
+            // The store keeps the way back: the reading goes at once with the
+            // undo hint.
+            .hlSwipeDelete(.undoable { await deleteRow(row, store: store) }, also: {
+                Button("labs.edit.action", systemImage: "pencil") {
+                    editingResult = row
+                }
+                .tint(HLAccent.userBrandTint)
+            })
     }
 
     private func deleteRow(_ row: LabResultDTO, store: LabsStore) async {
@@ -402,8 +480,8 @@ struct LabsOptInView: View {
             title: "labs.optIn.title",
             message: "labs.optIn.description"
         ) {
-            // 1.4 B4 — the one empty-state form: its one action is `.secondary`.
-            HLButton("labs.optIn.action", icon: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
+            // The one empty-state form: its one action is `.secondary`.
+            HLButton("labs.optIn.action", systemImage: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
                 Task {
                     isEnabling = true
                     await onEnable()
@@ -415,171 +493,62 @@ struct LabsOptInView: View {
     }
 }
 
-/// v0154 LR-REDO — one biomarker index row in the "by type" mode. Shows the
-/// biomarker name, its latest value + unit, a compact reading-count caption, and
-/// the latest reading's NEUTRAL range badge. A `NavigationLink` to the
-/// Insights-class detail page (the link chevron is supplied by the row's host).
+/// One biomarker index row in the "by type" mode: the marker name, one
+/// detail line (number of readings, date of the latest), the latest value and
+/// its range as quiet text. The whole row opens the marker's detail page; no
+/// chevron, as on every data row.
 struct BiomarkerIndexRow: View {
     let name: String
     let latest: LabResultDTO?
     let count: Int
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let layout = LabRowLayout.stack(dynamicTypeSize)
-        layout {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(name)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text(countCaption)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-            }
-            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: HLSpace.sm) }
-            if let latest {
-                VStack(alignment: LabRowLayout.valueAlignment(dynamicTypeSize), spacing: HLSpace.xxs) {
-                    Text(valueLabel(latest))
-                        .font(.hlMetric(.title3))
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
-                    LabRangeBadge(status: latest.rangeStatus)
-                }
-            }
-        }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
+        HLRow(
+            title: Text(verbatim: name),
+            detail: HLRowDetail.text([Self.countCaption(count), latest.map { LabsDateFormat.labDate($0.takenAt) }]),
+            value: latest.map { Text(verbatim: $0.displayValue) },
+            status: latest?.rangeStatus.rowStatus
+        )
         .accessibilityLabel(accessibilityText)
     }
 
-    /// 1.4 B2-c — the shared plural key; the format template read "1 Werte".
-    private var countCaption: String {
+    /// The shared plural key; the format template read "1 Werte".
+    static func countCaption(_ count: Int) -> String {
         String(localized: "\(count) values")
-    }
-
-    private func valueLabel(_ row: LabResultDTO) -> String {
-        // Item 1.5 — qualitative rows render their result text, not a phantom 0.
-        row.displayValue
     }
 
     private var accessibilityText: String {
         guard let latest else { return name }
         let template = String(localized: "labs.row.a11y")
-        return String(format: template, name, valueLabel(latest), latest.rangeStatus.localizedLabel)
+        return String(format: template, name, latest.displayValue, latest.rangeStatus.localizedLabel)
     }
 }
 
-/// POLISH-A (SHOTS F-AX-LABLIST) — at an accessibility size a lab row stacks
-/// name, value and range instead of squeezing the range capsule to letters.
-enum LabRowLayout {
-    static func stack(_ size: DynamicTypeSize) -> AnyLayout {
-        size.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: HLSpace.xs))
-            : AnyLayout(HStackLayout(spacing: HLSpace.md))
-    }
-
-    static func valueAlignment(_ size: DynamicTypeSize) -> HorizontalAlignment {
-        size.isAccessibilitySize ? .leading : .trailing
-    }
-}
-
-/// Single lab-result list row: analyte + paneled value/unit + a NEUTRAL range
-/// badge. Linked rows (`biomarkerId != nil`) show a small link glyph.
+/// Single lab-result list row: the analyte, no marks beside it (where a
+/// reading comes from is said on its page), one detail line (date, and the printed value of a converted reading), the
+/// value and its range as quiet text. Two lines on each side at most.
 struct LabResultRow: View {
     let row: LabResultDTO
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let layout = LabRowLayout.stack(dynamicTypeSize)
-        layout {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                HStack(spacing: HLSpace.xs) {
-                    Text(row.analyte)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    if row.isLinked {
-                        Image(systemName: "link")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                    if row.hasNote {
-                        Image(systemName: "note.text")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-                Text(LabsDateFormat.mediumDate(row.takenAt))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                LabConversionNote(conversion: LabConversion(row)) // #126 3.5
-            }
-            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: HLSpace.sm) }
-            VStack(alignment: LabRowLayout.valueAlignment(dynamicTypeSize), spacing: HLSpace.xxs) {
-                Text(valueLabel)
-                    // LR1 — match `MeasurementRow`'s `.hlMetric(.title3)` so the lab
-                    // value reads at the same weight as a Messwerte value.
-                    .font(.hlMetric(.title3))
-                    .monospacedDigit()
-                    .foregroundStyle(HLText.primary)
-                LabRangeBadge(status: row.rangeStatus)
-            }
-        }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
+        HLRow(
+            title: Text(verbatim: row.analyte),
+            detail: HLRowDetail.text(Self.detailParts(row)),
+            value: Text(verbatim: row.displayValue),
+            status: row.rangeStatus.rowStatus
+        )
         .accessibilityLabel(accessibilityText)
     }
 
-    private var valueLabel: String {
-        // Item 1.5 — qualitative rows render their result text, not a phantom 0.
-        row.displayValue
+    /// The facts of the detail line, in reading order. The printed range of a
+    /// converted reading stays on the reading's own page.
+    static func detailParts(_ row: LabResultDTO) -> [String?] {
+        [LabsDateFormat.labDate(row.takenAt), LabConversion(row).convertedLine]
     }
 
     private var accessibilityText: String {
         let template = String(localized: "labs.row.a11y")
-        return String(format: template, row.analyte, valueLabel, row.rangeStatus.localizedLabel)
-    }
-}
-
-/// **14-03 (E1 / the #67 pattern, Labs edition)** — the biomarker catalogue's
-/// own failure, stated beside a healthy labs list rather than instead of it.
-///
-/// Reuses `DashboardMetricsErrorState`'s lockup (canonical `HLEmptyState`,
-/// monochrome, the same `exclamationmark.arrow.circlepath` glyph and the same
-/// "Try again" copy), because this is the same fact in a different section: one
-/// subrequest failed, the rest of the surface is current, and the retry re-runs
-/// only the half that failed.
-///
-/// The button variant is `.secondary`, the one action of every empty or failed
-/// state (1.4 B4, `HLEmptyState`), and like the dashboard's it no longer sits
-/// in a card.
-private struct LabsBiomarkerCatalogErrorState: View {
-    let onRetry: () async -> Void
-
-    @State private var isRetrying = false
-
-    var body: some View {
-        // 1.4 B4 — the lockup on the list, no card around it.
-        HLEmptyState(
-            icon: "exclamationmark.arrow.circlepath",
-            title: "labs.biomarkerCatalog.error.title",
-            message: "labs.biomarkerCatalog.error.message"
-        ) {
-            HLButton(
-                String(localized: "Try again"),
-                icon: "arrow.clockwise",
-                variant: .secondary,
-                isLoading: isRetrying
-            ) {
-                Task {
-                    isRetrying = true
-                    await onRetry()
-                    isRetrying = false
-                }
-            }
-        }
-        .accessibilityIdentifier("labs.biomarkerCatalogErrorState")
+        return String(format: template, row.analyte, row.displayValue, row.rangeStatus.localizedLabel)
     }
 }
 
@@ -590,7 +559,7 @@ private struct LabsBiomarkerCatalogErrorState: View {
 enum LabsScreenFactory {
     @MainActor
     static func makeStore(container: AppContainer) -> LabsStore {
-        // QOL-OFF-2 — pass the shared SWR coordinator so this factory-built store
+        // Pass the shared SWR coordinator so this factory-built store
         // reads labs + biomarkers cache-first (offline-readable), matching the
         // container-owned `labsStore` once its AppContainer wiring passes `swr`.
         let repo = LabsRepository(api: container.api, outbox: container.outbox, swr: container.swr)

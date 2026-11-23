@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.4-BF7 — `PersonalRecordsStore` merge contract tests.
+/// `PersonalRecordsStore` merge contract tests.
 ///
 /// Pins the "server-records win their metric-type bucket; derived rows
 /// fill the gap" semantics. The screen relies on this so the moment the

@@ -7,7 +7,7 @@ import Foundation
 /// order plus, historically, a chosen presentation. Per-account, persisted
 /// server-side, preserve-when-absent on PUT.
 ///
-/// **08-05 — cards are the only presentation this app has, and the type says
+/// **Cards are the only presentation this app has, and the type says
 /// so.** The enum carries exactly one case, so no other presentation is
 /// representable anywhere in the app rather than merely unreachable.
 ///
@@ -57,7 +57,7 @@ public struct MedicationListLayout: Codable, Sendable, Equatable {
     /// ids absent from the list are appended after the ordered block, ids that
     /// no longer resolve are ignored at apply time.
     public let order: [String]
-    /// **CU-20 (#69) — optimistic-concurrency token.** Echoed as
+    /// **Optimistic-concurrency token.** Echoed as
     /// `baseUpdatedAt` on the next PUT; a stale one yields
     /// `409 medication_layout_conflict` and nothing is written. Guards the
     /// shared `User.updatedAt` (`api/medications/layout/route.ts:171`).
@@ -94,7 +94,7 @@ public struct MedicationListLayout: Codable, Sendable, Equatable {
         version = (try? container.decode(Int.self, forKey: .version)) ?? 1
         view = (try? container.decode(MedicationListView.self, forKey: .view)) ?? .cards
         order = (try? container.decode([String].self, forKey: .order)) ?? []
-        // CU-20 — absent on an older server / after a DELETE reset.
+        // Absent on an older server / after a DELETE reset.
         updatedAt = try? container.decodeIfPresent(String.self, forKey: .updatedAt)
     }
 
@@ -102,7 +102,7 @@ public struct MedicationListLayout: Codable, Sendable, Equatable {
     ///
     /// - the CU-20 `updatedAt` token, which rides the write as `baseUpdatedAt`
     ///   via ``OptimisticWriteBody``, never under its own key;
-    /// - `view` (08-05), because the app has one presentation and therefore no
+    /// - `view`, because the app has one presentation and therefore no
     ///   presentation to state. Emitting it would turn a legacy value that was
     ///   merely *read* into one this app *wrote*, which is exactly what the
     ///   cards-only decision forbids. A decode of the omitted field lands on
@@ -146,7 +146,7 @@ public struct MedicationListLayout: Codable, Sendable, Equatable {
 /// value survives untouched instead of being overwritten). `version` is always
 /// sent (the server schema requires the literal `1`).
 ///
-/// **08-13 — the presentation field is gone.** 08-05 reduced it to a constant
+/// **The presentation field is gone.** 08-05 reduced it to a constant
 /// that only the inert `setListView` could pass; with that setter deleted the
 /// field had no construction site left, and keeping an encodable presentation
 /// on the write body is precisely the thing the cards-only decision forbids.

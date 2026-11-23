@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - EndpointRouteTemplate
 
-/// Pure route-templating for the endpoint-failure diagnostics line (#67 / CU-02).
+/// Pure route-templating for the endpoint-failure diagnostics line.
 ///
 /// **Why this exists.** A failed request currently surfaces as a generic banner,
 /// so nobody — least of all the server team — learns *which* endpoint fell over.
@@ -87,7 +87,7 @@ public enum EndpointRouteTemplate {
 
 // MARK: - EndpointFailureClass
 
-/// The five buckets an endpoint failure falls into (#67). Deliberately coarse:
+/// The five buckets an endpoint failure falls into. Deliberately coarse:
 /// the point is to tell "the server was slow / said no / spoke nonsense / was
 /// unreachable" apart at a glance, not to reproduce the full `HLError` surface.
 public enum EndpointFailureClass: String, Sendable {
@@ -124,7 +124,7 @@ public enum StoreEffectDiagnostics {
     /// The stores that publish user-visible state through a session lease, or
     /// that raise a loading flag an SWR stream is responsible for lowering.
     ///
-    /// **14-06** — 13-03 left this at two cases, which is why every store other
+    /// 13-03 left this at two cases, which is why every store other
     /// than the dashboard and labs stayed uncountable. The operator's
     /// "die Medikamente werden gar nicht angezeigt" had no signature to look
     /// for at all: `medications` was not a word this vocabulary could say.
@@ -151,7 +151,7 @@ public enum StoreEffectDiagnostics {
         /// A lease was captured, then superseded while the effect was in
         /// flight. The result belongs to an account that is no longer here.
         case leaseRetired = "lease_retired"
-        /// **14-06** — the load ended without ever reaching a terminal emission:
+        /// The load ended without ever reaching a terminal emission:
         /// the SWR stream was cancelled (a bounded foreground pass expiring is
         /// the common case) before `.cached`, `.fresh` or `.failed` arrived.
         ///
@@ -163,7 +163,7 @@ public enum StoreEffectDiagnostics {
         /// is exactly the ambiguity that made a blank medications list take
         /// three builds to name.
         case loadInterrupted = "load_interrupted"
-        /// **22-01** — the load reached a TERMINAL error and published nothing.
+        /// The load reached a TERMINAL error and published nothing.
         ///
         /// Distinct from ``loadInterrupted`` on purpose, and the distinction is
         /// the whole diagnostic value: "there was no result yet" and "there will
@@ -200,7 +200,7 @@ public enum StoreEffectDiagnostics {
         "store-effect-refused store=\(store.rawValue) reason=\(refusal.rawValue)"
     }
 
-    /// **22-01 — the additive form of ``sink``, for suites that need an exact
+    /// **The additive form of ``sink``, for suites that need an exact
     /// count rather than a containment check.**
     ///
     /// ``sink`` is ONE process-global slot, and Swift Testing runs suites in
@@ -248,9 +248,9 @@ public enum StoreEffectDiagnostics {
         }
     }
 
-    // MARK: - The foreground pass census (14-05 / J3)
+    // MARK: - The foreground pass census
 
-    /// **14-05 (D-09-06-A / J3) — one line per foreground pass.**
+    /// **One line per foreground pass.**
     ///
     /// The pass ledger already recorded every member that finished and every
     /// member that never started; nothing read it, so "did the dashboard
@@ -283,7 +283,7 @@ public enum StoreEffectDiagnostics {
 
 // MARK: - EndpointFailureDiagnostics
 
-/// Emits exactly one PII-free line per failed `APIClient` request (#67 / CU-02):
+/// Emits exactly one PII-free line per failed `APIClient` request:
 ///
 /// ```
 /// endpoint-failure method=GET route=/api/medications/:id/dose-history status=503 class=status elapsedMs=812
@@ -366,7 +366,7 @@ public enum EndpointFailureDiagnostics {
     /// that must NOT produce a line (cancellation).
     static func classify(_ error: any Error) -> EndpointFailureClass? {
         if error is CancellationError { return nil }
-        // #110 / #112 — a detailed refusal is a server answer like `.server`.
+        // A detailed refusal is a server answer like `.server`.
         if error is APIRefusalDetail { return .status }
         guard let hlError = error as? HLError else {
             if let urlError = error as? URLError, urlError.code == .cancelled { return nil }
@@ -384,7 +384,7 @@ public enum EndpointFailureDiagnostics {
         // every one of those WAS a server answer, so it classifies as `.status`.
         // `.refusedWithReason` likewise: the server understood the request and
         // answered it with a stated refusal.
-        // Audit B-2 — `.idempotencyReplayInFlight` is a 409 the server answered
+        // `.idempotencyReplayInFlight` is a 409 the server answered
         // with, so it belongs to the answered class like every other verdict.
         case .server, .unauthorized, .rateLimited, .aiUnavailable, .moduleDisabled,
              .writeConflictUnresolved, .refusedWithReason, .idempotencyReplayInFlight, .accountDeletionPending: .status

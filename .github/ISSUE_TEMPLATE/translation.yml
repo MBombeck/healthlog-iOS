@@ -1,0 +1,38 @@
+name: Translation
+description: Ask for Tolgee access, propose a new language, or report a wording you cannot fix in Tolgee yourself.
+title: "[Translation] "
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Translations are made in Tolgee at [translate.healthlog.dev](https://translate.healthlog.dev) and imported into the app before each release. Please do not send changes to the `.xcstrings` catalogs as a pull request. How languages work in the app: [docs/localization.md](https://github.com/MBombeck/healthlog-iOS/blob/main/docs/localization.md).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What do you need?
+      options:
+        - Access to Tolgee
+        - A new language
+        - A correction
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: "Dutch (nl)"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a correction, where you saw the text (screen and element), what it says now and what it should say. Medical wording needs a short reason.
+  - type: checkboxes
+    id: licence
+    attributes:
+      label: Licensing
+      options:
+        - label: I agree that my translations may ship in every HealthLog build, including the App Store build, as described under "Licensing of contributions" in CONTRIBUTING.md.
+          required: true

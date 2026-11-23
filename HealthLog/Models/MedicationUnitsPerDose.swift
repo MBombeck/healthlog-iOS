@@ -14,13 +14,13 @@ public enum MedicationUnitsPerDose: Hashable, Sendable, CaseIterable, Identifiab
     case fraction(Double)
     /// A whole number of units (1…``wholeMax``).
     case whole(Int)
-    /// **#1034 — any other positive value the server holds**, kept exactly as
+    /// **Any other positive value the server holds**, kept exactly as
     /// sent: a combined value like 1½ (1.5) or 2¼ (2.25), or a measured amount
     /// like 0.8. Since server v1.39.1 (final tag) every write path accepts any
     /// value above 0 and at most 100 with up to four decimals, and the web
     /// editor enters them. This case lets the editor show the real value, and a
     /// save that does not touch the field can never round it to a curated
-    /// option. **B5 (1.4, #126 3.11)** — the halves above one unit (1½ …
+    /// option. **B5** — the halves above one unit (1½ …
     /// 9½) are picker options too, once the server is known to take them
     /// (``pickerOptions(offeringHalves:)``).
     case other(Double)
@@ -51,7 +51,7 @@ public enum MedicationUnitsPerDose: Hashable, Sendable, CaseIterable, Identifiab
         fractions.map { .fraction($0) } + (1 ... pickerWholeMax).map { .whole($0) }
     }
 
-    /// **B5 (1.4, #126 3.11)** — the first server release whose write
+    /// The first server release whose write
     /// paths take a whole number plus a fraction (`isSupportedUnitsPerDose`,
     /// #1034). An older server answers 1½ with a 422.
     public static let combinedMinimumServerVersion = "1.39.1"
@@ -86,7 +86,7 @@ public enum MedicationUnitsPerDose: Hashable, Sendable, CaseIterable, Identifiab
     /// sheet would otherwise round-trip that 15 back to the server as 10 (H-1
     /// data-loss). Whole values above ``pickerWholeMax`` are surfaced as an extra
     /// picker row (see ``UnitsPerDosePicker``) so the selection always has a tag.
-    /// **#1034 — any other positive value is kept verbatim** as ``other(_:)``
+    /// **Any other positive value is kept verbatim** as ``other(_:)``
     /// (1.5, 2.25, a whole above ``wholeMax``): it used to snap to one whole
     /// unit, so the editor showed "1" for a stored 1½. Only a value no server
     /// column can hold (NaN, infinity, ≤0, ≥ ``otherCeiling``) still falls

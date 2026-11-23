@@ -4,7 +4,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **v0.6.2.3 F3-SEC (A-CODE M-1) — silent outbox loss on decrypt failure.**
+/// **Silent outbox loss on decrypt failure.**
 ///
 /// Pre-v0.6.2.3 the snapshot path returned the raw ciphertext as the
 /// "plaintext" payload whenever `OutboxPayloadCipher.decrypt(...)` threw
@@ -100,11 +100,9 @@ struct OutboxSnapshotDecryptFailureTests {
             createdAt: .now
         )
 
-        // Simulate the logout-wipe: drop the persisted key, then let the
-        // cipher resurrect a fresh one on the next snapshot.
-        // `fetchOrCreateKey` will regenerate on miss, so the cipher tries
-        // to decrypt the existing row with a key that DOESN'T match the
-        // one that sealed it — should fail the tag check.
+        // Simulate the logout-wipe: drop the persisted key. Reading never
+        // creates a key, so the snapshot finds none, cannot open the row
+        // sealed under the old one, and deletes it.
         try stub.remove(forKey: account)
 
         let snap = try await store.snapshot()

@@ -6,14 +6,14 @@ import SwiftUI
     import UserNotifications
 #endif
 
-/// `NotificationsScreen` reminder + permission card subviews (W1-5).
+/// `NotificationsScreen` reminder + permission card subviews.
 /// Extracted from `NotificationsScreen.swift` (file_length discipline — pure
 /// move, no behaviour change).
 extension NotificationsScreen {
-    // MARK: - Cards (W1-5)
+    // MARK: - Cards
 
     var systemPermissionCard: some View {
-        HLSettingsCard(icon: "bell.badge.fill", title: "Device permission") {
+        HLCard("Device permission") {
             HStack {
                 Image(systemName: systemAuthorizationStatus.symbol)
                     .foregroundStyle(systemAuthorizationStatus.tint)
@@ -22,8 +22,7 @@ extension NotificationsScreen {
                         .font(.hlSubhead.weight(.semibold))
                     if let subtitle = systemAuthorizationStatus.subtitle {
                         Text(subtitle)
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.rowSubtitle)
                     }
                 }
                 Spacer(minLength: HLSpace.sm)
@@ -36,27 +35,21 @@ extension NotificationsScreen {
             // requestAuthorization, `.denied` → deep-link to iOS
             // Settings, `.authorized` / `.provisional` → no button.
             if systemAuthorizationStatus == .notDetermined {
-                Button {
+                HLSettingsActionRow(icon: "bell.fill", title: "Enable notifications", presents: .confirm) {
                     Task { await requestSystemAuthorization() }
-                } label: {
-                    Label("Enable notifications", systemImage: "bell.fill")
-                        .font(.hlSubhead)
                 }
                 .accessibilityIdentifier("notifications.systemPermission.request")
             }
             if systemAuthorizationStatus == .denied {
-                Button {
+                HLSettingsActionRow(icon: "gear", title: "Enable in Settings", presents: .external) {
                     openSystemSettings()
-                } label: {
-                    Label("Enable in Settings", systemImage: "arrow.up.right.square")
-                        .font(.hlSubhead)
                 }
                 .accessibilityIdentifier("notifications.systemPermission.openSettings")
             }
         }
     }
 
-    /// v0.6.0.8 — drives the system-permission prompt when the
+    /// Drives the system-permission prompt when the
     /// onboarding step never got a chance to fire it (server-branch
     /// race documented in Issue #10). Re-reads the status after the
     /// dialog closes so the card updates without a manual refresh.
@@ -68,7 +61,7 @@ extension NotificationsScreen {
         #endif
     }
 
-    /// v0.5.4.3 HP5 — opt-in card for the daily mood-reminder cron
+    /// Opt-in card for the daily mood-reminder cron
     /// (server PR #190). Toggling the switch fires `PATCH /api/user/profile`
     /// with `{ moodReminderEnabled: true|false }`. On a fresh server
     /// (which surfaces the field) the toggle reflects the persisted
@@ -85,11 +78,11 @@ extension NotificationsScreen {
     var moodReminderCard: some View {
         let settingsStore = container?.settingsStore
         let currentValue = settingsStore?.profile?.moodReminderEnabled ?? false
-        // UI-Standard R3/R7 (U6) — diese Karte ist die Heimat der Aussage über
+        // UI-Standard R3/R7 — diese Karte ist die Heimat der Aussage über
         // die Stimmungs-Erinnerung; der Ereignis-Hint in der Kanal-Karte und
         // die Unterzeile „Abend-Erinnerung" am Schalter sind entfallen.
         //
-        // **R7 — was der Footer nicht mehr behauptet.** Er sagte „nur an Tagen,
+        // **Was der Footer nicht mehr behauptet.** Er sagte „nur an Tagen,
         // an denen du es noch nicht getan hast". Seit v0.14.1 H2 ist die
         // Erinnerung ein *repeating* `UNCalendarNotificationTrigger`, den iOS
         // ohne Zutun der App zustellt; die „heute schon erfasst"-Unterdrückung
@@ -98,9 +91,11 @@ extension NotificationsScreen {
         // Hinweis auch dann, wenn die Stimmung längst erfasst ist. Der Satz
         // war also in genau dem häufigen Fall falsch und ist gefallen; was
         // bleibt, ist die Uhrzeit, und die stellt der DatePicker unten ein.
-        // 1.4 B2 — the switch and the time picker say it; no footer.
-        HLSettingsCard(icon: "face.smiling", title: "Mood reminder") {
-            Toggle(
+        // The switch and the time picker say it; no footer.
+        HLCard("Mood reminder") {
+            HLSettingsToggleRow(
+                title: "Daily reminder",
+                description: nil,
                 isOn: Binding(
                     get: { currentValue },
                     set: { newValue in
@@ -110,25 +105,16 @@ extension NotificationsScreen {
                             moodReminderInFlight = false
                         }
                     }
-                )
-            ) {
-                HStack(spacing: HLSpace.sm) {
-                    Text("Daily reminder")
-                        .font(.hlHeadline)
-                    if moodReminderInFlight {
-                        ProgressView()
-                            .controlSize(.mini)
-                    }
-                }
-            }
-            .disabled(settingsStore == nil || moodReminderInFlight)
-            .accessibilityIdentifier("NotificationsScreen.moodReminderToggle")
+                ),
+                isBusy: moodReminderInFlight,
+                isEnabled: settingsStore != nil && !moodReminderInFlight,
+                accessibilityID: "NotificationsScreen.moodReminderToggle"
+            )
 
-            // v0.10.0 W-Mood-B — the user-settable reminder time (server
+            // The user-settable reminder time (server
             // `notificationPrefs.mood.reminderHour`, the source of truth for
             // the iOS-local trigger). Only shown when the reminder is on.
             if currentValue {
-                Divider().opacity(0.5)
                 DatePicker(
                     selection: Binding(
                         get: { moodReminderTimeBinding },
@@ -140,9 +126,9 @@ extension NotificationsScreen {
                     ),
                     displayedComponents: .hourAndMinute
                 ) {
-                    Text("Reminder time")
-                        .font(.hlHeadline)
+                    HLRowTitle("Reminder time")
                 }
+                .frame(minHeight: HLLayout.rowMinHeight)
                 .accessibilityIdentifier("NotificationsScreen.moodReminderTime")
             }
         }
@@ -159,7 +145,39 @@ extension NotificationsScreen {
         return Calendar.current.date(from: comps) ?? .now
     }
 
-    /// **MED-4 / AUDIT-PARITY C3 — low-supply alert.** Opt-in threshold for the
+    /// **#191 — how long "Remind me later" waits.** One span for every
+    /// medication and every place a dose can be snoozed: the notification,
+    /// the alarm, the Watch, the card and the medication page. Shown only
+    /// where the server keeps the setting (`medication.snooze-setting`).
+    @ViewBuilder
+    var snoozeCard: some View {
+        if let minutes = store?.snoozeMinutes {
+            HLCard(LocalizedStringKey("med.snooze.settings.title"), footer: "med.snooze.settings.footer") {
+                HLFormPicker(
+                    "med.snooze.settings.label",
+                    selection: Binding(
+                        get: { minutes },
+                        set: { newValue in Task { await store?.setSnoozeMinutes(newValue) } }
+                    ),
+                    options: Self.snoozeChoices(including: minutes)
+                ) { value in
+                    Text(verbatim: Self.snoozeMinutesLabel(value))
+                }
+                .accessibilityIdentifier("NotificationsScreen.snoozeMinutes")
+            }
+        }
+    }
+
+    /// The offered spans, plus the account's own when the web set another.
+    nonisolated static func snoozeChoices(including current: Int) -> [Int] {
+        Array(Set(MedicationSnooze.choices + [current])).sorted()
+    }
+
+    nonisolated static func snoozeMinutesLabel(_ minutes: Int) -> String {
+        String(format: String(localized: "med.snooze.settings.minutes", defaultValue: "%lld min"), minutes)
+    }
+
+    /// **Low-supply alert.** Opt-in threshold for the
     /// runway warning: when a medication's projected days-of-supply drops to or
     /// below this many days, the server cron pushes a low-supply notification
     /// (deep-linking to that medication) and the medication card/detail render
@@ -168,9 +186,11 @@ extension NotificationsScreen {
     @ViewBuilder
     var lowStockCard: some View {
         let isOn = store?.lowStockRunwayDays != nil
-        // 1.4 B2 — title, switch and threshold say it; no footer.
-        HLSettingsCard(icon: "shippingbox", title: LocalizedStringKey("med.lowstock.title")) {
-            Toggle(
+        // Title, switch and threshold say it; no footer.
+        HLCard(LocalizedStringKey("med.lowstock.title")) {
+            HLSettingsToggleRow(
+                title: "med.lowstock.toggle.label",
+                description: nil,
                 isOn: Binding(
                     get: { isOn },
                     set: { newValue in
@@ -181,22 +201,13 @@ extension NotificationsScreen {
                             lowStockInFlight = false
                         }
                     }
-                )
-            ) {
-                HStack(spacing: HLSpace.sm) {
-                    Text(verbatim: String(localized: "med.lowstock.toggle.label"))
-                        .font(.hlHeadline)
-                    if lowStockInFlight {
-                        ProgressView()
-                            .controlSize(.mini)
-                    }
-                }
-            }
-            .disabled(store == nil || lowStockInFlight)
-            .accessibilityIdentifier("NotificationsScreen.lowStockToggle")
+                ),
+                isBusy: lowStockInFlight,
+                isEnabled: store != nil && !lowStockInFlight,
+                accessibilityID: "NotificationsScreen.lowStockToggle"
+            )
 
             if isOn {
-                Divider().opacity(0.5)
                 Stepper(
                     value: Binding(
                         get: { store?.lowStockRunwayDays ?? lowStockDaysSelection },
@@ -209,8 +220,7 @@ extension NotificationsScreen {
                     in: medicationLowStockRunwayMin ... medicationLowStockRunwayMax
                 ) {
                     HStack {
-                        Text(verbatim: String(localized: "med.lowstock.threshold.label"))
-                            .font(.hlHeadline)
+                        HLRowTitle("med.lowstock.threshold.label")
                         Spacer(minLength: HLSpace.sm)
                         Text(
                             verbatim: String(
@@ -223,6 +233,7 @@ extension NotificationsScreen {
                         .monospacedDigit()
                     }
                 }
+                .frame(minHeight: HLLayout.rowMinHeight)
                 .disabled(lowStockInFlight)
                 .accessibilityIdentifier("NotificationsScreen.lowStockThreshold")
             }
@@ -234,14 +245,14 @@ extension NotificationsScreen {
         }
     }
 
-    /// **W-B189 (#23) — preventive-care (Vorsorge) client-managed gate.** Mirrors
+    /// **Preventive-care (Vorsorge) client-managed gate.** Mirrors
     /// the medication opt-in precedent: toggling fires
     /// `PATCH /api/auth/me/notification-prefs` with
     /// `{ measurementReminder: { clientManaged } }`. On a v1.17.1+ server the
     /// toggle reflects the persisted state; a legacy server rejects the key and
     /// the local mirror stays. Default off.
     ///
-    /// **CU-26 / B1 — what the flag really does (server v1.33.1+).** It is a
+    /// **What the flag really does (server v1.33.1+).** It is a
     /// *suppression* flag, not an opt-in: `clientManaged = true` tells the server
     /// that this client owns the reminder, so the dispatcher skips the send.
     /// Until v1.33.1 that skip sat in the `measurement-reminder` cron and killed
@@ -257,12 +268,13 @@ extension NotificationsScreen {
     /// The per-event preferences card below is the separate, per-(channel ×
     /// event) switch — it gates whether a channel *delivers* the event at all.
     var measurementReminderCard: some View {
-        HLSettingsCard(
-            icon: "stethoscope",
-            title: LocalizedStringKey("measurement.reminder.title"),
+        HLCard(
+            LocalizedStringKey("measurement.reminder.title"),
             footer: LocalizedStringKey("measurement.reminder.footer")
         ) {
-            Toggle(
+            HLSettingsToggleRow(
+                title: "measurement.reminder.toggle.label",
+                description: nil,
                 isOn: Binding(
                     get: { store?.measurementReminderClientManaged ?? false },
                     set: { newValue in
@@ -272,31 +284,23 @@ extension NotificationsScreen {
                             measurementReminderInFlight = false
                         }
                     }
-                )
-            ) {
-                HStack(spacing: HLSpace.sm) {
-                    Text(LocalizedStringKey("measurement.reminder.toggle.label"))
-                        .font(.hlHeadline)
-                    if measurementReminderInFlight {
-                        ProgressView()
-                            .controlSize(.mini)
-                    }
-                }
-            }
-            .disabled(store == nil || measurementReminderInFlight)
-            .accessibilityIdentifier("NotificationsScreen.measurementReminderToggle")
+                ),
+                isBusy: measurementReminderInFlight,
+                isEnabled: store != nil && !measurementReminderInFlight,
+                accessibilityID: "NotificationsScreen.measurementReminderToggle"
+            )
 
             // W-REMINDERS (#23 v1.18.1) — link into the live manage-reminders
             // list (GET /api/measurement-reminders). The toggle above gates
             // whether the cron *fires* the push; this surface lists + manages
             // the actual reminder rows (type / schedule / next-due / provenance)
             // and the manual "Erledigt" + delete + create actions.
-            Divider().opacity(0.5)
-            NavigationLink {
+            HLSettingsActionRow(
+                icon: "list.bullet.clipboard",
+                title: "reminders.manage.entry",
+                presents: .push
+            ) {
                 MeasurementRemindersScreen()
-            } label: {
-                Label("reminders.manage.entry", systemImage: "list.bullet.clipboard")
-                    .font(.hlSubhead)
             }
             .accessibilityIdentifier("NotificationsScreen.manageReminders")
         }
@@ -310,55 +314,74 @@ extension NotificationsScreen {
     /// phone can't read a sensitive medication. The Taken/Snooze/Skipped
     /// actions still work — only the visible text changes.
     var lockScreenPrivacyCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: LocalizedStringKey("notif.lockscreen.privacy.title"),
+        HLCard(
+            LocalizedStringKey("notif.lockscreen.privacy.title"),
             footer: LocalizedStringKey("notif.lockscreen.hideName.footer")
         ) {
-            Toggle(
+            HLSettingsToggleRow(
+                title: "notif.lockscreen.hideName.label",
+                description: nil,
                 isOn: Binding(
                     get: { hideMedicationNameOnLockScreen },
                     set: { newValue in
                         hideMedicationNameOnLockScreen = newValue
                         LockScreenPrivacy.setHideMedicationName(newValue)
+                        #if canImport(ActivityKit)
+                            Task { await RelayDoseActivityObserver.applyLockScreenPrivacy(hideNames: newValue) }
+                        #endif
+                        // Holds at once: alarms, reminders and the running
+                        // Live Activity are built again under the new label.
+                        Task { await container?.applyLockScreenPrivacyChange() }
                     }
-                )
-            ) {
-                Text(LocalizedStringKey("notif.lockscreen.hideName.label"))
-                    .font(.hlHeadline)
-            }
-            .accessibilityIdentifier("NotificationsScreen.hideMedicationNameToggle")
+                ),
+                accessibilityID: "NotificationsScreen.hideMedicationNameToggle"
+            )
+            HLSettingsToggleRow(
+                title: "notif.privacy.hideContent.label",
+                description: "notif.privacy.hideContent.description",
+                isOn: Binding(
+                    get: { hideNotificationContent },
+                    set: { newValue in
+                        hideNotificationContent = newValue
+                        NotificationContentPrivacy.set(newValue)
+                        #if canImport(ActivityKit)
+                            Task {
+                                await RelayDoseActivityObserver.applyLockScreenPrivacy(hideNames: LockScreenPrivacy.hideMedicationName())
+                            }
+                        #endif
+                    }
+                ),
+                accessibilityID: "NotificationsScreen.hideNotificationContentToggle"
+            )
         }
     }
 
-    /// **W-THRESHOLD-NUDGE — opt-in out-of-range nudge.** A calm, retrospective
+    /// **Opt-in out-of-range nudge.** A calm, retrospective
     /// reminder when a just-logged reading falls outside a range the user / their
     /// own data define. Default OFF. The footer copy sets expectations: what it
     /// does, that it is NOT medical advice, and that it only uses the user's /
     /// their data's own ranges. Device-local opt-in (`ThresholdNudgePrefStore`).
     var outOfRangeNudgeCard: some View {
-        // 1.4 B2 — the footer repeated the switch; the disclaimer stays in the
+        // The footer repeated the switch; the disclaimer stays in the
         // card (MDR posture).
-        HLSettingsCard(icon: "ruler", title: LocalizedStringKey("threshold.nudge.settings.title")) {
-            Toggle(
+        HLCard(LocalizedStringKey("threshold.nudge.settings.title")) {
+            HLSettingsToggleRow(
+                title: "threshold.nudge.settings.label",
+                description: nil,
                 isOn: Binding(
                     get: { outOfRangeNudgeEnabled },
                     set: { newValue in
                         outOfRangeNudgeEnabled = newValue
                         ThresholdNudgePrefStore.setEnabled(newValue)
                     }
-                )
-            ) {
-                Text(LocalizedStringKey("threshold.nudge.settings.label"))
-                    .font(.hlHeadline)
-            }
-            .accessibilityIdentifier("NotificationsScreen.outOfRangeNudgeToggle")
+                ),
+                accessibilityID: "NotificationsScreen.outOfRangeNudgeToggle"
+            )
 
             // Standing non-diagnostic disclaimer, surfaced right at the toggle so
             // the user understands the framing before opting in (MDR posture).
             Text(LocalizedStringKey("threshold.nudge.settings.disclaimer"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.note)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("NotificationsScreen.outOfRangeNudgeDisclaimer")
         }

@@ -1,7 +1,7 @@
 import Foundation
 
 public extension AICoachSettingsRepository {
-    /// #126 P2 — the Coach's reading window (`coach-prefs.defaultWindow`).
+    /// The Coach's reading window (`coach-prefs.defaultWindow`).
     func fetchCoachDefaultWindow() async throws -> CoachDefaultWindow? {
         try await CoachDefaultWindow.from(fetchCoachPrefsRaw())
     }

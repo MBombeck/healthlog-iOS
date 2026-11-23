@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13.1 IC — v1.10.0 web-parity additive HealthKit signal descriptors.
+/// v1.10.0 web-parity additive HealthKit signal descriptors.
 ///
 /// Split out of `MetricKindDescriptor.swift` to keep that file under the
 /// 1000-line `file_length` budget. `MetricKindDescriptor.catalog` concatenates
@@ -164,7 +164,7 @@ extension MetricKindDescriptor {
                 comment: "Empty state — wrist temperature"
             )
         ),
-        // v0.14.6 — v1.12.8 WHOOP-native types (read-only display parity).
+        // v1.12.8 WHOOP-native types (read-only display parity).
         .init(
             kind: .averageHeartRate,
             sfSymbol: "heart",
@@ -215,7 +215,7 @@ extension MetricKindDescriptor {
         )
     ]
 
-    // MARK: - v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23)
+    // MARK: - v1.17.1 source-fixed render-only signals
 
     //
     // Four new server-stored `MeasurementType`s LIVE in v1.17.1, all SOURCE-
@@ -290,7 +290,7 @@ extension MetricKindDescriptor {
             trendPolarity: .neutral,
             renderHint: .scalar,
             supportsDrillDown: true,
-            // W-B189 (#23) — SIGNED format: the value is an offset from
+            // SIGNED format: the value is an offset from
             // baseline, rendered with an explicit +/− sign, NEVER as an
             // absolute reading.
             formatStyle: .signedDecimal1,
@@ -307,7 +307,7 @@ extension MetricKindDescriptor {
         )
     ]
 
-    /// W-B189 (#23) — formats a SIGNED 1-decimal value with an explicit sign,
+    /// Formats a SIGNED 1-decimal value with an explicit sign,
     /// for the `.signedDecimal1` style (`bodyTemperatureDeviation`: Oura's
     /// signed °C offset from baseline). Positives get a `+`, negatives the
     /// Unicode MINUS SIGN (U+2212, typographic minus), zero a plain `0.0`. The

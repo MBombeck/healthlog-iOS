@@ -1,6 +1,6 @@
 import Foundation
 
-/// U1 (#16) — every sentence the top-of-screen sync surfaces say, in one pure
+/// Every sentence the top-of-screen sync surfaces say, in one pure
 /// place so `SyncActivityCopyTests` can pin de and en without a view.
 ///
 /// Two registers on purpose. The visible line is short ("vor 5 Min."), because

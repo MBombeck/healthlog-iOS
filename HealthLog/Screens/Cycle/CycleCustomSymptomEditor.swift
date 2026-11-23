@@ -21,14 +21,18 @@ struct CycleCustomSymptomEditor: View {
     let target: CycleCustomEditorTarget
     let store: CycleStore
     let onSaved: (String) -> Void
-    let onDismiss: () -> Void
 
     @State private var label = ""
-    @State private var isSaving = false
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            target.symptom == nil ? "cycle.custom.create.title" : "cycle.custom.edit.title",
+            action: .save(isEnabled: !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                await save()
+            },
+            isDirty: label != (target.symptom?.displayLabel ?? "")
+        ) {
             Form {
                 Section {
                     TextField("cycle.custom.label.placeholder", text: $label)
@@ -37,44 +41,32 @@ struct CycleCustomSymptomEditor: View {
                             if value.count > 40 { label = String(value.prefix(40)) }
                         }
                 }
-                // 1.4 B2 — the field stops at 40 characters by itself; no
+                .hlFormRowSurface()
+                // The field stops at 40 characters by itself; no
                 // footer states the rule.
-                if let error { Section { HLFormErrorText(error) } }
-            }
-            .disabled(isSaving)
-            .navigationTitle(Text(
-                target.symptom == nil
-                    ? LocalizedStringKey("cycle.custom.create.title")
-                    : LocalizedStringKey("cycle.custom.edit.title")
-            ))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onDismiss)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(isSaving || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if let error {
+                    Section { HLFormErrorText(error) }
+                        .hlFormRowSurface()
                 }
             }
+            .hlPageMargins()
             .onAppear { label = target.symptom?.displayLabel ?? "" }
         }
-        .interactiveDismissDisabled(isSaving)
     }
 
-    private func save() async {
-        isSaving = true
+    /// `true` when the sheet may close.
+    private func save() async -> Bool {
         error = nil
-        defer { isSaving = false }
         if let symptom = target.symptom {
             if await store.updateCustomSymptom(key: symptom.key, label: label) {
                 onSaved(symptom.key)
-                return
+                return true
             }
         } else if let created = await store.createCustomSymptom(label: label) {
             onSaved(created.key)
-            return
+            return true
         }
         error = store.customSymptomsError ?? String(localized: "cycle.custom.error.generic")
+        return false
     }
 }

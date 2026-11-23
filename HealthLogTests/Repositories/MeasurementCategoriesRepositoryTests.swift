@@ -211,7 +211,7 @@ struct MeasurementCategoriesRepositoryTests {
         #expect(fb.categoryId(forRawType: "WALKING_STEADINESS") == "activity")
         #expect(fb.categoryId(forRawType: "AUDIO_EXPOSURE_EVENT") == "hearing")
         // Sanity: covers the existing ServerMeasurementType raw values too.
-        // Audit B-4 — `serverCases`: `__UNKNOWN__` is not a wire value the
+        // `serverCases`: `__UNKNOWN__` is not a wire value the
         // category map could ever be asked about.
         for type in ServerMeasurementType.serverCases {
             #expect(fb.categoryId(forRawType: type.rawValue) != nil, "Fallback must cover wire value \(type.rawValue)")

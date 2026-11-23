@@ -5,7 +5,7 @@ import Testing
 
 private typealias Measurement = HealthLog.Measurement
 
-/// **#115 B5 — the local doctor report prints glucose in the account's unit.**
+/// **The local doctor report prints glucose in the account's unit.**
 ///
 /// The PDF wrote canonical mg/dL with an mg/dL label for every account. Not a
 /// wrong value, but an mmol/L account handed its doctor a report in the one

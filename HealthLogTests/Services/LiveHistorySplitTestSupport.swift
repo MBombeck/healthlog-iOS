@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    // 1.3 (#127, #128) — doubles for the live/history split suites.
+    // Doubles for the live/history split suites.
     //
     // `SimulatedHealthStore` keeps the two properties of HealthKit the split
     // depends on: every row has an insertion position (what an anchor

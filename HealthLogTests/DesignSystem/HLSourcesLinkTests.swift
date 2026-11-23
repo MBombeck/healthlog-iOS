@@ -12,7 +12,7 @@ struct HLSourcesLinkTests {
 
     @Test("a metric kind with no sources renders no control at all")
     func metricWithoutSourcesIsNotRenderable() {
-        // R25 / I2 — the explainer methodology says "the references below", so
+        // The explainer methodology says "the references below", so
         // it may only be offered where there are references. A kind the catalog
         // leaves uncited (`.painNRS`, the decode sentinel, the six device-event
         // kinds) must suppress the control instead of opening an empty sheet.

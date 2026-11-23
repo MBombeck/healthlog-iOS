@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v1.39.1 (#1033) — the per-medication "track intake" switch.**
+/// **v1.39.1 — the per-medication "track intake" switch.**
 ///
 /// The web leads a medication's schedule with the same switch. On: doses fall
 /// due on the schedule, with reminders and adherence. Off: the medication is
@@ -13,7 +13,7 @@ struct MedicationTrackIntakeSection: View {
 
     var body: some View {
         Section {
-            // 1.4 B2 — the line speaks only when the switch is off: tracked
+            // The line speaks only when the switch is off: tracked
             // intake is the expected case, a record is the one to explain.
             HLSettingsToggleRow(
                 title: "med.edit.trackIntake.label",
@@ -22,8 +22,9 @@ struct MedicationTrackIntakeSection: View {
                 accessibilityID: "med.edit.trackIntake"
             )
         } header: {
-            Text("med.edit.trackIntake.section")
+            HLSectionHeader("med.edit.trackIntake.section")
         }
+        .hlFormRowSurface()
     }
 }
 

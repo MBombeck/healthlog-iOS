@@ -3,7 +3,7 @@
     @testable import HealthLog
     import Testing
 
-    /// #12 — no UTC day may end with neither raw heart-rate rows nor 10-minute
+    /// No UTC day may end with neither raw heart-rate rows nor 10-minute
     /// buckets, and no day may carry both.
     ///
     /// The reporter's account had raw heart rate up to the cutover and nothing
@@ -97,13 +97,6 @@
             }
         }
 
-        private struct Flags: FeatureFlagsServicing {
-            var hrBuckets = true
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                flag == .enableHRBuckets ? hrBuckets : flag.defaultValue
-            }
-        }
-
         private struct Harness {
             let suite: String
             let clock: Clock
@@ -130,14 +123,16 @@
             }
         }
 
-        private func harness(rows: [HealthKitHRBucketRow] = [], flags: Flags = Flags()) -> Harness {
+        private func harness(rows: [HealthKitHRBucketRow] = [], signedIn: Bool = true) -> Harness {
             let suite = "test.hrbucket.neither.\(UUID().uuidString)"
             // swiftlint:disable:next force_unwrapping
             let defaults = UserDefaults(suiteName: suite)!
             defaults.removePersistentDomain(forName: suite)
             defaults.set(Self.cutover, forKey: HRBucketCutoverStore.key(for: Self.user))
             let keychain = InMemoryKeychain()
-            try? keychain.setString("token", forKey: KeychainKey.authToken)
+            if signedIn {
+                try? keychain.setString("token", forKey: KeychainKey.authToken)
+            }
             try? keychain.setString(Self.user, forKey: KeychainKey.userID)
             let clock = Clock(Self.now)
             let reader = Reader(rows: rows)
@@ -145,9 +140,7 @@
             let coordinator = HealthKitHRBucketSyncCoordinator(
                 service: reader,
                 uploader: MeasurementBatchUploader(api: api, throttle: BatchSyncThrottle()),
-                featureFlags: flags,
                 keychain: keychain,
-                isStandalone: { false },
                 clock: { clock.now },
                 // swiftlint:disable:next force_unwrapping
                 defaultsProvider: { UserDefaults(suiteName: suite)! }
@@ -332,9 +325,9 @@
 
         @Test("a gate that suppresses the sweep is recorded by name")
         func gatesAreRecorded() async {
-            let h = harness(rows: [Self.row("2026-10-03T08:00:00.000Z")], flags: Flags(hrBuckets: false))
+            let h = harness(rows: [Self.row("2026-10-03T08:00:00.000Z")], signedIn: false)
             await h.coordinator.sync()
-            #expect(h.ledger.lastSuppression?.gate == .flagOff)
+            #expect(h.ledger.lastSuppression?.gate == .noAuthToken)
             #expect(h.api.posted.isEmpty)
         }
 

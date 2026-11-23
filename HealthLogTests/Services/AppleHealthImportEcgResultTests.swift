@@ -8,7 +8,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-37 — `result.ecg` on the archive-import poll status (server v1.34.1).**
+/// **`result.ecg` on the archive-import poll status (server v1.34.1).**
 ///
 /// The `export.zip` archive import is currently the ONLY route by which an ECG
 /// recording reaches HealthLog: there is no JSON ingest route, and the app ships

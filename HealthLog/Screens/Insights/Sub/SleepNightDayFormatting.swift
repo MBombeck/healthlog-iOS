@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Parity Build 4 · 4.7 — the ONE night-date authority for the sleep screens.**
+/// **The ONE night-date authority for the sleep screens.**
 ///
 /// ## The bug this replaces
 ///
@@ -139,14 +139,7 @@ enum SleepDurationFormat {
         components.month = 1
         components.day = 1
         guard let date = calendar.date(from: components) else { return "—" }
-        return date.formatted(
-            Date.FormatStyle(
-                date: .omitted,
-                time: .shortened,
-                locale: calendar.locale ?? .current,
-                calendar: calendar,
-                timeZone: calendar.timeZone
-            )
-        )
+        // The system's short time, as the status-bar clock writes it (04:15).
+        return HLTimeFormat.shortTime(date, locale: calendar.locale ?? .current, timeZone: calendar.timeZone)
     }
 }

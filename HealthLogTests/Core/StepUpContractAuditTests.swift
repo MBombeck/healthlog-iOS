@@ -55,7 +55,7 @@
 
     // MARK: - Header contract
 
-    /// C3: “`X-Step-Up: hle_…` verbatim, kein Schema-Präfix, neben
+    /// “`X-Step-Up: hle_…` verbatim, kein Schema-Präfix, neben
     /// `Authorization: Bearer`.”
     @Suite("CU-22 — X-Step-Up header contract", .serialized, .mockURLSession)
     struct StepUpHeaderContractTests {
@@ -121,7 +121,7 @@
 
             nonisolated(unsafe) var setup: (String?, String)?
             MockURLProtocol.install { req in
-                // CU-07: the handler is process-global — record only OUR route so
+                // The handler is process-global — record only OUR route so
                 // a parallel suite's request cannot overwrite the capture.
                 if req.targets("/api/auth/me/mfa/totp/setup") {
                     setup = (req.value(forHTTPHeaderField: "X-Step-Up"), req.httpMethod ?? "")
@@ -192,7 +192,7 @@
 
     // MARK: - The mint contract
 
-    /// C3: TTL 300 s, single-use, token-bound, overwritten by a re-mint;
+    /// TTL 300 s, single-use, token-bound, overwritten by a re-mint;
     /// `satisfiesFreshFactor` false for `password`; recovery codes not accepted.
     @Suite("CU-22 — mint contract", .mockURLSession)
     struct StepUpMintContractTests {
@@ -218,7 +218,7 @@
         @Test("The mint union has exactly the four server arms — no recovery arm")
         func unionArms() {
             #expect(StepUpMethod.allCases == [.password, .totp, .webauthn, .passkey])
-            // C3: “Recovery-Codes werden nicht akzeptiert.” The server's
+            // “Recovery-Codes werden nicht akzeptiert.” The server's
             // `stepUpMintSchema` has no such variant, so neither may the client:
             // there must be no way to *express* a recovery proof at the mint.
             #expect(!StepUpMethod.allCases.contains { $0.rawValue.contains("recovery") })
@@ -308,7 +308,7 @@
 
     // MARK: - Uniform rejection handling
 
-    /// C3: “Die Ablehnung ist absichtlich uniform — bei `auth.stepup.required`
+    /// “Die Ablehnung ist absichtlich uniform — bei `auth.stepup.required`
     /// die gecachte Elevation wegwerfen und neu minten, nicht diagnostizieren.”
     @Suite("CU-22 — step-up rejection classification", .mockURLSession)
     struct StepUpRejectionTests {
@@ -493,7 +493,7 @@
             _ = elevation.consume()
             nonisolated(unsafe) var hits = 0
             MockURLProtocol.install { req in
-                // CU-07: `hits == 0` only means something when a parallel suite's
+                // `hits == 0` only means something when a parallel suite's
                 // request cannot raise it — scope to the route this action uses.
                 if req.targets("/api/auth/me/mfa/webauthn/k1") { hits += 1 }
                 return StepUpAuditFixture.ok(req, #"{"data":{},"error":null}"#)
@@ -536,7 +536,7 @@
 
     // MARK: - Elevations are never cached
 
-    /// C3: an elevation is “an genau das mintende Token gebunden” and “wird von
+    /// An elevation is “an genau das mintende Token gebunden” and “wird von
     /// einem Re-Mint überschrieben”. The client half of that is simply: never
     /// hold one. Each mint is its own object; nothing memoises.
     @Suite("CU-22 — no client-side elevation cache", .serialized, .mockURLSession)
@@ -546,7 +546,7 @@
             let repo = try StepUpAuditFixture.makeRepo()
             nonisolated(unsafe) var counter = 0
             MockURLProtocol.install { req in
-                // CU-07: only the mint route advances the counter.
+                // Only the mint route advances the counter.
                 if req.targets("/api/auth/step-up") { counter += 1 }
                 return StepUpAuditFixture.ok(
                     req,

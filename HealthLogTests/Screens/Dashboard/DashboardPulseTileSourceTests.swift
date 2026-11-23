@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #20 — the Dashboard pulse slot follows the web rule (`page-client.tsx`
+/// The Dashboard pulse slot follows the web rule (`page-client.tsx`
 /// `hasRestingHr` / `pulseTileSummary`, HealthLog v1.39.x): with resting heart
 /// rate in the digest summaries the slot shows the resting series, otherwise raw
 /// `PULSE`. Every stat on the tile (headline, sparkline, 7d/30d, trend, in-range

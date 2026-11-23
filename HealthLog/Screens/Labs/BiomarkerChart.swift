@@ -2,15 +2,14 @@ import Accessibility
 import Charts
 import SwiftUI
 
-/// v0154 LR-REDO — the biomarker value-over-time chart on the detail page.
+/// The biomarker value-over-time chart on the detail page.
 ///
 /// A biomarker-specific Swift Charts variant because the Insights `ChartCard` /
 /// `MetricChartContent` are bound to `MetricKind` + `SeriesPoint` +
 /// `MeasurementsRepository`. This plots the per-biomarker `(takenAt, value)`
-/// series directly and overlays a NEUTRAL reference band from the server-resolved
-/// `referenceLow`/`referenceHigh` — mirroring the web's shaded `ReferenceArea` +
-/// dashed bound lines. The band is a calm graphite rail, NEVER a red/green alarm
-/// (the verdict stays the server `rangeStatus`, surfaced elsewhere on the page).
+/// series directly and draws the server-resolved `referenceLow`/`referenceHigh`
+/// as two dashed edges, like every metric page; never a red/green alarm (the
+/// verdict stays the server `rangeStatus`, surfaced elsewhere on the page).
 ///
 /// Reuses the chart tokens (`HLChartTints`, `HLChartGrid`, `HLChartStyle`) so the
 /// render matches every other chart in the app. Under two points it self-
@@ -33,7 +32,7 @@ struct BiomarkerChart: View {
         self.referenceHigh = referenceHigh
         points = BiomarkerSeries.valueBearing(rows)
             .compactMap { row -> DatedValue? in
-                guard let date = LabsDateFormat.parse(row.takenAt), let value = row.value else { return nil }
+                guard let date = LabsDateFormat.readingDate(row.takenAt), let value = row.value else { return nil }
                 return DatedValue(id: row.id, date: date, value: value)
             }
             .sorted { $0.date < $1.date }
@@ -59,9 +58,12 @@ struct BiomarkerChart: View {
         self.points = points.sorted { $0.date < $1.date }
     }
 
-    /// 1.4 B2-c — the card's one line under the chart (the custom metric's
+    /// The card's one line under the chart (the custom metric's
     /// "N of M in your target range"). `nil` for none.
     private var caption: String?
+
+    /// The point under the finger while the chart is scrubbed.
+    @State private var selectedDate: Date?
 
     var body: some View {
         if points.count >= 2 {
@@ -71,59 +73,21 @@ struct BiomarkerChart: View {
                         .frame(height: HLChartStyle.heightRegular)
                     if let caption {
                         Text(verbatim: caption)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                     }
                 }
             }
         } else {
             HLCard {
-                VStack(spacing: HLSpace.xs) {
-                    Image(systemName: "chart.xyaxis.line")
-                        // Audit-01 H4 — empty-glyph on the canonical hero scale
-                        // (was a raw `.title2`), matching `HLEmptyState`.
-                        .font(.hlIcon(HLIconSize.hero, weight: .medium))
-                        .foregroundStyle(HLText.tertiary)
-                    Text("biomarker.detail.chart.needMore")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, HLSpace.md)
+                HLEmptyNote("biomarker.detail.chart.needMore")
             }
         }
     }
 
+    /// The reference range as its two edges, never a filled area, as on every
+    /// metric page; the verdict stays the server's range status.
     private var chart: some View {
         Chart {
-            // Neutral reference band — a calm graphite rectangle spanning
-            // [low, high]. Only drawn when BOTH bounds exist; a single bound
-            // draws just its dashed rule below.
-            if let low = referenceLow, let high = referenceHigh {
-                RectangleMark(
-                    yStart: .value("biomarker.detail.chart.referenceLow", low),
-                    yEnd: .value("biomarker.detail.chart.referenceHigh", high)
-                )
-                .foregroundStyle(HLChartTints.seriesLow.opacity(0.18))
-            }
-            if let low = referenceLow {
-                RuleMark(y: .value("biomarker.detail.chart.referenceLow", low))
-                    .foregroundStyle(HLChartTints.seriesLow)
-                    .lineStyle(StrokeStyle(
-                        lineWidth: HLChartGrid.lineWidth,
-                        dash: HLChartGrid.thresholdDash
-                    ))
-            }
-            if let high = referenceHigh {
-                RuleMark(y: .value("biomarker.detail.chart.referenceHigh", high))
-                    .foregroundStyle(HLChartTints.seriesLow)
-                    .lineStyle(StrokeStyle(
-                        lineWidth: HLChartGrid.lineWidth,
-                        dash: HLChartGrid.thresholdDash
-                    ))
-            }
-
             ForEach(points) { point in
                 LineMark(
                     x: .value("biomarker.detail.chart.date", point.date),
@@ -140,26 +104,24 @@ struct BiomarkerChart: View {
                 .foregroundStyle(HLChartTints.series)
                 .symbolSize(40)
             }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { _ in
-                AxisGridLine()
-                    .foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisTick()
-                    .foregroundStyle(HLText.tertiary)
-                AxisValueLabel()
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+
+            // After the series, so the range's label lies over the curve.
+            HLChartReferenceLines.band(lower: referenceLow, upper: referenceHigh, unit: unit)
+
+            HLChartScrubber.marks(selectedDate: selectedDate, in: points, date: \.date, value: \.value) { point in
+                HLScrubCallout(
+                    title: HLDateFormat.date(point.date),
+                    value: HLValueFormat.number(point.value, fractionDigits: 0 ... 2),
+                    unit: LabUnit.suffix(unit)
+                )
             }
         }
-        .chartYAxisLabel(position: .leading, alignment: .center) {
-            if let axisUnit = LabUnit.suffix(unit) {
-                Text(verbatim: axisUnit)
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+        .hlChartAxes(dates: points.map(\.date), unit: LabUnit.suffix(unit) ?? "")
+        .hlChartScrub($selectedDate) { date in
+            HLChartScrubber.nearest(to: date, in: points, date: \.date).map {
+                "\(HLDateFormat.date($0.date)), \(Self.spokenValue($0.value, unit: unit))"
             }
         }
-        .chartXAxis { ChartDateAxis.marks(for: points.map(\.date)) }
         .accessibilityLabel(Text("biomarker.detail.chart.a11y"))
         .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
     }
@@ -172,7 +134,7 @@ struct BiomarkerChart: View {
     private var chartDescriptor: AXChartDescriptor {
         let pts = points
         let triples = pts.enumerated().map { idx, point in
-            (x: Double(idx), y: point.value, xLabel: point.date.formatted(.dateTime.day().month(.abbreviated).year()))
+            (x: Double(idx), y: point.value, xLabel: HLDateFormat.date(point.date))
         }
         let chartUnit = unit
         return HLChartAX.singleSeries(
@@ -194,7 +156,7 @@ struct BiomarkerChart: View {
 
     /// One plotted value as VoiceOver speaks it, with its unit when it has one.
     nonisolated static func spokenValue(_ value: Double, unit: String) -> String {
-        LabUnit.appending(unit, to: value.formatted(.number.precision(.fractionLength(0 ... 2))))
+        LabUnit.appending(unit, to: HLValueFormat.number(value, fractionDigits: 0 ... 2))
     }
 
     /// A parsed `(date, value)` chart point keyed by the source row id.

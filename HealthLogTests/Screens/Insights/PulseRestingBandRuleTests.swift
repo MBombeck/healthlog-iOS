@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #20 — the server `PULSE` target row is the RESTING-pulse band (`label:
+/// The server `PULSE` target row is the RESTING-pulse band (`label:
 /// "Resting pulse"`, HealthLog `src/lib/targets/vitals-builder.ts`). On the
 /// Insights pages it may sit on the resting heart rate card, never next to the
 /// raw pulse 30-day average (HealthLog#584: the resting band is never applied

@@ -22,7 +22,7 @@ import Foundation
 // known to be either, so the printed date alone is the rule that gets stated.
 
 public extension MedicationContainerType {
-    /// Audit B-4 — decodes an unrecognised container form onto ``unknown``
+    /// Decodes an unrecognised container form onto ``unknown``
     /// instead of throwing.
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -36,7 +36,7 @@ public extension MedicationContainerType {
         self = known
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire.
+    /// Refuses to put ``unknown`` back on the wire.
     ///
     /// `containerType` rides the inventory `POST` body, and the route validates
     /// it against `MEDICATION_CONTAINER_TYPE_VALUES`. The register sheet only
@@ -59,7 +59,7 @@ public extension MedicationContainerType {
 
 // MARK: - ScheduleType
 
-// Audit B-4 — the tolerant half of `ScheduleType`, the cadence discriminator.
+// The tolerant half of `ScheduleType`, the cadence discriminator.
 //
 // This one never threw and never lost a row. What it did was answer `.scheduled`
 // for a tag nobody had read, and `.scheduled` is a statement — "this is a
@@ -69,7 +69,7 @@ public extension MedicationContainerType {
 // than the claim it replaces.
 
 public extension ScheduleType {
-    /// Audit B-4 — lenient decode: an unrecognised tag lands on ``unknown``
+    /// Lenient decode: an unrecognised tag lands on ``unknown``
     /// instead of throwing OR of claiming ``scheduled``.
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -83,12 +83,12 @@ public extension ScheduleType {
         self = known
     }
 
-    /// Audit B-4 — every tag the SERVER can actually send.
+    /// Every tag the SERVER can actually send.
     static var serverCases: [ScheduleType] {
         [.scheduled, .prn, .cyclic]
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire.
+    /// Refuses to put ``unknown`` back on the wire.
     ///
     /// A schedule write is composed from a local ``Cadence``, which can only
     /// produce a named tag, and `MedicationScheduleDTO.encode(to:)` drops the

@@ -6,7 +6,7 @@ import SwiftUI
 /// (Foxtrot v0.4.0) so the parent stack handles `navigationTitle` +
 /// back-chevron + sheets.
 ///
-/// POLISH-ACHIEVE (v0.5.5.6) redesign:
+/// POLISH-ACHIEVE redesign:
 /// - Old: 2-col chunky `HLCard` grid (~140pt per cell, surface chrome, in-card
 ///   progress bars). Read as a "stats panel".
 /// - New: 3-col free-floating circular medallions. Earned cells glow with a
@@ -27,7 +27,7 @@ import SwiftUI
 /// Plus:
 /// - Empty state with humane copy when the store loads zero achievements.
 /// - Hidden-card opaque-placeholder render (mirrors the server's web treatment).
-/// - `.hlScreenBackground()` for canonical color (A6 §4).
+/// - `.hlScreenBackground()` for canonical color.
 struct AchievementsScreen: View {
     @Environment(AchievementsStore.self) private var store
     @State private var selectedAchievement: Achievement?
@@ -37,35 +37,26 @@ struct AchievementsScreen: View {
         GridItem(.flexible(), spacing: HLSpace.md)
     ]
 
-    /// Pixel-Match (28pt) bei Default-Dynamic-Type, skaliert mit Accessibility-
-    /// Sizes über `@ScaledMetric` (Audit M5). Slimmer than the legacy 36pt
-    /// hero number — the strip is now a quiet anchor, not a billboard.
-    @ScaledMetric(relativeTo: .title2) private var progressValueSize: CGFloat = 28
-
     var body: some View {
-        Group {
-            if isShowingInitialSkeleton {
-                // v0.5.5.2 W-IMPL-SKELETON: cold-launch placeholder cards
-                // matching the medallion silhouette (circle + tiny title)
+        HLPage {
+            HLStateContainer(loadPhase) {
+                // Cold-launch placeholder cards matching the medallion
+                // silhouette (circle + tiny title).
                 skeletonGrid
-            } else if store.achievements.isEmpty, !store.isLoading, store.error == nil {
+            } empty: {
                 emptyState
-            } else {
+            } content: {
                 grid
             }
         }
-        .hlScreenBackground()
-        // v0.5.x C-9 — iOS 26+ soft scroll-edge so content blurs into
-        // the navigation Liquid Glass instead of clipping cleanly.
-        // iOS 18-25: no-op (system stays flat-translucent).
-        .hlScrollEdgeSoft()
         .navigationTitle("achievements.title")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await store.revalidateIfStale() }
-        // W-B184 — WHOOP-style pull-to-refresh (custom glyph + checkmark + one
+        // WHOOP-style pull-to-refresh (custom glyph + checkmark + one
         // success haptic; the handshake driving the checkmark runs in the modifier).
         .hlPullToRefresh { await store.load() }
-        // K1 — the banner below still presents as this overlay; this
-        // reserves its height at the top so it covers nothing (H2).
+        // The banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing.
         .hlReserveErrorBannerSpace(store.error)
         .overlay(alignment: .top) {
             ErrorBanner(error: store.error) {
@@ -73,16 +64,7 @@ struct AchievementsScreen: View {
             }
         }
         .sheet(item: $selectedAchievement) { achievement in
-            AchievementDetailSheet(achievement: achievement) {
-                selectedAchievement = nil
-            }
-            .hlSheetPresentation(.standard)
-            .presentationCornerRadius(HLRadius.sheet)
-            // v0.6.1 Y2 — Home-Compliance background. The .sheet(item:)
-            // binding nils on drag-down dismiss, so the Schließen-removal
-            // in the body still routes through SwiftUI's standard
-            // dismiss-clears-the-binding semantics.
-            .presentationBackground(HLColor.surface)
+            AchievementDetailSheet(achievement: achievement)
         }
         // v0.5.5.1 haptic migration: replaces the per-cell
         // `UISelectionFeedbackGenerator().selectionChanged()` with a
@@ -99,23 +81,24 @@ struct AchievementsScreen: View {
         store.isLoading && store.achievements.isEmpty && store.error == nil
     }
 
+    private var loadPhase: HLLoadPhase {
+        if isShowingInitialSkeleton { return .loading }
+        if store.achievements.isEmpty, !store.isLoading, store.error == nil { return .empty }
+        return .loaded
+    }
+
     private var skeletonGrid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                progressStripSkeleton
-                LazyVGrid(columns: columns, spacing: HLSpace.lg) {
-                    ForEach(0 ..< 9, id: \.self) { _ in
-                        VStack(spacing: HLSpace.xs) {
-                            HLSkeleton(.circle, width: 72, height: 72)
-                            HLSkeleton(.capsule, width: 68, height: 10)
-                        }
-                        .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: HLSpace.md) {
+            progressStripSkeleton
+            LazyVGrid(columns: columns, spacing: HLSpace.lg) {
+                ForEach(0 ..< 9, id: \.self) { _ in
+                    VStack(spacing: HLSpace.xs) {
+                        HLSkeleton(.circle, width: 72, height: 72)
+                        HLSkeleton(.capsule, width: 68, height: 10)
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.md)
-            .padding(.bottom, HLSpace.lg)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Loading achievements"))
@@ -135,44 +118,41 @@ struct AchievementsScreen: View {
 
     // MARK: - Sections
 
+    @ViewBuilder
     private var grid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                progressStrip
-                // 1.4 B2 — no rest-mode paragraph between progress and grid; the
-                // note lives on Today and the recovery page.
-                LazyVGrid(columns: columns, spacing: HLSpace.lg) {
-                    ForEach(store.achievements) { achievement in
-                        AchievementMedallionButton(
-                            achievement: achievement,
-                            onTap: { selectedAchievement = achievement }
-                        )
-                    }
-                }
-                // v0.14.8 W2-SYNCUX — canonical sync-status footer (same
-                // primitive as Dashboard/Insights, self-suppressing).
-                HLSyncStatusFooter(screenLoading: store.isLoading)
+        progressStrip
+        // No rest-mode paragraph between progress and grid; the
+        // note lives on Today and the recovery page.
+        LazyVGrid(columns: columns, spacing: HLSpace.lg) {
+            ForEach(store.achievements) { achievement in
+                AchievementMedallionButton(
+                    achievement: achievement,
+                    onTap: { selectedAchievement = achievement }
+                )
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.md)
-            // Native iOS-18 `TabView` already supplies the bottom inset;
-            // tighter than the legacy `HLSpace.lg` to land flush with the
-            // tab-bar safe-area pad on iPhone 17 Pro.
-            .padding(.bottom, HLSpace.md)
         }
+        // Canonical sync-status footer (same
+        // primitive as Dashboard/Insights, self-suppressing).
+        HLSyncStatusFooter(screenLoading: store.isLoading)
     }
 
     /// Slim inline progress strip — replaces the legacy elevated `HLCard`.
     /// Withings-Tonal-Mono treatment: section header in uppercased
     /// `.hlFootnote`, a quiet count + percent chip, a hairline progress rail.
+    @ViewBuilder
     private var progressStrip: some View {
+        HLSectionHeader("Progress", rank: .area)
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("Progress")
             HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
-                Text("\(store.unlockedCount)/\(store.totalCount)")
-                    .font(.hlMetric(progressValueSize))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
+                // Unlocked over total in the tile size: a quiet anchor, not
+                // the page's hero.
+                HLValueText(
+                    Double(store.unlockedCount),
+                    Double(store.totalCount),
+                    unit: .plain,
+                    size: .tile,
+                    fractionDigits: 0 ... 0
+                )
                 Spacer()
                 HLBadge(percentLabel, icon: "trophy.fill", tone: .warning)
             }
@@ -188,7 +168,7 @@ struct AchievementsScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(Text("\(store.earnedPoints) of \(store.totalPoints) points earned"))
             }
-            // v0.8.0 W6 — inherit the scene-root `.tint(preferredTint)` instead
+            // Inherit the scene-root `.tint(preferredTint)` instead
             // of pinning the asset-catalog accent, so the live user tint drives
             // the bar.
             // v0.16 Build 7 / item 7.4 — the rail tracks POINTS (earned / total),
@@ -208,7 +188,6 @@ struct AchievementsScreen: View {
             message: "Log values or take medications — badges unlock step by step."
         )
         .accessibilityIdentifier("achievements.empty")
-        .containerCentered()
     }
 
     // MARK: - Derived
@@ -224,7 +203,7 @@ struct AchievementsScreen: View {
 
     private var percentLabel: String {
         guard store.totalPoints > 0 else { return HLNumberFormat.percent(0) }
-        // F1 — rounded, not truncated (`Int(x * 100)` read 2/3 as 66 %).
+        // Rounded, not truncated (`Int(x * 100)` read 2/3 as 66 %).
         return HLNumberFormat.percent(fraction: progressValue)
     }
 }

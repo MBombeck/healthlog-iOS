@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.11 marathon (AI-1) — the server-arm decision gate, split out of
+/// v0.11 marathon — the server-arm decision gate, split out of
 /// `CoachConversationStore.swift` to keep that file under the 600-line SwiftLint
 /// ceiling. These computed properties decide whether a Coach send routes to the
 /// server arm, asks for consent, or stays on-device.
@@ -20,9 +20,9 @@ public extension CoachConversationStore {
         serverService != nil && (prefersServerArm?() ?? false)
     }
 
-    /// **v0.7.1 W-COACH-FALLBACK** — `true` when the server arm is applicable
+    /// `true` when the server arm is applicable
     /// BUT the consent gate is not yet granted; the sheet surfaces a consent CTA
-    /// instead of a dead kill-card. **v0.11 (AI-1):** also `true` for an explicit
+    /// instead of a dead kill-card. **v0.11:** also `true` for an explicit
     /// server pick on a capable device that hasn't consented yet — so the pick
     /// lands on the CTA rather than being silently re-routed to on-device.
     var serverFallbackNeedsConsent: Bool {
@@ -36,7 +36,7 @@ public extension CoachConversationStore {
     /// `true` when sends should route through the server arm: a server service
     /// is wired, consent is granted, AND either the on-device model is not ready
     /// (legacy fallback) OR the user explicitly picked the server arm — in which
-    /// case it wins even on an AI-capable device (AI-1). Fail-closed: an
+    /// case it wins even on an AI-capable device. Fail-closed: an
     /// un-granted `serverConsentGate` returns `false` regardless of the pick, so
     /// nothing is transmitted off-device without the per-provider consent.
     var shouldUseServerFallback: Bool {
@@ -64,7 +64,7 @@ public extension CoachConversationStore {
         }
     }
 
-    /// **#114 / #115 · 0.2 — the `coach` capability, per arm.** The server
+    /// **The `coach` capability, per arm.** The server
     /// resolves it (`/api/auth/me` `ai.capabilities.coach`); the store only
     /// picks the half that applies to the arm the next turn would take:
     ///

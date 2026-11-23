@@ -8,11 +8,11 @@ import Testing
 
 /// Companion suite to ``MiniCoachServiceTests`` — keeps the
 /// type-body length under the linter cap by hosting the safety filter
-/// (C2), history (C3), and service-level gating tests separately.
+/// (C2), history, and service-level gating tests separately.
 @Suite("MiniCoach — safety + history + gating (C2+C3)")
 @MainActor
 struct MiniCoachSafetyAndHistoryTests {
-    // MARK: - History (C3)
+    // MARK: - History
 
     @Test("History enforces 8-turn cap")
     func historyEnforcesCap() async {
@@ -26,7 +26,7 @@ struct MiniCoachSafetyAndHistoryTests {
         #expect(total == 12)
     }
 
-    // UI-Standard R15 (U1) — `historyDisclaimerEveryFifth` und
+    // UI-Standard R15 — `historyDisclaimerEveryFifth` und
     // `historyDisclaimerSkipsRefused` sind entfallen. Sie prüften die
     // Fünf-Zug-Kadenz, mit der `MiniCoachService` einen Pauschalsatz an jede
     // fünfte Antwort klebte. Der Satz ist gefallen, die Kadenz mit ihm — ein
@@ -55,7 +55,7 @@ struct MiniCoachSafetyAndHistoryTests {
         #expect(count == 0)
     }
 
-    // MARK: - MDR safety filter (C2) — new Mini-Coach patterns
+    // MARK: - MDR safety filter — new Mini-Coach patterns
 
     @Test("MDR filter refuses implicit-advice softener (DE)")
     func mdrImplicitAdviceDE() async {

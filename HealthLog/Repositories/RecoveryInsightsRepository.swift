@@ -8,7 +8,7 @@ import Foundation
 /// server's `latest` and `avg30` unchanged; strain, load and energy are never
 /// derived on-device. The empty reason is the server's `recoveryEmpty`.
 ///
-/// **1.4 B3 — the 30-day gate.** A type is part of the family only when the
+/// **The 30-day gate.** A type is part of the family only when the
 /// server reports an `avg30` for it, which it does exactly when the type has a
 /// reading in the last 30 days. Older values (Alex's cardio recovery from
 /// 2024) therefore never appear as if they were current. The same rule decides
@@ -74,7 +74,7 @@ public actor RecoveryInsightsRepository {
     /// has its own Insights page, like on the web.
     static let familyOrder: [MetricKind] = [
         .recoveryScore,
-        // #162 — Garmin's scores sit with the recharge signals and its
+        // Garmin's scores sit with the recharge signals and its
         // acute load with the loads, in the web's order. A server before
         // v1.47.0 never summarises them, so they never become members there.
         .ansCharge, .bodyBattery, .trainingReadiness, .stressLevel,

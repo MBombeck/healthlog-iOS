@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// v0.10.0 W-Mood-A — zone-1 hero summary (DESIGN-A §1.3).
+/// Zone-1 hero summary.
 ///
 /// "Here is how you feel now": latest mood (big value) + 30-day average + the
 /// prior-period trend as a calm caption line.
 ///
-/// **I-4 Item 2 (standardisation):** the card was reworked to read like every
+/// The card was reworked to read like every
 /// other Insights card (`InsightsPrimaryTile` / `BPStatusCard`): a
 /// secondary-caption heading, the big headline value, and the trend folded into
 /// a single bottom **caption line with a leading direction glyph** — instead of
@@ -14,7 +14,7 @@ import SwiftUI
 /// direction still reads (the small glyph IN the caption), but there is no
 /// off-pattern arrow affordance any more. Monochrome.
 ///
-/// 1.5 VERDICTS (#151) — the glyph points where the server's trend points
+/// The glyph points where the server's trend points
 /// (`direction` of the 30-day slope, else the 7-day one) and nowhere else: no
 /// slope from the server, no arrow. It no longer warms on a fall either; that
 /// was the app's own judgement.
@@ -32,27 +32,25 @@ struct MoodHeroSummary: View {
 
     var body: some View {
         HLCard {
-            // v0.14.7 B5 — the "Stimmung heute" title moved OUT of the card to a
+            // The "Stimmung heute" title moved OUT of the card to a
             // section heading above it (`MoodAnalysisContent` section 0); the
             // card now leads with the value, matching the metric tiles.
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-                    Text(latestLabel)
-                        // Audit-01 H3 — semantic metric style (28pt @ Large)
-                        // instead of the pixel-locked escape hatch, so the hero
-                        // value scales with Dynamic Type.
-                        .font(.hlMetric(.title))
-                        .foregroundStyle(HLText.primary)
-                        // 1.4 B4 — wraps at large text sizes instead of
-                        // shrinking the one figure the card exists for.
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let avg30 = insights.avg30 {
-                        Text("Ø 30d \(avg30.formatted(.number.precision(.fractionLength(1))))")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                            .monospacedDigit()
-                    }
-                    Spacer(minLength: 0)
+                Text(latestLabel)
+                    // The page's one large figure, in the hero face of every
+                    // detail page; the mood is a word, so the face is taken
+                    // without HLValueText's number formatting. Wraps at large
+                    // text sizes instead of shrinking.
+                    .font(HLValueSize.hero.numberFont)
+                    .foregroundStyle(HLText.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                // The average is a fact about the word above it, set on its
+                // own line in caption size like the date under a metric's
+                // hero; beside the word the two ran into one another.
+                if let avg30 = insights.avg30 {
+                    Text("Ø 30d \(HLValueFormat.number(avg30, fractionDigits: 1 ... 1))")
+                        .hlText(.rowSubtitle)
+                        .monospacedDigit()
                 }
 
                 trendLine
@@ -69,12 +67,12 @@ struct MoodHeroSummary: View {
         return MoodCopy.scoreLabel(score)
     }
 
-    /// I-4 Item 2 — the trend, rendered as ONE calm caption line (leading
+    /// The trend, rendered as ONE calm caption line (leading
     /// direction glyph + the "+0.4 vs last month" delta), so the card matches
     /// the canonical "heading → value → caption" anatomy. Omitted when there is
     /// neither a slope nor a prior-period delta. The glyph is monochrome.
     ///
-    /// 1.4 B4 — the glyph only leads a delta. Without one it stood alone on
+    /// The glyph only leads a delta. Without one it stood alone on
     /// its own line under the value, an arrow that pointed at nothing.
     @ViewBuilder
     private var trendLine: some View {
@@ -87,8 +85,7 @@ struct MoodHeroSummary: View {
                         .accessibilityHidden(true)
                 }
                 Text(deltaLine)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .monospacedDigit()
             }
         }
@@ -98,7 +95,7 @@ struct MoodHeroSummary: View {
     private var deltaLine: String? {
         guard let avg30 = insights.avg30, let prior = insights.avg30PriorPeriod else { return nil }
         let delta = avg30 - prior
-        let magnitude = abs(delta).formatted(.number.precision(.fractionLength(1)))
+        let magnitude = HLValueFormat.number(abs(delta), fractionDigits: 1 ... 1)
         let signed = delta >= 0 ? "+\(magnitude)" : "−\(magnitude)"
         return String(localized: "\(signed) vs last month")
     }
@@ -109,7 +106,7 @@ struct MoodHeroSummary: View {
             parts.append(String(localized: "Latest \(MoodCopy.scoreLabel(score))"))
         }
         if let avg30 = insights.avg30 {
-            parts.append(String(localized: "30-day average \(avg30.formatted(.number.precision(.fractionLength(1))))"))
+            parts.append(String(localized: "30-day average \(HLValueFormat.number(avg30, fractionDigits: 1 ... 1))"))
         }
         if let dir = Self.spokenDirection(insights.trendDirection) {
             parts.append(String(localized: "trend \(dir)"))
@@ -125,14 +122,14 @@ struct MoodHeroSummary: View {
     /// build does not know) draws none.
     nonisolated static func symbol(for direction: TrendDirection?) -> String? {
         switch direction {
-        case .up: "arrow.up.right"
-        case .down: "arrow.down.right"
-        case .stable: "arrow.right"
+        case .up: "arrow.up"
+        case .down: "arrow.down"
+        case .stable: "minus"
         case .unknown, .none: nil
         }
     }
 
-    /// POLISH-B B8 — the server's mood direction as the arrow vocabulary of
+    /// The server's mood direction as the arrow vocabulary of
     /// the tiles.
     nonisolated static func indicator(for direction: TrendDirection?) -> TrendIndicator? {
         switch direction {

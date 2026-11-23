@@ -1,11 +1,11 @@
 import Foundation
 
-// Moved out of `MeasurementDTO.swift` (#162) so that file, which sits on
+// Moved out of `MeasurementDTO.swift` so that file, which sits on
 // a baselined `file_length` ceiling, has room for the Garmin types. Pure move.
 
 /// Server-List-Response.
 ///
-/// **v0.6.2.1 — tolerant `measurements` decode (F3 drill-down fix).** The
+/// **Tolerant `measurements` decode (F3 drill-down fix).** The
 /// Prisma `MeasurementType` enum on the server is a superset of
 /// `ServerMeasurementType` here — it also carries `ACTIVITY_STEPS`,
 /// `SLEEP_DURATION`, `ACTIVE_ENERGY_BURNED`, `FLIGHTS_CLIMBED`,
@@ -18,9 +18,8 @@ import Foundation
 /// gelesen werden" with an empty list. Operator hit this on the Steps
 /// chart (845 entries) on 2026-05-24.
 ///
-/// Same tolerant pattern as `TolerantMetricKind` (v0.4.0 A4-Audit row 5)
-/// — log + drop unknown rows, keep the array intact for the known
-/// metrics the iOS surfaces actually render.
+/// The fix logs and drops unknown rows and keeps the array intact for the
+/// known metrics the iOS surfaces actually render.
 public struct MeasurementListWireResponse: Codable, Sendable {
     public let measurements: [MeasurementWireDTO]
     public let meta: MeasurementListResponse.ListMeta?
@@ -52,7 +51,7 @@ public struct MeasurementListWireResponse: Codable, Sendable {
 /// Tolerant element wrapper used inside `MeasurementListWireResponse` so a
 /// single row carrying a `type` outside `ServerMeasurementType` (e.g.
 /// `ACTIVITY_STEPS` until the iOS enum catches up) doesn't reject the whole
-/// 400-row page. Mirrors `TolerantMetricKind`'s "log + continue" contract.
+/// 400-row page: log the unknown row and continue.
 private struct TolerantMeasurementWire: Decodable {
     let value: MeasurementWireDTO?
 

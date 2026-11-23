@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// INT-A (#115 / 0.3) — nutrient refusals live in the ONE skip register.
+/// Nutrient refusals live in the ONE skip register.
 ///
 /// * The update path: rows an earlier build kept in the UserDefaults list
 ///   (`hl.healthkit.nutrientRefusals.<token>`) move into the register on the

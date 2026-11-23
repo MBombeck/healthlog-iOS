@@ -6,7 +6,7 @@ import Foundation
 /// so the Store can diff frames cheaply.
 ///
 /// Used by `NotificationsScreen` to render the "last delivery" + state-badge
-/// rows the user expects from a finished settings surface (A7 §3.3 issue #2).
+/// rows the user expects from a finished settings surface.
 public struct NotificationChannelStatus: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let type: String

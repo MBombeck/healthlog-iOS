@@ -1,7 +1,7 @@
 import Foundation
 
 extension AppContainer {
-    /// **X4 (1.3, #138 / #77)** — the hourly 30-day backfill a pass may run.
+    /// The hourly 30-day backfill a pass may run.
     ///
     /// Only where the pass may walk history at all (W2's budget: foreground,
     /// manual, cold start, after sign-in, BGProcessing; never App-Refresh,

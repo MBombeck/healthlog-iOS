@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **1.5 SHORTCUT (#155, public #1295)** — one of the person's own metrics
+/// One of the person's own metrics
 /// as an App-Intents entity, so Shortcuts, Siri and the Action button can pick
 /// it by name.
 ///

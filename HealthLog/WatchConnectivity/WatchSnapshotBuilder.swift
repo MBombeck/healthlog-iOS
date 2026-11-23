@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Phone-side WatchSnapshot builder
 
 //
-// **v0.12 P2 — watchOS companion.** Pure map from the app's medication
+// **watchOS companion.** Pure map from the app's medication
 // universe + already-derived today's-intakes (the same
 // `MedicationsStore.derivedTodayIntakes` the widgets read) onto the
 // thin `WatchSnapshot` the phone pushes to the watch. References the app
@@ -37,6 +37,7 @@ extension WatchSnapshot {
         healthScore: WatchSnapshot.HealthScoreGlance? = nil,
         latestMeasurement: WatchSnapshot.LatestMeasurement? = nil,
         glucoseUnit: GlucoseUnit = .mgdL,
+        ownerHash: String? = nil,
         now: Date = .now,
         calendar: Calendar = .current
     ) -> WatchSnapshot {
@@ -44,7 +45,7 @@ extension WatchSnapshot {
             medications.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        // v1.39.1 (#1033) — a medication kept as a record has no dose on the watch.
+        // v1.39.1 — a medication kept as a record has no dose on the watch.
         let derivedIntakes = MedicationIntake.excludingUntrackedMedications(derivedIntakes, medications: medications)
 
         let doses: [Dose] = derivedIntakes
@@ -88,12 +89,25 @@ extension WatchSnapshot {
             healthScore: healthScore,
             latestMeasurement: latestMeasurement,
             glucoseUnit: WatchGlucoseUnit(glucoseUnit),
-            generatedAt: now
+            // #191: the wrist names the phone's snooze span.
+            snoozeMinutes: MedicationSnooze.minutes,
+            generatedAt: now,
+            ownerHash: signedIn ? ownerHash : nil
         )
     }
 }
 
-// MARK: - v0.15.2 W-WATCH-COMPLICATIONS — glance builders (app-only; reference Models)
+extension WatchSnapshot {
+    /// The calendar "today" means on the watch: the account zone, the same one
+    /// the medication day is anchored on, so mood and doses roll over together.
+    static func dayCalendar(accountTimeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = accountTimeZone
+        return calendar
+    }
+}
+
+// MARK: - Glance builders (app-only; reference Models)
 
 extension WatchSnapshot.HealthScoreGlance {
     /// Build the watch score glance from the server `HealthScore`. Mirrors the
@@ -134,7 +148,7 @@ extension WatchSnapshot.LatestMeasurement {
 }
 
 extension WatchGlucoseUnit {
-    /// #115 B5 — the account unit onto the wire token. Exhaustive, so a new
+    /// The account unit onto the wire token. Exhaustive, so a new
     /// app unit asks for its watch arm instead of falling back silently.
     init(_ unit: GlucoseUnit) {
         switch unit {
@@ -145,7 +159,7 @@ extension WatchGlucoseUnit {
 }
 
 extension WatchIntakeStatus {
-    /// Bridge to the app's `IntakeStatus`. Exhaustive on purpose (Audit B-5):
+    /// Bridge to the app's `IntakeStatus`. Exhaustive on purpose:
     /// the former `IntakeStatus(rawValue:) ?? .taken` could not fire while the
     /// two enums agreed, but the day a Watch status is added that the phone's
     /// enum lacks, a coalesce to `.taken` would count a dose nobody took. The

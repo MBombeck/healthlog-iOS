@@ -39,7 +39,7 @@ public actor IllnessRepository {
     private let outbox: OutboxQueue
     private let encoder: JSONEncoder
 
-    /// **Cache note (W-B B1).** SWR cache-first reads want dedicated `CacheKey`
+    /// **Cache note.** SWR cache-first reads want dedicated `CacheKey`
     /// cases (`.illnessEpisodes(includeResolved:)` / `.illnessCorrelation` /
     /// `.illnessInsights`) — but `Cache/CacheKey.swift` is a shared chokepoint
     /// owned by the reconcile pass, so this repository reads network-direct for
@@ -192,12 +192,13 @@ public actor IllnessRepository {
     @discardableResult
     public func createEpisode(_ body: IllnessEpisodeCreate) async throws -> IllnessEpisodeDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createIllnessEpisode,
+            payload: OutboxQueue.Payloads.CreateIllnessEpisode(body: body),
+            key: key
+        ) { [self] in
             let req: APIRequest<IllnessEpisodeDTO> = try .post("/api/illness/episodes", body: body, idempotencyKey: key)
             return try await api.send(req)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.createIllnessEpisode, payload: OutboxQueue.Payloads.CreateIllnessEpisode(body: body), key: key)
-            throw err
         }
     }
 
@@ -213,12 +214,13 @@ public actor IllnessRepository {
     @discardableResult
     public func updateEpisode(id: String, _ patch: IllnessEpisodePatch) async throws -> IllnessEpisodeDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateIllnessEpisode,
+            payload: OutboxQueue.Payloads.UpdateIllnessEpisode(id: id, patch: patch),
+            key: key
+        ) { [self] in
             let req: APIRequest<IllnessEpisodeDTO> = try .patch("/api/illness/episodes/\(id)", body: patch, idempotencyKey: key)
             return try await api.send(req)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.updateIllnessEpisode, payload: OutboxQueue.Payloads.UpdateIllnessEpisode(id: id, patch: patch), key: key)
-            throw err
         }
     }
 
@@ -238,12 +240,9 @@ public actor IllnessRepository {
     @discardableResult
     public func deleteEpisode(id: String) async throws -> Bool {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(.deleteIllnessEpisode, payload: OutboxQueue.Payloads.DeleteIllnessEpisode(id: id), key: key) { [self] in
             let req: APIRequest<DeleteIllnessEpisodeResult> = .delete("/api/illness/episodes/\(id)", idempotencyKey: key)
             return try await api.send(req).deleted
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.deleteIllnessEpisode, payload: OutboxQueue.Payloads.DeleteIllnessEpisode(id: id), key: key)
-            throw err
         }
     }
 
@@ -262,14 +261,15 @@ public actor IllnessRepository {
     @discardableResult
     public func restore(id: String) async throws -> IllnessEpisodeDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .restoreIllnessEpisode,
+            payload: OutboxQueue.Payloads.RestoreIllnessEpisode(id: id),
+            key: key
+        ) { [self] in
             let req: APIRequest<IllnessEpisodeDTO> = try .post(
                 "/api/illness/episodes/\(id)/restore", body: EmptyPayload(), idempotencyKey: key
             )
             return try await api.send(req)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(.restoreIllnessEpisode, payload: OutboxQueue.Payloads.RestoreIllnessEpisode(id: id), key: key)
-            throw err
         }
     }
 
@@ -287,18 +287,15 @@ public actor IllnessRepository {
     @discardableResult
     public func resolveEpisode(id: String, resolvedAt: String? = nil) async throws -> IllnessEpisodeDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .resolveIllnessEpisode,
+            payload: OutboxQueue.Payloads.ResolveIllnessEpisode(id: id, resolvedAt: resolvedAt),
+            key: key
+        ) { [self] in
             let req: APIRequest<IllnessEpisodeDTO> = try .patch(
                 "/api/illness/episodes/\(id)/resolve", body: IllnessResolveBody(resolvedAt: resolvedAt), idempotencyKey: key
             )
             return try await api.send(req)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .resolveIllnessEpisode,
-                payload: OutboxQueue.Payloads.ResolveIllnessEpisode(id: id, resolvedAt: resolvedAt),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -320,18 +317,15 @@ public actor IllnessRepository {
     @discardableResult
     public func upsertDayLog(episodeId: String, _ body: IllnessDayLogUpsert) async throws -> IllnessDayLogDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .upsertIllnessDayLog,
+            payload: OutboxQueue.Payloads.UpsertIllnessDayLog(episodeId: episodeId, body: body),
+            key: key
+        ) { [self] in
             let req: APIRequest<IllnessDayLogDTO> = try .post(
                 "/api/illness/episodes/\(episodeId)/day-logs", body: body, idempotencyKey: key
             )
             return try await api.send(req)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                .upsertIllnessDayLog,
-                payload: OutboxQueue.Payloads.UpsertIllnessDayLog(episodeId: episodeId, body: body),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -343,31 +337,20 @@ public actor IllnessRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - Outbox enqueue helper
+    // MARK: - Outbox write-ahead helper
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
-        key: IdempotencyKey
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Illness outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

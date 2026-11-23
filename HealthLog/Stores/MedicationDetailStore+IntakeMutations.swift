@@ -1,8 +1,8 @@
 import Foundation
 
-// T-4 intake retro-mutate — the optimistic-mutation family for the detail
+// Intake retro-mutate — the optimistic-mutation family for the detail
 // screen's history rows, lifted VERBATIM out of `MedicationDetailStore.swift`
-// (15-01, W-FILELEN) so that file stays under SwiftLint's 600-line ceiling.
+// so that file stays under SwiftLint's 600-line ceiling.
 // Pure code movement, no behaviour change; the only edit is the addition of
 // ``applyOptimisticTimeEdit(eventId:takenAt:)`` below, which B1 needs and which
 // belongs with the family it mirrors. `intakes` became `internal(set)` for this
@@ -53,7 +53,7 @@ public extension MedicationDetailStore {
         return original
     }
 
-    /// **15-01 (B1)** — optimistic patch for a TIME correction on a row that is
+    /// Optimistic patch for a TIME correction on a row that is
     /// already taken. Distinct from ``applyOptimisticMark(eventId:status:now:)``,
     /// whose `.taken` branch pins the SCHEDULED instant ("I took it on time, I
     /// just forgot to log it"): here the user is saying the opposite — the

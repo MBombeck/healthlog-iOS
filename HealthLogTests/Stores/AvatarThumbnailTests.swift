@@ -1,4 +1,4 @@
-// 20-03 (R6) — the avatar that arrives 23× too big.
+// The avatar that arrives 23× too big.
 //
 // `AvatarImageProcessor.encode` allows an UPLOAD of up to 2048 px under a
 // 2 MiB cap, and the server stores what it is given; `AvatarRepository`
@@ -77,7 +77,7 @@
 
             let pixelWidth = Int((decoded.size.width * decoded.scale).rounded())
             let pixelHeight = Int((decoded.size.height * decoded.scale).rounded())
-            let expectedScale = UIScreen.main.scale
+            let expectedScale = AvatarStore.screenScale
 
             let bounded = pixelWidth <= Self.bound
                 && pixelHeight <= Self.bound
@@ -85,7 +85,7 @@
             #expect(
                 bounded,
                 """
-                EXPECTED_RED: UIImage(data:) returns \(pixelWidth)×\(pixelHeight) px at \
+                UIImage(data:) returns \(pixelWidth)×\(pixelHeight) px at \
                 scale \(decoded.scale), so a 64 pt avatar downscales the full upload on every draw
                 """
             )

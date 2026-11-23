@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// v0.12 W4-3 — locks the mood "analysis" single-implementation contract.
+/// Locks the mood "analysis" single-implementation contract.
 ///
 /// Before W4-3 the seven analysis sub-views shipped twice — once in
 /// `MoodAnalysisScreen` (More → Stimmung) and once in `InsightsMoodPage`
@@ -25,7 +25,7 @@ struct MoodAnalysisContentTests {
         let store = MoodStore(repo: MoodRepository(api: api, outbox: outbox))
         let recorder = IndexRecorder()
         let content = MoodAnalysisContent(
-            period: .days30,
+            period: .month,
             editing: .constant(nil),
             showFullHistory: .constant(false),
             showsRecentSection: showsRecentSection
@@ -42,7 +42,7 @@ struct MoodAnalysisContentTests {
         return recorder.indices
     }
 
-    /// #115 1.3 — the device-calendar pattern cards are gone. #136 brings them
+    /// The device-calendar pattern cards are gone. #136 brings them
     /// back from the server only; without a server answer (this harness has
     /// none) the body has six sections.
     @Test("emits exactly six sections")
@@ -50,12 +50,12 @@ struct MoodAnalysisContentTests {
         #expect(try recordedSectionIndices().count == 6)
     }
 
-    @Test("section indices are 0…5 in order (hero → heatmap → trend → stability → tags → recent)")
+    @Test("section indices are 0…5 in order (hero, stability, trend, heatmap, tags, recent)")
     func sectionIndicesAreOrdered() throws {
         #expect(try recordedSectionIndices() == [0, 1, 2, 3, 4, 5])
     }
 
-    /// v0.14.4 E2 — the Insights Mood page opts out of the inline recent-entries
+    /// The Insights Mood page opts out of the inline recent-entries
     /// section (`showsRecentSection: false`); it replaces it with the canonical
     /// bottom-of-page "Show all measurements" drill-down. The shared body must
     /// then emit only sections 0…4 (no index 5).
@@ -84,7 +84,7 @@ struct MoodAnalysisContentTests {
         store.replaceEntriesForTesting(Phase09MoodFixture.entries(count: 120, endingAt: .now))
         let recorder = IndexRecorder()
         let content = MoodAnalysisContent(
-            period: .days30,
+            period: .month,
             editing: .constant(nil),
             showFullHistory: .constant(false),
             showsRecentSection: false,

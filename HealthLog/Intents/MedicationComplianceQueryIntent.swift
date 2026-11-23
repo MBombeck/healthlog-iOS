@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.8.4 WWIDGET-3 — the compliance READ intent.**
+/// **The compliance READ intent.**
 ///
 /// The one gap in the App-Intents surface: every shipped intent is a *write*
 /// action (log BG / log BP / mark taken). This is the read counterpart the
@@ -72,11 +72,10 @@ struct MedicationComplianceQueryIntent: AppIntent {
     }
 }
 
-/// **M1 / #115 1.5 — "is this the compliance day for today?"**
+/// **"is this the compliance day for today?"**
 ///
 /// `ComplianceDay.date` is the UTC-midnight anchor of a `YYYY-MM-DD` day key
-/// on both paths (the server's `JSONDecoder.hlDefault` decode, and since
-/// #115 1.5 the standalone roll-up too). "Today" is the ACCOUNT's today, the
+/// (the server's `JSONDecoder.hlDefault` decode). "Today" is the ACCOUNT's today, the
 /// day the server buckets compliance in (`ProfileDay`), so the match is a key
 /// comparison: the anchor read back in UTC against today's key in the profile
 /// zone. The earlier matcher accepted either the device's local day or the UTC
@@ -93,7 +92,7 @@ enum ComplianceDayMatcher {
     }
 }
 
-/// **v0.8.4 WWIDGET-3 — pure, localized copy for the compliance query.**
+/// **Pure, localized copy for the compliance query.**
 ///
 /// Split out so the scheduled/taken → spoken-summary mapping is unit-testable
 /// without an AppIntent perform or a live snapshot/server. The three buckets

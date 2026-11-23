@@ -3,7 +3,7 @@ import Foundation
 import os
 import Testing
 
-/// **Phase 07 / plan 07-05 — the Apple-medication dose ledger.**
+/// **The Apple-medication dose ledger.**
 ///
 /// The type that replaced the single `Date` watermark. What a watermark could
 /// not express, and each of these pins: a hole behind a moving horizon, a

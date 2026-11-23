@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// **#154 (MIRROR, 1.5)** — the one action the Apple Health connection card
+/// The one action the Apple Health connection card
 /// offers, chosen by ``HKReadinessStore/ConnectionAction``.
 ///
 /// - `.connect`: the system dialog is unanswered, so the primary button asks.
@@ -32,8 +32,8 @@ struct AppleHealthConnectActions: View {
             EmptyView()
         case .connect:
             HLButton(
-                String(localized: "Connect to Apple Health"),
-                icon: "heart.fill",
+                "Connect to Apple Health",
+                systemImage: "heart.fill",
                 variant: .primary,
                 isLoading: isRequesting,
                 action: connect
@@ -41,31 +41,22 @@ struct AppleHealthConnectActions: View {
             .accessibilityIdentifier("settings.integrations.connectAppleHealth")
         case .reviewWriteAccess:
             if let url = HKReadinessStore.healthAppDeepLink {
-                Link(destination: url) {
-                    HStack(spacing: HLSpace.xxs) {
-                        Text("settings.applehealth.writeback.review")
-                        Image(systemName: "arrow.up.right")
-                            .font(.hlCaption2)
-                            .accessibilityHidden(true)
-                    }
+                HLTextLink("settings.applehealth.writeback.review", destination: url)
                     .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                }
-                .accessibilityHint(Text("settings.applehealth.writeback.review.hint"))
-                .accessibilityIdentifier("settings.integrations.reviewWriteAccess")
+                    .accessibilityHint(Text("settings.applehealth.writeback.review.hint"))
+                    .accessibilityIdentifier("settings.integrations.reviewWriteAccess")
             }
         case .openHealthApp:
             if let url = HKReadinessStore.healthAppDeepLink {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
                     if showsNoOpHint {
                         Text("settings.integrations.healthapp_hint")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
+                            .hlText(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     HLButton(
-                        String(localized: "Open in Apple Health"),
-                        icon: "arrow.up.right.square",
+                        "Open in Apple Health",
+                        systemImage: HLRowIndicator.externalSymbol,
                         variant: .primary
                     ) {
                         #if canImport(UIKit)

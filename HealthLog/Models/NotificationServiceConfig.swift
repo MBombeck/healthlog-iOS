@@ -131,7 +131,7 @@ public struct WebhookConfig: Decodable, Sendable, Equatable {
     public static let empty = WebhookConfig(enabled: false, url: "", headerName: "", hasHeaderValue: false)
 }
 
-/// #112 — `GET`/`PUT /api/settings/webhook` `format`. `generic` posts HealthLog's
+/// `GET`/`PUT /api/settings/webhook` `format`. `generic` posts HealthLog's
 /// own JSON body; `gotify` posts `{ title, message, priority, extras }` for a
 /// Gotify `/message` URL (with `X-Gotify-Key` in the custom header slot).
 ///

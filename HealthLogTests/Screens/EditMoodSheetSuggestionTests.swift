@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// D-2 — EditMoodSheet tag-suggestion acceptance state-contract.
+/// EditMoodSheet tag-suggestion acceptance state-contract.
 ///
 /// We don't snapshot the SwiftUI body (the rest of the suite is state-shape
 /// only, per the file-level note in `MoodScreenStateTests`). Instead we

@@ -1,7 +1,7 @@
 import PhotosUI
 import SwiftUI
 
-/// SUPP-EDIT (1.5.0, #131 P3) — "Vom Etikettfoto lesen": the label photo
+/// "Vom Etikettfoto lesen": the label photo
 /// part of the composition form.
 ///
 /// Offered only where ``MedicationCompositionAccess/offersLabelPhoto(access:reportsCapabilities:capability:usage:)``
@@ -18,28 +18,30 @@ struct SupplementLabelCapture: View {
     var body: some View {
         Section {
             if model.isReading {
-                HStack(spacing: HLSpace.sm) {
-                    ProgressView()
-                    Text("medications.composition.label.reading")
-                        .foregroundStyle(HLText.secondary)
-                }
-                .accessibilityElement(children: .combine)
+                HLInlineProgress("medications.composition.label.reading")
                 Button("medications.composition.label.cancel", role: .cancel) {
                     model.cancelRead()
                 }
                 .accessibilityIdentifier("medications.composition.label.cancel")
             } else {
                 PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
-                    Label("medications.composition.label.choosePhoto", systemImage: "photo.on.rectangle")
+                    // The row of every form action: chip, title, chevron for
+                    // the picker sheet it opens.
+                    HLRowLayout(
+                        title: Text("medications.composition.label.choosePhoto"),
+                        subtitle: nil,
+                        indicator: .disclosure,
+                        configuration: .action(titleTint: HLText.primary, indicatorTint: HLText.tertiary),
+                        leading: { HLSettingsIconChip(symbol: "photo.on.rectangle", tint: HLAccent.userBrandTint) },
+                        trailing: { EmptyView() }
+                    )
                 }
                 .disabled(model.isBusy)
                 .accessibilityIdentifier("medications.composition.label.library")
                 #if canImport(UIKit) && canImport(VisionKit)
                     if DocumentScannerView.isSupported {
-                        NavigationLink {
+                        HLSettingsActionRow(icon: "camera", title: "medications.composition.label.camera", presents: .push) {
                             SupplementLabelCameraPage(model: model)
-                        } label: {
-                            Label("medications.composition.label.camera", systemImage: "camera")
                         }
                         .disabled(model.isBusy)
                         .accessibilityIdentifier("medications.composition.label.camera")
@@ -52,26 +54,27 @@ struct SupplementLabelCapture: View {
                     .accessibilityIdentifier("medications.composition.label.error")
             }
         } header: {
-            Text("medications.composition.label.title")
+            HLSectionHeader("medications.composition.label.title")
         } footer: {
             Text("medications.composition.label.footer")
                 .font(.hlCaption)
         }
+        .hlFormRowSurface()
         #if DEBUG && canImport(UIKit)
-        .task {
-            // The hermetic label world: the system picker runs outside the
-            // app, so the form reads a generated photo once it opens.
-            guard SuppEditFixtures.readsLabelOnOpen, model.proposal == nil,
-                  let jpeg = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image(actions: { _ in })
-                  .jpegData(compressionQuality: 0.85) else { return }
-            model.readLabel(jpeg: jpeg)
-        }
+            .task {
+                // The hermetic label world: the system picker runs outside the
+                // app, so the form reads a generated photo once it opens.
+                guard SuppEditFixtures.readsLabelOnOpen, model.proposal == nil,
+                      let jpeg = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image(actions: { _ in })
+                      .jpegData(compressionQuality: 0.85) else { return }
+                model.readLabel(jpeg: jpeg)
+            }
         #endif
-        .onChange(of: pickerItem) { _, item in
-            guard let item else { return }
-            pickerItem = nil
-            Task { await read(item) }
-        }
+            .onChange(of: pickerItem) { _, item in
+                guard let item else { return }
+                pickerItem = nil
+                Task { await read(item) }
+            }
     }
 
     private func read(_ item: PhotosPickerItem) async {

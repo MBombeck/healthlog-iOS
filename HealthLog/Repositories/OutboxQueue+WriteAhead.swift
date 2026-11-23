@@ -1,8 +1,8 @@
 import Foundation
 import SwiftData
 
-/// W-INTEGRITY-WRITEPATH — the durability surface of `OutboxQueue`:
-///   * **G-1** write-ahead (`writeAhead(_:send:)`) — persist BEFORE the network
+/// The durability surface of `OutboxQueue`:
+///   * **G-1** write-ahead (`writeAhead(_:now:send:)`) — persist BEFORE the network
 ///     send so a crash mid-send leaves exactly one replayable entry under the
 ///     same idempotency key (no double-write on re-action).
 ///   * **G-9** corrupt-vs-unavailable recovery (`recoverOrDegrade()`) — the
@@ -112,73 +112,134 @@ extension OutboxQueue {
 
     // MARK: - G-1 write-ahead durability
 
-    /// **Write-ahead** durability for an optimistic write whose loss on a
-    /// crash-mid-send is unacceptable (the worst case is the background
-    /// "Genommen" notification action, which has no UI recovery).
+    /// Kinds whose re-send does no harm at any age, because the server does
+    /// not rely on the 24-hour key cache to fold them: a delete or restore, an
+    /// edit that addresses one existing row by its id (or the one settings
+    /// row of the account), a write the server upserts on its day (cycle and
+    /// illness day logs), a medication intake (folded on medication and
+    /// planned time, and on the key the server stores with the row), a coach
+    /// answer the server skips when it is already on file, and what the
+    /// server folds by `externalId`.
     ///
-    /// Contract, in order:
-    ///   1. Persist `op` to the durable store **before** the network call, so a
-    ///      crash anywhere after this point leaves exactly one replayable entry
-    ///      carrying the SAME idempotency key (no fresh key minted on re-action
-    ///      → no double-write; server dedups the eventual replay against the
-    ///      original attempt that may have already landed).
-    ///   2. Run `send()` (the `api.send(...)`).
-    ///   3. On success: remove the entry — the write reached the server, nothing
-    ///      to replay. Returns normally.
-    ///   4. On a `shouldPersistToOutbox` failure: **keep** the entry (already
-    ///      durably queued) and re-throw the original error so the caller can
-    ///      surface the deferred/queued state. Replay drains it later.
-    ///   5. On a non-retriable failure (server understood + rejected, decode,
-    ///      cancel): **remove** the entry and re-throw — replaying a rejected op
-    ///      forever is strictly worse than surfacing the error.
+    /// Every other kind creates a record, or adds to a total, that the server
+    /// only recognises through its idempotency cache. Those rows are written
+    /// "sent, unconfirmed" (see ``writeAhead(_:now:send:)``), so a row that
+    /// outlives the cache is held back instead of going out a second time.
+    static let resendSafeAtAnyAge: Set<Operation.Kind> = OutboxReplayService.deleteKinds
+        .union(OutboxReplayService.externalIdDedupedKinds)
+        .union([
+            .takeMedication, .logMedicationIntake, .updateIntake,
+            .updateMeasurement, .updateMood, .updateMedication, .updateMedicationInventory,
+            .updateThresholds, .updateInsightsLayout,
+            .logCycleDayLog, .updateCycleDayLog, .cyclePeriod,
+            .updateLab, .restoreLabs, .updateBiomarker,
+            .updateIllnessEpisode, .restoreIllnessEpisode, .resolveIllnessEpisode, .upsertIllnessDayLog,
+            .updateAllergy, .updateFamilyHistory, .updateCustomMetric, .updateCustomMetricEntry,
+            .coachAboutMeAdopt, .coachAboutMeDismissQuestion
+        ])
+
+    /// **Write-ahead**: the write is on disk before the request leaves, so no
+    /// point in time exists at which it is neither stored nor sent.
     ///
-    /// If the write-ahead persist in step 1 itself fails, we degrade to a
-    /// best-effort send WITHOUT a durable safety net and signal that honestly:
-    /// a subsequent retriable send-failure throws `HLError.notPersisted` (G-2)
-    /// so the caller rolls back instead of claiming "queued"; a successful send
-    /// still returns normally (the entry would have been a no-op anyway).
+    /// In order:
+    ///   1. Persist `op`. From here on a crash leaves exactly one row, and the
+    ///      replay sends it under the SAME idempotency key the live request
+    ///      carried, so the server folds it onto a request that had landed.
+    ///   2. Run `send()`.
+    ///   3. Landed: remove the row.
+    ///   4. A failure worth a retry (`shouldPersistToOutbox`): the row stays
+    ///      and the error is re-thrown, so the caller reports "queued".
+    ///   5. Any other failure (refused, cancelled, unreadable): the row is
+    ///      removed and the error re-thrown.
     ///
-    /// - Parameters:
-    ///   - op: the operation to persist write-ahead. Its `idempotencyKey` is the
-    ///     single key reused across the live send, any crash-replay, and the
-    ///     reachability-replay — the idempotency contract is preserved end to end.
-    ///   - send: the network call. Throws `HLError` on failure.
+    /// While the process lives, the queue therefore ends up exactly as it did
+    /// when the row was only written after a failed send. The one new state is
+    /// the row of step 1 found after a restart.
+    ///
+    /// That row may or may not have reached the server. A kind the server
+    /// folds by itself goes out again whenever. Every other kind is written
+    /// with the "sent, unconfirmed" note, which holds it back once the
+    /// server's key cache can no longer recognise it. The note comes off when
+    /// the send fails without having left the device, and stays when the
+    /// request was cut off or its answer never came.
+    ///
+    /// If step 1 fails there is no safety net, and that is said honestly: a
+    /// retry-worthy send failure then throws `HLError.notPersisted`, so the
+    /// caller rolls back instead of reporting "queued". A send that succeeds
+    /// needed no net.
+    ///
+    /// The row is not announced to observers unless it stays, and the replay
+    /// does not touch it while this call runs (``isReplayable(_:)``).
     func writeAhead<Result: Sendable>(
         _ op: Operation,
+        now: Date = .now,
         send: @Sendable () async throws -> Result
     ) async throws -> Result {
+        liveSendIDs.insert(op.id)
+        defer { liveSendIDs.remove(op.id) }
+        let heldToWindow = !Self.resendSafeAtAnyAge.contains(op.kind)
+        var row = op
+        if heldToWindow { row.lastError = OutboxReplayService.unconfirmedMarker(op, now: now) }
+        let seenAtStart = broadcastGeneration
         var persisted = false
         do {
-            try await enqueue(op)
+            try await enqueueUnannounced(row)
             persisted = true
         } catch {
-            // Step 1 failed — no durable safety net. Log sanitized; the honest
-            // failure signal happens below if the send also fails retriably.
+            // No safety net. The honest signal follows below if the send
+            // fails in a way that would have needed one.
             HLLog.outbox.error("Write-ahead enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
         }
         do {
             let result = try await send()
-            // Success — drop the durable entry if we managed to persist it.
-            if persisted { try? await remove(id: op.id) }
+            if persisted { await settleLanded(op.id, seenAtStart: seenAtStart) }
             return result
-        } catch let err as HLError {
-            if persisted {
-                if err.shouldPersistToOutbox {
-                    // Keep the durable entry; replay drains it. Re-throw so the
-                    // caller surfaces the queued/deferred state.
-                    throw err
-                }
-                // Non-retriable reject — remove so it never replays.
-                try? await remove(id: op.id)
-                throw err
+        } catch let err as HLError where err.shouldPersistToOutbox {
+            guard persisted else { throw HLError.notPersisted(String(describing: err)) }
+            // Never left the device: an ordinary queued row. A failed clear
+            // leaves the note on, which only ever holds a row back.
+            if heldToWindow, !Self.mayHaveLeftTheDevice(err, kind: op.kind) {
+                try? await resolvedStore().clearLastError(id: op.id)
             }
-            // Not persisted AND the send failed. If the failure was retriable
-            // the write is now lost (no server, no queue) — surface that
-            // honestly so the store rolls the optimistic state back. A
-            // non-retriable failure is a genuine reject; surface it verbatim.
-            throw err.shouldPersistToOutbox
-                ? .notPersisted(String(describing: err))
-                : err
+            await broadcast()
+            throw err
+        } catch {
+            if persisted {
+                try? await removeUnannounced(id: op.id)
+                if broadcastGeneration != seenAtStart { await broadcast() }
+            }
+            throw error
         }
+    }
+
+    /// Whether a failed first send may have reached the server. A request cut
+    /// off on the wire while its task lived had left the device as surely as
+    /// one whose answer never came. The replay asks a narrower question
+    /// (``OutboxReplayService/mayHaveLanded(_:kind:)``): a cut-off request
+    /// stops its pass there and leaves the row as it was.
+    private static func mayHaveLeftTheDevice(_ error: HLError, kind: Operation.Kind) -> Bool {
+        error == .network(.writeCancelled) || OutboxReplayService.mayHaveLanded(error, kind: kind)
+    }
+
+    /// The server has the write: the row goes. A row that cannot be removed
+    /// is at least stamped delivered, so it is never sent again.
+    private func settleLanded(_ id: UUID, seenAtStart: UInt64) async {
+        do {
+            try await removeUnannounced(id: id)
+        } catch {
+            HLLog.outbox.error("Write-ahead remove failed: \(LogSanitizer.redact(String(describing: error)))")
+            try? await resolvedStore().markDelivered(id: id)
+        }
+        // Only when an observer was told about the row in the meantime.
+        if broadcastGeneration != seenAtStart { await broadcast() }
+    }
+
+    /// Whether the replay may send this row now: not while its first send is
+    /// still running, and not once it is gone (a snapshot can be older than a
+    /// row that has landed since). A store that cannot answer does not hold a
+    /// row back.
+    func isReplayable(_ id: UUID) async -> Bool {
+        if liveSendIDs.contains(id) { return false }
+        return await (try? resolvedStore().exists(id: id)) ?? true
     }
 }

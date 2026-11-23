@@ -14,59 +14,61 @@ struct CustomMetricsListScreen: View {
 
     @State private var showEditor = false
     @State private var editingMetric: CustomMetricDTO?
-    @State private var pendingDelete: CustomMetricDTO?
 
     var body: some View {
         List {
             if store.metrics.isEmpty, !store.isLoading {
-                // 1.4 B4 — the lockup stands on the list, not on a row card.
-                Section { emptyState.listRowBackground(Color.clear) }
+                if Self.showsLoadFailure(isEmpty: true, isLoading: false, lastError: store.lastError) {
+                    // A list that failed to load is not an empty one: no
+                    // invitation to create a first metric, but a retry.
+                    HLAsyncListErrorRow(retry: { await store.load() })
+                } else {
+                    // The lockup stands on the list, not on a row card.
+                    Section { emptyState.listRowBackground(Color.clear) }
+                }
             } else {
                 Section {
                     ForEach(store.metrics) { metric in
-                        NavigationLink {
-                            CustomMetricDetailScreen(store: store, metricID: metric.id)
-                        } label: {
-                            CustomMetricRow(metric: metric)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingDelete = metric
-                            } label: {
-                                Label("customMetric.action.delete", systemImage: "trash")
+                        // A data row: the whole row pushes the detail, no chevron.
+                        CustomMetricRow(metric: metric)
+                            .hlRowLink(inList: true) {
+                                CustomMetricDetailScreen(store: store, metricID: metric.id)
                             }
-                            Button {
-                                editingMetric = metric
-                            } label: {
-                                Label("customMetric.action.edit", systemImage: "slider.horizontal.3")
+                            // A metric is a container of values: it asks first.
+                            .hlSwipeDelete(.confirmed(
+                                title: "customMetric.delete.confirm.title",
+                                message: "customMetric.delete.confirm.message"
+                            ) {
+                                await store.deleteMetric(
+                                    id: metric.id,
+                                    undoMessage: String(localized: "customMetric.delete.undo")
+                                )
+                            }) {
+                                Button("customMetric.action.edit", systemImage: "slider.horizontal.3") {
+                                    editingMetric = metric
+                                }
+                                .tint(HLAccent.userBrandTint)
                             }
-                            .tint(HLAccent.userBrandTint)
-                        }
                     }
                 } footer: {
                     Text("customMetric.list.footer")
                 }
+                .hlFormRowSurface()
             }
             Section {} footer: {
                 HLSyncStatusFooter(screenLoading: store.isLoading)
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
+        .hlPageMargins()
         .hlScrollEdgeSoft()
         .navigationTitle(Text("customMetric.list.title"))
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showEditor = true
-                } label: {
-                    Label("customMetric.action.add", systemImage: "plus")
-                }
-                .accessibilityIdentifier("customMetric.list.add")
+        .navigationBarTitleDisplayMode(.inline)
+        .hlPageActions([
+            .add(label: "customMetric.action.add", identifier: "customMetric.list.add") {
+                showEditor = true
             }
-        }
+        ])
         .refreshable { await store.load() }
         .task { await store.load() }
         .sheet(isPresented: $showEditor) {
@@ -75,67 +77,38 @@ struct CustomMetricsListScreen: View {
         .sheet(item: $editingMetric) { metric in
             CustomMetricEditorSheet(store: store, existing: metric)
         }
-        .hlConfirmDestructive(
-            Text("customMetric.delete.confirm.title"),
-            presenting: $pendingDelete,
-            // The values survive the delete server-side and a same-name
-            // re-create revives them — say so, rather than implying data loss.
-            message: { _ in Text("customMetric.delete.confirm.message") },
-            confirm: Text("customMetric.action.delete"),
-            cancel: Text("customMetric.action.cancel"),
-            action: { metric in
-                Task {
-                    await store.deleteMetric(
-                        id: metric.id,
-                        undoMessage: String(localized: "customMetric.delete.undo")
-                    )
-                }
-            }
-        )
     }
 
+    /// Nothing to show because the request failed, rather than because there
+    /// is nothing.
+    nonisolated static func showsLoadFailure(isEmpty: Bool, isLoading: Bool, lastError: String?) -> Bool {
+        isEmpty && !isLoading && lastError != nil
+    }
+
+    /// No button: the plus in the bar creates the first metric (Z31).
     private var emptyState: some View {
         HLEmptyState(
             icon: "chart.line.uptrend.xyaxis",
             title: "customMetric.empty.title",
             message: "customMetric.empty.message"
-        ) {
-            HLButton("customMetric.action.add", icon: "plus", variant: .secondary) {
-                showEditor = true
-            }
-        }
+        )
     }
 }
 
 // MARK: - Row
 
-/// One custom-metric row: name + target band on the left, the latest value and
-/// its band status on the right.
+/// One custom-metric row: name and last date (or target band) on the left,
+/// the latest value with its band as a quiet status text on the right.
 struct CustomMetricRow: View {
     let metric: CustomMetricDTO
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(verbatim: metric.name)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if let subtitle {
-                    Text(verbatim: subtitle)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-            }
-            Spacer(minLength: HLSpace.sm)
-            VStack(alignment: .trailing, spacing: HLSpace.xxs) {
-                Text(verbatim: metric.latestDisplayValue)
-                    .font(.hlMetric(.title3))
-                    .monospacedDigit()
-                    .foregroundStyle(HLText.primary)
-                CustomMetricBandBadge(status: metric.latestBandStatus)
-            }
-        }
-        .padding(.vertical, HLSpace.xs)
+        HLRow(
+            title: Text(verbatim: metric.name),
+            detail: subtitle.map { Text(verbatim: $0) },
+            value: Text(verbatim: metric.latestDisplayValue),
+            status: CustomMetricBandBadge.rowStatus(metric.latestBandStatus)
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
@@ -160,7 +133,8 @@ struct CustomMetricRow: View {
 
 // MARK: - Band badge
 
-/// Calm, NON-critical badge for a value's position in its target window.
+/// Calm, NON-critical badge for a value's position in its target window: a
+/// capsule in the detail head, a status text (`rowStatus`) in rows.
 ///
 /// Deliberately mirrors `LabRangeBadge`'s tone doctrine: `below` / `above` are
 /// `.info`, never `.critical`. This is the user's own goal band, not a clinical
@@ -170,11 +144,16 @@ struct CustomMetricBandBadge: View {
 
     var body: some View {
         if status != .unknown {
-            HLBadge(label, tone: tone)
+            HLBadge(Self.label(status), tone: Self.tone(status))
         }
     }
 
-    private var label: String {
+    /// The same band as a row's status text; nothing when the band is unknown.
+    static func rowStatus(_ status: CustomMetricBandStatus) -> HLRowStatus? {
+        status == .unknown ? nil : HLRowStatus(label(status), tone: tone(status))
+    }
+
+    static func label(_ status: CustomMetricBandStatus) -> String {
         switch status {
         case .inBand: String(localized: "customMetric.band.inBand")
         case .below: String(localized: "customMetric.band.below")
@@ -183,7 +162,7 @@ struct CustomMetricBandBadge: View {
         }
     }
 
-    private var tone: HLBadge.Tone {
+    static func tone(_ status: CustomMetricBandStatus) -> HLBadge.Tone {
         switch status {
         case .inBand: .success
         case .below, .above: .info

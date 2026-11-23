@@ -46,7 +46,7 @@ public final class FamilyHistoryStore {
         }
         do {
             let fetched = try await repository.list()
-            // L6 — a refresh during the undo window must NOT re-surface a row that
+            // A refresh during the undo window must NOT re-surface a row that
             // is mid-deferred-delete (the pending DELETE still fires → flicker).
             records = pendingDeletes.isEmpty ? fetched : fetched.filter { pendingDeletes[$0.id] == nil }
             lastError = nil
@@ -59,7 +59,7 @@ public final class FamilyHistoryStore {
 
     /// Create an entry, then reload. Returns the created entry on success.
     ///
-    /// **H3 — offline create is SUCCESS, not failure.** A retriable failure is
+    /// **Offline create is SUCCESS, not failure.** A retriable failure is
     /// durably enqueued by the repo under a STABLE idempotency key and re-thrown.
     /// We treat that as success (optimistic row + return it) so the user does not
     /// re-tap and mint a SECOND key → a DUPLICATE clinical record on reconnect. The
@@ -67,7 +67,7 @@ public final class FamilyHistoryStore {
     @discardableResult
     public func create(_ body: FamilyHistoryCreate) async -> FamilyHistoryEntryDTO? {
         lastError = nil
-        // audit-v0162 H-4 — stamp the optimistic id on the queued create so a
+        // Stamp the optimistic id on the queued create so a
         // later offline edit/delete of this entry is remapped to the server id
         // once the create replays.
         let clientEntityId = "optimistic-\(UUID().uuidString)"
@@ -88,7 +88,7 @@ public final class FamilyHistoryStore {
 
     /// Update an entry, then reload. Returns `true` on success.
     ///
-    /// **H3 — an offline (durably enqueued) update is SUCCESS** (same duplicate-on-
+    /// **An offline (durably enqueued) update is SUCCESS** (same duplicate-on-
     /// retry rationale as `create`). The outbox replays the queued PATCH once.
     @discardableResult
     public func update(id: String, _ patch: FamilyHistoryPatch) async -> Bool {
@@ -172,7 +172,7 @@ public final class FamilyHistoryStore {
 
     // MARK: - Private
 
-    /// Build an optimistic in-memory row for an offline-queued create (H3). Carries
+    /// Build an optimistic in-memory row for an offline-queued create. Carries
     /// a temporary `optimistic-…` id; the next online reload replaces the snapshot
     /// with the server records (under the same idempotency key).
     private static func optimisticEntry(from body: FamilyHistoryCreate, id: String) -> FamilyHistoryEntryDTO {

@@ -1,22 +1,14 @@
 {
   "schema": 1,
   "swiftlint_version": "0.65.1",
-  "config_sha256": "a7a63fba2793595cf1489b191040b02f0b7432fa7f011a6fb86bad75059eae69",
+  "config_sha256": "8a750a132de4f0f620674d041738de142c4ac0080f84d6d9899839d87949726c",
   "warnings": [
     {
       "file": "HealthLog/App/AuthenticatedShell.swift",
-      "line": 297,
+      "line": 414,
       "character": 13,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 91 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Cache/SWRCoordinator.swift",
-      "line": 703,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 703",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 62 lines",
       "severity": "warning"
     },
     {
@@ -37,7 +29,7 @@
     },
     {
       "file": "HealthLog/DesignSystem/HLScoreRing.swift",
-      "line": 307,
+      "line": 314,
       "character": 24,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 92 lines",
@@ -60,32 +52,16 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/FHIR/DoctorReportToFHIRBundle.swift",
-      "line": 797,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 797",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/FHIR/MetricFHIRMapper.swift",
       "line": 30,
       "character": 8,
       "rule_id": "type_body_length",
-      "reason": "Enum body should span 350 lines or less excluding comments and whitespace: currently spans 389 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/FHIR/MetricFHIRMapper.swift",
-      "line": 643,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 643",
+      "reason": "Enum body should span 350 lines or less excluding comments and whitespace: currently spans 391 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/LiveActivity/MedAlarmMetadata.swift",
-      "line": 21,
+      "line": 20,
       "character": 9,
       "rule_id": "unneeded_synthesized_initializer",
       "reason": "This memberwise initializer would be synthesized automatically - you do not need to define it",
@@ -100,24 +76,8 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Models/DashboardWidgetLayout.swift",
-      "line": 695,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 695",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Models/Measurement.swift",
-      "line": 894,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 894",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Models/MeasurementDTO+Create.swift",
-      "line": 19,
+      "line": 14,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 96 lines",
@@ -125,7 +85,7 @@
     },
     {
       "file": "HealthLog/Models/MeasurementDTO+ListPage.swift",
-      "line": 67,
+      "line": 66,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -133,18 +93,10 @@
     },
     {
       "file": "HealthLog/Models/MeasurementDTO.swift",
-      "line": 111,
+      "line": 114,
       "character": 9,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Models/MeasurementDTO.swift",
-      "line": 729,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 729",
       "severity": "warning"
     },
     {
@@ -156,14 +108,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Models/MetricKind+Tolerant.swift",
-      "line": 29,
-      "character": 13,
-      "rule_id": "hllog_public_privacy_interpolation",
-      "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Repositories/MedicationsRepository+AppleHealth.swift",
       "line": 65,
       "character": 13,
@@ -172,16 +116,8 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Repositories/MedicationsRepository.swift",
-      "line": 3,
-      "character": 8,
-      "rule_id": "type_body_length",
-      "reason": "Actor body should span 350 lines or less excluding comments and whitespace: currently spans 388 lines",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Repositories/OutboxReplayService+DeadLetterSink.swift",
-      "line": 134,
+      "line": 147,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -189,7 +125,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService+Pass.swift",
-      "line": 30,
+      "line": 61,
       "character": 9,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -197,7 +133,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService+Pass.swift",
-      "line": 80,
+      "line": 112,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -205,7 +141,7 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 263,
+      "line": 279,
       "character": 5,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 16",
@@ -213,50 +149,34 @@
     },
     {
       "file": "HealthLog/Repositories/OutboxReplayService.swift",
-      "line": 263,
+      "line": 279,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 75 lines",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/AboutMe/AboutMeScreen.swift",
-      "line": 325,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
+      "file": "HealthLog/Screens/Achievements/AchievementMedallion.swift",
+      "line": 387,
+      "character": 37,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Achievements/AchievementDetailSheet.swift",
-      "line": 226,
-      "character": 9,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
+      "file": "HealthLog/Screens/Achievements/AchievementsScreen.swift",
+      "line": 93,
+      "character": 41,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Capture/CapturePickerSheet.swift",
-      "line": 296,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Charts/ChartDetailDrillDownRow.swift",
-      "line": 36,
-      "character": 21,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Charts/FullscreenChartCover.swift",
-      "line": 70,
-      "character": 13,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 80 lines",
+      "file": "HealthLog/Screens/Achievements/AchievementsScreen.swift",
+      "line": 126,
+      "character": 37,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
@@ -264,20 +184,196 @@
       "line": 74,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 78 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 79 lines",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Coach/AskCoachSheet+Provenance.swift",
-      "line": 34,
-      "character": 21,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift",
+      "line": 89,
+      "character": 25,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift",
+      "line": 108,
+      "character": 17,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift",
+      "line": 205,
+      "character": 13,
+      "rule_id": "hl_no_plain_buttonstyle",
+      "reason": "Tippbare Fläche: `.buttonStyle(.hlRow)` oder `HLRowButton`; leise Textaktion: `HLLinkButton`; Symbol: `HLIconButton`; Auswahl: `HLChoiceRow`.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+InputRow.swift",
+      "line": 222,
+      "character": 13,
+      "rule_id": "hl_no_plain_buttonstyle",
+      "reason": "Tippbare Fläche: `.buttonStyle(.hlRow)` oder `HLRowButton`; leise Textaktion: `HLLinkButton`; Symbol: `HLIconButton`; Auswahl: `HLChoiceRow`.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+ServerFallback.swift",
+      "line": 255,
+      "character": 41,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+ServerFallback.swift",
+      "line": 272,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+ServerFallback.swift",
+      "line": 273,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+Transcript.swift",
+      "line": 137,
+      "character": 25,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+Transcript.swift",
+      "line": 189,
+      "character": 25,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet+Transcript.swift",
+      "line": 238,
+      "character": 17,
+      "rule_id": "hl_no_material_bar",
+      "reason": "Leisten unten sind `hlBottomBar { }` (System-safeAreaBar mit Kante); Flächen im Inhalt sind HLCard.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 247,
+      "character": 37,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 325,
+      "character": 25,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 362,
+      "character": 13,
+      "rule_id": "hl_no_material_bar",
+      "reason": "Leisten unten sind `hlBottomBar { }` (System-safeAreaBar mit Kante); Flächen im Inhalt sind HLCard.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 379,
+      "character": 41,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 392,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 393,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 410,
+      "character": 41,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 414,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/AskCoachSheet.swift",
+      "line": 415,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/CoachCadenceSuggestionsSection.swift",
+      "line": 116,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/CoachReasoningViews.swift",
+      "line": 206,
+      "character": 49,
+      "rule_id": "hl_raw_spacing",
+      "reason": "Abstände kommen aus HLSpace oder HLLayout, nie als Zahl.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/CoachReengageCard.swift",
+      "line": 41,
+      "character": 12,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/Coach/CoachReengageCard.swift",
+      "line": 44,
+      "character": 5,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Coach/MiniCoachOnboardingSheet.swift",
-      "line": 96,
+      "line": 77,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -285,7 +381,7 @@
     },
     {
       "file": "HealthLog/Screens/CustomMetrics/CustomMetricEditorSheet.swift",
-      "line": 128,
+      "line": 133,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -293,47 +389,47 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleAdvancedSettingsSheet.swift",
-      "line": 30,
-      "character": 21,
+      "line": 29,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleAdvancedSettingsSheet.swift",
-      "line": 31,
-      "character": 21,
+      "line": 32,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleAdvancedSettingsSheet.swift",
-      "line": 67,
-      "character": 21,
+      "line": 75,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleAdvancedSettingsSheet.swift",
-      "line": 68,
-      "character": 21,
+      "line": 78,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 23,
+      "line": 22,
       "character": 1,
       "rule_id": "type_body_length",
-      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 410 lines",
+      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 401 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 206,
+      "line": 226,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -341,7 +437,7 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 256,
+      "line": 278,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -349,7 +445,7 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 264,
+      "line": 290,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -357,7 +453,7 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 333,
+      "line": 350,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -365,7 +461,7 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 337,
+      "line": 354,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -373,26 +469,10 @@
     },
     {
       "file": "HealthLog/Screens/Cycle/CycleCaptureSheet.swift",
-      "line": 346,
+      "line": 365,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Cycle/CycleInsightsCards.swift",
-      "line": 18,
-      "character": 29,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Dashboard/HealthScoreTile.swift",
-      "line": 377,
-      "character": 17,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
       "severity": "warning"
     },
     {
@@ -405,15 +485,15 @@
     },
     {
       "file": "HealthLog/Screens/Documents/DocumentComponents.swift",
-      "line": 65,
-      "character": 21,
+      "line": 61,
+      "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/GLP1/PenInventoryView.swift",
-      "line": 294,
+      "line": 253,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -421,23 +501,23 @@
     },
     {
       "file": "HealthLog/Screens/Illness/AddEpisodeSheet.swift",
-      "line": 73,
-      "character": 21,
+      "line": 83,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Illness/EditEpisodeSheet.swift",
-      "line": 100,
-      "character": 21,
+      "line": 110,
+      "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Illness/IllnessJournalScreen.swift",
-      "line": 161,
+      "line": 152,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -445,7 +525,7 @@
     },
     {
       "file": "HealthLog/Screens/Illness/LogDaySheet.swift",
-      "line": 91,
+      "line": 96,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -453,7 +533,7 @@
     },
     {
       "file": "HealthLog/Screens/Illness/LogDaySheet.swift",
-      "line": 113,
+      "line": 120,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -461,50 +541,10 @@
     },
     {
       "file": "HealthLog/Screens/Insights/InsightsMetricScreen+Assessment.swift",
-      "line": 145,
+      "line": 144,
       "character": 9,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/InsightsMetricScreen+Sections.swift",
-      "line": 294,
-      "character": 25,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/InsightsMetricScreen+Sections.swift",
-      "line": 388,
-      "character": 25,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/Sub/InsightsCycleTile.swift",
-      "line": 60,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/Sub/InsightsEcgPage.swift",
-      "line": 310,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/Sub/InsightsMoodPage.swift",
-      "line": 411,
-      "character": 21,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
       "severity": "warning"
     },
     {
@@ -516,67 +556,35 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Insights/Sub/InsightsRingEffects.swift",
-      "line": 739,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 739",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Insights/Sub/SameTimeBaselineBlock.swift",
-      "line": 195,
-      "character": 13,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 63 lines",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Screens/Insights/Sub/SleepStageCompositionCard.swift",
-      "line": 135,
+      "line": 127,
       "character": 22,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Insights/Sub/WellnessScoreDetailSheet.swift",
-      "line": 266,
-      "character": 21,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Labs/BiomarkerCatalogScreen.swift",
-      "line": 171,
-      "character": 13,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Screens/Labs/BiomarkerEditorSheet.swift",
-      "line": 130,
-      "character": 25,
+      "line": 166,
+      "character": 29,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Labs/LabScanReviewList.swift",
-      "line": 78,
+      "line": 81,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Measurements/EditMeasurementSheet.swift",
-      "line": 261,
-      "character": 13,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 61 lines",
+      "file": "HealthLog/Screens/LifeCircumstances/LifeCircumstancesScreen.swift",
+      "line": 124,
+      "character": 10,
+      "rule_id": "hl_card_surface_in_screens",
+      "reason": "Eine Karte ist HLCard (Rubrik) oder HLCard(object:) (ein Ding). hlCardSurface() bleibt Diagrammen bis an den Rand.",
       "severity": "warning"
     },
     {
@@ -589,31 +597,15 @@
     },
     {
       "file": "HealthLog/Screens/Measurements/MeasurementListScreen.swift",
-      "line": 22,
-      "character": 1,
-      "rule_id": "type_body_length",
-      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 370 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Measurements/MeasurementListScreen.swift",
-      "line": 580,
+      "line": 476,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Measurements/MeasurementListScreen.swift",
-      "line": 677,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 677",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Screens/Medications/AddMedicationSheet.swift",
-      "line": 289,
+      "line": 284,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -621,7 +613,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/AddMedicationSheet.swift",
-      "line": 291,
+      "line": 288,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -637,7 +629,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/CourseWindowRow.swift",
-      "line": 43,
+      "line": 46,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -645,7 +637,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/EditMedicationSheet.swift",
-      "line": 169,
+      "line": 192,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -653,7 +645,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/EditMedicationSheet.swift",
-      "line": 171,
+      "line": 196,
       "character": 25,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -669,7 +661,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/InjectionSiteTrackingSection.swift",
-      "line": 23,
+      "line": 25,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -677,7 +669,7 @@
     },
     {
       "file": "HealthLog/Screens/Medications/MDRGatedDrugLevelSection.swift",
-      "line": 232,
+      "line": 217,
       "character": 64,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -692,64 +684,24 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Medications/MedicationInventorySection.swift",
-      "line": 179,
-      "character": 13,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Medications/MedicationQuickIntakeSheet.swift",
-      "line": 261,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Screens/Medications/MedicationSupplyEditorSheet.swift",
-      "line": 238,
+      "line": 214,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Medications/PhotoOfMedSheet.swift",
-      "line": 149,
-      "character": 17,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Medications/PhotoOfMedSheet.swift",
-      "line": 206,
-      "character": 21,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Mood/MoodScreen.swift",
-      "line": 701,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 701",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Mood/MoodTagManagementScreen.swift",
-      "line": 216,
+      "line": 159,
       "character": 13,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 83 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 72 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/Notifications/MeasurementReminderCreateSheet+Sections.swift",
-      "line": 102,
+      "line": 179,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -757,47 +709,7 @@
     },
     {
       "file": "HealthLog/Screens/Notifications/MeasurementReminderCreateSheet+Sections.swift",
-      "line": 151,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/NotificationsScreen+Cards.swift",
-      "line": 103,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/NotificationsScreen+Cards.swift",
-      "line": 173,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/NotificationsScreen+Cards.swift",
-      "line": 265,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/NotificationsScreen+Cards.swift",
-      "line": 318,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/NotificationsScreen+Cards.swift",
-      "line": 343,
+      "line": 232,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -805,55 +717,15 @@
     },
     {
       "file": "HealthLog/Screens/Notifications/NotificationsScreen+ChannelCards.swift",
-      "line": 185,
+      "line": 155,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Notifications/NtfyChannelCard.swift",
-      "line": 31,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/TelegramChannelCard.swift",
-      "line": 27,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/VorsorgeReminderDetailSheet.swift",
-      "line": 215,
-      "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Notifications/WebhookChannelCard.swift",
-      "line": 35,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Nutrition/NutrientListScreen.swift",
-      "line": 110,
-      "character": 25,
-      "rule_id": "hl_no_system_buttonstyle",
-      "reason": "R8/R9: `.bordered` / `.borderedProminent` / `.borderless` sind im Screen-Code verboten. Vollbreiten-Aktion → `HLButton(variant:)`, Zeile in einer Karte → `HLSettingsActionRow`.",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Screens/Onboarding/BaselineProfileStep.swift",
-      "line": 163,
+      "line": 161,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -861,39 +733,55 @@
     },
     {
       "file": "HealthLog/Screens/Onboarding/MfaChallengeSheet.swift",
-      "line": 181,
+      "line": 171,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Onboarding/ModeSelectionStep.swift",
-      "line": 184,
+      "file": "HealthLog/Screens/PersonalRecords/CelebrationOverlay.swift",
+      "line": 186,
+      "character": 9,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/PersonalRecords/HeroRecordCard.swift",
+      "line": 146,
+      "character": 9,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/PersonalRecords/MilestoneStrip.swift",
+      "line": 33,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
+      "severity": "warning"
+    },
+    {
+      "file": "HealthLog/Screens/PersonalRecords/PersonalRecordsScreen.swift",
+      "line": 197,
       "character": 17,
-      "rule_id": "hl_no_handmade_chevron",
-      "reason": "R8/R10: Zeilen mit Chevron sind `HLSettingsActionRow(..., presents: .push) { destination }`. Das Trailing-Glyph wählt das Primitive, nicht der Aufrufer — nur so kann hinter einem Chevron kein Sheet mehr aufgehen.",
+      "rule_id": "hl_raw_spacing",
+      "reason": "Abstände kommen aus HLSpace oder HLLayout, nie als Zahl.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Screens/Onboarding/OnboardingFlow.swift",
-      "line": 665,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 665",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Onboarding/ServerAuthStep.swift",
-      "line": 815,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 815",
+      "file": "HealthLog/Screens/PersonalRecords/StreakRail.swift",
+      "line": 29,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Screens/PersonalSettings/EditProfileScreen.swift",
-      "line": 136,
+      "line": 140,
       "character": 17,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -901,7 +789,7 @@
     },
     {
       "file": "HealthLog/Screens/Records/AllergiesListScreen.swift",
-      "line": 68,
+      "line": 59,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -909,7 +797,7 @@
     },
     {
       "file": "HealthLog/Screens/Records/AllergyEditorSheet.swift",
-      "line": 120,
+      "line": 131,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -917,42 +805,10 @@
     },
     {
       "file": "HealthLog/Screens/Records/FamilyHistoryEditorSheet.swift",
-      "line": 75,
+      "line": 80,
       "character": 21,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/DashboardCustomizationScreen.swift",
-      "line": 192,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/DeleteAccountScreen.swift",
-      "line": 121,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/ResetDataScreen.swift",
-      "line": 117,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/Sub/AppleHealthIntegrationDetailScreen+Cycle.swift",
-      "line": 14,
-      "character": 5,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 62 lines",
       "severity": "warning"
     },
     {
@@ -965,23 +821,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/AppleHealthIntegrationDetailScreen.swift",
-      "line": 263,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/Sub/AppleHealthIntegrationDetailScreen.swift",
-      "line": 390,
-      "character": 13,
-      "rule_id": "hl_no_raw_toggle",
-      "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Screens/Settings/Sub/AppleHealthIntegrationDetailScreen.swift",
-      "line": 426,
+      "line": 282,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -989,7 +829,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/InsightsOverviewSectionsList.swift",
-      "line": 79,
+      "line": 78,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -997,7 +837,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInjectionSitesScreen.swift",
-      "line": 67,
+      "line": 56,
       "character": 13,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -1005,7 +845,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInsightsCustomizationScreen.swift",
-      "line": 193,
+      "line": 176,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -1013,7 +853,7 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInsightsCustomizationScreen.swift",
-      "line": 230,
+      "line": 216,
       "character": 9,
       "rule_id": "hl_no_raw_toggle",
       "reason": "R11: Schalter-Zeilen sind `HLSettingsToggleRow` (Titel + optionale Beschreibung nach R2 + Toggle, eine Geometrie app-weit). Ein roher `Toggle` driftet in Schrift, Tinte und Gap.",
@@ -1021,48 +861,40 @@
     },
     {
       "file": "HealthLog/Screens/Settings/Sub/SettingsInsightsCustomizationScreen.swift",
-      "line": 263,
+      "line": 247,
       "character": 13,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 15",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Services/AI/CoachConversationStore.swift",
-      "line": 878,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 878",
+      "file": "HealthLog/Screens/Shared/RelatedRecordDestination.swift",
+      "line": 69,
+      "character": 13,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Services/AI/CoachServerService.swift",
-      "line": 639,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 639",
+      "file": "HealthLog/Screens/Sharing/ShareLinkTokenPanel.swift",
+      "line": 35,
+      "character": 37,
+      "rule_id": "hl_free_page_spacing",
+      "reason": "Ab 16 pt ist ein Abstand eine Rolle: HLLayout.cardGap, sectionGapBefore, cardInset, pageMargin. HLSpace bis md bleibt innerhalb einer Karte frei.",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/AI/MiniCoachDataBinder.swift",
-      "line": 260,
+      "line": 341,
       "character": 13,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 85 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Services/AIConsentStore.swift",
-      "line": 714,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 714",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 86 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/APIClient.swift",
-      "line": 622,
-      "character": 13,
+      "line": 640,
+      "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 83 lines",
       "severity": "warning"
@@ -1072,23 +904,7 @@
       "line": 24,
       "character": 8,
       "rule_id": "type_body_length",
-      "reason": "Actor body should span 350 lines or less excluding comments and whitespace: currently spans 389 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Services/AuthService.swift",
-      "line": 825,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 825",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Services/BackgroundSyncCoordinator.swift",
-      "line": 823,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 823",
+      "reason": "Actor body should span 350 lines or less excluding comments and whitespace: currently spans 390 lines",
       "severity": "warning"
     },
     {
@@ -1101,15 +917,15 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/AnchoredHealthSampleCollector.swift",
-      "line": 302,
+      "line": 347,
       "character": 17,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 66 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 68 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Services/HealthKit/AppleHealthMedicationImporter+DoseImport.swift",
-      "line": 147,
+      "line": 161,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1117,7 +933,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/AppleHealthMedicationImporter.swift",
-      "line": 393,
+      "line": 433,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1133,7 +949,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/CycleHealthKitWriter.swift",
-      "line": 217,
+      "line": 209,
       "character": 21,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1141,7 +957,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKit/CycleHealthKitWriter.swift",
-      "line": 257,
+      "line": 247,
       "character": 17,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1157,7 +973,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKitWireConverter.swift",
-      "line": 102,
+      "line": 107,
       "character": 16,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 13",
@@ -1165,7 +981,7 @@
     },
     {
       "file": "HealthLog/Services/HealthKitWireConverter.swift",
-      "line": 137,
+      "line": 142,
       "character": 23,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 74 lines",
@@ -1181,7 +997,7 @@
     },
     {
       "file": "HealthLog/Services/NotificationService+Categories.swift",
-      "line": 118,
+      "line": 120,
       "character": 9,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 84 lines",
@@ -1189,18 +1005,10 @@
     },
     {
       "file": "HealthLog/Services/NotificationService+Handler.swift",
-      "line": 196,
+      "line": 215,
       "character": 9,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 14",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Services/NotificationService+Registration.swift",
-      "line": 61,
-      "character": 9,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 62 lines",
       "severity": "warning"
     },
     {
@@ -1253,58 +1061,26 @@
     },
     {
       "file": "HealthLog/Stores/AppContainer+CoreInfra.swift",
-      "line": 39,
+      "line": 41,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 75 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 78 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/AppContainer+HealthSyncOrchestrator.swift",
-      "line": 111,
+      "line": 127,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 77 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 82 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/AppContainer+Logout.swift",
-      "line": 245,
+      "line": 232,
       "character": 5,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 71 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/AppContainer+Logout.swift",
-      "line": 652,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 652",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/AppContainer.swift",
-      "line": 817,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 817",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/AuthStore.swift",
-      "line": 9,
-      "character": 14,
-      "rule_id": "type_body_length",
-      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 416 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/AuthStore.swift",
-      "line": 900,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 900",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 76 lines",
       "severity": "warning"
     },
     {
@@ -1325,7 +1101,7 @@
     },
     {
       "file": "HealthLog/Stores/ChartDetailStore+Loading.swift",
-      "line": 313,
+      "line": 319,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1333,7 +1109,7 @@
     },
     {
       "file": "HealthLog/Stores/ChartDetailStore+Loading.swift",
-      "line": 447,
+      "line": 453,
       "character": 13,
       "rule_id": "hllog_public_privacy_interpolation",
       "reason": "M-7: review whether this HLLog interpolation should be .private / .sensitive instead of .public. The sanitizer redacts tokens / emails / UUIDs as defence-in-depth, but the OS-level privacy boundary controls how the message surfaces in sysdiagnose on non-developer-signed devices. Use .public only for operator-grade values (counts, status codes, enum cases, sanitized paths).",
@@ -1349,7 +1125,7 @@
     },
     {
       "file": "HealthLog/Stores/CycleStore.swift",
-      "line": 20,
+      "line": 19,
       "character": 14,
       "rule_id": "type_body_length",
       "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 395 lines",
@@ -1372,14 +1148,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLog/Stores/DashboardStore+MetricStates.swift",
-      "line": 632,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 632",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLog/Stores/MeasurementsStore+SeriesBacked.swift",
       "line": 30,
       "character": 17,
@@ -1389,7 +1157,7 @@
     },
     {
       "file": "HealthLog/Stores/MeasurementsStore.swift",
-      "line": 268,
+      "line": 252,
       "character": 12,
       "rule_id": "cyclomatic_complexity",
       "reason": "Function should have complexity 12 or less; currently complexity is 16",
@@ -1397,18 +1165,10 @@
     },
     {
       "file": "HealthLog/Stores/MeasurementsStore.swift",
-      "line": 424,
+      "line": 401,
       "character": 12,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 79 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MeasurementsStore.swift",
-      "line": 659,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 659",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 76 lines",
       "severity": "warning"
     },
     {
@@ -1421,58 +1181,26 @@
     },
     {
       "file": "HealthLog/Stores/MedicationsStore+CRUD.swift",
-      "line": 434,
+      "line": 429,
       "character": 14,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 73 lines",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 88 lines",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 275,
-      "character": 5,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 80 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 375,
+      "line": 450,
       "character": 5,
       "rule_id": "cyclomatic_complexity",
-      "reason": "Function should have complexity 12 or less; currently complexity is 18",
+      "reason": "Function should have complexity 12 or less; currently complexity is 13",
       "severity": "warning"
     },
     {
       "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 375,
+      "line": 450,
       "character": 5,
       "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 65 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 488,
-      "character": 5,
-      "rule_id": "cyclomatic_complexity",
-      "reason": "Function should have complexity 12 or less; currently complexity is 15",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 488,
-      "character": 5,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 89 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MedicationsStore+IntakeMutations.swift",
-      "line": 634,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 634",
+      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 77 lines",
       "severity": "warning"
     },
     {
@@ -1480,15 +1208,7 @@
       "line": 17,
       "character": 14,
       "rule_id": "type_body_length",
-      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 426 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/MedicationsStore.swift",
-      "line": 939,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 939",
+      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 444 lines",
       "severity": "warning"
     },
     {
@@ -1496,15 +1216,7 @@
       "line": 17,
       "character": 14,
       "rule_id": "type_body_length",
-      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 418 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLog/Stores/SettingsStore.swift",
-      "line": 733,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 733",
+      "reason": "Class body should span 350 lines or less excluding comments and whitespace: currently spans 414 lines",
       "severity": "warning"
     },
     {
@@ -1517,7 +1229,7 @@
     },
     {
       "file": "HealthLogTests/Compliance/AppReviewConfigurationTests.swift",
-      "line": 218,
+      "line": 205,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 73 lines",
@@ -1596,14 +1308,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/FHIR/DoctorReportToFHIRBundleTests.swift",
-      "line": 667,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 667",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Models/HeroRingOrderTests.swift",
       "line": 34,
       "character": 13,
@@ -1621,7 +1325,7 @@
     },
     {
       "file": "HealthLogTests/Models/MeasurementReminderV13720ContractTests.swift",
-      "line": 151,
+      "line": 135,
       "character": 5,
       "rule_id": "function_body_length",
       "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 63 lines",
@@ -1717,10 +1421,10 @@
     },
     {
       "file": "HealthLogTests/Repositories/MoodTagCatalogTests.swift",
-      "line": 22,
+      "line": 20,
       "character": 5,
       "rule_id": "type_body_length",
-      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 442 lines",
+      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 389 lines",
       "severity": "warning"
     },
     {
@@ -1756,16 +1460,8 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Screens/InsightsScreenCompositionTests.swift",
-      "line": 169,
-      "character": 5,
-      "rule_id": "function_body_length",
-      "reason": "Function body should span 60 lines or less excluding comments and whitespace: currently spans 61 lines",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Services/AppleHealthMedicationImporterTestSupport.swift",
-      "line": 105,
+      "line": 107,
       "character": 42,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -1773,7 +1469,7 @@
     },
     {
       "file": "HealthLogTests/Services/AppleHealthMedicationImporterTestSupport.swift",
-      "line": 169,
+      "line": 171,
       "character": 28,
       "rule_id": "large_tuple",
       "reason": "Tuples should have at most 2 members",
@@ -1788,27 +1484,11 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Services/CoachServerFallbackTests.swift",
-      "line": 700,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 700",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Services/Devices/DeviceReadingForwarderTests.swift",
       "line": 25,
       "character": 5,
       "rule_id": "type_body_length",
       "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 369 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLogTests/Services/Devices/DeviceReadingForwarderTests.swift",
-      "line": 649,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 649",
       "severity": "warning"
     },
     {
@@ -1845,18 +1525,10 @@
     },
     {
       "file": "HealthLogTests/Spezi/HealthLogStandardForwardingTests.swift",
-      "line": 27,
+      "line": 26,
       "character": 5,
       "rule_id": "type_body_length",
-      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 419 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLogTests/Standalone/StandaloneAdoptUploadServiceTests.swift",
-      "line": 117,
-      "character": 71,
-      "rule_id": "unused_enumerated",
-      "reason": "When the item is not used, `.indices` should be used instead of `.enumerated()`",
+      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 395 lines",
       "severity": "warning"
     },
     {
@@ -1884,22 +1556,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Stores/AccountTeardownOrderingTests.swift",
-      "line": 426,
-      "character": 1,
-      "rule_id": "line_length",
-      "reason": "Line should be 200 characters or less; currently it has 209 characters",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLogTests/Stores/AuthStoreBootstrapTests.swift",
-      "line": 45,
-      "character": 21,
-      "rule_id": "large_tuple",
-      "reason": "Tuples should have at most 2 members",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Stores/AuthenticatedMedicationsBoundaryTests.swift",
       "line": 55,
       "character": 9,
@@ -1924,22 +1580,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Stores/BackgroundSyncCoordinatorTests.swift",
-      "line": 899,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 899",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLogTests/Stores/CloudDerivedGatingTests.swift",
-      "line": 48,
-      "character": 14,
-      "rule_id": "large_tuple",
-      "reason": "Tuples should have at most 2 members",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Stores/DashboardBugFix2IntegrationTests.swift",
       "line": 44,
       "character": 5,
@@ -1956,14 +1596,6 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Stores/DashboardLayoutStoreTests.swift",
-      "line": 672,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 672",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Stores/DocumentsStoreRaceTests.swift",
       "line": 99,
       "character": 5,
@@ -1972,27 +1604,11 @@
       "severity": "warning"
     },
     {
-      "file": "HealthLogTests/Stores/LogoutCompletenessTests+BoxBacked.swift",
-      "line": 142,
-      "character": 1,
-      "rule_id": "line_length",
-      "reason": "Line should be 200 characters or less; currently it has 209 characters",
-      "severity": "warning"
-    },
-    {
       "file": "HealthLogTests/Stores/LogoutCompletenessTests.swift",
       "line": 35,
       "character": 5,
       "rule_id": "type_body_length",
-      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 474 lines",
-      "severity": "warning"
-    },
-    {
-      "file": "HealthLogTests/Stores/LogoutCompletenessTests.swift",
-      "line": 946,
-      "character": 1,
-      "rule_id": "file_length",
-      "reason": "File should contain 600 lines or less: currently contains 946",
+      "reason": "Struct body should span 350 lines or less excluding comments and whitespace: currently spans 462 lines",
       "severity": "warning"
     },
     {

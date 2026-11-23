@@ -154,7 +154,7 @@ import Foundation
     }
 
     #if DEBUG
-        /// **13-04 — the web-handoff outcome seam for UI tests.**
+        /// **The web-handoff outcome seam for UI tests.**
         ///
         /// Returns a canned ``OidcAuthOutcome`` without opening any sheet. It
         /// exists because `ASWebAuthenticationSession` is presented out of

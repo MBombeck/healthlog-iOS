@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.14.8 — the **chronological** cross-category measurement feed, mounted as
+/// The **chronological** cross-category measurement feed, mounted as
 /// the "Chronologisch" mode of `MeasurementsPickerScreen`.
 ///
 /// The operator asked: "manchmal möchte man einfach nur sehen, was die letzten
@@ -17,25 +17,19 @@ import SwiftUI
 /// for the glyph + title. Tapping a row pushes the established per-kind table
 /// (`MeasurementListScreen(kind:)`) — no parallel detail surface.
 ///
-/// Data source: `measurementsRepo.recentAll(limit:)` (SWR-cached, on-device in
-/// standalone) raised to a cross-category window so multiple kinds interleave.
+/// Data source: `measurementsRepo.recentAll(limit:)` (SWR-cached) raised to a cross-category window so multiple kinds interleave.
 struct MeasurementsChronoFeed: View {
     /// The recent measurements across all kinds, already loaded by the host
     /// screen (so the feed stays a pure, preview-able view).
     @Binding var measurements: [Measurement]
     let onDelete: (Measurement) async -> Bool
 
-    /// QoL-4 (A360-4) — routes the empty-state CTA to the capture picker so the
+    /// Routes the empty-state CTA to the capture picker so the
     /// empty feed has a next step instead of a dead-end caption.
     @Environment(AppRouter.self) private var router
-    /// A11Y (audit-v0162 §5) — gates the imperative scroll-into-view animation
-    /// on the category strip so the active chip jumps instead of sliding when
-    /// Reduce Motion is on (the `.hlAnimation` on the strip already honours it).
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selection: MeasurementChronoModel.ChronoFilter = .all
     @State private var editing: Measurement?
-    @State private var deleteConfirmTarget: Measurement?
 
     private var chips: [MeasurementChronoModel.ChronoFilter] {
         MeasurementChronoModel.chips(for: measurements)
@@ -65,85 +59,32 @@ struct MeasurementsChronoFeed: View {
                     in: measurements
                 )
                 editing = nil
-            } onDismiss: {
-                editing = nil
             }
-            .hlSheetPresentation(.form)
         }
-        .hlConfirmDestructive(
-            Text("measurements.delete.confirm.title"),
-            isPresented: Binding(
-                get: { deleteConfirmTarget != nil },
-                set: { if !$0 { deleteConfirmTarget = nil } }
-            ),
-            message: Text("measurement.delete.confirm.message"),
-            confirm: Text("Delete"),
-            cancel: Text("Cancel"),
-            onCancel: { deleteConfirmTarget = nil },
-            action: {
-                if let target = deleteConfirmTarget {
-                    Task { await performDelete(target) }
-                }
-                deleteConfirmTarget = nil
-            }
-        )
     }
 
     // MARK: - Category strip
 
-    /// Horizontally scrollable chip strip — "Alle" + every chip that has data.
-    /// Mirrors `InsightsMetricTabStrip`: monochrome capsules, selected chip
-    /// filled + scrolled to the leading edge so the active category reads
-    /// left-to-right. Reduce-motion is honored via `hlAnimation`.
+    /// "Alle" and every category with data, as one row of chips that
+    /// scrolls sideways like the Insights strip. Wrapping left a single chip
+    /// alone on a second line.
     private var categoryStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: HLSpace.sm) {
-                    ForEach(chips) { chip in
-                        chipPill(chip)
-                            .id(chip)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: HLSpace.sm) {
+                ForEach(chips) { chip in
+                    HLChip(verbatim: chip.label, isSelected: selection == chip) {
+                        selection = chip
                     }
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.sm)
-            }
-            .scrollClipDisabled()
-            .onChange(of: selection) { _, newValue in
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                    proxy.scrollTo(newValue, anchor: .leading)
+                    .sensoryFeedback(.selection, trigger: selection == chip)
+                    .accessibilityIdentifier(chip.accessibilityIdentifier)
                 }
             }
+            .padding(.horizontal, HLLayout.pageMargin)
+            .padding(.vertical, HLSpace.sm)
         }
-        .hlAnimation(.easeInOut(duration: 0.22), value: selection)
+        .scrollClipDisabled()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("measurements.chrono.strip")
-    }
-
-    private func chipPill(_ chip: MeasurementChronoModel.ChronoFilter) -> some View {
-        let isSelected = selection == chip
-        return Button {
-            selection = chip
-        } label: {
-            Text(chip.label)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(isSelected ? HLSurface.primary : HLText.secondary)
-                .padding(.horizontal, HLSpace.md)
-                .padding(.vertical, HLSpace.sm)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(isSelected ? AnyShapeStyle(HLText.primary) : AnyShapeStyle(HLSurface.tertiary))
-                }
-                .overlay {
-                    if !isSelected {
-                        Capsule(style: .continuous)
-                            .strokeBorder(HLText.tertiary.opacity(0.35), lineWidth: 1)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: isSelected)
-        .accessibilityIdentifier(chip.accessibilityIdentifier)
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 
     // MARK: - Content
@@ -151,27 +92,37 @@ struct MeasurementsChronoFeed: View {
     @ViewBuilder
     private var content: some View {
         if entries.isEmpty {
-            EmptyCategoryState(onLog: { router.requestCapture() })
+            // The title says it; the button is the next step.
+            HLEmptyState(icon: "tray", title: "No measurements yet") {
+                HLButton("Log a measurement", systemImage: "plus", variant: .secondary) {
+                    router.requestCapture()
+                }
+                .accessibilityIdentifier("measurements.chrono.empty.log")
+            }
+            .accessibilityIdentifier("measurements.chrono.empty")
         } else {
             List {
-                ForEach(entries) { entry in
-                    switch entry {
-                    case .collapsed:
-                        chronologicalNavigationRow(entry)
-                    case let .single(measurement):
-                        if entry.editableMeasurement != nil {
-                            MeasurementSwipeActions(
-                                measurement: measurement,
-                                onEdit: { editing = $0 },
-                                onDelete: { deleteConfirmTarget = $0 },
-                                content: { chronologicalNavigationRow(entry) }
-                            )
-                        } else {
+                Section {
+                    ForEach(entries) { entry in
+                        switch entry {
+                        case .collapsed:
                             chronologicalNavigationRow(entry)
+                        case let .single(measurement):
+                            if entry.editableMeasurement != nil {
+                                MeasurementSwipeActions(
+                                    measurement: measurement,
+                                    onEdit: { editing = $0 },
+                                    onDelete: { await performDelete($0) },
+                                    content: { chronologicalNavigationRow(entry) }
+                                )
+                            } else {
+                                chronologicalNavigationRow(entry)
+                            }
                         }
                     }
                 }
-                // v0.14.8 W2-SYNCUX — canonical sync-status footer so the
+                .hlFormRowSurface()
+                // Canonical sync-status footer so the
                 // chrono mode carries the same pull-to-refresh feedback as the
                 // by-type list (self-suppressing via empty-section footer).
                 Section {} footer: {
@@ -179,10 +130,7 @@ struct MeasurementsChronoFeed: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            // Canonical screen canvas (matches Mehr/Insights/Medis/Start) —
-            // `HLColor.background` drifted bluish in dark mode.
-            .background(HLSurface.primary)
+            .hlPageMargins()
             .hlScrollEdgeSoft()
         }
     }
@@ -190,12 +138,12 @@ struct MeasurementsChronoFeed: View {
     private func chronologicalNavigationRow(
         _ entry: MeasurementChronoModel.ChronoEntry
     ) -> some View {
-        NavigationLink {
-            MeasurementListScreen(kind: entry.representative.kind)
-        } label: {
-            ChronoRow(entry: entry)
-        }
-        .accessibilityIdentifier("measurements.chrono.row.\(entry.id)")
+        // A data row: the whole row pushes the per-kind table, no chevron.
+        ChronoRow(entry: entry)
+            .hlRowLink(inList: true) {
+                MeasurementListScreen(kind: entry.representative.kind)
+            }
+            .accessibilityIdentifier("measurements.chrono.row.\(entry.id)")
     }
 
     private func performDelete(_ measurement: Measurement) async {
@@ -209,27 +157,19 @@ struct MeasurementsChronoFeed: View {
 
 // MARK: - Row
 
-/// One chronological feed row — glyph + localized type name + value/unit +
-/// absolute timestamp, monochrome. Reuses `MetricKindDescriptor` for the glyph
-/// and `MeasurementChronoModel.formattedValue(_:)` for the value (shared with
-/// the per-kind drill-down).
-///
-/// D1 (#34) — a `.collapsed` entry (a same-minute run of high-frequency-vital
-/// samples, e.g. Apple-Watch heart rate) renders as ONE honest summary row
-/// ("46 bpm · 10×") with a quiet "N Messwerte" sub-caption, instead of N
-/// near-identical rows. Display-only: every underlying sample is preserved.
+/// One chronological feed row: the kind's glyph and name, the timestamp in
+/// the detail line, the value at the right. A `.collapsed` entry (a
+/// same-minute run of high-frequency vitals, e.g. Apple-Watch heart rate)
+/// shows as ONE honest summary row ("46 bpm · 10×") with the sample count in
+/// the detail line. Display-only: every underlying sample is preserved.
 private struct ChronoRow: View {
     let entry: MeasurementChronoModel.ChronoEntry
-    /// A360-5 C-1 — render values in the user's chosen unit, matching the
+    /// Render values in the user's chosen unit, matching the
     /// dashboard tile / detail screen instead of the raw canonical value.
     @Environment(\.unitPreferences) private var units
 
     private var measurement: Measurement {
         entry.representative
-    }
-
-    private var descriptor: MetricKindDescriptor {
-        measurement.kind.descriptor
     }
 
     private var collapsedSamples: [Measurement]? {
@@ -249,64 +189,22 @@ private struct ChronoRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: HLSpace.md) {
-            Image(systemName: descriptor.sfSymbol)
-                .font(.hlIcon(HLIconSize.md))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(measurement.kind.displayName)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                // b215 — historical rows add the year when the measurement
-                // isn't from the current year (else the day+month is ambiguous).
-                Text(HLDateFormat.appendingYearIfNeeded(
+        HLRow(
+            title: Text(measurement.kind.displayName),
+            detail: HLRowDetail.text([
+                // Historical rows add the year when the measurement isn't
+                // from the current year (else the day+month is ambiguous).
+                HLDateFormat.appendingYearIfNeeded(
                     measurement.recordedAt,
                     base: .dateTime.weekday(.abbreviated).day().month().hour().minute()
-                ))
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                if let samples = collapsedSamples {
-                    Text("\(samples.count) measurements this minute")
-                        .font(.hlCaption2)
-                        .foregroundStyle(HLText.tertiary)
-                }
-            }
-            Spacer(minLength: HLSpace.sm)
-            Text(valueLabel)
-                .font(.hlMetric(.body))
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
-                .multilineTextAlignment(.trailing)
+                ),
+                collapsedSamples.map { String(localized: "\($0.count) measurements this minute") },
+                MeasurementRow.zoneHint(for: measurement)
+            ]),
+            value: Text(verbatim: valueLabel)
+        ) {
+            // The same chip as the "By type" list, so a kind looks alike in both.
+            HLSettingsIconChip(symbol: measurement.kind.descriptor.sfSymbol, tint: HLAccent.userBrandTint)
         }
-        .padding(.vertical, HLSpace.xs)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Empty state
-
-/// Calm per-category empty state — shown when the selected chip has no rows
-/// (or the whole feed is empty). Mirrors the type-picker / drill-down empty
-/// copy family so the surfaces feel like one.
-private struct EmptyCategoryState: View {
-    /// QoL-4 (A360-4) — next-step CTA: open the capture picker.
-    var onLog: (() -> Void)?
-
-    var body: some View {
-        // 1.4 B2 — the title says it; the sentence under it said it again.
-        HLEmptyState(icon: "tray", title: "No measurements yet") {
-            if let onLog {
-                HLButton(
-                    String(localized: "Log a measurement"),
-                    icon: "plus",
-                    variant: .secondary,
-                    action: onLog
-                )
-                .accessibilityIdentifier("measurements.chrono.empty.log")
-            }
-        }
-        .accessibilityIdentifier("measurements.chrono.empty")
     }
 }

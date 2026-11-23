@@ -13,8 +13,9 @@
       "hide medication name" opt-out from the SHARED App-Group
       `UserDefaults(suiteName: "group.dev.healthlog.app")`, so the binary links
       the UserDefaults Required-Reason API → CA92.1 is declared (same reason as
-      the host app + widget manifests). Leaving it empty is the
-      under-declaration / rejection-risk direction.
+      the host app + widget manifests), and 1C8F.1 ("Access info from the same
+      App Group"), since the suite it reads is the App Group the app writes.
+      Leaving it empty is the under-declaration / rejection-risk direction.
     - The extension does NO independent data collection or transmission. It
       only redacts the drug name the host app / server already produced, in the
       lock-screen text of a push the OS delivers → NSPrivacyCollectedDataTypes
@@ -35,6 +36,7 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+                <string>1C8F.1</string>
             </array>
         </dict>
     </array>

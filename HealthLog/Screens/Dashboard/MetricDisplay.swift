@@ -24,7 +24,7 @@ public struct MetricDisplay: Equatable, Sendable {
     public let valueText: String
     public let secondaryLine: String?
     public let isEmptyForDisplay: Bool
-    /// Unit-aware suffix for this metric (v0.11 N1). For the re-unitable
+    /// Unit-aware suffix for this metric. For the re-unitable
     /// families (weight / blood-pressure / glucose) this reflects the user's
     /// chosen unit; otherwise the descriptor's canonical `unitLabel`.
     public let unitSuffix: String
@@ -82,7 +82,7 @@ public struct MetricDisplay: Equatable, Sendable {
                 // that emits per-sample step rows landed as the most-
                 // recent batch's count, not the day total.
                 //
-                // **v0.6.2.x bug-c10-ios-direct.** For Steps the server's
+                // For Steps the server's
                 // batch route is insert-only on `(type, stats:<id>:<day>)`,
                 // so the day-sum derived from server snapshots is stale
                 // after the first sync of the day. When the dashboard
@@ -95,7 +95,7 @@ public struct MetricDisplay: Equatable, Sendable {
                 let liveValue = (metric.kind == .steps) ? liveTodayStepsOverride : nil
                 let value = liveValue ?? todaySum ?? latest.primaryValue
                 valueText = MetricDisplay.formatScalar(value, kind: metric.kind, style: descriptor.formatStyle, units: units)
-                // v0.14.8 AUDIT-HOME M5 — the cumulative value is only stale
+                // The cumulative value is only stale
                 // when BOTH today-paths missed and we fell back to the latest
                 // (possibly old) sample; a live HK read or a today-sum is by
                 // definition current, so no recency hint then.
@@ -107,7 +107,7 @@ public struct MetricDisplay: Equatable, Sendable {
             } else {
                 valueText = MetricDisplay.formatScalar(latest.primaryValue, kind: metric.kind, style: descriptor.formatStyle, units: units)
             }
-            // v0.14.8 AUDIT-HOME M5 — fresh-but-old data carries a visible
+            // Fresh-but-old data carries a visible
             // recency hint ("Last measurement X days ago") once the newest
             // sample is ≥ 7 days old. Pre-fix a `.ready` tile with a
             // 3-week-old weight showed the value with zero context.
@@ -132,7 +132,7 @@ public struct MetricDisplay: Equatable, Sendable {
             // No state resolved yet — defer to the summary snapshot for
             // first paint. Composite-incomplete short-circuits to empty
             // for the same reason as the ready branch above.
-            // #33 — a BP snapshot must carry BOTH components AND both > 0 to
+            // A BP snapshot must carry BOTH components AND both > 0 to
             // paint on the cold-launch first frame; otherwise a malformed
             // `0/77` server snapshot would flash before the guarded
             // MetricDataState fan-out resolves the real latest.
@@ -144,7 +144,7 @@ public struct MetricDisplay: Equatable, Sendable {
                 isEmptyForDisplay = true
                 return
             }
-            // v0.6.2.x bug-c10-ios-direct — Steps tile reads the HK-direct
+            // Steps tile reads the HK-direct
             // value even before the dashboard fan-out has resolved a per-
             // kind `MetricDataState`. Otherwise the operator sees the
             // (frozen) server snapshot during the ~50-300ms it takes the
@@ -172,12 +172,12 @@ public struct MetricDisplay: Equatable, Sendable {
         style: MetricKindDescriptor.FormatStyle,
         units: UnitPreferences
     ) -> String {
-        // W-CRASHGUARD — `latest` is an unsanitized server / HK-direct scalar;
+        // `latest` is an unsanitized server / HK-direct scalar;
         // every `Int(...)` below traps on non-finite AND out-of-`Int.range`.
         // Reject non-finite at the gate; route each integer conversion through
         // `Int(safeServer:)` → em-dash on an unrepresentable value.
         guard latest.isFinite else { return "—" }
-        // v0.11 N1 / #115 P2 — re-unitable families convert into the account's
+        // Re-unitable families convert into the account's
         // unit through the one central formatter; the identity branch (and
         // every other kind) keeps the descriptor style. BP is never a scalar
         // here (the caller checks `formatStyle` first).
@@ -186,7 +186,7 @@ public struct MetricDisplay: Equatable, Sendable {
         }
     }
 
-    /// v0.11 N1 — formats a `sys/dia` pair in the chosen BP unit. mmHg stays
+    /// Formats a `sys/dia` pair in the chosen BP unit. mmHg stays
     /// integer-grained; kPa renders 1 decimal.
     private static func formatBloodPressure(
         systolic s: Double,
@@ -196,19 +196,19 @@ public struct MetricDisplay: Equatable, Sendable {
         let sysValue = units.convertBloodPressure(s)
         let diaValue = units.convertBloodPressure(d)
         if units.bloodPressure == .mmHg {
-            // W-CRASHGUARD — em-dash if either BP operand is non-finite / OOR.
+            // Em-dash if either BP operand is non-finite / OOR.
             return Double.safeServerBPString(systolic: sysValue, diastolic: diaValue)
         }
-        return "\(sysValue.formatted(.number.precision(.fractionLength(1))))/\(diaValue.formatted(.number.precision(.fractionLength(1))))"
+        return "\(HLValueFormat.number(sysValue, fractionDigits: 1 ... 1))/\(HLValueFormat.number(diaValue, fractionDigits: 1 ... 1))"
     }
 
-    /// v0.14.8 AUDIT-HOME M5 — staleness threshold (in calendar days) above
+    /// Staleness threshold (in calendar days) above
     /// which a `.ready` value carries the visible "Last measurement X days
     /// ago" recency hint. Below it the tile stays clean (a value from this
     /// week needs no caveat).
     nonisolated static let recencyHintThresholdDays = 7
 
-    /// v0.14.8 AUDIT-HOME M5 — recency hint for fresh-but-old `.ready`
+    /// Recency hint for fresh-but-old `.ready`
     /// values. Returns `nil` when the sample is younger than
     /// ``recencyHintThresholdDays``. Day-math is clamped at 0 (clock-skewed
     /// future timestamps must never render "vor -2 Tagen" — same F7 guard as

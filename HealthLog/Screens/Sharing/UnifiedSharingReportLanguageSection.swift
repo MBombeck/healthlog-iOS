@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **L10N-REPORT (1.5) — the report language, under "Advanced".**
+/// **The report language, under "Advanced".**
 ///
 /// Few people print for a doctor in another language, so the choice is one
 /// quiet centred text link under the PDF's practice card that unfolds the
@@ -26,12 +26,10 @@ struct UnifiedSharingReportLanguageSection: View {
         VStack(spacing: HLSpace.md) {
             advancedToggle
             if isExpanded {
-                HLSettingsCard {
+                HLCard {
                     // A menu picker shows only its value; the row names it.
                     rowLayout {
-                        Text("sharing.unified.reportLanguage.label")
-                            .font(.hlBody)
-                            .foregroundStyle(HLText.primary)
+                        HLRowTitle("sharing.unified.reportLanguage.label")
                             .accessibilityHidden(true)
                         if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: HLSpace.sm) }
                         Picker(selection: $store.reportLanguage) {
@@ -56,23 +54,9 @@ struct UnifiedSharingReportLanguageSection: View {
     }
 
     private var advancedToggle: some View {
-        Button {
+        HLLinkButton("Advanced", isExpanded: isExpanded) {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isExpanded.toggle() }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text("Advanced")
-                    .font(.hlSubhead.weight(.semibold))
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("sharing.unified.advanced")
-        .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
     }
 }

@@ -3,7 +3,7 @@ import Foundation
     import UserNotifications
 #endif
 
-// MARK: - N1 — medication-reminder delivery (`clientManaged`)
+// MARK: - Medication-reminder delivery (`clientManaged`)
 
 extension AppContainer {
     /// Builds the coordinator over the container's own `APIClient`.
@@ -15,7 +15,9 @@ extension AppContainer {
     /// that may be mid-edit.
     static func makeMedicationReminderDelivery(
         api: APIClientProtocol,
-        notificationsAuthorized: (@Sendable () async -> Bool)?
+        notificationsAuthorized: (@Sendable () async -> Bool)?,
+        plansLocally: @escaping @MainActor () -> Bool = { true },
+        otherPhoneIsActive: @escaping @MainActor () -> Bool = { false }
     ) -> MedicationReminderDeliveryCoordinator {
         let repo = NotificationsRepository(api: api)
         return MedicationReminderDeliveryCoordinator(
@@ -26,7 +28,9 @@ extension AppContainer {
             },
             releaseOnSignOut: {
                 try await repo.releaseMedicationClientManagedOnSignOut()
-            }
+            },
+            plansLocally: plansLocally,
+            otherPhoneIsActive: otherPhoneIsActive
         )
     }
 
@@ -34,6 +38,7 @@ extension AppContainer {
     /// `.ephemeral` deliver (quietly), exactly as an APNs push would be
     /// delivered on this device; `.denied` and `.notDetermined` do not.
     @Sendable
+    @concurrent
     nonisolated static func systemAllowsNotifications() async -> Bool {
         #if canImport(UserNotifications)
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -76,6 +81,10 @@ extension AppContainer {
                 ownerID: keychain.getString(forKey: KeychainKey.userID)
             )
         }
+        wireReminderPlanning()
+        #if canImport(UserNotifications) && canImport(UIKit)
+            wireDeviceMedicationDelivery()
+        #endif
         authStore.onBeforeRemoteSignOut = { [weak coordinator] in
             await coordinator?.releaseForSignOut(ownerID: keychain.getString(forKey: KeychainKey.userID))
         }

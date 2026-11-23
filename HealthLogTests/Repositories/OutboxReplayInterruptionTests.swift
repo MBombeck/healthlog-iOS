@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// C4 — the outbox replay never loses a write to an answer that is not a
+/// The outbox replay never loses a write to an answer that is not a
 /// refusal.
 ///
 /// Before C4 every error that was neither `shouldPersistToOutbox` nor a
@@ -20,7 +20,7 @@ import Testing
 ///
 /// * cancellation: row untouched (no attempt, no stamp), the pass ends;
 /// * 5xx: row kept, one attempt counted; a timeout keeps the row but is not
-///   counted (W1, 1.3.0);
+///   counted;
 /// * a refusal the server names (4xx): never deleted when the data would be
 ///   gone — the row is dead-lettered (retained, visible, not re-sent); a
 ///   delete, which carries nothing to lose, still drains;
@@ -213,7 +213,7 @@ struct OutboxReplayInterruptionTests {
 
     // MARK: - Transient failures stay what they were
 
-    /// W1 (1.3.0) — a timeout keeps the row too, but is no longer counted:
+    /// A timeout keeps the row too, but is no longer counted:
     /// `OutboxTransientReplayTests.connectivityFailureIsNotCounted`.
     @Test("a timeout keeps the row uncounted, a 5xx keeps it and counts one attempt", arguments: ["timeout", "503"])
     func transientFailureKeepsTheRowCounted(_ failure: String) async throws {
@@ -399,7 +399,7 @@ struct OutboxReplayInterruptionTests {
     }
 }
 
-/// C3 / C4 — the medication banner after a queued intake. `WriteOutcome.queued`
+/// The medication banner after a queued intake. `WriteOutcome.queued`
 /// does not say why it was queued (offline, 429, 5xx, a sign-in refresh), so
 /// the sentence must be true for every reason: no "when back online".
 @Suite("Medication queued banner copy (C4)")

@@ -1,4 +1,4 @@
-// Audit B-4 — the list/series read-path wire shapes move out of
+// The list/series read-path wire shapes move out of
 // `Measurement.swift`. **Pure move** (same module, same access levels, same
 // behaviour); only the file boundary changes. `MetricKind` gained two cases so
 // no server measurement type is dropped any more, and `Measurement.swift` sits
@@ -20,7 +20,7 @@ public struct MeasurementListResponse: Codable, Sendable {
 
 /// Series-Endpoint Antwort.
 ///
-/// **W-B187 (#29) — server unit-at-source.** Since server v1.16.16 the
+/// **Server unit-at-source.** Since server v1.16.16 the
 /// `GET /api/measurements/series` payload carries an explicit `unit` token
 /// (e.g. glucose `"mg/dL"` | `"mmol/L"`, per the user's preference) and the
 /// `points[].value` + `stats` are ALREADY CONVERTED to that unit server-side —
@@ -34,17 +34,17 @@ public struct MeasurementSeries: Codable, Sendable {
     public let kind: MetricKind
     public let points: [SeriesPoint]
     public let stats: SeriesStats
-    /// W-B187 (#29) — the server-resolved display unit for this series (v1.16.16
+    /// The server-resolved display unit for this series (v1.16.16
     /// unit-at-source). `nil` on an older server / a kind the server doesn't
     /// unit-stamp → the consumer falls back to the per-`MetricKind` default.
     public let unit: String?
     /// #135 (server v1.43) — which way a change of this metric counts for this
     /// person. `nil` on an older server: the change stays uncoloured.
     public let direction: TrendVerdict?
-    /// #135 — first and last day value of the window and how that change
+    /// First and last day value of the window and how that change
     /// counts. `nil` under two days and on an older server.
     public let change: SeriesChange?
-    /// #135 — the lines the server asks the chart to draw, in this series'
+    /// The lines the server asks the chart to draw, in this series'
     /// unit. `nil` on a server before v1.43, `[]` when there is nothing to draw.
     public let referenceLines: [SeriesReferenceLine]?
 
@@ -86,7 +86,7 @@ public struct MeasurementSeries: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // #115 B6 — tolerant like every server-owned token: a `kind` this build
+        // Tolerant like every server-owned token: a `kind` this build
         // cannot name lands on the `.unknown` sentinel and the points survive,
         // instead of failing the whole chart. A non-string is still drift.
         let rawKind = try c.decode(String.self, forKey: .kind)
@@ -102,7 +102,7 @@ public struct MeasurementSeries: Codable, Sendable {
         stats = try c.decode(SeriesStats.self, forKey: .stats)
         // Tolerant: absent OR JSON `null` both decode to `nil` (older server).
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
-        // #135 — additive v1.43 fields, each tolerant on its own: a block this
+        // Additive v1.43 fields, each tolerant on its own: a block this
         // build cannot read degrades to "not sent", never a failed chart.
         direction = try? c.decodeIfPresent(TrendVerdict.self, forKey: .direction)
         change = try? c.decodeIfPresent(SeriesChange.self, forKey: .change)
@@ -111,7 +111,7 @@ public struct MeasurementSeries: Codable, Sendable {
 
     /// The display unit label for this series — the server-resolved `unit`
     /// (v1.16.16 unit-at-source) when present, else the per-`MetricKind`
-    /// hardcoded default. HONEST-ONLY: the server value is authoritative and is
+    /// hardcoded default. The server value is authoritative and is
     /// rendered as-is; iOS never re-converts the pre-converted `points`/`stats`.
     public func resolvedUnit(for kind: MetricKind) -> String {
         if let unit, !unit.isEmpty { return unit }

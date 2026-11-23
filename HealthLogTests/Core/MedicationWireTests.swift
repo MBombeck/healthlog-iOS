@@ -212,7 +212,7 @@ struct MedicationWireTests {
         #expect(TimeOfDay.parse("08-00") == nil)
     }
 
-    // MARK: - v0.10 R1 — v1.5/v1.6 field decode
+    // MARK: - v1.5/v1.6 field decode
 
     @Test("Schedule DTO decodes timesOfDay / rrule / rollingIntervalDays / grace")
     func decodesV15ScheduleFields() throws {
@@ -310,7 +310,7 @@ struct MedicationWireTests {
         #expect(domain.endsOn != nil)
     }
 
-    /// **09-14 — inverted.** This case used to send a schedule-level
+    /// **Inverted.** This case used to send a schedule-level
     /// `"asNeeded": true` and assert it produced a PRN cadence. No such key is
     /// published: `MedicationScheduleOutput` is `additionalProperties: false`
     /// and does not declare it, and `MedicationScheduleInput` does not accept
@@ -338,7 +338,7 @@ struct MedicationWireTests {
         #expect(domain.schedule.entries.first?.cadence == .daily)
     }
 
-    /// **09-14 — inverted.** This case used to send `cycleWeeksOn` /
+    /// **Inverted.** This case used to send `cycleWeeksOn` /
     /// `cycleWeeksOff` / `cycleAnchor` and require a non-nil anchor. All three
     /// strings occur **zero** times in the published contract, so it pinned a
     /// payload the server cannot produce — which is exactly why the real defect
@@ -388,7 +388,7 @@ struct MedicationWireTests {
         #expect(domain.schedule.entries.first?.cadence == .asNeeded)
     }
 
-    /// **09-14 — inverted for the same reason as `toDomainCyclicEntry`.** The
+    /// **Inverted for the same reason as `toDomainCyclicEntry`.** The
     /// payload now carries the published key names; the cadence carries no
     /// anchor because the contract publishes none.
     @Test("scheduleType=CYCLIC switches to the cyclic pair")
@@ -435,7 +435,7 @@ struct MedicationWireTests {
 
     @Test("unknown scheduleType decodes onto the sentinel and still dispatches on its fields")
     func toDomainScheduleTypeUnknownGraceful() throws {
-        // Audit B-4 — a future server enum value must not break the decode, and
+        // A future server enum value must not break the decode, and
         // must not be CLAIMED as SCHEDULED either: `.scheduled` is a statement
         // about a cadence nobody has read. It lands on `.unknown` and falls
         // through the same field-presence ladder, so the rrule still projects.

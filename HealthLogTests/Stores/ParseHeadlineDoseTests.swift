@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// FORM-5 — locale-aware, display-only headline-dose parsing.
+/// Locale-aware, display-only headline-dose parsing.
 ///
 /// `MedicationDetailStore.parseHeadlineDose` used to blindly replace ","→"."
 /// before `Double(_:)`, which mangled a German grouped headline

@@ -9,7 +9,7 @@ import Testing
 // swiftlint:disable force_unwrapping
 
 /// `.mockURLSession`, `.mock()` and `MockURLProtocol.install` — the three names
-/// every migrated suite writes (C2, issue #82). The session contract itself is
+/// every migrated suite writes. The session contract itself is
 /// pinned in `MockURLProtocolIsolationTests`; this suite pins the binding that
 /// hands one session to each test case.
 @Suite("MockURLProtocol per-test binding", .mockURLSession)

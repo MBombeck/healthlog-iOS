@@ -2,7 +2,7 @@
     import Foundation
 
     extension HermeticUITestSupport {
-        /// **1.4 B3** `-uitest-recovery` — the recovery overlay. Only
+        /// `-uitest-recovery` — the recovery overlay. Only
         /// `MarketingScreenshotsTest.test_capture_recovery_pages` passes it,
         /// together with `-uitest-marketing`, so the App Store motifs keep the
         /// world they were captured in.
@@ -22,7 +22,7 @@
         }
     }
 
-    /// **1.4 B3 — a wearable account for the recovery and HRV pages.**
+    /// **A wearable account for the recovery and HRV pages.**
     ///
     /// The shared hermetic world serves no measurements, so the recovery page
     /// could only ever photograph its empty note. This overlay answers the
@@ -58,7 +58,7 @@
             HermeticUITestSupport.isGarminOverlayActive ? baseSeries + garminSeries : baseSeries
         }
 
-        /// #162 — Body Battery and stress level as Garmin writes them, the
+        /// Body Battery and stress level as Garmin writes them, the
         /// readiness and the acute load as a bridge writes them (`EXTERNAL`).
         private static let garminSeries: [Series] = [
             Series(type: "BODY_BATTERY", unit: "score", source: "GARMIN", offsets: recent) { offset in
@@ -182,9 +182,25 @@
         // MARK: - Summaries slice
 
         private static var summariesJSON: String {
+            "{\"summaries\":{\(summaryEntries(series).joined(separator: ","))},\"recoveryEmpty\":null}"
+        }
+
+        /// The QA sweep's account wears the same tracker: the summary entries
+        /// and the type lists of every type its own table lacks, so the
+        /// recovery page has the readings behind the Insights rings.
+        static func sweepSummaryEntries(excluding types: Set<String>) -> [String] {
+            summaryEntries(baseSeries.filter { !types.contains($0.type) })
+        }
+
+        static func sweepListResponse(type: String) -> (status: Int, body: Data)? {
+            guard let entry = baseSeries.first(where: { $0.type == type }) else { return nil }
+            return ok(listJSON(entry))
+        }
+
+        private static func summaryEntries(_ wanted: [Series]) -> [String] {
             let windowStart = Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now
             let weekStart = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
-            let entries = series.map { entry -> String in
+            return wanted.map { entry -> String in
                 let rows = readings(entry)
                 let values = rows.map(\.value)
                 let month = rows.filter { $0.at >= windowStart }.map(\.value)
@@ -196,7 +212,6 @@
                 "slope7":null,"slope30":null}
                 """
             }
-            return "{\"summaries\":{\(entries.joined(separator: ","))},\"recoveryEmpty\":null}"
         }
 
         private static func mean(_ values: [Double]) -> Double? {

@@ -1,12 +1,12 @@
 import Foundation
 
-// **Phase 08 Plan 10 — the progress a route produces, rather than the progress
+// **The progress a route produces, rather than the progress
 // somebody typed.**
 //
 // The indicator used to read a ten-case table of hand-tuned fractions
 // (`0.18`, `0.32`, `0.5`, …) and a label table that named counts no branch ever
-// had: "Schritt 4 von 6: Anmelden" on a server route with eight steps, spoken
-// to a standalone user who walks five. Both tables were `private var` on the
+// had: "Schritt 4 von 6: Anmelden" on a server route with eight steps. Both
+// tables were `private var` on the
 // `View`, so nothing but a human could check either.
 //
 // This lives beside `OnboardingFlow` rather than inside it for the reason
@@ -73,7 +73,6 @@ extension OnboardingFlow {
         private static func label(for step: OnboardingFlow.Step) -> String {
             switch step {
             case .welcome: String(localized: "onboarding.progress.welcome")
-            case .mode: String(localized: "onboarding.progress.mode")
             case .serverURL: String(localized: "onboarding.progress.serverURL")
             case .auth: String(localized: "onboarding.progress.auth")
             case .checkingCompletion: String(localized: "onboarding.progress.checkingCompletion")

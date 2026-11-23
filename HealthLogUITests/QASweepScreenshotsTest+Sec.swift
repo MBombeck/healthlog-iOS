@@ -28,7 +28,7 @@ extension QASweepScreenshotsTest {
     func test_20s_mcpProofSsoOnly() {
         boot(extra: ["-uitest-sec", "-uitest-sec-sso-only"])
         guard openMintSheet(), submitMint() else { return }
-        // POLISH-C (C1, #163 B1) — an account without factor or passkey
+        // An account without factor or passkey
         // mints on the token: no proof sheet, no way to the browser.
         settle(4)
         XCTAssertFalse(element("stepUp.record.sheet").exists, "20s: an SSO-only account was asked for a proof")

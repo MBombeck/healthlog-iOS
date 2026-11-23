@@ -5,7 +5,7 @@ import Foundation
 /// `CoachServerService.swift` (A360, v0156) to keep that file under the 600-line
 /// SwiftLint ceiling once the scope-handoff body landed.
 ///
-/// **A360 H1 (v0156)** — `scope` is now sent. The server's v1.21.0 headline
+/// `scope` is now sent. The server's v1.21.0 headline
 /// coach feature ("Frag den Coach dazu") threads a `scope` ({ sources, window })
 /// from insight-card / metric surfaces so the coach knows which metric the user
 /// was looking at. iOS previously dropped it; we now attach it on the first turn

@@ -6,7 +6,7 @@ import Testing
 #if canImport(UserNotifications) && canImport(UIKit)
     import UserNotifications
 
-    /// **W-FOCUS-FILTER (v0.15.2)** — the intent + the request-level suppression
+    /// The intent + the request-level suppression
     /// decision against real `UNNotificationRequest` builds.
     ///
     /// Proves the gate at the level a scheduling path actually hits it:

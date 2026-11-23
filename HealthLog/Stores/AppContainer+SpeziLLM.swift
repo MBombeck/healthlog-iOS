@@ -65,7 +65,7 @@ public extension AppContainer {
         }
         let keychainRef = keychain
         let persistence = coachChatStore
-        // **v0.7.1 W-COACH-FALLBACK** — wire the server Coach so devices
+        // Wire the server Coach so devices
         // without Apple Intelligence get a working conversation instead
         // of the kill-card. The service routes through the existing
         // APIClient primitives (`POST /api/insights/chat` SSE) — no new
@@ -74,13 +74,13 @@ public extension AppContainer {
         // Consent gate: the server path sends health data off-device, so
         // it must respect the same per-provider AI-consent gate the
         // `/api/insights/*` surfaces use. Consent ONLY: whether the Coach is
-        // available at all is the `coach` capability (#115 · 0.2), checked per
+        // available at all is the `coach` capability, checked per
         // arm by the store — folding it in here made an operator-disabled Coach
         // ask for consent. Read lazily so a mid-session provider switch is
         // picked up on the next send.
         let consentStore = aiConsentStore
         let providerStore = aiProviderStore
-        // **v0.13 W4 — BYO-key arm.** The client-side device→provider service.
+        // **BYO-key arm.** The client-side device→provider service.
         // Its consent gate is the per-provider BYO grant (Apple 5.1.2(i)) read
         // from the same `AIConsentStore` — so `generate` throws before any
         // network call if consent is absent (fail-closed, never an un-consented
@@ -115,7 +115,7 @@ public extension AppContainer {
                 return AppContainer.hasRequiredServerAIConsent(config: config, consentStore: consentStore)
             },
             byoService: byoService,
-            // **v0.13 W4** — resolves the active BYO provider when the user's
+            // Resolves the active BYO provider when the user's
             // mode is `.byoKey` (a grant exists). `nil` → the BYO arm is never
             // selected, so the on-device / server arms keep their behaviour.
             byoProviderResolver: { [weak consentStore] in
@@ -123,17 +123,17 @@ public extension AppContainer {
             },
             userIDProvider: {
                 keychainRef.getString(forKey: KeychainKey.userID)
-                    ?? CoachChatMessage.standaloneUserID
+                    ?? CoachChatMessage.signedOutUserID
             }
         )
-        // **v0.11 marathon (AI-1)** — honour an explicit "External AI" (`.online`)
+        // **v0.11 marathon** — honour an explicit "External AI" (`.online`)
         // pick. When the user deliberately chose the server arm, it must win even
         // on an AI-capable device (mirroring the BYO precedence) instead of being
         // silently overridden by on-device. Reads `aiMode` lazily so a mid-session
         // mode switch is picked up on the next send. Consent stays fail-closed:
         // `serverConsentGate` above still gates every transmission.
         //
-        // **v0152 W-COACH-CLEANUP (C3)** — the pick must win even BEFORE consent
+        // The pick must win even BEFORE consent
         // has landed. The b198 on-device-reach widening (f4c90709) surfaced the
         // coach for an AI-capable device whenever `aiMode != .none || onDeviceReachable`,
         // so a user who selected External AI but whose grant hadn't yet landed
@@ -146,7 +146,7 @@ public extension AppContainer {
         // consent CTA instead of silently routing on-device. Consent stays
         // fail-closed: `serverConsentGate` still gates every actual transmission, so
         // this only *prefers* the arm, it never bypasses the grant.
-        // #115 · 0.2 — the server-resolved `coach` capability, checked per arm.
+        // The server-resolved `coach` capability, checked per arm.
         created.aiCapabilities = aiCapabilityGate.reader
         created.prefersServerArm = { [weak consentStore] in
             guard let consentStore else { return false }
@@ -162,7 +162,7 @@ public extension AppContainer {
             // for the `.onDevice` / unexpressed-`.none` user — they keep on-device.
             return consentStore.isOnlineIntentPending
         }
-        // #30 — route an inline coach-turn cadence suggestion into the proactive
+        // Route an inline coach-turn cadence suggestion into the proactive
         // Insights card surface so the same suggestion is discoverable outside an
         // open chat. The overview store owns the opt-in / dismissed-set /
         // Focus-filter gating. Weak self so the conversation store never extends
@@ -216,7 +216,7 @@ final class LocalLLMBox {
     /// **v0.5.7 G.5** — drop the cached conversation + chat stores for
     /// this container. Used by `AppContainer.handleLocalLogout` so the
     /// next AskCoach open re-hydrates against the new partition (or
-    /// the standalone sentinel) rather than reusing the previous
+    /// the signed-out sentinel) rather than reusing the previous
     /// user's in-memory chat array. The `LocalLLMService` itself stays
     /// — the FoundationModels session is partition-agnostic, and the
     /// availability probe is expensive to redo for no reason.

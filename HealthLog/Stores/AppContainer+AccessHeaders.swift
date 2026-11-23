@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Access headers without relaunch (#153)
+// MARK: - Access headers without relaunch
 
 extension AppContainer {
     /// Stores the access headers and hands them to the running client, so the

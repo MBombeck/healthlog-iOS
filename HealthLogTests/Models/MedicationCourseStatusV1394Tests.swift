@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **R1 — server v1.39.4 `courseStatus` / `intakeActionable` (#1040).**
+/// **Server v1.39.4 `courseStatus` / `intakeActionable`.**
 ///
 /// The server publishes, on `GET /api/medications` and `/{id}`, where today
 /// sits in the course (`UPCOMING` / `CURRENT` / `ENDED`, calendar days on the

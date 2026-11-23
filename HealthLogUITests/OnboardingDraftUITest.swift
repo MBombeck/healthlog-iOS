@@ -49,14 +49,23 @@ final class OnboardingDraftUITest: XCTestCase {
 
     /// (g) — the server step with the access headers unfolded, de/en, dark and
     /// light. Only runs when `TEST_RUNNER_HL_SWEEP_OUT` names a directory, like
-    /// the QA sweep.
+    /// the QA sweep. `HL_SWEEP_DISPLAY` (see ``SweepDisplay``) picks the sub
+    /// folder, one appearance and the orientation; `HL_SWEEP_LANG` one language.
     @MainActor
     func testServerStepShots() throws {
-        let out = ProcessInfo.processInfo.environment["HL_SWEEP_OUT"] ?? ""
-        try XCTSkipIf(out.isEmpty, "HL_SWEEP_OUT not set — shots only on request")
+        let env = ProcessInfo.processInfo.environment
+        let base = env["HL_SWEEP_OUT"] ?? ""
+        try XCTSkipIf(base.isEmpty, "HL_SWEEP_OUT not set — shots only on request")
+        let display = SweepDisplay(environmentValue: env["HL_SWEEP_DISPLAY"])
+        let out = display.directory(under: base)
         try FileManager.default.createDirectory(at: URL(fileURLWithPath: out), withIntermediateDirectories: true)
-        for language in ["de", "en"] {
-            for appearance in ["dark", "light"] {
+        let originalOrientation = XCUIDevice.shared.orientation
+        XCUIDevice.shared.orientation = display.wantsLandscape == true ? .landscapeLeft : .portrait
+        defer { XCUIDevice.shared.orientation = originalOrientation }
+        let languages = env["HL_SWEEP_LANG"].map { [$0] } ?? ["de", "en"]
+        let appearances = display.wantsLight.map { [$0 ? "light" : "dark"] } ?? ["dark", "light"]
+        for language in languages {
+            for appearance in appearances {
                 let app = XCUIApplication()
                 app.launchArguments = [
                     "-uitest-skip-bootstrap",
@@ -65,6 +74,9 @@ final class OnboardingDraftUITest: XCTestCase {
                     "-hl.settings.appearance", appearance,
                     "-hl.settings.darkDefault.reasserted.v1", "YES"
                 ]
+                if display.isAX5 {
+                    app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+                }
                 app.launch()
                 let cta = app.buttons["onboarding.welcome.cta"]
                 XCTAssertTrue(cta.waitForExistence(timeout: 10))

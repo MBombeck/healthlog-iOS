@@ -19,15 +19,31 @@ final class AppRouter {
     var homePath: NavigationPath = .init()
     var medsPath: NavigationPath = .init()
     var insightsPath: NavigationPath = .init()
-    var morePath: NavigationPath = .init()
+    var morePath: NavigationPath = .init() {
+        // The More row pushes the timeline by value; its landing on an empty
+        // stack is the person's opening, so a phone turns across.
+        didSet { noteTimelineOpening(from: oldValue, to: morePath) }
+    }
+
+    /// True while the router itself moves a page onto the More stack because
+    /// the window changed its layout. Such a move is no opening by the person.
+    @ObservationIgnored var isMovingPagesForLayout = false
+
+    /// One path per sidebar tab (regular width only). A tab that disappears
+    /// takes its path with it (``applyShellLayout(_:)``).
+    var sectionPaths: [SidebarDestination: NavigationPath] = [:]
+    /// What the shell last reported it can show. Until then: no sidebar.
+    var shellLayout: ShellLayout = .initial
     /// VISIT — the booked visit a push or `visit.view` named (``AppRouter+PushPaths``).
     var focusedVisitId: String?
+    /// The timeline's store and the person's openings of it (``TimelineSession``).
+    let timeline = TimelineSession()
 
     /// Geparkte Route für Cold-Start-from-Tap. Konsumiert + geleert von
     /// `consumePendingRoute()` sobald der Auth-Bootstrap fertig ist.
     private(set) var pendingRoute: DeepLinkRoute?
 
-    /// v0.5.4.3 HP5 — transient flag observed by `AuthenticatedShell` to
+    /// Transient flag observed by `AuthenticatedShell` to
     /// surface `MoodQuickEntrySheet` when a mood-reminder action handler
     /// signals "open the quick-capture surface" (taps on the body of a
     /// `MOOD_REMINDER` push, or the `mood.log.now` action). Modeled as
@@ -53,7 +69,23 @@ final class AppRouter {
     /// navigation-state) so it doesn't push onto any `NavigationPath`.
     private(set) var medicationQuickIntakeRequestCount: Int = 0
 
-    /// **POLISH-COACH (v0.5.5.6)** — transient counter observed by
+    /// #191 QoL — bumped when "Symptom" is picked from the capture picker.
+    /// Today observes it and pushes the symptom quick entry on its own stack,
+    /// the same page its quick-actions row opens. Counter for the same
+    /// reason as ``moodQuickEntryRequestCount``. Set only by
+    /// ``requestSymptomQuickEntry()`` (`AppRouter+SymptomEntry.swift`).
+    var symptomQuickEntryRequestCount: Int = 0
+
+    /// #186 — the dose a reminder tap is about, parked for the Meds list to
+    /// scroll to and mark (``MedicationReminderLanding``). One-shot: the list
+    /// takes it with ``consumeMedicationLanding()``.
+    /// Set by ``openMedicationsList(for:)`` (`AppRouter+MedicationLanding.swift`).
+    var pendingMedicationLanding: MedicationReminderLanding?
+    /// **D3 #12** — whether a medication is hidden from the Meds list on this
+    /// device; wired to `MedicationVisibilityStore`. `nil` hides nothing.
+    @ObservationIgnored var isHiddenFromMedicationsList: (@MainActor (String) -> Bool)?
+
+    /// Transient counter observed by
     /// `InsightsScreen` so the `.coach` deep-link surfaces the new
     /// `AskCoachSheet` instead of silently landing on Insights with no
     /// further action. Mirrors `moodQuickEntryRequestCount` — the sheet
@@ -63,7 +95,7 @@ final class AppRouter {
     /// processed the previous edge yet.
     private(set) var askCoachRequestCount: Int = 0
 
-    /// #34 — re-tap-to-root for the Insights tab. The Insights container drives
+    /// Re-tap-to-root for the Insights tab. The Insights container drives
     /// its surface with a LOCAL `@State selection` (not a router `NavigationPath`
     /// like `MoreScreen`), so re-tapping the active Insights tab can't be reset
     /// by clearing a path here. Instead the shell bumps this counter on an
@@ -81,7 +113,7 @@ final class AppRouter {
     /// bumps `insightsMetricRequestCount`; `InsightsContainerScreen` observes the
     /// counter and maps the slug onto `selection = .metric(kind)` (or a special
     /// page). This replaces the dead `InsightsDetailRoute` ghost type that was
-    /// appended to `insightsPath` and consumed nowhere (W0-3). `nil` (with a
+    /// appended to `insightsPath` and consumed nowhere. `nil` (with a
     /// bumped counter) means "Insights root / Übersicht".
     private(set) var pendingInsightsMetricSlug: String?
 
@@ -100,7 +132,7 @@ final class AppRouter {
     /// so it survives container re-creation.
     private var lastConsumedInsightsCount: Int = 0
 
-    /// b182 W-B182-INVITE (GH #16) — the server invite token (`hlv_<64 hex>`)
+    /// The server invite token (`hlv_<64 hex>`)
     /// parked from an `.invite` deep link (web QR / universal link / custom
     /// scheme). **AUTH-AGNOSTIC, unlike `pendingRoute`:** the normal pending-route
     /// mechanism only fires *after* `.authenticated` (`RootView` consumes it post-
@@ -111,7 +143,7 @@ final class AppRouter {
     /// Sensitive secret — never logged. One-shot via `consumePendingInviteToken()`.
     private(set) var pendingInviteToken: String?
 
-    /// W-INVITE-DEEPLINK (#16) — transient counter bumped when an invite link is
+    /// Transient counter bumped when an invite link is
     /// opened while the user is ALREADY signed in. An invite drives *registration*
     /// (creating a new account); it can't be applied to a session that already has
     /// one, so rather than silently swallow the tap, `AuthenticatedShell` observes
@@ -123,7 +155,7 @@ final class AppRouter {
     /// scary re-register), so nothing sensitive is held; only the fact-of-tap.
     private(set) var inviteWhileSignedInNoticeCount: Int = 0
 
-    /// v0.15 W-FRONTDOORS — the metric kind a "jetzt messen" Vorsorge action
+    /// The metric kind a "jetzt messen" Vorsorge action
     /// wants the `MeasureSheetView` to open prefilled to. Parked here (with a
     /// bumped `measurePrefillRequestCount`) by the Home Vorsorge tile;
     /// `AuthenticatedShell` observes the counter, flips to `.home`, and presents
@@ -137,9 +169,24 @@ final class AppRouter {
     /// processed the previous edge (same pattern as the other request counters).
     private(set) var measurePrefillRequestCount: Int = 0
 
+    /// Bumped each time a link from outside the app (a notification, a widget,
+    /// a URL) is applied. A form sheet without unsaved input closes on it
+    /// (``HLDiscardGuard``). A sheet on a screen the link pops off the stack
+    /// goes with that screen, input or not, as it always has.
+    private(set) var deepLinkArrivalCount: Int = 0
+
+    /// Bumped by the shell's Cmd-R. Every page with a pull-to-refresh that is
+    /// on screen runs its refresh (``View/hlRefreshCommand(_:)``). Counter, not
+    /// `Bool`, so a second Cmd-R refreshes again.
+    private(set) var refreshRequestCount: Int = 0
+
+    /// Bumped by ``requestCapture()`` in a regular window, where Log is no tab
+    /// but the "+" of the tab roots: the shell opens the picker on the edge.
+    private(set) var captureRequestCount: Int = 0
+
     init() {}
 
-    /// v0.15 W-FRONTDOORS — request the prefilled measure sheet for `kind`.
+    /// Request the prefilled measure sheet for `kind`.
     /// Flips the tab to `.home` first so the sheet covers a recognisable
     /// surface, then bumps the counter the shell observes. Mirrors
     /// ``requestMoodQuickEntry()``.
@@ -159,7 +206,7 @@ final class AppRouter {
         return kind
     }
 
-    /// b182 W-B182-INVITE — consume the parked invite token exactly once (clear
+    /// Consume the parked invite token exactly once (clear
     /// on read), mirroring the other one-shot consume patterns. `OnboardingFlow`
     /// reads it to auto-open the prefilled `RegistrationSheet`; a second read
     /// returns `nil` so a re-appear (scenePhase / tab churn) doesn't re-trigger
@@ -184,7 +231,7 @@ final class AppRouter {
         return .some(slug)
     }
 
-    /// v0.13.1 IC — unify the tile tap. Lands the operator IN the Insights tab
+    /// Unify the tile tap. Lands the operator IN the Insights tab
     /// on `kind`'s metric page via the existing `.insights(metric:)` deep link
     /// (switches `selectedTab` → `.insights`, parks the slug, bumps the request
     /// counter so `InsightsContainerScreen` selects the pager page). This is the
@@ -195,7 +242,7 @@ final class AppRouter {
     /// availability-gated downstream (`tryApplyStagedMetric`), so it relies on
     /// the IC availability fix to reliably land on the metric rather than the
     /// overview.
-    /// **Parity 1.10 — the dead-tap safety net.**
+    /// **The dead-tap safety net.**
     ///
     /// The `guard` used to `return` after a log line. The doc above still says
     /// "none today for charted kinds"; that has not been true for a while —
@@ -237,15 +284,28 @@ final class AppRouter {
         applyImmediate(.insights(metric: slug))
     }
 
-    /// Parity 1.10 — pushes the per-kind values table onto the Mehr stack.
+    /// Pushes the per-kind values table onto the Mehr stack.
     /// Mirrors ``requestSettingsAssistant()``'s stack-root-then-push shape.
     func showMeasurementList(_ kind: MetricKind) {
+        let resolution = Self.resolve(
+            .section(.measurements),
+            sizeClass: shellLayout.sizeClass,
+            enabledSections: shellLayout.enabledSections
+        )
+        if case let .select(tab) = resolution {
+            // The Messwerte sidebar tab: the table above its picker.
+            var path = NavigationPath()
+            path.append(MeasurementListRoute(kind: kind))
+            sectionPaths[.measurements] = path
+            selectedTab = tab
+            return
+        }
         selectedTab = .more
         morePath = .init()
         morePath.append(MeasurementListRoute(kind: kind))
     }
 
-    /// v0.14.3 F3 — deep-nav into one of the three composite **special** Insights
+    /// Deep-nav into one of the three composite **special** Insights
     /// pages (mood / medications / workouts). Mirrors `selectInsightsMetric` but
     /// for pages that are NOT a chartable `MetricKind`: the wellness-score detail
     /// sheet's Stimmung contributor routes here so it lands on the navigable Mood
@@ -256,7 +316,7 @@ final class AppRouter {
         applyImmediate(.insights(metric: page.slug))
     }
 
-    /// #34 — invoked by the shell when the operator taps the ALREADY-active
+    /// Invoked by the shell when the operator taps the ALREADY-active
     /// Insights tab. Pops the shared Insights stack to root and bumps the
     /// counter so the container resets its pager to Übersicht (index 0).
     func requestInsightsRoot() {
@@ -264,7 +324,7 @@ final class AppRouter {
         insightsRootRequestCount &+= 1
     }
 
-    /// v0.15.7 W-RHYTHM-FRONTDOOR — switch to the Insights tab AND reset its
+    /// Switch to the Insights tab AND reset its
     /// pager to the Übersicht overview, where the device-health-notifications
     /// (ECG/AFib rhythm-events) card lives. Unlike `requestInsightsRoot` (which
     /// only resets the already-active tab), this also flips `selectedTab`, so a
@@ -281,7 +341,7 @@ final class AppRouter {
     /// Wendet eine Route auf den Router an. Wenn `isAuthenticated == false`,
     /// wird die Route in `pendingRoute` geparkt; sonst direkt angewendet.
     func apply(_ route: DeepLinkRoute, isAuthenticated: Bool) {
-        // b182 W-B182-INVITE / W-INVITE-DEEPLINK (#16) — `.invite` drives the
+        // `.invite` drives the
         // *unauthenticated* onboarding registration flow, so it must surface
         // BEFORE auth (unlike `pendingRoute`, which only fires post-auth). Branch
         // on the live auth phase:
@@ -305,6 +365,7 @@ final class AppRouter {
             pendingRoute = route
             return
         }
+        deepLinkArrivalCount &+= 1
         applyImmediate(route)
     }
 
@@ -313,10 +374,11 @@ final class AppRouter {
     func consumePendingRoute() {
         guard let route = pendingRoute else { return }
         pendingRoute = nil
+        deepLinkArrivalCount &+= 1
         applyImmediate(route)
     }
 
-    /// v0.5.4.3 HP5 — requests that `AuthenticatedShell` surface
+    /// Requests that `AuthenticatedShell` surface
     /// `MoodQuickEntrySheet`. Called by the mood-reminder action handler
     /// (`mood.log.now`) and by body-taps on `MOOD_REMINDER` pushes. Flips
     /// the tab back to `.home` first so the sheet covers a recognisable
@@ -330,7 +392,7 @@ final class AppRouter {
         moodQuickEntryRequestCount &+= 1
     }
 
-    /// **v0.8.4 WWIDGET-3** — requests that `AuthenticatedShell` surface the
+    /// Requests that `AuthenticatedShell` surface the
     /// capture picker. Called when the app foregrounds with a pending
     /// "Erfassen" control marker (`OpenCaptureIntent` → `CaptureRequestStore`
     /// → `RootView` consume). Reuses the *same* mechanism a tap on the centre
@@ -340,7 +402,24 @@ final class AppRouter {
     /// not two. No counter needed — the tab-flip + snap-back is itself
     /// edge-triggered by the shell.
     func requestCapture() {
-        selectedTab = .measure
+        // A regular window builds no Log tab; selecting it there would pick
+        // a tab that does not exist.
+        if Self.capturesThroughTab(sizeClass: shellLayout.sizeClass) {
+            selectedTab = .measure
+        } else {
+            captureRequestCount &+= 1
+        }
+    }
+
+    /// Whether Log is a tab: compact, and before a size class is known. A
+    /// regular window opens the picker from the "+" of its tab roots.
+    nonisolated static func capturesThroughTab(sizeClass: UserInterfaceSizeClass?) -> Bool {
+        sizeClass != .regular
+    }
+
+    /// Cmd-R: refresh what is on screen.
+    func requestRefresh() {
+        refreshRequestCount &+= 1
     }
 
     /// v0.14.x Q — requests that `AuthenticatedShell` surface the medication
@@ -356,7 +435,7 @@ final class AppRouter {
         medicationQuickIntakeRequestCount &+= 1
     }
 
-    /// v0.14.1 — lands the operator on Settings → Assistant ("KI"-Hub), where
+    /// Lands the operator on Settings → Assistant ("KI"-Hub), where
     /// the server AI provider / BYO key is configured. Called from the Coach's
     /// "External AI needs a server provider" surface (`CoachSourceChoiceView`)
     /// so tapping "Externe KI" without a provider routes to setup instead of
@@ -381,7 +460,7 @@ final class AppRouter {
         morePath.append(SettingsRoute.integrations)
     }
 
-    /// CU-37 — lands the operator on Settings → Integrationen →
+    /// Lands the operator on Settings → Integrationen →
     /// Apple-Health-Import, the ONE path by which an ECG recording can reach
     /// HealthLog today (`POST /api/import/apple-health-export`; there is no JSON
     /// ingest route and no HealthKit live-sync — GH #74). Called from the ECG
@@ -397,7 +476,7 @@ final class AppRouter {
         morePath.append(SettingsRoute.appleHealthImport)
     }
 
-    /// GH #74 — lands the operator on Settings → Integrationen → Apple Health,
+    /// Lands the operator on Settings → Integrationen → Apple Health,
     /// the screen that carries the ECG upload switch. Called from the ECG empty
     /// state when the switch is off: the honest answer to "why is this empty"
     /// is "the upload is off", and the honest form of that answer is the way to
@@ -422,9 +501,7 @@ final class AppRouter {
     /// instrument chooser) rather than auto-starting a specific instrument — the
     /// screen/store internals are owned by the parallel WHO-5 wave.
     func requestMentalWellbeingCheckIn() {
-        selectedTab = .more
-        morePath = .init()
-        morePath.append(MentalWellbeingRoute())
+        openSidebarDestination(.mentalWellbeing)
     }
 
     /// W0-fix (review M1) — pure mapping from a med deep-link route to its typed
@@ -446,7 +523,7 @@ final class AppRouter {
             selectedTab = .home
             homePath = .init()
         case .coach:
-            // POLISH-COACH (v0.5.5.6) — flip to Insights and pulse the
+            // Flip to Insights and pulse the
             // `askCoachRequestCount` counter so `InsightsScreen`
             // presents `AskCoachSheet`. Counter (not route) because
             // the sheet is sheet-state, not nav-state — it doesn't
@@ -467,14 +544,12 @@ final class AppRouter {
             insightsPath = .init()
             pendingInsightsMetricSlug = metric
             insightsMetricRequestCount &+= 1
-        case .medications:
-            // v0.12 W0-2 — the med-reminder no-id fallback. Lands the operator
-            // on the Meds tab list root rather than teleporting to Dashboard
-            // (the old `.unknown` behaviour). No detail to push without an id.
-            selectedTab = .meds
-            medsPath = .init()
+        case .medications, .medicationDue:
+            // The Meds tab list root: the med-reminder no-id fallback, and
+            // since #186 a dose reminder, whose dose the list then marks.
+            openMedicationsList(for: route)
         case .medication, .medicationHistory:
-            // v0.3.x: kein dedizierter History-Screen — wir landen im Detail
+            // Kein dedizierter History-Screen — wir landen im Detail
             // mit History-Tab-Hint. Volle Web-Embed-History bleibt v0.3.x+.
             // W0-fix (review M1): the typed payload (incl. `.history` focus) is
             // built by the pure, unit-testable `medicationDetailRoute(for:)` so a
@@ -489,11 +564,12 @@ final class AppRouter {
             selectedTab = .more
             morePath = .init()
             morePath.append(PersonalRecordRoute(id: id))
-        case .settingsNotifications, .checkups, .checkupsVisit, .cycle, .settingsSecurity, .settingsIntegrations:
-            // #141 — every More-stack screen a link opens (see `+PushPaths`).
+        case .settingsNotifications, .checkups, .checkupsVisit, .cycle, .timeline, .seizures, .seizureEvent, .settingsSecurity,
+             .settingsIntegrations:
+            // Every More-stack screen a link opens (see `+PushPaths`).
             applyMoreStackRoute(route)
         case .mood:
-            // v0.10.0 W10 — `healthlog://mood` (the systemSmall mood widget's
+            // `healthlog://mood` (the systemSmall mood widget's
             // whole-tile tap) reuses the same central-CTA quick-entry path the
             // `mood.log.now` reminder action uses — no parallel surface.
             requestMoodQuickEntry()
@@ -505,17 +581,17 @@ final class AppRouter {
             // screening push lands on the identical surface.
             requestMentalWellbeingCheckIn()
         case let .invite(token):
-            // b182 W-B182-INVITE — `apply(_:isAuthenticated:)` short-circuits
+            // `apply(_:isAuthenticated:)` short-circuits
             // `.invite` before it reaches here, so this branch is only hit by a
             // direct `applyImmediate` (e.g. tests / future callers). Park the
             // token; the onboarding flow consumes it. No nav side-effect — the
             // invite surfaces in the unauthenticated onboarding shell, not a tab.
             pendingInviteToken = token
         case let .unknown(url):
-            // b182 W-B182-INVITE — token-safe logging. A malformed invite link
+            // Token-safe logging. A malformed invite link
             // resolves to `.unknown` and its query could carry a partial secret,
             // so we log the host/path only, never `url.absoluteString`.
-            // M-7: host + path are sanitized, non-sensitive values → `.public`.
+            // Host + path are sanitized, non-sensitive values → `.public`.
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.notifications.warning(
                 "Unbekannte Deep-Link-Route — fallback auf Dashboard. Host=\(url.host ?? "", privacy: .public) Pfad=\(url.path, privacy: .public)"
@@ -528,7 +604,7 @@ final class AppRouter {
 
 // MARK: - NavigationPath payload types
 
-// v0.12 W0-3 — the `InsightsDetailRoute` ghost type was removed. It was
+// The `InsightsDetailRoute` ghost type was removed. It was
 // appended to `insightsPath` and consumed by no `navigationDestination`, and
 // its doc-comment described a soft-scroll contract that was never built. The
 // Insights tab is a swipe pager driven by the container's local `selection`,
@@ -536,7 +612,7 @@ final class AppRouter {
 // `AppRouter.pendingInsightsMetricSlug` (mapped onto `selection` in
 // `InsightsContainerScreen`) rather than a `NavigationPath` push.
 
-/// v0.12 W0-1 — typed Meds-stack deep-link payload (id + focus). `public` so
+/// Typed Meds-stack deep-link payload (id + focus). `public` so
 /// `Focus` can be a default-argument value in the
 /// `public MedicationDetailScreen.init(...focus:)` signature.
 public struct MedicationDetailRoute: Hashable {
@@ -544,7 +620,7 @@ public struct MedicationDetailRoute: Hashable {
     public enum Focus: String, Hashable {
         case overview
         case history
-        /// M1 — an in-app compliance-bar tap. Pre-expands the Verlauf disclosure
+        /// An in-app compliance-bar tap. Pre-expands the Verlauf disclosure
         /// (so the history is one tap closer) but does NOT auto-scroll the page;
         /// the screen still opens at the top. Only `.history` (genuine reminder /
         /// URL deep links) scrolls down to the Verlauf anchor.
@@ -574,7 +650,7 @@ struct PersonalRecordRoute: Hashable {
 /// payload — the screen opens at its instrument chooser.
 struct MentalWellbeingRoute: Hashable {}
 
-/// **Parity 1.10 — typed `morePath` payload for the per-kind values table
+/// **Typed `morePath` payload for the per-kind values table
 /// (`MeasurementListScreen`).**
 ///
 /// The screen already existed and was reachable by hand (Mehr → Messwerte →

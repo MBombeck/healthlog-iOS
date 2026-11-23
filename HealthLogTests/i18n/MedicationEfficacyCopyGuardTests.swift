@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// v1.28 (GH iOS #45) — banned-verb guard for the `med.wirkung.*` namespace
+/// v1.28 — banned-verb guard for the `med.wirkung.*` namespace
 /// (the medication-efficacy / "Wirkung" view).
 ///
 /// The efficacy view is a medication-adjacent claim, so its safety boundary is

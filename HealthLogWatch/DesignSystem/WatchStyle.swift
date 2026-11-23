@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.12 P2 — watch-local style helpers.**
+/// **Watch-local style helpers.**
 ///
 /// Colours come from the shared, asset-catalog-free `LAColor` palette
 /// (Tonal-Mono, status colours as signal-only) — the same palette the Live

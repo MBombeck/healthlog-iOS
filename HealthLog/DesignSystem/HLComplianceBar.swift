@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared medication-compliance bar primitive — **FW1-C (M6).**
+/// Shared medication-compliance bar primitive — **FW1-C.**
 ///
 /// `ComplianceBand` (DesignSystem/ComplianceBand.swift) already unified the
 /// *colour/threshold* contract across the three med surfaces. But the *bar
@@ -40,17 +40,27 @@ public struct HLComplianceBar: View {
         ComplianceBand.band(forPercent: rate).color
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// From the accessibility sizes on the rate stands under its label, as
+    /// in ``HLFactRow``, so the label is never squeezed into syllables.
+    public nonisolated static func stacks(at typeSize: DynamicTypeSize) -> Bool {
+        typeSize.isAccessibilitySize
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                Text(label)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Text(HLNumberFormat.percent(rate))
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .monospacedDigit()
+            if Self.stacks(at: dynamicTypeSize) {
+                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                    labelText
+                    rateText
+                }
+            } else {
+                HStack {
+                    labelText
+                    Spacer(minLength: HLSpace.sm)
+                    rateText
+                }
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
@@ -79,6 +89,20 @@ public struct HLComplianceBar: View {
             label,
             rate
         )))
+    }
+
+    private var labelText: some View {
+        Text(label)
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var rateText: some View {
+        Text(HLNumberFormat.percent(rate))
+            .font(.hlCaption.weight(.semibold))
+            .foregroundStyle(HLText.primary)
+            .monospacedDigit()
     }
 
     private func bandTick(at fraction: CGFloat, width: CGFloat) -> some View {

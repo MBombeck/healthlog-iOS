@@ -46,13 +46,13 @@ public struct WorkoutListEntryDTO: Decodable, Sendable, Equatable, Identifiable 
     /// (Withings, manual entries) or when the user denied location
     /// recording on the Watch.
     public let route: WorkoutRouteDTO?
-    /// **W-B182** — Optional, `GET /api/workouts/{id}` only. Free-form provider
+    /// Optional, `GET /api/workouts/{id}` only. Free-form provider
     /// metadata the server stores per row. WHOOP populates strain / HR-zone
     /// durations / percent-recorded / altitude here (server
     /// `src/lib/whoop/sync-workout.ts`). Decoded permissively so unknown keys
     /// never break the round-trip.
     public let metadata: WorkoutMetadataDTO?
-    /// **W-B182** — Optional, `GET /api/workouts/{id}` only. Per-sample HR (and
+    /// Optional, `GET /api/workouts/{id}` only. Per-sample HR (and
     /// optional speed / power / cadence) series. Preferred over the local HK
     /// fetch because it works for WHOOP / imported sources that have no HK
     /// origin on this device.
@@ -81,6 +81,10 @@ public struct WorkoutListEntryDTO: Decodable, Sendable, Equatable, Identifiable 
     /// rendered as a muted comparison line. Comparison is to the user's own
     /// history only — never a population band (non-diagnostic standard).
     public let sportContext: WorkoutSportContextDTO?
+    /// #1343 (server 1.49.0) — Optional, `GET /api/workouts/{id}` only. The
+    /// watch's own figures for the session (``WorkoutPerformanceDTO``); `nil`
+    /// on an older server and for a workout that carries none.
+    public let performance: WorkoutPerformanceDTO?
 
     public init(
         id: String,
@@ -105,7 +109,8 @@ public struct WorkoutListEntryDTO: Decodable, Sendable, Equatable, Identifiable 
         hrSeries: WorkoutHrSeriesDTO? = nil,
         zones: WorkoutZonesDTO? = nil,
         splits: [WorkoutSplitDTO]? = nil,
-        sportContext: WorkoutSportContextDTO? = nil
+        sportContext: WorkoutSportContextDTO? = nil,
+        performance: WorkoutPerformanceDTO? = nil
     ) {
         self.id = id
         self.sportType = sportType
@@ -130,10 +135,11 @@ public struct WorkoutListEntryDTO: Decodable, Sendable, Equatable, Identifiable 
         self.zones = zones
         self.splits = splits
         self.sportContext = sportContext
+        self.performance = performance
     }
 }
 
-// MARK: - Workout metadata (W-B182)
+// MARK: - Workout metadata
 
 /// Typed view over the server `Workout.metadata` JSON blob (`GET
 /// /api/workouts/{id}`). Populated mainly by WHOOP ingest
@@ -171,7 +177,7 @@ public struct WorkoutMetadataDTO: Decodable, Sendable, Equatable {
     }
 }
 
-// MARK: - Workout samples (W-B182)
+// MARK: - Workout samples
 
 /// Typed view over the server `WorkoutSamples` blob (`GET /api/workouts/{id}`).
 /// JSONB array of `{ t: ISO string, hr?: int, speedMs?, power?, cadence? }`,
@@ -211,7 +217,7 @@ public struct WorkoutSamplesDTO: Decodable, Sendable, Equatable {
         case sampleCount, samples
     }
 
-    /// **M-2.** Tolerant decode: a single malformed sample row (missing/non-ISO
+    /// Tolerant decode: a single malformed sample row (missing/non-ISO
     /// `t`) must NOT abort the whole `GET /api/workouts/{id}` decode and blank the
     /// detail screen. `samples` defaults to `[]` when absent, and bad rows are
     /// skipped while the good ones survive.
@@ -434,7 +440,7 @@ public struct WorkoutSportContextDTO: Decodable, Sendable, Equatable {
 /// }
 /// ```
 ///
-/// 1.5 FIX-DATA (#151) — each `sampleTimestamps` entry is either a bare
+/// Each `sampleTimestamps` entry is either a bare
 /// ISO instant (older tracks) or an object with its instant and, where
 /// recorded, speed and heart rate (the workout batch and the Apple Health
 /// export since server 1.46). Until 1.5 the field was `[Date]`, so one

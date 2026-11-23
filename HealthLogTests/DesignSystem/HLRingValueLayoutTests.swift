@@ -52,8 +52,8 @@
     @MainActor
     @Suite("HLRing — the centre value stays on one line (public issue #6)", .serialized)
     struct HLRingValueLayoutTests {
-        /// Both production callsites (`ComplianceRingCard`, `HealthScoreLoaded`)
-        /// render at 92 pt — the size in the tester's screenshot.
+        /// The production callsite (`ComplianceRingCard`) renders at 92 pt —
+        /// the size in the tester's screenshot.
         private static let ringSide: CGFloat = 92
         /// Phone-width canvas, tall enough that a wrapped second line overflows
         /// into it rather than being clipped by the window edge.
@@ -90,6 +90,8 @@
 
         /// Hosts the ring in the dashboard row geometry, lets UIKit lay it out,
         /// and reduces the ink its centre text leaves to structural facts.
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         @discardableResult
         private func measure(
             value: String,
@@ -97,7 +99,7 @@
             typeSize: DynamicTypeSize = .large,
             dump: String? = nil
         ) throws -> InkGeometry {
-            // The `ComplianceRingCard` / `HealthScoreLoaded` row: the ring on
+            // The `ComplianceRingCard` row: the ring on
             // the leading edge, the copy column taking the rest.
             let row = HStack(alignment: .center, spacing: HLSpace.lg) {
                 HLRing(progress: 0, label: label, value: value, tint: .clear)
@@ -338,7 +340,7 @@
             arguments: [DynamicTypeSize.large, .accessibility3, .accessibility5]
         )
         func scoreValueSurvivesAccessibilitySizes(typeSize: DynamicTypeSize) throws {
-            // `HealthScoreLoaded` shares the primitive at the same 92 pt.
+            // A three-digit score in the same 92 pt primitive.
             let geometry = try measure(
                 value: "100",
                 label: "of 100",

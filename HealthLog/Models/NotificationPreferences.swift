@@ -72,7 +72,7 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
         }
     }
 
-    /// **MED-4 / AUDIT-PARITY C3 — low-supply runway threshold.** Nested under
+    /// **Low-supply runway threshold.** Nested under
     /// `notificationPrefs.medication`. `lowStockRunwayDays` is the projected
     /// days-of-supply at or below which the low-supply alert fires (server cron
     /// pushes once per crossing; iOS renders the runway on the card/detail and
@@ -81,7 +81,7 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
     /// servers omit the field — the client then keeps the alert off.
     public struct Medication: Codable, Sendable, Equatable {
         public let lowStockRunwayDays: Int?
-        /// **CU-20 (#69) — the field the concurrency token exists to protect.**
+        /// **The field the concurrency token exists to protect.**
         /// When `true` the *client* owns medication reminder delivery (iOS
         /// schedules them locally) and the server must not also push them.
         ///
@@ -94,24 +94,34 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
         /// clobbered from a stale read. Decoded so the client can see (and a
         /// test can pin) the value that survives a conflict.
         public let clientManaged: Bool?
-        /// **N1** — the roaming `deliveryDefault` (`"server" | "client"`, server
+        /// The roaming `deliveryDefault` (`"server" | "client"`, server
         /// v1.7.0). `"client"` pins `clientManaged` to `true` on the server
         /// (`applyDeliveryDefaultMapping`), so a `clientManaged: false` write
         /// cannot lift the suppression while it stands. Read so the app can
         /// tell that case apart instead of re-sending a write that has no
         /// effect. `nil` on a server that omits it.
         public let deliveryDefault: String?
+        /// #191 — the account's snooze span in minutes (default 30), read
+        /// behind ``MedicationCapability/snoozeSetting``. `nil` on an older
+        /// server; never sent unless set.
+        public let snoozeMinutes: Int?
 
-        public init(lowStockRunwayDays: Int?, clientManaged: Bool? = nil, deliveryDefault: String? = nil) {
+        public init(
+            lowStockRunwayDays: Int?,
+            clientManaged: Bool? = nil,
+            deliveryDefault: String? = nil,
+            snoozeMinutes: Int? = nil
+        ) {
             self.lowStockRunwayDays = lowStockRunwayDays
             self.clientManaged = clientManaged
             self.deliveryDefault = deliveryDefault
+            self.snoozeMinutes = snoozeMinutes
         }
     }
 
-    /// **W-B189 / #23 — preventive-care (Vorsorge) reminder suppression.**
+    /// **Preventive-care (Vorsorge) reminder suppression.**
     ///
-    /// **CU-26: `clientManaged == true` SUPPRESSES delivery** (server
+    /// **`clientManaged == true` SUPPRESSES delivery** (server
     /// `client-managed-apns.ts`; APNs-only since v1.33.1, every channel before).
     /// It is not an opt-in to receive. Nested
     /// under `notificationPrefs.measurementReminder` (server v1.17.1). The
@@ -147,7 +157,7 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
     public let medication: Medication?
     public let measurementReminder: MeasurementReminder?
     public let content: Content?
-    /// **CU-20 (#69) — optimistic-concurrency token.** Echoed as
+    /// **Optimistic-concurrency token.** Echoed as
     /// `baseUpdatedAt` on the next PATCH; a stale one yields
     /// `409 notification_prefs_conflict` and nothing is written. Guards the
     /// shared `User.updatedAt`
@@ -184,13 +194,13 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
         mood?.reminderHour.map { max(0, min(23, $0)) }
     }
 
-    /// **MED-4 / C3** — the configured low-supply runway threshold (1–60 days),
+    /// The configured low-supply runway threshold (1–60 days),
     /// clamped, or `nil` when the alert is off / the server omitted the field.
     public var lowStockRunwayDays: Int? {
         medication?.lowStockRunwayDays.map { max(1, min(60, $0)) }
     }
 
-    /// **W-B189 / #23** — whether the preventive-care (Vorsorge) reminder is
+    /// Whether the preventive-care (Vorsorge) reminder is
     /// opted in (`measurementReminder.clientManaged`), or `nil` when the server
     /// omitted the block (a pre-v1.17.1 / drifted server) so the caller keeps
     /// its local mirror rather than overwriting it with a guess.
@@ -198,14 +208,14 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
         measurementReminder?.clientManaged
     }
 
-    /// **CU-20 / #69** — whether medication reminder delivery is client-managed
+    /// Whether medication reminder delivery is client-managed
     /// (`medication.clientManaged`). `nil` when the server omitted the field so
     /// the caller keeps its local mirror rather than guessing.
     public var medicationClientManaged: Bool? {
         medication?.clientManaged
     }
 
-    /// **N1** — the medication-reminder delivery state this payload reports,
+    /// The medication-reminder delivery state this payload reports,
     /// or `nil` when the server omitted `medication.clientManaged` (an older
     /// server: the app then never writes the flag).
     var medicationReminderDelivery: MedicationReminderServerDelivery? {
@@ -217,7 +227,7 @@ public struct AuthNotificationPrefsPayload: Codable, Sendable, Equatable {
     }
 }
 
-/// **MED-4 / C3** — server bounds on the low-supply runway threshold.
+/// Server bounds on the low-supply runway threshold.
 public let medicationLowStockRunwayMin = 1
 public let medicationLowStockRunwayMax = 60
 /// Server default when the user has never set a threshold (v1.16.11).

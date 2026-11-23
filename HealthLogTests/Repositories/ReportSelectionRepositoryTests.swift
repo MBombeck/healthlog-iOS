@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// Locks `GET | PUT /api/auth/me/report-selection` (CU-01).
+/// Locks `GET | PUT /api/auth/me/report-selection`.
 ///
 /// The route is **not in the OpenAPI** — the shape asserted here is the one
 /// named in the catch-up brief (block A2) and nothing more:
@@ -179,7 +179,7 @@ struct ReportSelectionRepositoryTests {
         }
     }
 
-    // MARK: - #110 — the v1.39.0 wire forms
+    // MARK: - The v1.39.0 wire forms
 
     /// `400` + `error: "Invalid JSON body"` + `meta.errorCode` — the literal
     /// `apiError("Invalid JSON body", 400, { errorCode })` of

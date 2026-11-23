@@ -117,7 +117,7 @@ public final class CoachLiveTrail {
         } else {
             running.append(activity)
         }
-        // POLISH-B B9 — past the Coach's reach: its own sentence, not "nothing here".
+        // Past the Coach's reach: its own sentence, not "nothing here".
         var line = activity.label
         if let reach = CoachReachReason.sentence(for: activity.reason, defaults: defaults) {
             line = reach
@@ -130,12 +130,14 @@ public final class CoachLiveTrail {
     }
 
     /// Text that may be shown, or `nil` when there is none or the filter trips.
+    @concurrent
     nonisolated static func screened(_ text: String?, filter: MDRSafetyFilter) async -> String? {
         guard let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
         return await filter.containsForbiddenPattern(in: trimmed) ? nil : trimmed
     }
 
     /// A plan is offered only when every piece of its wording passes.
+    @concurrent
     nonisolated static func planIsClean(_ plan: CoachServerService.CoachPlanProposal, filter: MDRSafetyFilter) async -> Bool {
         for part in [plan.ifCue, plan.thenAction] + (plan.target.map { [$0] } ?? []) {
             guard await screened(part, filter: filter) != nil else { return false }
@@ -244,7 +246,7 @@ public extension CoachConversationStore {
     /// Load the trail of one answer. Only ever called from the tap.
     func loadTrail(for entityID: UUID) async {
         guard let serverService, let conversationID = serverConversationID,
-              let messageID = feedback.messageID(forEntity: entityID) else
+              let messageID = messageIndex.messageID(forEntity: entityID) else
         {
             live.trails[entityID] = .empty
             return

@@ -36,7 +36,7 @@ struct AuthAccountBoundaryCancellationTests {
         await drainMainActorJobs()
 
         if !probe.liveWaiterAcquired {
-            Issue.record("EXPECTED_RED: cancelled waiter acquired boundary")
+            Issue.record("cancelled waiter acquired boundary")
         }
 
         _ = await cancelled.result
@@ -78,7 +78,7 @@ struct AuthAccountBoundaryCancellationTests {
         _ = await cancelled.result
         _ = await live.result
         if !probe.liveWaiterAcquired || probe.cancelledCompletions != 1 {
-            Issue.record("EXPECTED_RED: waiter completed more than once")
+            Issue.record("waiter completed more than once")
         }
         #expect(probe.cancelledCompletions == 1)
     }

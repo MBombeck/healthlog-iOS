@@ -9,7 +9,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 09 / plan 09-02 — the centralized one-shot from-file transport.**
+/// **The centralized one-shot from-file transport.**
 ///
 /// These cases drive the **real** ``APIClient`` over a session-owned
 /// `URLProtocol` stub (Plan 09-11's recipe: both halves from the session, the
@@ -195,7 +195,7 @@ struct APIClientFileUploadTests {
 
         let scratch = try Phase09Scratch("09-02-net")
         let (file, bytes) = try makeBodyFile(scratch)
-        // B5 (1.4) — a severed load is its own case now, no longer `.offline`.
+        // A severed load is its own case now, no longer `.offline`.
         await #expect(throws: HLError.network(.connectionLost)) {
             _ = try await api.uploadFile(self.makeRequest(file: file, byteCount: bytes))
         }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// #65 / 13-02 — what the app knows about the server's web-handoff login route.
+/// What the app knows about the server's web-handoff login route.
 ///
 /// It replaces a `Bool` because the `Bool` could not say "not yet asked", and
 /// that missing third case is the K5 race: the probe fires on the same beat as
@@ -18,7 +18,7 @@ enum WebLoginAvailability: Equatable, Sendable {
     case unavailable
 }
 
-/// 13-02 — the single rule that decides what the sign-in step shows.
+/// The single rule that decides what the sign-in step shows.
 ///
 /// A value, not a method on the view, so the sequence a device actually walks
 /// (step switch → first render → probe lands → fallback tap) can be driven in
@@ -32,7 +32,7 @@ struct AuthStepFormVisibility: Equatable, Sendable {
     /// Has the password form been opened — by the fallback link, by the
     /// self-hosted passkey CTA, or by a dead-ended web leg?
     let latched: Bool
-    /// Build 272 — whether the native passkey ceremony can run against this
+    /// Whether the native passkey ceremony can run against this
     /// host (`AppEnvironment.supportsPasskeys`). The distributed build carries
     /// no relying-party host, so this is `false` for every server a user
     /// enters; the CTA used to stay visible anyway and only re-revealed the

@@ -5,8 +5,8 @@ import Testing
 /// tests for the AI-consent copy + the loading-vs-unconfigured distinction.
 ///
 /// The consent copy is composed inside SwiftUI view bodies with no testable hook
-/// for the resolved string, so — like `ConsentSheetButtonTests` — these are
-/// source-level contracts on the two screens. They guard the two trust-critical
+/// for the resolved string, so these are source-level contracts on the two
+/// screens until the copy moves into a testable type. They guard the two trust-critical
 /// invariants the audit flagged from regressing:
 ///   - COACH-9: the *server-mediated* consent path must NOT assert a concrete
 ///     third-party provider name (the client can't know which provider the
@@ -28,21 +28,8 @@ struct AIConsentCopyContractTests {
 
     private static let consentSheetPath = "HealthLog/Screens/Settings/AIConsentSheet.swift"
     private static let providerScreenPath = "HealthLog/Screens/Settings/AIProviderScreen.swift"
-    private static let settingsAIPath = "HealthLog/Screens/Settings/Sub/SettingsAIScreen.swift"
 
-    // MARK: - COACH-9 — provider-agnostic server-mediated consent copy
-
-    @Test("COACH-9: AIConsentSheet branches copy on a server-mediated vs user-chosen context")
-    func consentSheetHasContextBranch() {
-        let src = Self.source(Self.consentSheetPath)
-        #expect(!src.isEmpty)
-        // The context enum that selects provider-agnostic vs named copy.
-        #expect(src.contains("enum Context"))
-        #expect(src.contains("case serverMediated"))
-        #expect(src.contains("case userChosen"))
-        // The copy switches on that context, not on the decoded provider name.
-        #expect(src.contains("switch context"))
-    }
+    // MARK: - Provider-agnostic server-mediated consent copy
 
     @Test("COACH-9: the server-mediated copy names 'your server', never a third-party provider")
     func serverMediatedCopyIsProviderAgnostic() {
@@ -121,7 +108,7 @@ struct AIConsentCopyContractTests {
         #expect(openAILiteral.lowerBound > userChosen.lowerBound)
     }
 
-    // MARK: - COACH-10 — loading vs truly-unconfigured gating
+    // MARK: - Loading vs truly-unconfigured gating
 
     @Test("COACH-10: AIProviderScreen shows a loading affordance while config == nil")
     func providerScreenGatesLoadingBeforeUnconfigured() {
@@ -139,29 +126,5 @@ struct AIConsentCopyContractTests {
             return
         }
         #expect(loading.lowerBound < unconfigured.lowerBound)
-    }
-
-    /// **UI-Standard R3 (U4)** — die zweite Fundstelle der Ansage ist gefallen.
-    ///
-    /// `SettingsAIScreen` trug unter dem Quellen-Picker eine nahezu wortgleiche
-    /// Kopie der Status-Karten-Caption aus `AIProviderSection` — und die Sektion
-    /// ist auf **derselben scrollenden Seite** eingebettet, also beide Fassungen
-    /// im selben Blick. Heimat ist die Status-Karte: dort steht das
-    /// Bedienelement, das den Zustand ändert.
-    ///
-    /// Die COACH-10-Invariante selbst ist damit nicht weggefallen, sie hat nur
-    /// noch **einen** Ort. Dieser Test hält beides fest: der Hinweis ist auf dem
-    /// Host verschwunden, und die Bedingung „niemals ‚nicht konfiguriert‘
-    /// behaupten, solange die Konfiguration erst lädt" lebt in der Sektion —
-    /// geprüft von `providerScreenGatesLoadingBeforeUnconfigured` oben.
-    @Test("COACH-10 + R3: the needs-provider hint lives once, in the provider section")
-    func settingsHintHasASingleHome() {
-        let host = Self.source(Self.settingsAIPath)
-        #expect(!host.isEmpty)
-        #expect(!host.contains("SettingsAIScreen.onlineNeedsProvider.hint"))
-        #expect(!host.contains("Your server provides the AI provider"))
-
-        let section = Self.source(Self.providerScreenPath)
-        #expect(section.contains("Your server doesn't have an assistant provider set up yet"))
     }
 }

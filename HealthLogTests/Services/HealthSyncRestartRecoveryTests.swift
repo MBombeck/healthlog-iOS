@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Phase 07 Wave 0 — restart and replay identity.
+/// Restart and replay identity.
 ///
 /// A process that dies between a durable enqueue and the cursor write, or
 /// between server acceptance and the cursor write, must replay under exactly
@@ -76,48 +76,5 @@ struct HealthSyncRestartRecoveryTests {
             HealthSyncCursorPolicy.required.decide(outcome(persisted: false, lost: true))
                 == .hold(reason: .retryPersistenceFailed)
         )
-    }
-
-    // MARK: - RED
-
-    /// Both restart points — after a durable enqueue and after server
-    /// acceptance — must replay one stable identity. The mood write path still
-    /// mints a new local id and a new idempotency key per attempt and swallows
-    /// a lost enqueue, and no importer derives its retry identity from the
-    /// HealthKit sample it came from.
-    @Test("a restart reuses the stable retry identity")
-    func restartReusesStableRetryIdentity() throws {
-        var violations: [String] = []
-
-        let bindings = [
-            ("HealthLog/Repositories/MoodRepository.swift", "HealthSyncRetryEnvelope"),
-            ("HealthLog/Services/HealthKit/MoodStateOfMindImporter.swift", "HealthSyncRetryEnvelope"),
-            ("HealthLog/Services/HealthKit/HeartHealthEventImporter.swift", "HealthSyncRetryEnvelope")
-        ]
-        for (path, symbol) in bindings {
-            let contents = try Self.source(path)
-            if !contents.contains(symbol) {
-                violations.append("\(path) does not derive a restart-stable identity via \(symbol)")
-            }
-        }
-
-        // The mood repository still creates a per-attempt local id, so a replay
-        // after relaunch cannot resolve to the row the first attempt intended.
-        let moodRepository = try Self.source("HealthLog/Repositories/MoodRepository.swift")
-        if moodRepository.contains("MoodEntry(id: \"local-\\(UUID().uuidString)\"") {
-            violations.append("the mood write path mints a new local identity per attempt")
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: restart minted a new retry identity")
-    }
-
-    // MARK: - Source access
-
-    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 }

@@ -183,7 +183,6 @@ struct AchievementMedallionButton: View {
         Button(action: onTap) {
             AchievementMedallion(achievement: achievement)
         }
-        .buttonStyle(.plain)
         .hlPressable()
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)

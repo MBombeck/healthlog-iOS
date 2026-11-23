@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.10.0 — extended patient-identity fields.**
+/// **Extended patient-identity fields.**
 ///
 /// The full legal name, health insurer (Krankenkasse) and German insurance
 /// number (KVNR) feed the Doctor-Report cover + the FHIR Patient resource.
@@ -27,8 +27,9 @@ extension EditProfileScreen {
                 .multilineTextAlignment(.trailing)
                 .accessibilityIdentifier("editProfile.fullName")
             } label: {
-                Text("Full name")
-                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                HLRowTitle("Full name")
+                    // The label keeps its full width, the field gives way.
+                    .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
             }
             LabeledContent {
@@ -40,8 +41,9 @@ extension EditProfileScreen {
                 .multilineTextAlignment(.trailing)
                 .accessibilityIdentifier("editProfile.insurerName")
             } label: {
-                Text("Health insurer")
-                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                HLRowTitle("Health insurer")
+                    // The label keeps its full width, the field gives way.
+                    .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
             }
             LabeledContent {
@@ -58,37 +60,54 @@ extension EditProfileScreen {
                 .multilineTextAlignment(.trailing)
                 .accessibilityIdentifier("editProfile.insuranceNumber")
             } label: {
-                Text("Insurance number")
-                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
+                HLRowTitle("Insurance number")
+                    // The label keeps its full width, the field gives way.
+                    .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
             }
-            LabeledContent {
-                TextField(
-                    String(localized: "Optional"),
-                    text: $insurerIkNumber
-                )
-                // IKNR is a 9-digit opaque identifier — number-pad entry, no
-                // autocorrect/autocapitalisation. The server runs the
-                // authoritative validation.
-                .textContentType(.none)
-                .keyboardType(.numberPad)
-                .autocorrectionDisabled()
-                .multilineTextAlignment(.trailing)
-                .accessibilityIdentifier("editProfile.insurerIkNumber")
-            } label: {
-                Text("Insurer ID (IK)")
-                    // POLISH-C (F-PROF-1): the label wraps, the field gives way.
-                    .layoutPriority(1)
+            // The IK is a German institution code; in another app language
+            // the row would ask for something the reader has never heard of.
+            // A stored value stays untouched either way.
+            if Self.showsInsurerIK(appLanguage: AppLanguage.current.rawValue) {
+                insurerIKRow
             }
         } header: {
-            Text("Patient identity")
+            HLSectionHeader("Patient identity")
         } footer: {
             if let err = identityValidationError {
                 HLFormErrorText(err)
             } else {
-                // 1.4 B2-c — where these identifiers go, in one sentence.
+                // Where these identifiers go, in one sentence.
                 Text("editProfile.identity.footer")
             }
+        }
+        .hlFormRowSurface()
+    }
+
+    /// Only the German profile asks for the insurer's IK.
+    static func showsInsurerIK(appLanguage: String?) -> Bool {
+        appLanguage?.hasPrefix("de") == true
+    }
+
+    private var insurerIKRow: some View {
+        LabeledContent {
+            TextField(
+                String(localized: "Optional"),
+                text: $insurerIkNumber
+            )
+            // IKNR is a 9-digit opaque identifier — number-pad entry, no
+            // autocorrect/autocapitalisation. The server runs the
+            // authoritative validation.
+            .textContentType(.none)
+            .keyboardType(.numberPad)
+            .autocorrectionDisabled()
+            .multilineTextAlignment(.trailing)
+            .accessibilityIdentifier("editProfile.insurerIkNumber")
+        } label: {
+            HLRowTitle("Insurer ID (IK)")
+                // The label keeps its full width, the field gives way.
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
         }
     }
 
@@ -155,16 +174,10 @@ extension EditProfileScreen {
                 .controlSize(.small)
                 .accessibilityIdentifier("editProfile.saveProgress")
         } else if showSavedCue {
-            Label {
-                Text("Saved")
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-            }
-            .labelStyle(.titleAndIcon)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(HLColor.statusOK)
-            .transition(.opacity)
-            .accessibilityIdentifier("editProfile.savedCue")
+            // "Saved" has one form app-wide: the green status text.
+            HLBadge(String(localized: "Saved"), icon: "checkmark.circle.fill", tone: .success, form: .text)
+                .transition(.opacity)
+                .accessibilityIdentifier("editProfile.savedCue")
         }
     }
 }

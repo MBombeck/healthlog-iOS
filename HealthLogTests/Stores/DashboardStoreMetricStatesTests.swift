@@ -43,7 +43,7 @@ struct DashboardStoreMetricStatesTests {
     /// Counts the requests this test's own session answered. Wrapped in a class
     /// so the `@Sendable` handler closure can mutate it across actor boundaries
     /// without copy semantics, and `Mutex`-backed rather than an `NSLock` behind
-    /// an unchecked-`Sendable` conformance (Plan 09-11).
+    /// an unchecked-`Sendable` conformance.
     private final class CallCounter: Sendable {
         private let stored = Mutex(0)
 
@@ -60,7 +60,7 @@ struct DashboardStoreMetricStatesTests {
         }
     }
 
-    /// The transport seam (issue #82 / Plan 09-11). Both halves come from the
+    /// The transport seam. Both halves come from the
     /// caller's retained session, so every request this client makes is answered
     /// by that session's handler or by nothing at all.
     ///
@@ -119,7 +119,7 @@ struct DashboardStoreMetricStatesTests {
         let counter = CallCounter()
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let recentPayload = mixedKindsPayload(now: now)
-        // DASHBOARD-BUG-FIX-2: the series-endpoint fallback also fires for
+        // The series-endpoint fallback also fires for
         // kinds that resolved .empty from the wide page. The pinned
         // invariant remains "exactly 1 recent-all call across N kinds";
         // series calls are additive but irrelevant to this contract.
@@ -138,7 +138,7 @@ struct DashboardStoreMetricStatesTests {
                 return (response, emptySeries)
             }
             // Only the wide recent-all page is the fan-out guard target, and
-            // "recent-all" is now spelled out on both axes (Plan 09-11): the
+            // "recent-all" is now spelled out on both axes: the
             // **exact** path `/api/measurements` by `targets(_:method:)`, and no
             // `?type=`. Bounded kind-scoped fallbacks (`?type=…`, e.g. the BMI
             // `BODY_MASS_INDEX` no-series fallback) are expected and allowed —
@@ -258,7 +258,7 @@ struct DashboardStoreMetricStatesTests {
         #expect(store.metricStates[.pulse]?.hasValue == true, "Failure must not clear the previously-known pulse state")
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-11)
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     @MainActor
@@ -315,7 +315,7 @@ struct DashboardStoreMetricStatesTests {
         // `counter.value == 1` and an unrouted request leaves it at 0, which is
         // *less* than one — so the suite's headline contract could not tell a
         // collapsed fan-out from a transport that never reached it.
-        #expect(mine.value >= 1, "EXPECTED_RED: DashboardStoreMetricStatesTests was not routed to its own session")
+        #expect(mine.value >= 1, "DashboardStoreMetricStatesTests was not routed to its own session")
         #expect(theirs.value == 0)
         #expect(store.metricStates[.weight]?.hasValue == true)
     }

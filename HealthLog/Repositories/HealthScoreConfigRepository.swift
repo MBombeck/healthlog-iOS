@@ -1,10 +1,10 @@
 import Foundation
 
-/// **v1.35.0 (GH #83) — read and write which pillars count toward the Health
+/// **v1.35.0 — read and write which pillars count toward the Health
 /// Score.** `GET`/`PATCH /api/auth/me/health-score-config`.
 ///
 /// The route authenticates on cookie **or** bearer, so unlike the MFA
-/// management surface (#57) iOS can genuinely operate it.
+/// management surface iOS can genuinely operate it.
 ///
 /// **The first save is the unconditional one.** The `GET` omits `updatedAt`
 /// entirely for an account that never chose — there is nothing for a guarded

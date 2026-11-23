@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// **1.4 B2-c — Settings, labs and records follow the info pattern.**
+/// **Settings, labs and records follow the info pattern.**
 ///
 /// The explanations that stood under or between cards moved behind one (i)
 /// per screen; these pin that the sheets carry them (catalogued, not keys
@@ -59,18 +59,5 @@ struct B2cSettingsInfoPatternTests {
         let merged = InsightsOverviewSectionsList.merge(shown: ["signals", "vitals", "trends"], into: all)
         #expect(merged == ["signals", InsightsLayoutSectionId.ecg, "vitals", InsightsLayoutSectionId.periodReview, "trends"])
         #expect(Set(merged) == Set(all))
-    }
-
-    @Test("Einstellungs-Zeilen kappen ihren Untertitel nicht mehr")
-    func settingsRowSubtitleWraps() throws {
-        let source = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("HealthLog/DesignSystem/HLSettingsRow.swift"),
-            encoding: .utf8
-        )
-        #expect(!source.contains(".lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)"))
     }
 }

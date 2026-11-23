@@ -18,6 +18,12 @@ struct InjectionSiteStoreTests {
 
     private let medID = "med-Z"
 
+    /// A device-only site as an older build logged it (#169 removed the
+    /// standalone log; the rows stay readable).
+    private func seed(_ repo: GLP1LocalRepository, _ site: InjectionSite, at date: Date = .now) async throws {
+        _ = try await repo.addSite(medicationID: medID, injectedAt: date, site: site, note: nil)
+    }
+
     @Test("Empty load yields empty state")
     func emptyLoad() async throws {
         let repo = try makeRepo()
@@ -28,19 +34,13 @@ struct InjectionSiteStoreTests {
         #expect(store.suggestedNextSite == nil)
     }
 
-    @Test("Log appends newest-first to merged history")
+    @Test("Device-only sites read newest-first in merged history")
     func logAppends() async throws {
         let repo = try makeRepo()
         let store = InjectionSiteStore(medicationID: medID, repo: repo)
+        try await seed(repo, .abdomenLeftUpper, at: Date(timeIntervalSince1970: 1_700_000_000))
+        try await seed(repo, .thighRight, at: Date(timeIntervalSince1970: 1_800_000_000))
         await store.load(serverIntakes: [])
-        await store.log(
-            site: .abdomenLeftUpper,
-            injectedAt: Date(timeIntervalSince1970: 1_700_000_000)
-        )
-        await store.log(
-            site: .thighRight,
-            injectedAt: Date(timeIntervalSince1970: 1_800_000_000)
-        )
         #expect(store.mergedHistory.count == 2)
         #expect(store.mergedHistory[0].site == .thighRight)
         #expect(store.mergedHistory[1].site == .abdomenLeftUpper)
@@ -86,8 +86,8 @@ struct InjectionSiteStoreTests {
     func suggestedAvoidsRecent() async throws {
         let repo = try makeRepo()
         let store = InjectionSiteStore(medicationID: medID, repo: repo)
+        try await seed(repo, .abdomenLeftUpper)
         await store.load(serverIntakes: [])
-        await store.log(site: .abdomenLeftUpper)
         #expect(store.suggestedNextSite != .abdomenLeftUpper)
     }
 
@@ -97,10 +97,7 @@ struct InjectionSiteStoreTests {
         let store = InjectionSiteStore(medicationID: medID, repo: repo, historyLimit: 3)
         // 2 local
         for offset in 0 ..< 2 {
-            await store.log(
-                site: .thighLeft,
-                injectedAt: Date(timeIntervalSince1970: Double(1_700_000_000 + offset * 100))
-            )
+            try await seed(repo, .thighLeft, at: Date(timeIntervalSince1970: Double(1_700_000_000 + offset * 100)))
         }
         // 2 server
         var intakes: [PaginatedIntakeEvent] = []
@@ -131,10 +128,7 @@ struct InjectionSiteStoreTests {
                 injectionSite: "abdomen_left_upper"
             )
         ]
-        await store.log(
-            site: .thighRight,
-            injectedAt: Date(timeIntervalSince1970: 1_800_000_000)
-        )
+        try await seed(repo, .thighRight, at: Date(timeIntervalSince1970: 1_800_000_000))
         await store.load(serverIntakes: intakes)
         let localID = try #require(
             store.mergedHistory.first { $0.source == .local }?.id

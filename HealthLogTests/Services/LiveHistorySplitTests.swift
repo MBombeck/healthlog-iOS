@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// 1.3 (#127) — the history leg: newest first, persisted, bounded, and
+    /// The history leg: newest first, persisted, bounded, and
     /// never in the way of the live stream.
     @Suite("Live and history split (#127)")
     struct LiveHistorySplitTests {

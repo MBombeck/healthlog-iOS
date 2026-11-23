@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Audit B-7 — a background wake has nobody to push the profile zone.**
+/// **A background wake has nobody to push the profile zone.**
 ///
 /// `ProfileTimeZoneBox` is fed from `SettingsStore.profile.didSet`, which only
 /// fires once a screen has loaded a profile. A HealthKit background delivery

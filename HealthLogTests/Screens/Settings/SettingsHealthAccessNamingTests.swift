@@ -107,7 +107,7 @@ struct SettingsHealthAccessNamingTests {
         /// **Von 16-03 geändert, aber nur zur Hälfte — und die stehengebliebene
         /// Hälfte ist die wichtigere.**
         ///
-        /// Der Lesetyp ist jetzt im Standardpaket (E2). Was unverändert gilt und
+        /// Der Lesetyp ist jetzt im Standardpaket. Was unverändert gilt und
         /// hier weiter festgenagelt wird: er ist NIRGENDS im Schreibpaket.
         /// `HKReadinessStore` leitet seinen Verbindungszustand ausschliesslich
         /// aus SCHREIB-Typen ab, ein Lesetyp ist also strukturell ausserstande,

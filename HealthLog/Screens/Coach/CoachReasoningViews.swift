@@ -24,27 +24,18 @@ struct CoachLiveStatusLine: View {
     }
 }
 
-/// What sits under one finished server answer: its proposal, then the trail link.
+/// What sits under one finished server answer after its row: the proposal.
 struct CoachAnswerExtras: View {
     let store: CoachConversationStore
     let entityID: UUID
 
     var body: some View {
-        let proposal = store.live.proposals[entityID]
-        let hasTrail = store.live.hasTrail(entityID)
-        if proposal != nil || hasTrail {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                if let proposal {
-                    CoachProposalView(
-                        proposal: proposal,
-                        isBusy: store.isResponding,
-                        answer: { accept in Task { await store.answerProposal(for: entityID, accept: accept) } }
-                    )
-                }
-                if hasTrail {
-                    CoachTrailDisclosure(store: store, entityID: entityID)
-                }
-            }
+        if let proposal = store.live.proposals[entityID] {
+            CoachProposalView(
+                proposal: proposal,
+                isBusy: store.isResponding,
+                answer: { accept in Task { await store.answerProposal(for: entityID, accept: accept) } }
+            )
         }
     }
 }
@@ -72,7 +63,22 @@ struct CoachProposalView: View {
         }
     }
 
+    private var isSending: Bool {
+        if case .sending = proposal.state { return true }
+        return false
+    }
+
+    /// An offer inside the transcript, so the outlined card: it belongs to
+    /// the answer above it and does not stand as content of its own.
     private var card: some View {
+        HLCard(style: .outline) {
+            cardContent
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("coach.proposal")
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             Text(verbatim: CoachProposalCopy.heading(proposal.kind))
                 .font(.hlCaption)
@@ -83,22 +89,16 @@ struct CoachProposalView: View {
                     .foregroundStyle(HLText.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: HLSpace.sm) {
-                HLButton("coach.proposal.accept", variant: .primary, size: .compact) { answer(true) }
+            HLButtonPair {
+                HLButton("coach.proposal.accept", isLoading: isSending) { answer(true) }
                     .accessibilityIdentifier("coach.proposal.accept")
-                HLButton("coach.proposal.dismiss", variant: .secondary, size: .compact) { answer(false) }
+            } secondary: {
+                HLButton("coach.proposal.dismiss", variant: .secondary) { answer(false) }
                     .accessibilityIdentifier("coach.proposal.dismiss")
-                if case .sending = proposal.state {
-                    ProgressView()
-                }
             }
             .disabled(isBusy || proposal.state != .open)
         }
-        .padding(HLSpace.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("coach.proposal")
     }
 }
 
@@ -123,46 +123,64 @@ enum CoachProposalCopy {
     }
 }
 
-/// The centred text link „So kam die Antwort zustande" and, once tapped, the
-/// steps as a list. The trail is fetched on the first tap, never before.
-struct CoachTrailDisclosure: View {
+/// The one disclosure in the row under an answer, „So kam die Antwort
+/// zustande". It reads like the sources link beside it: the same font, weight
+/// and ink, so the two are equals in one line.
+struct CoachAnswerDisclosureToggle: View {
+    @Binding var expanded: Bool
+    /// Runs when the disclosure opens.
+    let onExpand: () -> Void
+
+    var body: some View {
+        Button {
+            withHLAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
+            if expanded { onExpand() }
+        } label: {
+            HStack(spacing: HLSpace.xxs) {
+                Text("coach.trail.link")
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.hlCaption2)
+                    .accessibilityHidden(true)
+            }
+            .font(.hlCaption)
+            .foregroundStyle(HLText.secondary)
+            .frame(minHeight: HLHitTarget.minimum, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        // Pressed like every tappable surface; it keeps the sources link's
+        // caption form beside it.
+        .buttonStyle(.hlRow)
+        .accessibilityIdentifier("coach.trail.link")
+        .accessibilityValue(expanded ? Text("Expanded") : Text("Collapsed"))
+    }
+}
+
+/// What the disclosure opens: the evidence first, then the steps.
+struct CoachAnswerDetails: View {
     let store: CoachConversationStore
     let entityID: UUID
-    @State private var expanded = false
+    let provenance: CoachServerService.CoachProvenance?
+    let showsTrail: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            Button {
-                withHLAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-                if expanded, store.live.trails[entityID] == nil || store.live.trails[entityID] == .failed {
-                    Task { await store.loadTrail(for: entityID) }
-                }
-            } label: {
-                HStack(spacing: HLSpace.xs) {
-                    Text("coach.trail.link")
-                        .font(.hlSubhead.weight(.semibold))
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.hlIcon(HLIconSize.sm))
-                        .accessibilityHidden(true)
-                }
-                .foregroundStyle(HLText.secondary)
-                .frame(minHeight: 44)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+            if let provenance {
+                CoachProvenanceBody(provenance: provenance)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("coach.trail.link")
-            .accessibilityValue(expanded ? Text("Expanded") : Text("Collapsed"))
-            if expanded {
-                content
-                    .padding(.horizontal, HLSpace.md)
-                    .transition(.opacity)
+            if showsTrail {
+                CoachTrailSteps(store: store, entityID: entityID)
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
+/// The steps behind an answer. Fetched when the disclosure first opens, never
+/// before.
+struct CoachTrailSteps: View {
+    let store: CoachConversationStore
+    let entityID: UUID
+
+    var body: some View {
         switch store.live.trails[entityID] {
         case .loading, nil:
             ProgressView()
@@ -177,7 +195,7 @@ struct CoachTrailDisclosure: View {
                 Text("coach.trail.failed")
                     .font(.hlCaption)
                     .foregroundStyle(HLText.secondary)
-                HLButton("Try again", variant: .secondary, size: .compact) {
+                HLButton(HLControlWord.retry.key, variant: .secondary) {
                     Task { await store.loadTrail(for: entityID) }
                 }
                 .accessibilityIdentifier("coach.trail.retry")

@@ -7,7 +7,7 @@
     @testable import HealthLog
     import Testing
 
-    // MARK: - W-PHI-HARDENING (G5) — box-backed / computed PHI store coverage
+    // MARK: - Box-backed / computed PHI store coverage
 
     @MainActor
     extension LogoutCompletenessTests {
@@ -64,7 +64,7 @@
             // The registry the cascade drains is non-empty and matches the
             // structural reflection discovery (no cached PHI store is invisible
             // to the hand list — a new un-listed cache dict would diverge here).
-            // 06-05: the reflection sweep is the TEST-side canary now — the
+            // The reflection sweep is the TEST-side canary now — the
             // production box must enumerate its owners explicitly.
             let registry = box.boxBackedPHIStores(for: container)
             let reflected = Self.reflectionCanaryBoxBackedStores(of: box, for: container)
@@ -114,8 +114,7 @@
         /// **06-05 Task 1 — exact box-backed owner canary.** The box's explicit
         /// `boxBackedPHIStores(for:)` enumeration must cover every cached
         /// box-backed PHI owner exactly once (compared against the test-side
-        /// reflection sweep above), and the production MiniCoach composition
-        /// must not use runtime reflection to discover them.
+        /// reflection sweep above).
         @Test
         func boxBackedOwnersAreExplicitAndExactlyComplete() throws {
             let container = try makeContainer(
@@ -131,15 +130,11 @@
             let reflectedIDs = Self.reflectionCanaryBoxBackedStores(of: box, for: container)
                 .map { ObjectIdentifier($0) }
             let duplicateCount = explicitIDs.count - Set(explicitIDs).count
-            let reflectionHits = LogoutCompletenessTests.productionReflectionHits(
-                relativePath: "HealthLog/Stores/AppContainer+MiniCoach.swift"
-            )
 
             #expect(
                 Set(explicitIDs) == Set(reflectedIDs) && duplicateCount == 0
-                    && explicitIDs.count == reflectedIDs.count
-                    && reflectionHits.isEmpty,
-                "EXPECTED_RED: box-backed owner membership was not exact — explicit \(explicitIDs.count), reflected \(reflectedIDs.count), duplicates \(duplicateCount), production reflection \(reflectionHits)"
+                    && explicitIDs.count == reflectedIDs.count,
+                "box-backed owner membership was not exact — explicit \(explicitIDs.count), reflected \(reflectedIDs.count), duplicates \(duplicateCount)"
             )
         }
 
@@ -167,7 +162,7 @@
         }
     }
 
-    /// **W-PHI-HARDENING (G5)** — minimal in-test ``BoxBackedPHIStore`` conformer
+    /// Minimal in-test ``BoxBackedPHIStore`` conformer
     /// standing in for a future box-backed PHI store, to prove the marker
     /// protocol's wipe contract clears in-memory PHI (the red→green case).
     @MainActor

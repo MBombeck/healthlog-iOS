@@ -8,12 +8,15 @@ import SwiftUI
 /// grid would shrink each headline below the point where it reads as a
 /// headline. Same data, same order, same calm empty states.
 ///
-/// **1.4 B2 — calm by default.** Only ready cards show. While nothing is ready
+/// **Calm by default.** Only ready cards show. While nothing is ready
 /// the section is one card with one line ("Dein Schlaf wird noch erfasst …")
 /// instead of three cards saying it three times. The citation sits once, in
 /// the first ready card that makes a claim (debt, else chronotype); what the
 /// figures mean and how they are worked out is in the page's info sheet
 /// (`InsightsMetricInfo`).
+///
+/// Each card's figure stands in the compact value size, a cell under its
+/// label, so the page keeps its one large figure at the top.
 ///
 /// **Every card is server-rendered.** The balance, the band and the mean all
 /// arrive computed — iOS chooses layout and copy only. The debt figure in
@@ -54,9 +57,9 @@ struct SleepRhythmSection: View {
     var body: some View {
         let anyReady = readyDebt != nil || readyAverage != nil || readyChronotype != nil
         if anyReady || learningLine != nil {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("sleep.rhythm.section")
-                VStack(spacing: HLSpace.md) {
+            Group {
+                HLSectionHeader("sleep.rhythm.section", rank: .area)
+                VStack(spacing: HLLayout.cardGap) {
                     if anyReady {
                         if let debt = readyDebt {
                             SleepDebtCard(debt: debt)
@@ -69,11 +72,7 @@ struct SleepRhythmSection: View {
                         }
                     } else if let learningLine {
                         HLCard {
-                            Text(learningLine)
-                                .font(.hlFootnote)
-                                .foregroundStyle(HLText.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            HLEmptyNote(learningLine)
                         }
                         .accessibilityIdentifier("sleep.rhythm.learning")
                     }
@@ -94,18 +93,16 @@ private struct SleepDebtCard: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 Text("sleep.debt.title")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                 // Below the night floor the section shows its one learning
                 // line instead: a balance off two thin nights would be a
                 // confident-looking guess.
                 Text(headline)
-                    .font(.hlMetric(.title2))
+                    .font(HLValueSize.compact.numberFont)
                     .foregroundStyle(HLText.primary)
                     .monospacedDigit()
                 Text(caption)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
                 // 1.0.3 (App Review 1.4.1) — the sleep-need and social-jetlag
                 // literature behind the balance. That the figure is HealthLog's
@@ -142,15 +139,13 @@ private struct AverageSleepCard: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 Text("sleep.average.title")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                 Text(SleepDurationFormat.hoursMinutes(average.averageMinutes))
-                    .font(.hlMetric(.title2))
+                    .font(HLValueSize.compact.numberFont)
                     .foregroundStyle(HLText.primary)
                     .monospacedDigit()
                 Text("sleep.average.caption \(average.nightsCounted)")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -176,8 +171,7 @@ private struct ChronotypeCard: View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 Text("sleep.chronotype.title")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                 readyBody
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,16 +182,15 @@ private struct ChronotypeCard: View {
     private var readyBody: some View {
         if let band = chronotype.band {
             Text(band.displayKey)
-                .font(.hlMetric(.title3))
+                .font(HLValueSize.compact.numberFont)
                 .foregroundStyle(HLText.primary)
         }
         if let msf = chronotype.msfMinutes {
             Text("sleep.chronotype.midpointHeadline \(SleepDurationFormat.clockTime(minutesOfDay: msf))")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // 1.4 B2 — the values stay, their explanations (social jetlag, the
+        // The values stay, their explanations (social jetlag, the
         // weekend correction, weekends as free days) are in the info sheet.
         if let jetlag = chronotype.socialJetlagMinutes {
             detailRow(String(localized: "sleep.chronotype.socialJetlagValue \(SleepDurationFormat.hoursMinutes(jetlag))"))

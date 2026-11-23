@@ -6,7 +6,7 @@ import SwiftUI
 /// und bieten einen "Später"-Button. Bei Skip oder Deny fällt die App
 /// nicht zurück.
 ///
-/// **Issue #10 — GESCHLOSSEN (v0.6.0.9).** Dieser Step wird auf der
+/// **GESCHLOSSEN.** Dieser Step wird auf der
 /// Server-Branch jetzt zuverlaessig erreicht: nach erfolgreichem
 /// Server-Login landet `AuthStore.phase` auf der Zwischen-Phase
 /// `.authenticating(user)` (nicht direkt `.authenticated`), und `RootView`
@@ -15,7 +15,7 @@ import SwiftUI
 /// HealthKit-Step fuehrt hierher, und erst `advanceFromNotifications` →
 /// `AuthStore.completeOnboarding()` promotet auf `.authenticated(user)`,
 /// woraufhin `RootView` die `AuthenticatedShell` einblendet. Der frueheres
-/// (v0.6.0.7) Verhalten — Step nie erreicht, System-Prompt nur ueber die
+/// Verhalten — Step nie erreicht, System-Prompt nur ueber die
 /// Settings-Karte — gilt nicht mehr. Die Settings-seitige Recovery
 /// (`NotificationsScreen` / `NotificationDiagnosticsScreen`,
 /// `requestAuthorization` + `openSettingsURLString`) bleibt als Re-Entry-
@@ -26,11 +26,11 @@ struct NotificationsPermissionStep: View {
 
     @Environment(\.appContainer) private var container
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 08-10 — the answer, not just "busy". The step used to write
+    /// The answer, not just "busy". The step used to write
     /// `_ = await container.notifications.requestAuthorization()` and advance,
     /// which discarded the one value the whole screen exists to obtain.
     @State private var permission = OnboardingPermissionRequest()
-    /// v0.12 W7 — staged entrance flag, matching the rest of the onboarding
+    /// Staged entrance flag, matching the rest of the onboarding
     /// steps so the rhythm is consistent. Reduce-motion flips it instantly.
     @State private var appeared = false
 
@@ -61,17 +61,17 @@ struct NotificationsPermissionStep: View {
 
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
-                    PermissionRow(
+                    OnboardingExplainRow(
                         symbol: "pills.fill",
                         title: String(localized: "onboarding.notifications.medReminder.title"),
                         subtitle: String(localized: "onboarding.notifications.medReminder.subtitle")
                     )
-                    PermissionRow(
+                    OnboardingExplainRow(
                         symbol: "exclamationmark.triangle.fill",
                         title: String(localized: "onboarding.notifications.outOfRange.title"),
                         subtitle: String(localized: "onboarding.notifications.outOfRange.subtitle")
                     )
-                    PermissionRow(
+                    OnboardingExplainRow(
                         symbol: "trophy.fill",
                         title: String(localized: "onboarding.notifications.records.title"),
                         subtitle: String(localized: "onboarding.notifications.records.subtitle")
@@ -93,7 +93,7 @@ struct NotificationsPermissionStep: View {
                     failed: "onboarding.permission.notifications.failed"
                 )
                 answerAffordances
-                HLButton("Later", variant: .ghost, action: onSkip)
+                HLLinkButton("Later", action: onSkip)
                     .accessibilityIdentifier("onboarding.notifications.skip")
             }
             .padding(.horizontal, HLSpace.xl)
@@ -109,7 +109,7 @@ struct NotificationsPermissionStep: View {
                 }
             }
         }
-        // 08-10 — the step is leaving; nothing asked from it may publish onto
+        // The step is leaving; nothing asked from it may publish onto
         // whatever replaced it.
         .onDisappear { permission.invalidate() }
     }
@@ -136,7 +136,7 @@ struct NotificationsPermissionStep: View {
                 .accessibilityIdentifier("onboarding.notifications.continue")
         case .failed:
             HLButton(
-                String(localized: "Try again"),
+                HLControlWord.retry.catalogKey,
                 icon: "arrow.clockwise",
                 variant: .primary,
                 size: .large,
@@ -208,28 +208,5 @@ struct NotificationsPermissionStep: View {
                   UIApplication.shared.canOpenURL(url) else { return }
             UIApplication.shared.open(url)
         #endif
-    }
-}
-
-private struct PermissionRow: View {
-    let symbol: String
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        // T2-4: row icon-rings demoted to mono — three purple-on-purple
-        // chips below the hero stacked accent too high (Theme-2.0
-        // <5% pixel coverage). Hero icon at top keeps its accent.
-        HStack(spacing: HLSpace.md) {
-            Image(systemName: symbol)
-                .font(.hlIcon(HLIconSize.rowAction))
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 28, height: 28)
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(title).font(.hlHeadline).foregroundStyle(HLText.primary)
-                Text(subtitle).font(.hlCaption).foregroundStyle(HLText.secondary)
-            }
-            Spacer()
-        }
     }
 }

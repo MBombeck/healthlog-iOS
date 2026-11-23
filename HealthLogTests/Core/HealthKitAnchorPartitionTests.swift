@@ -25,7 +25,7 @@
 
         @Test("Punkte im User-ID werden gestripped (sonst Key-Suffix-Kollision)")
         func userIDDotStripping() {
-            // M-6 (v0.6.2): allowlist `[A-Za-z0-9_-]` drops every disallowed
+            // Allowlist `[A-Za-z0-9_-]` drops every disallowed
             // character. Dots are not in the allowlist, so they vanish (the
             // legacy behaviour replaced them with underscores; we drop now to
             // make the partition determined purely by the surviving-safe

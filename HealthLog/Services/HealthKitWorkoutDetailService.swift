@@ -4,7 +4,7 @@ import Foundation
     import Synchronization
 #endif
 
-// v0.5.4-SP5 — Per-workout HR-time-series fetcher (HK-direct).
+// Per-workout HR-time-series fetcher (HK-direct).
 //
 // The server's `GET /api/workouts/{id}` ships avg/max/min HR + the
 // optional GPS route geometry, but **not** the second-by-second HR

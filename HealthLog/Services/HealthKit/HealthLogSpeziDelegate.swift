@@ -26,7 +26,7 @@
         import SpeziLLMLocal
     #endif
     #if canImport(SpeziScheduler)
-        // v0.6.0.7 — module-qualified import. `SpeziScheduler.Task` is a
+        // Module-qualified import. `SpeziScheduler.Task` is a
         // `@Model` class that name-collides with Swift's `_Concurrency.Task`.
         // The unqualified `import SpeziScheduler` would force every Spezi-
         // scheduling site to spell out `_Concurrency.Task` for the
@@ -37,7 +37,7 @@
         import SpeziScheduler
     #endif
 
-    /// **v0.15.5 AUD-1 F5 — shared local-notification budget accounting.**
+    /// **Shared local-notification budget accounting.**
     ///
     /// iOS pends at most 64 *local* notification requests per app, and every
     /// local scheduler the app runs draws from this single budget:
@@ -52,7 +52,7 @@
         static let iosPendingNotificationCeiling = 64
 
         /// The pre-scheduled-notification horizon SpeziScheduler materializes.
-        /// Raised 30 → 48 (AUD-1 F5) to deepen the one-shot-cadence horizon
+        /// Raised 30 → 48 to deepen the one-shot-cadence horizon
         /// while leaving `iosPendingNotificationCeiling − speziNotificationLimit`
         /// (= 16) slots of headroom for the non-Spezi local requests above.
         static let speziNotificationLimit = 48
@@ -117,7 +117,7 @@
         /// genuinely uses — authorization and the HealthKit module itself,
         /// AccessGuard, Scheduler, Devices/Bluetooth, and the LLM runner.
         ///
-        /// **Phase 07 Wave 2 — the server-bound `CollectSamples` registrations are
+        /// **The server-bound `CollectSamples` registrations are
         /// gone.** All thirty-five of them were removed in one commit, and nothing
         /// replaced them inside this DSL. The reason is a property of
         /// SpeziHealthKit 1.4.2 (`a86db5c`) rather than a preference: its collector
@@ -164,7 +164,7 @@
                     // devices without enrolled biometrics SpeziAccessGuard
                     // falls back to an app-level passcode (numeric 6,
                     // one-time setup flow) — acceptable for these opt-in
-                    // deep surfaces, NOT for the root (B3). The 5-minute
+                    // deep surfaces, NOT for the root. The 5-minute
                     // timeout matches SpeziAccessGuard's default and means
                     // one Face ID prompt covers a whole export/share
                     // session instead of re-prompting per screen.
@@ -226,7 +226,7 @@
                     // Center(_:willPresent:)` returns for foreground
                     // deliveries, so the foreground-presentation contract
                     // stays consistent.
-                    // v0.6.1.3 Y4.1 — drop `.badge` from the presentation
+                    // Drop `.badge` from the presentation
                     // set so a foreground-arriving Spezi-scheduled banner
                     // doesn't trigger the system's auto-badge bump. The
                     // App-Badge is now driven centrally from
@@ -317,11 +317,7 @@
                     // "device-not-eligible" branch on the simulator
                     // without needing the LLMRunner to be registered.
                     //
-                    // The `if #available(iOS 26.0, *)` guard keeps the
-                    // module out of the Spezi graph on pre-26 runtimes
-                    // entirely — pre-26 has no FoundationModels symbol
-                    // table so loading `LLMLocalPlatform` would dynamic-
-                    // link a missing framework. The compile-time
+                    // The compile-time
                     // `canImport(SpeziLLM)` outer fence keeps the
                     // dependency optional for build configurations
                     // (Mac Catalyst, future targets) that may want to
@@ -330,10 +326,8 @@
                     // G.3 will wire `LLMLocalSession` into
                     // `AskCoachStore`; G.1 only proves the registration
                     // path compiles + the SPM graph resolves.
-                    if #available(iOS 26.0, *) {
-                        LLMRunner {
-                            LLMLocalPlatform()
-                        }
+                    LLMRunner {
+                        LLMLocalPlatform()
                     }
                 #endif
             }
@@ -381,9 +375,23 @@
             return result
         }
 
+        /// Spezi does not implement this callback, so the embedded delegate's
+        /// launch note never ran and a background launch was labelled as a
+        /// foreground one.
+        func application(
+            _ application: UIApplication,
+            // swiftlint:disable:next discouraged_optional_collection
+            didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
+        ) -> Bool {
+            AppDelegate.noteLaunch(of: application)
+            // D5 #12: MetricKit's daily reports, kept on this device only.
+            AppMetricsSubscriber.shared.start()
+            return true
+        }
+
         // MARK: - Home-Screen Quick Actions (v0.14.x Q, scene path since 1.4)
 
-        /// **1.4 — quick actions reach the app through its scene.** A
+        /// **Quick actions reach the app through its scene.** A
         /// scene-based app gets the shortcut of a cold launch in the scene's
         /// connection options, not in `launchOptions`, and a warm tap in
         /// ``HLSceneDelegate``, not in `application(_:performActionFor:)`. The

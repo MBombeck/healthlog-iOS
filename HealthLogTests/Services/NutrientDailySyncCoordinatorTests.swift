@@ -151,7 +151,7 @@ struct NutrientDailySyncCoordinatorTests {
         #expect(recorder.requestCount == 1)
     }
 
-    // MARK: - Transient vs terminal skips (#115 / 0.3)
+    // MARK: - Transient vs terminal skips
 
     /// The server's `upsert_failed` (route.ts at v1.39.0): the DB write for the
     /// whole group failed, nothing was stored. The 279 coordinator logged it,
@@ -248,7 +248,7 @@ struct NutrientDailySyncCoordinatorTests {
 
         #expect(summary.heldSkips == 0)
         #expect(defaults().object(forKey: Self.lastSweepKey) as? Date == Self.fixedNow)
-        // INT-A — the ONE skip register, not a second list in UserDefaults.
+        // The ONE skip register, not a second list in UserDefaults.
         let recorded = await HealthKitSkippedRowRegister.current.rows(ownerID: "user-123")
         #expect(recorded.count == 1)
         #expect(recorded.first?.nutrient?.nutrient == .zinc)
@@ -557,9 +557,9 @@ private final class RequestRecorder: @unchecked Sendable {
     }
 }
 
-/// #110 — kept in an extension so the suite body stays inside `type_body_length`.
+/// Kept in an extension so the suite body stays inside `type_body_length`.
 extension NutrientDailySyncCoordinatorTests {
-    // MARK: - 429 → stop, hold, register nothing (#110)
+    // MARK: - 429 → stop, hold, register nothing
 
     @Test("a 429 on the batch route stops the sweep: no further chunk, window held, register empty")
     func rateLimitedHoldsTheSweep() async {

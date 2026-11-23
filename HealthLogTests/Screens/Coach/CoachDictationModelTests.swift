@@ -32,7 +32,7 @@ struct CoachDictationModelTests {
         #expect(CoachDictationModel.isTapFormatValid(format) == true)
     }
 
-    /// M-1 (v0153) — `stop()` is idempotent and safe to call on a model that
+    /// `stop()` is idempotent and safe to call on a model that
     /// never started a session (the refuse-before-`isRecording` path the leak fix
     /// protects). The real session-leak assertion (session deactivated on the
     /// refuse/throw paths) needs a live `AVAudioSession`, which the headless test

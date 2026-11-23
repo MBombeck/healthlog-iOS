@@ -11,16 +11,14 @@ import SwiftUI
 /// a mid-session gate withdrawal (`notIndexed` / `consentRequired`) or a budget
 /// bucket (`limitReached`) surfaced by the store.
 struct DocumentChatSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let store: DocumentChatStore
 
     @State private var draft = ""
-    @FocusState private var inputFocused: Bool
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold("documents.chat.title", action: .done { store.cancel() }) {
             VStack(spacing: 0) {
                 caveat
                 transcript
@@ -29,20 +27,6 @@ struct DocumentChatSheet: View {
                 }
                 if showsInput {
                     inputRow
-                }
-            }
-            .hlScreenBackground()
-            .navigationTitle(Text("documents.chat.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        store.cancel()
-                        dismiss()
-                    } label: {
-                        Text("documents.chat.close")
-                    }
-                    .accessibilityIdentifier("documents.chat.close")
                 }
             }
             .task { await store.loadHistory() }
@@ -54,14 +38,12 @@ struct DocumentChatSheet: View {
     private var caveat: some View {
         HStack(spacing: HLSpace.xs) {
             Image(systemName: "doc.text.magnifyingglass")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
             Text("documents.chat.caveat")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, HLSpace.lg)
+        .padding(.horizontal, HLLayout.pageMargin)
         .padding(.vertical, HLSpace.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(HLSurface.secondary)
@@ -91,7 +73,7 @@ struct DocumentChatSheet: View {
                     }
                     Color.clear.frame(height: 1).id("transcript-tail")
                 }
-                .padding(.horizontal, HLSpace.lg)
+                .padding(.horizontal, HLLayout.pageMargin)
                 .padding(.vertical, HLSpace.md)
             }
             .onChange(of: store.messages) { _, _ in scrollToTail(proxy) }
@@ -108,16 +90,16 @@ struct DocumentChatSheet: View {
 
     private var emptyPrompt: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            // 1.4 B2-c — the title only: the bar above says the answers rest
+            // The title only: the bar above says the answers rest
             // on this document alone, and the field says what to do.
             Text("documents.chat.empty.title")
-                // Audit-01 C2 — sheet-header role on the app standard
+                // Sheet-header role on the app standard
                 // `.hlTitle3` (vgl. AskCoachSheet, DocumentUploadSheet).
                 .font(.hlTitle3)
                 .foregroundStyle(HLText.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, HLSpace.xl)
+        .padding(.top, HLLayout.sectionGapBefore)
     }
 
     // MARK: - Error / limit / gate states
@@ -126,15 +108,14 @@ struct DocumentChatSheet: View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             Label {
                 Text(errorMessageKey(state))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
                 Image(systemName: errorIcon(state))
                     .foregroundStyle(HLText.tertiary)
             }
             if state == .limitReached || state == .generic {
-                HLButton("documents.chat.retry", variant: .secondary, size: .compact) {
+                HLButton("documents.chat.retry", variant: .secondary) {
                     Task { await store.retry() }
                 }
             }
@@ -143,7 +124,7 @@ struct DocumentChatSheet: View {
         .padding(HLSpace.md)
         .background(HLSurface.secondary)
         .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-        .padding(.horizontal, HLSpace.lg)
+        .padding(.horizontal, HLLayout.pageMargin)
         .padding(.bottom, HLSpace.sm)
     }
 
@@ -178,47 +159,17 @@ struct DocumentChatSheet: View {
 
     // MARK: - Composer
 
+    /// The app's one composer, the same as the coach's.
     private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: HLSpace.sm) {
-            TextField(
-                String(localized: "documents.chat.placeholder"),
-                text: $draft,
-                axis: .vertical
-            )
-            .lineLimit(1 ... 5)
-            .textFieldStyle(.plain)
-            .font(.hlBody)
-            .foregroundStyle(HLText.primary)
-            .padding(.horizontal, HLSpace.md)
-            .padding(.vertical, HLSpace.sm)
-            .background(HLSurface.tertiary)
-            .clipShape(RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
-            .focused($inputFocused)
-            .submitLabel(.send)
-            .disabled(store.isResponding)
-            .onSubmit(submit)
-
-            Button(action: submit) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(canSend ? HLAccent.primary : HLText.secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
-            .accessibilityLabel(Text("documents.chat.send"))
-        }
-        .padding(.horizontal, HLSpace.lg)
+        HLComposerBar(
+            text: $draft,
+            prompt: Text("documents.chat.placeholder"),
+            isBusy: store.isResponding,
+            identifier: "documents.chat.composer",
+            onSend: submit
+        )
+        .padding(.horizontal, HLLayout.pageMargin)
         .padding(.vertical, HLSpace.sm)
-        // 08-14 — the composer bar is the document chat's one translucent
-        // surface. `HLMaterialBackground` keeps the material as the standard
-        // presentation and hands Reduce Transparency the opaque fill, which is
-        // the shared seam 08-04 built and the clause 08-02 wrote about this file.
-        .background(HLMaterialBackground(.thinMaterial))
-    }
-
-    private var canSend: Bool {
-        !store.isResponding && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func submit() {

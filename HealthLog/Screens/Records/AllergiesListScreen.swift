@@ -24,9 +24,12 @@ struct AllergiesListScreen: View {
             empty: { emptyRows },
             content: { if let store { loadedRows(store: store) } }
         )
+        .hlPageMargins()
         .navigationTitle(Text("allergies.list.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .hlPageActions([
+            .add(label: "allergies.add.title", identifier: "allergies.toolbar.add") { showAddSheet = true }
+        ])
         .task { await onAppear() }
         .sheet(isPresented: $showAddSheet) {
             if let store {
@@ -37,18 +40,6 @@ struct AllergiesListScreen: View {
             if let store {
                 AllergyEditorSheet(store: store, record: record)
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showAddSheet = true
-            } label: {
-                Label("allergies.add.title", systemImage: "plus")
-            }
-            .accessibilityIdentifier("allergies.toolbar.add")
         }
     }
 
@@ -65,39 +56,40 @@ struct AllergiesListScreen: View {
     @ViewBuilder
     private func loadedRows(store: AllergiesStore) -> some View {
         Section {
-            Toggle("allergies.list.showInactive", isOn: $includeInactive)
-                .onChange(of: includeInactive) { _, _ in
-                    Task { await reload() }
-                }
-                .accessibilityIdentifier("allergies.list.showInactiveToggle")
+            Toggle(isOn: $includeInactive) {
+                HLRowTitle("allergies.list.showInactive")
+            }
+            .onChange(of: includeInactive) { _, _ in
+                Task { await reload() }
+            }
+            .accessibilityIdentifier("allergies.list.showInactiveToggle")
         }
+        .hlFormRowSurface()
         Section {
             ForEach(store.records) { record in
                 row(record, store: store)
             }
         }
+        .hlFormRowSurface()
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
         }
+        .hlFormRowSurface()
     }
 
     private func row(_ record: AllergyDTO, store: AllergiesStore) -> some View {
-        Button {
+        HLRowButton {
             editingRecord = record
         } label: {
             AllergyRow(record: record)
         }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                store.delete(record, undoMessage: String(localized: "allergies.delete.undo"))
-            } label: {
-                Label("allergies.delete.action", systemImage: "trash")
-            }
-            Button {
+        // The store keeps the way back, so the row goes at once with the
+        // undo hint.
+        .hlSwipeDelete(.undoable {
+            store.delete(record, undoMessage: String(localized: "allergies.delete.undo"))
+        }) {
+            Button("allergies.edit.action", systemImage: "pencil") {
                 editingRecord = record
-            } label: {
-                Label("allergies.edit.action", systemImage: "pencil")
             }
             .tint(HLAccent.userBrandTint)
         }
@@ -109,14 +101,11 @@ struct AllergiesListScreen: View {
                 icon: "allergens",
                 title: "allergies.empty.title",
                 message: "allergies.empty.subtitle"
-            ) {
-                HLButton("allergies.add.title", icon: "plus", variant: .secondary) {
-                    showAddSheet = true
-                }
-            }
+            )
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+        .hlFormRowSurface()
     }
 
     private func onAppear() async {
@@ -131,43 +120,17 @@ struct AllergiesListScreen: View {
     }
 }
 
-/// Single allergy list row: substance + category/severity/status badges + an
-/// optional note glyph (a reaction / note exists). Neutral badges only.
+/// Single allergy list row: the substance, one detail line (type, category,
+/// severity) and, for a record that is no longer active, its status as text.
 struct AllergyRow: View {
     let record: AllergyDTO
 
-    private var hasFreeText: Bool {
-        record.reaction?.isEmpty == false || record.note?.isEmpty == false
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack(spacing: HLSpace.xs) {
-                Text(record.substance)
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                if hasFreeText {
-                    Image(systemName: "note.text")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-            HStack(spacing: HLSpace.xs) {
-                HLBadge(record.category.localizedLabel, tone: .neutral)
-                if let severity = record.severity {
-                    // A grade this build does not know reads as unknown, in the
-                    // neutral tone — never as a severity the server did not state.
-                    HLBadge(severity.localizedLabel, tone: severity == .unknown ? .neutral : .info)
-                }
-                if record.status != .active {
-                    HLBadge(record.status.localizedLabel, tone: .neutral)
-                }
-            }
-        }
-        .padding(.vertical, HLSpace.xxs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+        HLRow(
+            title: Text(verbatim: record.substance),
+            detail: HLRowDetail.text(RecordsRowContent.allergyDetailParts(record)),
+            status: RecordsRowContent.allergyStatus(record).map { HLRowStatus($0) }
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }

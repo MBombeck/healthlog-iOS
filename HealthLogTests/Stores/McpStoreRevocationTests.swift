@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **Revocation behaviour of the MCP + API-token stores (Build 2 / 2.7 + 2.8).**
+/// **Revocation behaviour of the MCP + API-token stores.**
 ///
 /// The invariants here are security invariants, not cosmetics: the user must be
 /// able to see and cut live access even when parts of the surface are failing.

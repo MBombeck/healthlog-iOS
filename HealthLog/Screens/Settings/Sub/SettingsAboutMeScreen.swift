@@ -14,20 +14,16 @@ import SwiftUI
 /// encrypted **server-side**; iOS keeps no local copy (drafts live in the
 /// store for the screen's lifetime only).
 ///
-/// **Server-only surface** — gates on `BackendAvailability.hasServer` like
-/// `CoachMemoryScreen` (standalone → calm placeholder). The route is not
-/// coach-gated server-side, so no disabled-surface branch is needed.
+/// **Server-only surface.** The route is not coach-gated server-side, so no disabled-surface branch is needed.
 ///
 /// The server derives up to three clarifying questions after a save; they
 /// render read-only at the bottom (the web composer-chip flow is a separate,
 /// not-yet-adopted surface).
 struct SettingsAboutMeScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: CoachAboutMeStore?
-    /// COACH-3 — the question the user tapped "Answer" on; drives the inline
+    /// The question the user tapped "Answer" on; drives the inline
     /// answer sheet. `nil` when no answer is in progress.
     @State private var answeringQuestion: AnsweringQuestion?
     @State private var answerDraft: String = ""
@@ -42,31 +38,20 @@ struct SettingsAboutMeScreen: View {
     }
 
     var body: some View {
-        Group {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                List {
-                    HLCloudDerivedPlaceholder(
-                        variant: .inline,
-                        surfaceName: String(localized: "coachContext.title"),
-                        onConnect: { authStore.beginServerPairing() }
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
+        connectedBody
+            .navigationTitle("coachContext.title")
+            .navigationBarTitleDisplayMode(.inline)
+            // Saving is the check mark in the bar (Z17). The page goes back
+            // unless the server asked clarifying questions to show below.
+            .hlConfirmBar(saveAction, identifier: "settings.aboutMe.save", hidesUntilChanged: true)
+            .task {
+                // Share the container-owned store so a question
+                // adopted from the coach chat reflects here (and vice-versa).
+                guard store == nil, let container else { return }
+                let s = container.coachAboutMeStore
+                store = s
+                if !s.didLoad { await s.load() }
             }
-        }
-        .navigationTitle("coachContext.title")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            // W-B187 COACH-3 — share the container-owned store so a question
-            // adopted from the coach chat reflects here (and vice-versa).
-            guard backend.hasServer, store == nil, let container else { return }
-            let s = container.coachAboutMeStore
-            store = s
-            if !s.didLoad { await s.load() }
-        }
     }
 
     @ViewBuilder
@@ -87,32 +72,19 @@ struct SettingsAboutMeScreen: View {
     }
 
     private func loadFailedState(store: CoachAboutMeStore) -> some View {
-        HLEmptyState(
-            icon: "wifi.exclamationmark",
-            title: "Could not load your data."
-        ) {
-            // UI-Standard R9 — „Erneut versuchen" ist überall `.secondary`.
-            // Ein Wiederholen-Knopf nach einem Ladefehler war hier die
-            // lauteste Fläche der Seite (gefüllte 48-pt-`.primary`-Fläche),
-            // während dieselbe Rolle auf den Sicherheits-Screens bereits
-            // zurückgenommen gerendert wurde.
-            HLButton("Try again", icon: "arrow.clockwise", variant: .secondary) {
-                Task { await store.load() }
-            }
+        HLErrorState("Could not load your data.") {
+            await store.load()
         }
-        // 1.4 B2-c — the page margin; the retry button ran edge to edge.
-        .padding(.horizontal, HLSpace.xl)
-        .containerCentered()
+        .padding(.horizontal, HLLayout.pageMargin)
     }
 
     // MARK: - Form
 
     private func form(store: CoachAboutMeStore) -> some View {
         @Bindable var store = store
-        return HLSettingsPage(title: "coachContext.title") {
-            HLSettingsCard(
-                icon: "person.text.rectangle",
-                title: "About you",
+        return HLPage {
+            HLCard(
+                "About you",
                 footer: "What you write here is sent to your HealthLog server, stored encrypted, and shared with the coach assistant."
             ) {
                 field(
@@ -125,7 +97,7 @@ struct SettingsAboutMeScreen: View {
                 .accessibilityIdentifier("settings.aboutMe.aboutYou")
             }
 
-            HLSettingsCard(icon: "stethoscope", title: "Conditions") {
+            HLCard("Conditions") {
                 field(
                     text: $store.conditions,
                     prompt: String(localized: "Chronic conditions"),
@@ -136,7 +108,7 @@ struct SettingsAboutMeScreen: View {
                 .accessibilityIdentifier("settings.aboutMe.conditions")
             }
 
-            HLSettingsCard(icon: "allergens", title: "Allergies & intolerances") {
+            HLCard("Allergies & intolerances") {
                 field(
                     text: $store.allergies,
                     prompt: String(localized: "Allergies or intolerances"),
@@ -147,7 +119,7 @@ struct SettingsAboutMeScreen: View {
                 .accessibilityIdentifier("settings.aboutMe.allergies")
             }
 
-            HLSettingsCard(icon: "scope", title: "Coach focus") {
+            HLCard("Coach focus") {
                 field(
                     text: $store.coachFocus,
                     prompt: String(localized: "What the coach should focus on"),
@@ -190,55 +162,44 @@ struct SettingsAboutMeScreen: View {
         }
     }
 
-    /// **UI-Standard R8/R9 (U5) — der einzige System-Knopf im gesamten
-    /// Einstellungsbaum ist gefallen.** „Speichern" war hier ein roher
-    /// `Button` im gefüllten System-Style, während dasselbe Verb zwei Screens
-    /// weiter als `HLButton` gerendert wurde. Nach R9 ist ein
-    /// „Speichern" am Formularende die abschließende Commit-Aktion des Flows
-    /// und damit `.primary` — die einzige `.primary`-Fläche dieses Screens.
-    /// Den Spinner im Label übernimmt `isLoading:` des Primitives.
-    private func saveSection(store: CoachAboutMeStore) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLButton(
-                "Save",
-                variant: .primary,
-                isLoading: store.isSaving,
-                action: { Task { await store.save() } }
-            )
-            .disabled(store.isSaving || !store.hasChanges || overCap(store: store))
-            .accessibilityIdentifier("settings.aboutMe.save")
-
-            switch store.saveOutcome {
-            case .idle:
-                EmptyView()
-            case .saved:
-                Label(String(localized: "Saved"), systemImage: "checkmark.circle.fill")
-                    .font(.hlFootnote)
-                    .foregroundStyle(HLColor.statusOK)
-            case .failed:
-                Label(
-                    String(localized: "Could not save — please try again."),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(.hlFootnote)
-                .foregroundStyle(HLColor.statusBad)
-            }
+    private var saveAction: HLSheetAction {
+        guard let store, store.didLoad else { return .none }
+        return .save(isEnabled: store.hasChanges && !store.isSaving && !overCap(store: store)) {
+            await store.save()
+            return store.saveOutcome == .saved && store.pendingQuestions.isEmpty
         }
     }
 
-    /// **COACH-3** — interactive clarifying questions: each row offers
+    /// What the last save produced, under the fields it saved.
+    @ViewBuilder
+    private func saveSection(store: CoachAboutMeStore) -> some View {
+        switch store.saveOutcome {
+        case .idle:
+            EmptyView()
+        case .saved:
+            Label(String(localized: "Saved"), systemImage: "checkmark.circle.fill")
+                .font(.hlFootnote)
+                .foregroundStyle(HLColor.statusOK)
+        case .failed:
+            Label(
+                String(localized: "Could not save — please try again."),
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.hlFootnote)
+            .foregroundStyle(HLColor.statusBad)
+        }
+    }
+
+    /// Interactive clarifying questions: each row offers
     /// "Answer" (adopt the answer into the matching self-context field) and a
     /// dismiss (✕). Answering opens an inline sheet; dismissing removes the
     /// question. Both are optimistic + outbox-backed via the store.
     private func questionsCard(store: CoachAboutMeStore) -> some View {
-        // R2 — der Footer („Beantworte eine Frage, um sie in deinen Kontext zu
+        // Der Footer („Beantworte eine Frage, um sie in deinen Kontext zu
         // übernehmen, oder verwirf sie.") erzählte die zwei Zeilen darunter
         // nach, die genau „Antworten" und „Verwerfen" heißen. Bedien-
         // Nacherzählungen sind verboten; die Abdeck-Probe fällt eindeutig aus.
-        HLSettingsCard(
-            icon: "questionmark.bubble",
-            title: "coach.questions.title"
-        ) {
+        HLCard("coach.questions.title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 ForEach(store.pendingQuestions, id: \.self) { question in
                     questionRow(question, store: store)
@@ -259,8 +220,7 @@ struct SettingsAboutMeScreen: View {
                     .font(.hlIcon(HLIconSize.sm))
                     .foregroundStyle(.tint)
                 Text(question)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if isInFlight {
@@ -307,8 +267,7 @@ struct SettingsAboutMeScreen: View {
                 .foregroundStyle(HLColor.statusOK)
         case .dismissed:
             Label(String(localized: "coach.questions.dismissed"), systemImage: "checkmark.circle")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.note)
         case .failed:
             Label(String(localized: "coach.questions.failed"), systemImage: "exclamationmark.triangle.fill")
                 .font(.hlFootnote)
@@ -319,31 +278,28 @@ struct SettingsAboutMeScreen: View {
     /// Inline answer entry for one clarifying question. Adopting folds the
     /// answer into the matching self-context field server-side.
     private func answerSheet(question: String, store: CoachAboutMeStore) -> some View {
-        NavigationStack {
-            HLSettingsPage(title: "coach.questions.answer.title") {
-                HLSettingsCard(icon: "questionmark.bubble", title: "coach.questions.answer.title") {
+        HLSheetScaffold(
+            "coach.questions.answer.title",
+            action: .confirm("coach.questions.remember", isEnabled: canRemember(store: store)) {
+                let answer = answerDraft
+                Task { await store.adoptQuestion(question, answer: answer) }
+                return true
+            },
+            isDirty: !answerDraft.isEmpty
+        ) {
+            HLPage {
+                HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         // The clarifying question is runtime text, so it renders
                         // as content (not the card's LocalizedStringKey title).
                         Text(question)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
+                            .hlText(.prose)
                             .fixedSize(horizontal: false, vertical: true)
                         answerField(store: store)
                     }
                 }
-
-                rememberButton(question: question, store: store)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { answeringQuestion = nil }
-                }
             }
         }
-        .hlSheetPresentation(.form)
-        .presentationBackground(HLColor.surface)
     }
 
     private func answerField(store: CoachAboutMeStore) -> some View {
@@ -368,18 +324,9 @@ struct SettingsAboutMeScreen: View {
     /// UI-Standard R9 — der Commit des Antwort-Sheets. War ein roher
     /// `.borderedProminent`-Knopf; als abschließende Aktion dieses (eigenen)
     /// Screens ist er `HLButton(variant: .primary)`.
-    private func rememberButton(question: String, store: CoachAboutMeStore) -> some View {
-        HLButton("coach.questions.remember", variant: .primary) {
-            let q = question
-            let a = answerDraft
-            answeringQuestion = nil
-            Task { await store.adoptQuestion(q, answer: a) }
-        }
-        .disabled(
-            answerDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || answerDraft.count > store.fieldMaxChars
-        )
-        .accessibilityIdentifier("settings.aboutMe.question.remember")
+    private func canRemember(store: CoachAboutMeStore) -> Bool {
+        !answerDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && answerDraft.count <= store.fieldMaxChars
     }
 
     private func overCap(store: CoachAboutMeStore) -> Bool {

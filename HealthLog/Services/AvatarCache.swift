@@ -28,9 +28,9 @@ public final class AvatarCache: @unchecked Sendable {
     private let fileManager = FileManager.default
     private let lock = NSLock()
 
-    /// **v0.8.0 W11 — in-memory self-hosted avatar bytes.**
+    /// **In-memory self-hosted avatar bytes.**
     ///
-    /// The Gravatar removal (W-SEC-A) left this type as a disk-sweep shim.
+    /// The Gravatar removal left this type as a disk-sweep shim.
     /// W11 brings a real avatar back — served from the OWN authenticated,
     /// owner-scoped endpoint — so we re-introduce a cache. It is
     /// deliberately **in-memory only** (no disk write): the bytes are
@@ -48,7 +48,7 @@ public final class AvatarCache: @unchecked Sendable {
 
     private init() {}
 
-    // MARK: - In-memory avatar bytes (W11)
+    // MARK: - In-memory avatar bytes
 
     /// Returns the cached bytes for `key` (the `?v=`-suffixed avatar URL) or
     /// `nil` on a miss / superseded key.
@@ -93,7 +93,7 @@ public final class AvatarCache: @unchecked Sendable {
         HLLog.cache.debug("AvatarCache cleared")
     }
 
-    /// Drops the in-memory avatar bytes (W11). Pulled out of `clearAll()` so
+    /// Drops the in-memory avatar bytes. Pulled out of `clearAll()` so
     /// it can be exercised directly in tests and reused without the disk
     /// sweep when only the RAM copy needs invalidation.
     public func clearMemory() {

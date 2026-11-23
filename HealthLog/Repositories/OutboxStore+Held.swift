@@ -6,12 +6,12 @@ import SwiftData
 // `OutboxQueue+Backlog.swift`.
 
 extension OutboxStore {
-    /// **W1 (1.3.0) — "Erneut senden" for a live row the replay holds back.**
+    /// **"Erneut senden" for a live row the replay holds back.**
     /// Clears the retry budget, the back-off stamp and the park marker, so the
     /// next pass sends the row again. Dead-lettered rows are not touched here
     /// (they have ``resubmit(id:)``). Returns `true` when a live row matched.
     ///
-    /// 1.4 (S2) — an `unconfirmed:` marker stays, as in
+    /// An `unconfirmed:` marker stays, as in
     /// ``requeueRetriableRowsOverBudget(maxAttempts:keepingMarkers:)``: the
     /// row may already be on the server, and the marker dates the first
     /// unconfirmed send. Cleared, the next unreadable answer restarted the
@@ -32,7 +32,7 @@ extension OutboxStore {
         return true
     }
 
-    /// **W1 (1.3.0) — the update path from 1.2.0.** Up to 1.2.0 a timeout or a
+    /// **The update path from 1.2.0.** Up to 1.2.0 a timeout or a
     /// lost connection counted against the retry budget like any other
     /// retriable failure, and a row whose budget ran out was held, unsent, for
     /// the seven days before the dead-letter sweep could act. Every live row
@@ -47,6 +47,29 @@ extension OutboxStore {
         )
         let due = try modelContext.fetch(descriptor).filter { row in
             !row.delivered && !markers.contains { row.lastError?.hasPrefix($0) ?? false }
+        }
+        guard !due.isEmpty else { return 0 }
+        for row in due {
+            row.attempts = 0
+            row.lastAttemptAt = nil
+        }
+        try modelContext.save()
+        return due.count
+    }
+
+    /// **A sign-in gives the account's rows their budget back (#6).**
+    /// Before 1.7 a pass without a session, or with an access token past its
+    /// day, counted every 401 as an attempt. The rows of the account that
+    /// signs in now start again; another account's rows, delivered rows and
+    /// parked or unconfirmed rows keep what they have. Returns the number of
+    /// rows reset.
+    func resetAttempts(ownedBy owner: String, keepingMarkers markers: [String]) throws -> Int {
+        let descriptor = FetchDescriptor<OutboxOperation>(
+            predicate: #Predicate { $0.attempts > 0 && !$0.deadLettered }
+        )
+        let due = try modelContext.fetch(descriptor).filter { row in
+            row.ownerUserID == owner && !row.delivered
+                && !markers.contains { row.lastError?.hasPrefix($0) ?? false }
         }
         guard !due.isEmpty else { return 0 }
         for row in due {

@@ -69,7 +69,7 @@ import Foundation
             y += 56
             draw(text: patientLabel, at: CGPoint(x: PDFPage.margin, y: y), font: bodyFont, color: .label)
             y += 22
-            // v0.10.0 — extended patient-identity lines. Each is drawn only
+            // Extended patient-identity lines. Each is drawn only
             // when the spec carries a non-empty value (the builder already
             // trims + nils empties), so a user who left the field blank sees
             // no orphan label. The KVNR is plaintext (operator's own data,
@@ -108,7 +108,7 @@ import Foundation
 
             // Column layout: kind | n | mean | median | min | max.
             let columns: [(title: String, width: CGFloat)] = [
-                // L10N-REPORT — the name column takes the rest of the 540 pt
+                // The name column takes the rest of the 540 pt
                 // content width: Dutch and German metric names run long.
                 (LocaleText.colKind(for: spec.cover.locale), 190),
                 (LocaleText.colCount(for: spec.cover.locale), 50),
@@ -131,10 +131,10 @@ import Foundation
             )
             y += 20
 
-            // #115 B5 / P2 — glucose, weight, temperature and waist print in
+            // Glucose, weight, temperature and waist print in
             // the account's unit.
             let units = spec.printUnits
-            // L10N-REPORT — decimals in the report language ("72,4" in DE/NL).
+            // Decimals in the report language ("72,4" in DE/NL).
             let numbers = spec.cover.locale.formattingLocale
             for row in vitals.rows {
                 let primaryMean = ValueFormatter.format(row.mean, kind: row.kind, units: units, locale: numbers)
@@ -265,9 +265,9 @@ import Foundation
             let labelFont = UIFont.systemFont(ofSize: 12, weight: .regular)
             let noteFont = UIFont.systemFont(ofSize: 11, weight: .regular)
             let locale = spec.cover.locale
-            // #115 · 1.2 — every line below is the server's; the notes say
+            // Every line below is the server's; the notes say
             // which window the figures cover, or why there are none.
-            // L10N-REPORT — notes and rows wrap inside the content width; the
+            // Notes and rows wrap inside the content width; the
             // Dutch source note ran off the right edge of the page.
             for note in LocaleText.adherenceNotes(for: adherence, locale: locale) {
                 y += drawWrapped(text: note, y: y, font: noteFont, color: .secondaryLabel) + 4
@@ -386,8 +386,8 @@ enum ValueFormatter {
         format(value, kind: kind, units: UnitPreferences(glucose: glucoseUnit))
     }
 
-    /// #115 P2 — `value` is canonical; converted families print in `units`.
-    /// L10N-REPORT — `locale` is the report language's; the default keeps the
+    /// `value` is canonical; converted families print in `units`.
+    /// `locale` is the report language's; the default keeps the
     /// device's, as before, for callers outside the report.
     static func format(_ value: Double, kind: MetricKind, units: UnitPreferences, locale: Locale = .current) -> String {
         let formatter = NumberFormatter()
@@ -407,28 +407,28 @@ enum ValueFormatter {
         case .steps: 0
         case .pulse, .bloodPressure, .glucose, .restingHeartRate, .hrv,
              .respiratoryRate, .audioExposureEnvironment, .audioExposureHeadphone: 0
-        // v0.8.3 W-D — kcal / flights / meters / minutes all render as whole numbers.
+        // Kcal / flights / meters / minutes all render as whole numbers.
         case .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight: 0
         case .weight, .bodyFat, .bodyTemperature, .spo2, .bodyWater, .boneMass, .sleep,
              .vo2Max, .walkingAsymmetry, .walkingDoubleSupport, .walkingSteadiness, .bmi: 1
         case .walkingSpeed, .walkingStepLength: 2
-        // v0.11 W21 — web-parity additions: cardio/age/rating render whole;
+        // Web-parity additions: cardio/age/rating render whole;
         // body-composition masses + temps + PWV one decimal.
         case .vascularAge, .visceralFat, .walkingHeartRate: 0
         case .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature, .pulseWaveVelocity, .fatMass: 1
-        // v0.13.1 IC — v1.10.0 additive signals. Counts + recovery bpm + 6MWT
+        // v1.10.0 additive signals. Counts + recovery bpm + 6MWT
         // metres render whole; stair speeds two decimals; wrist temp one.
         case .falls, .breathingDisturbances, .cardioRecovery, .sixMinuteWalk: 0
         case .stairAscentSpeed, .stairDescentSpeed: 2
         case .wristTemperature: 1
-        // v0.14.6 — v1.12.8 WHOOP-native: bpm + counts render whole.
+        // v1.12.8 WHOOP-native: bpm + counts render whole.
         case .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount: 0
-        // v0.14.1 W-B189 — v1.17.1 source-fixed signals (#23). Cardio-load /
+        // v1.17.1 source-fixed signals. Cardio-load /
         // sleep-score render whole; ANS-charge + the signed body-temperature
         // deviation render one decimal.
         case .cardioLoad, .sleepScore: 0
         case .ansCharge, .bodyTemperatureDeviation: 1
-        // v0158 — v1.25 clinical types. Pain NRS is a whole 0–10 score; grip /
+        // v1.25 clinical types. Pain NRS is a whole 0–10 score; grip /
         // waist render one decimal; waist-to-height ratio two decimals.
         case .painNRS: 0
         case .gripStrength, .waistCircumference: 1
@@ -444,18 +444,19 @@ enum ValueFormatter {
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes,
+             .basalEnergy, .indoorCO2, .indoorHumidity,
              // Build 7 / item 7.3 — mood is a whole-number daily score.
              .mood,
-             // Audit B-4 — the audio-exposure event is a whole occurrence count.
+             // The audio-exposure event is a whole occurrence count.
              .audioExposureEvent: 0
-        // Audit B-4 — `.unknown` has no known precision; one decimal matches its
+        // `.unknown` has no known precision; one decimal matches its
         // descriptor's `.decimal1` and is the least-claiming default. The arm
         // is unreachable from the report itself: `DoctorReportSpecBuilder`
         // skips the sentinel explicitly in BOTH aggregators (`makeVitalsSummary`
         // and `makeCharts`), so no unknown row reaches this formatter. It stays
         // because the formatter is a general helper, not because the report
         // happens not to build such a row.
-        case .hrvRMSSD, .dayStrain, .workoutStrain, .afibBurden, .unknown: 1
+        case .hrvRMSSD, .dayStrain, .workoutStrain, .afibBurden, .bloodKetones, .indoorTemperature, .unknown: 1
         }
     }
 }

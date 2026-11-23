@@ -204,7 +204,7 @@ public final class CustomMetricsStore {
             // The delete is durably queued and WILL replay. Keep the optimistic
             // removal and the live undo affordance — rolling back here would make
             // the row reappear and vanish again after replay (a visible flicker).
-            // Same doctrine as `LabsStore.deleteLab` (v0150 C-M3).
+            // Same doctrine as `LabsStore.deleteLab`.
             applyError(err)
         } catch {
             // Permanent failure — restore the row and drop the undo so the user
@@ -378,7 +378,7 @@ public final class CustomMetricsStore {
         )
     }
 
-    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// The visible error is localized copy, not a Swift description.
     /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
     /// user-facing surface; the sanitized description belongs in the log line,
     /// where triage reads it. `HLError.userFacingText(for:)` resolves the

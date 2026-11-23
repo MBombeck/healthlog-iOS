@@ -17,11 +17,32 @@ public struct ServerVersionInfo: Decodable, Sendable, Equatable {
     /// ISO-8601 build timestamp, baked alongside `buildSha`. Same
     /// nil-on-dev semantics.
     public let builtAt: String?
+    /// **#191 — the capability keys** (`features: string[]`, server 1.49.0).
+    /// Empty on an older server, which has none of them.
+    public let features: [String]
 
-    public init(version: String, buildSha: String? = nil, builtAt: String? = nil) {
+    public init(version: String, buildSha: String? = nil, builtAt: String? = nil, features: [String] = []) {
         self.version = version
         self.buildSha = buildSha
         self.builtAt = builtAt
+        self.features = features
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, buildSha, builtAt, features
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(String.self, forKey: .version)
+        buildSha = try c.decodeIfPresent(String.self, forKey: .buildSha)
+        builtAt = try c.decodeIfPresent(String.self, forKey: .builtAt)
+        features = (try? c.decodeIfPresent([String].self, forKey: .features)) ?? []
+    }
+
+    /// The medication contract keys among ``features``.
+    public var medicationCapabilities: Set<MedicationCapability> {
+        MedicationCapabilities.flags(inFeatures: features)
     }
 }
 
@@ -77,7 +98,7 @@ public enum TwoFactorManagement {
 }
 
 public enum WebHandoffLogin {
-    /// #65 — the server version at which the native web-handoff login contract
+    /// The server version at which the native web-handoff login contract
     /// (`/api/auth/native/login` → `/complete` → `/token`, PKCE-S256) landed.
     /// Below this a self-hosted instance has no such endpoints, so the app must
     /// keep the native password form rather than opening a web sheet that would
@@ -108,7 +129,7 @@ public enum SignOutEverywhereElse {
         server.isAtLeast(minimumServerVersion)
     }
 
-    /// R2 / #115 A7 — v1.39.3: the same call also ends AI-assistant
+    /// v1.39.3: the same call also ends AI-assistant
     /// connections, API tokens and clinician share links (the latter unless
     /// `?keepShareLinks=1`). Below it those keep working, so the copy must not
     /// say they end.
@@ -124,8 +145,42 @@ public enum SignOutEverywhereElse {
     }
 }
 
+/// **#188 (4), #191 — the server's resolved dose state on
+/// today's intakes.**
+///
+/// Server 1.49.0 publishes per slot `state`, `takenLate`, `dueAt`,
+/// `overdueSince` and `slotInstant` (``ServerDoseState``). Behind
+/// ``MedicationCapability/doseState`` the Live Activity, the reminder
+/// completion and today's sheet read the server's verdict for a row that
+/// carries one; a row without it, and every row while the capability is shut,
+/// keeps the local slot match and window grading.
+public enum MedicationServerResolvedSlots {
+    public static func isAvailable(defaults: UserDefaults? = MedicationCapabilities.appGroupDefaults) -> Bool {
+        MedicationCapabilities.isOpen(.doseState, defaults: defaults)
+    }
+
+    /// The server's overdue verdict for `medicationId`'s slot at `slot`, or
+    /// `nil` when the capability is shut or no row of that slot carries a
+    /// dose state (the caller then grades locally).
+    public static func serverOverdue(
+        medicationId: String,
+        slot: Date,
+        intakes: [MedicationIntake],
+        now: Date,
+        enabled: Bool
+    ) -> Bool? {
+        guard enabled else { return nil }
+        let row = intakes.first {
+            $0.medicationId == medicationId
+                && abs(($0.doseState?.slotInstant ?? $0.scheduledAt).timeIntervalSince(slot)) < 60
+                && $0.doseState != nil
+        }
+        return row?.doseState?.isOverdue
+    }
+}
+
 public enum MedicationSlotMaterialization {
-    /// audit-v0162 M-7 — the server version from which `GET /api/medications
+    /// The server version from which `GET /api/medications
     /// /intake?scope=today` (and `/api/dashboard/summary`) **materialise every
     /// one of today's dose slots** as real `MedicationIntakeEvent` rows before
     /// answering. From here on the client's own slot synthesis

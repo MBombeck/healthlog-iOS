@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// W-COACH-CADENCE (#30) — pins the `CoachCadenceSuggestionsStore`:
+/// Pins the `CoachCadenceSuggestionsStore`:
 /// inline `present(_:)` ingest (gated on the opt-in toggle + the dismissed-set),
 /// accept creates a reminder (the shared reminders store re-lists), dismiss
 /// suppresses + persists (no re-surface), and logout drops the in-memory cards.

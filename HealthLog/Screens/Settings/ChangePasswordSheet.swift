@@ -11,7 +11,6 @@ struct ChangePasswordSheet: View {
     @Environment(AccountSecurityStore.self) private var store
     @Environment(\.appContainer) private var container
     @Environment(\.openURL) private var openURL
-    @Environment(\.dismiss) private var dismiss
 
     @State private var current: String = ""
     @State private var newPassword: String = ""
@@ -19,21 +18,18 @@ struct ChangePasswordSheet: View {
     @FocusState private var currentFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.lg) {
-                    fields
-                    outcomeRow
-                    submitButton
-                }
-                .padding(HLSpace.lg)
+        HLSheetScaffold(
+            "settings.security.password.title",
+            action: .confirm("settings.security.password.submit", isEnabled: !store.isSaving) {
+                await submit()
+                // The sheet stays: the server ended every other session, and
+                // the user reads that before leaving.
+                return false
             }
-            .navigationTitle("settings.security.password.title")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("settings.passkeys.cancel") { dismiss() }
-                }
+        ) {
+            HLPage {
+                fields
+                outcomeRow
             }
             .onAppear { currentFocused = true }
         }
@@ -46,8 +42,7 @@ struct ChangePasswordSheet: View {
             VStack(alignment: .leading, spacing: HLSpace.xs) {
                 labelledField("settings.security.password.new", text: $newPassword, isNew: true)
                 Text("settings.security.password.hint")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
             }
             labelledField("settings.security.password.confirm", text: $confirm, isNew: true)
         }
@@ -63,15 +58,14 @@ struct ChangePasswordSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
             Text(label)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             SecureField("", text: text)
                 .textContentType(isNew ? .newPassword : .password)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.hlBody)
                 .padding(HLSpace.md)
-                .background(HLColor.surface)
+                .background(HLTextField.plate)
                 .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
                 // Editing after a failure clears the stale message so the user
                 // is never reading an error about the text they just replaced.
@@ -93,12 +87,14 @@ struct ChangePasswordSheet: View {
         switch outcome {
         case .success:
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("settings.security.password.updated")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLColor.statusOK)
+                HLBadge(
+                    String(localized: "settings.security.password.updated"),
+                    icon: "checkmark.circle.fill",
+                    tone: .success,
+                    form: .text
+                )
                 Text("settings.security.password.otherSessionsEnded")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             .accessibilityIdentifier("security.password.success")
         case let .validation(failure):
@@ -114,12 +110,9 @@ struct ChangePasswordSheet: View {
             // geht, ohne hinzuführen. Die Aussage bleibt, der letzte Halbsatz
             // wird die Zeile darunter.
             VStack(alignment: .leading, spacing: HLSpace.xs) {
-                Text("settings.security.stepUp.title")
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                HLRowTitle("settings.security.stepUp.title")
                 Text("settings.security.stepUp.body")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
             }
             .accessibilityIdentifier("security.password.stepUp")
             HLSettingsActionRow(
@@ -147,17 +140,6 @@ struct ChangePasswordSheet: View {
             .font(.hlSubhead)
             .foregroundStyle(HLColor.statusBad)
             .accessibilityIdentifier("security.password.error")
-    }
-
-    private var submitButton: some View {
-        HLButton(
-            String(localized: "settings.security.password.submit"),
-            variant: .primary,
-            isLoading: store.isSaving,
-            action: { Task { await submit() } }
-        )
-        .disabled(store.isSaving)
-        .accessibilityIdentifier("security.password.submit")
     }
 
     private func submit() async {

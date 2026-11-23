@@ -31,13 +31,24 @@ public struct Glp1DoseChangeDTO: Codable, Sendable, Hashable, Identifiable {
     public let doseValue: Double
     public let doseUnit: String
     public let note: String?
+    /// #169 (server 1.48.0) — the uploading device's own id for the step,
+    /// `nil` for a step created without one and from an older server.
+    public let clientId: String?
 
-    public init(id: String, effectiveFrom: Date, doseValue: Double, doseUnit: String, note: String? = nil) {
+    public init(
+        id: String,
+        effectiveFrom: Date,
+        doseValue: Double,
+        doseUnit: String,
+        note: String? = nil,
+        clientId: String? = nil
+    ) {
         self.id = id
         self.effectiveFrom = effectiveFrom
         self.doseValue = doseValue
         self.doseUnit = doseUnit
         self.note = note
+        self.clientId = clientId
     }
 }
 

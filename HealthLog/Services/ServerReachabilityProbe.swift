@@ -36,13 +36,13 @@ public actor ServerReachabilityProbe {
         case reachable
         /// 404 — the host answered but does not look like a HealthLog server.
         case notHealthLogServer
-        /// #149 — 503: the server answered but is still starting (newer
+        /// 503: the server answered but is still starting (newer
         /// servers add `reason: starting`, older ones send a bare 503). Worth
         /// a retry in a moment, not a different address.
         case serverStarting
         /// Any other status code — surfaced verbatim so the View can show it.
         case unexpectedStatus(Int)
-        /// GH-iOS #27 — the answer came from a different host than the one
+        /// The answer came from a different host than the one
         /// asked (carries that host). That is what a zero-trust proxy does with
         /// a request lacking its credentials: Cloudflare Access forwards it to
         /// its sign-in page, which then answers 200 and would otherwise pass
@@ -65,7 +65,7 @@ public actor ServerReachabilityProbe {
     ///   - userAgent: the `User-Agent` header value — the onboarding and
     ///     settings surfaces send distinct tags so server logs can tell
     ///     which flow issued the probe.
-    ///   - accessHeaders: proxy credentials (GH-iOS #27). The probe is the
+    ///   - accessHeaders: proxy credentials. The probe is the
     ///     first request a new install sends, so a server behind Cloudflare
     ///     Access or Pangolin is only reachable with them.
     public func probe(

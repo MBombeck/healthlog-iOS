@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 import Testing
 
-// W-PERF-SWR — locks the behaviour-preserving speedups from the perf audit:
+// Locks the behaviour-preserving speedups from the perf audit:
 //  1. SWR write-through returns `fresh` WITHOUT awaiting the SwiftData persist;
 //     the detached write still lands so a later cold read sees the value.
 //  2. `ModuleGate.dashboardDisabledMetricKinds()` memoizes on `modules` —
@@ -11,7 +11,7 @@ import Testing
 //  3. The hoisted shared `RelativeDateTimeFormatter` produces identical strings.
 //  4. The meds foreground-revalidation throttle coalesces a rapid flap.
 
-// MARK: - 1. SWR non-blocking write-through (C2)
+// MARK: - 1. SWR non-blocking write-through
 
 @Suite("W-PERF-SWR — non-blocking SWR write-through (C2)")
 struct WPerfSWRWriteTests {

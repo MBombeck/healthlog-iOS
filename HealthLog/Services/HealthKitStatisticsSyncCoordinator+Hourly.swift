@@ -1,6 +1,6 @@
 import Foundation
 
-/// **X4 (1.3, #138 / #77)** — the hourly backfill a pass hands its history
+/// The hourly backfill a pass hands its history
 /// budget to. A separate protocol, so the day-total seam and its test stubs
 /// stay as they are; ``HealthKitStatisticsSyncCoordinator`` is the only
 /// production conformer.
@@ -11,7 +11,7 @@ public protocol HealthKitHourlyStatsBackfilling: AnyObject, Sendable {
 
 #if canImport(HealthKit)
 
-    /// **X4 — hourly `stats:` rows for the four summed types.**
+    /// **Hourly `stats:` rows for the four summed types.**
     ///
     /// Two halves, both behind the server's `features.cumulativeHourBuckets`
     /// (``KnownServerVersion/supports(_:defaults:)``). Against any other server
@@ -38,8 +38,7 @@ public protocol HealthKitHourlyStatsBackfilling: AnyObject, Sendable {
         nonisolated static let hourlyBackfillDayOffsets = Array(2 ..< 30)
 
         func hourlyGateOpen() -> Bool {
-            featureFlags.isEnabled(.enableDailyStats)
-                && KnownServerVersion.supports(.cumulativeHourBuckets, defaults: defaultsProvider())
+            KnownServerVersion.supports(.cumulativeHourBuckets, defaults: defaultsProvider())
         }
 
         // MARK: - Live
@@ -177,7 +176,7 @@ public protocol HealthKitHourlyStatsBackfilling: AnyObject, Sendable {
         /// One batch through the shared uploader (same throttle, backoff,
         /// idempotency key and acceptance gate as every measurement batch).
         /// `true` only when every row landed terminally for the same account.
-        /// SYNC-TRIG (1.5) — `asBackfill` marks the batch on the upload call.
+        /// `asBackfill` marks the batch on the upload call.
         func postHours(
             _ rows: [HealthKitHourlyStatRow],
             requiring lease: HealthSyncAuthenticatedLease,

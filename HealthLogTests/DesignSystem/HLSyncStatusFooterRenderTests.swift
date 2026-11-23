@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// v0.14.8 W2-SYNCUX — render verification for the sync-status rollout.
+    /// Render verification for the sync-status rollout.
     ///
     /// The W2-SYNCUX wave mounts `HLSyncStatusFooter` in three host shapes
     /// (ScrollView stack-child, `List`/`Form` empty-section footer) and pins
@@ -37,7 +37,7 @@
                 buildNumber: "1"
             )
             let api = APIClient(environment: env, keychain: InMemoryKeychain(), sessionConfiguration: .mock())
-            // b178 W-SYNCVIS — zero phase holds + idle-settle below, so the
+            // Zero phase holds + idle-settle below, so the
             // fixture renders the SETTLED caption, not the transient .done beat.
             let store = SyncStateStore(
                 repo: SyncStateRepository(api: api),
@@ -59,7 +59,7 @@
             await store.handshake()
             #expect(store.lastHandshakeAt != nil, "fixture handshake must settle the store")
             // Wait out the (zero-hold) .done beat so the phase is .idle. The
-            // deadline is a hang guard (FLAKES 1.3.0), not a latency budget.
+            // deadline is a hang guard, not a latency budget.
             let deadline = ContinuousClock.now + .seconds(30)
             while store.phase != .idle, ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(10))
@@ -71,6 +71,8 @@
         /// Hosts `view` in a key window, lets layout settle, renders a PNG,
         /// returns the image. Exports to `$SYNCUX_RENDER_DIR/<name>.png`
         /// when the env var is present.
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(_ view: some View, name: String) throws -> UIImage {
             let size = CGSize(width: 393, height: 600)
             let host = UIHostingController(rootView: AnyView(view))

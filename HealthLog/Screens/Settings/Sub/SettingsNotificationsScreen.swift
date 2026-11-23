@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// The existing `NotificationsScreen` is feature-rich and uses its own
 /// `List`-based IA tuned for the current shape. PA2 §10 will eventually
-/// re-skin it onto `HLSettingsCard` for full web-parity (per-channel
+/// re-skin it onto `HLCard` for full web-parity (per-channel
 /// reliability card; ntfy / telegram / web-push cards). For PB3 we route
 /// to the existing screen so functionality is preserved.
 struct SettingsNotificationsScreen: View {

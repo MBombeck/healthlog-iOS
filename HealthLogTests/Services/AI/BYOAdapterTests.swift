@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.13 W2 — pure-function coverage for the four BYO ``LLMProvider`` adapters:
+/// Pure-function coverage for the four BYO ``LLMProvider`` adapters:
 /// request-shape (URL, method, auth header, JSON body), success parse from a
 /// fixture body, and HTTP→``BYOLLMError`` mapping. No network — adapters are
 /// pure value types, so we feed canned `Data` directly.

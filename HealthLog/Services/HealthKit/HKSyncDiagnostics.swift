@@ -55,7 +55,7 @@ public final class HKSyncDiagnostics {
     /// Useful operator-tell: if it's > 1h ago, observation is asleep.
     public private(set) var lastActivityAt: Date?
 
-    /// **W-B182** — last time `SpeziCollectionTrigger.trigger` actively pulled
+    /// Last time `SpeziCollectionTrigger.trigger` actively pulled
     /// the manual collectors, plus its source (background / foreground /
     /// manual). Persisted (anchors-class data, doctrine-allowed) so the
     /// diagnostics surface can distinguish "armed, nothing new" (healthy: a
@@ -64,7 +64,7 @@ public final class HKSyncDiagnostics {
     public private(set) var lastCollectionTriggerAt: Date?
     public private(set) var lastCollectionTriggerSource: String?
 
-    /// **W-B182** — last successful per-identifier observation, persisted across
+    /// Last successful per-identifier observation, persisted across
     /// relaunches so the surface survives the cold-launch reset that wiped the
     /// operator's evidence before. Memory counters above stay session-scope
     /// (monotonic "this session" semantics); this dict carries only the
@@ -88,13 +88,13 @@ public final class HKSyncDiagnostics {
     /// structurally absent from this type.
     public private(set) var workout = WorkoutSnapshot()
 
-    /// **#17** — is an older workout history still being imported, and about
+    /// Is an older workout history still being imported, and about
     /// how much is left. `nil` until the importer has proven either way. Kept
     /// outside ``WorkoutSnapshot`` so a stored snapshot from an older build
     /// still decodes. See `HKSyncDiagnostics+WorkoutHistory.swift`.
     public internal(set) var workoutHistoryImport: WorkoutHistoryImportStatus?
 
-    /// **Phase 07 / plan 07-07** — what the last orchestrated pass did, plus the
+    /// What the last orchestrated pass did, plus the
     /// two withheld-item counts that had no operator surface before.
     ///
     /// Persisted for the same reason the wake timestamps are: the questions
@@ -102,7 +102,7 @@ public final class HKSyncDiagnostics {
     /// cross-launch answers, and a cold-launch reset was exactly what hid them.
     public internal(set) var healthSync = HealthSyncSnapshot()
 
-    /// **U1 (#16)** — the last moment the server accepted Apple Health data
+    /// The last moment the server accepted Apple Health data
     /// from this device, on any path that hears the server's answer (sample
     /// observer, daily statistics, workouts, an orchestrated pass that settled
     /// items), and whether the app was in the background then.
@@ -115,7 +115,7 @@ public final class HKSyncDiagnostics {
     /// `noteServerAcceptance(at:channel:)` in `+ServerAcceptance`.
     public internal(set) var lastServerAcceptance: SyncActivity?
 
-    /// **#66 P0.1** — the wake channels the diagnostics surface distinguishes.
+    /// The wake channels the diagnostics surface distinguishes.
     /// `observer` is a background-context vital-sign delivery (the six
     /// `continueInBackground: true` collectors); the other three are the
     /// explicit wake triggers.
@@ -269,7 +269,7 @@ public final class HKSyncDiagnostics {
         }
     }
 
-    /// **W-B182** — record an active collection-trigger heartbeat. Called from
+    /// Record an active collection-trigger heartbeat. Called from
     /// `SpeziCollectionTrigger.trigger` on every BG / foreground / manual pull.
     /// Persisted so "never armed" vs "armed, idle" survives relaunch.
     public func recordCollectionTrigger(source: String, at date: Date = Date()) {
@@ -279,7 +279,7 @@ public final class HKSyncDiagnostics {
         defaults.set(source, forKey: Self.triggerSourceKey)
     }
 
-    // MARK: - Workout delivery diagnostics (Phase 1 / Plan 04)
+    // MARK: - Workout delivery diagnostics
 
     public func recordWorkoutRegistration(
         _ state: WorkoutRegistrationState,
@@ -413,7 +413,7 @@ public final class HKSyncDiagnostics {
     ///   observation fired but had nothing new — we still bump
     ///   `lastObservationAt` so the operator can see the heartbeat.
     /// - Parameter samplesUploaded: rows the server stored — `inserted`,
-    ///   `updated` or `duplicate`, and nothing else (#113). A skipped row, a
+    ///   `updated` or `duplicate`, and nothing else. A skipped row, a
     ///   parked row and a row handed to another path are counted separately.
     /// - Parameter samplesSkipped: rows the server refused for a deterministic
     ///   reason; they sit in the skip register.
@@ -446,12 +446,12 @@ public final class HKSyncDiagnostics {
         if samplesUploaded > 0 {
             noteServerAcceptance(at: date)
         }
-        // W-B182 — persist last-observation timestamp so the cross-launch
+        // Persist last-observation timestamp so the cross-launch
         // staleness call survives the cold-launch counter reset.
         persistLastObservation(identifier: identifier, at: date)
     }
 
-    /// **W-B182** — persist the last-observation timestamp for one identifier
+    /// Persist the last-observation timestamp for one identifier
     /// (anchors-class data: a timestamp, no PII / values).
     private func persistLastObservation(identifier: String, at date: Date) {
         persistedLastObservation[identifier] = date
@@ -466,7 +466,7 @@ public final class HKSyncDiagnostics {
     /// `HealthKitStatisticsSyncCoord`, not the per-sample batch route — the
     /// operator surface deserves a signal that this OTHER path is alive too.
     ///
-    /// **Phase 07 / Plan 07-04** — the `patched` counter is gone with the PATCH
+    /// The `patched` counter is gone with the PATCH
     /// arm it counted; that arm required a server row id the stats path never
     /// obtained, so it was unreachable in production.
     public func recordStatsAction(
@@ -538,6 +538,7 @@ public final class HKSyncDiagnostics {
                 HKCategoryTypeIdentifier.sleepAnalysis.rawValue: .sleep,
                 HKQuantityTypeIdentifier.stepCount.rawValue: .steps,
                 HKQuantityTypeIdentifier.activeEnergyBurned.rawValue: .activeEnergy,
+                HKQuantityTypeIdentifier.basalEnergyBurned.rawValue: .basalEnergy,
                 HKQuantityTypeIdentifier.flightsClimbed.rawValue: .flightsClimbed,
                 HKQuantityTypeIdentifier.distanceWalkingRunning.rawValue: .distanceWalkingRunning,
                 // Time in Daylight ships on iOS 17+; the raw identifier string is
@@ -557,7 +558,7 @@ public final class HKSyncDiagnostics {
                 HKQuantityTypeIdentifier.headphoneAudioExposure.rawValue: .audioExposureHeadphone,
                 HKQuantityTypeIdentifier.bodyMassIndex.rawValue: .bmi
             ]
-            // 1.2 / V4 — RMSSD only where the system resolves it, in lockstep
+            // RMSSD only where the system resolves it, in lockstep
             // with the read set (`diagnosticsIdentifiersAreInReadSet`).
             if HeartRateVariabilityRMSSD.sampleType != nil {
                 map[HeartRateVariabilityRMSSD.identifier] = .hrvRMSSD
@@ -569,7 +570,7 @@ public final class HKSyncDiagnostics {
     }()
 }
 
-/// INT-L (1.1.1) — U1 and U2 each added a persisted value to the class; one
+/// U1 and U2 each added a persisted value to the class; one
 /// decoding helper outside the class body keeps `init` short and the type
 /// under its `type_body_length` budget. A missing or undecodable entry is
 /// `nil`, exactly as the four inline `if let … try?` blocks behaved.

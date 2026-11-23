@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.7.1 W-APPINTENTS** — shared, localized result dialogs for the
+/// Shared, localized result dialogs for the
 /// HealthLog App Intents. Centralised so the three intents speak with
 /// one voice and the strings live in a single place for the xcstrings
 /// catalogue.
@@ -17,7 +17,7 @@ enum IntentCopy {
         )
     }
 
-    /// #110 — the dialog for a write the repository durably queued, chosen by
+    /// The dialog for a write the repository durably queued, chosen by
     /// why it was queued. A 429 (the server's write ceiling, with or without
     /// `record_write.rate_limited`) is not "offline": the phone is online and
     /// the entry is saved, it just waits a moment. Everything else keeps
@@ -54,7 +54,29 @@ enum IntentCopy {
         )
     }
 
-    /// **v0.8.4 WWIDGET-3** — the "next dose – taken" control fired but the
+    /// The "next dose – taken" control fired on a snapshot the app has not
+    /// refreshed for too long: its next dose may be long past.
+    static var snapshotStale: IntentDialog {
+        IntentDialog(
+            LocalizedStringResource(
+                "Your doses are out of date. Open HealthLog, then try again.",
+                comment: "AppIntents — next-dose control fired on an out-of-date widget snapshot; nothing recorded"
+            )
+        )
+    }
+
+    /// The "next dose – taken" control fired for a dose a widget or control
+    /// tap already saved.
+    static var alreadyRecorded: IntentDialog {
+        IntentDialog(
+            LocalizedStringResource(
+                "This dose is already recorded.",
+                comment: "AppIntents — next-dose control fired for a dose that was already saved; nothing recorded again"
+            )
+        )
+    }
+
+    /// The "next dose – taken" control fired but the
     /// App Group snapshot has no due dose (nothing scheduled in-window /
     /// everything already taken). Reassures the user there was nothing to do.
     static var noDoseDue: IntentDialog {
@@ -74,7 +96,7 @@ enum IntentCopy {
         )
     }
 
-    /// **v0.15 W-SIRI** — the generic log-measurement intent received a value
+    /// The generic log-measurement intent received a value
     /// outside the kind's plausible range (a transposed / fat-fingered entry).
     static var measurementOutOfRange: LocalizedStringResource {
         LocalizedStringResource(

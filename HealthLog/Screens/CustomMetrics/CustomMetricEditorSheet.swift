@@ -8,8 +8,6 @@ import SwiftUI
 /// duplicate name surfaces the server `409` as an inline ``HLFormErrorText``,
 /// and an inverted target window is caught client-side before the round-trip.
 struct CustomMetricEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let store: CustomMetricsStore
     /// `nil` → define a new metric; non-nil → edit that definition.
     let existing: CustomMetricDTO?
@@ -25,9 +23,7 @@ struct CustomMetricEditorSheet: View {
     @State private var correlationEnabled: Bool
     @State private var isSaving = false
     @State private var inlineError: String?
-    /// FORM-1 — drives the discard-confirmation dialog.
-    @State private var showDiscardConfirm = false
-    /// FORM-2 — initial focus + submit-chain across the text fields.
+    /// Initial focus + submit-chain across the text fields.
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -62,7 +58,7 @@ struct CustomMetricEditorSheet: View {
             && !unit.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    /// FORM-1 — any field diverges from the initial value.
+    /// Any field diverges from the initial value.
     private var isDirty: Bool {
         name != (existing?.name ?? "")
             || unit != (existing?.unit ?? "")
@@ -74,7 +70,11 @@ struct CustomMetricEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            isEditing ? "customMetric.edit.title" : "customMetric.add.title",
+            action: isEditing ? .save(isEnabled: canSave) { await save() } : .add(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
                 Section {
                     TextField("customMetric.editor.name", text: $name)
@@ -86,8 +86,9 @@ struct CustomMetricEditorSheet: View {
                         .submitLabel(.next)
                         .onSubmit { focusedField = .targetLow }
                 } header: {
-                    Text("customMetric.editor.identity")
+                    HLSectionHeader("customMetric.editor.identity")
                 }
+                .hlFormRowSurface()
 
                 Section {
                     TextField("customMetric.editor.targetLow", text: $targetLowText)
@@ -97,26 +98,30 @@ struct CustomMetricEditorSheet: View {
                         .keyboardType(.numbersAndPunctuation)
                         .focused($focusedField, equals: .targetHigh)
                 } header: {
-                    // 1.4 B2-c — no footer: the fields are optional by their
+                    // No footer: the fields are optional by their
                     // placeholders, and the band shows itself on the chart.
-                    Text("customMetric.editor.target")
+                    HLSectionHeader("customMetric.editor.target")
                 }
+                .hlFormRowSurface()
 
                 Section {
-                    // 1.4 B2-c — "leave empty for automatic" is the field's
+                    // "leave empty for automatic" is the field's
                     // placeholder instead of a footer.
-                    LabeledContent("customMetric.editor.decimals") {
+                    LabeledContent {
                         TextField("customMetric.editor.decimals.placeholder", text: $decimalsText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .decimals)
+                    } label: {
+                        HLRowTitle("customMetric.editor.decimals")
                     }
                     TextField("customMetric.editor.description", text: $descriptionText, axis: .vertical)
                         .lineLimit(2 ... 5)
                         .focused($focusedField, equals: .description)
                 } header: {
-                    Text("customMetric.editor.display")
+                    HLSectionHeader("customMetric.editor.display")
                 }
+                .hlFormRowSurface()
 
                 // CU-35 (3) — its own section, because it is not a display
                 // option like the two above it: it decides whether these values
@@ -125,44 +130,31 @@ struct CustomMetricEditorSheet: View {
                 // it can be taken back — a consent nobody could describe is not
                 // one that was given.
                 Section {
-                    Toggle("customMetric.editor.correlation", isOn: $correlationEnabled)
-                        .accessibilityIdentifier("customMetric.editor.correlation")
+                    Toggle(isOn: $correlationEnabled) {
+                        HLRowTitle("customMetric.editor.correlation")
+                    }
+                    .accessibilityIdentifier("customMetric.editor.correlation")
                 } header: {
-                    Text("customMetric.editor.analysis")
+                    HLSectionHeader("customMetric.editor.analysis")
                 } footer: {
                     Text("customMetric.editor.correlation.hint")
                 }
+                .hlFormRowSurface()
 
                 if let inlineError {
                     Section { HLFormErrorText(inlineError) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(Text(isEditing ? "customMetric.edit.title" : "customMetric.add.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("customMetric.action.cancel") {
-                        if isDirty { showDiscardConfirm = true } else { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("customMetric.action.save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave || isSaving)
-                }
-            }
+            .hlPageMargins()
             .task {
                 try? await Task.sleep(for: HLSheet.focusDelay)
                 focusedField = .name
             }
         }
-        .hlDiscardGuard(isDirty: isDirty, isSaving: isSaving, isPresented: $showDiscardConfirm) {
-            dismiss()
-        }
     }
 
-    private func save() async {
+    private func save() async -> Bool {
         isSaving = true
         inlineError = nil
         defer { isSaving = false }
@@ -177,13 +169,22 @@ struct CustomMetricEditorSheet: View {
         let decimals = Int(decimalsText.trimmingCharacters(in: .whitespaces))
         let description: String? = trimmedDescription.isEmpty ? nil : trimmedDescription
 
+        // A field that holds text but no number must not save as "no target"
+        // or "automatic": that would clear a stored value without a word.
+        if let unreadable = Self.unreadableInput(
+            targetLowText: targetLowText, targetHighText: targetHighText, decimalsText: decimalsText
+        ) {
+            inlineError = String(localized: unreadable)
+            return false
+        }
+
         if let failure = CustomMetricValidation.validate(
             name: trimmedName, unit: trimmedUnit,
             targetLow: low, targetHigh: high,
             decimals: decimals, description: description
         ) {
             inlineError = Self.message(for: failure)
-            return
+            return false
         }
 
         let ok: Bool = if let existing {
@@ -211,12 +212,36 @@ struct CustomMetricEditorSheet: View {
         }
 
         if ok {
-            dismiss()
+            return true
         } else if store.lastErrorWasDuplicateName {
             inlineError = String(localized: "customMetric.duplicate.error")
         } else {
             inlineError = store.lastError ?? String(localized: "customMetric.save.failed")
         }
+        return false
+    }
+
+    /// The message for a filled field that does not read as a number, `nil`
+    /// when every filled field does. Blank fields are fine: they mean "none".
+    nonisolated static func unreadableInput(
+        targetLowText: String,
+        targetHighText: String,
+        decimalsText: String,
+        locale: Locale = .current
+    ) -> LocalizedStringResource? {
+        func unreadable(_ text: String, _ parse: (String) -> Bool) -> Bool {
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            return !trimmed.isEmpty && !parse(trimmed)
+        }
+        if unreadable(targetLowText, { LocaleDecimalParser.parse($0, locale: locale) != nil })
+            || unreadable(targetHighText, { LocaleDecimalParser.parse($0, locale: locale) != nil })
+        {
+            return "customMetric.validation.targetNotNumber"
+        }
+        if unreadable(decimalsText, { Int($0) != nil }) {
+            return "customMetric.validation.decimals"
+        }
+        return nil
     }
 
     /// Localized copy for a client-side validation failure.

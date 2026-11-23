@@ -1,6 +1,6 @@
 import Foundation
 
-/// Thin actor wrapper around `GET /api/meta/capabilities` (CU-01).
+/// Thin actor wrapper around `GET /api/meta/capabilities`.
 ///
 /// The route is the server's live discovery surface: it serves the REAL id
 /// vocabularies the routes accept and emit, each derived server-side from the

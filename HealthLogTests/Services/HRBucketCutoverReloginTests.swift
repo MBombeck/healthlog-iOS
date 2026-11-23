@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Build 273 (A7) — re-login on a day that already carries bucket rows must
+/// Re-login on a day that already carries bucket rows must
 /// continue in bucket mode from the persisted cursor. Logout clears the cutover
 /// (per-user key), and re-arming at the NEXT UTC midnight sent the rest of that
 /// day raw while the morning was already bucketed: the double-count the store's

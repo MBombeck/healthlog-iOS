@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// F1 (1.1.0) — four display defects the App-Store screenshots surfaced.
+/// Four display defects the App-Store screenshots surfaced.
 private enum F1Source {
     /// `<repo>/HealthLogTests/Screens/F1DisplayFixesTests.swift` → `<repo>`.
     /// Symlinks resolved on both sides (see `PercentFormatLintTests`).
@@ -15,10 +15,6 @@ private enum F1Source {
             .deletingLastPathComponent() // HealthLogTests
             .deletingLastPathComponent() // <repo>
             .resolvingSymlinksInPath()
-    }
-
-    static func read(_ relative: String) throws -> String {
-        try String(contentsOf: repoRoot().appendingPathComponent(relative), encoding: .utf8)
     }
 
     /// Every `*.swift` under the given top-level directories.
@@ -137,7 +133,7 @@ struct F1PercentLocaleTests {
 
 // MARK: - 3. Settings card subtitle
 
-/// 1.4 B2-c — every settings-card subtitle wraps now, at every text size; the
+/// Every settings-card subtitle wraps now, at every text size; the
 /// F1 opt-in (`subtitleWraps`) and the one-line default it opted out of are
 /// gone (HIG: wrap, never truncate).
 @MainActor
@@ -154,15 +150,8 @@ struct F1SettingsCardSubtitleTests {
         #expect(longHeight > shortHeight + 1, "the long subtitle was cut to one line (\(longHeight)pt vs \(shortHeight)pt)")
     }
 
-    @Test("Kein Untertitel kappt sich selbst auf eine Zeile")
-    func noOneLineCapLeft() throws {
-        let source = try F1Source.read("HealthLog/DesignSystem/HLSettingsCard.swift")
-        #expect(!source.contains("subtitleWraps"))
-        #expect(!source.contains(".lineLimit(wraps"))
-    }
-
     private static func card(subtitle: LocalizedStringKey) -> some View {
-        HLSettingsCard(icon: "checklist", title: "Was", subtitle: subtitle) {
+        HLCard("Was", subtitle: subtitle) {
             Text("Body").font(.hlBody)
         }
     }
@@ -193,7 +182,6 @@ struct F1InsightsEmptyStateTests {
         data: Bool
     ) -> InsightsEmptyState? {
         InsightsEmptyState.resolve(
-            hasServer: true,
             hasDeliveredCards: delivered,
             cardsEmpty: cardsEmpty,
             isLoading: loading,
@@ -202,7 +190,7 @@ struct F1InsightsEmptyStateTests {
         )
     }
 
-    /// 1.4 B2 — with data there is no empty card at all, whatever the AI
+    /// With data there is no empty card at all, whatever the AI
     /// layer's state: the "no AI summary right now" card is gone.
     @Test("Daten da: keine Leerkarte, auch ohne KI")
     func dataMeansNoCard() {
@@ -220,10 +208,6 @@ struct F1InsightsEmptyStateTests {
         #expect(Self.resolve(cardsEmpty: false, data: false) == nil)
         #expect(Self.resolve(loading: true, data: false) == nil)
         #expect(Self.resolve(error: true, data: false) == nil)
-        #expect(InsightsEmptyState.resolve(
-            hasServer: false, hasDeliveredCards: true, cardsEmpty: true, isLoading: false,
-            hasError: false, hasRecordedData: false
-        ) == nil)
     }
 
     @Test("Store: leere Kartenliste zählt erst, wenn insights/cards geantwortet hat")

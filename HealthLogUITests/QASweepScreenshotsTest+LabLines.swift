@@ -1,6 +1,6 @@
 import XCTest
 
-/// 1.5 LAB-LINES — the metric chart against a 1.47 server with the timeline
+/// The metric chart against a 1.47 server with the timeline
 /// module on (`-uitest-lab-lines`, `LabLinesFixtures`): the weight page with
 /// the usual-range line (latest reading two days ago) and HbA1c under the
 /// chart (remembered choice via the argument domain), the opened
@@ -58,7 +58,6 @@ extension QASweepScreenshotsTest {
     /// The same weight page against the sweep's own server: no line, no
     /// marker, no "Erweitert" (the "before" picture and Regel 10).
     func test_19l_labLinesBefore() {
-        guard !isXXL else { return }
         boot(extra: ["-insights.labOverlay.weight", "lab:bm_hba1c"])
         openDeepLink("healthlog://insights/weight")
         settle(6)

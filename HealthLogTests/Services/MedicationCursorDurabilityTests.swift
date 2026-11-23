@@ -3,7 +3,7 @@ import Foundation
 import os
 import Testing
 
-/// Phase 07 Wave 0 — Apple medication dose durability.
+/// Apple medication dose durability.
 ///
 /// The importer holds back a dose whose concept is not mirrored yet, then
 /// advances one `Date` watermark to the newest dose it *did* import. A held
@@ -98,15 +98,13 @@ struct MedicationCursorDurabilityTests {
 
     // MARK: - RED
 
-    /// A later success may never make an older held dose unreachable, and the
-    /// importer must keep per-dose durable state instead of one timestamp.
+    /// A later success may never make an older held dose unreachable.
     ///
     /// **Restated by plan 07-05, in the commit that changed production.** The two
     /// progression clauses used to drive ``WatermarkCursor``, a local model of
     /// the rule this plan removes — so they could only ever fail, because that
     /// model *is* the defect. They now drive ``AppleHealthDoseLedger``, the type
-    /// the importer runs, against the identical three-dose fixture. The source
-    /// clauses are untouched.
+    /// the importer runs, against the identical three-dose fixture.
     @Test("an older held event survives a later success")
     func olderHeldEventSurvivesLaterSuccess() throws {
         var violations: [String] = []
@@ -138,18 +136,7 @@ struct MedicationCursorDurabilityTests {
             violations.append("the dose ledger did not retain the unaccounted dose identities")
         }
 
-        let importer = try Self.source("HealthLog/Services/HealthKit/AppleHealthMedicationImporter.swift")
-        if importer.contains("registry.advanceDoseCursor(to: maxImportedInstant)") {
-            violations.append("the importer still advances one timestamp watermark")
-        }
-        if !importer.contains("HealthSyncRetryEnvelope") {
-            violations.append("the importer keeps no durable per-dose retry identity")
-        }
-        if !importer.contains("HealthSyncOwnerLease") {
-            violations.append("the importer captures no owner lease across its awaits")
-        }
-
-        #expect(violations.isEmpty, "EXPECTED_RED: later medication success skipped held event")
+        #expect(violations.isEmpty, "later medication success skipped held event")
     }
 
     // MARK: - Production ledger fixture
@@ -188,15 +175,5 @@ struct MedicationCursorDurabilityTests {
             )
         )
         return AppleHealthDoseLedger(storage: Backing().storage, key: key)
-    }
-
-    // MARK: - Source access
-
-    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 }

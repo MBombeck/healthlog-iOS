@@ -4,7 +4,7 @@ import os
 /// **SAFETY — private, on-device-only signpost for the mental-health screener.**
 ///
 /// The PHQ-9 / GAD-7 surface is a clinical-safety surface with a HARD privacy
-/// contract (INV-C §4 / §7): the item answers and the item-9 self-harm flag are
+/// contract: the item answers and the item-9 self-harm flag are
 /// NEVER logged. We still want a private, Instruments-oriented heartbeat that "a
 /// screener was submitted" so a debug session can confirm the flow ran — but it
 /// must carry NO PII: no instrument-specific copy, no score, and crucially NO

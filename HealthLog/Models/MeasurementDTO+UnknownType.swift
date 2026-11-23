@@ -22,7 +22,7 @@ import Synchronization
 // row the user can see, not a row nobody knows was lost.
 
 public extension ServerMeasurementType {
-    /// Audit B-4 — decodes an unrecognised server token onto ``unknown``
+    /// Decodes an unrecognised server token onto ``unknown``
     /// instead of throwing.
     ///
     /// This is the seam, not the list wrapper: a single-measurement decode
@@ -39,7 +39,7 @@ public extension ServerMeasurementType {
         self = known
     }
 
-    /// Audit B-4 — every value the SERVER can actually send: `allCases` minus
+    /// Every value the SERVER can actually send: `allCases` minus
     /// the decode-only ``unknown`` sentinel. Anything enumerating the wire
     /// vocabulary (round-trip locks, the category fallback map, a set-difference
     /// against the Prisma enum) reads this, because `__UNKNOWN__` is not a
@@ -48,7 +48,7 @@ public extension ServerMeasurementType {
         allCases.filter { $0 != .unknown }
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire.
+    /// Refuses to put ``unknown`` back on the wire.
     ///
     /// `__UNKNOWN__` is not a server `MeasurementType` and a client that sent
     /// it would be inventing one. No production path encodes a
@@ -71,7 +71,7 @@ public extension ServerMeasurementType {
 }
 
 public extension ServerMeasurementSource {
-    /// Audit B-4 — decodes an unrecognised server source onto ``unknown``
+    /// Decodes an unrecognised server source onto ``unknown``
     /// instead of throwing.
     ///
     /// `MeasurementWireDTO.source` is `decodeIfPresent`, which does NOT swallow
@@ -88,12 +88,12 @@ public extension ServerMeasurementSource {
         self = known
     }
 
-    /// Audit B-4 — every value the SERVER can actually send.
+    /// Every value the SERVER can actually send.
     static var serverCases: [ServerMeasurementSource] {
         allCases.filter { $0 != .unknown }
     }
 
-    /// Audit B-4 — refuses to put ``unknown`` back on the wire. A create/update
+    /// Refuses to put ``unknown`` back on the wire. A create/update
     /// body naming `__UNKNOWN__` would be a source the app invented.
     func encode(to encoder: Encoder) throws {
         guard self != .unknown else {
@@ -110,7 +110,7 @@ public extension ServerMeasurementSource {
     }
 }
 
-/// Audit B-4 — logs each unrecognised measurement token **once per process**.
+/// Logs each unrecognised measurement token **once per process**.
 ///
 /// A 400-row page of one new type would otherwise write 400 identical
 /// warnings. The token is a server enum name (`ACTIVITY_STEPS`-shaped) — never

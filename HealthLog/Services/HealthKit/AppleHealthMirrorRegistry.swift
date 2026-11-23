@@ -1,6 +1,6 @@
 import Foundation
 
-/// **GH #47 — per-user persistence for the Apple Health medication mirror.**
+/// **Per-user persistence for the Apple Health medication mirror.**
 ///
 /// Holds the mapping the importer builds each sweep: the HK
 /// `medicationConceptIdentifier` → the server medication id it mirrored to, plus
@@ -52,7 +52,7 @@ public struct AppleHealthMirrorRegistry: Sendable {
         migrateConceptMapIfNeeded()
     }
 
-    // MARK: - Schema migration (CU-10)
+    // MARK: - Schema migration
 
     /// Drop concept-map entries that were written under an older key scheme.
     ///
@@ -116,7 +116,7 @@ public struct AppleHealthMirrorRegistry: Sendable {
         Set(conceptMap().values)
     }
 
-    /// **CU-10 — fold server truth into the routing table.**
+    /// **Fold server truth into the routing table.**
     ///
     /// Called once per sweep with what `GET /api/medications` actually returned:
     /// `serverMirrors` maps `externalId → medicationId` for every row the server

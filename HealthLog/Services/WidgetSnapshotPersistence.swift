@@ -14,7 +14,7 @@ enum WidgetSnapshotDecision: Sendable {
     case write(WidgetSnapshot, reloadKinds: [String])
 }
 
-/// **Phase 09 / plan 09-03 — the app-side widget snapshot boundary.**
+/// **The app-side widget snapshot boundary.**
 ///
 /// Five call sites (medication schedule, mood glance, health score, latest
 /// measurement, logout reset) each did read → modify → encode → write against
@@ -75,7 +75,7 @@ actor WidgetSnapshotPersistence {
     }
 }
 
-/// **Phase 09 / plan 09-03 — admission and ordering for the widget writer.**
+/// **Admission and ordering for the widget writer.**
 ///
 /// `WidgetSnapshotWriter` is a `struct` that every store callback copies, so the
 /// state those copies must agree on lives here, behind one reference held by all

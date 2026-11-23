@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.14.2 (#136) — pure, view-free model for the **Messwerte** metric-type
+/// Pure, view-free model for the **Messwerte** metric-type
 /// picker (`MeasurementsPickerScreen`).
 ///
 /// The operator asked for "ein Menü, in dem ich eine Messgröße auswähle

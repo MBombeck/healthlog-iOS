@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-23 — pen detail from the server (#52) + the per-form expiry rule (B2).**
+/// **Pen detail from the server (#52) + the per-form expiry rule.**
 ///
 /// Pure model-level pins, no network:
 ///   1. `manufacturer` / `doseStrength` decode off `MedicationInventoryItem`
@@ -137,7 +137,7 @@ struct MedicationInventoryPenDetailTests {
         #expect(detail.doseStrength.isEmpty, "the missing half must not be invented")
     }
 
-    // MARK: - B2 — the expiry clock is no longer blanket
+    // MARK: - The expiry clock is no longer blanket
 
     @Test("B2: only PEN and AMPOULE run the 30-day-after-opening clock")
     func firstUseClockAppliesToPenAndAmpouleOnly() {

@@ -1,6 +1,6 @@
 import XCTest
 
-/// **Plan 08-09 — the cancel leg of `testLogoutConfirmationPreservesSessionOnCancel`.**
+/// **The cancel leg of `testLogoutConfirmationPreservesSessionOnCancel`.**
 ///
 /// Kept in a sibling file for the reason 08-15 put its support-gate legs in
 /// one: the primary class stays inside `type_body_length`, and a leg that has

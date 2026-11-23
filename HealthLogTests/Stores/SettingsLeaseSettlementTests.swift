@@ -1,4 +1,4 @@
-// 20-02 — R1's genuine residual: the exit that sits ABOVE the covering defer.
+// R1's genuine residual: the exit that sits ABOVE the covering defer.
 //
 // `SettingsStore.load()`'s `guard let sessionLease = captureAuthenticatedSession
 // Lease() else { … return }` (`SettingsStore.swift:265`) sits above the covering
@@ -150,7 +150,7 @@
 
             #expect(
                 store.isLoading == false,
-                "EXPECTED_RED: the nil-lease exit returns above the covering defer and strands the profile skeleton"
+                "the nil-lease exit returns above the covering defer and strands the profile skeleton"
             )
             #expect(
                 observed.lines.contains("store-effect-refused store=settings reason=lease_unavailable"),

@@ -8,14 +8,14 @@ import Observation
 extension ChartDetailStore {
     // MARK: - Loading
 
-    /// **W1-2:** the two `measurementsRepo` fan-out fetches below
+    /// The two `measurementsRepo` fan-out fetches below
     /// (`series` + `recent(kind:)`) route through the SWR-wrapped paths
     /// the repo exposes since W1-1. Warm cache hits return in ≤ a few ms;
     /// `isLoading` stays true only long enough for the spinner to flash
     /// (≤ 50 ms on a warm tap). On cold cache the full `task.value`
     /// await drives the skeleton path as before.
     ///
-    /// **v0.11 W56 (#56 / #55) — non-blocking pre-load.** The HK daily-stats
+    /// **Non-blocking pre-load.** The HK daily-stats
     /// refresh (`preLoadHook`, wired only for cumulative kinds like active
     /// energy / steps) used to be `await`ed INLINE at the very top of
     /// `load()`, BEFORE the SWR series fan-out. That made every cumulative
@@ -37,7 +37,7 @@ extension ChartDetailStore {
         let currentRange = range
         let currentKind = kind
         let localeTag = resolveLocale()
-        // PB1 H1 — consult the consent gate ON THE MAIN ACTOR before the
+        // Consult the consent gate ON THE MAIN ACTOR before the
         // task body so the Befunde fetch never even gets queued when consent
         // is missing. Setting `findingsConsentClosed` early lets the UI
         // render the CTA on first paint rather than after a flicker.
@@ -64,7 +64,7 @@ extension ChartDetailStore {
                 insightsRepo: insightsRepo,
                 forceSeriesRevalidate: false
             )
-            // Cumulative correctness (#56): run the HK daily-stats refresh
+            // Cumulative correctness: run the HK daily-stats refresh
             // CONCURRENTLY/AFTER the first paint, then revalidate ONLY the
             // series so today's day-total catches up. The pre-load hook
             // invalidated the series cache key on its server POST, so the
@@ -83,7 +83,7 @@ extension ChartDetailStore {
         await task.value
     }
 
-    /// v0.11 W56 — series-only revalidate fired after the non-blocking
+    /// Series-only revalidate fired after the non-blocking
     /// pre-load hook completes (cumulative kinds). Re-reads the series with a
     /// forced revalidation so today's freshly-POSTed HK day-total replaces the
     /// stale snapshot the first paint may have shown. Best-effort: a failure
@@ -103,7 +103,7 @@ extension ChartDetailStore {
                 forceRevalidate: true
             )
             if Task.isCancelled { return }
-            // v0.12 W8-6 — bucket + LTTB downsample over ~1.5k points off-main
+            // Bucket + LTTB downsample over ~1.5k points off-main
             // so the ~200ms tap-to-detail budget isn't burned on the main
             // thread. `makeSeries` is `nonisolated static` + pure; `raw` and the
             // `MeasurementSeries` result are `Sendable`.
@@ -119,7 +119,7 @@ extension ChartDetailStore {
         }
     }
 
-    /// v0.11 W56 — the series + recent + findings + summary fan-out, extracted
+    /// The series + recent + findings + summary fan-out, extracted
     /// from `load()` so the pre-load hook can run OFF the first-paint path.
     /// Behaviour is byte-for-byte the prior `load()` body; only the inline
     /// `preLoadHook` await was lifted out (it now runs after this completes).
@@ -134,7 +134,7 @@ extension ChartDetailStore {
         insightsRepo: MetricInsightsRepository,
         forceSeriesRevalidate: Bool
     ) async {
-        // v0.14 DATA — GUARANTEE `dataState` settles on EVERY exit path. The
+        // GUARANTEE `dataState` settles on EVERY exit path. The
         // cancellation early-returns below (`if Task.isCancelled { return }`)
         // run BEFORE the recent-page `derive`, so on rapid re-entry (period
         // control churn, pager settle, tab-return) the task is cancelled in
@@ -146,7 +146,7 @@ extension ChartDetailStore {
         // an early-return / cancellation left it unresolved.
         if case .unknown = dataState { dataState = .loading }
         defer { collapseDataStateOnLoadFailure() }
-        // v0.14 DATA — BMI is DERIVED (no stored series / no `BODY_MASS_INDEX`
+        // BMI is DERIVED (no stored series / no `BODY_MASS_INDEX`
         // wire row), so the generic series + recent paths always read empty and
         // the page showed "no data / no chart". Compute the BMI series
         // client-side from the weight series + the profile height (web parity:
@@ -156,7 +156,7 @@ extension ChartDetailStore {
             return
         }
         do {
-            // QC-2 reconcile: short-circuit kinds the server's series
+            // Short-circuit kinds the server's series
             // endpoint doesn't support (`.bodyTemperature` returns 422)
             // before issuing the network call. Mirrors `DashboardStore`'s
             // `kindSupportsSeries` gate so the chart-detail surface
@@ -187,12 +187,12 @@ extension ChartDetailStore {
 
             let raw = try await seriesAsync
             if Task.isCancelled { return }
-            // v0.12 W8-6 — off-main downsample (see `revalidateSeriesAfterPreload`).
+            // Off-main downsample (see `revalidateSeriesAfterPreload`).
             let rangeDays = currentRange.rawValue
             series = await Task.detached(priority: .userInitiated) {
                 Self.makeSeries(from: raw, rangeDays: rangeDays)
             }.value
-            // 14-01 (A2) — the measurements page is awaited HERE, with the
+            // The measurements page is awaited HERE, with the
             // series, and no longer behind the two best-effort insight
             // roundtrips it does not depend on.
             //
@@ -213,7 +213,7 @@ extension ChartDetailStore {
             // value block.
             do {
                 let recent = try await recentAsync
-                applyRecentPage(recent, currentRange: currentRange)
+                applyRecentPage(recent, currentRange: currentRange, limit: recentLimit)
             } catch {
                 applyRecentPageFailure(error, currentKind: currentKind)
             }
@@ -229,13 +229,17 @@ extension ChartDetailStore {
                     findings = nil
                 }
             }
-            // v0.7.0 W-API-RENDER — best-effort per-metric summary
+            // Best-effort per-metric summary
             // (slopes + last-year average) for the HeroStrip trend chips
             // + "vor 1 Jahr" delta. Extracted to keep `load()` under the
             // cyclomatic-complexity ceiling; a failure never hides the
             // chart (it's caught + logged like the findings fetch).
             if Task.isCancelled { return }
             await loadMetricSummary(kind: currentKind, repo: insightsRepo)
+            // #176 — the window comparison the dashboard arrow follows (best-effort).
+            if Task.isCancelled { return }
+            let windowDays = currentRange.rawValue
+            rangeTrend = await insightsRepo.rangeTrend(metric: currentKind, windowDays: windowDays).map { (windowDays, $0) }
         } catch let err as HLError {
             if !Task.isCancelled {
                 error = err
@@ -256,7 +260,7 @@ extension ChartDetailStore {
         }
     }
 
-    /// 14-01 (A2) — the measurements page's own derivation, lifted verbatim out
+    /// The measurements page's own derivation, lifted verbatim out
     /// of ``runFanOut(currentRange:currentKind:localeTag:consentOpen:measurementsRepo:insightsRepo:forceSeriesRevalidate:)``
     /// so the page can be awaited beside the series instead of behind the two
     /// insight roundtrips. Same inputs, same assignments, same order — only the
@@ -266,16 +270,17 @@ extension ChartDetailStore {
     /// `recent(kind:)` page, which is what guarantees the chart-detail
     /// subtitle/drill-down/empty-predicate agrees with what the drill-down
     /// `MeasurementListScreen` would actually show.
-    private func applyRecentPage(_ recent: [Measurement], currentRange: Range) {
+    private func applyRecentPage(_ recent: [Measurement], currentRange: Range, limit: Int) {
         let cutoff = Date.now.addingTimeInterval(-Double(currentRange.rawValue) * 86400)
+        recentPageCapLimit = Self.recentPageIsCut(recent, limit: limit, cutoff: cutoff) ? limit : nil
         sourceCountsForRange = Self.computeSourceCounts(measurements: recent, since: cutoff)
         let inRange = recent
             .filter { $0.recordedAt >= cutoff }
             .filter { sourceFilter == nil || $0.source == sourceFilter }
         recentInRange = inRange
-        // N4 — true latest raw reading for the source filter, range-
+        // True latest raw reading for the source filter, range-
         // independent (drives the HeroStrip "Letzte Messung").
-        // #33 — skip malformed 0-systolic/0-diastolic BP rows so the
+        // Skip malformed 0-systolic/0-diastolic BP rows so the
         // HeroStrip never shows "0/77 mmHg"; falls back to the most
         // recent VALID reading (nil ⇒ honest empty state). Non-BP kinds
         // are always displayable, so behaviour is unchanged for them.
@@ -290,13 +295,14 @@ extension ChartDetailStore {
         )
     }
 
-    /// 14-01 (A2) — the measurements page's failure arm, likewise lifted
+    /// The measurements page's failure arm, likewise lifted
     /// verbatim. A failed page with a good series still resolves `dataState`
     /// from the series points; neither half available collapses to
     /// `.empty(.noData)` rather than a stuck spinner.
     private func applyRecentPageFailure(_ error: Error, currentKind: MetricKind) {
         let detail = LogSanitizer.redact(String(describing: error))
         HLLog.api.warning("recent(kind:) fetch failed for SourcesChipStrip: \(detail)")
+        recentPageCapLimit = nil
         sourceCountsForRange = []
         // DASHBOARD-CHARTS-BUG-FIX (2026-05-16): when the recent-
         // page fan-out fails but the series request succeeded,
@@ -318,8 +324,8 @@ extension ChartDetailStore {
                 kind: currentKind
             )
             recentInRange = synthetic
-            // N4 — recent-page fan-out failed; best-effort latest raw
-            // from the synthetic series-derived rows. #33 — same
+            // Recent-page fan-out failed; best-effort latest raw
+            // from the synthetic series-derived rows. Same
             // displayable-latest guard so a synthetic BP row with a
             // 0 component can't surface as the latest value either.
             latestRawMeasurement = synthetic
@@ -357,7 +363,7 @@ extension ChartDetailStore {
         }
     }
 
-    /// v0.14 DATA — derived-BMI fan-out. BMI has no server series (it's computed
+    /// Derived-BMI fan-out. BMI has no server series (it's computed
     /// from weight + height, web-parity), so the generic path always read empty.
     /// This fetches the weight series + the profile height and projects each
     /// weight point to BMI = weight_kg / (height_m)². The resulting series feeds
@@ -413,7 +419,7 @@ extension ChartDetailStore {
             let cutoff = Date.now.addingTimeInterval(-Double(currentRange.rawValue) * 86400)
             let inRange = synthetic.filter { $0.recordedAt >= cutoff }
             recentInRange = inRange
-            // v0.14.6 N4 (H-1) — BMI is derived (no raw rows), but the HeroStrip
+            // BMI is derived (no raw rows), but the HeroStrip
             // "Letzte Messung" must still be range-independent: use the latest
             // projected BMI point, not `displaySeries.points.last` (a midnight
             // bucket-avg on Month/Year). Without this BMI kept the pre-N4 jump.
@@ -434,7 +440,7 @@ extension ChartDetailStore {
         }
     }
 
-    /// v0.7.0 W-API-RENDER — best-effort fetch of the per-metric summary
+    /// Best-effort fetch of the per-metric summary
     /// (slopes + last-year average) feeding the HeroStrip trend decoration.
     /// Extracted from `load()` so the latter stays under the swiftlint
     /// cyclomatic-complexity ceiling. A failure leaves `metricSummary` nil
@@ -493,12 +499,12 @@ extension ChartDetailStore {
         }
     }
 
-    /// QC-2 reconcile helper — downsamples the raw series tuple from the
+    /// Downsamples the raw series tuple from the
     /// server when the kind supports it, or returns `nil` so the chart card
     /// renders its "no series" empty-state when the gate short-circuited.
     /// Extracted from `load()` so the latter stays under the cyclomatic ceiling.
     ///
-    /// **Two-stage downsampling (v0.7.1 W-CHARTS-LTTB):** `SeriesDownsampler`
+    /// **Two-stage downsampling:** `SeriesDownsampler`
     /// first collapses very long windows into calendar buckets (the legacy
     /// perf gate), then `LTTB.downsampleSeries` caps the *plotted* mark count
     /// at `LTTB.seriesPlotThreshold` while preserving peaks/troughs the
@@ -513,12 +519,12 @@ extension ChartDetailStore {
         guard let raw else { return nil }
         let bucketed = SeriesDownsampler.downsampleIfNeeded(raw.points, rangeDays: rangeDays)
         let plotted = LTTB.downsampleSeries(bucketed)
-        // W-B187 (#29) — preserve the server-resolved unit through downsampling;
+        // Preserve the server-resolved unit through downsampling;
         // #135 — the verdict and the reference lines ride along the same way.
         return raw.replacing(points: plotted)
     }
 
-    /// QC-2 reconcile: matches `DashboardStore.kindSupportsSeries` —
+    /// Matches `DashboardStore.kindSupportsSeries` —
     /// `true` when the server's `/api/measurements/series` endpoint
     /// supports the kind. `bodyTemperature` is HK-write-only and the
     /// server returns 422 for it (canonical list lives in
@@ -528,23 +534,23 @@ extension ChartDetailStore {
         case .bodyTemperature, .walkingSpeed, .walkingAsymmetry, .walkingStepLength, .walkingDoubleSupport,
              .walkingSteadiness,
              .respiratoryRate, .audioExposureEnvironment, .audioExposureHeadphone, .bmi,
-             // v0.8.3 W-D — server persists the rows but the series endpoint
+             // Server persists the rows but the series endpoint
              // doesn't accept them yet; detail reads off the list page + HK cache.
              .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight,
-             // v0.11 W21 — server/Withings-sourced web-parity kinds; the series
+             // Server/Withings-sourced web-parity kinds; the series
              // endpoint doesn't accept them, so detail reads off the list page.
              .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
              .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
              .fatMass,
-             // v0.13.1 IC — v1.10.0 additive signals: the series endpoint
+             // v1.10.0 additive signals: the series endpoint
              // doesn't accept them, so detail reads off the list page + HK cache.
              .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature,
-             // v0.14.6 — v1.12.8 WHOOP-native types: no series endpoint; detail
-             // reads off the list page. v0.14.1 W-B189 — v1.17.1 source-fixed
-             // signals (#23) join the same no-series bucket.
+             // v1.12.8 WHOOP-native types: no series endpoint; detail
+             // reads off the list page. v1.17.1 source-fixed
+             // signals join the same no-series bucket.
              .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount, .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation,
-             // v0158 — v1.25 clinical types: the server `surfaces.detailPage ==
+             // v1.25 clinical types: the server `surfaces.detailPage ==
              // false`, so there is no series endpoint; detail reads off the list
              // page (manual rows for pain / grip / waist).
              .painNRS, .gripStrength, .waistCircumference, .waistToHeight,
@@ -558,10 +564,11 @@ extension ChartDetailStore {
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent,
              .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
              .exerciseMinutes, .standMinutes, .standHours, .mindfulMinutes, .stateOfMindValence, .afibBurden,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity,
              // Build 7 / item 7.3 — mood is not a `Measurement`; no series
              // endpoint. The tile renders from the summary snapshot.
              .mood,
-             // Audit B-4 — the audio-exposure event is not in the series kind
+             // The audio-exposure event is not in the series kind
              // enum, and `.unknown` has no kind name to send at all.
              .audioExposureEvent, .unknown:
             false

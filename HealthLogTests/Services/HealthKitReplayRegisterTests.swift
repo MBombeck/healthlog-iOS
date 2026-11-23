@@ -6,7 +6,7 @@
 
     // swiftlint:disable force_unwrapping
 
-    /// INT-A (#115 / 0.3) — the outbox replay is no longer the one path where a
+    /// The outbox replay is no longer the one path where a
     /// refused or unconfirmed HealthKit reading disappears without a trace.
     ///
     /// * A replayed page whose rows the server skips for a deterministic reason
@@ -128,7 +128,7 @@
 
             let parked = try #require(await outbox.snapshot.first)
             #expect(parked.attempts == 0, "parked, not counted toward the dead-letter lane")
-            // W1 (1.3.0) — held with its reason, and not "waiting for a connection".
+            // Held with its reason, and not "waiting for a connection".
             #expect(await outbox.heldGroups() == [OutboxHeldGroup(reason: .refusalNotRecorded, count: 1)])
             #expect(await outbox.waitingCount(in: outbox.snapshot) == 0)
         }

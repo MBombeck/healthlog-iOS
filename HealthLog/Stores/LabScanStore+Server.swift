@@ -1,6 +1,6 @@
 import Foundation
 
-// The create bodies, the catalog match and (LAB-OCR) the server-read mapping of
+// The create bodies, the catalog match and the server-read mapping of
 // the lab-report scan, split out of `LabScanStore.swift` (type body length).
 
 extension LabScanStore {
@@ -138,7 +138,7 @@ extension LabScanStore {
 }
 
 extension LabScanRow {
-    /// LAB-OCR — one row a server read proposed. The same rules as a row read
+    /// One row a server read proposed. The same rules as a row read
     /// on the device: a bare "1" is not the person saying "no unit" (field
     /// empty, row flagged), weak fields and repeats are flagged, never dropped.
     init(server proposed: LabsOCRRow, biomarkerId: String?) {

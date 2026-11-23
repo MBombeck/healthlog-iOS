@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.6.1.4 Y4.2 — server-canonical compliance fetch tests.**
+/// **Server-canonical compliance fetch tests.**
 ///
 /// Verifies that `MedicationsStore.refreshCardComplianceSnapshot(for:)`
 /// hits `/api/medications/[id]/compliance`, decodes the server's
@@ -10,7 +10,7 @@ import Testing
 /// `complianceCardSnapshots`, and that `cardComplianceSnapshot(for:)`
 /// prefers the cached value. Also verifies the failure path: a thrown
 /// HLError leaves the dict untouched so the previous-good value keeps
-/// rendering, and without one the card reads "unknown" (#115 B7).
+/// rendering, and without one the card reads "unknown".
 @Suite("MedicationsStore — server-canonical card compliance")
 @MainActor
 struct MedicationsStoreServerComplianceTests {
@@ -83,7 +83,7 @@ struct MedicationsStoreServerComplianceTests {
         #expect(snapshot?.rate30 == 100)
     }
 
-    // MARK: - W-COMPLIANCE-INV — pending → nil (skeleton), failed → fallback
+    // MARK: - Pending → nil (skeleton), failed → fallback
 
     @Test("W-COMPLIANCE-INV: cardComplianceSnapshot is nil while the server fetch is pending")
     func cardSnapshotPendingReturnsNil() throws {

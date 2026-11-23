@@ -6,7 +6,7 @@ import Observation
 /// no behaviour change).
 @MainActor
 public extension ChartDetailStore {
-    // MARK: - v0.7.0 W-API-RENDER — trend + year-over-year decoration
+    // MARK: - Trend + year-over-year decoration
 
     /// Ordered 7/30/90-day regression slopes for the HeroStrip trend chips.
     /// Each entry pairs a window label key with the server `TrendSlope`.

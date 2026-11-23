@@ -1,6 +1,6 @@
 import XCTest
 
-/// **R1 — von der Anmeldefläche führt immer ein Weg zur Serveradresse.**
+/// **Von der Anmeldefläche führt immer ein Weg zur Serveradresse.**
 ///
 /// Der Betreiber saß auf `ServerAuthStep` fest: Passkey, E-Mail/Passwort und
 /// SSO scheiterten alle an einer fehlenden bzw. nicht übernommenen

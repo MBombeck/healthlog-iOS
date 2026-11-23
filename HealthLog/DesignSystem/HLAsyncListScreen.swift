@@ -58,7 +58,7 @@ struct HLAsyncListScreen<Loading: View, Empty: View, Content: View>: View {
 
     var body: some View {
         styledList
-            // 1.4 B4 — the app canvas under every list built on this primitive.
+            // The app canvas under every list built on this primitive.
             // Only Labs painted it; Illness, Documents, Nutrition, Environment,
             // the coach's memory, Allergies and Family history stood on the
             // system's pure black (light grey in light mode) instead.
@@ -93,22 +93,10 @@ struct HLAsyncListScreen<Loading: View, Empty: View, Content: View>: View {
     /// view across the async load.
     private var rootList: some View {
         List {
-            switch phase {
-            case .loading:
-                loading()
-            case .empty:
-                empty()
-            case let .error(retry):
-                // AUD-5 H1 — a server error / cold-offline fetch failure is
-                // distinct from a genuine empty state: render an honest error row
-                // with a Retry CTA *inside* the stable `List` root (never a sibling
-                // container that would re-bind the large-title bar). Without this
-                // arm a 500 / offline-with-cold-cache looked identical to "Add your
-                // first…" on Labs / Illness / CoachMemory.
-                HLAsyncListErrorRow(retry: retry)
-            case .loaded:
-                content()
-            }
+            // An honest error row with a retry stands *inside* the stable
+            // `List` root, distinct from a genuine empty state: without it a
+            // failed load looked identical to "Add your first…".
+            HLStateContainer(phase, placement: .rows, skeleton: loading, empty: empty, content: content)
         }
     }
 }
@@ -117,84 +105,22 @@ struct HLAsyncListScreen<Loading: View, Empty: View, Content: View>: View {
 /// message + a Retry CTA, rendered INSIDE the stable `List` root so the error
 /// state never swaps the scroll container (the RCA-2 invariant). Used by Labs,
 /// the Illness journal, and Coach memory so a failed fetch is no longer
-/// indistinguishable from a genuinely empty list (AUD-5 H1).
+/// indistinguishable from a genuinely empty list.
 struct HLAsyncListErrorRow: View {
     let retry: (() async -> Void)?
 
     var body: some View {
         Section {
-            HLEmptyState(
-                icon: "exclamationmark.triangle",
-                title: "async.list.error.title",
-                message: "async.list.error.subtitle"
-            ) {
-                if let retry {
-                    HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .secondary) {
-                        Task { await retry() }
-                    }
-                    .accessibilityIdentifier("async.list.error.retry")
-                }
-            }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+            HLErrorState(optionalRetry: retry)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
         }
     }
 }
 
-/// QOL-ERR-1 — the cold-error unavailable state for `ScrollView`- / `Group`-based
-/// screens that can't host the `List`-only ``HLAsyncListErrorRow`` (Cycle,
-/// Mental-Wellbeing, Mood-History). A cold offline start / server 500 with no
-/// cached data used to render indistinguishably from a genuine empty state ("no
-/// data yet"); this surfaces an honest "couldn't load" + a Retry CTA instead,
-/// reusing the same `async.list.error.*` copy as the list error row so the two
-/// error surfaces read identically. Built on the canonical ``HLEmptyState``
-/// lockup (audit-01 C1), centered in the host like the system primitive was.
-struct HLRetryUnavailableView: View {
-    let retry: () async -> Void
-
-    var body: some View {
-        HLEmptyState(
-            icon: "exclamationmark.triangle",
-            title: "async.list.error.title",
-            message: "async.list.error.subtitle"
-        ) {
-            HLButton("async.list.error.retry", icon: "arrow.clockwise", variant: .secondary) {
-                Task { await retry() }
-            }
-            .accessibilityIdentifier("async.list.error.retry")
-        }
-        .containerCentered()
-    }
-}
-
-/// The async render phases a stable-root list distinguishes. The container
-/// renders the SAME `List` root for all of them — only the rows differ.
-enum HLAsyncListPhase: Equatable {
-    /// First load with nothing to show yet — render skeleton rows.
-    case loading
-    /// Loaded, but no data — render the empty-state row(s).
-    case empty
-    /// AUD-5 H1 — the fetch FAILED (server 500 / cold-offline) and there is no
-    /// cached data to fall back to. Render an honest error row + a Retry CTA,
-    /// distinct from the genuine `.empty` "add your first…" state. The associated
-    /// closure re-runs the screen's load; `nil` renders the message without a CTA.
-    case error(retry: (() async -> Void)?)
-    /// Loaded with data — render the real rows.
-    case loaded
-
-    /// `Equatable` by CASE only — the `.error` retry closure is not comparable
-    /// and its identity is irrelevant to view diffing (the row is the same
-    /// regardless of which load it re-runs). This keeps the phase usable as an
-    /// `onChange`/animation value without forcing the closure to be `Equatable`.
-    static func == (lhs: HLAsyncListPhase, rhs: HLAsyncListPhase) -> Bool {
-        switch (lhs, rhs) {
-        case (.loading, .loading), (.empty, .empty), (.error, .error), (.loaded, .loaded):
-            true
-        default:
-            false
-        }
-    }
-}
+/// The phases of a stable-root list. The same four states apply outside of
+/// lists, so the type lives on as ``HLLoadPhase``; new code uses that name.
+typealias HLAsyncListPhase = HLLoadPhase
 
 /// The list styles `HLAsyncListScreen` supports. `switch`-applied at compile time
 /// because `.listStyle(_:)` takes distinct concrete types.
@@ -210,7 +136,9 @@ private struct HLAsyncListRefresh: ViewModifier {
 
     func body(content: Content) -> some View {
         if let refresh {
-            content.refreshable { await refresh() }
+            content
+                .refreshable { await refresh() }
+                .hlRefreshCommand { await refresh() }
         } else {
             content
         }

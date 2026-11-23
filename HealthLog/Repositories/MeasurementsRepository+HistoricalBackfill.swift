@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-HKBACKFILL** — full-history, source-scoped measurement fetch for the
+/// Full-history, source-scoped measurement fetch for the
 /// one-shot Apple-Health historical backfill.
 ///
 /// The b198 latest-page mirror only ever sees the newest SWR page
@@ -14,8 +14,7 @@ import Foundation
 /// large to write into the SWR cache (it would evict the live list pages and
 /// never be re-read), and the backfill runs exactly once per user. The wire
 /// call + BP-pair merge are identical to the cached paths, so the rows decode
-/// the same way. Standalone short-circuits to `[]` (no server history offline,
-/// and the mirror is suppressed in standalone anyway).
+/// the same way.
 public extension MeasurementsRepository {
     /// Server cap-saturating limit. `recentDirect`/`recentKindScoped` treat any
     /// `limit >= 2000` as "the full ~10y history" (see `serverDaysCap` /
@@ -26,14 +25,13 @@ public extension MeasurementsRepository {
     }
 
     /// Full server history for `kind`, narrowed to one mirror-eligible `source`,
-    /// uncached. Returns `[]` in standalone mode. BP is fetched as the paired
+    /// uncached. BP is fetched as the paired
     /// SYS+DIA pages and merged (never "124/0"); every other mirror-writable
     /// kind uses the plain `?type=…&sourceEq=…` page.
     func historyForBackfill(
         kind: MetricKind,
         source: MeasurementSource
     ) async throws -> [Measurement] {
-        if standalone?.isActive == true { return [] }
         let limit = Self.backfillHistoryLimit
         if kind == .bloodPressure {
             return try await fetchBloodPressureHistoryUncached(limit: limit, source: source)
@@ -91,7 +89,7 @@ public extension MeasurementsRepository {
         return merged.filter { $0.kind == .bloodPressure && $0.source == source }
     }
 
-    // MARK: - MIRROR (1.5, #152, server #1272) — the server's own answer
+    // MARK: - The server's own answer
 
     /// Rows per page of the v3 history walk, and the most pages one kind may
     /// take (200 000 rows), so a server that ignored `offset` cannot loop.
@@ -112,7 +110,6 @@ public extension MeasurementsRepository {
     /// The caller still runs every row through the mirror's own decision, so
     /// even then nothing from Apple Health is written back.
     func historyForMirrorBackfill(kind: MetricKind) async throws -> [Measurement] {
-        if standalone?.isActive == true { return [] }
         let typeKeys: [String]
         if kind == .bloodPressure {
             typeKeys = ["BLOOD_PRESSURE_SYS", "BLOOD_PRESSURE_DIA"]
@@ -156,15 +153,14 @@ public extension MeasurementsRepository {
         return rows
     }
 
-    /// **MIRROR (1.5, public #28)** — the one request of the background mirror:
+    /// The one request of the background mirror:
     /// the rows the server marks for Apple Health, measured since `since`,
-    /// newest first, at most `limit`. Uncached; `[]` in standalone.
+    /// newest first, at most `limit`. Uncached.
     ///
     /// A blood-pressure half whose partner fell outside the page is dropped
     /// rather than written as a reading with a zero half; a later window, or
     /// the measurement list, sees the pair whole.
     func rowsForServerMirror(since: Date, limit: Int) async throws -> [Measurement] {
-        if standalone?.isActive == true { return [] }
         let request: APIRequest<MeasurementListWireResponse> = .get(
             "/api/measurements",
             query: [

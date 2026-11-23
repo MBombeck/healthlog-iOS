@@ -50,7 +50,7 @@ public extension MetricFHIRMapper {
     /// Each LOINC entry is `physicianReviewPending` — the name match is a
     /// heuristic, not a server-bound terminology code.
     ///
-    /// **Authority boundary (W-FHIR-CODING-CLEANUP, #30):** This table is
+    /// **Authority boundary:** This table is
     /// trimmed to the analytes the server's authoritative coding map also
     /// resolves, so the OFFLINE local emitter never asserts a LOINC the server
     /// itself would not stamp (the `$everything` path passes server codings
@@ -69,7 +69,7 @@ public extension MetricFHIRMapper {
         "hämoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "haemoglobin": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
         "hemoglobine": LOINCCode(code: "718-7", display: "Hemoglobin [Mass/volume] in Blood", physicianReviewPending: true),
-        // #115 R3 — method-less LDL (server v1.39.3 `lab-loinc.ts`): a logged
+        // Method-less LDL (server v1.39.3 `lab-loinc.ts`): a logged
         // value does not say whether it was measured directly (18262-6) or
         // calculated (13457-7), so neither method code may be asserted.
         "ldl": LOINCCode(
@@ -107,7 +107,7 @@ public extension MetricFHIRMapper {
         "ferritin": LOINCCode(code: "2276-4", display: "Ferritin [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "ferritine": LOINCCode(code: "2276-4", display: "Ferritin [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
         "crp": LOINCCode(code: "1988-5", display: "C reactive protein [Mass/volume] in Serum or Plasma", physicianReviewPending: true),
-        // #115 R3 — total 25-OH vitamin D (D2 + D3) is what labs report; 1989-3
+        // Total 25-OH vitamin D is what labs report; 1989-3
         // is D3 alone (server v1.39.3 `lab-loinc.ts`).
         "vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
         "25-oh vitamin d": LOINCCode(code: "62292-8", display: vitaminDTotalDisplay, physicianReviewPending: true),
@@ -138,7 +138,7 @@ public extension MetricFHIRMapper {
         // row is deliberately text-only even when its name happens to match,
         // because we have no terminology binding to trust it (SPEC §A FHIR).
         let loinc = isLinked ? labAnalyteLOINCTable[normalized] : nil
-        // #160 — the UCUM unity "1" is a stated "no unit" and stays coded
+        // The UCUM unity "1" is a stated "no unit" and stays coded
         // (`{ unit: "1", system: UCUM, code: "1" }`, like the server's export).
         // An EMPTY unit is not that statement: it rides as a bare Quantity
         // instead of being promoted to "1".

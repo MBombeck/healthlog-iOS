@@ -1,43 +1,24 @@
 import SwiftUI
 
-/// Settings hub. **PB3 v0.5.0+ rewrite per PA2 §Recommended Pattern,
-/// trimmed in fix/v05x-pb3-baustelle per operator AC18 ruling.**
-///
-/// Previously a single monolithic `Form` painting nine inline sections
-/// with rainbow-tinted icon-chips per row — the dominant source of the
-/// "super clicky-bunt" user feedback in v0.4.2. PB3 collapsed the body
-/// into a hub of 11 `NavigationLink` rows that each pushed a dedicated
-/// sub-screen (`HealthLog/Screens/Settings/Sub/`) mirroring the web's
-/// `/settings/<slug>` routes column-for-column. The Baustelle-reconcile
-/// then dropped the two routes whose entire body was a placeholder
-/// (`api`, `thresholds`) per operator directive "Ich möchte keine
-/// Fake-Sachen haben". The `thresholds` editor has since shipped as
-/// `TargetEditorSheet` (More → Goals → pencil), and `api`
-/// (token-management, PB26) shipped in Build 2 / 2.8 as `apiTokens` —
-/// list + revoke, no mint, because the server removed the generic
-/// `POST /api/tokens`. Build 2 / 2.7 added the sibling `mcp` route.
-/// Both are real surfaces, not placeholders.
+/// Settings hub: a list of `NavigationLink` rows, each pushing a dedicated
+/// sub-screen (`HealthLog/Screens/Settings/Sub/`) that mirrors the web's
+/// `/settings/<slug>` routes. Every row leads to a real surface, never a
+/// placeholder. `apiTokens` lists and revokes tokens but cannot mint one,
+/// because the server has no generic `POST /api/tokens`.
 ///
 /// Visual contract — per PA2 §17 ("Rainbow row-tints"):
 /// - Hub list rows use a **single accent** (`Color.accentColor`) on every
 ///   `HLSettingsIconChip` so no row shouts louder than its neighbour.
 /// - The sub-screens follow the monochrome doctrine (Theme-2.0
-///   accent-restraint): `HLSettingsCard` dropped its per-card title icon
-///   entirely (W1-4, R5 #2 finding #3), and surviving icons render in
-///   `HLText.primary` — no purple tint.
+///   accent-restraint): `HLCard` carries no per-card title icon,
+///   and the remaining icons render in `HLText.primary`.
 /// - Sign-out and Delete-account stay at the bottom in their own dedicated
 ///   Sections with destructive role + footer copy (Apple HIG-correct;
 ///   web puts them inside the Account card, iOS keeps them visible).
-///
-/// The 9-section v0.4.1 layout is preserved in spirit: every toggle /
-/// picker / action that lived inline still works — it just moved one
-/// navigation hop deeper into its proper sub-screen.
 struct SettingsScreen: View {
     @Environment(SettingsStore.self) private var store
-    @Environment(AuthStore.self) private var authStore
     @Environment(HKReadinessStore.self) private var hkReadiness
     @Environment(AIProviderStore.self) private var aiProviderStore
-    @Environment(SyncModeStore.self) private var syncMode
     @Environment(\.appContainer) private var container
 
     @State private var refreshTick: Int = 0
@@ -60,35 +41,24 @@ struct SettingsScreen: View {
         // other Settings sub-screen, which own NO body NavigationStack) gives one
         // consistent back-stack and one navigation bar across the transition.
         Form {
-            if syncMode.isStandalone {
-                pairServerSection
-            }
             if notificationAuthorizationStatus.needsCallout {
                 notificationsCalloutSection
             }
-            // v0.11 IA — Sign-out + Delete-account moved out of this hub
+            // Sign-out + Delete-account moved out of this hub
             // into `SettingsAccountScreen` (Settings → Account). They are
             // account-lifecycle actions, not hub navigation, so they now
-            // live next to the profile they govern. The standalone gating
-            // (a local install has no server account to sign out of or
-            // delete) moved with them.
-            // 1.4 B2-c — the hub's sync footer is gone: the sync state has no
+            // live next to the profile they govern.
+            // The hub's sync footer is gone: the sync state has no
             // bearing on a list of settings, and the symbol beside the avatar
             // already carries it. The success haptic still confirms a pull.
             hubSection
         }
-        .scrollContentBackground(.hidden)
-        .background(HLSurface.primary)
-        // v0.5.x C-9 — iOS 26+ soft scroll-edge so Form content blurs
-        // into the navigation Liquid Glass instead of clipping cleanly.
-        // iOS 18-25: no-op (system stays flat-translucent).
-        .hlScrollEdgeSoft()
+        .hlPageMargins()
         .navigationTitle("Settings")
+        // A page under More: inline, like every other sub-page.
+        .navigationBarTitleDisplayMode(.inline)
         .task {
-            // Standalone users have no server profile to fetch —
-            // /api/user/profile would 401, which the 401-bridge would
-            // interpret as logout. Gate the call.
-            if !syncMode.isStandalone, store.profile == nil {
+            if store.profile == nil {
                 await store.load()
             }
             await hkReadiness.refresh()
@@ -98,7 +68,7 @@ struct SettingsScreen: View {
         .refreshable {
             await refresh()
         }
-        // POLISH-SWEEP: success-haptic confirms the pull-to-refresh round-trip
+        // Success-haptic confirms the pull-to-refresh round-trip
         // completed (parallel to Apple Mail / Health pull-to-refresh confirm tick).
         .sensoryFeedback(.success, trigger: refreshTick)
         // SET-V2-C (C-6, operator-mandated) — the hub's `.task`/`.refreshable`
@@ -113,55 +83,64 @@ struct SettingsScreen: View {
         }
     }
 
-    /// SET-V2-C (C-6) — first server-load error from the hub's refresh
-    /// surfaces. Standalone is suppressed wholesale: `store.load()` is
-    /// gated off there (no profile to fetch) and there is no server to
-    /// revalidate against, mirroring `HLSyncStatusFooter`'s
-    /// self-suppression.
+    /// First server-load error from the hub's refresh
+    /// surfaces.
     private var refreshError: HLError? {
-        guard !syncMode.isStandalone else { return nil }
-        return store.error ?? aiProviderStore.error
+        store.error ?? aiProviderStore.error
     }
 
     /// Shared pull-to-refresh / banner-retry path — identical to the
     /// pre-C-6 `.refreshable` body so retry and the gesture stay in
     /// lockstep.
     private func refresh() async {
-        if !syncMode.isStandalone { await store.load() }
+        await store.load()
         await hkReadiness.refresh()
         await aiProviderStore.load()
         await refreshNotificationStatus()
         refreshTick &+= 1
     }
 
-    // MARK: - Notifications call-out (v0.6.0.8 Issue #10 fix A)
+    // MARK: - Notifications call-out
 
     /// Top-level recovery card for users who never reached the
     /// onboarding `NotificationsPermissionStep`. Renders only when the
     /// system reports `.notDetermined` or `.denied`; once the user
     /// grants permission the card disappears so it doesn't squat at the
-    /// top of Settings forever. 1.4 B2-c: the row's subtitle says what a
+    /// top of Settings forever. The row's subtitle says what a
     /// tap does; the footer that said it again is gone.
     private var notificationsCalloutSection: some View {
         Section {
             Button {
                 Task { await runNotificationsCalloutAction() }
             } label: {
+                // The action stands at the row's end in words, so the row
+                // reads as something to tap, not as a notice.
                 HLSettingsRow(
                     icon: "bell.badge.fill",
                     title: notificationsCalloutTitle,
                     subtitle: notificationsCalloutSubtitle
-                )
+                ) {
+                    Text(notificationsCalloutAction)
+                        .hlText(.rowTitle)
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hlRow)
             .accessibilityIdentifier("settings.notifications.callout")
         }
+        .hlFormRowSurface()
     }
 
     private var notificationsCalloutTitle: LocalizedStringKey {
         switch notificationAuthorizationStatus {
         case .denied: "Notifications blocked"
         default: "Enable notifications"
+        }
+    }
+
+    private var notificationsCalloutAction: LocalizedStringKey {
+        switch notificationAuthorizationStatus {
+        case .denied: "settings.notifications.callout.open"
+        default: "settings.notifications.callout.enable"
         }
     }
 
@@ -198,44 +177,16 @@ struct SettingsScreen: View {
         #endif
     }
 
-    // MARK: - Standalone Pair-Server (B4-Onboarding)
-
-    /// Pair-later entry-point. Only renders when the user is in standalone
-    /// mode — tap drops back into the OnboardingFlow Server branch with
-    /// the user's local data intact, so they can convert without re-install.
-    /// 1.4 B2-c: what a server adds and that local values stay are one
-    /// subtitle; the header that repeated the row title and the footer
-    /// ("Health Score", "Doctor-Report") are gone.
-    private var pairServerSection: some View {
-        Section {
-            Button {
-                authStore.beginServerPairing()
-            } label: {
-                HLSettingsRow(
-                    icon: "icloud.and.arrow.up.fill",
-                    title: "Connect to server",
-                    subtitle: "settings.pairServer.subtitle"
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("settings.pairServerRow")
-        }
-    }
-
-    // MARK: - Hub (usage-frequency order; `api` token-management deferred)
+    // MARK: - Hub (usage-frequency order)
 
     /// NavigationLink rows for the Settings sub-screens, ordered by iOS
-    /// usage frequency (v0.8.0 W7 — no longer web-sidebar parity). The
-    /// `thresholds` editor shipped as `TargetEditorSheet` (More → Goals);
-    /// only the `api` route (PB26 token-management) stays absent until its
-    /// iOS editor ships.
-    /// Monochrome icon-chips with the single `Color.accentColor` accent —
-    /// per PA2 §17, the rainbow-tinted shape of the v0.4.1 hub was the
-    /// dominant "clicky-bunt" signal.
+    /// usage frequency. Monochrome icon-chips with the single
+    /// `Color.accentColor` accent, per PA2 §17: rainbow-tinted rows read as
+    /// "clicky-bunt".
     private var hubSection: some View {
         Section {
             ForEach(HubRow.allCases) { row in
-                // #153 follow-up (SET-ROUTE) — a value on the More stack,
+                // #153 follow-up — a value on the More stack,
                 // resolved in `MoreScreen`, so the page comes back after the
                 // privacy shield rebuilt the window.
                 NavigationLink(value: row) {
@@ -248,16 +199,17 @@ struct SettingsScreen: View {
                 .accessibilityIdentifier(row.accessibilityIdentifier)
             }
         }
+        .hlFormRowSurface()
     }
 
     // MARK: - Konto
 
     //
-    // v0.11 IA: Sign-out + Konto-löschen moved out of this hub onto
+    // Sign-out + Konto-löschen moved out of this hub onto
     // `SettingsAccountScreen` (Settings → Account). They are account-lifecycle
     // actions tied to the profile, so they now live next to it instead of as
     // two trailing sections under the hub navigation rows. The destructive
-    // `DeleteAccountScreen` sheet + the standalone gating moved with them.
+    // `DeleteAccountScreen` sheet moved with them.
 }
 
 // MARK: - Hub row catalogue
@@ -266,20 +218,14 @@ struct SettingsScreen: View {
 /// destination view, and accessibility identifier in one place so the hub
 /// stays declarative.
 ///
-/// v0.8.0 W7 — order is now iOS usage-frequency, not the web sidebar
-/// (`section-slugs.ts`) order it used to mirror. HIG favours most-used
-/// first: Account, Notifications, Appearance sit above the power-user
-/// surface (Sources) and the rarely-touched ones (Privacy & Security,
-/// About). v0.11 IA — the `devices` row (BLE device pairing) moved out of
-/// this hub into the "Mehr" tab: it is content navigation, not a setting.
-/// `serverSync` was promoted out of About's Server card
-/// into its own row; `advanced` was renamed to "Privacy & Security" (its
-/// enum case + a11y id stay `advanced` for selector stability — same
-/// trick `dashboard`→Appearance already uses). The `thresholds` route
-/// shipped as `TargetEditorSheet` (More → Goals); the `api` route
-/// (PB26 token-management) landed in Build 2 / 2.8 as `apiTokens`, alongside
-/// the new `mcp` connector surface (2.7).
-/// **Internal, not private, since 17-05.** The hub's row descriptors are a
+/// Order follows iOS usage frequency, not the web sidebar: HIG favours
+/// most-used first, so Account, Notifications and Appearance sit above the
+/// power-user surface (Sources) and the rarely touched rows (Privacy &
+/// Security, About). Some enum cases keep an older name (`dashboard`,
+/// `advanced`, `sources`) because their accessibility identifiers are
+/// selectors in tests and deep links.
+///
+/// **Internal, not private.** The hub's row descriptors are a
 /// contract surface: R5-A1 requires every one of them to carry a subtitle in the
 /// stated register, and `SettingsSubtitleTests` asserts that over `allCases`
 /// rather than over a hand-kept copy of the list. A `private` model can only be
@@ -290,42 +236,35 @@ enum HubRow: String, CaseIterable, Identifiable {
     case notifications
     case dashboard
     case integrations
-    /// v0.14.10 §3 — Geräte (BLE device pairing) moved BACK into the Settings hub
-    /// per operator directive. It sits right after Integrations (Apple Health /
+    /// BLE device pairing. Sits right after Integrations (Apple Health /
     /// Withings) since "what's connected to my account" reads as one cluster.
     case devices
-    /// v0.15 W-SIRI — Siri & Shortcuts discovery surface. Sits after Devices
+    /// Siri & Shortcuts discovery surface. Sits after Devices
     /// ("what's connected") and before Source priority: it's about how the OS
     /// reaches the app (voice / Shortcuts / Spotlight), a system-integration
     /// concern adjacent to Integrations and Devices.
     case siri
-    /// Build 2 / 2.7 — MCP connector. Sits in the "what's connected to my
+    /// MCP connector. Sits in the "what's connected to my
     /// account" cluster, right after Siri: it is the surface where a user sees
     /// and cuts an external assistant's live access to their record.
     case mcp
-    /// Build 2 / 2.8 — API token management. Directly after MCP; both answer
-    /// "which credentials can reach my data". This closes the `api` route the
-    /// hub comment below has been holding open since PB26.
+    /// API token management. Directly after MCP; both answer
+    /// "which credentials can reach my data".
     case apiTokens
     case sources
     case ai
     case serverSync
-    /// v0.14.7 C1 — `export` moved BACK into the Settings hub. v0.14.1 (#134/FB9)
-    /// had relocated it to "Mehr" (grouped with Geräte under "Daten & Geräte"),
-    /// but the operator walkthrough reverted that one move: generic
-    /// backup/measurements export is a *setting* the user reaches for under
-    /// Einstellungen. `SettingsExportScreen` was simultaneously split (C1/C2) — it
-    /// now hosts ONLY the generic exports (full JSON/CSV backup + per-domain CSV);
-    /// the doctor-handover surfaces (PDF report, FHIR, health-record ZIP, clinician
-    /// share-link) regrouped under Mehr → "Mit dem Arzt teilen"
-    /// (`UnifiedSharingScreen` since 18-03; `ShareWithDoctor…` in C2).
+    /// Generic backup and measurement export is a *setting* the user reaches
+    /// for under Einstellungen. `SettingsExportScreen` hosts only the generic
+    /// exports (full JSON/CSV backup and per-domain CSV); the doctor-handover
+    /// surfaces live under Mehr → "Mit dem Arzt teilen" (`UnifiedSharingScreen`).
     case export
-    /// v1.35.0 (GH #83) — which pillars count toward the Health Score. Sits
+    /// Which pillars count toward the Health Score (server v1.35.0). Sits
     /// directly beside Modules because both answer "what does the app count
     /// for me"; the distinction the pair has to keep visible is that Modules
     /// says what gets *recorded* and this says what gets *counted*.
     case healthScore
-    // #30 (v1.18.0) — per-user feature-module on/off toggles. Sits before
+    // Per-user feature-module on/off toggles (server v1.18.0). Sits before
     // Privacy & Security: "which parts of the app are on" reads as a
     // configuration concern, adjacent to Appearance/Source-priority.
     case modules
@@ -340,45 +279,35 @@ enum HubRow: String, CaseIterable, Identifiable {
         switch self {
         case .account: "person.crop.circle.fill"
         case .integrations: "link.circle.fill"
-        // v0.14.10 §3 — same glyph `SettingsDevicesScreen` uses internally so the
+        // Same glyph `SettingsDevicesScreen` uses internally so the
         // hub→detail transition reads continuous.
         case .devices: "dot.radiowaves.left.and.right"
         case .notifications: "bell.fill"
-        // v0.6.2.6 E2 — `dashboard` hub-row was relabelled "Aussehen"
-        // (operator directive 2026-05-24) so the icon swaps from the
-        // grid glyph to `paintpalette.fill`, matching the
-        // Personalisierung card icon inside SettingsDashboardScreen so
-        // the hub→detail transition reads as one continuous surface.
-        // The enum case + accessibility identifier stay `dashboard` so
-        // a11y selectors and any future deep-link routes continue to
-        // resolve.
+        // Matches the Personalisierung card icon inside
+        // SettingsDashboardScreen so the hub→detail transition reads as one
+        // continuous surface.
         case .dashboard: "paintpalette.fill"
         case .siri: "mic.fill"
-        // Build 2 / 2.7–2.8 — the "who can reach my data" pair. `powerplug`
+        // The "who can reach my data" pair. `powerplug`
         // matches the web MCP card's plug glyph; `key.fill` matches the web
         // API-token card.
         case .mcp: "powerplug.fill"
         case .apiTokens: "key.fill"
         case .sources: "square.stack.3d.up"
         case .ai: "sparkles"
-        // v0.8.0 W7 — Server promoted out of About into its own row.
-        // `server.rack` matches the icon `SettingsServerScreen` +
-        // About's former server card both used, so the hub→detail
-        // transition stays continuous.
+        // `server.rack` matches the icon `SettingsServerScreen` uses, so
+        // the hub→detail transition stays continuous.
         case .serverSync: "server.rack"
-        // v0.14.7 C1 — Export back in the hub. The down-arrow tray glyph
-        // matches the former `MoreScreen.Layout.exportRow` icon so the
-        // hub→`SettingsExportScreen` transition reads continuous.
+        // The down-arrow tray glyph keeps the hub→`SettingsExportScreen`
+        // transition continuous.
         case .export: "square.and.arrow.down.fill"
-        // GH #83 — same glyph the screen's own card wears, so the hub→detail
+        // Same glyph the screen's own card wears, so the hub→detail
         // transition reads continuous.
         case .healthScore: "slider.horizontal.3"
-        // #30 — feature-module switchboard.
+        // Feature-module switchboard.
         case .modules: "square.grid.2x2.fill"
-        // v0.8.0 W7 — `advanced` relabelled "Privacy & Security"; the
-        // lock-shield glyph matches the screen's own security card and
-        // reads as privacy/security at a glance instead of the generic
-        // wrench "catch-all" tools metaphor.
+        // The lock-shield glyph matches the screen's own security card and
+        // reads as privacy and security at a glance.
         case .advanced: "lock.shield.fill"
         case .about: "info.circle.fill"
         }
@@ -390,39 +319,27 @@ enum HubRow: String, CaseIterable, Identifiable {
         case .integrations: "Integrations"
         case .devices: "Devices"
         case .notifications: "Notifications"
-        // v0.6.2.6 E2 — relabelled from "Dashboard" → "Aussehen" per
-        // operator directive 2026-05-24 ("den Bereich Dashboard
-        // sollten wir umbenennen in Aussehen oder so und da diese
-        // ganzen Sachen, die wir verändern können reinbringen"). The
-        // sub-screen already hosts the consolidated visual-config
-        // surface (Layout + Erscheinungsbild picker + tile editor) so
-        // no rows needed to move — only the label.
+        // The sub-screen hosts the visual configuration (layout,
+        // Erscheinungsbild picker, tile editor), so it is named for that.
         case .dashboard: "Appearance"
-        // v0.11 Settings-IA-Restructure — the per-Apple-Health-type sync
-        // toggles moved into the dedicated Apple-Health integration sub-page;
-        // this hub row is now priority-only (cross-source ladder), so it reads
-        // "Source priority". The enum case + a11y id stay `sources` for
-        // selector stability (same trick `dashboard`→Appearance uses).
         case .siri: "Siri & Shortcuts"
         case .mcp: "MCP connector"
         case .apiTokens: "API tokens"
+        // The row is priority-only (the cross-source ladder); the per-type
+        // Apple Health toggles live on the Apple Health integration page.
         case .sources: "Source priority"
-        // v0.8.0 W7 — relabelled "Assistant & Insights" → "Assistant".
-        // The Insights-tile customization moved to Appearance (a layout
-        // concern), so the screen now owns only the assistant
-        // provider/chain config + on-device trend toggle + Coach.
+        // The screen owns the assistant provider and chain, the on-device
+        // trend toggle and the Coach; tile customization is in Appearance.
         case .ai: "Assistant"
         case .serverSync: "Server & sync"
-        // v0.14.7 C1 — Export back in the hub (generic backup + per-domain CSV).
+        // Generic backup and per-domain CSV.
         case .export: "Export"
-        // GH #83 — which pillars carry the composite.
+        // Which pillars carry the composite.
         case .healthScore: "Health Score"
-        // #30 — feature-module switchboard.
+        // Feature-module switchboard.
         case .modules: "Modules"
-        // v0.8.0 W7 — relabelled "Advanced" → "Privacy & Security". Its
-        // remaining content (audit log, LOINC review, biometric lock,
-        // delete account) is exactly privacy/security; "Advanced" was a
-        // catch-all that collided with the old root Security section.
+        // Its content (audit log, LOINC review, biometric lock, delete
+        // account) is exactly privacy and security.
         case .advanced: "Privacy & Security"
         case .about: "About this app"
         }
@@ -446,16 +363,16 @@ enum HubRow: String, CaseIterable, Identifiable {
     /// Mittelpunkt ist raus (Betreiber-Urteil: wirkt KI-generiert). Jede Zeile
     /// ist Katalog-Inhalt — rohe Literale gibt es hier nicht mehr.
     ///
-    /// **Prüfung:** `SettingsSubtitleTests` (E12) hält die Regel über
+    /// **Prüfung:** `SettingsSubtitleTests` hält die Regel über
     /// `HubRow.allCases`, in beiden Sprachen.
     var subtitle: String? {
         switch self {
         case .account: "Profile, passkeys"
-        // 17-05 — was the raw literal "Apple Health · Withings": uncatalogued,
+        // Was the raw literal "Apple Health · Withings": uncatalogued,
         // middle-dotted, and only naming two of the four providers the screen
         // hosts. Catalogued, comma-separated and complete.
         case .integrations: "Apple Health, Withings, WHOOP, Oura"
-        // 17-05 (R5-A1) — the five U7 nils, written. Each names what the screen
+        // The five U7 nils, written. Each names what the screen
         // behind it actually contains, checked against that screen rather than
         // guessed: R7 outranks brevity.
         case .devices: "Paired devices, add new"
@@ -465,28 +382,28 @@ enum HubRow: String, CaseIterable, Identifiable {
         case .mcp: "Connected assistants, tokens"
         case .apiTokens: "See and revoke API access"
         case .sources: "Which source wins per metric"
-        // v0.8.0 W7 — Insights customization moved to Appearance, so the
+        // Insights customization moved to Appearance, so the
         // subtitle no longer promises tile customization here.
-        // 1.4 B2-c — shortened to fit one line (it ended in "KI-Anbi…").
+        // Shortened to fit one line (it ended in "KI-Anbi…").
         case .ai: "Coach, trend hints, AI provider"
         case .serverSync: "Connection, region, server version"
-        // v0.14.7 C1 — generic exports only; the doctor-handover surfaces
-        // moved to Mehr → "Mit dem Arzt teilen" (C2).
+        // Generic exports only; the doctor-handover surfaces
+        // moved to Mehr → "Mit dem Arzt teilen".
         case .export: "Full backup, CSV per area"
         // R5 — bleibt: grenzt ein statt umzuformulieren. „Health Score" allein
         // sagt nicht, dass hinter der Zeile eine Auswahl liegt und keine
         // Anzeige des Werts.
         case .healthScore: "Which pillars count"
         case .modules: "Which features are on"
-        // v0.8.0 W7 N5 — was "Sicherheit · Audit", which both leaked raw
+        // Was "Sicherheit · Audit", which both leaked raw
         // German and collided with the old root Security section.
-        // 25-02 (E-2026-08-29 #1) — glucose targets and injection sites moved
+        // Glucose targets and injection sites moved
         // to their subject homes (Über mich / Medications), and the old
         // subtitle's "clinical mappings" had been stale since 08-06 removed
         // the LOINC sign-off. What the screen holds now is exactly one thing,
         // and the subtitle says exactly that.
         case .advanced: "Biometric app lock"
-        // R7 — deliberately does NOT promise a licence card: the screen has
+        // Deliberately does NOT promise a licence card: the screen has
         // the app card, the two links and the update note, and nothing else.
         case .about: "Version, privacy policy, docs"
         }
@@ -496,7 +413,7 @@ enum HubRow: String, CaseIterable, Identifiable {
         "settings.hub.\(rawValue)"
     }
 
-    /// v0.13 W3 — `@MainActor` because some destinations (e.g. `SettingsAIScreen`)
+    /// `@MainActor` because some destinations (e.g. `SettingsAIScreen`)
     /// now hold `@Environment` properties whose default values are main-actor
     /// isolated, making their synthesized `init()` main-actor isolated. The only
     /// consumer is `hubSection` inside a View body (already on the main actor).

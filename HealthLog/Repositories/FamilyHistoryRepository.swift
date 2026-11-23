@@ -37,7 +37,7 @@ public actor FamilyHistoryRepository {
     // MARK: - Reads
 
     /// `GET /api/family-history` — the caller's entries, newest-first.
-    /// SWR cache-first (`.familyHistory`) for offline readability (QOL-OFF-2).
+    /// SWR cache-first (`.familyHistory`) for offline readability.
     public func list(limit: Int = 100) async throws -> [FamilyHistoryEntryDTO] {
         let api = api
         let query: [(String, String)] = [("limit", String(limit))]
@@ -69,23 +69,20 @@ public actor FamilyHistoryRepository {
 
     /// `POST /api/family-history`. Returns the created entry. Outbox-backed.
     ///
-    /// `clientEntityId` (audit-v0162 H-4) — the store's `optimistic-<uuid>` id,
+    /// `clientEntityId` — the store's `optimistic-<uuid>` id,
     /// stamped on the queued create so a queued offline edit/delete is remapped
     /// to the server id once this replays.
     @discardableResult
     public func create(_ body: FamilyHistoryCreate, clientEntityId: String? = nil) async throws -> FamilyHistoryEntryDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .createFamilyHistory, payload: OutboxQueue.Payloads.CreateFamilyHistory(body: body),
+            key: key, clientEntityId: clientEntityId
+        ) { [self] in
             let req: APIRequest<FamilyHistoryEntryDTO> = try .post("/api/family-history", body: body, idempotencyKey: key)
             let created = try await api.send(req)
             await invalidate([.familyHistory])
             return created
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
-                .createFamilyHistory, payload: OutboxQueue.Payloads.CreateFamilyHistory(body: body),
-                key: key, clientEntityId: clientEntityId
-            )
-            throw err
         }
     }
 
@@ -94,7 +91,7 @@ public actor FamilyHistoryRepository {
         _ = try await replayCreateReturningServerId(body, idempotencyKey: idempotencyKey)
     }
 
-    /// audit-v0162 H-4 — replay drain returning the server-assigned id.
+    /// Replay drain returning the server-assigned id.
     @discardableResult
     public func replayCreateReturningServerId(_ body: FamilyHistoryCreate, idempotencyKey: String) async throws -> String {
         let req: APIRequest<FamilyHistoryEntryDTO> = try .post(
@@ -107,17 +104,14 @@ public actor FamilyHistoryRepository {
     @discardableResult
     public func update(id: String, _ patch: FamilyHistoryPatch) async throws -> FamilyHistoryEntryDTO {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .updateFamilyHistory, payload: OutboxQueue.Payloads.UpdateFamilyHistory(id: id, patch: patch),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<FamilyHistoryEntryDTO> = try .patch("/api/family-history/\(id)", body: patch, idempotencyKey: key)
             let updated = try await api.send(req)
             await invalidate([.familyHistory])
             return updated
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
-                .updateFamilyHistory, payload: OutboxQueue.Payloads.UpdateFamilyHistory(id: id, patch: patch),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -134,17 +128,14 @@ public actor FamilyHistoryRepository {
     @discardableResult
     public func delete(id: String) async throws -> Bool {
         let key = IdempotencyKey()
-        do {
+        return try await writeAhead(
+            .deleteFamilyHistory, payload: OutboxQueue.Payloads.DeleteFamilyHistory(id: id),
+            key: key, clientEntityId: id
+        ) { [self] in
             let req: APIRequest<DeleteRecordResult> = .delete("/api/family-history/\(id)", idempotencyKey: key)
             let deleted = try await api.send(req).deleted
             await invalidate([.familyHistory])
             return deleted
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(
-                .deleteFamilyHistory, payload: OutboxQueue.Payloads.DeleteFamilyHistory(id: id),
-                key: key, clientEntityId: id
-            )
-            throw err
         }
     }
 
@@ -156,7 +147,7 @@ public actor FamilyHistoryRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - Cache invalidation (QOL-OFF-2)
+    // MARK: - Cache invalidation
 
     /// Drop the cached list snapshot after a successful write so a mutation is
     /// never masked by a fresh-enough cached row. No-op without a coordinator.
@@ -164,21 +155,23 @@ public actor FamilyHistoryRepository {
         await swr?.invalidate(keys)
     }
 
-    // MARK: - Outbox enqueue helper
+    // MARK: - Outbox write-ahead helper
 
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         _ kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
         key: IdempotencyKey,
-        clientEntityId: String? = nil
-    ) async {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(
-                kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
-            ))
-        } catch {
-            HLLog.outbox.error("Family-history outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-        }
+        clientEntityId: String? = nil,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(
+            kind: kind, payload: data, idempotencyKey: key.raw, clientEntityId: clientEntityId
+        )
+        return try await outbox.writeAhead(op, send: send)
     }
 }

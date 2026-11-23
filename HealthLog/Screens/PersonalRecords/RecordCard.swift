@@ -1,58 +1,96 @@
 import Charts
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — grid tile rendering one `PersonalRecord`.
+/// Grid tile rendering one `PersonalRecord`.
 ///
 /// 2-col `LazyVGrid` cell, ~168pt tall, `.elevated`. Anatomy (top-down):
 /// - 18pt kind glyph + caption (`metricSlot` or metric label, uppercased).
-/// - 32pt-bold rounded value + unit row.
+/// - Value + unit in the tile size (`HLValueText(.tile)`).
 /// - Mini sparkline (~32pt) with a filled `Circle()` overlay at the
 ///   peak index (and a tiny star above as a peak-flag indicator).
 /// - Footer row: relative timestamp + delta chip ("Neuer Rekord!" /
 ///   "+12% vs. previous", catalog `records.delta.vsPrevious`).
 ///
-/// **Tap target:** the entire card is a button — taps emit `onTap`
-/// upstream so the screen can present a share sheet or push to
-/// chart detail. The card itself does not own navigation.
+/// **Tap target:** the entire card opens the record's metric page, where the
+/// record is a point in the history. Sharing sits in the context menu. A
+/// record without a metric page (no resolvable kind) keeps sharing on tap;
+/// `onTap` is the share callback either way.
 ///
 /// **Accessibility:** the whole card collapses to a single
 /// VoiceOver element with a synthesised summary so users don't have
 /// to swipe through each label individually.
 struct RecordCard: View {
-    /// #115 P2 — the account's display units.
+    /// The account's display units.
     @Environment(\.unitPreferences) private var unitPreferences
     let record: PersonalRecord
     let onTap: (PersonalRecord) -> Void
 
-    /// Audit-01 H3 — the record value keeps its 32pt visual weight at the
-    /// default setting but now scales with Dynamic Type (accessibility text
-    /// sizes were previously ignored by the pixel-locked `hlMetric(32)`).
-    @ScaledMetric(relativeTo: .largeTitle) private var valueSize: CGFloat = 32
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// What a tap on the card does.
+    enum TapAction: Equatable {
+        /// Push the metric page of this kind.
+        case openMetric(MetricKind)
+        /// Share the record (no metric page to open).
+        case share
+    }
+
+    /// The metric page when the record names a kind the app can show,
+    /// otherwise sharing, as before.
+    nonisolated static func tapAction(for record: PersonalRecord) -> TapAction {
+        guard let kind = record.kind, kind != .unknown else { return .share }
+        return .openMetric(kind)
+    }
 
     var body: some View {
-        Button {
-            onTap(record)
-        } label: {
+        Group {
+            switch Self.tapAction(for: record) {
+            case let .openMetric(kind):
+                NavigationLink {
+                    RecordMetricDestination(kind: kind)
+                } label: {
+                    card
+                }
+                .buttonStyle(.hlRow)
+            case .share:
+                Button {
+                    onTap(record)
+                } label: {
+                    card
+                }
+                .buttonStyle(.hlRow)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(accessibilityHint)
+        .accessibilityAction(named: Text("Share record")) { onTap(record) }
+        .contextMenu {
+            Button {
+                onTap(record)
+            } label: {
+                Label("Share record", systemImage: "square.and.arrow.up")
+            }
+        }
+    }
+
+    private var card: some View {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 header
                 valueRow
                 sparklineRow
                 footer
             }
-            .padding(HLSpace.md)
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-            .background(HLSurface.secondary, in: RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                    .stroke(HLColor.separator, lineWidth: 0.5)
-            }
-            .hlShadow(HLShadow.cardLight)
+            // Fills the row's height, so the cards of a row end together.
+            .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .topLeading)
         }
-        .buttonStyle(HLPressableButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(Text("Tap to share this record."))
+    }
+
+    private var accessibilityHint: Text {
+        switch Self.tapAction(for: record) {
+        case .openMetric: Text("records.card.a11y.opensMetric")
+        case .share: Text("Tap to share this record.")
+        }
     }
 
     // MARK: - Subviews
@@ -63,37 +101,23 @@ struct RecordCard: View {
                 .font(.hlIcon(HLIconSize.lg))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
-            // POLISH-B (SHOTS F-REC-1) — a long German metric name
-            // ("HERZFREQUENZVARIABILITÄT") was cut; it shrinks further on one
-            // line, and from the accessibility sizes on it wraps.
-            HLSectionLabel(verbatim: metricLabel)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.55)
-                .allowsTightening(true)
+            // The label wraps a long metric name ("Herzfrequenzvariabilität")
+            // itself instead of cutting it.
+            HLCardLabel(verbatim: metricLabel)
         }
     }
 
+    /// The record in the account's unit, one decimal at most like before.
     private var valueRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
-            Text(formattedValue)
-                // Design-system metric token, Dynamic-Type-scaled via the
-                // `valueSize` @ScaledMetric (audit-01 H3).
-                .font(.hlMetric(valueSize))
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
-                .lineLimit(1)
-                // v0.8.0 W6 — 0.6 → 0.75: record value stays legible at large
-                // Dynamic Type instead of crushing below its caption.
-                .minimumScaleFactor(0.75)
-                .contentTransition(.numericText(value: record.base.value))
-            if !unitLabel.isEmpty {
-                Text(unitLabel)
-                    // v0.11 reconcile (#12 sizing-drift): footnote token (13pt)
-                    // instead of a raw system-size font.
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-            }
-        }
+        HLValueText(
+            record.base.displayValue(unitPreferences),
+            unit: HLUnit(symbol: unitLabel),
+            size: .tile,
+            fractionDigits: 0 ... 1
+        )
+        // A five-digit step count with its unit is wider than a half-width
+        // card; it shrinks to fit instead of ending in "…".
+        .minimumScaleFactor(0.6)
     }
 
     @ViewBuilder
@@ -150,13 +174,13 @@ struct RecordCard: View {
     @ViewBuilder
     private var deltaChip: some View {
         if let delta = record.delta {
-            let isImprovement = delta.absolute >= 0
-            let symbol = isImprovement ? "arrow.up.right" : "arrow.down.right"
-            let tone: HLBadge.Tone = isImprovement ? .success : .warning
-            let label = Self.deltaLabel(delta: delta)
-            HLBadge(label, icon: symbol, tone: tone)
+            // Trend arrows point straight up or down; the diagonal is the
+            // sign for a link that leaves the app. No change has no arrow
+            // and no colour: "+0 %" in green read like a gain.
+            let style = Self.deltaStyle(delta: delta)
+            HLBadge(Self.deltaLabel(delta: delta), icon: style.symbol, tone: style.tone)
         } else {
-            // 1.4 B4 — `HLBadge` takes a display string; the literal was
+            // `HLBadge` takes a display string; the literal was
             // never looked up, so German read "New record!".
             HLBadge(String(localized: "New record!"), icon: "sparkles", tone: .neutral)
         }
@@ -180,7 +204,7 @@ struct RecordCard: View {
         return MetricTypeLocalisation.label(forType: record.base.metricType)
     }
 
-    /// #115 P2 — the record in the account's unit (the row is canonical).
+    /// The record in the account's unit (the row is canonical).
     private var formattedValue: String {
         let value = record.base.displayValue(unitPreferences)
         return Self.numberFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
@@ -198,8 +222,18 @@ struct RecordCard: View {
         record.base.achievedAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
     }
 
+    /// Arrow and tone of the change chip: up and green for a gain, down and
+    /// amber for a loss, neither for a change that rounds to nothing.
+    static func deltaStyle(delta: PersonalRecord.Delta) -> (symbol: String?, tone: HLBadge.Tone) {
+        let shown = delta.percent.map { ($0 * 100).rounded() } ?? delta.absolute
+        if shown == 0 { return (nil, .neutral) }
+        return shown > 0 ? ("arrow.up", .success) : ("arrow.down", .warning)
+    }
+
     static func deltaLabel(delta: PersonalRecord.Delta) -> String {
-        if let percent = delta.percent {
+        // A step under half a percent read "+0 % vs. zuvor" on a new best,
+        // which says nothing; it shows its absolute size instead.
+        if let percent = delta.percent, abs(percent * 100).rounded() >= 1 {
             let signed = percent * 100
             let prefix = signed >= 0 ? "+" : ""
             let percentText = prefix + HLNumberFormat.percent(Int(signed.rounded()))
@@ -238,6 +272,23 @@ struct RecordCard: View {
         f.minimumFractionDigits = 0
         return f
     }()
+}
+
+/// The metric page a record card opens, built only when pushed. Pushed
+/// outside the Insights pager, it needs the bar for the way back and has no
+/// strip of its own.
+private struct RecordMetricDestination: View {
+    let kind: MetricKind
+
+    @Environment(\.appContainer) private var appContainer
+
+    var body: some View {
+        if let appContainer {
+            InsightsMetricScreen(kind: kind, store: appContainer.makeChartDetailStore(kind: kind))
+                .toolbar(.visible, for: .navigationBar)
+                .environment(\.insightsInPager, false)
+        }
+    }
 }
 
 #Preview("RecordCard — grid") {

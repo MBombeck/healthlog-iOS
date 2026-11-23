@@ -62,7 +62,7 @@ struct APIClientTests {
         #expect(capturedIdem != nil)
     }
 
-    /// GH-iOS #27 — Cloudflare documents `CF-Access-Client-Id` and
+    /// Cloudflare documents `CF-Access-Client-Id` and
     /// `CF-Access-Client-Secret`; until 1.4.1 the secret went out as
     /// `cf-access-client-token`, which Cloudflare ignores.
     @Test("CF-Access headers use Cloudflare's documented names")

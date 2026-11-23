@@ -17,7 +17,7 @@ import SwiftUI
 /// / respiratory rate / SpO₂ / body temperature / blood glucose / weight. This
 /// block mirrors that set in the same order, dropping any vital the user has no
 /// reading for. Each tile = the metric icon + label, the latest value + unit
-/// (big mono), the monochrome `TrendChip` (direction-only, polarity-aware), and
+/// (compact cell size), the monochrome `TrendChip` (direction-only, polarity-aware), and
 /// an inline `HLSparkline` of the server's daily-rollup series — exactly the
 /// grammar of the web `SparklineDeltaTile`.
 ///
@@ -29,9 +29,7 @@ import SwiftUI
 /// the iOS tile surfaces the honest latest-value + trend + series only. BMI
 /// already has its own dedicated overview card.
 ///
-/// **On-device ((A) — survives standalone):** the dashboard summary is part of
-/// the W2 read-union, so this block renders in BOTH the paired and standalone
-/// paths. It is pure data — no AI gate, no glass, monochrome.
+/// It is pure data — no AI gate, no glass, monochrome.
 ///
 /// **Self-suppression:** when no vital sign carries a value the whole section
 /// renders NOTHING (no header, no shell, no apologetic empty card) — matching
@@ -42,7 +40,7 @@ struct InsightsVitalsDashboard: View {
     /// site — the same array the dashboard tiles + target grid already read, so
     /// this block costs no extra round-trip.
     let metrics: [DashboardMetric]
-    /// W5-1 (v0.12 W5a) — kinds already rendered by another overview surface
+    /// Kinds already rendered by another overview surface
     /// (originally the target-tile grid, gone since #115 B7). The overview must show each metric
     /// EXACTLY ONCE: a vital that already lives as a target tile (e.g. weight,
     /// resting-HR) is dropped from this Vitals block so the two surfaces never
@@ -63,7 +61,7 @@ struct InsightsVitalsDashboard: View {
     var trendVerdicts: TileTrendVerdicts = .none
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// #115 P2 — weight, temperature and glucose read in the account's unit.
+    /// Weight, temperature and glucose read in the account's unit.
     @Environment(\.unitPreferences) private var unitPreferences
 
     /// Web `SECTION_VITALS` order, mapped onto the iOS `MetricKind` enum.
@@ -83,16 +81,17 @@ struct InsightsVitalsDashboard: View {
         let tiles = Self.tiles(from: metrics, excluding: excludedKinds, units: unitPreferences, verdicts: trendVerdicts)
         // Self-suppress: no vital with a value → render nothing (calm doctrine).
         if !tiles.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                 // One canonical header (sentence-case, monochrome) — matches the
                 // web `insights.derived.vitals.sectionTitle` h2.
-                InsightsSectionHeader("Vitals")
-                VStack(spacing: HLSpace.sm) {
+                HLSectionHeader("Vitals", rank: .area)
+                VStack(spacing: HLLayout.cardGap) {
                     ForEach(tiles) { tile in
                         card(for: tile)
                     }
                 }
             }
+            .hlContainerGap(HLLayout.cardGap)
             .frame(maxWidth: .infinity, alignment: .leading)
             .transition(reduceMotion ? .identity : .opacity)
             .accessibilityElement(children: .contain)
@@ -106,29 +105,33 @@ struct InsightsVitalsDashboard: View {
     private func card(for tile: VitalTile) -> some View {
         let body = HLCard {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: tile.symbol)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .frame(width: 22)
-                        .accessibilityHidden(true)
-                    Text(tile.title)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Spacer(minLength: HLSpace.sm)
-                    TrendChip(trend: tile.trend, mode: tile.mode)
-                    Text(tile.valueText)
-                        .font(.hlHeadline)
-                        .monospacedDigit()
-                        .foregroundStyle(HLText.primary)
+                // The head of a Today tile (12 pt), the value in the compact
+                // cell size: a list of vitals must not read louder than the
+                // tiles it summarises. At the accessibility sizes the value
+                // goes under the name.
+                HLAdaptiveStack(spacing: HLSpace.sm) { stacked in
+                    HStack(spacing: HLSpace.xs) {
+                        HLTileHeaderGlyph(systemName: tile.symbol)
+                            .accessibilityHidden(true)
+                        HLTileTitleLabel(Text(tile.title))
+                    }
+                    if !stacked {
+                        Spacer(minLength: HLSpace.sm)
+                    }
+                    // Value first, trend after it: a glyph in front of the
+                    // number reads as its sign.
+                    HStack(spacing: HLSpace.sm) {
+                        HLValueText(
+                            tile.displayValue,
+                            unit: tile.unit,
+                            size: .compact,
+                            fractionDigits: tile.fractionDigits
+                        )
+                        TrendChip(trend: tile.trend, mode: tile.mode)
+                    }
                 }
                 if tile.series.count >= 2 {
-                    // W6b (v0.12 W5a) — conform to the unified tile grammar
-                    // (STANDARDS §7). Task #36 — route through the shared
-                    // `HLTileMetricChart` (same `MetricChartContent` engine +
-                    // inkGraphite ink as the metric's Insights page) so the
-                    // Vitals block reads as the same chart material as the
-                    // target-grid tiles below it AND the per-metric detail.
+                    // The same chart material as the metric page, shrunk.
                     HLTileMetricChart(kind: tile.kind, values: tile.series)
                         .frame(height: HLChartStyle.heightCompact)
                 }
@@ -136,7 +139,7 @@ struct InsightsVitalsDashboard: View {
         }
         if let onSelect {
             Button { onSelect(tile.kind) } label: { body }
-                .hlPressable() // QOL-AUDIT H1: press feedback
+                .hlPressable(hover: .lift) // Press feedback, the card rises under the pointer
                 // v0.14.1 D — re-attach the pin affordance the redesign dropped:
                 // every at-a-glance vital tile is long-press-pinnable to Home.
                 .pinToHomeContextMenu(kind: tile.kind, container: container)
@@ -160,6 +163,11 @@ struct InsightsVitalsDashboard: View {
         let title: String
         let symbol: String
         let valueText: String
+        /// The reading in the account's unit, for the compact value; `nil`
+        /// when it cannot be shown (the placeholder stands instead).
+        var displayValue: Double?
+        var unit: HLUnit = .plain
+        var fractionDigits: ClosedRange<Int> = HLValueFormat.defaultFractionDigits
         let trend: TrendIndicator
         /// 1.5 VERDICTS — the server's verdict on this card, or neutral.
         var mode: TrendChip.Mode = .neutral
@@ -182,24 +190,31 @@ struct InsightsVitalsDashboard: View {
     ) -> [VitalTile] {
         let byKind = Dictionary(metrics.map { ($0.kind, $0) }, uniquingKeysWith: { first, _ in first })
         return vitalOrder.compactMap { kind -> VitalTile? in
-            // W5-1 — a vital already shown as a configured-target tile is dropped
+            // A vital already shown as a configured-target tile is dropped
             // here so the overview renders the metric exactly once.
             guard !excludedKinds.contains(kind) else { return nil }
             guard let metric = byKind[kind], let latest = metric.latestValue else { return nil }
             let descriptor = kind.descriptor
             let title = String(localized: descriptor.title)
-            // #115 P2 — the summary value is canonical SI; a converted family
+            // The summary value is canonical SI; a converted family
             // reads in the account's unit (the identity branch keeps the
             // summary's own label and the 0…1-dp text).
             let unit = units.transform(for: kind).suffix
                 ?? (metric.unit.isEmpty ? String(localized: descriptor.unitLabel) : metric.unit)
             let value = MetricValueFormatter.formatScalar(latest, kind: kind, units: units)
             let valueText = unit.isEmpty ? value : "\(value) \(unit)"
+            // Same conversion and precision as the text above: the
+            // account's fixed digits, else up to one decimal.
+            let transform = units.transform(for: kind)
+            let displayed = transform.display(latest)
             return VitalTile(
                 kind: kind,
                 title: title,
                 symbol: descriptor.sfSymbol,
                 valueText: valueText,
+                displayValue: displayed.isFinite ? displayed : nil,
+                unit: HLUnit(symbol: unit),
+                fractionDigits: transform.fractionDigits.map { $0 ... $0 } ?? HLValueFormat.defaultFractionDigits,
                 trend: metric.trend,
                 mode: verdicts.mode(for: metric),
                 series: metric.sparkline,

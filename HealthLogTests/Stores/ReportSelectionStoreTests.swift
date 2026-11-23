@@ -68,7 +68,7 @@ private enum Fixtures {
     }
 }
 
-/// **CU-11 — the report-selection panel's state.**
+/// **The report-selection panel's state.**
 ///
 /// Drives the real ``ServerCapabilitiesRepository`` / ``ReportSelectionRepository``
 /// over the real `APIClient` with a stubbed `URLSession` (`MockURLProtocol`) —

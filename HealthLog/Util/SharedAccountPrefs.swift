@@ -1,6 +1,6 @@
 import Foundation
 
-/// **#115 B5 — the account preferences an extension needs, shared per account.**
+/// **The account preferences an extension needs, shared per account.**
 ///
 /// The app learns the account zone and the account glucose unit from
 /// `/api/auth/me` and keeps them in its own `UserDefaults.standard`
@@ -29,7 +29,7 @@ public final class SharedAccountPrefs: Sendable {
     static let userIDKey = "hl.shared.account.userID"
     static let timeZoneKey = "hl.shared.account.timeZone"
     static let glucoseUnitKey = "hl.shared.account.glucoseUnit"
-    /// #115 P2 — the account's unit system and the effective weight unit, so a
+    /// The account's unit system and the effective weight unit, so a
     /// spoken weight or temperature is taken in the unit the account reads.
     static let unitSystemKey = "hl.shared.account.unitSystem"
     static let weightUnitKey = "hl.shared.account.weightUnit"
@@ -67,13 +67,13 @@ public final class SharedAccountPrefs: Sendable {
         value(forKey: Self.glucoseUnitKey).flatMap(GlucoseUnit.init(rawValue:))
     }
 
-    /// #115 P2 — the account's unit system, or `nil` when unknown for the
+    /// The account's unit system, or `nil` when unknown for the
     /// account signed in now.
     public func unitSystem() -> HLUnitPreference? {
         value(forKey: Self.unitSystemKey).flatMap(HLUnitPreference.init(rawValue:))
     }
 
-    /// #115 P2 — the effective weight unit (the device override, else the
+    /// The effective weight unit (the device override, else the
     /// unit system's), or `nil` when unknown for the account signed in now.
     public func weightUnit() -> WeightUnit? {
         value(forKey: Self.weightUnitKey).flatMap(WeightUnit.init(rawValue:))
@@ -81,8 +81,8 @@ public final class SharedAccountPrefs: Sendable {
 
     // MARK: - Writes (app process)
 
-    /// Record the account zone. No-op without a signed-in user (standalone,
-    /// mid-logout): there is no account to scope it to.
+    /// Record the account zone. No-op without a signed-in user (mid-logout):
+    /// there is no account to scope it to.
     public func setTimeZone(_ zone: TimeZone) {
         set(zone.identifier, forKey: Self.timeZoneKey)
     }
@@ -92,7 +92,7 @@ public final class SharedAccountPrefs: Sendable {
         set(unit.rawValue, forKey: Self.glucoseUnitKey)
     }
 
-    /// #115 P2 — record the unit system and the effective weight unit. No-op
+    /// Record the unit system and the effective weight unit. No-op
     /// without a signed-in user.
     public func setAccountUnits(system: HLUnitPreference, weight: WeightUnit) {
         set(system.rawValue, forKey: Self.unitSystemKey)

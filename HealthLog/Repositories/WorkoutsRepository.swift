@@ -5,6 +5,14 @@ protocol WorkoutBatchUploading: Sendable {
         _ workouts: [WorkoutIngestDTO],
         ownerUserID: String
     ) async throws -> WorkoutBatchResponseDTO
+
+    /// Workouts deleted in Apple Health, by sample UUID (contract §3).
+    func deleteAppleHealthWorkouts(_ externalIDs: [String], ownerUserID: String) async throws
+}
+
+extension WorkoutBatchUploading {
+    /// An uploader that cannot delete (test doubles) sends nothing.
+    func deleteAppleHealthWorkouts(_: [String], ownerUserID _: String) async throws {}
 }
 
 /// Wraps `GET /api/workouts` and `GET /api/workouts/{id}` (server
@@ -27,7 +35,7 @@ protocol WorkoutBatchUploading: Sendable {
 /// since, until, sportType) so different views sharing the repo don't
 /// step on each other's slices.
 ///
-/// **Page coherence (#19):** a page one read from the network evicts the
+/// **Page coherence:** a page one read from the network evicts the
 /// cached follow-up pages of the same filter. Otherwise a pull-to-refresh
 /// would pair a fresh first page with a 59-second-old second page, and a
 /// workout that moved across the boundary in between would be lost or shown
@@ -38,7 +46,7 @@ protocol WorkoutBatchUploading: Sendable {
 /// workout id. Same TTL.
 public actor WorkoutsRepository: WorkoutBatchUploading {
     private let api: APIClientProtocol
-    /// Outbox-Mandate (audit v0.14.8 C4.1): a retriably-failed batch upload
+    /// Outbox-Mandate: a retriably-failed batch upload
     /// enrolls here with its already-used idempotency key so replay fires on
     /// reachability/foreground (not just the next HK observer wakeup) and the
     /// server's 24h `(userId, key, method, path)` dedup stays effective
@@ -170,7 +178,7 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
     /// next `list()` goes to the wire and the freshly-ingested workouts
     /// surface immediately in the UI rather than serving a stale slice.
     ///
-    /// **Outbox enrollment (audit v0.14.8 C4.1).** On a retriable failure
+    /// **Outbox enrollment.** On a retriable failure
     /// (`shouldPersistToOutbox`) the batch enqueues as `.uploadWorkoutBatch`
     /// carrying the SAME idempotency key that was just used on the wire, then
     /// rethrows (CycleRepository pattern). Replay re-POSTs under that
@@ -242,6 +250,22 @@ public actor WorkoutsRepository: WorkoutBatchUploading {
             idempotencyKey: IdempotencyKey(raw: idempotencyKey),
             authLease: authLease
         )
+    }
+
+    /// Sends workouts deleted in Apple Health to the workout delete route; the
+    /// server keeps a tombstone, so a late re-post answers `duplicate`.
+    func deleteAppleHealthWorkouts(_ externalIDs: [String], ownerUserID: String) async throws {
+        // A queued upload of a deleted workout must not bring it back later.
+        await outbox.pruneQueuedAppleHealthUploads(.uploadWorkoutBatch, removing: Set(externalIDs), ownerUserID: ownerUserID)
+        for start in stride(from: 0, to: externalIDs.count, by: AppleHealthDeleteDomain.maxIDsPerRequest) {
+            let end = min(start + AppleHealthDeleteDomain.maxIDsPerRequest, externalIDs.count)
+            let req: APIRequest<EmptyResponse> = try .delete(
+                AppleHealthDeleteDomain.workout.path,
+                body: ExternalIDBatch(externalIds: Array(externalIDs[start ..< end]))
+            )
+            _ = try await api.send(req)
+        }
+        invalidateCache()
     }
 
     /// Test hook: drop all cached entries so the next read goes to the wire.

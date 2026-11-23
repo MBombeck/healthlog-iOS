@@ -4,7 +4,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// v0.11 — the ONE canonical scrub-to-read primitive for every time-series
+/// The ONE canonical scrub-to-read primitive for every time-series
 /// chart in the app.
 ///
 /// **Why this exists (AUDIT-FINAL §H1):** before v0.11 only `ChartDetailScreen`
@@ -27,11 +27,10 @@ import SwiftUI
 ///    with a parent `ScrollView`) + the declarative selection-haptic + a
 ///    VoiceOver announcement on change.
 ///
-/// The two existing scrubbable charts (`ChartDetailScreen`, `FullscreenChartCover`)
-/// keep their bespoke `SeriesPoint` marks because they carry BP-secondary +
-/// personal-record affordances the generic path doesn't; this primitive is the
-/// canonical shape every OTHER chart now adopts so the *interaction contract* is
-/// identical app-wide.
+/// Every scrubbable chart shows the same callout (``HLScrubCallout``): the
+/// metric chart formats its `SeriesPoint` through ``HLSeriesPointCallout``,
+/// which draws the same card. A second series (the diastolic of a blood
+/// pressure) gets its own dot through the `secondary:` overload.
 enum HLChartScrubber {
     /// Scrub overlay marks for a generic ascending `(date, value)` series.
     ///
@@ -64,7 +63,7 @@ enum HLChartScrubber {
                 .annotation(
                     position: .top,
                     spacing: HLSpace.xs,
-                    // v0.11 #23 — fit the callout vertically inside the chart
+                    // Fit the callout vertically inside the chart
                     // bounds too. Previously `y: .disabled` let a `.top`-pinned
                     // callout render above the plot and get clipped by the
                     // enclosing card (operator: value readout cut off / invisible
@@ -78,9 +77,41 @@ enum HLChartScrubber {
                 y: .value(String(localized: "Value"), nearest[keyPath: value])
             )
             .foregroundStyle(HLChartTints.series)
-            .symbolSize(120)
+            .symbolSize(selectionSymbolSize)
         }
     }
+
+    /// Scrub overlay for a two-line series (blood pressure): the same rule,
+    /// dot and callout as above, plus a lighter dot on the second value where
+    /// the snapped element has one.
+    @ChartContentBuilder
+    static func marks<P>(
+        selectedDate: Date?,
+        in points: [P],
+        date: KeyPath<P, Date>,
+        value: KeyPath<P, Double>,
+        secondary: KeyPath<P, Double?>,
+        @ViewBuilder callout: (P) -> some View
+    ) -> some ChartContent {
+        marks(selectedDate: selectedDate, in: points, date: date, value: value, callout: callout)
+        if let selectedDate, let nearest = nearest(to: selectedDate, in: points, date: date),
+           let second = nearest[keyPath: secondary]
+        {
+            PointMark(
+                x: .value(String(localized: "chart.scrubber.selection"), nearest[keyPath: date]),
+                y: .value(String(localized: "Value"), second)
+            )
+            .foregroundStyle(HLChartTints.seriesLow)
+            .symbolSize(selectionSymbolSize)
+        }
+    }
+
+    /// Area of the emphasised dot under the scrub rule. Larger than any
+    /// series symbol, so the dot the callout describes is never ambiguous.
+    static let selectionSymbolSize: CGFloat = 120
+
+    /// The haptic every scrub plays when the snapped point changes.
+    static let haptic: SensoryFeedback = .selection
 
     /// Nearest element to `date` by absolute time distance. `nil` for an empty
     /// series. Pure + `nonisolated` so the snap contract is unit-testable.
@@ -95,21 +126,37 @@ enum HLChartScrubber {
     }
 }
 
-/// Canonical floating callout for the generic scrubber — a compact value +
-/// caption card with the same Liquid-Glass-on-26 / elevated-surface fallback
-/// treatment as `SelectedPointCallout`, so every scrubbable chart reads with
-/// one callout vocabulary. Use this where the chart has no `SeriesPoint`
-/// (mood, stability, workout HR, trends-raw); charts backed by `SeriesPoint`
-/// keep `SelectedPointCallout` (it adds BP-secondary + PR affordances).
+/// The one floating callout of every scrubbable chart: the date in caption
+/// type, the value in the rounded metric face, the unit beside it.
+///
+/// An opaque raised surface, not glass: the callout lies on the plot, and
+/// glass over a coloured curve takes up its colours in patches, so the
+/// value would stand on yellow and red. No rim and no shadow of its own.
+/// `marksRecord` adds the star of a personal best.
 struct HLScrubCallout: View {
     let title: String
     let value: String
     let unit: String?
+    let marksRecord: Bool
 
-    init(title: String, value: String, unit: String? = nil) {
+    /// The callout's surface, in light and dark.
+    static let surface: Color = HLColor.surfaceElevated
+
+    /// Widest the callout grows, so it never covers more than half a plot.
+    static let maxWidth: CGFloat = 220
+
+    init(title: String, value: String, unit: String? = nil, marksRecord: Bool = false) {
         self.title = title
         self.value = value
         self.unit = unit
+        self.marksRecord = marksRecord
+    }
+
+    /// What VoiceOver reads: date, value and unit, then the record note.
+    static func spokenText(title: String, value: String, unit: String?, marksRecord: Bool) -> String {
+        let reading = [value, unit].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ")
+        let record = marksRecord ? ", " + String(localized: "Personal best") : ""
+        return "\(title), \(reading)\(record)"
     }
 
     var body: some View {
@@ -127,21 +174,18 @@ struct HLScrubCallout: View {
                         .font(.hlCaption)
                         .foregroundStyle(HLText.secondary)
                 }
+                if marksRecord {
+                    Image(systemName: "star.fill")
+                        .font(.hlIcon(HLIconSize.xs, weight: .bold))
+                        .foregroundStyle(.tint)
+                }
             }
         }
         .padding(HLSpace.sm)
-        .frame(maxWidth: 220, alignment: .leading)
-        .hlGlassBackground(
-            in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous),
-            fallback: HLColor.surfaceElevated
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                .stroke(HLColor.separator, lineWidth: 0.5)
-        )
-        .hlShadow(HLShadow.cardLight)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(title), \(value) \(unit ?? "")"))
+        .frame(maxWidth: Self.maxWidth, alignment: .leading)
+        .background(Self.surface, in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: Self.spokenText(title: title, value: value, unit: unit, marksRecord: marksRecord)))
     }
 }
 
@@ -159,8 +203,44 @@ extension View {
         _ selectedDate: Binding<Date?>,
         announcement: @escaping (Date) -> String? = { _ in nil }
     ) -> some View {
-        chartXSelection(value: selectedDate)
-            .sensoryFeedback(.selection, trigger: selectedDate.wrappedValue)
+        modifier(HLChartScrubModifier(selectedDate: selectedDate, announcement: announcement))
+    }
+}
+
+/// The scrub interaction behind ``SwiftUI/View/hlChartScrub(_:announcement:)``.
+/// Touch selects through `chartXSelection`; a pointer (iPad trackpad or mouse)
+/// selects by hovering, with the same rule, dot and callout.
+private struct HLChartScrubModifier: ViewModifier {
+    let selectedDate: Binding<Date?>
+    let announcement: (Date) -> String?
+
+    /// Where the pointer stands over the chart, `nil` when it is elsewhere.
+    @State private var hoverLocation: CGPoint?
+
+    func body(content: Content) -> some View {
+        content
+            .chartXSelection(value: selectedDate)
+            .onContinuousHover { phase in
+                switch phase {
+                case let .active(location): hoverLocation = location
+                case .ended: hoverLocation = nil
+                }
+            }
+            // The overlay only translates the pointer into a date; it takes no
+            // touches, so the touch selection underneath keeps working.
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Color.clear
+                        .allowsHitTesting(false)
+                        .onChange(of: hoverLocation) { _, location in
+                            selectedDate.wrappedValue = HLChartScrubber.hoverDate(
+                                at: location,
+                                plotFrame: proxy.plotFrame.map { geometry[$0] }
+                            ) { proxy.value(atX: $0, as: Date.self) }
+                        }
+                }
+            }
+            .sensoryFeedback(HLChartScrubber.haptic, trigger: selectedDate.wrappedValue)
             .onChange(of: selectedDate.wrappedValue) { _, newValue in
                 #if canImport(UIKit)
                     guard UIAccessibility.isVoiceOverRunning,
@@ -168,5 +248,20 @@ extension View {
                     UIAccessibility.post(notification: .announcement, argument: text)
                 #endif
             }
+    }
+}
+
+extension HLChartScrubber {
+    /// The date under the pointer: `nil` when the pointer has left or stands
+    /// outside the plot, else the date at its x position inside the plot.
+    /// `dateAtX` reads the chart's scale and is handed in, so the rule is
+    /// testable without a chart.
+    static func hoverDate(
+        at location: CGPoint?,
+        plotFrame: CGRect?,
+        dateAtX: (CGFloat) -> Date?
+    ) -> Date? {
+        guard let location, let plotFrame, plotFrame.contains(location) else { return nil }
+        return dateAtX(location.x - plotFrame.minX)
     }
 }

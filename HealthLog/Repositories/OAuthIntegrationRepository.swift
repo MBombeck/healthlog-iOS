@@ -25,7 +25,7 @@ public actor OAuthIntegrationRepository {
         case oura
         case polar
         case fitbit
-        /// v1.28.11 (#46) — Strava workout/activity ingest. Same server-OAuth
+        /// v1.28.11 — Strava workout/activity ingest. Same server-OAuth
         /// shape as Oura/Polar (browser connect, status, disconnect) plus per-user
         /// BYO credentials + a live token-probe `/test`.
         case strava
@@ -55,14 +55,15 @@ public actor OAuthIntegrationRepository {
             }
         }
 
-        /// #139 — the route behind `health.action == "resume"`, or `nil` when
-        /// the provider has none. The server has one for Fitbit (and Google
-        /// Health, Withings, WHOOP); Oura, Polar and Strava have no resume
-        /// route, so a `resume` action from them shows no button.
+        /// The route behind `health.action == "resume"`, or `nil` when
+        /// the provider has none. Oura, Polar and Strava never had a resume
+        /// route; Fitbit's answered 410 `route.retired` from server 1.48.0
+        /// and is gone in 1.49.0 (FitbitRetirement), so a `resume` action
+        /// from any of them shows no button. Google Health, Withings and
+        /// WHOOP resume through their own repositories.
         var resumePath: String? {
             switch self {
-            case .fitbit: "/api/integrations/fitbit/resume"
-            case .oura, .polar, .strava: nil
+            case .fitbit, .oura, .polar, .strava: nil
             }
         }
     }
@@ -87,13 +88,21 @@ public actor OAuthIntegrationRepository {
     }
 
     /// Revokes the link. `POST` (server contract) with an empty body.
-    /// KONTO (#149) — the Fitbit turndown, read from the consolidated
-    /// `GET /api/integrations/status` (the only read that carries it). `nil`
-    /// for every other provider and for a server without the field.
-    public func retirement() async throws -> FitbitRetirement? {
+    /// The Fitbit turndown and removal, read from the consolidated
+    /// `GET /api/integrations/status` (the only read that carries them). `nil`
+    /// for every other provider.
+    public func fitbitState() async throws -> FitbitConsolidatedState? {
         guard provider == .fitbit else { return nil }
         let req: APIRequest<IntegrationsRetirementPayload> = .get("/api/integrations/status")
-        return try await api.send(req).fitbit
+        return try await api.send(req).fitbitState
+    }
+
+    /// Clears the Fitbit removal note for this account (server 1.48.0,
+    /// `POST /api/integrations/fitbit-removal-notice/dismiss`, idempotent).
+    public func dismissFitbitRemovalNotice() async throws {
+        guard provider == .fitbit else { return }
+        let req: APIRequest<EmptyPayload> = try .post("/api/integrations/fitbit-removal-notice/dismiss", body: EmptyBody())
+        try await api.sendVoid(req)
     }
 
     public func disconnect() async throws {
@@ -126,7 +135,7 @@ public actor OAuthIntegrationRepository {
         return try await api.send(req)
     }
 
-    /// #139 — clear a parked connection (`POST /api/integrations/<provider>/resume`,
+    /// Clear a parked connection (`POST /api/integrations/<provider>/resume`,
     /// same contract as WHOOP's: no body, `{ resumed, wasParked }`). Only for a
     /// provider with a ``Provider/resumePath``.
     public func resume() async throws {

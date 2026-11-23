@@ -23,6 +23,10 @@ import SwiftUI
 ///   Coach AI-hero CTA pill, `HLColor.aiHeroInk`) where `HLText.tertiary`
 ///   would vanish on the dark gradient. Leave `nil` everywhere else.
 struct HLDisclosureChevron: View {
+    /// The text size up to which the glyph grows. Past it the glyph only
+    /// takes width from the title beside it and says nothing more.
+    static let largestTypeSize: DynamicTypeSize = .accessibility1
+
     var expanded: Bool?
     var tint: Color?
 
@@ -34,6 +38,7 @@ struct HLDisclosureChevron: View {
     var body: some View {
         Image(systemName: expanded == true ? "chevron.down" : "chevron.right")
             .font(.hlFootnote.weight(.semibold))
+            .dynamicTypeSize(...Self.largestTypeSize)
             .foregroundStyle(tint ?? HLText.tertiary)
             .accessibilityHidden(true)
     }

@@ -23,7 +23,7 @@ private func respond(_ req: URLRequest, _ json: String, status: Int = 200) -> (H
     return (http, Data(json.utf8))
 }
 
-/// **CU-30 / C5.** Locks the Same-Time-Baseline wire contract
+/// Locks the Same-Time-Baseline wire contract
 /// (`GET /api/insights/derived?metric=SAME_TIME_BASELINE&type=<MeasurementType>`,
 /// server v1.34.0, `src/lib/insights/derived/same-time-baseline.ts`) and the
 /// digest rail card it feeds.
@@ -52,7 +52,7 @@ private func respond(_ req: URLRequest, _ json: String, status: Int = 200) -> (H
 /// provided.
 @Suite("Same-Time-Baseline — Wire-Vertrag, gegatete Arme, Rail-Schlüssel", .serialized)
 struct SameTimeBaselineTests {
-    /// The transport seam (issue #82 / Plan 09-11). Both halves come from the
+    /// The transport seam. Both halves come from the
     /// caller's retained session, so every request this client makes is answered
     /// by that session's handler or by nothing at all.
     ///
@@ -487,26 +487,24 @@ struct SameTimeBaselineTests {
         #expect(SameTimeBaselineType(rawValue: "WEIGHT") == nil)
     }
 
-    @Test("Der Block hängt genau an den vier Typseiten und nur mit Cloud-Insights")
+    @Test("Der Block hängt genau an den vier Typseiten")
     func blockPlacementGate() {
-        #expect(SameTimeBaselineBlock.supportedType(for: .steps, canShowCloudInsights: true) == .activitySteps)
+        #expect(SameTimeBaselineBlock.supportedType(for: .steps) == .activitySteps)
         #expect(
-            SameTimeBaselineBlock.supportedType(for: .activeEnergy, canShowCloudInsights: true)
+            SameTimeBaselineBlock.supportedType(for: .activeEnergy)
                 == .activeEnergyBurned
         )
         #expect(
-            SameTimeBaselineBlock.supportedType(for: .distanceWalkingRunning, canShowCloudInsights: true)
+            SameTimeBaselineBlock.supportedType(for: .distanceWalkingRunning)
                 == .walkingRunningDistance
         )
         #expect(
-            SameTimeBaselineBlock.supportedType(for: .flightsClimbed, canShowCloudInsights: true)
+            SameTimeBaselineBlock.supportedType(for: .flightsClimbed)
                 == .flightsClimbed
         )
         // Every other metric page never constructs the block, so never reads.
-        #expect(SameTimeBaselineBlock.supportedType(for: .pulse, canShowCloudInsights: true) == nil)
-        #expect(SameTimeBaselineBlock.supportedType(for: .weight, canShowCloudInsights: true) == nil)
-        // Pure server compute — absent in standalone / no-server.
-        #expect(SameTimeBaselineBlock.supportedType(for: .steps, canShowCloudInsights: false) == nil)
+        #expect(SameTimeBaselineBlock.supportedType(for: .pulse) == nil)
+        #expect(SameTimeBaselineBlock.supportedType(for: .weight) == nil)
     }
 
     // MARK: - The digest rail card
@@ -623,7 +621,7 @@ struct SameTimeBaselineTests {
         #expect(!DerivedInsightsStore.surfacedMetrics.contains(SameTimeBaselineMetric.id))
     }
 
-    // MARK: - Transport ownership (issue #82 / Plan 09-11)
+    // MARK: - Transport ownership
 
     @Test("a handler installed after ours cannot answer this suite's request")
     func aLaterInstallCannotAnswerThisSuite() async throws {
@@ -658,7 +656,7 @@ struct SameTimeBaselineTests {
         // A positive count is the whole point: a decoded envelope proves the
         // *response* was right, and an unrouted request produces `nil` here just
         // as a 404 does. Only the count says the request reached this session.
-        #expect(mine.value == 1, "EXPECTED_RED: SameTimeBaselineTests was not routed to its own session")
+        #expect(mine.value == 1, "SameTimeBaselineTests was not routed to its own session")
         #expect(theirs.value == 0)
         #expect(dto?.sameTimeBaseline?.type == .activitySteps)
     }
@@ -667,7 +665,7 @@ struct SameTimeBaselineTests {
 
     /// Records the last URL the stub saw, across the `@Sendable` handler
     /// boundary. `Mutex` rather than an `NSLock` behind an unchecked-`Sendable`
-    /// conformance (Plan 09-11): checked concurrency instead of a promise the compiler
+    /// conformance: checked concurrency instead of a promise the compiler
     /// cannot verify. Since the migration it is reachable only through the
     /// session that owns it.
     private final class SeenURL: Sendable {

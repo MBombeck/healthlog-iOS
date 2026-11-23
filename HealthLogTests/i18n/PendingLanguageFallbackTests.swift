@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **1.5 L10N-NL — no listed language ever shows a raw key.**
+/// **No listed language ever shows a raw key.**
 ///
 /// nl ships in `CFBundleLocalizations` while it is still `pending`
 /// (`scripts/l10n/languages.json`). The bundle looks a key up in that
@@ -17,7 +17,6 @@ import Testing
 @Suite("every listed language resolves dotted keys to text, never to the raw key")
 struct PendingLanguageFallbackTests {
     @Test("every dotted key reads as text in every listed language")
-    @available(iOS 18.4, *)
     func dottedKeysNeverResolveToThemselves() throws {
         let catalog = try ParityCatalog.load()
         let exemptions = try Self.exemptPrefixes()
@@ -41,11 +40,10 @@ struct PendingLanguageFallbackTests {
         #expect(checked > 1000)
     }
 
-    /// 1.5 L10N-FINAL: nl is `required` now, so the key that used to read
+    /// Nl is `required` now, so the key that used to read
     /// English through its placeholder reads Dutch, and no listed language
     /// carries a placeholder any more (`check-catalog-format.py` fails on one).
     @Test("the Dutch table reads Dutch where it once carried an English placeholder")
-    @available(iOS 18.4, *)
     func formerPlaceholderReadsDutch() {
         // Changed in de/en since 1.3.0, so it went without a Dutch value from
         // PR #29 and carried the English placeholder until L10N-FINAL.

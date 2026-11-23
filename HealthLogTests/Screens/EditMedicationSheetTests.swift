@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10 W-Meds-B — covers the form-state prefill helper backing
+/// Covers the form-state prefill helper backing
 /// `EditMedicationSheet`, now cadence-aware. The sheet itself drives a SwiftUI
 /// view; this pure mapping struct lets us pin the field-by-field prefill +
 /// cadence-inference contract without standing up a view host.

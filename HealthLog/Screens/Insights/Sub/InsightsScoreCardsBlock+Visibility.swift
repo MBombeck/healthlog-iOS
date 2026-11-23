@@ -1,6 +1,6 @@
 import SwiftUI
 
-// v0141 — per-card show/hide support for the Insights-overview wellness score
+// Per-card show/hide support for the Insights-overview wellness score
 // cards. Split out of `InsightsScoreCardsBlock.swift` to keep that file under
 // the 600-line file-length budget (project file-length discipline).
 //
@@ -34,7 +34,7 @@ extension InsightsScoreCardsBlock {
     }
 }
 
-// MARK: - Parity Build 4 · 4.3 — one source of truth per card
+// MARK: - One source of truth per card
 
 /// Resolves WHICH wellness score cards the Insights overview renders, and in
 /// what order, from the two inputs that each own a disjoint slice of the
@@ -90,11 +90,20 @@ enum InsightsScoreCardResolution {
         let rest = catalogue.filter { !governed.contains($0) && !hidden.contains($0) }
         return selectedIDs + rest
     }
+
+    /// Where the health score card stands among the visible cards: after the
+    /// rings the hero order puts before it, so Today and Insights read in the
+    /// same order. First when there is no order or nothing comes before it.
+    static func healthScoreIndex(in visibleIDs: [String], heroOrder: [HeroRingID]) -> Int {
+        guard let anchor = heroOrder.firstIndex(of: .healthScore) else { return 0 }
+        let before = Set(heroOrder[..<anchor].map(\.rawValue))
+        return visibleIDs.prefix { before.contains($0) }.count
+    }
 }
 
 // MARK: - Per-card hide affordance
 
-/// v0141 — attaches a long-press "Hide card" context menu to a wellness score
+/// Attaches a long-press "Hide card" context menu to a wellness score
 /// tile. Renders nothing extra for a tile with no hideable id (the cycle tile),
 /// so a plain `.modifier(_:)` call site stays uniform. The tap gesture (open the
 /// detail sheet) is untouched — only the long-press adds the hide action.
@@ -105,7 +114,9 @@ struct HideScoreCardMenu: ViewModifier {
     func body(content: Content) -> some View {
         if let id {
             content.contextMenu {
-                Button(role: .destructive) {
+                // Hiding deletes nothing; the customisation screen brings
+                // the card back, so the item is not a destructive one.
+                Button {
                     store.hide(id)
                 } label: {
                     Label(String(localized: "Hide card"), systemImage: "eye.slash")

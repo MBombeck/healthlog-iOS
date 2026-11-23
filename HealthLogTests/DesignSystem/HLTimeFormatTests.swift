@@ -62,11 +62,57 @@ struct HLTimeFormatTests {
     func autoDefersToLocale() {
         let date = sample()
         let auto = HLTimeFormat.auto.formatTime(date)
-        // AUTO must equal the plain locale-driven short-time render.
-        let expected = date.formatted(
-            Date.FormatStyle(date: .omitted, time: .shortened).locale(.current)
-        )
-        #expect(auto == expected)
+        // AUTO must equal the system's short time for the device locale.
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        #expect(auto == formatter.string(from: date))
+    }
+
+    /// Five seconds past eight in the morning, read in GMT.
+    private static let fiveSecondsPastEight = Date(timeIntervalSince1970: 1_781_424_005)
+
+    /// The system puts a narrow no-break space in front of AM and PM.
+    private static func plainSpaces(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+
+    @Test("the time with seconds reads like the phone's clock with the seconds added", arguments: [
+        ("de_DE", "08:00:05"),
+        ("en_US", "8:00:05 AM"),
+        ("nl_NL", "08:00:05")
+    ])
+    func timeWithSeconds(identifier: String, expected: String) {
+        let locale = Locale(identifier: identifier)
+        let precise = HLTimeFormat.timeWithSeconds(Self.fiveSecondsPastEight, locale: locale, timeZone: .gmt)
+        #expect(Self.plainSpaces(precise) == expected)
+
+        // Hour and minute are the ones the short form shows.
+        let short = HLTimeFormat.shortTime(Self.fiveSecondsPastEight, locale: locale, timeZone: .gmt)
+        let hourAndMinute = Self.plainSpaces(short).replacingOccurrences(of: " AM", with: "")
+        #expect(Self.plainSpaces(precise).hasPrefix(hourAndMinute + ":05"))
+    }
+
+    @Test("the time with seconds follows the 12- or 24-hour form the user chose")
+    func timeWithSecondsFollowsPreference() throws {
+        let suite = try #require(UserDefaults(suiteName: "hl.test.timeformat.seconds"))
+        suite.removePersistentDomain(forName: "hl.test.timeformat.seconds")
+        // Half past one in the afternoon wherever the test runs.
+        let date = try #require(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 6, day: 14, hour: 13, minute: 30, second: 5)
+        ))
+
+        suite.set("H24", forKey: HLTimeFormat.defaultsKey)
+        let h24 = HLTimeFormat.timeWithSeconds(date, defaults: suite)
+        #expect(h24.hasPrefix("13"))
+        #expect(h24.hasSuffix("05"))
+
+        suite.set("H12", forKey: HLTimeFormat.defaultsKey)
+        let h12 = HLTimeFormat.timeWithSeconds(date, defaults: suite)
+        #expect(!h12.hasPrefix("13"))
+        #expect(h12.contains("05"))
+        suite.removePersistentDomain(forName: "hl.test.timeformat.seconds")
     }
 
     @Test("static time() routes through the effective preference")

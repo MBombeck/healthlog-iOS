@@ -4,7 +4,7 @@ import WidgetKit
 // MARK: - HealthLog watch complications
 
 //
-// **v0.12 P2 / v0.15.2 W-WATCH-COMPLICATIONS — watch-face complications.**
+// **Watch-face complications.**
 // Glanceable next-due dose + today's compliance, the Personal Health Score
 // ring, and the latest measurement on the watch face. Each reads the
 // `WatchSnapshot` the watch app persists into the shared App Group container
@@ -40,7 +40,7 @@ enum WatchComplicationFormat {
     static let emDash = "—"
 }
 
-// MARK: - Staleness (audit-v0162 M3)
+// MARK: - Staleness
 
 /// **Watch-side mirror of `WidgetTimelinePolicy`'s staleness rule.**
 ///
@@ -82,10 +82,21 @@ enum WatchComplicationStaleness {
 struct NextDoseEntry: TimelineEntry {
     let date: Date
     let snapshot: WatchSnapshot
-    /// audit-v0162 M3 — next dose too old to trust (suppress the dose glance).
+    /// Next dose too old to trust (suppress the dose glance).
     var isDoseStale: Bool = false
-    /// audit-v0162 M3 — today-counts from an earlier local day / > 24 h old.
+    /// Today-counts from an earlier local day / > 24 h old.
     var isComplianceStale: Bool = false
+
+    /// The dose the complication shows, or `nil` when none is open or the
+    /// snapshot is too old to trust it.
+    var openDose: WatchSnapshot.Dose? {
+        isDoseStale ? nil : snapshot.doses.first { $0.isActionable }
+    }
+
+    /// Lifts the complication in the Smart Stack around the dose's slot.
+    var relevance: TimelineEntryRelevance? {
+        TimelineEntryRelevance(score: NextDoseRelevance.relevance(for: openDose?.scheduledAt, now: date))
+    }
 }
 
 struct NextDoseProvider: TimelineProvider {
@@ -98,16 +109,20 @@ struct NextDoseProvider: TimelineProvider {
     }
 
     func getTimeline(in _: Context, completion: @escaping (Timeline<NextDoseEntry>) -> Void) {
-        let entry = makeEntry(WatchSnapshotStore().read() ?? .placeholder)
+        let now = Date()
+        let entry = makeEntry(WatchSnapshotStore().read() ?? .placeholder, at: now)
+        // The relevance window edges get their own entries, so the Smart Stack
+        // ranking changes at the edge and not only at the next re-read.
+        let edges = NextDoseRelevance.boundaries(for: entry.openDose?.scheduledAt, after: now)
+            .map { makeEntry(entry.snapshot, at: $0) }
         // Re-read every 15 min so the next-dose / compliance stays current even
         // without a fresh push (the watch app reloads on every push too).
-        let next = Date().addingTimeInterval(15 * 60)
-        completion(Timeline(entries: [entry], policy: .after(next)))
+        let next = now.addingTimeInterval(15 * 60)
+        completion(Timeline(entries: [entry] + edges, policy: .after(next)))
     }
 
-    private func makeEntry(_ snapshot: WatchSnapshot) -> NextDoseEntry {
-        let now = Date()
-        return NextDoseEntry(
+    private func makeEntry(_ snapshot: WatchSnapshot, at now: Date = Date()) -> NextDoseEntry {
+        NextDoseEntry(
             date: now,
             snapshot: snapshot,
             isDoseStale: WatchComplicationStaleness.isNextDoseStale(generatedAt: snapshot.generatedAt, now: now),
@@ -145,17 +160,16 @@ struct NextDoseComplication: Widget {
 private struct NextDoseComplicationView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: WatchSnapshot
-    /// audit-v0162 M3 — when set, suppress the (out-of-date) next dose glance.
+    /// When set, suppress the (out-of-date) next dose glance.
     var isDoseStale = false
-    /// audit-v0162 M3 — when set, the today-counts are yesterday's: show em-dash.
+    /// When set, the today-counts are yesterday's: show em-dash.
     var isComplianceStale = false
 
     /// The soonest actionable dose, or `nil` when there is none — OR when the
-    /// snapshot is too stale to trust it (audit-v0162 M3): a stale dose must
+    /// snapshot is too stale to trust it: a stale dose must
     /// never be surfaced as if it were still due today.
     private var nextDose: WatchSnapshot.Dose? {
-        guard !isDoseStale else { return nil }
-        return snapshot.doses.first { $0.isActionable }
+        NextDoseEntry(date: .now, snapshot: snapshot, isDoseStale: isDoseStale).openDose
     }
 
     /// Compliance ring fill — 0 while stale so yesterday's fraction isn't
@@ -193,7 +207,7 @@ private struct NextDoseComplicationView: View {
 
     private var inline: some View {
         if let dose = nextDose {
-            // W-RECONCILE H1 — redact the diagnosis-implying med name when the
+            // Redact the diagnosis-implying med name when the
             // wrist is down / face locked / always-on dimmed.
             Label {
                 Text("\(dose.medicationName) \(dose.scheduledAt, format: .dateTime.hour().minute())")
@@ -202,7 +216,7 @@ private struct NextDoseComplicationView: View {
             }
             .privacySensitive()
         } else if isDoseStale {
-            // audit-v0162 M3 — snapshot too old to trust: prompt to open the app
+            // Snapshot too old to trust: prompt to open the app
             // instead of an "All done" that could be a false reassurance.
             Label("Open iPhone app", systemImage: "exclamationmark.arrow.circlepath")
                 .privacySensitive()
@@ -217,8 +231,10 @@ private struct NextDoseComplicationView: View {
     private var circular: some View {
         Gauge(value: complianceFraction) {
             Image(systemName: isComplianceStale ? "exclamationmark.arrow.circlepath" : "pills.fill")
+                .widgetLayer(.statusSymbol, in: .watchNextDose)
         } currentValueLabel: {
             Text(takenText)
+                .widgetLayer(.primaryValue, in: .watchNextDose)
         }
         .gaugeStyle(.accessoryCircularCapacity)
     }
@@ -226,6 +242,7 @@ private struct NextDoseComplicationView: View {
     private var corner: some View {
         Image(systemName: cornerSymbol)
             .font(.title2)
+            .widgetLayer(.statusSymbol, in: .watchNextDose)
             .widgetLabel {
                 if let dose = nextDose {
                     Text("\(dose.scheduledAt, format: .dateTime.hour().minute())")
@@ -243,13 +260,14 @@ private struct NextDoseComplicationView: View {
     }
 
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
             if let dose = nextDose {
                 Label {
-                    // W-RECONCILE H1 — redact PHI med name on the locked/dimmed face.
+                    // Redact PHI med name on the locked/dimmed face.
                     Text(dose.medicationName).font(.headline).lineLimit(1).privacySensitive()
                 } icon: {
                     Image(systemName: dose.isInjection ? "syringe" : "pills.fill")
+                        .widgetLayer(.statusSymbol, in: .watchNextDose)
                 }
                 Text("\(dose.scheduledAt, format: .dateTime.hour().minute())")
                     .font(.caption)
@@ -311,7 +329,7 @@ struct HealthScoreComplication: Widget {
 }
 
 /// Maps the resolved band (shared `HealthScoreGlance.signalBand`, tested in
-/// `HealthLogTests`) onto the signal colour. No server band → neutral (#115 B7).
+/// `HealthLogTests`) onto the signal colour. No server band → neutral.
 enum WatchHealthScoreSignal {
     static func color(for glance: WatchSnapshot.HealthScoreGlance) -> Color {
         switch glance.signalBand {
@@ -325,7 +343,16 @@ enum WatchHealthScoreSignal {
 
 private struct HealthScoreComplicationView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let glance: WatchSnapshot.HealthScoreGlance?
+
+    /// The band rides on the gauge tint, which tinted faces drop; there the
+    /// symbol under the gauge takes over and states the band by shape.
+    private var bandSymbol: String {
+        WidgetTint(renderingMode).keepsStatusColor
+            ? "heart.fill"
+            : WidgetTintPolicy.healthScoreBandSymbol(band: glance?.signalBand)
+    }
 
     /// Clamped 0…1 ring fraction. Absent score → empty ring (0).
     private var fraction: Double {
@@ -355,23 +382,34 @@ private struct HealthScoreComplicationView: View {
 
     private var circular: some View {
         Gauge(value: fraction) {
-            Image(systemName: "heart.fill")
+            Image(systemName: bandSymbol)
+                .widgetLayer(.statusSymbol, in: .watchHealthScore)
         } currentValueLabel: {
             Text(valueText)
+                .widgetLayer(.primaryValue, in: .watchHealthScore)
         }
         .gaugeStyle(.accessoryCircular)
         .tint(tint)
     }
 
+    /// Where the hues are dropped, the band's shape stands before the number,
+    /// since the corner gauge carried it only in its tint.
     private var corner: some View {
-        Text(valueText)
-            .font(.title2)
-            .widgetLabel {
-                Gauge(value: fraction) {
-                    Text(verbatim: "")
-                }
-                .tint(tint)
+        HStack(spacing: WidgetMetrics.valueUnitSpacing) {
+            if !WidgetTint(renderingMode).keepsStatusColor {
+                Image(systemName: WidgetTintPolicy.healthScoreBandSymbol(band: glance?.signalBand))
+                    .widgetLayer(.statusSymbol, in: .watchHealthScore)
             }
+            Text(valueText)
+        }
+        .font(.title2)
+        .widgetLabel {
+            Gauge(value: fraction) {
+                Text(verbatim: "")
+            }
+            .tint(tint)
+            .widgetLayer(.ringProgress, in: .watchHealthScore)
+        }
     }
 }
 
@@ -444,24 +482,28 @@ private struct LatestMeasurementComplicationView: View {
         VStack(spacing: 0) {
             Image(systemName: symbol)
                 .font(.caption2)
+                .widgetLayer(.statusSymbol, in: .watchLatestMeasurement)
             Text(valueText)
                 .font(.system(.headline, design: .rounded))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .widgetLayer(.primaryValue, in: .watchLatestMeasurement)
         }
     }
 
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: WidgetMetrics.lineSpacing) {
             if let measurement {
                 Label {
                     Text(measurement.title).font(.headline).lineLimit(1)
                 } icon: {
                     Image(systemName: measurement.symbol)
+                        .widgetLayer(.statusSymbol, in: .watchLatestMeasurement)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: WidgetMetrics.valueUnitSpacing) {
                     Text(measurement.formattedValue)
                         .font(.system(.body, design: .rounded))
+                        .widgetLayer(.primaryValue, in: .watchLatestMeasurement)
                     if !measurement.unit.isEmpty {
                         Text(measurement.unit)
                             .font(.caption2)

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **REG (1.5) — Server #1216, the threshold nudges (POLISH-B B5).**
+/// **REG (1.5) — Server #1216, the threshold nudges.**
 ///
 /// `Regression_server_1216` pins that Rest Mode is shown only as the server
 /// delivers it. The threshold nudges after a lab entry had the same mistake

@@ -1,6 +1,6 @@
 import XCTest
 
-/// **W-HERMETIC-E2E (v0152).** Shared hermetic launch helper for the walkthrough
+/// Shared hermetic launch helper for the walkthrough
 /// UITests. Replaces the fragile live-`demo.healthlog.dev` onboarding walk with a
 /// deterministic, NETWORK-FREE boot: the `-uitest-hermetic` launch argument seeds
 /// an authenticated session backed by bundled JSON fixtures (see
@@ -38,7 +38,7 @@ extension XCUIApplication {
     }
 }
 
-/// **Phase 08 Wave 0.** Typed launch helpers for the Phase-8 UI REDs.
+/// Typed launch helpers for the Phase-8 UI REDs.
 ///
 /// Every helper waits for a *scenario-specific* ready identifier before its
 /// caller asserts anything, so a Phase-8 RED can only ever fail at the named
@@ -51,13 +51,13 @@ enum Phase8Scenario: String {
     case documentsPartialBulk
     case documentsModuleDisabled
     case returningLoginCompleted
-    /// **08-08.** The same unauthenticated boot for an account whose setup is
+    /// The same unauthenticated boot for an account whose setup is
     /// genuinely outstanding. A case that asserts about the optional tail has to
     /// ask for it now: since the post-authentication route reads the server's
     /// completion flag, `returningLoginCompleted` goes straight to the shell.
     case returningLoginIncomplete
     case onboardingProfileFailure
-    /// **08-11.** The shell with four renderable wellness scores on the derived
+    /// The shell with four renderable wellness scores on the derived
     /// batch route, so the Insights score grid has tiles to lay out.
     case insightsAccessibility
 }
@@ -128,7 +128,7 @@ extension XCUIApplication {
     /// The tab-bar button carrying `symbol`. `TabContent` drops accessibility
     /// identifiers (see `AuthenticatedShell`), so the SF Symbol is the landmark.
     func phase8Tab(_ symbol: String) -> XCUIElement {
-        tabBars.buttons.containing(.image, identifier: symbol).firstMatch
+        ShellNavigator.button(symbol: symbol, in: self)
     }
 
     /// An element by identifier, without asserting its element type. A SwiftUI
@@ -188,7 +188,7 @@ extension XCUIApplication {
 }
 
 extension XCTestCase {
-    /// **CU-05.** Attach "what was on screen instead" right before a walkthrough
+    /// Attach "what was on screen instead" right before a walkthrough
     /// assertion fails.
     ///
     /// The Insights walkthroughs used to fail with a bare "header missing" /
@@ -211,7 +211,7 @@ extension XCTestCase {
     }
 }
 
-/// **1.4 B4-z — the light review set.** The app lands on its dark appearance
+/// **The light review set.** The app lands on its dark appearance
 /// and re-asserts it once per install (`SettingsStore`, "dark-first"), so the
 /// simulator's own appearance does not reach it. These launch arguments set
 /// the app's choice the way Settings → Aussehen does, in the argument domain:

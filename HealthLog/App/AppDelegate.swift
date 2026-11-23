@@ -34,7 +34,7 @@
     final class AppDelegate: NSObject, UIApplicationDelegate {
         nonisolated(unsafe) static var bridge: AppDelegateBridge?
 
-        // MARK: - Home-Screen Quick Actions (v0.14.x Q)
+        // MARK: - Home-Screen Quick Actions
 
         /// Register the three dynamic shortcut items as the app finishes
         /// launching. A cold launch *from* a shortcut also delivers the chosen
@@ -49,13 +49,33 @@
             didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
         ) -> Bool {
             HLQuickActions.register(on: application)
-            // V1 — a launch for a HealthKit delivery or a background task starts
-            // in the background without a scene-phase change to report it.
-            SyncTriggerContext.shared.noteApplicationState(backgrounded: application.applicationState == .background)
-            if let item = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
+            Self.noteLaunch(of: application)
+            if let item = Self.launchShortcutItem(launchOptions) {
                 HLQuickActions.handle(item)
             }
             return true
+        }
+
+        /// A launch for a HealthKit delivery, a background task or a silent
+        /// push starts in the background without a scene-phase change to
+        /// report it. Shared with `HealthLogSpeziDelegate`, the delegate the
+        /// app actually runs.
+        static func noteLaunch(of application: UIApplication) {
+            let backgrounded = application.applicationState == .background
+            SyncTriggerContext.shared.noteApplicationState(backgrounded: backgrounded)
+            if backgrounded {
+                HLLog.healthKit.notice("launch: process started in the background, no scene")
+            }
+        }
+
+        /// The launch-options shortcut key is deprecated from iOS 26 in favour of
+        /// the scene connection options; moving there is a lifecycle change.
+        @diagnose(DeprecatedDeclaration, as: ignored)
+        private static func launchShortcutItem(
+            // swiftlint:disable:next discouraged_optional_collection
+            _ launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+        ) -> UIApplicationShortcutItem? {
+            launchOptions?[.shortcutItem] as? UIApplicationShortcutItem
         }
 
         /// Warm-launch / foreground Quick-Action tap. Writes the one-shot
@@ -68,6 +88,18 @@
             completionHandler: @escaping (Bool) -> Void
         ) {
             completionHandler(HLQuickActions.handle(shortcutItem))
+        }
+
+        /// The orientations on iOS 26, where the scene is never asked
+        /// (`HLSceneDelegate.supportedInterfaceOrientations(for:)`, iOS 27).
+        /// The plist lets the phone turn for the timeline's full screen, so
+        /// this keeps every screen upright there by the same policy; on
+        /// iOS 27 it answers the same mask as the scene.
+        func application(
+            _: UIApplication,
+            supportedInterfaceOrientationsFor _: UIWindow?
+        ) -> UIInterfaceOrientationMask {
+            OrientationPolicy.mask(isPad: OrientationPolicy.deviceIsPad, allowsLandscape: OrientationPolicy.allowsLandscape)
         }
 
         func application(

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #114 / #115 · 0.2 — locks how `APIClient` reads an AI refusal.
+/// Locks how `APIClient` reads an AI refusal.
 ///
 /// Server v1.39 answers every refused AI action with
 /// `{ data: null, error, meta: { errorCode, capability, reason, module? } }`

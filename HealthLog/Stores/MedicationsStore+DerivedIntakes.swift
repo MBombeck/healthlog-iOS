@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.5.5.1 W-MED2 — client-side intake synthesis for un-emitted server slots.**
+/// **Client-side intake synthesis for un-emitted server slots.**
 ///
 /// **Operator pain (TestFlight build 21, walkthrough 2026-05-21):**
 ///
@@ -92,7 +92,7 @@ public extension MedicationsStore {
     /// < 10 server intakes — so re-computation on every render is
     /// cheaper than maintaining a cached mirror).
     ///
-    /// **audit-v0162 M-7 — the "fallback" scope, made honest, gated AND wired.**
+    /// **The "fallback" scope, made honest, gated AND wired.**
     /// Synthesis is documented (PROJECT_GUIDE.md) as a "fallback ONLY for server ≤
     /// v1.15.17", but this live due-surface path synthesised UNCONDITIONALLY on
     /// every server — the inverted doc. On a modern slot-materialising server the
@@ -105,7 +105,7 @@ public extension MedicationsStore {
     /// the composition root now WIRES that provider (it shipped as `= { true }`
     /// with an "until wired" note and stayed unconnected): it reads the
     /// persisted `MedicationSlotMaterializationGate` verdict from
-    /// `GET /api/version`, OR'd with standalone mode. On a server ≥
+    /// `GET /api/version`. On a server ≥
     /// ``MedicationSlotMaterialization/minimumServerVersion`` the gate is off
     /// and this trusts the server rows verbatim — no double-count.
     ///
@@ -125,7 +125,7 @@ public extension MedicationsStore {
     /// `deriveTodayIntakes(_:medications:now:calendar:)` is the
     /// `nonisolated` test seam.
     var derivedTodayIntakes: [MedicationIntake] {
-        // v0.14 DATA — anchor today's window + the engine context on the
+        // Anchor today's window + the engine context on the
         // server-profile IANA timezone (NOT device `.current`) so a dose due
         // "now" stays inside `[startOfToday, endOfToday)` even when the device
         // TZ differs from the profile zone. `profileTimeZone` defaults to
@@ -133,7 +133,7 @@ public extension MedicationsStore {
         // byte-unchanged.
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = profileTimeZone
-        // audit-v0162 M-7 — on a slot-materialising server, skip synthesis and
+        // On a slot-materialising server, skip synthesis and
         // trust the server's today rows verbatim (no double-count hazard).
         guard derivedIntakeSynthesisEnabledProvider() else {
             let startOfToday = calendar.startOfDay(for: .now)
@@ -188,7 +188,7 @@ public extension MedicationsStore {
             return serverIntakes
         }
 
-        // Step 1 — server-emitted today's intakes, preserved. v1.39.1 (#1033):
+        // Step 1 — server-emitted today's intakes, preserved. v1.39.1:
         // a row of a medication kept as a record is not a dose that is due —
         // the server's today list leaves it out, and so does a stale cached one.
         let serverToday = excludingUntrackedMedications(serverIntakes, medications: medications).filter { intake in
@@ -200,7 +200,7 @@ public extension MedicationsStore {
         // the reminder-worker's `localHmAsUtc` precision (whole-minute);
         // ±5 min absorbs DST + clock-skew without producing duplicates.
         //
-        // **v0.10 R1 §3.3 — routed through `MedicationRecurrenceEngine`.**
+        // **Routed through `MedicationRecurrenceEngine`.**
         // Previously this iterated `schedule.times` and gated on a
         // weekday-only `medicationFiresToday`, which treated rolling /
         // monthly / yearly meds (whose `daysOfWeek` is null) as DAILY and
@@ -213,7 +213,7 @@ public extension MedicationsStore {
         let timeZone = calendar.timeZone
 
         var synthesised: [MedicationIntake] = []
-        // v1.39.4 (#1040) — no placeholder for a medication the server calls
+        // v1.39.4 — no placeholder for a medication the server calls
         // not actionable today: the server's today list has none either.
         for medication in medications where medication.active && medication.offersIntakeActions {
             let context = MedicationRecurrenceEngine.Context(
@@ -327,7 +327,7 @@ public extension MedicationsStore {
 
     /// Whole-minute floor of an instant, used as the per-medication dedup key so
     /// two schedule entries that resolve to the same `HH:mm` collapse to one dose
-    /// slot (B2). Truncates sub-minute precision via `timeIntervalSinceReferenceDate`
+    /// slot. Truncates sub-minute precision via `timeIntervalSinceReferenceDate`
     /// rounding — locale/timezone-independent because it operates on the absolute
     /// instant, and two instants within the same wall-clock minute share a key.
     private nonisolated static func wholeMinute(_ date: Date) -> Date {
@@ -362,7 +362,7 @@ public extension MedicationsStore {
             return []
 
         case .rolling, .oneShot:
-            // v0.10.0 W10 M4 — prefer the server `nextDueAt` when present so the
+            // Prefer the server `nextDueAt` when present so the
             // in-app today-placeholder agrees with the reminder slot
             // (`MedicationRecurrenceEngine.nextOccurrence` already prefers
             // `serverNextDueAt` for single-slot cadences). Without this, the
@@ -405,7 +405,7 @@ public extension MedicationsStore {
 public extension MedicationsStore {
     /// Derived: rows the user has not archived (UI's "active" tab).
     ///
-    /// **M2** — honours the saved per-account manual `order` from
+    /// Honours the saved per-account manual `order` from
     /// `/api/medications/layout` so the list matches the web/other devices.
     /// An empty saved order is a pure passthrough (plain server order).
     var activeMedications: [Medication] {

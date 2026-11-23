@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.4 B2 — what the cycle screen's (i) explains.**
+/// **What the cycle screen's (i) explains.**
 ///
 /// The phase card keeps its picture and headline; the longer text about the
 /// current phase stands here, with the method behind phases and predictions,

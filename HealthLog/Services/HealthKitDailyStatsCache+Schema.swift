@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-// Phase 07 / Plan 07-04 — the versioned shape of the daily-stat cache.
+// The versioned shape of the daily-stat cache.
 //
 // Split out of `HealthKitDailyStatsCache.swift` so the actor's behaviour and
 // the store's schema history are separate reading tasks: V1 exists only as the
@@ -16,7 +16,7 @@ public typealias HealthKitDailyStatsCacheRow = HealthKitDailyStatsCacheSchemaV2.
 
 /// Schema-Versionierung — mirrors Cache/Outbox-Pattern.
 ///
-/// **V1 — die Form vor der Owner-Partitionierung.** Der Typ existiert weiterhin
+/// **Die Form vor der Owner-Partitionierung.** Der Typ existiert weiterhin
 /// und wird von keinem Laufzeitpfad benutzt: er ist die *Quellform* der
 /// Migrationsstufe. Ohne ihn haetten V1 und V2 dieselbe Checksumme und SwiftData
 /// wuerde den Plan ablehnen — eine Version, die nichts beschreibt, ist keine
@@ -55,7 +55,7 @@ public enum HealthKitDailyStatsCacheSchemaV1: VersionedSchema {
     }
 }
 
-/// **Phase 07 / Plan 07-04** — owner-partitionierter Daily-Stats-Cache.
+/// Owner-partitionierter Daily-Stats-Cache.
 ///
 /// Die einzige Schema-Aenderung gegenueber V1 ist ein zusaetzliches
 /// **optionales** Attribut (`ownerUserID`). Optionale Attribute sind

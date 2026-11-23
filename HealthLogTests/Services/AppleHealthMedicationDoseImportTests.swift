@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **GH #47 / Phase 07 plan 07-05** — the Apple-Health dose-import half.
+/// The Apple-Health dose-import half.
 ///
 /// Split out of `AppleHealthMedicationImporterTests` when per-dose progression
 /// replaced the date watermark: these are the cases that assert what the sweep
@@ -16,7 +16,7 @@ import Testing
 struct AppleHealthMedicationDoseImportTests {
     // MARK: - Dose bulk source/externalId + duplicate replay
 
-    @Test("Dose bulk carries source + externalId; a replay reports duplicate and advances the cursor")
+    @Test("Dose bulk carries source + externalId; a settled dose read again is not sent again")
     func doseBulkSourceExternalIdAndDuplicateReplay() async throws {
         let (api, kc) = MedFixtures.makeAPI()
         let recorder = MedicationRequestRecorder()
@@ -73,14 +73,15 @@ struct AppleHealthMedicationDoseImportTests {
         #expect(ledger.pendingIdentities().isEmpty)
         #expect(ledger.resumeInstant() == dose.recordedAt)
 
-        // Second sweep — the fake reader returns the SAME dose (a replay). The
-        // server reports `duplicate`; the importer counts it as landed and never
-        // retries in a loop.
+        // Second sweep — the fake reader returns the SAME dose, as the trailing
+        // re-read does. The ledger knows it landed, so nothing is sent again
+        // and nothing turns pending.
         let bulkCountBefore = recorder.bulkPostCount
         let second = await importer.sync()
-        #expect(second.dosesDuplicate == 1)
+        #expect(second.dosesDuplicate == 0)
         #expect(second.dosesInserted == 0)
-        #expect(recorder.bulkPostCount == bulkCountBefore + 1, "one replay POST, not a retry loop")
+        #expect(recorder.bulkPostCount == bulkCountBefore, "a settled dose is not posted again")
+        #expect(ledger.pendingIdentities().isEmpty)
     }
 
     // MARK: - apple_health_not_mirrored 422

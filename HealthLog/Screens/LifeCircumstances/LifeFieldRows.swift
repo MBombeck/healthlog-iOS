@@ -1,6 +1,6 @@
 import SwiftUI
 
-// **LIFE (1.5.0)** — the question rows of the life circumstances.
+// The question rows of the life circumstances.
 //
 // Every row allows "no answer" (`nil`, or nothing ticked), wraps its label
 // at every text size and stacks its control under the label at the
@@ -12,10 +12,8 @@ struct LifeRowLabel: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.primary)
-            .fixedSize(horizontal: false, vertical: true)
+        // The one row title of every form: semibold subhead.
+        HLRowTitle(Text(text))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -114,26 +112,10 @@ struct LifeMultiChoiceRows<Value: Hashable>: View {
     private func tickRow(_ option: Value, index: Int) -> some View {
         let isOn = selection.contains(option)
         let isFull = limit.map { selection.count >= $0 } ?? false
-        return Button {
+        return HLChoiceRow(title: Text(verbatim: title(option)), isSelected: isOn, mode: .multiple) {
             toggle(option)
-        } label: {
-            HStack(spacing: HLSpace.sm) {
-                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isOn ? HLAccent.userBrandTint : HLText.tertiary)
-                    .accessibilityHidden(true)
-                Text(verbatim: title(option))
-                    .font(.hlBody)
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(!isOn && isFull)
-        .accessibilityLabel(Text(verbatim: title(option)))
-        .accessibilityAddTraits(isOn ? .isSelected : [])
         .accessibilityIdentifier("\(identifier).\(index)")
     }
 
@@ -160,7 +142,7 @@ struct LifeNumberRow: View {
             TextField(String(localized: "life.noAnswer"), text: $text)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
-                .font(.hlBody)
+                .font(HLRowValue.Emphasis.setting.font)
                 .frame(minWidth: 72, maxWidth: 140)
                 .focused($focused)
                 .accessibilityLabel(Text(verbatim: label))
@@ -196,7 +178,7 @@ struct LifeHalfHourRow: View {
         LifeChoiceRow(
             label: label,
             options: Self.options,
-            title: { $0.formatted(.number.precision(.fractionLength(0 ... 1))) },
+            title: { HLValueFormat.number($0, fractionDigits: 0 ... 1) },
             selection: $value,
             identifier: identifier
         )

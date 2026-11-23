@@ -6,7 +6,7 @@ public extension SWRCache {
     /// Tries the persistent store, wipes + retries on failure, falls back to
     /// in-memory so a corrupted cache file never crashes app launch.
     ///
-    /// **Note (PA5 v0.5.x):** synchronous shape preserved for compat — the
+    /// **Note:** synchronous shape preserved for compat — the
     /// composition root now prefers `makeWithRecoveryTask()` so the
     /// SwiftData open runs off the launch tick. Tests + macOS targets still
     /// use the sync path because they don't pay for the cold-start budget.

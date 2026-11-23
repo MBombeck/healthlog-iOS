@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// P8 B-5 — the pulse page's ECG cross-link.
+/// The pulse page's ECG cross-link.
 ///
 /// The row exists ONLY on the pulse page, only with a cloud surface, and only
 /// when the operator actually has recordings — otherwise it would be a tap into
@@ -34,8 +34,8 @@ struct EcgCrossLinkTests {
     }
 
     /// The row's gate, expressed exactly as `ecgCrossLinkRow` spells it.
-    private func isVisible(kind: MetricKind, canShowCloudInsights: Bool, store: EcgStore) -> Bool {
-        kind == .pulse && canShowCloudInsights && store.hasRecordings
+    private func isVisible(kind: MetricKind, store: EcgStore) -> Bool {
+        kind == .pulse && store.hasRecordings
     }
 
     @Test("visible on the pulse page when recordings exist")
@@ -49,15 +49,15 @@ struct EcgCrossLinkTests {
         ],"hasRecordings":true},"error":null}
         """#)
         await store.load()
-        #expect(isVisible(kind: .pulse, canShowCloudInsights: true, store: store))
+        #expect(isVisible(kind: .pulse, store: store))
     }
 
-    @Test("un-mounts without recordings, off the pulse page, and without a cloud surface")
+    @Test("un-mounts without recordings and off the pulse page")
     func hiddenOtherwise() async {
         let empty = makeStore()
         respond(#"{"data":{"recordings":[],"hasRecordings":false},"error":null}"#)
         await empty.load()
-        #expect(!isVisible(kind: .pulse, canShowCloudInsights: true, store: empty))
+        #expect(!isVisible(kind: .pulse, store: empty))
 
         let full = makeStore()
         respond(#"""
@@ -68,8 +68,7 @@ struct EcgCrossLinkTests {
         ],"hasRecordings":true},"error":null}
         """#)
         await full.load()
-        #expect(!isVisible(kind: .hrv, canShowCloudInsights: true, store: full), "pulse page only")
-        #expect(!isVisible(kind: .pulse, canShowCloudInsights: false, store: full), "server-derived only")
+        #expect(!isVisible(kind: .hrv, store: full), "pulse page only")
     }
 
     @Test("the caption is the count plus the DEVICE's last result — nothing derived")

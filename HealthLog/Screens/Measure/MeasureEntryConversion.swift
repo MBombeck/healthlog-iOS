@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Entry-path inverse unit conversion (audit v0162 H-5)
+// MARK: - Entry-path inverse unit conversion
 
 //
 // The DISPLAY path converts canonical SI → the user's preferred unit everywhere
@@ -19,16 +19,6 @@ import Foundation
 // pure, unit-testable transform — no SwiftUI render context required.
 
 extension UnitPreferences {
-    /// Inverse of ``convertWeight(_:)`` — a displayed weight-family value (kg or
-    /// lb, per the user's pref) back to canonical kg. Divides by the SAME factor
-    /// the forward path multiplies by.
-    func canonicalWeight(fromDisplayed displayed: Double) -> Double {
-        switch weight {
-        case .kg: displayed
-        case .lb: displayed / Self.kgToLb
-        }
-    }
-
     /// Inverse of ``convertBloodPressure(_:)`` — displayed mmHg/kPa back to
     /// canonical mmHg.
     func canonicalBloodPressure(fromDisplayed displayed: Double) -> Double {
@@ -56,7 +46,7 @@ enum MeasureEntryConversion {
     /// Convert a single displayed scalar value into its canonical unit for
     /// `kind`. Non-re-unitable kinds pass through unchanged.
     static func canonicalScalar(_ displayed: Double, kind: MetricKind, units: UnitPreferences) -> Double {
-        // #115 P2 — the one account-unit transform, inverted: lb → kg,
+        // The one account-unit transform, inverted: lb → kg,
         // °F → °C (affine), in → cm, mmol/L → mg/dL, kPa → mmHg. Blood
         // pressure never reaches the scalar path (it uses the paired
         // systolic/diastolic fields) but routes correctly for completeness.

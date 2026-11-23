@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.11 W22-W1 — the web-mirror Insights tab strip.
+/// The web-mirror Insights tab strip.
 ///
 /// Mirrors the web `<InsightsTabStrip>` (`src/components/insights/insights-tab-
 /// strip.tsx`): a horizontally-scrollable row of pills, the first always
@@ -28,7 +28,12 @@ struct InsightsMetricTabStrip: View {
     /// container so the content area can switch off the same value.
     @Binding var selection: InsightsTabSelection
 
-    /// V0150 — the FROZEN ordered selection list shared verbatim with the
+    /// The pill to show chosen when it is not the selection: the page a
+    /// swipe is passing (``InsightsPagerModel/stripSelection``). A tap still
+    /// writes `selection`.
+    var shownSelection: InsightsTabSelection?
+
+    /// The FROZEN ordered selection list shared verbatim with the
     /// container's swipe pager (`InsightsContainerScreen.pagerOrder`). The strip
     /// renders pills from EXACTLY this list (only folding grouped metrics into
     /// category pills), so the highlighted pill and the visible page can never
@@ -46,7 +51,7 @@ struct InsightsMetricTabStrip: View {
     /// `selection` via the pager), so only a deliberate pill tap animates a reset.
     var onPillTap: (InsightsTabSelection) -> Void = { _ in }
 
-    /// v0.14.1 — tapped the trailing "customise" affordance at the strip's end.
+    /// Tapped the trailing "customise" affordance at the strip's end.
     /// Opens the strip-customise sheet (reorder + show/hide metric tabs). The
     /// affordance only renders when this is wired (defaults to a no-op so the
     /// existing previews + any non-customisable embed compile unchanged AND the
@@ -70,10 +75,32 @@ struct InsightsMetricTabStrip: View {
     /// horizontal room it uses is room the short strip was not using anyway.
     var availabilityNote: String?
 
-    /// A11Y (audit-v0162 §5) — gates the imperative scroll-into-view animation
+    /// `true` while the strip belongs to the pager's visible page. A strip
+    /// that becomes visible stands at the selected chip again, whatever it
+    /// showed while its page was out of view.
+    var isOnVisiblePage = true
+    /// Extra room before the first pill and after the last, where the strip
+    /// runs past the page's column to the edges of a wide window: the first
+    /// pill still starts on the column's edge.
+    var edgeInset: CGFloat = 0
+
+    /// A11Y — gates the imperative scroll-into-view animation
     /// on selection change so the highlighted pill jumps instead of sliding when
-    /// Reduce Motion is on (the `.hlAnimation` on the strip already honours it).
+    /// Reduce Motion is on.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
+
+    /// The strip's visible width, so no single pill outgrows the screen at
+    /// the largest text sizes.
+    @State var stripWidth: CGFloat = 0
+    /// Which ends of the strip are cut right now; only those fade.
+    @State private var cutLeading = false
+    @State private var cutTrailing = true
+
+    /// The pill drawn as chosen, and the one the strip keeps in view.
+    private var shown: InsightsTabSelection {
+        shownSelection ?? selection
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -86,15 +113,14 @@ struct InsightsMetricTabStrip: View {
                 HStack(spacing: HLSpace.sm) {
                     ForEach(stripEntries, id: \.self) { entry in
                         stripPill(for: entry)
-                            .id(scrollAnchor(for: entry))
+                            .id(Self.scrollAnchor(for: entry))
                     }
                     if let onCustomize {
                         customizePill(action: onCustomize)
                     }
                     if let availabilityNote {
                         Text(availabilityNote)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                             // Single line by construction: this rides the pills'
                             // row and may never be the thing that makes it taller.
                             .lineLimit(1)
@@ -102,27 +128,67 @@ struct InsightsMetricTabStrip: View {
                             .padding(.vertical, HLSpace.sm)
                     }
                 }
-                .padding(.horizontal, HLSpace.lg)
+                .padding(.horizontal, HLLayout.pageMargin + edgeInset)
                 .padding(.vertical, HLSpace.sm)
             }
             .scrollClipDisabled()
-            // W29 — when a SWIPE moves the selection, scroll the matching pill into
-            // view so the strip's highlighted pill never drifts off-screen.
+            // The strip fades out where a chip runs out of view, so it reads
+            // as "more this way" instead of a cut piece ("⌄" alone at the
+            // edge looked like a control). An end at rest stays sharp.
+            .onScrollGeometryChange(for: [Bool].self) { geometry in
+                let ends = HLEdgeFade.cutEnds(
+                    offset: geometry.contentOffset.x,
+                    visible: geometry.containerSize.width,
+                    content: geometry.contentSize.width
+                )
+                return [ends.leading, ends.trailing]
+            } action: { _, ends in
+                cutLeading = ends[0]
+                cutTrailing = ends[1]
+            }
+            .hlEdgeFade(
+                length: InsightsStripLayout.fadeLength(contentInset: HLLayout.pageMargin + edgeInset),
+                leading: cutLeading,
+                trailing: cutTrailing
+            )
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
+            // Every strip of the tab stands at the selected chip: a strip built
+            // after the selection moved (a page realized on the way there, the
+            // pinned strip) starts there, without animation, and each strip
+            // follows a new selection on its own. The position is derived
+            // from the selection, never from a strip's history, so the strips
+            // of two pages and the pinned one cannot drift apart.
+            .onAppear {
+                proxy.scrollTo(Self.scrollAnchor(forSelection: shown, in: stripEntries), anchor: .center)
+            }
+            .task {
+                await Task.yield()
+                proxy.scrollTo(Self.scrollAnchor(forSelection: shown, in: stripEntries), anchor: .center)
+            }
+            // When the selection moves, the selected chip goes to the middle
+            // of the strip. A fixed place, not the smallest scroll: every
+            // strip of the tab then shows the same chips whatever it showed
+            // before, and the chip is never left at an edge (the old
+            // `.leading` threw the strip back to its first category).
             //
-            // v0153 I2 — `anchor: nil` (minimal scroll to make the pill visible)
-            // REPLACES the old `.leading` yank. With the pager now
-            // category-contiguous the active member's owning-category pill no longer
-            // sits at the far left of the strip, so left-aligning it teleported the
-            // strip back to "Vitalwerte" on every later-member swipe (the operator's
-            // "thrown back" bug). A minimal scroll only nudges when the pill is
-            // genuinely off-screen and never yanks an already-visible pill leftward.
-            .onChange(of: selection) { _, newValue in
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
-                    proxy.scrollTo(scrollAnchor(forSelection: newValue), anchor: nil)
+            // Only the strip in view slides; the strips of the pages out of
+            // view follow at once. A page that slides in therefore brings its
+            // strip at the chip it left, and the one slide runs on the page
+            // that is seen, instead of one animation per page in the pager.
+            .onChange(of: shown) { _, newValue in
+                let anchor = Self.scrollAnchor(forSelection: newValue, in: stripEntries)
+                guard Self.slidesToSelection(isOnVisiblePage: isOnVisiblePage, reduceMotion: reduceMotion) else {
+                    proxy.scrollTo(anchor, anchor: .center)
+                    return
+                }
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    proxy.scrollTo(anchor, anchor: .center)
                 }
             }
         }
-        .hlAnimation(.easeInOut(duration: 0.22), value: selection)
+        // The chosen pill changes its fill with a short fade, as in 1.5; one
+        // strip on the tab, so one animation (none with reduced motion).
+        .hlAnimation(.easeInOut(duration: 0.22), value: shown)
         // W22-audit Finding #6 — expose the strip as one container of pills so
         // VoiceOver groups them as a navigable set (the iOS-idiomatic stand-in
         // for the web tablist role). The pills keep their `.isSelected`/`.isButton`
@@ -141,7 +207,13 @@ struct InsightsMetricTabStrip: View {
         selection = sel
     }
 
-    /// W28 / v0152 I1 — the strip render model: Übersicht + flat pills + category
+    /// Whether a strip slides to a new selection: only the strip in view, and
+    /// only with motion allowed. Every other strip jumps, out of sight.
+    nonisolated static func slidesToSelection(isOnVisiblePage: Bool, reduceMotion: Bool) -> Bool {
+        isOnVisiblePage && !reduceMotion
+    }
+
+    /// The strip render model: Übersicht + flat pills + category
     /// pills, derived from `orderedSelections`. The swipe order (the flat pager)
     /// stays the flat `orderedSelections`; this only changes which PILLS render
     /// (a multi-member category folds to one category pill).
@@ -157,22 +229,25 @@ struct InsightsMetricTabStrip: View {
         case .overview:
             let sel = InsightsTabSelection.overview
             pill(
-                title: sel.title,
-                isSelected: selection == sel,
+                title: sel.pillTitle,
+                accessibilityTitle: sel.title,
+                isSelected: shown == sel,
                 identifier: sel.tabStripPillIdentifier
             ) { selectPill(sel) }
         case let .flat(kind):
             let sel = InsightsTabSelection.metric(kind)
             pill(
-                title: sel.title,
-                isSelected: selection == sel,
+                title: sel.pillTitle,
+                accessibilityTitle: sel.title,
+                isSelected: shown == sel,
                 identifier: sel.tabStripPillIdentifier
             ) { selectPill(sel) }
         case let .special(page):
             let sel = InsightsTabSelection.special(page)
             pill(
-                title: sel.title,
-                isSelected: selection == sel,
+                title: sel.pillTitle,
+                accessibilityTitle: sel.title,
+                isSelected: shown == sel,
                 identifier: sel.tabStripPillIdentifier
             ) { selectPill(sel) }
         case let .group(category, members):
@@ -205,7 +280,7 @@ struct InsightsMetricTabStrip: View {
                     Button {
                         selectPill(member)
                     } label: {
-                        if selection == member {
+                        if shown == member {
                             Label(member.title, systemImage: "checkmark")
                         } else {
                             Text(member.title)
@@ -214,9 +289,10 @@ struct InsightsMetricTabStrip: View {
                 }
             } label: {
                 HStack(spacing: HLSpace.xs) {
-                    Text(category.label)
+                    Text(Self.categoryPillTitle(category, selection: shown, members: members))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(Self.pillTitleScale(isAccessibilitySize: dynamicTypeSize.isAccessibilitySize))
+                        .modifier(InsightsPillTitleCap(width: Self.pillTitleMaxWidth(stripWidth: stripWidth, trailing: HLSpace.xl)))
                     Image(systemName: "chevron.down")
                         .font(.hlCaption.weight(.semibold))
                 }
@@ -236,10 +312,10 @@ struct InsightsMetricTabStrip: View {
                 }
             }
             .menuStyle(.button)
-            .buttonStyle(.plain)
-            .sensoryFeedback(.selection, trigger: isActive)
+            .buttonStyle(.hlRow)
+            .sensoryFeedback(.selection, trigger: isActive) { _, active in active && isOnVisiblePage }
             .accessibilityIdentifier(category.tabStripPillIdentifier)
-            .accessibilityLabel(category.label)
+            .accessibilityLabel(Self.categoryPillAccessibilityLabel(category, selection: shown, members: members))
             // A Menu already exposes its button/menu role to VoiceOver; carry the
             // selected treatment through as a trait so the active category reads as
             // selected, mirroring the flat pills.
@@ -247,19 +323,39 @@ struct InsightsMetricTabStrip: View {
         }
     }
 
+    /// The title of a category pill: the chosen member's while one of its
+    /// pages is shown, so the strip says which page this is ("Puls"
+    /// under Herz); the category's name otherwise.
+    static func categoryPillTitle(
+        _ category: InsightsMetricCategory,
+        selection: InsightsTabSelection,
+        members: [InsightsTabSelection]
+    ) -> String {
+        members.contains(selection) ? selection.pillTitle : category.label
+    }
+
+    /// VoiceOver hears the category and, while one of its pages is shown, that page.
+    static func categoryPillAccessibilityLabel(
+        _ category: InsightsMetricCategory,
+        selection: InsightsTabSelection,
+        members: [InsightsTabSelection]
+    ) -> String {
+        members.contains(selection) ? "\(category.label), \(selection.title)" : category.label
+    }
+
     /// True when the current selection belongs to `category` — drives the category
-    /// pill's active treatment + scroll-into-view anchoring. Parity 4.4 — resolved
+    /// pill's active treatment + scroll-into-view anchoring. Resolved
     /// over the whole selection, so the Aktivität pill also lights up on the
     /// `workouts` special page now that it is one of that category's members.
     private func isCategoryActive(_ category: InsightsMetricCategory) -> Bool {
-        InsightsCategoryGroups.category(for: selection) == category
+        InsightsCategoryGroups.category(for: shown) == category
     }
 
     /// The scroll anchor `id` for a rendered strip entry. A flat pill anchors on
     /// its own `InsightsTabSelection`; a category pill anchors on a stable
     /// per-category token so a member-page selection can scroll the PARENT pill
     /// into view (the member itself has no pill of its own).
-    private func scrollAnchor(for entry: InsightsStripEntry) -> InsightsStripAnchor {
+    nonisolated static func scrollAnchor(for entry: InsightsStripEntry) -> InsightsStripAnchor {
         switch entry {
         case .overview: .selection(.overview)
         case let .flat(kind): .selection(.metric(kind))
@@ -268,11 +364,19 @@ struct InsightsMetricTabStrip: View {
         }
     }
 
-    /// The scroll anchor matching the CURRENT selection: a grouped member resolves
-    /// to its category's parent-pill anchor, everything else to its own pill.
-    private func scrollAnchor(forSelection selection: InsightsTabSelection) -> InsightsStripAnchor {
-        if let category = InsightsCategoryGroups.category(for: selection) {
-            return .category(category)
+    /// The scroll anchor matching the CURRENT selection, resolved against the
+    /// pills the strip actually renders: a member of a folded category pill
+    /// resolves to that pill's anchor, everything else to its own pill. A
+    /// category with one member renders that member as a plain pill, so its
+    /// anchor is the member's own, not the category's.
+    nonisolated static func scrollAnchor(
+        forSelection selection: InsightsTabSelection,
+        in entries: [InsightsStripEntry]
+    ) -> InsightsStripAnchor {
+        for entry in entries {
+            if case let .group(category, members) = entry, members.contains(selection) {
+                return .category(category)
+            }
         }
         return .selection(selection)
     }
@@ -280,7 +384,7 @@ struct InsightsMetricTabStrip: View {
 
 // MARK: - Selection model
 
-/// v0.11 W28c — the three **special** Insights pages (web `/insights/mood`,
+/// The three **special** Insights pages (web `/insights/mood`,
 /// `/insights/medications`, `/insights/workouts`). Unlike a metric page these are
 /// composite surfaces driven by `MoodStore` / `MedicationsStore` / `WorkoutsStore`
 /// (mood = score + stability + patterns; medications = per-med adherence; workouts
@@ -292,12 +396,7 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
     case mood
     case medications
     case workouts
-    /// W-B189 (#23) — the server-computed recovery sub-page (strain /
-    /// training-load / autonomic-charge + the daily heart-and-energy family).
-    /// Like the other specials it is a composite surface (driven by
-    /// `RecoveryInsightsStore`), not a single chartable `MetricKind`.
-    case recovery
-    /// v0141 W-PARITY (P8) — the ECG recording surface (web `/insights/ecg`,
+    /// The ECG recording surface (web `/insights/ecg`,
     /// server v1.28.50). Composite like its siblings: ECG has no
     /// `MeasurementType` and therefore no chartable `MetricKind`, so it is a
     /// page driven by `EcgStore` rather than a metric pill. **Data-gated on
@@ -311,7 +410,6 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
         case .mood: InsightsLayoutTileId.mood
         case .medications: InsightsLayoutTileId.medications
         case .workouts: InsightsLayoutTileId.workouts
-        case .recovery: InsightsLayoutTileId.recovery
         case .ecg: InsightsLayoutTileId.ecg
         }
     }
@@ -322,11 +420,11 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
         return allCases.first { $0.slug == normalized }
     }
 
-    /// #30 — the server feature-module this special page belongs to, or `nil` for
+    /// The server feature-module this special page belongs to, or `nil` for
     /// a core / never-gated page. When the owning module is OFF the page is
     /// dropped from the strip + pager.
     ///
-    /// Build 2 / 2.6: `medications` used to return `nil` here on the (then-true)
+    /// `medications` used to return `nil` here on the (then-true)
     /// assumption that it was CORE. The server made it a real toggle (registry
     /// D3 / web v1.18.1), so the page now gates like its siblings — otherwise a
     /// user who switched Medications off still saw its Insights page.
@@ -334,7 +432,6 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
         switch self {
         case .mood: .mood
         case .workouts: .workouts
-        case .recovery: .recovery
         case .medications: .medications
         // Server v1.39 — `GET/POST /api/insights/ecg` and `ecg/[id]` carry no AI
         // gate and no module gate: a recording is device data. The `insights`
@@ -346,7 +443,7 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
     }
 
     /// Whether this page's owning module is on. `true` for a page without an
-    /// owning module and when no gate is wired / the map is absent (#30).
+    /// owning module and when no gate is wired / the map is absent.
     @MainActor
     func isModuleEnabled(in gate: ModuleGate?) -> Bool {
         guard let key = moduleKey, let gate else { return true }
@@ -359,7 +456,6 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
         case .mood: String(localized: "Mood")
         case .medications: String(localized: "Medications")
         case .workouts: String(localized: "Workouts")
-        case .recovery: String(localized: "Recovery")
         case .ecg: String(localized: "insights.ecg.title")
         }
     }
@@ -371,7 +467,7 @@ enum InsightsSpecialPage: String, Hashable, CaseIterable {
 enum InsightsTabSelection: Hashable {
     case overview
     case metric(MetricKind)
-    /// v0.11 W28c — a composite special page (mood / medications / workouts).
+    /// A composite special page (mood / medications / workouts).
     case special(InsightsSpecialPage)
 
     /// The localized pill / page title.
@@ -380,6 +476,15 @@ enum InsightsTabSelection: Hashable {
         case .overview: String(localized: "Overview")
         case let .metric(kind): kind.displayName
         case let .special(page): page.title
+        }
+    }
+
+    /// The title on the strip's pill: the page title, shortened where the
+    /// full name would take half the strip ("Sauerstoffsättigung").
+    var pillTitle: String {
+        switch self {
+        case .metric(.spo2): String(localized: "insights.tabStrip.pill.spo2")
+        default: title
         }
     }
 
@@ -393,39 +498,42 @@ enum InsightsTabSelection: Hashable {
     }
 
     /// The full ordered tab list — Übersicht first, then the availability-gated
-    /// metric AND special selections in the server layout order. W29: the SINGLE
+    /// metric AND special selections in the server layout order. The SINGLE
     /// source of truth shared by the tab strip (pill order) and the container's
     /// swipe pager (page order), so the highlighted pill and the visible page stay
     /// in lockstep.
     ///
-    /// W28c — the three special slugs (`mood` / `medications` / `workouts`) now
+    /// The three special slugs (`mood` / `medications` / `workouts`) now
     /// resolve to a `.special` page when the operator HAS data for them
     /// (`availableSpecials`), placed at their server-layout slot exactly like a
     /// metric pill. A special with no data is skipped (Doctrine: never a dead
     /// pill — the surface self-suppresses rather than showing an empty box).
     ///
-    /// Parity Build 4 — `recovery` is the one exception: it is a FIXED second
-    /// entry (see below), and the returned order is otherwise the operator's
-    /// curated layout order verbatim, with no category re-sort and no appends.
+    /// The recovery family is the one exception: its pages are a FIXED
+    /// block right after Übersicht (see below), and the returned order is
+    /// otherwise the operator's curated layout order verbatim, with no
+    /// category re-sort and no appends.
+    ///
+    /// - Parameter recoveryKinds: the recovery family members with a current
+    ///   reading, in the family's order; each becomes a metric page under the
+    ///   Recovery pill. Empty when the module is off or nothing is current.
     static func ordered(
         layout: InsightsLayout,
         availableKinds: Set<MetricKind>,
-        availableSpecials: Set<InsightsSpecialPage> = []
+        availableSpecials: Set<InsightsSpecialPage> = [],
+        recoveryKinds: [MetricKind] = []
     ) -> [InsightsTabSelection] {
         var entries: [InsightsTabSelection] = [.overview]
         var placedSpecials: Set<InsightsSpecialPage> = []
-        // Parity Build 4 / 4.4 — Recovery is a FIXED second pill, immediately
-        // after Übersicht, not a tail-append. The web pushes it as a hard-coded
-        // strip entry right after Overview and gates it ONLY on the `recovery`
-        // module toggle — never on data (`insights-tab-strip.tsx:534-547`: "it has
-        // no `summaries[METRIC].count` to gate on — the page data-gates every
-        // block and falls back to a calm empty note"). `availableSpecials` now
-        // carries `.recovery` whenever the module is on (the `hasContent` data
-        // gate was dropped in `InsightsContainerScreen+Ordering`), so this
-        // placement is the whole gate.
-        if availableSpecials.contains(.recovery) {
-            entries.append(.special(.recovery))
-            placedSpecials.insert(.recovery)
+        // Recovery stands right after Übersicht, where the web pushes its
+        // hard-coded recovery entry (`insights-tab-strip.tsx:534-547`). The
+        // members carry no layout slug, so the layout loop below never places
+        // them a second time, and the strip folds them into one pill as it
+        // folds Heart.
+        var placedRecovery: Set<MetricKind> = []
+        for kind in recoveryKinds where InsightsCategoryGroups.recoveryKinds.contains(kind) {
+            guard placedRecovery.insert(kind).inserted else { continue }
+            entries.append(.metric(kind))
         }
         for tile in layout.visibleTiles {
             if let kind = InsightsTabSlug.metricKind(forSlug: tile.id) {
@@ -453,8 +561,8 @@ enum InsightsTabSelection: Hashable {
             entries.append(.special(.ecg))
             placedSpecials.insert(.ecg)
         }
-        // Parity Build 4 / 4.1 — the `recovery` and `steps` tail-appends are both
-        // GONE. Recovery is now placed as the fixed second pill above (web
+        // The `recovery` and `steps` tail-appends are both
+        // GONE. Recovery is now placed as the fixed block above (web
         // parity); `steps` is a first-class server layout slug (it entered
         // `SUB_PAGE_METRIC` in web v1.12 and the server's resolver auto-merges it
         // onto older saved layouts), so it arrives through `visibleTiles` at its
@@ -490,8 +598,7 @@ enum InsightsTabSelection: Hashable {
     /// (`.special(.workouts)` → Aktivität, a member since Parity 4.4) clusters into
     /// its category block alongside the chartable activity metrics — mirroring the
     /// strip fold, which groups by the very same lookup. `.overview`, pinned/flat
-    /// metrics, and `.special(.recovery)`/mood/medications (category == nil) keep
-    /// their slots verbatim.
+    /// metrics, and mood/medications (category == nil) keep their slots verbatim.
     ///
     /// Deterministic + idempotent: running it again yields the same list (members
     /// are already contiguous after the first pass). `nonisolated static` so the
@@ -535,10 +642,10 @@ enum InsightsTabSelection: Hashable {
 /// onto the iOS `MetricKind` enum so the strip can build a per-metric pill from
 /// the server layout order.
 ///
-/// v0.11 W28b — widened to the full chartable metric universe the server's
+/// Widened to the full chartable metric universe the server's
 /// layout enum now accepts (`v0.11-server-to-ios-insights-layout-enum-
 /// WIDENED.md`). Every slug below maps to a `MetricKind` that already exists in
-/// the enum and already carries assessment wiring (W28a); the strip still gates
+/// the enum and already carries assessment wiring; the strip still gates
 /// each pill on ≥1 measurement, so adding ids never produces a dead pill.
 ///
 /// Slugs WITHOUT a single chartable `MetricKind` are intentionally absent:
@@ -551,7 +658,7 @@ enum InsightsTabSelection: Hashable {
 ///   forcing it into the chartable model would be wrong — see W28d report. If
 ///   ever surfaced it belongs as an event-COUNT, not a line chart).
 ///
-/// `walking-steadiness` DOES map now (W28d): `appleWalkingSteadiness` is a clean
+/// `walking-steadiness` DOES map now: `appleWalkingSteadiness` is a clean
 /// 0–100 % mobility quantity, wired into the HK registry + `slugToKind` below.
 ///
 /// These render no metric pill (web shows them as group/flat non-chart entries);
@@ -561,7 +668,7 @@ enum InsightsTabSlug {
     /// The chartable `MetricKind` for a layout slug, or `nil` for non-chart slugs
     /// (`overview`, `workouts`, `mood`, `medications`, or any unknown id).
     ///
-    /// W-WIDGET-DEEPLINK (v0152) — the canonical slug ⇄ kind table now lives on
+    /// The canonical slug ⇄ kind table now lives on
     /// the plattform-free `InsightsLayoutTileId` (compiled into the widget
     /// extension too) so the `LatestMeasurement` widget can build a per-metric
     /// deep link. This app-only wrapper delegates to it (normalising legacy
@@ -570,7 +677,7 @@ enum InsightsTabSlug {
         InsightsLayoutTileId.kind(forSlug: slug)
     }
 
-    /// v0.13.1 IC — the layout slug for a chartable `MetricKind` (reverse of
+    /// The layout slug for a chartable `MetricKind` (reverse of
     /// `slugToKind`), or `nil` for a kind with no Insights slug. Used by the
     /// Dashboard tile tap to feed the `AppRouter.selectInsightsMetric(_:)` deep
     /// link so a tap lands the operator IN the Insights tab on that metric's

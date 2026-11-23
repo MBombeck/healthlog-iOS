@@ -16,8 +16,8 @@ import Testing
     ///   - `med.skipped` → `MedicationsRepository.recordFromReminder(.skipped)`
     ///   - `med.snooze.15m` → schedules a local UN trigger 15 min out,
     ///     carries the same metadata in `userInfo`
-    ///   - Body-tap (default action) with `medicationId` deep-links to
-    ///     `healthlog://medications/<id>`
+    ///   - Body-tap (default action) with `medicationId` lands on the due
+    ///     dose on the Meds list (#186)
     @Suite("NotificationService — medication action dispatch", .serialized, .mockURLSession)
     @MainActor
     struct NotificationServiceMedicationActionTests {
@@ -93,7 +93,7 @@ import Testing
             _ = makeService(repo: nil, appRouter: appRouter)
             // setNotificationCategories is dispatched through
             // UNUserNotificationCenter, which serialises on its own queue.
-            // T1 (1.4) — awaited, not a 50 ms sleep (see the helper).
+            // Awaited, not a 50 ms sleep (see the helper).
             await awaitNotificationCategory(NotificationService.categoryMedication)
             let categories = await UNUserNotificationCenter.current().notificationCategories()
             guard let med = categories.first(where: { $0.identifier == NotificationService.categoryMedication }) else {
@@ -120,9 +120,10 @@ import Testing
             #expect(NotificationService.categoryMedication == "MEDICATION_REMINDER")
         }
 
-        @Test("Snooze interval is exactly 15 minutes")
-        func snoozeIntervalIsFifteenMinutes() {
-            #expect(NotificationService.snoozeIntervalSeconds == 15 * 60)
+        @Test("Snooze interval is the account's span, never the old fixed 15 minutes")
+        func snoozeIntervalFollowsTheSetting() {
+            #expect(NotificationService.snoozeIntervalSeconds == MedicationSnooze.interval)
+            #expect(MedicationSnooze.allowedMinutes.contains(Int(NotificationService.snoozeIntervalSeconds / 60)))
         }
 
         // MARK: - med.taken → server roundtrip
@@ -261,20 +262,23 @@ import Testing
 
         // MARK: - Default action (body-tap) → deep-link
 
-        @Test("Default action with medicationId deep-links to the medication detail")
+        @Test("Default action with medicationId lands on its due dose, not the info page (#186)")
         func defaultActionDeepLinksToMedication() async {
             let appRouter = AppRouter()
             let svc = makeService(repo: nil, appRouter: appRouter)
+            let slot = Date(timeIntervalSince1970: 1_779_710_400)
 
             await svc.dispatchAction(
                 actionID: UNNotificationDefaultActionIdentifier,
-                payload: payload(medicationId: "med-detail-42")
+                payload: payload(medicationId: "med-detail-42", scheduledFor: slot)
             )
 
-            // AppRouter.apply for .medication(id:) flips the tab to .meds
-            // and pushes a MedicationDetailRoute(id:) onto medsPath.
+            // The Meds list root, where the card offers Take and Skip; the
+            // landing carries the reminder's slot so its bundle is marked.
             #expect(appRouter.selectedTab == .meds)
-            #expect(appRouter.medsPath.count == 1)
+            #expect(appRouter.medsPath.isEmpty)
+            #expect(appRouter.pendingMedicationLanding?.medicationId == "med-detail-42")
+            #expect(appRouter.pendingMedicationLanding?.slot == slot)
         }
 
         // MARK: - Helpers

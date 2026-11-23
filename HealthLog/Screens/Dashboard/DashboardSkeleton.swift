@@ -4,12 +4,12 @@ import SwiftUI
 /// out of `DashboardScreen.swift` so the parent screen stays under the
 /// 600-line swiftlint `file_length` warning threshold.
 ///
-/// **v0.5.5.1 — `HLSkeleton` adoption (W-IMPL-SKELETON):** the placeholder
+/// **`HLSkeleton` adoption:** the placeholder
 /// silhouette mirrors the actual dashboard layout using the design-system
 /// `HLSkeleton` primitive — shape-aware shimmer that respects
 /// `accessibilityReduceMotion` at the token layer.
 ///
-/// **v0.12 W3-4 — silhouette-match fix:** the tile region previously rendered
+/// **Silhouette-match fix:** the tile region previously rendered
 /// a 2-column `LazyVGrid`, but the live dashboard tiles render as a full-width
 /// `LazyVStack` (`DashboardScreen.tileColumn`). On cold launch the 2-up grid
 /// reflowed into a 1-up column the instant data landed — a visible layout jump
@@ -19,13 +19,13 @@ import SwiftUI
 /// cross-fade, not a re-flow.
 struct SkeletonContent: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.lg) {
+        VStack(alignment: .leading, spacing: HLLayout.cardGap) {
             // HealthScore + briefing hero. The live tile renders a 92pt
             // compliance ring on the left, score value + caption on the
             // right. We mirror that silhouette so cold-launch doesn't
             // collapse into a single blank slab.
             HLCard {
-                HStack(spacing: HLSpace.lg) {
+                HStack(spacing: HLLayout.cardGap) {
                     HLSkeleton(.circle, width: 92, height: 92)
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         HLSkeleton(.capsule, width: 140, height: 14)

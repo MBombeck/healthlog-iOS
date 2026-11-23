@@ -11,9 +11,9 @@ import Testing
 /// number with NO other test failing.
 ///
 /// This suite is the lockstep guard. The canonical expected sets below are the
-/// pinned copy of the server data (tag `v1.46.6`, re-pinned 2026-11-04 for
-/// L10N-MH: Brazil, Portugal, the Netherlands, Belgium and the two combined
-/// sets for a Portuguese or Dutch reader without a region). Every
+/// pinned copy of the server data (tag `v1.47.2`, re-pinned 2026-11-14: South
+/// Korea, and the region subtag now decides before the language, so "en-BE"
+/// gets Belgium and "de-DE" Germany alone). Every
 /// bundled emergency number, resource id, and contact line is asserted by FULL
 /// structural equality (`CrisisResourceSet: Equatable`) — so editing ANY digit,
 /// url, id, or ordering fails here loudly. It also pins the coarse locale→region
@@ -27,7 +27,7 @@ import Testing
 ///
 /// Pure (no network, no global `MockURLProtocol` handler) → no `.serialized`
 /// needed and immune to the cross-suite handler-stomping flakiness landmine.
-@Suite("Crisis-resource fallback lockstep (server v1.46.6)")
+@Suite("Crisis-resource fallback lockstep (server v1.47.2)")
 struct CrisisResourceFallbackLockstepTests {
     // MARK: - Canonical expected fixtures (pinned copy of server `crisis-resources.ts`)
 
@@ -63,6 +63,29 @@ struct CrisisResourceFallbackLockstepTests {
             CrisisResource(id: "krisenchat", contacts: ["krisenchat.de"]),
             CrisisResource(id: "telefonSeelsorgeAt", contacts: ["142", "telefonseelsorge.at"]),
             CrisisResource(id: "dargeboteneHand", contacts: ["143", "143.ch"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// Germany alone, for a tag with the region DE ("de-DE", "en-DE").
+    private static let expectedGermany = CrisisResourceSet(
+        emergencyNumber: "112",
+        resources: [
+            CrisisResource(
+                id: "telefonSeelsorge",
+                contacts: ["0800 111 0 111", "0800 111 0 222", "telefonseelsorge.de"]
+            ),
+            CrisisResource(id: "nummerGegenKummer", contacts: ["116 111"]),
+            CrisisResource(id: "krisenchat", contacts: ["krisenchat.de"]),
+            CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
+        ]
+    )
+
+    /// South Korea ("kr", "ko", any tag with the region KR) — 109. Emergency 119.
+    private static let expectedSouthKorea = CrisisResourceSet(
+        emergencyNumber: "119",
+        resources: [
+            CrisisResource(id: "suicidePrevention109", contacts: ["109"]),
             CrisisResource(id: "findahelpline", contacts: ["findahelpline.com"])
         ]
     )
@@ -189,10 +212,17 @@ struct CrisisResourceFallbackLockstepTests {
     /// region hint resolves to that country's own set — only a REGIONLESS `de*`
     /// falls through to the combined DE/AT/CH set. Covered below.
     @Test("regionless de* → German-speaking DE/AT/CH set (case-insensitive)", arguments: [
-        "de", "DE", "de-DE", "de_DE", "de-de"
+        "de", "DE", "de-LU", "de_IT", "de-Latn"
     ])
     func mapsGermanPrefixes(_ locale: String) {
         #expect(CrisisResourceFallback.forLocale(locale) == Self.expectedGermanSpeaking)
+    }
+
+    @Test("the region DE → Germany alone, whatever the language", arguments: [
+        "de-DE", "de_DE", "de-de", "en-DE", "nl-DE", "ko-DE"
+    ])
+    func mapsGermanRegion(_ locale: String) {
+        #expect(CrisisResourceFallback.forLocale(locale) == Self.expectedGermany)
     }
 
     @Test("explicit Austrian locale → Austria only (142 connects, 0800-numbers do not)", arguments: [
@@ -223,8 +253,8 @@ struct CrisisResourceFallbackLockstepTests {
     }
 
     @Test("everything else → International (incl. plain en, en-GB, other langs, empty, nil)", arguments: [
-        "en", "en-GB", "en-CA", "en-AU", "en-PT", "en-BR", "en-BE", "en-NL", "fr", "fr-FR", "fr-BE", "es", "",
-        "  ", "xx", "german", "brazil", "nlx"
+        "en", "en-GB", "en-CA", "en-AU", "fr", "fr-FR", "es", "",
+        "  ", "xx", "german", "brazil", "nlx", "kor", "korea"
     ])
     func mapsOtherLocalesToInternational(_ locale: String) {
         #expect(CrisisResourceFallback.forLocale(locale) == Self.expectedInternational)
@@ -253,7 +283,7 @@ struct CrisisResourceFallbackLockstepTests {
         }
     }
 
-    // MARK: - v1.46.6 regions
+    // MARK: - Brazil, Portugal, the Netherlands, Belgium
 
     @Test("Brazil, Portugal and Portuguese without a region match the pinned fixtures")
     func portugueseSetsInLockstep() {
@@ -275,18 +305,42 @@ struct CrisisResourceFallbackLockstepTests {
         for tag in ["nl-BE", "nl_BE", "be", "BE"] {
             #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedBelgium, "\(tag)")
         }
-        for tag in ["nl", "NL", "nl-SR", "nl-DE", "nl_AW"] {
+        for tag in ["nl", "NL", "nl-SR", "nl_AW"] {
             #expect(CrisisResourceFallback.forLocale(tag) == Self.expectedDutchSpeaking, "\(tag)")
         }
     }
 
-    /// The server's `replace("_", "-")` touches the first underscore only;
-    /// the copy does the same, so `en_US_POSIX` stays US.
-    @Test("Only the first underscore becomes a hyphen, as in JavaScript")
-    func firstUnderscoreOnly() {
+    /// The server's `replaceAll("_", "-")` turns every underscore into a
+    /// hyphen, and the first two-letter subtag after the language is the region.
+    @Test("Every underscore becomes a hyphen, the first two-letter subtag is the region")
+    func everyUnderscoreAndTheRegion() {
         #expect(CrisisResourceFallback.forLocale("en_US_POSIX") == Self.expectedUnitedStates)
-        #expect(CrisisResourceFallback.forLocale("nl_BE_x") == Self.expectedDutchSpeaking)
-        #expect(CrisisResourceFallback.forLocale("pt_PT_x") == Self.expectedPortugueseSpeaking)
+        #expect(CrisisResourceFallback.forLocale("nl_BE_x") == Self.expectedBelgium)
+        #expect(CrisisResourceFallback.forLocale("pt_PT_x") == Self.expectedPortugal)
+        #expect(CrisisResourceFallback.forLocale("zh-Hant-TW") == Self.expectedInternational)
+        #expect(CrisisResourceFallback.forLocale(" ko-KR ") == Self.expectedSouthKorea)
+    }
+
+    @Test("A region with its own set wins over the language", arguments: [
+        ("en-BE", "be"), ("fr-BE", "be"), ("en-NL", "nl"), ("en-PT", "pt"), ("en-BR", "br"),
+        ("fr-CH", "ch"), ("en-AT", "at"), ("es-US", "us"), ("ko-US", "us"), ("en-KR", "kr")
+    ])
+    func regionWinsOverLanguage(_ locale: String, _ region: String) {
+        #expect(CrisisResourceFallback.forLocale(locale) == CrisisResourceFallback.byRegion[region], "\(locale)")
+    }
+
+    @Test("Korean, the region KR and the bare kr resolve to South Korea", arguments: [
+        "ko", "KO", "ko-KR", "ko_KR", "en-KR", "kr", "KR", "ko-JP", "ko-Kore"
+    ])
+    func mapsSouthKorea(_ locale: String) {
+        #expect(CrisisResourceFallback.forLocale(locale) == Self.expectedSouthKorea)
+    }
+
+    @Test("A Korean reader in a country with its own set gets that country")
+    func koreanInAnotherCountry() {
+        #expect(CrisisResourceFallback.forLocale("ko-US") == Self.expectedUnitedStates)
+        #expect(CrisisResourceFallback.forLocale("ko-DE") == Self.expectedGermany)
+        #expect(CrisisResourceFallback.forLocale("ko-GB") == Self.expectedSouthKorea)
     }
 
     /// Acceptance (e): what each reader gets through the tag the app sends
@@ -307,9 +361,20 @@ struct CrisisResourceFallbackLockstepTests {
         RegionCase(language: .nl, region: "NL", mustReach: ["113"]),
         RegionCase(language: .nl, region: nil, mustReach: ["113", "1813"]),
         RegionCase(language: .de, region: "AT", mustReach: ["142"]),
-        RegionCase(language: .de, region: "DE", mustReach: ["0800 111 0 111", "142", "143"]),
+        RegionCase(language: .de, region: "DE", mustReach: ["0800 111 0 111"]),
+        RegionCase(language: .de, region: nil, mustReach: ["0800 111 0 111", "142", "143"]),
         RegionCase(language: .en, region: "US", mustReach: ["988"]),
-        RegionCase(language: .en, region: "PT", mustReach: ["116 123"])
+        RegionCase(language: .en, region: "PT", mustReach: ["808 24 24 24"]),
+        RegionCase(language: .ko, region: "KR", mustReach: ["109"]),
+        RegionCase(language: .ko, region: nil, mustReach: ["109"]),
+        RegionCase(language: .ko, region: "US", mustReach: ["988"]),
+        // No Spanish-speaking country has a set of its own on server 1.47.2:
+        // Spain and Latin America get the international set, a Spanish
+        // interface in the US gets 988.
+        RegionCase(language: .es, region: "ES", mustReach: ["findahelpline.com", "116 123"]),
+        RegionCase(language: .es, region: "MX", mustReach: ["findahelpline.com"]),
+        RegionCase(language: .es, region: nil, mustReach: ["findahelpline.com"]),
+        RegionCase(language: .es, region: "US", mustReach: ["988"])
     ])
     func regionTagPicksTheCountry(_ probe: RegionCase) {
         let (language, region, mustReach) = (probe.language, probe.region, probe.mustReach)
@@ -321,10 +386,12 @@ struct CrisisResourceFallbackLockstepTests {
         if language == .nl, region == "BE" { #expect(!contacts.contains("113")) }
         if language == .nl, region == "NL" { #expect(!contacts.contains("1813")) }
         if language == .de, region == "AT" { #expect(!contacts.contains("0800 111 0 111")) }
-        if language == .en, region == "PT" { #expect(set == Self.expectedInternational) }
+        if language == .en, region == "PT" { #expect(set == Self.expectedPortugal) }
+        if language == .ko, region == "KR" { #expect(set.emergencyNumber == "119") }
+        if language == .es, region != "US" { #expect(set == Self.expectedInternational) }
     }
 
-    /// #150: a Portuguese phone must never get the Brazilian lines alone,
+    /// A Portuguese phone must never get the Brazilian lines alone,
     /// whatever the interface language.
     @Test("A Portuguese device never sees only Brazilian numbers", arguments: AppLanguage.allCases)
     func portugueseDeviceNeverBrazilOnly(language: AppLanguage) {
@@ -339,11 +406,12 @@ struct CrisisResourceFallbackLockstepTests {
         let canonical = [
             Self.expectedInternational, Self.expectedGermanSpeaking, Self.expectedUnitedStates,
             Self.expectedBrazil, Self.expectedPortugal, Self.expectedPortugueseSpeaking,
-            Self.expectedNetherlands, Self.expectedBelgium, Self.expectedDutchSpeaking
+            Self.expectedNetherlands, Self.expectedBelgium, Self.expectedDutchSpeaking,
+            Self.expectedGermany, Self.expectedSouthKorea
         ]
         let probes = [
-            "de", "de-AT", "de-CH", "en-US", "en", "br", "pt-PT", "pt", "nl-NL", "nl-BE", "nl",
-            "", "xx", "fr-CH", "en-GB"
+            "de", "de-AT", "de-CH", "de-DE", "en-US", "en", "br", "pt-PT", "pt", "nl-NL", "nl-BE", "nl",
+            "", "xx", "fr-CH", "en-GB", "ko", "ko-KR", "kr", "es", "es-ES", "es-MX", "es-US"
         ]
         for probe in probes {
             let set = CrisisResourceFallback.forLocale(probe)

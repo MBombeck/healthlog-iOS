@@ -1,6 +1,6 @@
 import Foundation
 
-/// W8-A1 — small coalescer for the foreground refresh fan-out.
+/// Small coalescer for the foreground refresh fan-out.
 ///
 /// Both `RootView` and `DashboardScreen` historically fired the HK daily-stats
 /// sync on every `scenePhase == .active`, so on a foreground while the Home tab
@@ -40,7 +40,7 @@ struct ForegroundRefreshThrottle {
         return true
     }
 
-    /// **14-05 (D-09-06-A) — hand a stamp back.**
+    /// **Hand a stamp back.**
     ///
     /// ``shouldRun(force:now:)`` stamps the window at the moment it admits a
     /// caller, which is correct for a caller that then does the work, and a lie

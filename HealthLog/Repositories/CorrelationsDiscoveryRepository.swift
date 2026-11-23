@@ -54,7 +54,7 @@ public actor CorrelationsDiscoveryRepository {
             || (status == 403 && (code?.hasPrefix("assistant.disabled") ?? false))
         {
             // Operator-gated surface off / route not deployed → hide the block,
-            // never error it. v0141 W-DATAPARITY (P10): `requireAssistantSurface`
+            // never error it. `requireAssistantSurface`
             // answers a disabled `correlations` surface with `403` +
             // `errorCode: "assistant.disabled.correlations"`
             // (`src/lib/feature-flags/index.ts:137-145`) — folding that into the
@@ -62,7 +62,7 @@ public actor CorrelationsDiscoveryRepository {
             // genuine auth `403` (no `assistant.disabled.*` code) still throws.
             return nil
         } catch let HLError.aiUnavailable(refusal) where refusal.errorCode.hasPrefix(AIRefusal.operatorDisabledPrefix) {
-            // #115 · 0.2 — since the transport reads `meta.errorCode`, the same
+            // Since the transport reads `meta.errorCode`, the same
             // operator refusal arrives typed; hide the block the same way.
             return nil
         }

@@ -68,46 +68,23 @@ extension WorkoutDetailView {
 
     // MARK: - Splits section (server-computed per-km splits)
 
-    /// Per-kilometre splits from the server `splits[]`. Each row shows the km
-    /// index, the split duration, and the unit-adapted pace (min/km · min/mi).
-    /// Hidden for indoor / route-less workouts (server sends nil / empty).
+    /// Per-kilometre splits from the server `splits[]`, one shared row each:
+    /// the km index with the unit-adapted pace (min/km, min/mi) under it, the
+    /// split duration as the value. Hidden for indoor / route-less workouts
+    /// (server sends nil / empty).
     @ViewBuilder
     var splitsSection: some View {
         if let splits = resolved.splits, !splits.isEmpty {
-            HLCard(style: .elevated) {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    Text("workout.splits.title")
-                        .font(.hlTitle3)
-                        .foregroundStyle(HLText.primary)
-                    VStack(spacing: HLSpace.xs) {
-                        ForEach(splits) { split in
-                            splitRow(split)
-                        }
-                    }
+            HLCard("workout.splits.title", layout: .rows) {
+                ForEach(splits) { split in
+                    HLRow(
+                        title: Text("workout.splits.km \(split.km)"),
+                        detail: WorkoutFormatter.paceLabel(secondsPerKm: Double(split.paceSecPerKm)).map { Text($0) },
+                        value: WorkoutFormatter.duration(split.durationSec).map { Text($0) }
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-    }
-
-    private func splitRow(_ split: WorkoutSplitDTO) -> some View {
-        HStack(spacing: HLSpace.sm) {
-            Text("workout.splits.km \(split.km)")
-                .font(.hlBody.weight(.medium))
-                .foregroundStyle(HLText.primary)
-            Spacer()
-            if let pace = WorkoutFormatter.paceLabel(secondsPerKm: Double(split.paceSecPerKm)) {
-                Text(pace)
-                    .font(.hlCaption.monospacedDigit())
-                    .foregroundStyle(HLText.secondary)
-            }
-            if let dur = WorkoutFormatter.duration(split.durationSec) {
-                Text(dur)
-                    .font(.hlBody.monospacedDigit())
-                    .foregroundStyle(HLText.primary)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Sport-context section (own-history comparison)
@@ -120,10 +97,9 @@ extension WorkoutDetailView {
         // Guard on the avg duration (a real baseline always has one) rather than
         // `ctx.count` — the count is a session tally, not a collection size.
         if let ctx = resolved.sportContext, ctx.avgDurationSec > 0 {
-            HLCard(style: .elevated) {
+            HLCard("workout.sportContext.title \(ctx.count)") {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("workout.sportContext.title \(ctx.count)")
-                    HStack(spacing: HLSpace.lg) {
+                    HStack(spacing: HLLayout.statCellGap) {
                         if let dur = WorkoutFormatter.duration(ctx.avgDurationSec) {
                             sportContextStat(labelKey: "Duration", value: dur)
                         }
@@ -143,14 +119,16 @@ extension WorkoutDetailView {
         }
     }
 
+    /// A raster cell in the compact value form: label over figure. The
+    /// figures are preformatted (a stopwatch length, a distance), so they take
+    /// the compact value role directly.
     private func sportContextStat(labelKey: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(labelKey)
                 .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .foregroundStyle(HLText.secondary)
             Text(value)
-                .font(.hlSubhead.weight(.semibold).monospacedDigit())
-                .foregroundStyle(HLText.primary)
+                .hlText(.compactValue)
         }
     }
 }

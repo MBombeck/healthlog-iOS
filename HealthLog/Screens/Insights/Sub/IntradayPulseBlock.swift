@@ -30,12 +30,10 @@ struct IntradayPulseBlock: View {
     /// The block's PLACEMENT gate, pulled out as pure logic so the wiring on
     /// `InsightsMetricScreen` is testable without a view host.
     ///
-    /// Two conditions, both load-bearing: the day curve belongs to the pulse
-    /// page only (no other metric may fire the read), and it is pure server
-    /// compute — in standalone / no-server there is nothing to fetch, so the
-    /// block must not exist rather than sit there empty.
-    nonisolated static func isAvailable(for kind: MetricKind, canShowCloudInsights: Bool) -> Bool {
-        kind == .pulse && canShowCloudInsights
+    /// The day curve belongs to the pulse page only (no other metric may fire
+    /// the read).
+    nonisolated static func isAvailable(for kind: MetricKind) -> Bool {
+        kind == .pulse
     }
 
     var body: some View {
@@ -47,7 +45,7 @@ struct IntradayPulseBlock: View {
                 // placeholder so the page does not jump when the day lands.
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, HLSpace.lg)
+                    .padding(.vertical, HLLayout.cardInset)
                     .accessibilityIdentifier("insights.metric.pulse.intraday.loading")
             }
         }
@@ -56,10 +54,11 @@ struct IntradayPulseBlock: View {
 
     // MARK: - Card
 
+    /// The card head carries the title; the day stepper opens the content.
     private var card: some View {
-        HLCard {
+        HLCard("insights.intraday.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                header
+                navigator
                 caption
                 content
                 // 1.0.3 (App Review 1.4.1) — how the day's tension window is
@@ -71,60 +70,24 @@ struct IntradayPulseBlock: View {
         .accessibilityIdentifier("insights.metric.pulse.intraday")
     }
 
-    private var header: some View {
-        HStack(spacing: HLSpace.xs) {
-            Text("insights.intraday.title")
-                .font(.hlHeadline)
-                .foregroundStyle(HLText.primary)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: HLSpace.sm)
-            navigator
-        }
-    }
-
-    /// ‹ Tag › — 44 pt touch targets, "next" disabled on today.
+    /// ‹ Tag › through the shared stepper, like the sleep night and
+    /// movement; "next" is off on today.
     private var navigator: some View {
-        HStack(spacing: 0) {
-            Button {
-                Task { await store.goToPreviousDay(in: zone) }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("insights.intraday.previousDay"))
-            .accessibilityIdentifier("insights.metric.pulse.intraday.previous")
-
-            Text(dayLabel)
-                .font(.hlCaption)
-                .monospacedDigit()
-                .foregroundStyle(HLText.secondary)
-                .frame(minWidth: 56)
-                .multilineTextAlignment(.center)
-
-            Button {
-                Task { await store.goToNextDay(in: zone) }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(isOnToday ? HLText.tertiary : HLText.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(isOnToday)
-            .accessibilityLabel(Text("insights.intraday.nextDay"))
-            .accessibilityIdentifier("insights.metric.pulse.intraday.next")
-        }
+        HLStepperHeader(
+            verbatim: dayLabel,
+            previousLabel: "insights.intraday.previousDay",
+            nextLabel: "insights.intraday.nextDay",
+            canGoNext: !isOnToday,
+            identifier: "insights.metric.pulse.intraday",
+            previous: { Task { await store.goToPreviousDay(in: zone) } },
+            next: { Task { await store.goToNextDay(in: zone) } }
+        )
     }
 
     /// The card's one caption line, the most specific true statement about
     /// THIS day: tension copy > hourly-grain note > the coverage of a day with
     /// gaps > nothing. Ordered like the web (`intraday-pulse-chart.tsx:162-166`).
-    /// 1.4 B2 — the standing "averaged in 10-minute steps" caption moved into
+    /// The standing "averaged in 10-minute steps" caption moved into
     /// the page's info sheet; a day without anything special shows no line.
     @ViewBuilder
     private var caption: some View {
@@ -145,8 +108,7 @@ struct IntradayPulseBlock: View {
                         Text("insights.intraday.coverage.many \(coverage.readingCount) \(coverage.hours)")
                     }
                 }
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("insights.metric.pulse.intraday.coverage")
             }
@@ -155,8 +117,7 @@ struct IntradayPulseBlock: View {
 
     private func captionText(_ key: LocalizedStringKey) -> some View {
         Text(key)
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -179,25 +140,17 @@ struct IntradayPulseBlock: View {
             IntradayPulseChartView(day: day)
         } else if store.isLoading {
             ProgressView()
-                .frame(maxWidth: .infinity, minHeight: 180)
+                .frame(maxWidth: .infinity, minHeight: HLChartStyle.heightRegular)
         } else if store.loadFailed {
-            Button {
+            // A quiet link in the card, the app's one form of a text action.
+            HLLinkButton("insights.intraday.loadFailed", systemImage: "arrow.clockwise", alignment: .leading) {
                 Task { await store.refresh(in: zone) }
-            } label: {
-                Text("insights.intraday.loadFailed")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("insights.metric.pulse.intraday.retry")
         } else {
-            Text("insights.intraday.empty")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-                .frame(maxWidth: .infinity, minHeight: 120)
-                .multilineTextAlignment(.center)
+            // A day without readings is missing data inside the card: one
+            // quiet line where the curve would be.
+            HLEmptyNote("insights.intraday.empty")
                 .accessibilityIdentifier("insights.metric.pulse.intraday.empty")
         }
     }
@@ -219,6 +172,9 @@ struct IntradayPulseBlock: View {
     }
 
     private static func keyParser(_ zone: TimeZone) -> DateFormatter {
+        // Reads the store's `yyyy-MM-dd` key back into a date; nothing on
+        // screen uses this formatter, the label goes through HLDateFormat.
+        // swiftlint:disable:next hl_date_via_helper
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = zone

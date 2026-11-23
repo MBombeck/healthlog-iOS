@@ -1,6 +1,6 @@
 import Foundation
 
-/// **LIFE (1.5.0, #132, Server #614)** — the life-circumstance routes.
+/// The life-circumstance routes.
 ///
 /// - `GET /api/anamnesis/life-circumstances`: the six sections, read.
 /// - `POST /api/anamnesis/facts`, `PATCH|DELETE /api/anamnesis/facts/{id}`:

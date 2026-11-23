@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **W-HK-RELIABILITY H-2 — honest anchor (de)serialization.**
+    /// **Honest anchor (de)serialization.**
     ///
     /// The historical importer (de)serializers swallowed every archive failure
     /// with `try?`, so a corrupt stored anchor silently decoded to `nil` and

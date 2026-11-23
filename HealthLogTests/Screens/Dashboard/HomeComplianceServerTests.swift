@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #115 · 1.3 — the Home ring and the compliance widget show only what the
+/// The Home ring and the compliance widget show only what the
 /// server computed.
 @Suite("Home ring + widget compliance — server values (#115 1.3)")
 @MainActor

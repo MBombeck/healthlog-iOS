@@ -20,7 +20,7 @@ public enum ChangePasswordOutcome: Equatable, Sendable {
     /// step-up that a Bearer client cannot produce. Distinct from `.failure`
     /// because the remedy is different and specific.
     case stepUpRequired
-    /// **B5 (1.4)** — the current password did not match. The server answers
+    /// The current password did not match. The server answers
     /// that with a 401 whose prose is English only ("Current password is
     /// incorrect"), so the sheet shows its own sentence. The session stays:
     /// `APIClient` surfaces this 401 instead of refreshing and signing out
@@ -92,7 +92,7 @@ public final class AccountSecurityStore {
     /// `@MainActor` hop or a live repository.
     nonisolated static func classify(_ err: HLError) -> ChangePasswordOutcome {
         if SecurityStepUp.isRequired(err) { return .stepUpRequired }
-        // B5 (1.4) — every other 401 that reaches here is the server refusing
+        // Every other 401 that reaches here is the server refusing
         // the current password: a refusal of the session never arrives as
         // `.server(401, …)` from this route (`APIClient.isCredentialCheckRefusal`).
         if case .server(401, _, _) = err { return .wrongCurrentPassword }
@@ -122,7 +122,7 @@ public final class AccountSecurityStore {
         pendingTotpSetup = nil
     }
 
-    // MARK: - Native 2FA management (#57)
+    // MARK: - Native 2FA management
 
     /// The 2FA card's status, resolved server-side.
     public enum TwoFactorState: Equatable, Sendable {
@@ -162,7 +162,7 @@ public final class AccountSecurityStore {
         return false
     }
 
-    /// R2 / #115 A3 — whether the account holds a second factor (a confirmed
+    /// Whether the account holds a second factor (a confirmed
     /// authenticator or a registered security key), the server's
     /// `hasSecondFactorEnrolled`. Decides whether a step-up for adding a factor
     /// or for a record action may come from the password (no) or must come from

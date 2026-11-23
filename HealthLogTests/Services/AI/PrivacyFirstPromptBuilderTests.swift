@@ -29,7 +29,7 @@ import Testing
 ///    UNVERHANDELBAR guardrail block so a template tweak surfaces as an
 ///    obvious test failure.
 ///
-/// 4. **R11 (1.0.3) — the ask describes, and it is bilingual.** The prompt
+/// 4. **R11 — the ask describes, and it is bilingual.** The prompt
 ///    must never ask for concrete action suggestions, and the guardrails
 ///    must reach an English session too (the App-Review reviewer's).
 @Suite("PrivacyFirstPromptBuilder — privacy invariants + composition")
@@ -180,7 +180,7 @@ struct PrivacyFirstPromptBuilderTests {
         #expect(snapshot.last7dSleepAvgHours == 7.0)
     }
 
-    // MARK: - Prompt-injection guard (v0.6.0.7 B3-M3)
+    // MARK: - Prompt-injection guard
 
     /// Worst-case user input: contains a literal `"`, a `\n`, AND a
     /// literal `</user-input>` close-fence token. The composed prompt
@@ -236,7 +236,7 @@ struct PrivacyFirstPromptBuilderTests {
         #expect(prompt.contains("<user-input>\nWas bedeutet \"Hypertonie\"?\n</user-input>"))
     }
 
-    // MARK: - Deterministic clock (v0.6.0.7 B2-M3)
+    // MARK: - Deterministic clock
 
     /// Same `(userText, snapshot, now)` triple must always produce
     /// byte-identical output. The previously-silent `now: Date = .now`

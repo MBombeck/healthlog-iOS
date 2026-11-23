@@ -2,7 +2,7 @@
 //  FHIRServerCodeAlignmentTests.swift
 //  HealthLogTests
 //
-//  #115 R3 — the app's own FHIR exporter (doctor report → FHIR R4 document
+//  The app's own FHIR exporter (doctor report → FHIR R4 document
 //  bundle) aligned with the server's v1.39.3 code table (#115, section D).
 //  The server checked its bundles with the HL7 validator against
 //  tx.fhir.org; several of the old codes were commented there as matching
@@ -181,13 +181,6 @@ struct FHIRServerCodeAlignmentTests {
         let bundle = try DoctorReportToFHIRBundle.bundle(from: Self.spec(rows: [Self.row(.pulse, 64)]))
         let codings = try Self.codings(#require(Self.observations(bundle).first))
         #expect(codings.map(\.code) == ["8867-4"])
-    }
-
-    @Test("The per-measurement mapper emits the same companion coding")
-    func measurementMapperCompanion() throws {
-        let measurement = Measurement(id: "m1", kind: .spo2, recordedAt: .now, value: .scalar(97))
-        let observation = try #require(MeasurementToFHIRObservation.map(measurement, patientID: "p"))
-        #expect(Self.codings(observation).map(\.code) == ["59408-5", "2708-6"])
     }
 
     @Test("An allergy Condition is SNOMED 473011001 'Allergic condition'")

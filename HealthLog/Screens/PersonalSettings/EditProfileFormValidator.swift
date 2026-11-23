@@ -30,7 +30,7 @@ enum EditProfileFormValidator {
         return nil
     }
 
-    // MARK: - v0.10.0 patient-identity fields
+    // MARK: - Patient-identity fields
 
     /// Server `profileSchema.fullName` / `insurerName` caps both free-text
     /// identity fields at 120 chars (trimmed). Empty is valid (clears the
@@ -71,7 +71,7 @@ enum EditProfileFormValidator {
         return nil
     }
 
-    /// v0.11.0 — insurer IKNR (Institutionskennzeichen) light format check.
+    /// Insurer IKNR (Institutionskennzeichen) light format check.
     /// The canonical IKNR is exactly 9 digits. We only guard the obvious
     /// shape client-side (non-numeric or wrong length); the server runs the
     /// authoritative validation and we don't compute the check digit

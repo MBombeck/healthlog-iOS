@@ -5,7 +5,7 @@ import PDFKit
     import UIKit
 #endif
 
-/// **Local Doctor Report — PDFKit renderer (T-7).**
+/// **Local Doctor Report — PDFKit renderer.**
 ///
 /// Pure-actor PDF renderer. Consumes a `DoctorReportSpec` (Sendable), draws
 /// each non-nil section onto a single multi-page `Data` blob, and writes
@@ -104,7 +104,7 @@ public actor DoctorReportRenderer {
             elements.append(.vitals(vitals, footer: spec.footer))
         }
         if let charts = spec.charts {
-            // POLISH-A F-PDF-1 — the chart page holds five 110 pt tiles; the
+            // The chart page holds five 110 pt tiles; the
             // drawer used to stop there and drop every further metric without
             // a word. Each further five get a page of their own.
             for start in stride(from: 0, to: max(charts.series.count, 1), by: Self.chartsPerPage) {

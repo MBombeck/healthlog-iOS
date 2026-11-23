@@ -31,10 +31,16 @@ public final class OAuthIntegrationCore {
     /// them on the generic red error line would say the opposite of what
     /// happened.
     public private(set) var syncState: ManualSyncState = .idle
-    /// KONTO (#149) — the Fitbit turndown (`retirement`, or a `410
-    /// provider_retired` from connect, sync or test). Always `nil` for the
-    /// other providers.
+    /// The Fitbit turndown (`retirement`, or a `410
+    /// provider_retired` / `route.retired` from a Fitbit route). Always `nil`
+    /// for the other providers.
     public private(set) var retirement: FitbitRetirement?
+    /// Whether the consolidated status still lists a Fitbit entry. `nil` until
+    /// read and after a failed read; `false` from server 1.48.0 on.
+    public private(set) var fitbitListed: Bool?
+    /// `fitbitRemovalNotice` as the server sent it (server 1.48.0). `false`
+    /// on an older server, before the read and once dismissed.
+    public private(set) var showsRemovalNotice = false
 
     public let provider: OAuthIntegrationRepository.Provider
     /// Whether this provider exposes a manual `/sync` route (Fitbit only).
@@ -59,7 +65,7 @@ public final class OAuthIntegrationCore {
         provider.supportsConnectionTest
     }
 
-    /// #139 — whether this provider has a resume route for `action: resume`.
+    /// Whether this provider has a resume route for `action: resume`.
     public var supportsResume: Bool {
         provider.resumePath != nil
     }
@@ -84,24 +90,52 @@ public final class OAuthIntegrationCore {
 
     /// The turndown is a second, best-effort read: a failure keeps what was
     /// known and never shows as the connection's error.
+    ///
+    /// A server that lists Fitbit without `retirement` (before 1.43.11) gets
+    /// the dateless notice: Google turned the API off, whatever the server
+    /// knows. A server from 1.48.0 lists no Fitbit at all; it only says
+    /// whether the removal note is due.
     private func loadRetirement() async {
-        guard provider == .fitbit, let read = try? await repo.retirement() else { return }
-        if retirement == .retiredByRefusal, !read.ended { return }
-        retirement = read
+        guard provider == .fitbit, let read = try? await repo.fitbitState() else { return }
+        fitbitListed = read.listed
+        showsRemovalNotice = read.removalNotice == true
+        guard read.listed else { return }
+        guard let announced = read.retirement else {
+            if retirement == nil { retirement = .retiredByRefusal }
+            return
+        }
+        if retirement == .retiredByRefusal, !announced.ended { return }
+        retirement = announced
     }
 
-    /// Whether Google turned the provider off: connect, sync and test are gone.
+    /// Whether the provider can no longer be connected: connect, sync and test
+    /// are gone. Always for Fitbit (the Fitbit Web API is off, whatever the
+    /// server says), never for the others.
     public var isRetired: Bool {
-        retirement?.ended == true
+        provider == .fitbit || retirement?.ended == true
     }
 
-    /// `false` only when the server says the row is not offered at all.
+    /// Whether Integrations lists the provider. Fitbit only while the server
+    /// still lists it (before 1.48.0) or the account is still connected, and
+    /// not when the server says the row is not offered at all. Before the
+    /// read the row stays away, like Dawarich's.
     public var isOffered: Bool {
-        retirement?.offered != false
+        guard provider == .fitbit else { return true }
+        guard retirement?.offered != false else { return false }
+        return fitbitListed == true || status?.connected == true
     }
 
-    /// A `410 provider_retired` is the turndown, not a failure: the notice
-    /// explains it, so it replaces the error line.
+    /// Clears the Fitbit removal note at once and tells the server. The
+    /// dismiss is idempotent; when it does not land, the next status read
+    /// brings the note back, so a failure needs no line of its own.
+    public func dismissRemovalNotice() async {
+        guard showsRemovalNotice else { return }
+        showsRemovalNotice = false
+        try? await repo.dismissFitbitRemovalNotice()
+    }
+
+    /// A `410 provider_retired` or `route.retired` is the turndown, not a
+    /// failure: the notice explains it, so it replaces the error line.
     private func absorbRetirement(_ error: Error) -> Bool {
         guard provider == .fitbit, FitbitRetirement.isRetiredRefusal(error) else { return false }
         if retirement?.ended != true { retirement = .retiredByRefusal }
@@ -110,7 +144,7 @@ public final class OAuthIntegrationCore {
 
     /// Ask the server to pull from the provider now.
     ///
-    /// The three registers stay separate on purpose (CU-35):
+    /// The three registers stay separate on purpose:
     ///  - a 2xx publishes the server's own `{ imported, outcome }` verdict, so
     ///    "nothing new over there" (`outcome == .empty`) reads as the normal
     ///    non-event it is rather than as a failed run;
@@ -149,7 +183,7 @@ public final class OAuthIntegrationCore {
         }
     }
 
-    /// #139 — `health.action == "resume"`: clear the park, then re-read status.
+    /// `health.action == "resume"`: clear the park, then re-read status.
     public func resume() async {
         guard supportsResume else { return }
         isWorking = true
@@ -159,7 +193,7 @@ public final class OAuthIntegrationCore {
             try await repo.resume()
             await loadStatus()
         } catch let err as HLError {
-            error = err
+            if !absorbRetirement(err) { error = err }
         } catch {
             self.error = .unknown(String(describing: error))
         }
@@ -173,7 +207,7 @@ public final class OAuthIntegrationCore {
             try await repo.disconnect()
             await loadStatus()
         } catch let err as HLError {
-            error = err
+            if !absorbRetirement(err) { error = err }
         } catch {
             self.error = .unknown(String(describing: error))
         }
@@ -215,7 +249,7 @@ public final class OAuthIntegrationCore {
             await loadStatus()
             return error == nil
         } catch let err as HLError {
-            error = err
+            if !absorbRetirement(err) { error = err }
             return false
         } catch {
             self.error = .unknown(String(describing: error))
@@ -234,7 +268,7 @@ public final class OAuthIntegrationCore {
             await loadCredentialsStatus()
             await loadStatus()
         } catch let err as HLError {
-            error = err
+            if !absorbRetirement(err) { error = err }
         } catch {
             self.error = .unknown(String(describing: error))
         }
@@ -265,6 +299,8 @@ public final class OAuthIntegrationCore {
         lastTestResult = nil
         syncState = .idle
         retirement = nil
+        fitbitListed = nil
+        showsRemovalNotice = false
     }
 }
 
@@ -283,10 +319,11 @@ public protocol OAuthIntegrationStoreProtocol: AnyObject {
     var retirement: FitbitRetirement? { get }
     var isRetired: Bool { get }
     var isOffered: Bool { get }
+    var showsRemovalNotice: Bool { get }
     var provider: OAuthIntegrationRepository.Provider { get }
     var supportsManualSync: Bool { get }
     var supportsConnectionTest: Bool { get }
-    /// #139 — whether `health.action == "resume"` can be carried out here.
+    /// Whether `health.action == "resume"` can be carried out here.
     var supportsResume: Bool { get }
     var isConnected: Bool? { get }
     var hasOwnCredentials: Bool? { get }
@@ -300,6 +337,7 @@ public protocol OAuthIntegrationStoreProtocol: AnyObject {
     func deleteCredentials() async
     func testConnection() async
     func openingExternalConnect(_ open: @MainActor () async -> Void) async
+    func dismissRemovalNotice() async
     func clearOnLogout()
 }
 
@@ -345,6 +383,10 @@ public extension OAuthIntegrationStoreProtocol where Self: OAuthIntegrationStore
 
     var isOffered: Bool {
         core.isOffered
+    }
+
+    var showsRemovalNotice: Bool {
+        core.showsRemovalNotice
     }
 
     var provider: OAuthIntegrationRepository.Provider {
@@ -408,6 +450,10 @@ public extension OAuthIntegrationStoreProtocol where Self: OAuthIntegrationStore
         await core.openingExternalConnect(open)
     }
 
+    func dismissRemovalNotice() async {
+        await core.dismissRemovalNotice()
+    }
+
     func clearOnLogout() {
         core.clearOnLogout()
     }
@@ -447,7 +493,7 @@ public final class FitbitIntegrationStore: OAuthIntegrationStoreForwarding {
     }
 }
 
-/// v1.28.11 (#46) — Strava workout/activity ingest. Same server-OAuth surface as
+/// v1.28.11 — Strava workout/activity ingest. Same server-OAuth surface as
 /// Oura/Polar (browser connect, status, disconnect) plus BYO credentials + the
 /// live `/test` probe.
 @MainActor

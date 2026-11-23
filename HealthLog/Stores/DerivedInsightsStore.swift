@@ -7,14 +7,12 @@ import Observation
 /// provenance envelope (award-tier transparency, web `vitals-dashboard.tsx` +
 /// `wellness-scores.tsx` parity).
 ///
-/// **HONEST-ONLY.** The store surfaces ONLY the envelopes the server returns;
+/// The store surfaces ONLY the envelopes the server returns;
 /// it never fabricates a band or score. An `insufficient` envelope is kept
 /// (the card renders its gating state) but is NOT presented as a value; a
 /// `404`/`422` arm is dropped entirely (the metric simply does not appear).
 ///
-/// **Server-derived.** Pure server compute, no on-device fallback — the call
-/// site additionally gates the block on `BackendAvailability.hasServer` so it
-/// hides in standalone / no-server.
+/// **Server-derived.** Pure server compute, no on-device fallback.
 @MainActor
 @Observable
 public final class DerivedInsightsStore {
@@ -29,7 +27,7 @@ public final class DerivedInsightsStore {
         "STRESS_SCORE",
         "STRAIN_SCORE",
         "FITNESS_AGE",
-        // I-2 — "Signale des Tages" (transparent deviation COUNT, NOT a score,
+        // "Signale des Tages" (transparent deviation COUNT, NOT a score,
         // NOT AI). Rendered as an honest count card, never a ring. Fetched here
         // so the same batch round-trip carries it; the overview partitions it
         // out of the ring-card lane.
@@ -40,7 +38,7 @@ public final class DerivedInsightsStore {
 
     public private(set) var metrics: [DerivedMetricDTO] = []
 
-    // MARK: - CU-30 / C5 — Same-Time-Baseline
+    // MARK: - Same-Time-Baseline
 
     /// The latest `SAME_TIME_BASELINE` envelope, kept OUT of ``metrics``.
     ///
@@ -57,7 +55,7 @@ public final class DerivedInsightsStore {
     public private(set) var sameTimeBaselineSettled: Bool = false
 
     public private(set) var isLoading: Bool = false
-    /// v0.14.1 — `true` while the server is still computing at least one
+    /// `true` while the server is still computing at least one
     /// surfaced score out of band (any envelope returned `revalidating: true`)
     /// and a bounded in-session re-poll is scheduled. Lets the overview show a
     /// calm "Einschätzung wird erstellt…" placeholder during the warm window
@@ -68,7 +66,7 @@ public final class DerivedInsightsStore {
 
     private let repo: DerivedMetricsRepository
 
-    /// v0.14.1 — number of warm re-polls already issued this session (capped so
+    /// Number of warm re-polls already issued this session (capped so
     /// a never-warming server can't loop forever). Reset once the grid settles.
     private var revalidatePolls: Int = 0
     /// The pending warm re-poll, held so logout can cancel it.
@@ -112,7 +110,7 @@ public final class DerivedInsightsStore {
         let fresh = await repo.fetchBatch(Self.surfacedMetrics)
         metrics = fresh
 
-        // v0.14.1 — warm-in-flight re-poll. On a cold first-login session the
+        // Warm-in-flight re-poll. On a cold first-login session the
         // daily derived compute may not have landed yet: the server returns the
         // envelopes with `revalidating: true` (no value / no assessment) while
         // it warms them out of band. Settling here would freeze the empty
@@ -143,7 +141,7 @@ public final class DerivedInsightsStore {
         await load()
     }
 
-    // MARK: - CU-30 / C5 — Same-Time-Baseline
+    // MARK: - Same-Time-Baseline
 
     /// Reads the Same-Time-Baseline for one cumulative type through the
     /// uncached single route.

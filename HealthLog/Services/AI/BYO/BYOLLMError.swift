@@ -1,8 +1,8 @@
 import Foundation
 
-/// v0.13 W2 — typed error surface shared across every BYO adapter +
+/// Typed error surface shared across every BYO adapter +
 /// ``BYOLLMService``. Adapters map provider HTTP errors onto these cases via
-/// ``LLMProvider/mapError(status:data:)``; the Coach consumer (W4) folds them
+/// ``LLMProvider/mapError(status:data:)``; the Coach consumer folds them
 /// into its existing `LocalLLMError` banner so no new view-layer error type is
 /// needed.
 ///

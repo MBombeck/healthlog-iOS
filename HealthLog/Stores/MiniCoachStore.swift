@@ -11,7 +11,7 @@ public enum MiniCoachDefaultsKeys {
     public static let enabled: String = "hl.minicoach.enabled"
 }
 
-/// In-session message log + service-wrapper for the Mini-Coach UI (C4).
+/// In-session message log + service-wrapper for the Mini-Coach UI.
 ///
 /// **Contract (operator-locked, COACH-SUB-QUEUE Q-MC-3):**
 ///   - No cross-session persistence. The `messages` array lives entirely
@@ -152,7 +152,7 @@ public final class MiniCoachStore: BoxBackedPHIStore {
         await service.history.reset()
     }
 
-    /// **W-PHI-HARDENING (G5)** — box-backed PHI conformance so the
+    /// Box-backed PHI conformance so the
     /// ``MiniCoachBox`` logout registry can clear this store generically and the
     /// completeness suite can verify it. Forwards to ``wipe()``.
     public func clearPHIOnLogout() async {

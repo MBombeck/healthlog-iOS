@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.15.2 W-BUTTONS, neu gefasst am 2026-08-23 (Phase 17-01).**
+/// **v0.15.2 W-BUTTONS, neu gefasst am 2026-08-23.**
 ///
 /// Diese Suite pinnte ursprünglich die drei tragenden Werte der Variante
 /// `HLButton(.restrained)`, die nach dem b198-Walkthrough entstand: der
@@ -28,7 +28,7 @@ import Testing
 /// `HLText.secondary`-Tinte, keine Füllung. Das sind exakt die Werte, die
 /// `HLButton.restrainedContract` seit W-BUTTONS trägt. Träger der neuen
 /// Rolle ist aber **nicht** diese Variante, sondern das geteilte Primitive
-/// `HLTileActionButton` (17-02) — die Variante bleibt die historische
+/// `HLTileActionButton` — die Variante bleibt die historische
 /// Quelle der Zahlen, nicht ihr Vehikel.
 ///
 /// Deshalb prüft diese Suite ab jetzt **zwei** Dinge:

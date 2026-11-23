@@ -18,7 +18,7 @@ import Foundation
 // (`CoachAboutMeWrite.aboutMe` is a non-optional `String` that is always sent,
 // and neither `CoachAboutMeStore.save()` nor `AboutMeScreen` gates on it).
 //
-// **PUT concurrency (CU-20 / #69):** the write carries `baseUpdatedAt` — see
+// **PUT concurrency:** the write carries `baseUpdatedAt` — see
 // `CoachAboutMeRepository.update(_:)`. This route is the only one of the eight
 // guarding its OWN column (`UserHealthProfile.updatedAt`) rather than the
 // shared `User.updatedAt`.

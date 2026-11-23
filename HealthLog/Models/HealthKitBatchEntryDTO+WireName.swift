@@ -1,6 +1,6 @@
 import Foundation
 
-/// **REG (1.5, public #13) and POLISH-B B6 — the one table of HealthKit types
+/// **REG and POLISH-B B6 — the one table of HealthKit types
 /// whose run-time identifier is not the name the server maps them under.**
 ///
 /// The server keys `APPLE_HEALTH_TYPE_MAP` by the SDK constant's NAME and
@@ -36,7 +36,9 @@ public extension HealthKitBatchEntryDTO {
             categoryValue: categoryValue,
             externalId: externalId,
             externalSourceVersion: externalSourceVersion,
-            deviceType: deviceType
+            deviceType: deviceType,
+            assessmentAnswers: assessmentAnswers,
+            timeZone: timeZone
         )
     }
 }

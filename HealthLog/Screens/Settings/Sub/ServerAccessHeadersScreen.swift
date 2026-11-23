@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// GH-iOS #27 — Settings › Server › Access headers: edits the extra headers for
+/// Settings › Server › Access headers: edits the extra headers for
 /// a server behind a zero-trust proxy (Cloudflare Access, Pangolin or anything
 /// that checks a fixed header). The editor itself is
 /// `ServerAccessHeadersEditor`, which onboarding shows inline.
@@ -8,9 +8,9 @@ import SwiftUI
 /// A pushed screen, not a sheet: the row pushes `SettingsRoute.serverAccessHeaders`
 /// through `HLSettingsActionRow(presents: .push, value:)`, so it adds no
 /// presenter to the frozen Phase-06 presentation census, and the page comes
-/// back after the privacy shield (SET-ROUTE). Back discards, Save stores and pops.
+/// back after the privacy shield. Back discards, Save stores and pops.
 ///
-/// #153 — the rows being edited live in the container's
+/// The rows being edited live in the container's
 /// `OnboardingDraftStore`, not in view state: the privacy shield rebuilds the
 /// window when the user switches to a password manager, and the values typed
 /// so far are waiting when the page comes back (SET-ROUTE restores it from the
@@ -23,7 +23,6 @@ import SwiftUI
 /// headers to the configured server.
 struct ServerAccessHeadersScreen: View {
     @Environment(\.appContainer) private var container
-    @Environment(\.dismiss) private var dismiss
 
     /// Only without a container (previews); otherwise the draft holds the rows.
     @State private var localRows: [ServerAccessHeadersEditor.Row] = []
@@ -46,27 +45,17 @@ struct ServerAccessHeadersScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                ServerAccessHeadersEditor(rows: rows, onChange: { errorText = nil })
-                if let errorText {
-                    ServerAccessHeadersErrorLine(text: errorText)
-                }
+        HLPage {
+            ServerAccessHeadersEditor(rows: rows, onChange: { errorText = nil })
+            if let errorText {
+                HLFormErrorText(errorText)
+                    .accessibilityIdentifier(ServerAccessHeadersEditor.errorIdentifier)
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.md)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .background(HLSurface.primary)
         .navigationTitle("Access headers")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Save") { Task { await save() } }
-                    .fontWeight(.semibold)
-                    .accessibilityIdentifier("serverAccessHeaders.save")
-            }
-        }
+        // The check mark, as in a sheet: saving goes back on success.
+        .hlConfirmBar(.save { await save() }, identifier: "serverAccessHeaders.save")
         .onAppear {
             stackDepth = container?.appRouter.morePath.count
             loadOnce()
@@ -90,33 +79,17 @@ struct ServerAccessHeadersScreen: View {
         )
     }
 
+    /// `true` when the headers are stored and the page may go back.
     @MainActor
-    private func save() async {
-        guard let container else { return }
+    private func save() async -> Bool {
+        guard let container else { return false }
         do {
             try await container.saveAccessHeaders(ServerAccessHeadersEditor.headers(from: rows.wrappedValue))
             container.onboardingDraft.settingsAccessHeaderRows = nil
-            dismiss()
+            return true
         } catch {
             errorText = ServerAccessHeadersEditor.saveFailureMessage(for: error)
+            return false
         }
-    }
-}
-
-/// The one-line validation error under the editor, shared by the Settings screen
-/// and onboarding.
-struct ServerAccessHeadersErrorLine: View {
-    let text: String
-
-    var body: some View {
-        HStack(spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(HLColor.statusBad)
-            Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityIdentifier("serverAccessHeaders.error")
     }
 }

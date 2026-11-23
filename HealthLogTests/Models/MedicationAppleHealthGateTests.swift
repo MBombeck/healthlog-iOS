@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **GH #47 — source-exclusive policy gate.** An Apple-Health-mirrored med is
+/// **Source-exclusive policy gate.** An Apple-Health-mirrored med is
 /// source-exclusive: the client must NOT offer manual dose logging on it
 /// (prevents double-counting; compliance is never recomputed client-side).
 @Suite("Medication — Apple Health source-exclusive gate")

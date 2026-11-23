@@ -33,14 +33,14 @@ struct SupportInfoReport: Equatable {
         var lastKnownServerVersion: String?
         /// Newest first, from ``RecentFailureLog/snapshot()``.
         var failures: [RecentFailure]
-        /// #134 — the account's zone as `/api/auth/me` resolved it.
+        /// The account's zone as `/api/auth/me` resolved it.
         var timeZone: String?
-        /// #134 — `/api/auth/me` `modules`; `nil` before the first load.
+        /// `/api/auth/me` `modules`; `nil` before the first load.
         var modules: [String: Bool]?
-        /// #134 — `/api/auth/me` `ai`; `nil` before the first load and on a
+        /// `/api/auth/me` `ai`; `nil` before the first load and on a
         /// server older than v1.39.
         var ai: AIAccountBlock?
-        /// #134 — `GET /api/integrations/healthkit`, when it answered in time.
+        /// `GET /api/integrations/healthkit`, when it answered in time.
         var appleHealth: HKServerSyncHealthSummary?
         var appleHealthLoadFailed = false
     }

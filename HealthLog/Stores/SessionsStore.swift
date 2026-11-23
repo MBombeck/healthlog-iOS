@@ -31,18 +31,18 @@ public final class SessionsStore {
     /// not keep. Resolved on every ``load()``.
     public private(set) var sparesThisDevice: Bool = false
 
-    /// R2 / #115 A7 — whether the running server (≥ v1.39.3) also ends AI
+    /// Whether the running server (≥ v1.39.3) also ends AI
     /// assistants, API tokens and doctor share links on "sign out everywhere"
     /// (``SignOutEverywhereElse/endsConnectionsAndLinks(on:)``). Picks the
     /// consequence text and shows the keep-links switch. Resolved on ``load()``.
     public private(set) var endsConnectionsAndLinks: Bool = false
 
-    /// R2 / #115 A7 — the "keep doctor share links" switch (`?keepShareLinks=1`).
+    /// The "keep doctor share links" switch (`?keepShareLinks=1`).
     /// Off by default, like the server: a person signing out everywhere after
     /// losing a device usually wants links made on it to stop too.
     public var keepShareLinks: Bool = false
 
-    /// R2 / #115 A7 — the full answer of the last "sign out everywhere": what
+    /// The full answer of the last "sign out everywhere": what
     /// ended, and the access grants that were kept (`grantsKept`).
     public private(set) var lastRevokeOthersResult: SessionRevokeOthersResponse?
 
@@ -88,6 +88,7 @@ public final class SessionsStore {
     /// surfacing it as an error would put a red alert in front of a user whose
     /// session list loaded perfectly well. `nonisolated` so `load()` can run it
     /// alongside the list rather than in front of it.
+    @concurrent
     private nonisolated func resolvedVerdict() async -> (sparesThisDevice: Bool, endsConnectionsAndLinks: Bool) {
         guard let version = try? await serverVersion() else { return (false, false) }
         return (
@@ -145,7 +146,7 @@ public final class SessionsStore {
         lastRevokeOthersResult = nil
     }
 
-    /// R2 / #115 A7 — who can still read the record after "sign out
+    /// Who can still read the record after "sign out
     /// everywhere": the kept grants' names, deduplicated, in server order.
     /// Empty when nothing was kept or the server does not report it.
     public var keptGrantNames: [String] {

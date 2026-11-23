@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The report-selection panel's state (CU-11): the **live** leaf vocabulary, the
+/// The report-selection panel's state: the **live** leaf vocabulary, the
 /// user's chosen scope, and the saved-profile round-trip behind it.
 ///
 /// **Since 18-03 there is exactly one consumer**, and that is the point of it.
@@ -239,7 +239,7 @@ public final class ReportSelectionStore {
             )
             adopt(saved)
         } catch let ReportSelectionError.unknownLeaves(ids) {
-            // #110 — the server names the refused ids; narrow by them too, so a
+            // The server names the refused ids; narrow by them too, so a
             // leaf the capabilities vocabulary still lists but this PUT refuses
             // cannot keep the panel in a save → refuse → rebuild loop.
             await rebuildFromCapabilities(refusing: Set(ids))

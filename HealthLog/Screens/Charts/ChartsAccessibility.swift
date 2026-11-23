@@ -14,16 +14,6 @@ import Foundation
 ///   one was exposed accessibly. We now emit two `AXDataSeriesDescriptor`s for BP so
 ///   VoiceOver users can swipe between both series.
 enum ChartsAccessibility {
-    /// Cached formatter — `DateFormatter` allocation is non-trivial, and accessibility
-    /// descriptors are rebuilt on every render. Locale is read from `Locale.autoupdatingCurrent`
-    /// so OS language switches are respected without app restart.
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = .autoupdatingCurrent
-        f.setLocalizedDateFormatFromTemplate("dMMM") // e.g. "9. Mai" (de), "May 9" (en)
-        return f
-    }()
-
     /// Builds a chart descriptor for a measurement series.
     ///
     /// - Parameters:
@@ -61,14 +51,14 @@ enum ChartsAccessibility {
             range: 0 ... upper,
             gridlinePositions: [],
             valueDescriptionProvider: { value in
-                // C3 fix: VoiceOver previously announced "(empty)" because the provider
+                // VoiceOver previously announced "(empty)" because the provider
                 // returned "". Map the integer index back to the underlying Date and format
                 // it for the user's current locale.
                 let idx = Int(value.rounded())
                 guard points.indices.contains(idx) else {
                     return ""
                 }
-                return dateFormatter.string(from: points[idx].at)
+                return HLDateFormat.dayMonth(points[idx].at)
             }
         )
     }
@@ -97,7 +87,7 @@ enum ChartsAccessibility {
         let hasSecondary = points.contains(where: { $0.secondary != nil })
 
         if kind == .bloodPressure, hasSecondary {
-            // C4 fix: expose BOTH systolic and diastolic as separate accessible series.
+            // Expose BOTH systolic and diastolic as separate accessible series.
             // VoiceOver users can now swipe between the two with the rotor.
             let systolic = AXDataSeriesDescriptor(
                 name: String(localized: "Systolic"),
@@ -163,14 +153,12 @@ enum ChartsAccessibility {
         point: SeriesPoint,
         kind: MetricKind
     ) -> String {
-        let dateString = point.at.formatted(
-            .dateTime.weekday(.wide).day().month().hour().minute()
-        )
+        let dateString = "\(HLDateFormat.weekdayDayMonth(point.at)), \(HLTimeFormat.time(point.at))"
         let valueString: String = if let secondary = point.secondary {
             // BP reads naturally — "128 über 82" is what a clinician would say.
             String(localized: "\(Int(point.value.rounded())) over \(Int(secondary.rounded()))")
         } else {
-            point.value.formatted(.number.precision(.fractionLength(0 ... 1)))
+            HLValueFormat.number(point.value, fractionDigits: 0 ... 1)
         }
         return String(
             localized: "\(dateString): \(valueString) \(kind.unit)"

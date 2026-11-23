@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v1.25 (GH iOS #38) — the "drifting from your normal" awareness card.
+/// v1.25 — the "drifting from your normal" awareness card.
 ///
 /// Renders `GET /api/insights/health-status` (`InsightsHealthStatusDTO`): vitals
 /// sitting outside the user's personal band today (deviations) plus dated,
@@ -16,10 +16,9 @@ struct InsightsHealthStatusCard: View {
 
     var body: some View {
         if let status, status.hasContent {
-            HLCard(style: .elevated) {
+            // A card head (15 semibold), not the label over a key figure.
+            HLCard("clinicalSignals.healthStatus.title") {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
-                    HLSectionLabel("clinicalSignals.healthStatus.title")
-
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         ForEach(status.deviations) { deviation in
                             DeviationRow(deviation: deviation)
@@ -47,14 +46,12 @@ private struct DeviationRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
             Image(systemName: deviation.isAbove ? "arrow.up" : "arrow.down")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 HStack(alignment: .firstTextBaseline, spacing: HLSpace.xs) {
                     Text(name)
-                        .font(.hlSubhead.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
+                        .hlText(.rowTitle)
                     Spacer(minLength: 0)
                     Text(Self.format(deviation.value))
                         .font(.hlSubhead.weight(.medium))
@@ -62,8 +59,7 @@ private struct DeviationRow: View {
                         .foregroundStyle(HLText.primary)
                 }
                 Text(subline)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -87,7 +83,7 @@ private struct DeviationRow: View {
     }
 
     static func format(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0 ... 1)))
+        HLValueFormat.number(value, fractionDigits: 0 ... 1)
     }
 }
 
@@ -99,16 +95,13 @@ private struct ShiftRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: HLSpace.sm) {
             Image(systemName: shift.isUp ? "chart.line.uptrend.xyaxis" : "chart.line.downtrend.xyaxis")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(name)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 Text(subline)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

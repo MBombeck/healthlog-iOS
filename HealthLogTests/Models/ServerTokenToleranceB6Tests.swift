@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 B6 — three remaining places where a new server token cost data.**
+/// **Three remaining places where a new server token cost data.**
 ///
 /// - `MeasurementSeries.kind` decoded `MetricKind` strictly: a kind this build
 ///   cannot name failed the whole chart payload.

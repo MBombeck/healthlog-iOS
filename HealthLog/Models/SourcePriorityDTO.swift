@@ -13,7 +13,7 @@ import Foundation
 ///     it down. Lets the user say "for HRV prefer the watch over the
 ///     ring" even when both rows have `source = APPLE_HEALTH`.
 ///
-/// **Flat-shape backward-compat (W5e):** the server also accepts the
+/// **Flat-shape backward-compat:** the server also accepts the
 /// old flat-keys shape (`{ steps: [...], weight: [...], ... }`). The
 /// nested `metricPriority` wins when both are present. iOS-side the
 /// `metricPriority` is the authoritative read; the flat aliases are

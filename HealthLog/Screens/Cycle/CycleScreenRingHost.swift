@@ -45,12 +45,12 @@
         var body: some View {
             // Mirror CycleScreen.content(store:) chrome 1:1.
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: HLSpace.xxl) {
+                LazyVStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     hero
                 }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.top, HLSpace.md)
-                .padding(.bottom, HLSpace.xl)
+                .padding(.horizontal, HLLayout.pageMargin)
+                .padding(.top, HLLayout.pageTop)
+                .padding(.bottom, HLLayout.pageBottom)
             }
             .scrollContentBackground(.hidden)
             .background(HLSurface.primary)
@@ -74,11 +74,15 @@
 
     #Preview("CycleScreen hero in-situ · Dark") {
         CycleScreenRingHostPreview()
+            // The two previews show the ring in both schemes side by side.
+            // swiftlint:disable:next hl_no_fixed_color_scheme
             .preferredColorScheme(.dark)
     }
 
     #Preview("CycleScreen hero in-situ · Light") {
         CycleScreenRingHostPreview()
+            // The two previews show the ring in both schemes side by side.
+            // swiftlint:disable:next hl_no_fixed_color_scheme
             .preferredColorScheme(.light)
     }
 #endif

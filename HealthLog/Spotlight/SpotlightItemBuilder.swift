@@ -6,7 +6,7 @@ import Foundation
     import UniformTypeIdentifiers
 #endif
 
-/// **W-B187 QOL-2 — pure builder for HealthLog CoreSpotlight items.**
+/// **Pure builder for HealthLog CoreSpotlight items.**
 ///
 /// Turns a medication or a measured-kind into a `CSSearchableItem` whose
 /// `uniqueIdentifier` IS the app's own `healthlog://` deep-link — so the

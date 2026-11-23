@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #115 R3 — server v1.39.7 (unreleased at the time of writing; shapes from the
+/// Server v1.39.7 (unreleased at the time of writing; shapes from the
 /// maintainer's 2026-10-01 08:45 note on #115):
 ///
 /// 1. `GET /api/dashboard/summary` `metrics[kind=mood].updatedAt` moves from

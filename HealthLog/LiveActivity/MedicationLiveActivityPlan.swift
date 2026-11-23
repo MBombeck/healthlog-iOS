@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-1 — pure Live-Activity lifecycle decisions.**
+/// **Pure Live-Activity lifecycle decisions.**
 ///
 /// The `ActivityKit`-touching controller (``MedicationLiveActivityController``)
 /// is hard to unit-test because `Activity.request` needs a live OS surface.
@@ -19,7 +19,7 @@ enum MedicationLiveActivityPlan {
         let medicationName: String
         let doseText: String
         let scheduledFireDate: Date
-        /// **W-B183** — the server-gated overdue verdict for this dose, computed
+        /// The server-gated overdue verdict for this dose, computed
         /// in the app process via ``isOverdue(medication:now:calendar:)`` so the
         /// widget extension (which cannot call the server) renders danger styling
         /// from the SAME truth the in-app card uses, not its own
@@ -39,7 +39,7 @@ enum MedicationLiveActivityPlan {
     /// 3 h mirrors the missed-dose grace the reminder pipeline uses.
     static let overdueGrace: TimeInterval = 3 * 60 * 60
 
-    /// **1.4 B4 — one zone for the card and the Lock Screen.** The calendar the
+    /// **One zone for the card and the Lock Screen.** The calendar the
     /// plan reads its occurrences, its "resolved" minute and its overdue
     /// verdict in: the account zone the server keeps (`/me`), which is the
     /// zone `MedicationCard` grades the same dose window in. The device zone
@@ -57,7 +57,7 @@ enum MedicationLiveActivityPlan {
     /// enabled + is active, **and** whose per-medication Live-Activity
     /// toggle is on.
     ///
-    /// **Per-medication gate (v0.8.5 WFIX-LA):** `isLiveActivityEnabled` is a
+    /// **Per-medication gate:** `isLiveActivityEnabled` is a
     /// pure predicate keyed by medication id (backed by
     /// `DeliveryPreferencesStore.enabledPredicate(for: .liveActivity)`, default
     /// OFF). Only medications the user
@@ -73,14 +73,15 @@ enum MedicationLiveActivityPlan {
         intakes: [MedicationIntake],
         now: Date,
         calendar: Calendar = .current,
-        isLiveActivityEnabled: (String) -> Bool = { _ in true }
+        isLiveActivityEnabled: (String) -> Bool = { _ in true },
+        serverDoseState: Bool = MedicationServerResolvedSlots.isAvailable()
     ) -> DoseActivity? {
         var best: (date: Date, activity: DoseActivity)?
         for medication in medications
             where medication.active
             && medication.notificationsEnabled
-            // v1.39.1 (#1033) — nothing is ever due on a medication kept as a
-            // record; v1.39.4 (#1040) — nor offered on one the server calls not
+            // v1.39.1 — nothing is ever due on a medication kept as a
+            // record; v1.39.4 — nor offered on one the server calls not
             // actionable today.
             && medication.offersIntakeActions
             && isLiveActivityEnabled(medication.id)
@@ -97,6 +98,9 @@ enum MedicationLiveActivityPlan {
             // schedule's `reminderGraceMinutes`), not a hardcoded global grace.
             if fire > now.addingTimeInterval(leadWindow) { continue }
             if now > occurrence.graceUntil { continue }
+            // #191 (final): a dose already past when the medication was
+            // created is not owed; no countdown for it.
+            if !Self.isOwed(fire: fire, medication: medication) { continue }
 
             // Already acted on for this scheduled instant?
             if isResolved(medicationId: medication.id, scheduledFor: fire, intakes: intakes, calendar: calendar) {
@@ -108,7 +112,15 @@ enum MedicationLiveActivityPlan {
                 medicationName: medication.name,
                 doseText: medication.dose,
                 scheduledFireDate: fire,
-                isOverdue: isOverdue(medication: medication, now: now, calendar: calendar)
+                // #191: the server's verdict for this slot when it sent one,
+                // the local window grading otherwise.
+                isOverdue: MedicationServerResolvedSlots.serverOverdue(
+                    medicationId: medication.id,
+                    slot: fire,
+                    intakes: intakes,
+                    now: now,
+                    enabled: serverDoseState
+                ) ?? isOverdue(medication: medication, now: now, calendar: calendar)
             )
             if let current = best {
                 if fire < current.date { best = (fire, activity) }
@@ -119,7 +131,7 @@ enum MedicationLiveActivityPlan {
         return best?.activity
     }
 
-    /// **v0.10 R1 §3.6 — the nearest occurrence to surface for a medication,
+    /// **The nearest occurrence to surface for a medication,
     /// across every `ScheduleEntry`, via `MedicationRecurrenceEngine`.**
     ///
     /// Replaces the prior day-walk: for each entry we ask the engine for the
@@ -219,15 +231,16 @@ enum MedicationLiveActivityPlan {
         intakes.contains { intake in
             guard intake.medicationId == medicationId else { return false }
             guard intake.status == .taken || intake.status == .skipped else { return false }
+            // #191: a row bound to its slot by the server matches on that slot.
             return calendar.isDate(
-                intake.scheduledAt,
+                intake.doseState?.slotInstant ?? intake.scheduledAt,
                 equalTo: scheduledFor,
                 toGranularity: .minute
             )
         }
     }
 
-    /// **W-B183 (dose-safety coherence)** — the server-gated overdue verdict the
+    /// The server-gated overdue verdict the
     /// Live Activity must carry into the widget extension.
     ///
     /// Starts with the server-authoritative `nextDueOverdue` fallback for
@@ -239,6 +252,17 @@ enum MedicationLiveActivityPlan {
     /// the dose is actionable but still on time, so the widget must keep its
     /// neutral countdown styling — never derive danger from the bare
     /// `Date.now > countdownTarget` value that bypassed the server gate.
+    /// #191 (final) — a slot before the medication's creation is not owed;
+    /// a rolling cadence is exempt.
+    static func isOwed(fire: Date, medication: Medication) -> Bool {
+        guard let createdAt = medication.createdAt else { return true }
+        let rolling = medication.schedule.entries.contains {
+            if case .rolling = $0.cadence { return true }
+            return false
+        }
+        return rolling || fire >= createdAt
+    }
+
     static func isOverdue(
         medication: Medication,
         now: Date = .now,
@@ -261,5 +285,44 @@ enum MedicationLiveActivityPlan {
         case .inWindow, nil:
             return false
         }
+    }
+}
+
+// MARK: - Slot binding of a running Activity
+
+extension MedicationLiveActivityPlan {
+    /// One running Activity of a medication, reduced to what the slot decision
+    /// reads. `slot` is the attribute the "Taken" button books against.
+    struct RunningSlot: Equatable {
+        let id: String
+        let slot: Date
+        let isLive: Bool
+    }
+
+    /// What `start` does with the medication's running Activities.
+    enum SlotDecision: Equatable {
+        /// An Activity for exactly this slot runs: update it, end the others.
+        case reuse(id: String, end: [String])
+        /// None runs for this slot: end the live ones, request a new one.
+        case request(end: [String])
+    }
+
+    /// The attributes of an Activity are fixed for its lifetime, so a new slot
+    /// can never be written into a running one. Reusing it would show the old
+    /// "due at" and book the old slot. Ended Activities are left alone.
+    /// **#188 (6)** — the stale date for a pending countdown: its due time
+    /// while that lies ahead, so the system renders once more at that instant
+    /// and the countdown hands over to the counting-up "since due" clock; none
+    /// once it has passed (the counting-up text needs no further render).
+    static func staleDate(countdownTarget: Date, now: Date) -> Date? {
+        countdownTarget > now ? countdownTarget : nil
+    }
+
+    static func slotDecision(running: [RunningSlot], requestedSlot: Date) -> SlotDecision {
+        let live = running.filter(\.isLive)
+        if let match = live.first(where: { abs($0.slot.timeIntervalSince(requestedSlot)) < 1 }) {
+            return .reuse(id: match.id, end: live.filter { $0.id != match.id }.map(\.id))
+        }
+        return .request(end: live.map(\.id))
     }
 }

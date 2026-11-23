@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.8.4 WWIDGET-3** — pins the one-shot "Erfassen"-control hand-off.
+/// Pins the one-shot "Erfassen"-control hand-off.
 ///
 /// The `OpenCaptureIntent` writes a marker; the app consumes it on
 /// foreground. Contract: write → consume returns the request exactly once,
@@ -83,7 +83,7 @@ struct CaptureRequestStoreTests {
         #expect(store.consume() == nil)
     }
 
-    // MARK: - v0.10.0 W-Mood-B — surface routing
+    // MARK: - Surface routing
 
     @Test("The marker surface round-trips (mood is preserved through write/consume)")
     func surfaceRoundTrips() throws {

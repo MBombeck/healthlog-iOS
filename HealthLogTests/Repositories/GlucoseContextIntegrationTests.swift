@@ -13,10 +13,10 @@ import Testing
 ///
 /// 1. **Create-path:** `Measurement(glucoseContext: ...) → repo.create →
 ///    POST /api/measurements` carries `glucoseContext` in the wire body.
-/// 2. **Edit-path:** `repo.update(... patch.glucoseContext ...) → PATCH`
-///    issues the standard 3-key wire body (server side doesn't accept the
-///    intent yet — SB-25), but the returned Domain row preserves the user
-///    intent client-side.
+/// 2. **Edit-path:** `repo.update(... patch.glucoseContext ...) → PUT`
+///    without `sendsGlucoseContext` (a server before 1.48.0) issues the
+///    standard 3-key wire body, and the returned Domain row preserves the
+///    user intent client-side. The 1.48 path is `GlucoseContextEditTests`.
 /// 3. **Outbox-replay-round-trip:** an offline-edit of a glucose row
 ///    persists `glucoseContext` on the payload + replay re-applies the
 ///    intent on the rehydrated patch.
@@ -147,7 +147,7 @@ struct GlucoseContextIntegrationTests {
         )
     }
 
-    @Test("repo.create(glucose, no-context) omits glucoseContext from POST body")
+    @Test("repo.create(glucose, no-context) sends RANDOM, the context the server requires")
     func createOmitsGlucoseContextWhenNil() async throws {
         let repo = try makeRepo()
         let recorder = RequestRecorder()
@@ -170,7 +170,7 @@ struct GlucoseContextIntegrationTests {
         _ = try await repo.create(local)
         let entries = recorder.snapshot
         #expect(entries.count == 1)
-        #expect(entries[0].body["glucoseContext"] == nil, "nil context omits the wire key — server default applies")
+        #expect(entries[0].body["glucoseContext"] as? String == "RANDOM", "POST /api/measurements refuses a glucose row without context")
     }
 
     // MARK: - 2. Edit-path: PATCH stays at 3-key wire shape, intent lives client-side
@@ -184,7 +184,7 @@ struct GlucoseContextIntegrationTests {
             return (
                 HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
                 // Server response: echoes the OLD context — server PATCH
-                // schema doesn't yet accept glucoseContext (SB-25). The
+                // schema doesn't yet accept glucoseContext. The
                 // Edit-Sheet client-side re-paints the new intent.
                 glucoseWireEnvelope(id: "srv-glu-3", value: 132, glucoseContext: .fasting)
             )

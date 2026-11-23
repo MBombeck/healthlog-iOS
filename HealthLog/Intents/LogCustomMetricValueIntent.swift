@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **1.5 SHORTCUT (#155, public #1295)** — log a value for one of the
+/// Log a value for one of the
 /// person's own metrics from Shortcuts, Siri or the Action button, without
 /// opening the app.
 ///

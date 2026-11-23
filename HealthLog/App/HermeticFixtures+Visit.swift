@@ -14,7 +14,7 @@
     enum VisitFixtures {
         static let argument = "-uitest-visit"
         static let plainArgument = "-uitest-visit-plain"
-        /// POLISH-A A8 — the last visit at the practice lies 900 days back, so
+        /// The last visit at the practice lies 900 days back, so
         /// a v1.47.1 server caps the window at 730 days and says `capped`.
         static let cappedArgument = "-uitest-visit-capped"
 

@@ -154,7 +154,7 @@ import Testing
             #expect(MedicationsSchedulerModule.localeWeekday(from: .sat) == .saturday)
         }
 
-        // MARK: - v0.10 R1 §3.4 — per-entry cadence projection
+        // MARK: - Per-entry cadence projection
 
         private static func med(
             id: String = "med-x",

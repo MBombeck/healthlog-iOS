@@ -78,7 +78,7 @@
 
             #expect(
                 store.recent.isEmpty && store.error == nil && !store.isLoading,
-                "EXPECTED_RED: late A measurement published into B"
+                "late A measurement published into B"
             )
         }
     }

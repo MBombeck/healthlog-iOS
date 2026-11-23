@@ -23,7 +23,7 @@ enum IntegrationConnectedState {
 /// section of the old monolithic SettingsScreen), Withings and WHOOP (each a
 /// full sub-screen).
 ///
-/// **v0.14.1 #4 — no MoodLog integration.** The MoodLog placeholder PB3 once
+/// **No MoodLog integration.** The MoodLog placeholder PB3 once
 /// shipped here is permanently gone (operator: unused + confusing, handled
 /// elsewhere). Do NOT re-add a MoodLog integration row — mood lives in its own
 /// surface, not as a connectable provider on this page.
@@ -32,14 +32,13 @@ enum IntegrationConnectedState {
 /// we route into it from a single nav row rather than duplicating its
 /// connect/sync/disconnect surface here.
 ///
-/// **v0.12 W4-4:** the Apple-Health-Import card (a permanently-disabled
+/// The Apple-Health-Import card (a permanently-disabled
 /// "Coming soon v0.6" placeholder pushing a no-op CTA screen) was REMOVED — it
 /// read as abandoned stub UI. The real one-shot ZIP-import path lands in its own
 /// wave against the live `/api/import/apple-health-export` endpoint, which
 /// re-introduces the entry point wired to a working CTA.
 struct SettingsIntegrationsScreen: View {
     @Environment(HKReadinessStore.self) private var hkReadiness
-    @Environment(BackendAvailability.self) private var backend
     @Environment(WithingsIntegrationStore.self) private var withings
     @Environment(WhoopIntegrationStore.self) private var whoop
     // v1.18.7 web-parity (❌-7) — the four additional server-OAuth /
@@ -48,18 +47,22 @@ struct SettingsIntegrationsScreen: View {
     @Environment(OuraIntegrationStore.self) private var oura
     @Environment(PolarIntegrationStore.self) private var polar
     @Environment(FitbitIntegrationStore.self) private var fitbit
-    // v1.28.11 (#46) — Strava workout/activity connector.
+    // v1.28.11 — Strava workout/activity connector.
     @Environment(StravaIntegrationStore.self) private var strava
     @Environment(NightscoutIntegrationStore.self) private var nightscout
     @Environment(\.appContainer) private var container
-    /// 1.5 MOVE (#133) — the `dawarich` entry of the consolidated status,
+    @Environment(\.deviceProfile) private var deviceProfile
+    /// The `dawarich` entry of the consolidated status,
     /// display only. `nil` until read, on a server that does not list it, and
     /// after a failed read: the row then stays away.
     @State private var dawarich: DawarichIntegrationPayload.Entry?
     @State private var refreshTick: Int = 0
+    /// Whether the HealthKit sheet is answered, so the row and the Apple
+    /// Health page state the same connection.
+    @State private var sheetAnswered: Bool?
 
     var body: some View {
-        HLSettingsPage(title: "Integrations") {
+        HLPage {
             appleHealthCard
             // W-B187 (Settings consolidation §A.3) — the Apple-Health-Import peer
             // row was FOLDED INTO `AppleHealthIntegrationDetailScreen` (the one
@@ -67,24 +70,24 @@ struct SettingsIntegrationsScreen: View {
             // "Apple Health" row instead of two confusing peers. The one-shot
             // export.zip importer is now reached from inside that detail page.
             servicesCard
+            if fitbit.showsRemovalNotice {
+                fitbitRemovalCard
+            }
         }
         .navigationTitle("Integrations")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await hkReadiness.refresh()
-            // Server-backed providers only — standalone has no status endpoint.
-            if backend.hasServer {
-                await loadServerStatuses()
-            }
+            sheetAnswered = await hkReadiness.authorizationSheetAnswered()
+            await loadServerStatuses()
         }
         .refreshable {
             await hkReadiness.refresh()
-            if backend.hasServer {
-                await loadServerStatuses()
-            }
+            sheetAnswered = await hkReadiness.authorizationSheetAnswered()
+            await loadServerStatuses()
             refreshTick &+= 1
         }
-        // POLISH-SWEEP: success-tick confirms pull-to-refresh round-trip.
+        // Success-tick confirms pull-to-refresh round-trip.
         .sensoryFeedback(.success, trigger: refreshTick)
     }
 
@@ -113,33 +116,54 @@ struct SettingsIntegrationsScreen: View {
     /// Detailseite (wie Withings). Die Status-Pill bleibt hier als Trailing-
     /// Badge sichtbar, damit der Verbindungsstand auf einen Blick lesbar ist.
     ///
-    /// 1.4 B4 — one row, one heading: "Apple Health" over "Apple Health
+    /// One row, one heading: "Apple Health" over "Apple Health
     /// öffnen" said the name twice. The card is its row now, with the state
     /// and the chevron like the services below.
     private var appleHealthCard: some View {
-        HLSettingsCard { appleHealthRow }
+        HLCard { appleHealthRow }
     }
 
     /// Eine Ableitung, ein Maler — siehe ``HealthKitStatusPill``. Diese Fläche
     /// malte `.partiallyGranted` unbesehen rot, während dieselbe Lage eine
     /// Ebene tiefer „Verbunden“ las (Betreiber-Befund 2026-07-31).
+    ///
+    /// In a row the state is text (Z5a), the capsule belongs to a card head.
     private var appleHealthPill: some View {
-        HealthKitStatusPill()
+        HealthKitStatusPill(
+            status: AppleHealthIntegrationDetailScreen.shownStatus(
+                hkReadiness.surfaceStatus,
+                action: hkReadiness.connectionAction(sheetAnswered: sheetAnswered)
+            ),
+            form: .text
+        )
     }
 
     /// R8/R10 — war eine handgebaute Chevron-Zeile; das Trailing-Glyph gehört
     /// jetzt dem Primitive, und `.push` kapselt den `NavigationLink`.
+    @ViewBuilder
     private var appleHealthRow: some View {
-        HLSettingsActionRow(
-            icon: "heart.fill",
-            title: "Apple Health",
-            subtitle: "Read and write access to vitals",
-            presents: .push,
-            // POLISH-C (C2) — a value, so the page survives the privacy shield.
-            value: SettingsRoute.appleHealthDetail,
-            trailing: { appleHealthPill }
-        )
-        .accessibilityIdentifier("settings.integrations.appleHealthRow")
+        if HealthKitAvailabilityPolicy(idiom: deviceProfile.idiom).offersAuthorization {
+            HLSettingsActionRow(
+                icon: "heart.fill",
+                title: "Apple Health",
+                subtitle: "Read and write access to vitals",
+                presents: .push,
+                // A value, so the page survives the privacy shield.
+                value: SettingsRoute.appleHealthDetail,
+                trailing: { appleHealthPill }
+            )
+            .accessibilityIdentifier("settings.integrations.appleHealthRow")
+        } else {
+            // No status pill: there is no connection to report on this device.
+            HLSettingsActionRow(
+                icon: "heart.fill",
+                title: "Apple Health",
+                subtitle: "health.padNotice.row",
+                presents: .push,
+                value: SettingsRoute.appleHealthDetail
+            )
+            .accessibilityIdentifier("settings.integrations.appleHealthRow")
+        }
     }
 
     // W-B187 (Settings consolidation §A.3) — `appleHealthImportCard` was folded
@@ -152,29 +176,26 @@ struct SettingsIntegrationsScreen: View {
     /// row (Withings, WHOOP, …). One connected-status input per row — the row
     /// shows "Connected" iff that provider is actually connected. Before the
     /// status loads (`isConnected == nil`) it stays in the calm `.unknown`
-    /// state so no false "Connected" flashes. Standalone (no server) renders
-    /// nothing.
+    /// state so no false "Connected" flashes.
     ///
-    /// 1.4 B4 — `failed`: the status read failed. "Checking" would then stay
+    /// `failed`: the status read failed. "Checking" would then stay
     /// forever, so the row shows no state until a read succeeds.
     @ViewBuilder
     private func connectedPill(isConnected: Bool?, health: ConnectionHealth? = nil, failed: Bool = false) -> some View {
-        if backend.hasServer {
-            switch isConnected {
-            case .some(true):
-                // #139 — a connected provider reads its state from `health`;
-                // without it (server before v1.42.4) the plain "Connected".
-                if let health {
-                    HLStatusPill(ConnectionHealthPresentation(health: health).pill)
-                } else {
-                    HLStatusPill(.connected(label: String(localized: "Connected")))
-                }
-            case .some(false):
-                HLStatusPill(.disconnected(label: String(localized: "Not connected")))
-            case .none:
-                if !failed {
-                    HLStatusPill(.unknown(label: String(localized: "Checking")))
-                }
+        switch isConnected {
+        case .some(true):
+            // A connected provider reads its state from `health`;
+            // without it (server before v1.42.4) the plain "Connected".
+            if let health {
+                HLStatusPill(ConnectionHealthPresentation(health: health).pill, form: .text)
+            } else {
+                HLStatusPill(.connected(label: String(localized: "Connected")), form: .text)
+            }
+        case .some(false):
+            HLStatusPill(.disconnected(label: String(localized: "Not connected")), form: .text)
+        case .none:
+            if !failed {
+                HLStatusPill(.unknown(label: String(localized: "Checking")), form: .text)
             }
         }
     }
@@ -192,32 +213,36 @@ struct SettingsIntegrationsScreen: View {
 
     // MARK: - Services
 
-    /// **1.4 B2-c — one list instead of seven cards.** Withings, WHOOP (v0.12),
+    /// **One list instead of seven cards.** Withings, WHOOP,
     /// Oura, Polar, Fitbit, Nightscout (v1.18.7 web parity) and Strava
     /// (v1.28.11, #46) each had a card of its own: title, an "Import … from
     /// your … account" subtitle cut after one line, the status pill, and a
     /// single "Open …" row. They are rows of one card now: the provider's
-    /// name, its pill, the chevron. The names say what they are.
+    /// name, its state as text, the chevron. Each provider has a symbol of
+    /// its own (a scale for Withings, a strap's heart for WHOOP, a sports
+    /// watch for Polar), so no two rows look alike.
     private var servicesCard: some View {
-        HLSettingsCard(icon: "link.circle.fill", title: "settings.integrations.services") {
-            serviceRow("Withings", icon: "link.circle.fill", identifier: "settings.integrations.withingsRow", route: .withings) {
+        HLCard("settings.integrations.services") {
+            serviceRow("Withings", icon: "scalemass.fill", identifier: "settings.integrations.withingsRow", route: .withings) {
                 connectedPill(isConnected: withingsConnected, health: withings.status?.health, failed: withings.error != nil)
             }
-            serviceRow("WHOOP", icon: "link.circle.fill", identifier: "settings.integrations.whoopRow", route: .whoop) {
+            serviceRow("WHOOP", icon: "bolt.heart.fill", identifier: "settings.integrations.whoopRow", route: .whoop) {
                 connectedPill(isConnected: whoopConnected, health: whoop.status?.health, failed: whoop.error != nil)
             }
             serviceRow("Oura", icon: "moon.fill", identifier: "settings.integrations.ouraRow", route: .oura) {
                 connectedPill(isConnected: oura.isConnected, health: oura.status?.health, failed: oura.error != nil)
             }
-            serviceRow("Polar", icon: "figure.run", identifier: "settings.integrations.polarRow", route: .polar) {
+            serviceRow("Polar", icon: "stopwatch.fill", identifier: "settings.integrations.polarRow", route: .polar) {
                 connectedPill(isConnected: polar.isConnected, health: polar.status?.health, failed: polar.error != nil)
             }
-            // KONTO (#149) — after the turndown the row says so; an account
-            // that never had Fitbit is not offered the row at all.
+            // After the turndown the row says so; an account
+            // that never had Fitbit is not offered the row at all. From
+            // server 1.48.0 Fitbit is gone from the list; the removal note
+            // below takes its place where the server asks for it.
             if fitbit.isOffered {
                 serviceRow("Fitbit", icon: "figure.walk", identifier: "settings.integrations.fitbitRow", route: .fitbit) {
-                    if fitbit.isRetired, backend.hasServer {
-                        HLStatusPill(.disconnected(label: String(localized: "integration.fitbit.retired.pill")))
+                    if fitbit.isRetired {
+                        HLStatusPill(.disconnected(label: String(localized: "integration.fitbit.retired.pill")), form: .text)
                     } else {
                         connectedPill(isConnected: fitbit.isConnected, health: fitbit.status?.health, failed: fitbit.error != nil)
                     }
@@ -233,11 +258,26 @@ struct SettingsIntegrationsScreen: View {
         }
     }
 
-    /// 1.5 MOVE (#133) — Dawarich is connected on the web; the app shows
+    /// Server 1.48.0 removed Fitbit. An account that held a Fitbit
+    /// connection sees the turndown once, in the same words as the old Fitbit
+    /// page, until it closes the note; closing clears it on the server too.
+    private var fitbitRemovalCard: some View {
+        HLCard(object: Text(verbatim: "Fitbit"), trailing: {
+            HLDismissButton {
+                Task { await fitbit.dismissRemovalNotice() }
+            }
+            .accessibilityIdentifier("integration.fitbit.removalNotice.dismiss")
+        }, content: {
+            FitbitRetirementNotice(retirement: .retiredByRefusal)
+        })
+        .accessibilityIdentifier("settings.integrations.fitbitRemovalNotice")
+    }
+
+    /// Dawarich is connected on the web; the app shows
     /// its state and nothing to tap. Its days appear under Environment.
     @ViewBuilder
     private var dawarichRow: some View {
-        if backend.hasServer, let dawarich {
+        if let dawarich {
             HLSettingsRow(
                 icon: "location.circle.fill",
                 title: "Dawarich",
@@ -250,7 +290,7 @@ struct SettingsIntegrationsScreen: View {
     }
 
     /// One provider: chip, name, status pill, chevron into its detail screen.
-    /// POLISH-C (C2) — pushed as a value (``IntegrationRoute``), resolved by
+    /// Pushed as a value (``IntegrationRoute``), resolved by
     /// ``IntegrationRouteDestination`` on the More stack, so the provider page
     /// comes back after the privacy shield.
     private func serviceRow(
@@ -264,14 +304,14 @@ struct SettingsIntegrationsScreen: View {
             .accessibilityIdentifier(identifier)
     }
 
-    // v0.6.1.5 Y5: the legacy `statRow` helper was removed alongside the
+    // The legacy `statRow` helper was removed alongside the
     // Apple Health card rebuild — the new hierarchy stack uses `Text`
     // primitives at `hlSubhead` (description) and `hlCaption` (status
     // line) directly. Withings + Apple-Health-Import + HK-Diagnostics
     // surfaces don't render stat-rows.
 }
 
-/// POLISH-C (C2) — the page behind each provider row of Integrations.
+/// The page behind each provider row of Integrations.
 struct IntegrationRouteDestination: View {
     let route: IntegrationRoute
 
@@ -282,25 +322,13 @@ struct IntegrationRouteDestination: View {
         case .whoop:
             WhoopIntegrationScreen()
         case .oura:
-            OAuthIntegrationScreen<OuraIntegrationStore>(
-                displayName: "Oura",
-                placeholderSurface: String(localized: "cloud_derived.surface.oura")
-            )
+            OAuthIntegrationScreen<OuraIntegrationStore>(displayName: "Oura")
         case .polar:
-            OAuthIntegrationScreen<PolarIntegrationStore>(
-                displayName: "Polar",
-                placeholderSurface: String(localized: "cloud_derived.surface.polar")
-            )
+            OAuthIntegrationScreen<PolarIntegrationStore>(displayName: "Polar")
         case .fitbit:
-            OAuthIntegrationScreen<FitbitIntegrationStore>(
-                displayName: "Fitbit",
-                placeholderSurface: String(localized: "cloud_derived.surface.fitbit")
-            )
+            OAuthIntegrationScreen<FitbitIntegrationStore>(displayName: "Fitbit")
         case .strava:
-            OAuthIntegrationScreen<StravaIntegrationStore>(
-                displayName: "Strava",
-                placeholderSurface: String(localized: "cloud_derived.surface.strava")
-            )
+            OAuthIntegrationScreen<StravaIntegrationStore>(displayName: "Strava")
         case .nightscout:
             NightscoutIntegrationScreen()
         }

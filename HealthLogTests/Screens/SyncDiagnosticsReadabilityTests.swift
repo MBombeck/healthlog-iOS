@@ -5,7 +5,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **U1 (#18) — die Sync-Diagnose liest sich.**
+    /// **Die Sync-Diagnose liest sich.**
     ///
     /// Gemeldet: `WORKOUTS` in Großbuchstaben neben `heart_rate`, und
     /// „F710 · M710 · S710 · A710 · X0" als Trainingszähler. Diese Suite pinnt
@@ -50,7 +50,8 @@
             let sentence = HKSyncDiagnosticsVocabulary.workoutCounts(snapshot)
             #expect(!sentence.contains("F 710") && !sentence.contains("·"))
             if Self.runsInGerman {
-                #expect(sentence == "710 gelesen, 710 gesendet, 710 angenommen, 0 abgelehnt")
+                // A no-break space keeps each number on the line of its word.
+                #expect(sentence == "710\u{00A0}gelesen, 710\u{00A0}gesendet, 710\u{00A0}angenommen, 0\u{00A0}abgelehnt")
             }
             snapshot.mappedTotal = 707
             let withUnmapped = HKSyncDiagnosticsVocabulary.workoutCounts(snapshot)
@@ -63,7 +64,7 @@
             let catalog = try ParityCatalog.load()
             let entry = try #require(catalog.strings[key], "\(key) fehlt im Katalog")
             for language in ["de", "en"] {
-                // INT-L — the attention counts are plurals (`variations`).
+                // The attention counts are plurals (`variations`).
                 #expect(ParityCatalog.hasLocalization(entry, language: language), "\(key) ohne \(language)")
             }
         }
@@ -97,7 +98,7 @@
         }
     }
 
-    /// **U1 (#16) — was die Sync-Anzeige oben sagt.** Sichtbar kurz
+    /// **Was die Sync-Anzeige oben sagt.** Sichtbar kurz
     /// („vor 5 Min."), für VoiceOver ausgeschrieben („vor 5 Minuten").
     @Suite("U1 — SyncActivityCopy")
     struct SyncActivityCopyTests {
@@ -152,7 +153,7 @@
             #expect(!stale.isEmpty)
         }
 
-        /// INT-L (1.1.1) — the panel says the state as a plain sentence, not
+        /// The panel says the state as a plain sentence, not
         /// as an alert line; counts agree with their noun.
         @Test("Die Zustandssätze sind ganze, ruhige Sätze")
         func attentionSentencesArePlain() {
@@ -168,7 +169,7 @@
             )
         }
 
-        /// INT-L (1.1.1) — rule for 1.1.1 copy: plain words, never
+        /// Owner rule for 1.1.1 copy: plain words, never
         /// joined with a middle dot, a dash or an arrow. Checked in the
         /// catalog so English is covered while the suite runs in German.
         @Test("Sync-Sätze oben kommen ohne Mittelpunkt, Gedankenstrich und Pfeil aus, de und en")

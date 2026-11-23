@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **POLISH-C (C3)** — iOS offers to save a password whenever a filled secure
+/// iOS offers to save a password whenever a filled secure
 /// field leaves the window, and that system prompt swallows the next tap
 /// (SET-ROUTE probe G: the first Back after leaving the app did nothing). A
 /// secure field that is not a sign-in (an access header value, an API key, a
@@ -12,7 +12,7 @@ import Testing
 struct SecretFieldContentTypeTests {
     /// The screens where a secure field really is the account password.
     private static let signInFiles: Set<String> = [
-        "Screens/Onboarding/ServerAuthStep.swift",
+        "DesignSystem/HLTextField.swift",
         "Screens/Settings/ChangePasswordSheet.swift",
         "Screens/Settings/TwoFactorManagementScreen.swift"
     ]

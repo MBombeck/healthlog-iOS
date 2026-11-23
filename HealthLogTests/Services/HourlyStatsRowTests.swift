@@ -4,7 +4,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **X4 (1.3, #138)** — the hourly row as the server's v1.43 contract
+    /// The hourly row as the server's v1.43 contract
     /// names it (`release/v1.43.0`, `intraday-hour-buckets.ts`,
     /// `routes/measurements.ts`): `stats:<HK>:<YYYY-MM-DD>T<HH>` in the
     /// account's zone, the hour's sum in the day form's unit, `startDate` the

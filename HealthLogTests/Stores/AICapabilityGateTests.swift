@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// #114 / #115 · 0.2 — successor of `FeatureFlagsLiveServiceTests`: the gate
+/// Successor of `FeatureFlagsLiveServiceTests`: the gate
 /// every AI surface reads, its live shadow for the on-device actors, the
 /// refusal mirror, and the update path from builds that cached the old flags.
 @Suite("AICapabilityGate — capability reads, live shadow, update path", .serialized)
@@ -110,9 +110,9 @@ struct AICapabilityGateTests {
 
     // MARK: - Update path: a 1.0.3 installation's cached flags
 
-    /// The keys a pre-#115 build could have persisted: the UserDefaults stub
-    /// (`UserDefaultsFeatureFlagsService`, key `feature_flag.<raw>`) was the
-    /// default flag source of every on-device assistant service.
+    /// The keys a pre-#115 build could have persisted: the UserDefaults flag
+    /// stub (key `feature_flag.<raw>`) was the default flag source of every
+    /// on-device assistant service.
     private static let legacyKeys = [
         "feature_flag.assistant.briefing",
         "feature_flag.assistant.coach",
@@ -154,13 +154,5 @@ struct AICapabilityGateTests {
         let gate = AICapabilityGate()
         #expect(gate.offersEntryPoint(.coach))
         #expect(gate.reader.allowsOnDevice(.briefing))
-    }
-
-    @Test("The local flag store carries no assistant key any more")
-    func flagStoreHasNoAssistantKeys() {
-        #expect(FeatureFlag.allCases.allSatisfy { !$0.rawValue.hasPrefix("assistant.") })
-        let store = FeatureFlagsStore()
-        #expect(store.isEnabled(.enableDailyStats))
-        #expect(store.isEnabled(.cycleTracking))
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// W5-3 (v0.12 W5a) — pins the pure period-over-period delta math behind the
+/// Pins the pure period-over-period delta math behind the
 /// per-metric Insights page caption: the temporal-midpoint window split, the
 /// signed-percentage formatting, the server's change with its verdict (1.5
 /// VERDICTS), and the self-suppression contract (nil → the caption renders nothing). Pure
@@ -136,9 +136,9 @@ struct MetricRangeDeltaTests {
         let steps = try #require(MetricRangeDelta.resolve(.server(delta: 1200, unit: "", sentiment: .positive)))
         #expect(steps.sentiment == .favourable)
         #expect(steps.symbol == "arrow.up")
-        #expect(HeroDeltaChip.colorRole(for: .positive) == .statusOK)
-        #expect(HeroDeltaChip.colorRole(for: nil) == .textSecondary)
-        #expect(HeroDeltaChip.colorRole(for: .neutral) == .textSecondary)
-        #expect(HeroDeltaChip.colorRole(for: .negative) == .statusBad)
+        #expect(HeroDeltaChip.tone(for: nil) == .neutral)
+        #expect(HeroDeltaChip.tone(for: .positive) == .success)
+        #expect(HeroDeltaChip.tone(for: .negative) == .critical)
+        #expect(HeroDeltaChip.tone(for: .neutral) == .neutral)
     }
 }

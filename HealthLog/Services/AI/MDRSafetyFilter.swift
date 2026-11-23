@@ -10,15 +10,16 @@ import Foundation
 ///
 /// The filter operates on plain Swift strings so it works against both the
 /// `@Generable OnDeviceBriefing` (iOS 26+) and the legacy server-AI surfaces
-/// when reused (R4 §5.2). Logging stays PII-free — never log raw output text.
+/// when reused. Logging stays PII-free — never log raw output text.
 public actor MDRSafetyFilter {
     /// Regex pattern + the matrix row in R4 §5 it covers. Internal, not
-    /// private, only so `MDRSafetyFilter+Dutch.swift` can build its rows.
+    /// private, only so the per-language files (`MDRSafetyFilter+Dutch.swift`,
+    /// `+Korean.swift`, `+Spanish.swift`) can build their rows.
     struct Pattern {
         let regex: NSRegularExpression
         let matrixRow: Int
         let label: String
-        /// **R19b (1.0.3)** — the ways a match of this pattern can fail to
+        /// The ways a match of this pattern can fail to
         /// count. Empty for every row that has no exemption, which is most.
         /// A match is excused if ANY of them excuses it.
         var exemptions: [Exemption] = []
@@ -31,8 +32,10 @@ public actor MDRSafetyFilter {
         }
     }
 
-    /// 44-pattern matrix per R4 §5.1: the 25 German/English rows below plus
-    /// the 19 Dutch twins in `MDRSafetyFilter+Dutch.swift`.
+    /// 91-pattern matrix per R4 §5.1: the 25 German/English rows below, the
+    /// 19 Dutch twins in `MDRSafetyFilter+Dutch.swift`, the 24 Korean rows in
+    /// `MDRSafetyFilter+Korean.swift` and the 23 Spanish rows in
+    /// `MDRSafetyFilter+Spanish.swift`.
     ///
     /// **Arithmetic, corrected in fix round 2.** The header used to say
     /// "20-pattern matrix (15 base rows from I-1 + 5 Mini-Coach extensions)".
@@ -44,8 +47,12 @@ public actor MDRSafetyFilter {
     /// bare-prescriptive rows, and R23 added `bare_recommend_en` → **25**.
     /// Dutch (nl) added **19**, one `_nl` twin per German/English row family
     /// (the bilingual `prescriptive` row and `bare_recommend_en` share one
-    /// twin, `prescriptive_nl`) → **44**. Every row runs on every text, so the
-    /// Dutch rows can only make the filter stricter.
+    /// twin, `prescriptive_nl`) → **44**. Korean (ko) added 19 twins and 5
+    /// red-team rows → **68**. Spanish (es) added 19 twins and 4 rows for the
+    /// shapes the Korean red-team found (dose by number, multiple or extra
+    /// pill, bare condition assertion, present-tense forecast) → **91**. Every
+    /// row runs on every text, so a new language can only make the filter
+    /// stricter.
     /// `MDRSafetyFilterExemptionsTests.matrixSizeUnchanged` pins the total.
     /// Each entry is annotated with the pattern row in the safety matrix so
     /// reviewers can cross-reference.
@@ -56,7 +63,7 @@ public actor MDRSafetyFilter {
     /// softeners; 9 = reflective-suggestive condition floating) close
     /// gaps the conversational surface re-opens that the briefing
     /// (one-shot, no user echo) didn't have.
-    private static let patterns: [Pattern] = basePatterns + dutchPatterns
+    private static let patterns: [Pattern] = basePatterns + dutchPatterns + koreanPatterns + spanishPatterns
 
     private static let basePatterns: [Pattern] = // swiftlint:disable force_try
         [
@@ -85,10 +92,10 @@ public actor MDRSafetyFilter {
                 ),
                 matrixRow: 8,
                 label: "prescriptive",
-                // R19b — "Die ESH-Leitlinien empfehlen …" is a citation, not an
+                // "Die ESH-Leitlinien empfehlen …" is a citation, not an
                 // instruction. Scoped to the verb, so "…, und ich empfehle dir
                 // eine höhere Dosis" in the same sentence still fires.
-                // R23 — a citation cannot launder an instruction ("Die
+                // A citation cannot launder an instruction ("Die
                 // Leitlinien empfehlen, deine Dosis zu erhöhen"). Fix round 1 —
                 // this row also catches a bare "ich empfehle", so without the
                 // hand-off exemption the German hand-off sentence was refused
@@ -256,7 +263,7 @@ public actor MDRSafetyFilter {
                 ),
                 matrixRow: 9,
                 label: "reflective_suggestive_de",
-                // R19b — paired with the clinician hand-off this IS the
+                // Paired with the clinician hand-off this IS the
                 // talking-point form R11 asks the model to produce.
                 exemptions: [handOffExemptionUnguarded]
             ),
@@ -276,7 +283,7 @@ public actor MDRSafetyFilter {
                 ),
                 matrixRow: 9,
                 label: "reflective_suggestive_en",
-                // R19b — see `reflective_suggestive_de`.
+                // See `reflective_suggestive_de`.
                 exemptions: [handOffExemptionUnguarded]
             ),
             Pattern(
@@ -287,7 +294,7 @@ public actor MDRSafetyFilter {
                 matrixRow: 9,
                 label: "reflective_possibly_en"
             ),
-            // Row 8 (R23) — bare English "recommend(s)". R23 requires
+            // Row 8 — bare English "recommend(s)". R23 requires
             // "Guidelines recommend increasing your medication." to fire, and
             // adding `blockedBy` to the citation exemption could not achieve
             // that on its own: no row matched the sentence in the first place.
@@ -306,7 +313,7 @@ public actor MDRSafetyFilter {
                 label: "bare_recommend_en",
                 exemptions: [citationExemption, handOffExemption]
             ),
-            // Row 8 (R21) — the bare imperative. Until 1.0.3 the matrix caught
+            // Row 8 — the bare imperative. Until 1.0.3 the matrix caught
             // "maybe you should" and "you should now take" but not the plain
             // "You should reduce your salt", and had no bare "I recommend" at
             // all — the simplest way of telling someone what to do was the one
@@ -360,7 +367,7 @@ public actor MDRSafetyFilter {
     public init() {}
 
     /// Number of patterns in the matrix. Used by tests to verify the matrix
-    /// is complete (R4 §5.1 + AC13).
+    /// is complete.
     public static var patternCount: Int {
         patterns.count
     }
@@ -394,6 +401,8 @@ public actor MDRSafetyFilter {
         switch language {
         case .de, .en: basePatterns
         case .nl: dutchPatterns
+        case .ko: koreanPatterns
+        case .es: spanishPatterns
         }
     }
 
@@ -412,7 +421,7 @@ public actor MDRSafetyFilter {
 
     /// Does this pattern have a match that its exemption does not excuse?
     ///
-    /// **R19b (1.0.3).** A pattern with no exemption keeps the exact behaviour
+    /// A pattern with no exemption keeps the exact behaviour
     /// it had before — one `firstMatch` and done. Only the two exempted rows
     /// pay for enumerating their matches, and they have to: a single text can
     /// hold both an exempt occurrence and a real one ("Die Leitlinien empfehlen
@@ -498,9 +507,9 @@ public actor MDRSafetyFilter {
     }
 }
 
-/// Protocol allowing both `@Generable OnDeviceBriefing` (iOS 26+) and the
-/// fallback shell (iOS 18-25) to feed the filter without conditional
-/// compilation in callers.
+/// Protocol allowing both the `@Generable` model output and the plain
+/// transport shell to feed the filter without conditional compilation in
+/// callers.
 public protocol BriefingTextProvider: Sendable {
     var allTextFields: [String] { get }
 }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.12 W0 — navigation-graph deep-link wiring. Each test asserts that a
+/// Navigation-graph deep-link wiring. Each test asserts that a
 /// `DeepLinkRoute` applied to `AppRouter` lands the operator on the right tab +
 /// pushes (or selects) the right surface, rather than dead-ending at a tab root
 /// or teleporting to Dashboard.
@@ -19,7 +19,7 @@ struct AppRouterNavigationTests {
         try #require(URL(string: string), "Test-Fixture URL ungültig: \(string)")
     }
 
-    /// W0-1 — `MedicationDetailRoute` is pushed onto the (now-bound) `medsPath`.
+    /// `MedicationDetailRoute` is pushed onto the (now-bound) `medsPath`.
     @Test("medication route → Meds tab + one pushed detail")
     func medicationRoutepushesDetail() {
         let router = AppRouter()
@@ -28,7 +28,7 @@ struct AppRouterNavigationTests {
         #expect(router.medsPath.count == 1)
     }
 
-    /// W0-1 — `…/history` deep link pushes a detail route with `.history` focus
+    /// `…/history` deep link pushes a detail route with `.history` focus
     /// (the focus rides inside the `MedicationDetailRoute` payload; the stack
     /// still shows exactly one pushed entry).
     @Test("medicationHistory route → Meds tab + one pushed detail")
@@ -53,7 +53,7 @@ struct AppRouterNavigationTests {
         #expect(AppRouter.medicationDetailRoute(for: .dashboard) == nil)
     }
 
-    /// v0153 M1 — the `.compliance` focus is an IN-APP card-tap affordance
+    /// The `.compliance` focus is an IN-APP card-tap affordance
     /// (`onComplianceTap` → opens at the top, pre-expanded Verlauf, NO scroll),
     /// never a router deep-link. A genuine reminder/URL deep link must keep
     /// `.history` (which DOES scroll) and must never resolve to `.compliance`,
@@ -100,7 +100,7 @@ struct AppRouterNavigationTests {
         #expect(router.insightsMetricRequestCount == 1)
     }
 
-    /// W0-3 — bare `.insights(metric: nil)` selects Insights + parks `nil`
+    /// Bare `.insights(metric: nil)` selects Insights + parks `nil`
     /// (Übersicht) and bumps the counter so the container resolves to overview.
     @Test("insights(metric: nil) → Insights tab + nil slug, counter bumped")
     func insightsBareSelectsOverview() {
@@ -111,7 +111,7 @@ struct AppRouterNavigationTests {
         #expect(router.insightsMetricRequestCount == 1)
     }
 
-    /// v0.13.1 IC — the Dashboard tile-tap nav-unification entry point. A tap
+    /// The Dashboard tile-tap nav-unification entry point. A tap
     /// drives `selectInsightsMetric(_:)`, which resolves the kind to its slug
     /// and routes through the SAME `.insights(metric:)` path — landing the
     /// operator in the Insights tab on that metric's page (not a duplicate
@@ -137,7 +137,7 @@ struct AppRouterNavigationTests {
         #expect(router.pendingInsightsMetricSlug == "cardio-fitness")
     }
 
-    /// v0.14.1 §6 — the wellness-score detail sheet's contributor deep-nav.
+    /// The wellness-score detail sheet's contributor deep-nav.
     /// Tapping a contributor (e.g. Ruhepuls) previously pushed a BARE
     /// `InsightsMetricScreen` onto the Insights screen's local stack — a
     /// dead-end with no tab strip, no swipe, no back. It now routes through the
@@ -159,7 +159,7 @@ struct AppRouterNavigationTests {
         #expect(router.consumePendingInsightsMetric() == .some("resting-pulse"))
     }
 
-    /// v0.14.3 F3 — the Stimmung (mood) contributor in the wellness-score detail
+    /// The Stimmung (mood) contributor in the wellness-score detail
     /// sheet is NOT a chartable `MetricKind`; it routes through the special-page
     /// seam `selectInsightsSpecial(.mood)`, which parks the mood layout slug so
     /// `InsightsContainerScreen` resolves it onto its pager via
@@ -179,7 +179,7 @@ struct AppRouterNavigationTests {
         #expect(InsightsSpecialPage.page(forSlug: "mood") == .mood)
     }
 
-    /// W0-1 — `PersonalRecordRoute` is pushed onto the More stack.
+    /// `PersonalRecordRoute` is pushed onto the More stack.
     @Test("personalRecord route → More tab + one pushed entry")
     func personalRecordRoutePushes() {
         let router = AppRouter()
@@ -188,7 +188,7 @@ struct AppRouterNavigationTests {
         #expect(router.morePath.count == 1)
     }
 
-    /// W0-1 — `.settingsNotifications` pushes Settings THEN Notifications onto
+    /// `.settingsNotifications` pushes Settings THEN Notifications onto
     /// the More stack (back stack: Mehr → Settings → Notifications).
     @Test("settingsNotifications route → More tab + two pushed entries")
     func settingsNotificationsRoutePushesTwo() {
@@ -211,7 +211,7 @@ struct AppRouterNavigationTests {
         #expect(router.medsPath.count == 1)
     }
 
-    /// W0-2 — the no-id fallback `healthlog://medications` now parses to
+    /// The no-id fallback `healthlog://medications` now parses to
     /// `.medications` (Meds list root), NOT `.unknown` → Dashboard. Applying it
     /// selects the Meds tab with an empty stack.
     @Test("no-id med fallback → Meds tab root, NOT Dashboard")
@@ -249,7 +249,7 @@ struct AppRouterNavigationTests {
         #expect(router.medsPath.count == 1)
     }
 
-    // MARK: - b182 W-B182-INVITE (GH #16)
+    // MARK: - b182 W-B182-INVITE
 
     private static let inviteToken = "hlv_" + String(repeating: "a", count: 64)
 
@@ -265,7 +265,7 @@ struct AppRouterNavigationTests {
         #expect(router.pendingRoute == nil)
     }
 
-    /// W-INVITE-DEEPLINK (#16) — an already-signed-in user tapping an invite link
+    /// An already-signed-in user tapping an invite link
     /// does NOT park the token (an invite creates a NEW account; it can't be
     /// applied to the current session). Instead the router bumps a non-destructive
     /// notice counter the shell surfaces, and leaves the current tab untouched (no
@@ -321,7 +321,7 @@ struct AppRouterNavigationTests {
         #expect(none?.isInvalidInviteError != true)
     }
 
-    // MARK: - Parity 1.10 — dead-tap safety net
+    // MARK: - Dead-tap safety net
 
     /// A `MetricKind` with no Insights slug used to make `selectInsightsMetric`
     /// log a line and return. Four such kinds ship a dashboard tile today, so

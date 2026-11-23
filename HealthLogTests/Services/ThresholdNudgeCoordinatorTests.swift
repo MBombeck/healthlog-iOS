@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-THRESHOLD-NUDGE — the coordinator + the persistence stores.**
+/// **The coordinator + the persistence stores.**
 ///
 /// Exercises the full decision-to-delivery wiring with injected seams (no
 /// `UNUserNotificationCenter`, no network): opt-in gating, server-escalation
@@ -183,7 +183,7 @@ struct ThresholdNudgeCoordinatorTests {
 #if canImport(UserNotifications) && canImport(UIKit)
     import UserNotifications
 
-    /// **W-THRESHOLD-NUDGE — the delivered banner is NEVER urgent.** The hard
+    /// **The delivered banner is NEVER urgent.** The hard
     /// safety property: an out-of-range nudge fires at `.passive` so it is
     /// informational + Focus-suppressible, never `.timeSensitive` / `.critical`.
     @Suite("W-THRESHOLD-NUDGE — notification level is never urgent")

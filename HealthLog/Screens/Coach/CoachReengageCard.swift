@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **b182 (AUDIT-COACH-PARITY F1) — Insights "Enable the coach" re-engage card.**
+/// **Insights "Enable the coach" re-engage card.**
 ///
 /// Rendered on the Insights overview when the Coach is currently SUPPRESSED
 /// (`aiMode == .none`) but a server provider IS configured and consent is merely
@@ -20,25 +20,15 @@ struct CoachReengageCard: View {
     let action: () -> Void
 
     var body: some View {
-        HLCard {
+        // The title is the promise, the button the action; the title used
+        // to repeat the button.
+        HLCard("coach.reengage.title") {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HStack(spacing: HLSpace.sm) {
-                    Image(systemName: "sparkles")
-                        .font(.hlIcon(HLIconSize.lg))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(HLText.primary)
-                        .accessibilityHidden(true)
-                    // 1.4 B2-c — the title is the promise, the button the
-                    // action; the title used to repeat the button.
-                    Text("coach.reengage.title")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                }
                 Text("coach.reengage.body")
                     .font(.hlSubhead)
                     .foregroundStyle(HLText.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HLButton(String(localized: "Enable the coach"), variant: .primary, size: .regular, action: action)
+                HLButton("Enable the coach", variant: .primary, action: action)
                     .accessibilityIdentifier("InsightsScreen.coachReengageCard.button")
             }
         }

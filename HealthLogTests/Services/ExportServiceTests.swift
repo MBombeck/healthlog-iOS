@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.11 W9 — ExportService contract.**
+/// **ExportService contract.**
 ///
 /// Pins the per-domain CSV export against the *real* `APIClient` with a stubbed
 /// `URLSession` (`MockURLProtocol`) — never a mock server (PROJECT_GUIDE.md: export
@@ -164,9 +164,9 @@ struct ExportServiceTests {
         }
     }
 
-    // MARK: - AUD-7 H3 / R2 A4 — full backup (GET /api/export?type=all) is service-owned
+    // MARK: - Full backup (GET /api/export?type=all) is service-owned
 
-    /// R2 / #115 A4 — this test used to pin `POST /api/export` with a format
+    /// This test used to pin `POST /api/export` with a format
     /// body, and so pinned the defect: the route has only ever exported `GET`
     /// (`src/app/api/export/route.ts`, query `format` + `type`), so the card
     /// answered 405. It now pins the server's form.

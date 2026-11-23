@@ -154,7 +154,7 @@ struct CrisisResourceFallbackLocaleTests {
     @Test("Every resolvable resource id has a catalog name")
     func everyResourceIdIsLocalized() {
         let allIds = Set(
-            ["de", "de-at", "de-ch", "en", "en-us", "at", "ch"]
+            ["de", "de-at", "de-ch", "en", "en-us", "at", "ch", "ko", "kr", "es", "es-mx"]
                 .flatMap { ids(CrisisResourceFallback.forLocale($0)) }
         )
         for id in allIds {

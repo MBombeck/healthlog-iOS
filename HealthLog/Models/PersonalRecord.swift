@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — UI-facing view model for the Persönliche-Rekorde
+/// UI-facing view model for the Persönliche-Rekorde
 /// surface (`PersonalRecordsScreen`).
 ///
 /// **Why this exists separate from `PersonalRecordDTO`:** the wire DTO is
@@ -91,7 +91,7 @@ public struct PersonalRecord: Identifiable, Sendable, Equatable {
 /// fresh "now". This matches the operator's mental model: "Diese Woche"
 /// means the calendar-week the user is in right now.
 public enum TimeBucket: String, CaseIterable, Identifiable, Sendable {
-    // v0.14.1 (#139) — declaration order drives the segmented-picker order
+    // Declaration order drives the segmented-picker order
     // (`allCases`). The operator wants the most-recent window FIRST (left) and
     // selected by default: Diese Woche → Dieser Monat → Dieses Jahr → Allzeit.
     // Raw values are unchanged, so persisted selections + the
@@ -107,7 +107,7 @@ public enum TimeBucket: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// String-Catalog key for the segmented picker; the picker renders it via
-    /// `Text(LocalizedStringKey(...))`. L1 — these were the German words
+    /// `Text(LocalizedStringKey(...))`. These were the German words
     /// themselves ("Allzeit", "Dieses Jahr", …), which are no catalog keys, so
     /// the English UI showed German segments.
     public var label: String {
@@ -192,7 +192,14 @@ public enum MetricTypeKindResolver {
         "BLOOD_GLUCOSE_FASTING": .glucose,
         "BLOOD_GLUCOSE_POSTPRANDIAL": .glucose,
         "BLOOD_GLUCOSE_RANDOM": .glucose,
-        "BLOOD_GLUCOSE_BEDTIME": .glucose
+        "BLOOD_GLUCOSE_BEDTIME": .glucose,
+        // The activity totals the server keeps records for: without a kind
+        // their cards fell back to the rosette while every other card showed
+        // its metric's symbol.
+        "FLIGHTS_CLIMBED": .flightsClimbed,
+        "TIME_IN_DAYLIGHT": .timeInDaylight,
+        "ACTIVE_ENERGY_BURNED": .activeEnergy,
+        "WALKING_RUNNING_DISTANCE": .distanceWalkingRunning
     ]
 }
 

@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    // Phase 07 / plan 07-06 — the durable half of the cycle import.
+    // The durable half of the cycle import.
     //
     // Split out of `CycleHealthKitImporter.swift` for the same reason
     // `AppleHealthMedicationImporter+DoseImport.swift` exists: the lifecycle half
@@ -20,9 +20,8 @@ import Foundation
         // MARK: - Sweep
 
         /// One anchored batch for a single category type, serialized through
-        /// the per-type sweep gate (N5.3).
-        @available(iOS 18.0, *)
-        func runAnchoredSweep(type: HKCategoryType) async -> HealthSyncDisposition {
+        /// the per-type sweep gate.
+        func runAnchoredSweep(type: HKSampleType) async -> HealthSyncDisposition {
             // One token per call. Only the first caller's body runs, so only that
             // caller's token is ever filled in; a coalesced trigger reads nothing
             // back and reports `.deferred` — which is exactly what happened to
@@ -52,8 +51,7 @@ import Foundation
         /// Only ever entered via `runAnchoredSweep` (one sweep per type at a
         /// time). Each type is committed on its own evidence: a type whose page
         /// held does not ride a sibling type's success.
-        @available(iOS 18.0, *)
-        func performAnchoredSweep(type: HKCategoryType) async -> HealthSyncDisposition {
+        func performAnchoredSweep(type: HKSampleType) async -> HealthSyncDisposition {
             guard let lease = try? admission?() else {
                 HLLog.healthKit.info("cycle HK sweep refused — no admitted account")
                 return .disabled
@@ -72,12 +70,24 @@ import Foundation
             do {
                 // Fence 1 of 3 — before the query.
                 try lease.requireCurrent()
+                // The sample-to-day map must know every sample before a
+                // deletion can be judged; an upgraded install fills it once.
+                let mapReady = await ensureSampleDayMapSeeded()
                 let result = try await fetch(type: type, anchor: anchor)
                 // Fence 2 of 3 — an account replacement that landed during the
                 // read must not let this page reach the wire under the new owner.
                 try lease.requireCurrent()
-                let writes = buildWrites(from: result.samples, identifier: type.identifier)
+                let writes = try await pageWrites(fromSamples: result.samples, identifier: type.identifier)
+                // New samples first: an edit in Health (delete plus a new
+                // sample on the same day) keeps its day.
+                recordSampleDays(result.samples, identifier: type.identifier)
                 let page = await drain(writes, requiring: lease)
+                if mapReady {
+                    await forwardDeletions(result.deletedIDs, requiring: lease)
+                } else if !parkDeletions(result.deletedIDs) {
+                    // The anchor would carry the deletions past for good.
+                    return .failed
+                }
                 return await commitAnchor(result.newAnchor, for: type, page: page, requiring: lease)
             } catch let refusal as HealthSyncLeaseRefusal {
                 return refusal == .cancelled ? .deferred : .expired
@@ -137,11 +147,11 @@ import Foundation
                     try lease.requireCurrent()
                     Self.apply(result, offset: start, sliceCount: slice.count, into: &classifications)
                     let imported = result.entries.filter { $0.status == .inserted || $0.status == .updated }.count
-                    // M-7: both interpolations are pure row counts — operator-grade, no PII.
+                    // Both interpolations are pure row counts — operator-grade, no PII.
                     HLLog.healthKit
                         .debug("cycle HK import drained \(imported, privacy: .public)/\(slice.count, privacy: .public) rows") // swiftlint:disable:this hllog_public_privacy_interpolation
                 } catch where Self.isModuleOff(error) {
-                    // #115 / 0.3 — cycle tracking is off for this account. The
+                    // Cycle tracking is off for this account. The
                     // server stored nothing, and a queued row would only wait
                     // for the same answer, so the rest of the page is not sent.
                     moduleOff = true
@@ -197,7 +207,7 @@ import Foundation
             CycleRepository.isCycleDisabled(error) || (error as? HLError)?.isModuleDisabled == true
         }
 
-        /// #115 / 0.3 — the page when the cycle module is off. Nothing is queued
+        /// The page when the cycle module is off. Nothing is queued
         /// and nothing claims a durable retry, so the shared rule holds the
         /// anchor (`nonterminalEntry`) for every row the server did not store.
         /// The next sweep after the module is back on reads the same window
@@ -321,7 +331,7 @@ import Foundation
 
         // MARK: - Anchor persistence (UserDefaults, per PROJECT_GUIDE.md battery rationale)
 
-        func anchorKey(for type: HKCategoryType) -> String {
+        func anchorKey(for type: HKSampleType) -> String {
             anchorPrefix + type.identifier
         }
 
@@ -330,7 +340,7 @@ import Foundation
         /// another account's key.
         static func cursorKey(
             for lease: HealthSyncAuthenticatedLease,
-            type: HKCategoryType
+            type: HKSampleType
         ) -> HealthSyncCursorKey? {
             let owner: HealthSyncOwnerLease = lease.owner
             return owner.cursorKey(typeIdentifier: type.identifier)
@@ -346,7 +356,7 @@ import Foundation
         /// through the store's verified write, so an unverifiable migration fails
         /// closed and the partition collects nothing.
         func establishCursorPartitionIfNeeded(
-            _ type: HKCategoryType,
+            _ type: HKSampleType,
             requiring lease: HealthSyncAuthenticatedLease
         ) async {
             guard let cursors,
@@ -363,15 +373,14 @@ import Foundation
 
         /// The anchor this account's partition committed for one type, or the
         /// legacy per-user value when no durable store is wired.
-        @available(iOS 18.0, *)
         func committedAnchor(
-            for type: HKCategoryType,
+            for type: HKSampleType,
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HKQueryAnchor? {
             if let cursors, let key = Self.cursorKey(for: lease, type: type) {
                 return await cursors.queryAnchor(for: key)
             }
-            // W-HK-RELIABILITY H-2 — surface decode failures + controlled reset.
+            // Surface decode failures + controlled reset.
             return HealthKitAnchorArchive.loadAnchor(
                 forKey: anchorKey(for: type),
                 from: defaults,
@@ -387,10 +396,9 @@ import Foundation
         /// the un-wired fallback consults ``HealthSyncCursorPolicy/installed``
         /// directly, so a context without a cursor store is never *more*
         /// permissive than production.
-        @available(iOS 18.0, *)
         func commitAnchor(
             _ anchor: HKQueryAnchor?,
-            for type: HKCategoryType,
+            for type: HKSampleType,
             page: HealthSyncPageOutcome,
             requiring lease: HealthSyncAuthenticatedLease
         ) async -> HealthSyncDisposition {
@@ -421,7 +429,7 @@ import Foundation
             // swiftlint:disable:next hllog_public_privacy_interpolation
             HLLog.healthKit.info("cycle HK anchor holds — \(reason.rawValue, privacy: .public)")
             switch reason {
-            case .cancelled: return .deferred
+            case .cancelled, .superseded: return .deferred
             case .leaseLost: return .expired
             case .nonterminalEntry, .incompleteIndexCoverage, .retryPersistenceFailed, .serverUnreachable: return .failed
             }

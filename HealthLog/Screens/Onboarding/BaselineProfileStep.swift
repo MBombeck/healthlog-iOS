@@ -16,8 +16,7 @@ import SwiftUI
 /// Settings.
 ///
 /// **Server-only surface.** Profile lives on the server, so this step is
-/// reached on the server branch only (standalone has no server). The
-/// flow inserts it after the anamnesis step, before `done`.
+/// reached after sign-in. The flow inserts it after the anamnesis step, before `done`.
 struct BaselineProfileStep: View {
     let onNext: () -> Void
     let onSkip: () -> Void
@@ -37,7 +36,7 @@ struct BaselineProfileStep: View {
     /// audit 02 · M-5 — set when the profile save fails so the step surfaces the
     /// error instead of silently advancing as if the fields were persisted.
     @State private var saveFailed = false
-    /// 08-10 — set when the height field holds something that is neither blank
+    /// Set when the height field holds something that is neither blank
     /// nor a plausible height. The old code simply *dropped* such a value
     /// (`if let parsed = Int(…), (50…300).contains(parsed)`) and, when it was
     /// the only thing typed, advanced through `guard dirty else { onNext() }`:
@@ -66,7 +65,9 @@ struct BaselineProfileStep: View {
         // (QA-b198 Design-M3).
         .scrollDismissesKeyboard(.interactively)
         .background(HLColor.background)
-        .safeAreaInset(edge: .bottom) {
+        // The pinned call to action rides the system's bottom bar, as on the
+        // welcome and Apple Health steps.
+        .hlBottomBar {
             VStack(spacing: HLSpace.sm) {
                 if invalidHeight {
                     Text("onboarding.baselineProfile.invalidHeight")
@@ -77,7 +78,7 @@ struct BaselineProfileStep: View {
                         .accessibilityIdentifier("onboarding.baselineProfile.invalidHeight")
                 }
                 if saveFailed, let rejected = store?.rejectedProfileFields, !rejected.isEmpty {
-                    // #97 / #115 · 0.4 — partial save: name what did not land.
+                    // Partial save: name what did not land.
                     ProfileRejectedFieldsNotice(fields: rejected)
                         .multilineTextAlignment(.leading)
                 } else if saveFailed {
@@ -97,14 +98,11 @@ struct BaselineProfileStep: View {
                     Task { await saveThenContinue() }
                 }
                 .accessibilityIdentifier("onboarding.baselineProfile.continue")
-                HLButton(String(localized: "Later"), variant: .ghost) {
+                HLLinkButton("Later") {
                     onSkip()
                 }
                 .accessibilityIdentifier("onboarding.baselineProfile.skip")
             }
-            .padding(.horizontal, HLSpace.xl)
-            .padding(.bottom, HLSpace.xxxl)
-            .background(HLColor.background)
         }
         .task { await prepareStore() }
         .onAppear {
@@ -253,7 +251,7 @@ struct BaselineProfileStep: View {
             patch.displayName = .some(trimmedName)
             dirty = true
         }
-        // 08-10 — optional is not the same as unchecked. Blank may advance;
+        // Optional is not the same as unchecked. Blank may advance;
         // anything non-blank must be a height or the step stays and says so.
         switch Self.validateHeight(heightCm) {
         case .blank:
@@ -291,7 +289,7 @@ struct BaselineProfileStep: View {
         onNext()
     }
 
-    // MARK: - Height (08-10)
+    // MARK: - Height
 
     /// What the height field holds. Three answers, because an optional field
     /// has three states and the old code only had two: it folded "left empty"

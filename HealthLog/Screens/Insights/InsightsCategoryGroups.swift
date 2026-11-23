@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.11 W28 — the Insights tab-strip **category grouping** (web parity).
+/// The Insights tab-strip **category grouping** (web parity).
 ///
 /// The web app folds its 24+ secondary metric pills behind **7 category
 /// popovers** so the strip stays scannable (`SUB_PAGE_GROUP` /
@@ -26,7 +26,7 @@ enum InsightsMetricCategory: String, CaseIterable, Hashable {
     case vitals
     case body
     case activity
-    /// Parity Build 4 / 4.1 — renamed from `cardiovascular` and widened to the
+    /// Renamed from `cardiovascular` and widened to the
     /// web's `heart` group (2026-07-17 UX/IA audit H2, `sub-page-metric.ts:218-231`):
     /// pulse / resting-pulse / HRV moved in from `vitals` (and `pulse` lost its
     /// flat status), joining the three Withings vascular markers that were all the
@@ -35,11 +35,19 @@ enum InsightsMetricCategory: String, CaseIterable, Hashable {
     case hearing
     case environment
     case metabolic
+    /// The server-derived recovery family (recovery score, strain, loads,
+    /// heart rate and energy of the day). Each member is its own metric page,
+    /// grouped under one pill exactly like Heart; the pill stands right after
+    /// Overview, where the single recovery page used to stand. A pager
+    /// category only: the measurement lists keep their own grouping
+    /// (`category(for kind:)` does not name it).
+    case recovery
 
     /// The localized parent-pill label (mirror web `*Parent.label`). `Vitals` and
     /// `Environment` reuse existing xcstrings keys; the rest are appended.
     var label: String {
         switch self {
+        case .recovery: String(localized: "Recovery")
         case .vitals: String(localized: "Vitals")
         case .body: String(localized: "Body")
         case .activity: String(localized: "Activity")
@@ -58,7 +66,7 @@ enum InsightsMetricCategory: String, CaseIterable, Hashable {
 
 /// The slug-grouping taxonomy + the strip-render-model builder.
 ///
-/// **Parity Build 4 / 4.1 — this is now a 1:1 mirror of the web `SUB_PAGE_GROUP`
+/// **This is now a 1:1 mirror of the web `SUB_PAGE_GROUP`
 /// (`src/lib/insights/sub-page-metric.ts:195-256`) plus `PINNED_SUB_PAGE_SLUGS`.**
 /// The three standing b215/v0.13.1 divergences were resolved in favour of web
 /// parity by operator decision:
@@ -79,7 +87,7 @@ enum InsightsMetricCategory: String, CaseIterable, Hashable {
 /// absent here too — they map to no pill anyway
 /// (`InsightsTabSlug.metricKind` returns `nil`), so they never widen a menu.
 enum InsightsCategoryGroups {
-    /// Parity Build 4 / 4.1 — the web `PINNED_SUB_PAGE_SLUGS` (2026-07-17 UX/IA
+    /// The web `PINNED_SUB_PAGE_SLUGS` (2026-07-17 UX/IA
     /// audit H2, `sub-page-metric.ts:187-193`): the account's highest-traffic
     /// pages, which always render as their own flat pill even if they carry a
     /// ``slugToCategory`` entry, and are excluded from that category's menu so
@@ -103,7 +111,7 @@ enum InsightsCategoryGroups {
         InsightsLayoutTileId.oxygen: .vitals,
         InsightsLayoutTileId.bodyTemperature: .vitals,
         InsightsLayoutTileId.respiratoryRate: .vitals,
-        // Parity 4.1 — patient-reported physiological signal; web rides it in the
+        // Patient-reported physiological signal; web rides it in the
         // vitals popover (`:253`). Previously slug-less, so its Dashboard tile
         // was a dead tap.
         InsightsLayoutTileId.pain: .vitals,
@@ -121,7 +129,7 @@ enum InsightsCategoryGroups {
         // activity / mobility — `:210-213` + `:243-256`.
         InsightsLayoutTileId.steps: .activity,
         InsightsLayoutTileId.activeEnergy: .activity,
-        // Parity 4.4 — `workouts` is a SPECIAL page on iOS (no chartable kind),
+        // `workouts` is a SPECIAL page on iOS (no chartable kind),
         // but the web folds it into the activity popover like any other member
         // (`:213`), so it is grouped here and the strip builder folds specials
         // that carry a category. Resolved via `category(for page:)`.
@@ -148,7 +156,7 @@ enum InsightsCategoryGroups {
         InsightsLayoutTileId.pulseWaveVelocity: .heart,
         InsightsLayoutTileId.vascularAge: .heart,
         InsightsLayoutTileId.cardioRecovery: .heart,
-        // hearing — `:233-235`. Audit B-4 — `audio-events` is no longer omitted:
+        // hearing — `:233-235`. `audio-events` is no longer omitted:
         // `audioExposureEvent` is an iOS `MetricKind` now, so the pill the web
         // has always shown here is reachable.
         InsightsLayoutTileId.environmentalAudio: .hearing,
@@ -183,11 +191,15 @@ enum InsightsCategoryGroups {
         return category(forSlug: slug)
     }
 
-    /// Parity 4.4 — the category a **special** page folds into, or `nil` when it
+    /// The kinds of the recovery family, in the server's order. None of them
+    /// has a layout slug, so the strip customisation never sees them; the
+    /// family decides which of them are pages.
+    static let recoveryKinds: Set<MetricKind> = Set(RecoveryInsightsRepository.familyOrder)
+
+    /// The category a **special** page folds into, or `nil` when it
     /// stays a flat pill. Only `workouts` is grouped (into activity, web `:213`);
-    /// `mood`/`medications` are pinned and `recovery` is the fixed second pill.
+    /// `mood`/`medications` are pinned.
     static func category(for page: InsightsSpecialPage) -> InsightsMetricCategory? {
-        guard page != .recovery else { return nil }
         // P8 (v0141 parity) — ECG folds into the HEART group, but deliberately
         // NOT via `slugToCategory`: the web keeps `ecg` out of `SUB_PAGE_GROUP`
         // entirely (it carries no `MeasurementType`) and injects it into the
@@ -204,7 +216,8 @@ enum InsightsCategoryGroups {
     static func category(for selection: InsightsTabSelection) -> InsightsMetricCategory? {
         switch selection {
         case .overview: nil
-        case let .metric(kind): category(for: kind)
+        // The recovery family has no layout slug; its pages are known by kind.
+        case let .metric(kind): recoveryKinds.contains(kind) ? .recovery : category(for: kind)
         case let .special(page): category(for: page)
         }
     }
@@ -249,8 +262,8 @@ enum InsightsStripEntry: Hashable {
     case overview
     /// A flat (ungrouped) metric pill — same treatment as today's pills.
     case flat(MetricKind)
-    /// v0.11 W28c — a flat special-page pill (mood / medications / recovery).
-    /// Parity 4.4 — `workouts` is no longer always flat: a special page that
+    /// A flat special-page pill (mood / medications).
+    /// `workouts` is no longer always flat: a special page that
     /// carries a category (`InsightsCategoryGroups.category(for page:)`) folds
     /// into that category's menu, mirroring the web, and only the ungrouped
     /// specials still emit a direct pill at their layout slot.
@@ -261,7 +274,7 @@ enum InsightsStripEntry: Hashable {
     /// (`prefer no 1-item menus` — operator doctrine), so this case always
     /// carries ≥2 members.
     ///
-    /// Parity 4.4 — members are `InsightsTabSelection`, not `MetricKind`, so the
+    /// Members are `InsightsTabSelection`, not `MetricKind`, so the
     /// `workouts` special page can sit inside the Aktivität menu alongside the
     /// chartable activity metrics exactly as the web renders it.
     case group(InsightsMetricCategory, members: [InsightsTabSelection])
@@ -347,7 +360,7 @@ enum InsightsPagerPage: Hashable {
     case overview
     /// A single metric page — one page per metric (flat, no grouping).
     case flat(MetricKind)
-    /// A special composite page (mood / medications / workouts / recovery).
+    /// A special composite page (mood / medications / workouts / ECG).
     case special(InsightsSpecialPage)
 
     /// The flat pager page list — one page per ordered selection, in the same

@@ -26,7 +26,7 @@ struct AuthenticatedSessionLease: Sendable {
         !Task.isCancelled && current()
     }
 
-    /// **14-06 — registry currency ALONE, deliberately without the cancellation
+    /// **Registry currency ALONE, deliberately without the cancellation
     /// fold that ``isCurrent`` applies.**
     ///
     /// ``isCurrent`` answers "may this effect publish DATA?", and folding
@@ -67,7 +67,7 @@ final class AuthenticatedSessionLeaseRegistry: Sendable {
     }
 
     private let state = Mutex(State())
-    /// **09-03 — the admission signal, for composition-owned state that has to
+    /// **The admission signal, for composition-owned state that has to
     /// re-open when a new authenticated owner appears.**
     ///
     /// ``activate(ownerID:)`` is the one statement every login path in the app

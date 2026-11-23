@@ -1,4 +1,4 @@
-// #130 — the labs marker list comes from `GET /api/labs/overview`.
+// The labs marker list comes from `GET /api/labs/overview`.
 //
 // `LabsStore.load()` used to build the "by type" list from one page of
 // `GET /api/labs?limit=500`, so on a long history every marker whose readings
@@ -114,7 +114,7 @@
             await store.load()
 
             let index = store.markerIndex
-            #expect(index.map(\.name) == ["Ferritin", "Homocystein", "TSH"], "EXPECTED_RED: TSH (2001) is cut off")
+            #expect(index.map(\.name) == ["Ferritin", "Homocystein", "TSH"], "TSH (2001) is cut off")
             #expect(index.first { $0.name == "Ferritin" }?.count == 1200, "the server's count, not the page's 2")
             let tsh = try #require(index.first { $0.name == "TSH" })
             #expect(tsh.biomarkerId == "bm_tsh")

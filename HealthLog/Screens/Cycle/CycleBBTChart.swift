@@ -33,7 +33,7 @@ struct CycleBBTChartModel: Equatable {
         points.count >= 2
     }
 
-    /// **1.4 B4** — the y range the readings need. Without one Swift Charts
+    /// The y range the readings need. Without one Swift Charts
     /// starts the axis at 0, so a cycle between 36.4 and 36.9 °C lay flat at
     /// the top of a 0 to 40 °C chart. A quarter of the spread (at least 0.2 in
     /// the plotted unit) above and below, on tenths.
@@ -99,7 +99,7 @@ struct CycleBBTChartModel: Equatable {
         )
     }
 
-    /// #115 P2 — the same chart with every reading mapped through `display`
+    /// The same chart with every reading mapped through `display`
     /// (°C → the account's unit). Segments, phases and ovulation stay as built.
     func converted(_ display: (Double) -> Double) -> CycleBBTChartModel {
         func map(_ point: Point) -> Point {
@@ -120,7 +120,7 @@ struct CycleBBTChartModel: Equatable {
 
 struct CycleBBTChart: View {
     @Environment(\.colorScheme) private var colorScheme
-    /// #115 P2 — the basal temperature reads in the account's unit (°F on an
+    /// The basal temperature reads in the account's unit (°F on an
     /// imperial account); the logged value stays canonical °C.
     @Environment(\.unitPreferences) private var units
     let days: [CalendarDayDTO]
@@ -128,18 +128,21 @@ struct CycleBBTChart: View {
     let prediction: CyclePredictionDTO?
     let rawMode: Bool
     let today: String
+    /// The day under the finger while the chart is scrubbed.
+    @State private var selectedDate: Date?
 
-    /// #115 P2 — built canonical (°C), plotted in the account's unit.
+    /// Built canonical (°C), plotted in the account's unit.
     private var model: CycleBBTChartModel {
         CycleBBTChartModel.build(days: days, cycles: cycles, prediction: prediction, today: today)
             .converted { [units] in units.displayValue($0, kind: .bodyTemperature) }
     }
 
     var body: some View {
-        // 1.4 B2 — fewer than two readings in this cycle: no card, rather than
+        // Fewer than two readings in this cycle: no card, rather than
         // one saying two are needed.
         if model.hasEnoughData {
-            HLSettingsCard(icon: "chart.xyaxis.line", title: "cycle.bbt.title") {
+            HLSectionHeader("cycle.bbt.title", rank: .area)
+            HLCard {
                 chart
             }
         }
@@ -154,7 +157,7 @@ struct CycleBBTChart: View {
                         y: .value(String(localized: "cycle.bbt.axis.temperature"), point.value),
                         series: .value("segment", segment.id)
                     )
-                    .foregroundStyle(HLChartTints.seriesMid)
+                    .foregroundStyle(HLChartTints.series)
                     .lineStyle(StrokeStyle(lineWidth: HLChartStyle.lineWidth))
                 }
             }
@@ -176,22 +179,45 @@ struct CycleBBTChart: View {
                     ))
                     .annotation(position: .top, alignment: .leading) {
                         Text(ovulation.confirmed ? "cycle.bbt.ovulation.confirmed" : "cycle.bbt.ovulation.estimated")
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.chartMark)
                     }
+            }
+            HLChartScrubber.marks(selectedDate: selectedDate, in: model.points, date: \.date, value: \.value) { point in
+                HLScrubCallout(title: HLDateFormat.dayMonth(point.date), value: valueText(point.value), unit: unitText)
             }
         }
         .frame(height: HLChartStyle.heightRegular)
         .chartYScale(domain: model.yDomain)
-        .chartXAxis { ChartDateAxis.marks(for: model.points.map(\.date)) }
-        .chartYAxisLabel { axisUnitLabel }
+        .hlChartAxes(dates: model.points.map(\.date), unit: unitText)
+        .hlChartScrub($selectedDate) { [model, units] date in
+            Self.announcement(for: date, in: model.points, units: units)
+        }
         .accessibilityChartDescriptor(ChartDescriptor(descriptor: descriptor))
     }
 
     /// "°C" from the catalogue on a metric account, else the account's label.
-    private var axisUnitLabel: Text {
-        guard let suffix = units.transform(for: .bodyTemperature).suffix else { return Text("cycle.bbt.axis.celsius") }
-        return Text(verbatim: suffix)
+    private var unitText: String {
+        Self.unitText(units: units)
+    }
+
+    static func unitText(units: UnitPreferences) -> String {
+        units.transform(for: .bodyTemperature).suffix ?? String(localized: "cycle.bbt.axis.celsius")
+    }
+
+    /// A reading as the callout shows it: two decimals, as logged.
+    private func valueText(_ value: Double) -> String {
+        HLValueFormat.number(value, fractionDigits: 2 ... 2)
+    }
+
+    /// What VoiceOver says for the reading nearest to the scrubbed day.
+    static func announcement(
+        for date: Date,
+        in points: [CycleBBTChartModel.Point],
+        units: UnitPreferences
+    ) -> String? {
+        guard let point = HLChartScrubber.nearest(to: date, in: points, date: \.date) else { return nil }
+        let value = HLValueFormat.number(point.value, fractionDigits: 2 ... 2)
+        return "\(HLDateFormat.dayMonth(point.date)), \(value) \(unitText(units: units))"
     }
 
     private func pointColor(_ point: CycleBBTChartModel.Point) -> Color {
@@ -214,7 +240,7 @@ struct CycleBBTChart: View {
             (
                 x: Double(index),
                 y: point.value,
-                xLabel: point.date.formatted(.dateTime.day().month(.abbreviated))
+                xLabel: HLDateFormat.dayMonth(point.date, relativeTo: point.date)
             )
         }
         return HLChartAX.singleSeries(
@@ -228,7 +254,7 @@ struct CycleBBTChart: View {
                 guard let suffix = units.transform(for: .bodyTemperature).suffix else {
                     return String(format: String(localized: "cycle.bbt.value"), value)
                 }
-                return "\(value.formatted(.number.precision(.fractionLength(2)))) \(suffix)"
+                return "\(HLValueFormat.number(value, fractionDigits: 2 ... 2)) \(suffix)"
             }
         )
     }

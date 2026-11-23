@@ -19,19 +19,31 @@ import SwiftUI
 /// Fehlerfarbe an der Verbindung.
 public struct HealthKitStatusPill: View {
     @Environment(HKReadinessStore.self) private var readiness
+    /// A status the host already derived (the Apple Health page also knows
+    /// whether iOS would still show the permission sheet); `nil` reads the store.
+    private let status: HKReadinessStore.SurfaceStatus?
+    private let form: HLBadge.Form
 
-    public init() {}
+    public init() {
+        status = nil
+        form = .capsule
+    }
+
+    init(status: HKReadinessStore.SurfaceStatus? = nil, form: HLBadge.Form) {
+        self.status = status
+        self.form = form
+    }
 
     public var body: some View {
-        switch readiness.surfaceStatus {
+        switch status ?? readiness.surfaceStatus {
         case .checking:
-            HLStatusPill(.unknown(label: String(localized: "Checking")))
+            HLStatusPill(.unknown(label: String(localized: "Checking")), form: form)
         case .receiving:
-            HLStatusPill(.connected(label: String(localized: "Connected")))
+            HLStatusPill(.connected(label: String(localized: "Connected")), form: form)
         case .notConnected:
-            HLStatusPill(.disconnected(label: String(localized: "Not connected")))
+            HLStatusPill(.disconnected(label: String(localized: "Not connected")), form: form)
         case .declined:
-            HLStatusPill(.error(label: String(localized: "Declined")))
+            HLStatusPill(.error(label: String(localized: "Declined")), form: form)
         }
     }
 }

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// #114 / #115 · 0.2 — successor of `FeatureFlagsRepositoryTests`.
+/// Successor of `FeatureFlagsRepositoryTests`.
 ///
 /// `FeatureFlagsRepository` decoded an invented `{ flags: [String: Bool] }`
 /// from `GET /api/feature-flags` while the server has always sent

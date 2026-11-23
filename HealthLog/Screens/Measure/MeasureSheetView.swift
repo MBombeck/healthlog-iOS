@@ -1,96 +1,123 @@
 import SwiftUI
 
 struct MeasureSheetView: View {
-    @Environment(MeasurementsStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    /// Audit v0162 H-5 — the user's display-unit prefs (kg|lb / mmHg|kPa /
+    @Environment(MeasurementsStore.self) var store
+    /// The user's display-unit prefs (kg|lb / mmHg|kPa /
     /// mg/dL|mmol/L). Threaded in so the entry path can inverse-convert the
     /// typed value FROM the preferred unit TO canonical before storing +
     /// range-validating, mirroring the display path's forward conversion.
     /// `.standard` (canonical identity) when there's no store handle.
-    @Environment(\.unitPreferences) private var units
-    /// v0.15 W-FRONTDOORS — optional type-prefill. When set (e.g. the Home
+    @Environment(\.unitPreferences) var units
+    /// Optional type-prefill. When set (e.g. the Home
     /// Vorsorge tile's "jetzt messen" for a due BP reminder), the picker seeds
     /// to this kind ONCE on appear, overriding the last-used-kind restore so the
     /// operator lands directly on the metric the reminder targets. `nil` keeps
     /// the existing last-used-kind behaviour for the central Erfassen path.
     var initialKind: MetricKind?
-    /// H1 (v0.11 W26) — last-used metric kind, persisted across sheet opens
+    /// Last-used metric kind, persisted across sheet opens
     /// so the morning weigh-in stops re-resetting to Blutdruck. `@AppStorage`
     /// (UI-pref only, PROJECT_GUIDE.md-allowed). Seeds `kind` in `.task` before the
     /// keyboard settles; updated on every successful save.
     @AppStorage("measure.lastKind") private var lastKindRaw: String = MetricKind.bloodPressure.rawValue
-    /// H1 — recent distinct kinds (MRU, newest-first, comma-joined raw values,
-    /// capped at `Self.recentKindLimit`) feeding the one-tap chip row. Also a
-    /// UI-pref. Updated alongside `lastKindRaw` on save.
-    @AppStorage("measure.recentKinds") private var recentKindsRaw: String = ""
-    @State private var kind: MetricKind = .bloodPressure
+    /// Recent distinct kinds (MRU, newest-first, comma-joined raw values,
+    /// capped at `Self.recentKindLimit`), the stand-in for the recent rows
+    /// until the store holds manual readings. Also a UI-pref. Updated
+    /// alongside `lastKindRaw` on save.
+    @AppStorage("measure.recentKinds") var recentKindsRaw: String = ""
+    @State var kind: MetricKind = .bloodPressure
     /// True once `.task` has seeded `kind` from `lastKindRaw`, so the seeding
     /// runs exactly once and a later user pick isn't clobbered.
     @State private var didSeedKind = false
-    @State private var systolic: String = ""
-    @State private var diastolic: String = ""
-    @State private var scalar: String = ""
-    /// v0158 — pain NRS picker selection (0–10 integer). Separate from `scalar`
+    @State var systolic: String = ""
+    @State var diastolic: String = ""
+    @State var scalar: String = ""
+    /// Pain NRS picker selection (0–10 integer). Separate from `scalar`
     /// because pain is captured via a wheel picker, not the decimal text field.
-    @State private var painScore: Int = 0
-    @State private var note: String = ""
+    @State var painScore: Int = 0
+    @State var note: String = ""
     /// **Build 1 / item 1.4b — backdating.** The capture path hard-coded
     /// `recordedAt: .now` (`MeasurementsStore+QuickCapture.swift`), so the only
     /// way to log yesterday's weigh-in was save-then-edit. Web has carried the
     /// field plus an explicit hint since `measurement-form.tsx:539-560`.
-    @State private var recordedAt: Date = .now
+    @State var recordedAt: Date = .now
     /// Future bound for the timestamp picker (web: `max={getDefaultMeasuredAt…}`,
     /// mirroring the server's `validateEntryInstant`). Held in state so the range
     /// doesn't churn per render; refreshed when the sheet settles.
     @State private var recordedAtBound: Date = .now
-    /// T-2 — glucose-context picker selection. Only shown when
-    /// `kind == .glucose`. `nil` = "Ohne Kontext" (server keeps the row
-    /// context-less).
-    @State private var glucoseContext: GlucoseContext?
+    /// Glucose-context picker selection, `nil` until the person picks one.
+    /// The server requires a context on a hand-entered glucose reading, so
+    /// there is no "no context" here. Until a pick the form shows the web's
+    /// default for the reading's time (``GlucoseContextDefault``), not a fixed
+    /// "Random", so an evening reading nobody touched is not filed as fasting.
+    @State var pickedGlucoseContext: GlucoseContext?
+    /// The receipt after "Save and next" stands in the sheet, which covers
+    /// the shell's toast slot; a save that closes the sheet leaves it to the
+    /// shell.
+    @State var showsReceiptInSheet = false
     /// v0.5.5.1 haptic migration: save-outcome triggers for declarative
     /// `.sensoryFeedback`. Replaces the legacy
     /// `UINotificationFeedbackGenerator().notificationOccurred(.success/.error)`
     /// pair so SwiftUI manages prepare-and-fire + Reduce-Motion semantics.
-    @State private var saveOk: Int = 0
-    @State private var saveErr: Int = 0
-    /// v0.5.5.2 — visible save-error surface. Before this fix, a failed
+    @State var saveOk: Int = 0
+    /// Set once the value is saved: the drawn check stands over the form for
+    /// a moment before the sheet closes.
+    @State var isSaved = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var saveErr: Int = 0
+    /// Visible save-error surface. Before this fix, a failed
     /// `store.capture(...)` only triggered the error-haptic — there was
     /// no banner, no inline text, no toast (PROJECT_GUIDE.md anti-pattern:
     /// "silent error swallowing"). We now mirror the store error into
     /// local state, render an `ErrorBanner` overlay at the top, and
     /// auto-clear it on the next user input so the operator never gets
     /// stuck reading a stale failure after they typed past it.
-    @State private var saveError: HLError?
-    @FocusState private var primaryFocused: Bool
+    @State var saveError: HLError?
+    /// Holds the save in flight, so a second tap on a slow network cannot log
+    /// the same reading twice.
+    @State var saveGate = FormSaveGate()
+    @FocusState var primaryFocused: Bool
+    /// The form's measured height, bar included, so a form sheet stands as
+    /// tall as its sections. `nil` until the first measure lands.
+    @State private var measuredHeight: CGFloat?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "Measurement",
+            size: .formMeasured(height: measuredHeight),
+            action: .save(isEnabled: canSave) { await save() },
+            isDirty: isDirty
+        ) {
             Form {
                 Section {
-                    // H1 (v0.11 W26) — recent-kinds chip row: one-tap switch to
-                    // the last few kinds the user logged, so the common case
-                    // (Gewicht / Blutdruck / Glukose) is a single tap instead of
-                    // a 22-item menu dive. Hidden until there's recent history.
-                    if !recentKinds.isEmpty {
-                        recentKindChips
-                            .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: HLSpace.md, bottom: HLSpace.xs, trailing: HLSpace.md))
-                    }
-                    Picker("Metric", selection: $kind) {
+                    // #191 QoL — the kinds logged by hand, as rows with the
+                    // last reading: one tap switches the form, so the common
+                    // case (Gewicht / Blutdruck / Glukose) is a single tap
+                    // instead of a menu dive. Hidden until there's history.
+                    MeasureRecentKindRows(kinds: recentKinds, lastReadings: recentLastReadings, selection: $kind)
+                    Picker(selection: $kind) {
                         ForEach(supportedKinds) { k in
                             Label(k.displayName, systemImage: symbol(for: k)).tag(k)
                         }
+                    } label: {
+                        HLRowTitle("Metric")
                     }
                     .pickerStyle(.menu)
                 }
+                .hlFormRowSurface()
 
-                Section(String(localized: "Value")) {
+                Section {
                     if kind == .bloodPressure {
-                        HStack {
+                        // At the accessibility sizes the two fields stand
+                        // one above the other: side by side the unit was cut
+                        // to „80 m" and the titles broke into syllables.
+                        HLAdaptiveStack { stacked in
                             HLNumericField(title: String(localized: "Systolic"), placeholder: "120", value: $systolic)
                                 .focused($primaryFocused)
-                            Text("/").foregroundStyle(HLText.secondary)
-                            // H-5 — surface the BP unit suffix (mmHg|kPa) on the
+                                .accessibilityIdentifier("measure-sheet.systolic.field")
+                            if !stacked {
+                                Text("/").foregroundStyle(HLText.secondary)
+                            }
+                            // Surface the BP unit suffix (mmHg|kPa) on the
                             // trailing leg so the operator knows which unit both
                             // fields are in.
                             HLNumericField(
@@ -100,7 +127,7 @@ struct MeasureSheetView: View {
                                 value: $diastolic
                             )
                         }
-                        // v0.5.5.2 — per-component inline range hint.
+                        // Per-component inline range hint.
                         // Without this the operator can submit a 30/200
                         // pair (or a typo'd 1234 systolic) and only find
                         // out via the server 422.
@@ -110,14 +137,16 @@ struct MeasureSheetView: View {
                         if let err = diastolicErrorMessage {
                             inlineRangeError(err, identifier: "measure-sheet.diastolic.error")
                         }
+                        lastValueLine
                     } else if kind == .painNRS {
-                        // v0158 — bespoke 0–10 integer NRS picker. The server
+                        // Bespoke 0–10 integer NRS picker. The server
                         // accepts any 0–10 float, so the integer constraint is a
                         // client responsibility: a wheel picker can only yield a
                         // valid 0…10 integer (no decimal text field for pain).
                         painNRSPicker
+                        lastValueLine
                     } else {
-                        // H-5 — show the entry-unit suffix so the operator knows
+                        // Show the entry-unit suffix so the operator knows
                         // which unit they're typing (kg|lb, mg/dL|mmol/L, …).
                         HLNumericField(
                             title: kind.displayName,
@@ -126,78 +155,86 @@ struct MeasureSheetView: View {
                             value: $scalar
                         )
                         .focused($primaryFocused)
-                        // v0.5.5.2 — inline range hint when the scalar
+                        .accessibilityIdentifier("measure-sheet.scalar.field")
+                        // Inline range hint when the scalar
                         // sits outside the per-kind sane range. Submit
                         // stays disabled (`canSave`) until the operator
                         // either fixes the value or clears the field.
                         if let err = scalarErrorMessage {
                             inlineRangeError(err, identifier: "measure-sheet.scalar.error")
                         }
+                        lastValueLine
                     }
+                } header: {
+                    HLSectionHeader("Value")
                 }
+                .hlFormRowSurface()
 
                 if kind == .glucose {
-                    Section("Context") {
-                        Picker("Context", selection: $glucoseContext) {
-                            Text("No context").tag(GlucoseContext?.none)
+                    Section {
+                        Picker(selection: glucoseContextSelection) {
                             ForEach(GlucoseContext.allCases) { context in
-                                Text(context.displayResource).tag(GlucoseContext?.some(context))
+                                Text(context.displayResource).tag(context)
                             }
+                        } label: {
+                            HLRowTitle("Context")
                         }
                         .pickerStyle(.menu)
                         .accessibilityIdentifier("measure-sheet.glucose-context.picker")
+                    } header: {
+                        HLSectionHeader("Context")
                     }
+                    .hlFormRowSurface()
                 }
 
                 // Item 1.4b — backdating. Bounded to "not in the future". 1.4
                 // B2: no footer; the date control is visibly adjustable on iOS.
                 Section {
                     DatePicker(
-                        "measurement.form.recordedAt.label",
                         selection: $recordedAt,
                         in: ...recordedAtBound,
                         displayedComponents: [.date, .hourAndMinute]
-                    )
+                    ) {
+                        HLRowTitle("measurement.form.recordedAt.label")
+                    }
                     .accessibilityIdentifier("measure-sheet.recordedAt.picker")
                 } header: {
-                    Text("measurement.form.recordedAt.section")
+                    HLSectionHeader("measurement.form.recordedAt.section")
                 }
+                .hlFormRowSurface()
 
-                Section("Note") {
+                Section {
                     TextField("Optional", text: $note, axis: .vertical)
                         .lineLimit(2 ... 4)
+                        .accessibilityIdentifier("measure-sheet.note")
+                } header: {
+                    HLSectionHeader("Note")
                 }
+                .hlFormRowSurface()
+
+                saveAndNextSection
             }
-            .scrollContentBackground(.hidden)
-            .background(HLColor.background)
-            // v0.5.x C-9 — iOS 26+ soft scroll-edge so the Form blurs into
+            .hlPageMargins()
+            // iOS 26+ soft scroll-edge so the Form blurs into
             // the sheet's Liquid Glass header instead of clipping cleanly.
-            // iOS 18-25: no-op (system stays flat-translucent).
             .hlScrollEdgeSoft()
-            .navigationTitle("Measurement")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task { await save() }
-                    }
-                    .disabled(!canSave)
-                }
+            // The rows' height and the insets around them (the bar above, the
+            // page margins): one measure, in the form's own scroll geometry,
+            // so the sheet's slide-in does not move it.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                HLSheet.formHeight(contentHeight: geometry.contentSize.height, topInset: geometry.contentInsets.top)
+            } action: { _, height in
+                measuredHeight = height
             }
+            // The keyboard comes after the sheet has settled, so it does not
+            // fight the detent transition; a form sheet waits for a tap.
+            .hlFocusOnSettle($primaryFocused)
         }
-        // A6 §5 — fire focus AFTER the sheet has settled so the keyboard
-        // doesn't fight the .presentationDetents transition. Combined with
-        // the caller-side .hlSheetPresentation(.form) (full-height detent),
-        // this kills the "half-open → pause → full-with-keyboard" glitch
-        // reported as user-report #4.
         .task {
-            // H1 — seed the picker from the last-used kind exactly once, before
+            // Seed the picker from the last-used kind exactly once, before
             // the keyboard settles. A later user pick is preserved (`didSeedKind`).
             if !didSeedKind {
-                // v0.15 W-FRONTDOORS — an explicit prefill (Vorsorge "jetzt messen")
+                // An explicit prefill (Vorsorge "jetzt messen")
                 // wins over the last-used-kind restore; otherwise restore the MRU.
                 if let initialKind, supportedKinds.contains(initialKind) {
                     kind = initialKind
@@ -209,21 +246,37 @@ struct MeasureSheetView: View {
             // Item 1.4b — refresh the "not in the future" bound to the moment the
             // sheet actually opened.
             recordedAtBound = .now
-            try? await Task.sleep(for: HLSheet.focusDelay)
-            primaryFocused = true
         }
         // v0.5.5.1 haptic migration: declarative success/error feedback on
         // save outcome.
         .sensoryFeedback(.success, trigger: saveOk)
         .sensoryFeedback(.error, trigger: saveErr)
-        // v0.5.5.2 — surface the save error visually. Before this the
+        // The saved value's confirmation: the same drawn check as a taken
+        // dose and a logged mood, in the middle of the sheet.
+        .overlay {
+            // Always there, held undrawn, so it draws itself on when the
+            // save lands.
+            HLConfirmGlyph(isConfirmed: isSaved)
+                .font(.hlIcon(HLIconSize.cover))
+                .foregroundStyle(HLColor.statusOK)
+                // A calm disc under the check, as on the mood face, so it
+                // never stands on the form's text; only once it is saved.
+                .padding(HLSpace.md)
+                .background(Circle().fill(HLSurface.primary).opacity(isSaved ? 1 : 0))
+                .allowsHitTesting(false)
+        }
+        // The receipt of a "Save and next": value and Undo, in the sheet the
+        // person keeps typing in (the shell's slot sits under the sheet).
+        .overlay(alignment: .bottom) { receiptInSheet }
+        .hlAnimation(HLMotion.spring, value: store.undoCoordinator?.current?.id)
+        // Surface the save error visually. Before this the
         // operator only got a haptic; the banner makes the failure
         // legible so they know what went wrong + can retry.
-        // K1 — the banner below still presents as this overlay; this
-        // reserves its height at the top so it covers nothing (H2).
+        // The banner below still presents as this overlay; this
+        // reserves its height at the top so it covers nothing.
         .hlReserveErrorBannerSpace(saveError)
         .overlay(alignment: .top) {
-            // A2-M4 — give the save-error banner an explicit way forward.
+            // Give the save-error banner an explicit way forward.
             // Previously the only retry was the still-live Save button, which a
             // user might not realise is tappable; every other ErrorBanner call
             // site passes a retry closure, so align this one.
@@ -266,13 +319,13 @@ struct MeasureSheetView: View {
     /// (BP / Pulse / Resting-HR / HRV / Respiratory / Glucose / SpO2 / Temp /
     /// Pain), body composition next (Weight / BodyFat / BodyWater / BoneMass),
     /// manual clinical signals and VO2 max last.
-    private var supportedKinds: [MetricKind] {
+    var supportedKinds: [MetricKind] {
         [
             .bloodPressure, .pulse, .restingHeartRate, .hrv, .respiratoryRate, .glucose, .spo2, .bodyTemperature,
-            // v0158 — pain NRS is a manual symptom signal; sits with the vitals.
+            // Pain NRS is a manual symptom signal; sits with the vitals.
             .painNRS,
             .weight, .bodyFat, .bodyWater, .boneMass,
-            // v0158 — waist circumference + grip strength are manual clinical
+            // Waist circumference + grip strength are manual clinical
             // signals (HK-less / HK-deferred). Waist-to-height is render-only and
             // intentionally absent here (no manual-entry path).
             .waistCircumference, .gripStrength,
@@ -280,56 +333,14 @@ struct MeasureSheetView: View {
         ]
     }
 
-    // MARK: - H1 recent-kinds chips (v0.11 W26)
+    // MARK: - Recent-kinds chips
 
     /// Max distinct kinds kept in the recent-kinds MRU + shown as chips.
     private static let recentKindLimit = 5
 
-    /// Parsed recent-kinds MRU (newest-first), filtered to kinds the picker
-    /// actually supports so a stale raw value can't surface a dead chip.
-    private var recentKinds: [MetricKind] {
-        MeasureRecentKinds.parse(recentKindsRaw, allowed: supportedKinds)
-    }
-
-    /// One-tap chip row over the recent kinds. The active kind reads selected
-    /// (filled), the rest are hairline outlines — mirrors the `TagChip`
-    /// monochrome vocabulary.
-    private var recentKindChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: HLSpace.sm) {
-                ForEach(recentKinds) { k in
-                    Button {
-                        kind = k
-                    } label: {
-                        HStack(spacing: HLSpace.xs) {
-                            Image(systemName: symbol(for: k))
-                                .imageScale(.small)
-                            Text(k.displayName)
-                                .font(.hlSubhead)
-                        }
-                        .padding(.horizontal, HLSpace.md)
-                        .padding(.vertical, HLSpace.chip)
-                        .foregroundStyle(k == kind ? HLColor.background : HLText.primary)
-                        .background(
-                            Capsule()
-                                .fill(k == kind ? AnyShapeStyle(HLText.primary) : AnyShapeStyle(Color.clear))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(k == kind ? Color.clear : HLText.tertiary.opacity(0.3), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("measure-sheet.recent-chip.\(k.rawValue)")
-                    .accessibilityAddTraits(k == kind ? .isSelected : [])
-                }
-            }
-        }
-    }
-
     /// Persist `picked` as last-used + move it to the front of the recent MRU,
     /// de-duping and capping at `recentKindLimit`.
-    private func persistRecentKind(_ picked: MetricKind) {
+    func persistRecentKind(_ picked: MetricKind) {
         lastKindRaw = picked.rawValue
         recentKindsRaw = MeasureRecentKinds.push(
             picked,
@@ -339,7 +350,7 @@ struct MeasureSheetView: View {
         )
     }
 
-    /// v0158 — 0–10 integer NRS pain picker. A wheel picker structurally
+    /// 0–10 integer NRS pain picker. A wheel picker structurally
     /// constrains the selection to a valid 0…10 integer, satisfying the
     /// client-side integer requirement the server does not enforce.
     private var painNRSPicker: some View {
@@ -352,8 +363,7 @@ struct MeasureSheetView: View {
             .pickerStyle(.wheel)
             .accessibilityIdentifier("measure-sheet.pain-nrs.picker")
             Text(String(localized: "0 = no pain · 10 = worst imaginable"))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
         }
     }
 
@@ -365,63 +375,54 @@ struct MeasureSheetView: View {
         k.descriptor.sfSymbol
     }
 
-    /// V052-R3 U-H2 — example placeholder per kind. The descriptor catalog
+    /// Example placeholder per kind. The descriptor catalog
     /// doesn't carry a textfield placeholder yet (it surfaces `unitLabel`,
     /// `title`, empty-state copy), and the values here are user-friendly
     /// "typical" examples rather than canonical defaults. Kept inline so a
     /// reader can scan the picker contents without leaving the sheet file.
     ///
-    /// **#115 P2** — the examples are canonical (kg, °C, cm, mg/dL). On an
+    /// The examples are canonical (kg, °C, cm, mg/dL). On an
     /// account that reads another unit the example converts with the field's
     /// own unit, so a °F field never suggests "36,8".
     private var placeholder: String {
+        Self.placeholder(for: kind, units: units)
+    }
+
+    /// The example value in the unit the user types in; the edit sheet shows
+    /// the same one.
+    static func placeholder(for kind: MetricKind, units: UnitPreferences) -> String {
         let transform = units.transform(for: kind)
-        guard transform.rescales,
-              let canonical = Double(canonicalPlaceholder.replacingOccurrences(of: ",", with: ".")),
-              let converted = transform.formatted(canonical) else { return canonicalPlaceholder }
+        guard transform.rescales, let example = MeasurePlaceholder.examples[kind],
+              let converted = transform.formatted(example.value) else { return MeasurePlaceholder.text(kind) }
         return converted
     }
 
-    private var canonicalPlaceholder: String {
-        switch kind {
-        case .weight: "72,4"
-        case .glucose: "92"
-        case .pulse: "62"
-        case .bodyFat: "22,5"
-        case .bodyTemperature: "36,8"
-        case .spo2: "98"
-        case .bodyWater: "42"
-        case .boneMass: "3,2"
-        case .restingHeartRate: "55"
-        case .hrv: "45"
-        case .vo2Max: "42,5"
-        // v0158 — manual clinical decimal fields (pain uses a picker, not this).
-        case .gripStrength: "38,0"
-        case .waistCircumference: "84,0"
-        default: "0"
-        }
+    /// Whether anything was entered, for the discard guard. The kind and the
+    /// time are where the sheet opens, so only a typed value or note counts.
+    private var isDirty: Bool {
+        !systolic.isEmpty || !diastolic.isEmpty || !scalar.isEmpty || painScore != 0 || !note.isEmpty
     }
 
-    /// **v0.5.5.2 — submit-gate now honors per-kind sane-range validation.**
+    /// **Submit-gate now honors per-kind sane-range validation.**
     /// Before this the operator could type `-500` weight or `99999`
     /// glucose, hit Speichern, and only learn the value was out-of-range
     /// from the server 422. We now refuse the submit client-side and keep
     /// the inline error hint visible until the value lands inside the
     /// range OR the field is cleared.
-    private var canSave: Bool {
+    var canSave: Bool {
         if kind == .bloodPressure {
-            // H-5 — validate in canonical mmHg space (inverse-converting the
+            // Validate in canonical mmHg space (inverse-converting the
             // typed mmHg|kPa value first) so a kPa entry isn't wrongly blocked.
             let s = MeasureEntryValidation.validateBloodPressure(systolic, component: .systolic, units: units)
             let d = MeasureEntryValidation.validateBloodPressure(diastolic, component: .diastolic, units: units)
             return s == .ok && d == .ok
         }
-        // v0158 — pain NRS is captured via the wheel picker; any picked value is
+        // Pain NRS is captured via the wheel picker; any picked value is
         // a valid 0…10 integer, so the submit gate is always open (0 = no pain).
         if kind == .painNRS {
             return PainScoreInput.isValid(painScore)
         }
-        // H-5 — validate against the canonical range in canonical unit space
+        // Validate against the canonical range in canonical unit space
         // (inverse-converting the typed value first), so e.g. 5.5 mmol/L glucose
         // is checked as ~99 mg/dL and is no longer range-blocked.
         return MeasureEntryValidation.validateScalar(scalar, kind: kind, units: units) == .ok
@@ -465,73 +466,16 @@ struct MeasureSheetView: View {
     /// below the field, with an accessibility identifier the UI tests can
     /// pin against.
     private func inlineRangeError(_ message: String, identifier: String) -> some View {
-        Text(message)
+        HLFormErrorText(message)
             .font(.hlCaption)
-            .foregroundStyle(HLColor.statusBad)
             .accessibilityIdentifier(identifier)
-    }
-
-    private func save() async {
-        let value: MeasurementValue
-        if kind == .bloodPressure,
-           let s = LocaleDecimalParser.parse(systolic),
-           let d = LocaleDecimalParser.parse(diastolic)
-        {
-            // Audit v0162 H-5 — inverse-convert the typed mmHg|kPa values to the
-            // canonical mmHg the server + HealthKit expect. Identity for mmHg.
-            value = .bloodPressure(
-                systolic: units.canonicalBloodPressure(fromDisplayed: s),
-                diastolic: units.canonicalBloodPressure(fromDisplayed: d)
-            )
-        } else if kind == .painNRS {
-            // v0158 — pain NRS: persist the clamped 0–10 integer as a scalar.
-            value = .scalar(Double(PainScoreInput.clamp(painScore)))
-        } else if let v = LocaleDecimalParser.parse(scalar) {
-            // Audit v0162 H-5 — inverse-convert the typed value FROM the user's
-            // preferred unit TO canonical (kg / mg/dL) before storing, so a
-            // non-default unit pref no longer silently corrupts the record.
-            // Identity for default (canonical) units.
-            value = .scalar(MeasureEntryConversion.canonicalScalar(v, kind: kind, units: units))
-        } else {
-            return
-        }
-        // T-2 — propagate the glucose-context intent only when actually
-        // entering a glucose measurement. Store guards this too, but the
-        // explicit check here keeps the UI's "kind→fields" contract obvious.
-        let contextForCapture: GlucoseContext? = kind == .glucose ? glucoseContext : nil
-        let ok = await store.capture(
-            kind: kind,
-            value: value,
-            note: note.isEmpty ? nil : note,
-            glucoseContext: contextForCapture,
-            // Item 1.4b — the operator-chosen instant, not an implicit `.now`.
-            recordedAt: recordedAt
-        )
-        if ok {
-            // H1 — remember this kind as last-used + push it to the front of
-            // the recent-kinds MRU so the next open defaults here and the chip
-            // row surfaces it.
-            persistRecentKind(kind)
-            saveOk &+= 1
-            dismiss()
-        } else {
-            saveErr &+= 1
-            // v0.5.5.2 — surface the store's error in the banner. Fall
-            // back to a generic `.unknown` if the store didn't record
-            // one (defensive — `capture(...)` always sets `.error` on a
-            // false return today, but the fallback keeps the banner
-            // honest if that contract drifts).
-            saveError = store.error ?? .unknown(
-                String(localized: "Save failed. Please try again.")
-            )
-        }
     }
 }
 
 struct HLNumericField: View {
     let title: String
     let placeholder: String
-    /// Audit v0162 H-5 — optional unit suffix rendered inside the field's
+    /// Optional unit suffix rendered inside the field's
     /// trailing edge (e.g. "kg", "mmol/L", "mmHg"), so the operator always
     /// knows which unit they're typing in. `nil` renders no suffix.
     var unit: String?
@@ -543,17 +487,17 @@ struct HLNumericField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(title)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
             HStack(spacing: HLSpace.xs) {
                 TextField(placeholder, text: $value)
                     .keyboardType(.decimalPad)
                     .font(.hlMetric(inputSize))
                     .foregroundStyle(HLText.primary)
                 if let unit, !unit.isEmpty {
+                    // The unit is never cut; the number field gives way.
                     Text(unit)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
+                        .fixedSize()
                         .accessibilityHidden(true)
                 }
             }

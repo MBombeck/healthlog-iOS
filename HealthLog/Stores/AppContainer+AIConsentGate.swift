@@ -101,7 +101,7 @@ public extension AppContainer {
         }
     }
 
-    /// PB1 H1 — Builds the @MainActor consent-gate closure used by the
+    /// Builds the @MainActor consent-gate closure used by the
     /// chart-detail "Befunde" path (`ChartDetailStore`). The closure reads
     /// the current provider lazily so a user who switches provider mid-
     /// session hits the gate again automatically. Mirrors the wiring used
@@ -142,7 +142,7 @@ public extension AppContainer {
             guard let config = providerStore.config else { return false }
             return hasRequiredServerAIConsent(config: config, consentStore: consentStore)
         }
-        // PB1 H1 — gate the per-metric "Befunde" path with the same closure.
+        // Gate the per-metric "Befunde" path with the same closure.
         // `MetricInsightsRepository` is a Sendable actor so the gate must be
         // Sendable + async; we hop to the main actor to call the @MainActor
         // gate closure once per fetch — the hop is cheap and fail-closed:
@@ -178,7 +178,7 @@ public extension AppContainer {
         consentStore: AIConsentStore,
         providerStore: AIProviderStore
     ) -> @Sendable () async -> Bool {
-        // RECONCILE-CELEBRATE — bind the PR snapshot box to the live
+        // Bind the PR snapshot box to the live
         // `PersonalRecordsStore.enrichedRecords` accessor. The box hides the
         // store reference so the store stays free to refresh / replace its list
         // without re-wiring.
@@ -187,47 +187,47 @@ public extension AppContainer {
         }
         // S7 / QA3 BLOCKER 2 — paired consent gates (sync + async). The sync
         // gate sits on DailyBriefingStore so the /api/insights/generate POST
-        // respects consent (Guideline 5.1.2(i)). #115 · 0.2 — it no longer sits
+        // respects consent (Guideline 5.1.2(i)). It no longer sits
         // on InsightsStore: `insights/comprehensive` is deterministic data.
         let consentGates = makeInsightsConsentGates(
             consentStore: consentStore,
             providerStore: providerStore
         )
         dailyBriefingStore.consentGate = consentGates.sync
-        // v1.16.x (GH issue #15) — tolerant briefing slot off
+        // v1.16.x — tolerant briefing slot off
         // `GET /api/dashboard/snapshot`. Read-only lift, no LLM server-side →
-        // NOT consent-gated; standalone mode returns nil inside the repo.
+        // NOT consent-gated.
         dailyBriefingStore.snapshotFetch = {
             try await dashboardRepo.snapshotBriefing()
         }
         return consentGates.async
     }
 
-    // MARK: - Task #49 — single remote-AI master opt-in
+    // MARK: - Single remote-AI master opt-in
 
     /// The currently server-resolved AI provider (`.unconfigured` when none is
-    /// set or in standalone). Reading it inside a SwiftUI body establishes
+    /// set). Reading it inside a SwiftUI body establishes
     /// observation on `AIProviderStore.config`, so the master toggle + render
     /// gates re-evaluate when the operator (or the server) changes the provider.
     var resolvedAIProvider: AIProvider {
         aiProviderStore.config?.resolvedProvider ?? .unconfigured
     }
 
-    /// Task #49 — the **single** master opt-in that drives every remote-AI
+    /// The **single** master opt-in that drives every remote-AI
     /// surface (the per-metric / overview server-generated assessment texts and
     /// the ✦ Coach). True iff the user has granted remote-AI consent for any
     /// real provider — the existing per-provider grant record IS the opt-in, so
     /// a prior grant via `AIConsentSheet` reads as ON with no parallel flag.
     ///
     /// This is the *intent* flag only. Surfaces still AND it with their own
-    /// availability (`BackendAvailability.hasServer`, the server envelope's
-    /// `hasProvider`) so standalone / no-provider stays hidden even when ON —
+    /// availability (the server envelope's `hasProvider`) so no-provider stays
+    /// hidden even when ON —
     /// nothing to show, never an empty box.
     var remoteAIEnabled: Bool {
         aiConsentStore.isAnyProviderGranted()
     }
 
-    // MARK: - Task #53 — three-way AI source choice
+    // MARK: - Three-way AI source choice
 
     /// The user's single ``AIMode`` choice — `.none` / `.onDevice` / `.online`
     /// — resolved from `AIConsentStore`. This is the source of truth every AI
@@ -251,7 +251,7 @@ public extension AppContainer {
         aiConsentStore.aiMode == .onDevice
     }
 
-    /// v0.13 — true when the client-side BYO-key arm is active
+    /// True when the client-side BYO-key arm is active
     /// (`aiMode == .byoKey`). Surfaces with a wired BYO generation path (Coach,
     /// and later the briefing) read this to route through `BYOLLMService`
     /// (device→provider directly), distinct from `.online` (server-mediated).
@@ -259,7 +259,7 @@ public extension AppContainer {
         aiConsentStore.aiMode == .byoKey
     }
 
-    /// v0.13 — true when the user picked "Own key" but has not yet completed key
+    /// True when the user picked "Own key" but has not yet completed key
     /// entry + consent, so the choice is held as a pending intent. Read ONLY by
     /// the Settings picker (keep "Own key" selected) and the inline key-entry
     /// card (stay expanded) — mirrors ``aiOnlineIntentPending``. Does NOT open any
@@ -268,7 +268,7 @@ public extension AppContainer {
         aiConsentStore.isBYOKeyIntentPending
     }
 
-    /// v0.13 W4 — builds the ``BYOKeyEntryModel`` backing the inline "Own key"
+    /// Builds the ``BYOKeyEntryModel`` backing the inline "Own key"
     /// entry card in Settings → Assistant. A fresh ``BYOLLMService`` is used for
     /// the **validate** round-trip (no consent gate needed — validation is a
     /// cheap pre-grant key check that the user explicitly triggered, transmitting
@@ -282,7 +282,7 @@ public extension AppContainer {
         return BYOKeyEntryModel(service: service, keyStore: keyStore, consent: aiConsentStore)
     }
 
-    /// v0.13 — current on-device AI availability (Apple FoundationModels),
+    /// Current on-device AI availability (Apple FoundationModels),
     /// surfaced for the AI-source picker so it can hide the On-device card on
     /// permanently-incapable hardware (`.deviceNotEligible` / `.unsupported`) or
     /// show it disabled-with-reason on recoverable states
@@ -294,12 +294,12 @@ public extension AppContainer {
         localLLMService.availability
     }
 
-    /// v0.13 — true only when the on-device path can serve a request right now.
+    /// True only when the on-device path can serve a request right now.
     var onDeviceAICapable: Bool {
         localLLMService.availability == .available
     }
 
-    /// M1 (Audit-2) — true when the user picked `.online` but no provider is
+    /// True when the user picked `.online` but no provider is
     /// configured yet, so the choice is held as a pending intent. Read ONLY by
     /// the Settings AI picker + add-provider hint so the pick survives
     /// navigation instead of snapping back to None. Does NOT open any app-wide
@@ -317,8 +317,8 @@ public extension AppContainer {
     /// add-provider path — never an empty box.
     func setAIMode(_ mode: AIMode) {
         let wasGranted = aiConsentStore.isAnyProviderGranted()
-        // v0.13 D5 — capability guard. Never persist a non-functional on-device
-        // choice on an incapable device (pre-iOS-26, ineligible hardware, Apple
+        // Capability guard. Never persist a non-functional on-device
+        // choice on an incapable device (ineligible hardware, Apple
         // Intelligence off, model not downloaded): coerce to `.none` so the user
         // is never left with a silently-dead assistant. The picker already
         // hides/disables the card, but this closes the back door for any other
@@ -328,43 +328,14 @@ public extension AppContainer {
         } else {
             aiConsentStore.setMode(mode, activeProvider: resolvedAIProvider)
         }
-        // v0.14.10 W-INSIGHTSDATA — keep the SERVER-side consent receipt in
+        // Keep the SERVER-side consent receipt in
         // lockstep with an explicit switch away from External AI (the store
         // revokes the device grant when the arms flip). See
         // `revokeServerAIConsentReceiptIfGrantDropped`.
         revokeServerAIConsentReceiptIfGrantDropped(wasGranted: wasGranted)
     }
 
-    /// Flips the master opt-in. ON routes through the informed-consent flow
-    /// (`AIConsentSheet` for the resolved provider, per Apple 5.1.2(i)) when a
-    /// provider is configured; OFF revokes consent for the resolved provider so
-    /// every gate closes immediately. When no provider is configured there is
-    /// nothing to consent to — the request is a no-op and `remoteAIEnabled`
-    /// stays false until a provider is wired (standalone calm-state).
-    func setRemoteAIEnabled(_ enabled: Bool) {
-        let provider = resolvedAIProvider
-        if enabled {
-            guard provider != .unconfigured else { return }
-            // Reuse the explicit-prompt path so the shell presents the
-            // informed-consent sheet; its `onAccept` calls `grant(for:)`.
-            aiConsentStore.requestExplicitPrompt()
-        } else {
-            let wasGranted = aiConsentStore.isAnyProviderGranted()
-            // Revoke the active provider (and, defensively, any other granted
-            // provider) so a single OFF closes every remote-AI gate.
-            for granted in AIProvider.allCases where granted != .unconfigured {
-                aiConsentStore.revoke(for: granted)
-            }
-            // W-B186 COACH-1 (#24) — the server-managed scope has no concrete
-            // provider, so the loop above can't reach it; revoke it explicitly.
-            aiConsentStore.revokeServerManaged()
-            // v0.14.10 W-INSIGHTSDATA — the master OFF is the explicit
-            // revocation act, so the account-level server receipt falls too.
-            revokeServerAIConsentReceiptIfGrantDropped(wasGranted: wasGranted)
-        }
-    }
-
-    // MARK: - v0.14.10 W-INSIGHTSDATA — server-side consent receipts
+    // MARK: - Server-side consent receipts
 
     /// Thin wire wrapper for the server's SB-10 consent-receipt routes.
     /// Stateless — built fresh per call (mirrors `makeBYOKeyEntryModel`), so
@@ -406,7 +377,7 @@ public extension AppContainer {
         return true
     }
 
-    /// #143 — the server half of the person's **Accept tap** (shell sheet
+    /// The server half of the person's **Accept tap** (shell sheet
     /// and the Coach's nested sheet). The ONLY caller of
     /// `POST /api/consent/ai`, which carries `confirm: true`, at most once per tap:
     ///
@@ -444,15 +415,15 @@ public extension AppContainer {
         return outcome
     }
 
-    /// J1 — the shell consent sheet's **Accept**, as one step instead of a
+    /// The shell consent sheet's **Accept**, as one step instead of a
     /// closure body in the view. Grants the scope the request names.
     ///
     /// The receipt is best-effort by design: a refused or failed
     /// `POST /api/consent/ai` (rate limit, a demo edge allowlist, offline)
-    /// leaves the device grant standing. #143: nothing retries it silently;
+    /// leaves the device grant standing. Nothing retries it silently;
     /// the server's `ai.consent` decides whether the sheet asks again.
     ///
-    /// Bug 2 (v0.14.8) — a stray `.unconfigured` never grants: the live config
+    /// Bug 2 — a stray `.unconfigured` never grants: the live config
     /// is re-read (it may have arrived since the sheet opened) and only a real
     /// provider is granted; otherwise ``AIConsentAcceptOutcome/noProvider``
     /// tells the sheet to stay up.
@@ -470,8 +441,8 @@ public extension AppContainer {
 
     /// Fires the best-effort server-side master revoke when a mutation dropped
     /// the device grant (`wasGranted` captured before the mutation). Wired to
-    /// the EXPLICIT user revocation choke points only (`setRemoteAIEnabled(false)`,
-    /// `setAIMode` away from a granted External-AI arm) — deliberately NOT to
+    /// the EXPLICIT user revocation choke point only (`setAIMode` away from a
+    /// granted External-AI arm) — deliberately NOT to
     /// the logout cascade, whose consent wipe is per-device hygiene while the
     /// receipt is the account-level record.
     private func revokeServerAIConsentReceiptIfGrantDropped(wasGranted: Bool) {
@@ -483,7 +454,7 @@ public extension AppContainer {
     /// The opaque audit artefact stored with a minted receipt — a small JSON
     /// record of the in-app consent act (no health data, no tokens).
     private func aiConsentArtefact() -> String {
-        // W-B186 COACH-1 (#24) — name the server-managed scope honestly in the
+        // Name the server-managed scope honestly in the
         // audit artefact when that grant is the active one (no concrete provider).
         let provider: String = if aiConsentStore.activeGrantedProvider() == nil,
                                   aiConsentStore.hasServerManagedConsent()
@@ -499,7 +470,7 @@ public extension AppContainer {
     }
 }
 
-/// J1 — what ``AppContainer/acceptAIConsent(_:)`` did.
+/// What ``AppContainer/acceptAIConsent(_:)`` did.
 enum AIConsentAcceptOutcome: Equatable {
     /// The grant is on file; the sheet closes and the tap's receipt is recorded.
     case granted

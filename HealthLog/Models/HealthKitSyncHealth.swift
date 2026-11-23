@@ -1,6 +1,6 @@
 import Foundation
 
-/// **CU-21 (C1)** — Server-Urteil über die Sync-Gesundheit dieser
+/// Server-Urteil über die Sync-Gesundheit dieser
 /// HealthKit-Integration. Kommt seit Server v1.32.31 **nur im GET** von
 /// `/api/integrations/healthkit` (das PATCH-Echo trägt es nicht).
 public struct HealthKitSyncHealth: Codable, Sendable, Equatable {
@@ -102,7 +102,7 @@ public enum SyncHealthVerdict: Sendable, Hashable, Codable {
     }
 }
 
-/// **CU-21 (C1)** — pro Metrik-Typ, wann der Server zuletzt etwas von diesem
+/// Pro Metrik-Typ, wann der Server zuletzt etwas von diesem
 /// Gerät gesehen hat.
 ///
 /// **Wichtig:** Die Liste enthält **nur** Typen, die tatsächlich geliefert
@@ -144,6 +144,11 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
     /// `lastSeenAt` is the newer of the two, so the app shows it beside them
     /// and recomputes neither. Absent on every other type and on older servers.
     public let lastEnteredHereAt: Date?
+    /// #10 — the oldest stored `measuredAt` of this type from Apple Health,
+    /// once the server names it (asked for in healthlog-ios-#191). The
+    /// history walk of a type the server holds folded stops there, never at
+    /// the bottom of the window. Absent on every server so far.
+    public let oldestSeenAt: Date?
 
     public var id: String {
         type
@@ -158,8 +163,10 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         lastNewSampleAt: Date? = nil,
         lastBackgroundAt: Date? = nil,
         lastBackfillAt: Date? = nil,
-        lastEnteredHereAt: Date? = nil
+        lastEnteredHereAt: Date? = nil,
+        oldestSeenAt: Date? = nil
     ) {
+        self.oldestSeenAt = oldestSeenAt
         self.type = type
         self.lastSeenAt = lastSeenAt
         self.stale = stale
@@ -173,7 +180,7 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case type, lastSeenAt, stale, lastReceivedAt, lastTrigger, lastNewSampleAt, lastBackgroundAt, lastBackfillAt
-        case lastEnteredHereAt
+        case lastEnteredHereAt, oldestSeenAt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -189,5 +196,6 @@ public struct MetricFreshness: Codable, Sendable, Equatable, Identifiable {
         lastBackgroundAt = try? c.decodeIfPresent(Date.self, forKey: .lastBackgroundAt)
         lastBackfillAt = try? c.decodeIfPresent(Date.self, forKey: .lastBackfillAt)
         lastEnteredHereAt = try? c.decodeIfPresent(Date.self, forKey: .lastEnteredHereAt)
+        oldestSeenAt = (try? c.decodeIfPresent(Date.self, forKey: .oldestSeenAt)).flatMap { $0 }
     }
 }

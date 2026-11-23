@@ -19,8 +19,8 @@ final class CycleToggleFlipUITest: XCTestCase {
 
     func test_cycle_toggle_flips_on_via_settings() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot. The cycleTracking
-        // feature flag is ON in the fixture so the toggle surface is reachable.
+        // Network-free hermetic boot; the toggle
+        // surface is reachable for every user.
         _ = app.launchHermeticAndWaitForDashboard(
             extraArguments: [
                 // Deterministic start state: opt-in OFF.
@@ -30,9 +30,7 @@ final class CycleToggleFlipUITest: XCTestCase {
         )
 
         // More tab → gear → Integrations → Apple Health.
-        let moreTab = app.tabBars.buttons.element(boundBy: max(0, app.tabBars.buttons.count - 1))
-        XCTAssertTrue(moreTab.waitForExistence(timeout: 10), "More tab missing")
-        moreTab.tap()
+        XCTAssertTrue(ShellNavigator.select(tab: .more, in: app, timeout: 10), "More tab missing")
 
         let gear = app.buttons["more.toolbar.gear"]
         XCTAssertTrue(gear.waitForExistence(timeout: 10), "Settings gear missing")
@@ -48,7 +46,7 @@ final class CycleToggleFlipUITest: XCTestCase {
         XCTAssertTrue(appleHealthRow.waitForExistence(timeout: 10), "Apple-Health row missing")
         appleHealthRow.tap()
 
-        // A2 (b244): a not-yet-eligible user (opt-in OFF, non-female fixture)
+        // A not-yet-eligible user (opt-in OFF, non-female fixture)
         // now sees the neutral "Zyklus-Tracking aktivieren?" OFFER instead of a
         // live-looking toggle. Drive the real opt-in path — expand the offer,
         // confirm — then assert the toggle now renders ON: opting in flips the
@@ -63,7 +61,7 @@ final class CycleToggleFlipUITest: XCTestCase {
         }
         XCTAssertTrue(
             offer.waitForExistence(timeout: 10),
-            "Cycle opt-in offer missing — is FeatureFlag.cycleTracking off on the demo server?"
+            "Cycle opt-in offer missing — is the cycle module off on the demo server?"
         )
         offer.tap()
 

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.5.3-F3 — Personal-Records surface contract tests.
+/// Personal-Records surface contract tests.
 ///
 /// Pins the layout descriptor strings + the metric-type localisation map.
 /// The SwiftUI body itself is presentational.
@@ -26,14 +26,14 @@ struct PersonalRecordsScreenTests {
 
     @Test("Metric-type localisation covers the canonical set")
     func metricTypeLocalisation() {
-        // L1 — the labels resolve through the catalog in the app language.
+        // The labels resolve through the catalog in the app language.
         let en = Locale(identifier: "en")
         let de = Locale(identifier: "de")
         #expect(MetricTypeLocalisation.label(forType: "WEIGHT", locale: en) == "Weight")
         #expect(MetricTypeLocalisation.label(forType: "WEIGHT", locale: de) == "Gewicht")
         #expect(MetricTypeLocalisation.label(forType: "PULSE", locale: en) == "Pulse")
-        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: de) == "Herzfrequenzvariabilität")
-        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: en) == "Heart rate variability")
+        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: de) == "HRV")
+        #expect(MetricTypeLocalisation.label(forType: "HRV", locale: en) == "HRV")
         #expect(MetricTypeLocalisation.label(forType: "VO2_MAX") == "VO₂ max")
         #expect(MetricTypeLocalisation.label(forType: "MOOD", locale: de) == "Stimmung")
         #expect(MetricTypeLocalisation.label(forType: "MOOD", locale: en) == "Mood")

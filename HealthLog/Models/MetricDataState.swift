@@ -82,7 +82,7 @@ public extension MetricDataState {
         return 0
     }
 
-    /// v0.14.4 D2 — `true` when the metric HAS recorded data but every row
+    /// `true` when the metric HAS recorded data but every row
     /// falls outside the currently-queried range. The drill-down row uses this
     /// to say "outside the period" instead of "no entries" (the all-time list
     /// still has rows the operator can tap into).
@@ -121,7 +121,7 @@ public extension MetricDataState {
     /// kind in scope). `latest` is computed as `max(by recordedAt)` of
     /// the in-range set — most recent wins.
     ///
-    /// **#33 — displayable-latest guard.** `latest` (the single value the tile
+    /// **Displayable-latest guard.** `latest` (the single value the tile
     /// renders) is picked only from rows that pass ``Measurement/isDisplayableLatest``,
     /// so a malformed 0-systolic / 0-diastolic blood-pressure row can never
     /// surface as "0/77 mmHg". When every in-range row is invalid the state

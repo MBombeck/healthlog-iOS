@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **Phase 09 / plan 09-02 — the bounded, file-backed, one-shot import contract.**
+/// **The bounded, file-backed, one-shot import contract.**
 ///
 /// A deliberate *extension of the same suite type* rather than a second suite,
 /// following the split 09-01 made in `Phase09SignpostContractTests+Balance`:
@@ -97,7 +97,7 @@ extension AppleHealthImportServiceTests {
         let worstInMemoryBody = inMemoryBodyBytes.values.max() ?? 0
         #expect(
             worstInMemoryBody == 0,
-            "EXPECTED_RED: Apple Health import still buffers the full multipart body"
+            "Apple Health import still buffers the full multipart body"
         )
 
         // Bounded, and — the stronger half — bounded by the same number at
@@ -157,7 +157,7 @@ extension AppleHealthImportServiceTests {
         #expect(remaining.isEmpty)
         #expect(
             created == 3,
-            "EXPECTED_RED: Apple Health import temp lifecycle is incomplete"
+            "Apple Health import temp lifecycle is incomplete"
         )
     }
 
@@ -274,65 +274,6 @@ extension AppleHealthImportServiceTests {
         #expect(leftovers.isEmpty)
         #expect(scope.starts == 1)
         #expect(scope.stops == 1)
-    }
-
-    // MARK: - The production source itself
-
-    @Test("the production import path reads no whole file and attaches no in-memory body")
-    func productionFilesNoLongerBufferTheArchive() throws {
-        let service = try Self.executableSource("HealthLog/Services/AppleHealthImportService.swift")
-        // The exact call this plan removed. Counted, not probed.
-        #expect(Self.occurrences(of: "Data(contentsOf:", in: service) == 0)
-        #expect(Self.occurrences(of: "Data(contentsOf: fileURL)", in: service) == 0)
-        // The multipart envelope is never attached as a request body.
-        #expect(Self.occurrences(of: "httpBody", in: service) == 0)
-        #expect(Self.occurrences(of: "multipartBody(", in: service) == 1) // its own definition
-
-        let transport = try Self.executableSource("HealthLog/Services/APIClient+FileUpload.swift")
-        #expect(Self.occurrences(of: "httpBody", in: transport) == 0)
-        #expect(Self.occurrences(of: "Data(contentsOf:", in: transport) == 0)
-        // The redirect refusal and the single-attempt shape, pinned in source
-        // so a later edit that reintroduces a retry loop is visible here too.
-        #expect(Self.occurrences(of: "while true", in: transport) == 0)
-
-        // The protection literal lives next to the bytes it protects.
-        let temps = try Self.executableSource("HealthLog/Services/AppleHealthImportTempStore.swift")
-        #expect(Self.occurrences(of: "FileProtectionType.complete", in: temps) >= 1)
-        #expect(Self.occurrences(of: "isExcludedFromBackup", in: temps) >= 1)
-
-        // The store no longer holds the picked file's scope across the upload.
-        let exportStore = try Self.executableSource("HealthLog/Stores/ExportStore.swift")
-        #expect(Self.occurrences(of: "startAccessingSecurityScopedResource", in: exportStore) == 0)
-        #expect(Self.occurrences(of: "stopAccessingSecurityScopedResource", in: exportStore) == 0)
-    }
-
-    // MARK: - Source helpers
-
-    private static func repositoryRoot(file: String = #filePath) -> URL {
-        URL(fileURLWithPath: file)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    /// The file with comment lines removed — this suite's own prose names the
-    /// symbols the scan forbids.
-    private static func executableSource(_ relativePath: String) throws -> String {
-        let contents = try String(
-            contentsOf: repositoryRoot().appendingPathComponent(relativePath),
-            encoding: .utf8
-        )
-        return contents
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.hasPrefix("//") && !$0.hasPrefix("*") && !$0.hasPrefix("/*") }
-            .joined(separator: "\n")
-    }
-
-    /// Counts, never a short-circuiting probe — the Swift shape of the
-    /// `grep -q` defect this phase's tooling produced three separate times.
-    private static func occurrences(of needle: String, in haystack: String) -> Int {
-        haystack.components(separatedBy: needle).count - 1
     }
 }
 

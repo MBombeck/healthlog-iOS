@@ -8,7 +8,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **R1 — `startsOn` / `endsOn` are calendar days (server 1.39.3, A1 on #115).**
+/// **`startsOn` / `endsOn` are calendar days (server 1.39.3, A1 on #115).**
 ///
 /// Ported from the server's own fixture file
 /// `src/lib/medications/scheduling/__tests__/recurrence-timezones.test.ts` at

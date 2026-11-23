@@ -1,4 +1,4 @@
-// Phase 07 / plan 07-09 — the admission half of the Phase-06 session boundary.
+// The admission half of the Phase-06 session boundary.
 //
 // Phase 06 built one awaited teardown orchestrator and four terminal paths that
 // invalidate the shared `AuthenticatedSessionLeaseRegistry`. Nothing ever
@@ -76,7 +76,6 @@
             let store = AuthStore(
                 auth: auth,
                 keychain: keychain,
-                syncMode: nil,
                 defaults: defaults,
                 sessionRegistry: registry
             )
@@ -130,6 +129,8 @@
         /// actually run.
         @Test("a real password login activates the shared session registry")
         func passwordLoginActivatesRegistry() async throws {
+            // The plan's declaration is what diagnostics report; this test is what proves it.
+            #expect(HealthSyncCompositionPlan.installedActivatesSessionRegistry)
             let fixture = try makeFixture()
 
             // Before the login there is nothing to admit, and the admission
@@ -240,29 +241,18 @@
             #expect(fixture.registry.capture(ownerID: "usr_activation_1") == nil)
         }
 
-        /// The two transitions that lose an owner without going through the
-        /// terminal cascade. Before this plan they left a live registry behind an
-        /// unauthenticated shell — an account with no session that could still be
-        /// admitted.
-        @Test("standalone and server-pairing transitions also stop admitting")
-        func ownerLosingTransitionsInvalidate() async throws {
-            let standalone = try makeFixture()
+        /// The server switch drops back to sign-in without going through the
+        /// terminal cascade; the registry must stop admitting the old owner.
+        @Test("returning to sign-in also stops admitting")
+        func returnToSignInInvalidates() async throws {
+            let fixture = try makeFixture()
             Self.serveSession()
-            await standalone.store.login(email: "u@e.co", password: "pw")
-            standalone.store.completeOnboarding()
-            let standaloneLease = try #require(standalone.registry.capture(ownerID: "usr_activation_1"))
-            standalone.store.enterStandaloneMode()
-            #expect(!standaloneLease.isCurrent)
-            #expect(standalone.registry.capture(ownerID: "usr_activation_1") == nil)
-
-            let pairing = try makeFixture()
-            Self.serveSession()
-            await pairing.store.login(email: "u@e.co", password: "pw")
-            pairing.store.completeOnboarding()
-            let pairingLease = try #require(pairing.registry.capture(ownerID: "usr_activation_1"))
-            pairing.store.beginServerPairing()
-            #expect(!pairingLease.isCurrent)
-            #expect(pairing.registry.capture(ownerID: "usr_activation_1") == nil)
+            await fixture.store.login(email: "u@e.co", password: "pw")
+            fixture.store.completeOnboarding()
+            let lease = try #require(fixture.registry.capture(ownerID: "usr_activation_1"))
+            fixture.store.returnToSignIn()
+            #expect(!lease.isCurrent)
+            #expect(fixture.registry.capture(ownerID: "usr_activation_1") == nil)
         }
 
         /// An account switch on one device must never let account A's captured

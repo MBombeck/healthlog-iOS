@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 
-/// Phase 07 Wave 1 — the verified, owner-partitioned cursor store.
+/// The verified, owner-partitioned cursor store.
 ///
 /// The properties under test are the ones the Wave-0 fault matrix demands of
 /// any real storage layer: partitions are per `{owner, source, type}`, a write

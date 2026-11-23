@@ -1,6 +1,6 @@
 import Foundation
 
-/// **LIFE (1.5.0, #132)** — the editable answers of one section and the
+/// The editable answers of one section and the
 /// writes that turn them into server state.
 ///
 /// One section is one decision about one part of a life, so it saves as a
@@ -76,7 +76,7 @@ public struct LifeSectionDraft: Equatable, Sendable {
         asksTobaccoDetails && tobacco.products.contains(.cigarettes)
     }
 
-    /// The quit month is asked only of a former smoker (Server #1334).
+    /// The quit month is asked only of a former smoker.
     public var asksQuitMonth: Bool {
         smokingStatus == .former
     }

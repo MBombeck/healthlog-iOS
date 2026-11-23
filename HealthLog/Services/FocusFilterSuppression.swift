@@ -3,7 +3,7 @@ import Foundation
     import UserNotifications
 #endif
 
-/// **W-FOCUS-FILTER (v0.15.2)** — the pure suppression decision for the
+/// The pure suppression decision for the
 /// HealthLog Focus filter.
 ///
 /// This is the single, safety-critical place that decides whether a *local*

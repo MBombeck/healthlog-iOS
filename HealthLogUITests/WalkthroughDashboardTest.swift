@@ -26,7 +26,7 @@ final class WalkthroughDashboardTest: XCTestCase {
 
     func test_dashboard_renders_correctly_after_demo_login() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot. The app comes up
+        // Network-free hermetic boot. The app comes up
         // authenticated against bundled fixtures (greeting + per-kind tiles +
         // sparklines), so this test no longer depends on `demo.healthlog.dev`.
         _ = app.launchHermeticAndWaitForDashboard(timeout: 60)
@@ -61,7 +61,7 @@ final class WalkthroughDashboardTest: XCTestCase {
         XCTAssertLessThan(avatar.frame.minY, 300, "Avatar must be near top, inline with greeting")
         XCTAssertGreaterThan(avatar.frame.minY, 30, "Avatar must NOT be in the navigation chrome")
 
-        // 8a. v0.5.4.3 HP1 — Gravatar render evidence. The operator's
+        // 8a. Gravatar render evidence. The operator's
         // walkthrough on v0.5.4.2 caught the Dashboard avatar painting
         // empty (initials-only) even for emails with a registered
         // Gravatar. We capture an isolated screenshot of the avatar's
@@ -187,7 +187,7 @@ final class WalkthroughDashboardTest: XCTestCase {
     /// exists or we hit the bottom; returning the (possibly still-absent)
     /// element lets the caller's `waitForExistence` produce the original
     /// diagnostic message on a genuine sparkline regression.
-    /// #20 — on an account with resting heart rate the pulse slot renders the
+    /// On an account with resting heart rate the pulse slot renders the
     /// resting tile (web `hasRestingHr` parity), so either identifier is the
     /// pulse slot with its chart.
     private static let pulseSlotWithChartIdentifiers = ["tile.pulse.withChart", "tile.restingHeartRate.withChart"]
@@ -209,7 +209,7 @@ final class WalkthroughDashboardTest: XCTestCase {
         return element
     }
 
-    /// **v0.5.5 — Mehr-header layout walkthrough.**
+    /// **Mehr-header layout walkthrough.**
     ///
     /// The Mehr-tab header reads `[Mehr title] [Spacer] [Gear]` — gear on
     /// the trailing edge so the operator's "settings = top-right" mental
@@ -233,7 +233,7 @@ final class WalkthroughDashboardTest: XCTestCase {
     ///    title "Einstellungen").
     func test_mehr_header_gear_is_right_of_title() {
         let app = XCUIApplication()
-        // W-HERMETIC-E2E (v0152) — network-free hermetic boot.
+        // Network-free hermetic boot.
         _ = app.launchHermeticAndWaitForDashboard(timeout: 60)
 
         // Walk to the Mehr tab. Tab-bar items expose their localised title

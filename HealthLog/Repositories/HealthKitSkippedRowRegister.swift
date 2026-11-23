@@ -1,6 +1,6 @@
 import Foundation
 
-// #113 / 0.3 — a refusal the person cannot see is data loss.
+// A refusal the person cannot see is data loss.
 //
 // `POST /api/measurements/batch` answers a row it will not store with
 // `status: "skipped"` inside an HTTP 200. For `value_out_of_range` (and the other
@@ -22,8 +22,8 @@ import Foundation
 //   * a sign-out or account deletion removes every row, like every other
 //     account-bound local store.
 //
-// INT-A (1.0.4) — this is the ONE register for every refusal a HealthKit sync
-// path would otherwise lose: `value_out_of_range` rows (A2), named whole-batch
+// This is the ONE register for every refusal a HealthKit sync
+// path would otherwise lose: `value_out_of_range` rows, named whole-batch
 // refusals and unexplained 4xx runs of the heart-event importer, refused or
 // never-confirmed pages of the outbox replay, and nutrient day-totals. It
 // lives in the platform-free core so the replay can write to it; every path
@@ -45,19 +45,21 @@ import Foundation
 /// One refused row as it came back from the server: the exact row that was
 /// posted and the reason the server gave.
 ///
-/// #115 / 0.3 (INT-A) — ONE register for every reading a HealthKit sync moved
+/// ONE register for every reading a HealthKit sync moved
 /// past without the server storing it. A row is either a measurement-batch
 /// entry (`/api/measurements/batch`: out-of-range values, named whole-batch
 /// refusals, replayed pages the server never confirmed, a heart-event page
-/// held too long), a nutrient day-total (`/api/nutrients/batch`) or (E1) an
+/// held too long), a nutrient day-total (`/api/nutrients/batch`) or an
 /// Apple Health State of Mind sample the mood route never confirmed. Exactly
 /// one of ``entry``, ``nutrient`` and ``mood`` is set.
 struct HealthKitSkippedEntry: Sendable, Equatable {
     let entry: HealthKitBatchEntryDTO?
     let nutrient: NutrientIntakeEntryDTO?
     let mood: StateOfMindSkippedSample?
+    /// An Apple Health symptom the symptom batch refused; never re-offered.
+    var symptom: AppleHealthSymptomEntryDTO?
     let reason: String
-    /// 1.5 FIX-DATA — what the server said about the value, when it said it.
+    /// What the server said about the value, when it said it.
     var detail: HealthKitRefusalDetail?
 
     init(entry: HealthKitBatchEntryDTO, reason: String, detail: HealthKitRefusalDetail? = nil) {
@@ -82,12 +84,20 @@ struct HealthKitSkippedEntry: Sendable, Equatable {
         self.reason = reason
     }
 
+    init(symptom: AppleHealthSymptomEntryDTO, reason: String) {
+        entry = nil
+        nutrient = nil
+        mood = nil
+        self.symptom = symptom
+        self.reason = reason
+    }
+
     var id: String {
-        HealthKitSkippedRow.identity(entry: entry, nutrient: nutrient, mood: mood)
+        HealthKitSkippedRow.identity(entry: entry, nutrient: nutrient, mood: mood, symptom: symptom)
     }
 }
 
-/// 1.5 FIX-DATA (#126) — a `value_out_of_range` refusal's own words: the
+/// A `value_out_of_range` refusal's own words: the
 /// value after the server's unit conversion and the band it broke. Either may
 /// be absent (an older server sends neither); nil when both are.
 struct HealthKitRefusalDetail: Codable, Sendable, Equatable {
@@ -101,7 +111,7 @@ struct HealthKitRefusalDetail: Codable, Sendable, Equatable {
     }
 }
 
-/// E1 — a State of Mind sample as the register keeps it: its HealthKit UUID,
+/// A State of Mind sample as the register keeps it: its HealthKit UUID,
 /// when it was felt, and the 1–5 score the importer posts. Never re-offered
 /// (it belongs to `POST /api/mood-entries`, not the measurement batch); shown so
 /// the person knows which mood the server never confirmed.
@@ -121,11 +131,14 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     /// measurement row. (Absent from files written before INT-A, which then
     /// decode as measurement rows, exactly what they were.)
     var nutrient: NutrientIntakeEntryDTO?
-    /// E1 — a State of Mind sample; absent from every earlier file.
+    /// A State of Mind sample; absent from every earlier file.
     var mood: StateOfMindSkippedSample?
+    /// An Apple Health symptom (symptom batch, never re-offered); absent from
+    /// every earlier file.
+    var symptom: AppleHealthSymptomEntryDTO?
     /// The server's latest reason for refusing it.
     var reason: String
-    /// 1.5 FIX-DATA — the latest refusal's value and band; absent from files
+    /// The latest refusal's value and band; absent from files
     /// written before 1.5 and from servers older than v1.39.1.
     var detail: HealthKitRefusalDetail?
     let firstSkippedAt: Date
@@ -135,7 +148,7 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     var lastOfferedBuild: String
 
     var id: String {
-        Self.identity(entry: entry, nutrient: nutrient, mood: mood)
+        Self.identity(entry: entry, nutrient: nutrient, mood: mood, symptom: symptom)
     }
 
     /// The HealthKit identifier of a measurement row; `nutrient:<code>` for a
@@ -144,6 +157,7 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     var hkIdentifier: String {
         if let entry { return entry.hkIdentifier }
         if mood != nil { return Self.stateOfMindIdentifier }
+        if let symptom { return "symptom:" + symptom.code }
         return "nutrient:" + (nutrient?.nutrient.rawValue ?? "unknown")
     }
 
@@ -153,8 +167,24 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     var measuredAt: Date {
         if let entry { return entry.startDate }
         if let mood { return mood.recordedAt }
+        if let symptom { return symptom.occurredAt }
         return nutrient.flatMap { Self.dayNoonUTC($0.day) } ?? firstSkippedAt
     }
+
+    /// The server never gave this row a verdict of its own: a replayed page it
+    /// did not confirm, or a whole page held past its sweeps without a named
+    /// reason. Unlike a refusal, such a row may well be stored on a later
+    /// offer, and nothing else on the device still holds it.
+    var awaitsVerdict: Bool {
+        reason == Self.notConfirmedReason || reason.hasPrefix(Self.unclassifiedReasonPrefix)
+    }
+
+    /// `OutboxReplayService.notConfirmedReason`, spelled here because the
+    /// register lives below the replay.
+    static let notConfirmedReason = "not_confirmed"
+
+    /// `HealthRefusalRegister.unclassifiedReason(status:)` without its status.
+    static let unclassifiedReasonPrefix = "unclassified_4xx:"
 
     /// The `hkIdentifier` of a State of Mind row (no diagnostics kind maps to it).
     static let stateOfMindIdentifier = "HKStateOfMindType"
@@ -162,10 +192,12 @@ struct HealthKitSkippedRow: Codable, Sendable, Equatable, Identifiable {
     static func identity(
         entry: HealthKitBatchEntryDTO?,
         nutrient: NutrientIntakeEntryDTO?,
-        mood: StateOfMindSkippedSample? = nil
+        mood: StateOfMindSkippedSample? = nil,
+        symptom: AppleHealthSymptomEntryDTO? = nil
     ) -> String {
         if let entry { return entry.externalId }
         if let mood { return "mood|" + mood.externalId }
+        if let symptom { return "symptom|" + symptom.externalId }
         guard let nutrient else { return "" }
         return "nutrient|" + nutrient.day + "|" + nutrient.nutrient.rawValue
     }
@@ -229,11 +261,31 @@ actor HealthKitSkippedRowRegister {
         bound ?? shared
     }
 
-    /// Rows kept per account. A person does not produce this many refusals in
-    /// normal use; a systematic one (a whole type mis-mapped) reaches it fast,
-    /// and then the newest readings are the ones worth keeping. What falls off
-    /// is counted, never silently forgotten.
+    /// Refused rows kept per account. A person does not produce this many
+    /// refusals in normal use; a systematic one (a whole type mis-mapped)
+    /// reaches it fast, and then the newest readings are the ones worth
+    /// keeping. What falls off is counted, never silently forgotten.
+    ///
+    /// Rows the server never answered (``HealthKitSkippedRow/awaitsVerdict``)
+    /// have their own, much higher bound (``maxUnansweredRowsPerOwner``): the
+    /// cursor is already past them, so this register is their only copy, and
+    /// one page of a longer outage holds 500 of them.
     static let maxRowsPerOwner = 500
+
+    /// Unanswered rows kept per account: twenty full pages. They are offered
+    /// again on their own (``unansweredRowsDue(ownerID:at:limit:)``), so the
+    /// register only fills this far during an outage of many days.
+    static let maxUnansweredRowsPerOwner = 10000
+
+    /// Unanswered rows offered per pass: one batch POST.
+    static let unansweredRetryBatch = 500
+
+    /// The wait before an unanswered row is offered again: 15 minutes,
+    /// doubling per attempt, at most a day.
+    static func unansweredRetryDelay(attempts: Int) -> TimeInterval {
+        let steps = Double(max(0, min(attempts - 1, 7)))
+        return min(15 * 60 * pow(2, steps), 24 * 3600)
+    }
 
     static let formatVersion = 1
 
@@ -282,6 +334,39 @@ actor HealthKitSkippedRowRegister {
         rows(ownerID: ownerID).filter { $0.entry != nil && $0.lastOfferedBuild != build }
     }
 
+    /// Unanswered measurement rows whose wait is over, oldest offer first, at
+    /// most `limit`. Independent of the build stamp: the server that did not
+    /// answer is usually back long before the next app update.
+    func unansweredRowsDue(
+        ownerID: String,
+        at now: Date,
+        limit: Int = HealthKitSkippedRowRegister.unansweredRetryBatch
+    ) -> [HealthKitSkippedRow] {
+        Array(
+            rows(ownerID: ownerID)
+                .filter {
+                    $0.entry != nil && $0.awaitsVerdict
+                        && now.timeIntervalSince($0.lastAttemptAt) >= Self.unansweredRetryDelay(attempts: $0.attempts)
+                }
+                .sorted { $0.lastAttemptAt < $1.lastAttemptAt }
+                .prefix(max(0, limit))
+        )
+    }
+
+    /// An offer that got no verdict: one more attempt, so the next one waits
+    /// longer. Rows not in the register are ignored.
+    func noteOfferWithoutVerdict(ids: Set<String>, ownerID: String, at now: Date = Date()) throws {
+        guard let owner = Self.canonical(ownerID) else {
+            throw HealthKitSkippedRowRegisterError.unownedWriteRefused
+        }
+        var file = loaded()
+        for index in file.rows.indices where file.rows[index].ownerID == owner && ids.contains(file.rows[index].id) {
+            file.rows[index].lastAttemptAt = now
+            file.rows[index].attempts += 1
+        }
+        try persist(file)
+    }
+
     /// Every measurement row, for the manual re-offer.
     func measurementRows(ownerID: String) -> [HealthKitSkippedRow] {
         rows(ownerID: ownerID).filter { $0.entry != nil }
@@ -305,8 +390,14 @@ actor HealthKitSkippedRowRegister {
             throw HealthKitSkippedRowRegisterError.unownedWriteRefused
         }
         var file = loaded()
+        // One lookup table instead of a scan per row: an outage can bring
+        // thousands of rows in one call.
+        var indexByID: [String: Int] = [:]
+        for (index, row) in file.rows.enumerated() where row.ownerID == owner {
+            indexByID[row.id] = index
+        }
         for item in skipped {
-            if let index = file.rows.firstIndex(where: { $0.ownerID == owner && $0.id == item.id }) {
+            if let index = indexByID[item.id] {
                 file.rows[index].reason = item.reason
                 file.rows[index].detail = item.detail
                 // A nutrient day-total is re-read before every post: keep the
@@ -316,12 +407,14 @@ actor HealthKitSkippedRowRegister {
                 file.rows[index].attempts += 1
                 file.rows[index].lastOfferedBuild = build
             } else {
+                indexByID[item.id] = file.rows.count
                 file.rows.append(
                     HealthKitSkippedRow(
                         ownerID: owner,
                         entry: item.entry,
                         nutrient: item.nutrient,
                         mood: item.mood,
+                        symptom: item.symptom,
                         reason: item.reason,
                         detail: item.detail,
                         firstSkippedAt: now,
@@ -402,8 +495,13 @@ actor HealthKitSkippedRowRegister {
     }
 
     private static func enforceBound(_ file: inout File, owner: String) {
-        let owned = file.rows.filter { $0.ownerID == owner }
-        let excess = owned.count - maxRowsPerOwner
+        enforceBound(&file, owner: owner, unanswered: false, max: maxRowsPerOwner)
+        enforceBound(&file, owner: owner, unanswered: true, max: maxUnansweredRowsPerOwner)
+    }
+
+    private static func enforceBound(_ file: inout File, owner: String, unanswered: Bool, max: Int) {
+        let owned = file.rows.filter { $0.ownerID == owner && $0.awaitsVerdict == unanswered }
+        let excess = owned.count - max
         guard excess > 0 else { return }
         let dropped = Set(owned.sorted { $0.measuredAt < $1.measuredAt }.prefix(excess).map(\.id))
         file.rows.removeAll { $0.ownerID == owner && dropped.contains($0.id) }
@@ -423,7 +521,7 @@ struct HealthKitBatchRowVerdict: Sendable, Equatable {
     let index: Int
     let status: HealthKitEntryStatus
     let reason: String?
-    /// 1.5 FIX-DATA — from `entries[]` only; `skipped[]` carries no detail.
+    /// From `entries[]` only; `skipped[]` carries no detail.
     var detail: HealthKitRefusalDetail?
 
     /// The only three words that mean the row is in the server's state.

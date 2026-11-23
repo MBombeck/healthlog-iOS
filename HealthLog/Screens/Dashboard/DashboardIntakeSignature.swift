@@ -1,6 +1,6 @@
 import Foundation
 
-/// #115 · 1.3 — when the Home compliance ring must re-read the server.
+/// When the Home compliance ring must re-read the server.
 ///
 /// The ring renders `GET /api/dashboard/summary` → `compliance` verbatim. It
 /// used to overlay a count derived on the device from today's intakes

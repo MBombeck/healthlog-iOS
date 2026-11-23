@@ -1,6 +1,6 @@
 import AppIntents
 
-/// **v0.8.4 WWIDGET-2 — intent builders for the interactive widgets.**
+/// **Intent builders for the interactive widgets.**
 ///
 /// The interactive widgets fire shared App Intents (shared source membership
 /// — see `project.yml`) whose `perform()` resolves the full server-first
@@ -15,7 +15,7 @@ import AppIntents
 /// the call site with the dose's slot instant) so its anti-accidental
 /// arm/commit state machine stays self-contained, mirroring the Live Activity.
 enum WidgetIntents {
-    /// **v0.10.0 W-Mood-B** — build a `LogMoodIntent` for a tapped mood-widget
+    /// Build a `LogMoodIntent` for a tapped mood-widget
     /// face button. The intent writes through the same server-first
     /// `MoodRepository.log` path the in-app picker + Siri use — no parallel
     /// write path. `score` is a 1…5 HealthLog level.

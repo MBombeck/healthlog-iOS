@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **CU-32 — Zustand der Anamnese-Fläche.**
+/// **Zustand der Anamnese-Fläche.**
 ///
 /// Hält den Server-Stand (`payload`) und leitet daraus für jede Art genau eine
 /// von drei Aussagen ab: nie erfasst / erfasst-aber-unlesbar / erfasst. Der

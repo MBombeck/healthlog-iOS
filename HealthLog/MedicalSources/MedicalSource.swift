@@ -85,11 +85,15 @@ public enum MedicalSourceID: String, CaseIterable, Sendable {
     case appleWalkingSteadiness = "apple-walking-steadiness"
     case appleSleepApnea = "apple-sleep-apnea"
     case studenski2011GaitSpeed = "studenski-2011-gait-speed"
+    case trinka2015StatusEpilepticus = "trinka-2015-status-epilepticus"
+    case niceNg217Epilepsies = "nice-ng217-epilepsies"
+    case beniczky2025IlaeSeizures = "beniczky-2025-ilae-seizures"
+    case cdcSeizureFirstAid = "cdc-seizure-first-aid"
 }
 
 /// Which surface is asking. Fail-closed: a topic the catalog does not know
 /// resolves to no sources and no methodology, and the affordance renders
-/// nothing (`HLLearnMoreLink` discipline).
+/// nothing.
 public enum MedicalSourceTopic: Hashable, Sendable {
     case correlations
     case metric(MetricKind)
@@ -118,6 +122,8 @@ public enum MedicalSourceTopic: Hashable, Sendable {
     case mood
     case illnessRecovery
     case vorsorge
+    /// The seizure diary's thresholds and cluster rules.
+    case seizures
 
     /// **1.0.3 (App Review 1.4.1, audit row 6)** — `true` for the one topic whose
     /// sheet also offers a way into the full ``MedicalSourcesScreen`` hub.
@@ -161,6 +167,7 @@ public enum MedicalSourceTopic: Hashable, Sendable {
         case .mood: "mood"
         case .illnessRecovery: "illnessRecovery"
         case .vorsorge: "vorsorge"
+        case .seizures: "seizures"
         }
     }
 
@@ -176,6 +183,6 @@ public enum MedicalSourceTopic: Hashable, Sendable {
         .titration(GLP1DrugCatalog.allDrugIDs[0]), .injectionRotation, .glucoseTargets,
         .labBiomarker("hs-crp"), .labBiomarker("alt"), .labReferenceRanges,
         .mentalHealth(.phq9), .personalRecords(.restingHeartRate), .nutrition, .cycle, .mood,
-        .illnessRecovery, .vorsorge
+        .illnessRecovery, .vorsorge, .seizures
     ]
 }

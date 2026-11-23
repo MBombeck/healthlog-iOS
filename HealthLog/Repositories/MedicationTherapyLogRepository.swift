@@ -1,16 +1,13 @@
 import Foundation
 
-/// SP3 + SP4 (v0.12) — server round-trip for the GLP-1 side-effect logbook and
+/// Server round-trip for the GLP-1 side-effect logbook and
 /// pen/vial inventory. Mirrors the medication-intake Outbox pattern verbatim:
 /// the online write is attempted first; on a *retriable* `HLError` the write is
 /// enqueued on the `OutboxQueue` under its own kind with a persisted
 /// idempotency-key, and `OutboxReplayService` re-issues it on reachability +
 /// foreground. On 2xx the Outbox entry clears.
 ///
-/// **Standalone:** when no server pairing exists, callers route through the
-/// local-only GLP-1 store (`GLP1LocalRepository`) and never reach this actor —
-/// so there is simply nothing to replay (no server write fires). This repo is a
-/// pure server seam.
+/// This repo is a pure server seam.
 ///
 /// Contracts consumed:
 ///   side-effects: `…/medications/[id]/side-effects[/(logId)]/route.ts`
@@ -30,7 +27,7 @@ public actor MedicationTherapyLogRepository {
         self.encoder = encoder
     }
 
-    // MARK: - Side-effects (SP3)
+    // MARK: - Side-effects
 
     /// GET the side-effect logbook for one medication (SWR read; newest first).
     public func sideEffects(
@@ -59,15 +56,12 @@ public actor MedicationTherapyLogRepository {
         body: MedicationSideEffectCreate
     ) async throws -> MedicationSideEffectDTO {
         let key = IdempotencyKey()
-        do {
-            return try await postSideEffect(medicationID: medicationID, body: body, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                kind: .createMedicationSideEffect,
-                payload: OutboxQueue.Payloads.CreateMedicationSideEffect(medicationId: medicationID, body: body),
-                key: key
-            )
-            throw err
+        return try await writeAhead(
+            kind: .createMedicationSideEffect,
+            payload: OutboxQueue.Payloads.CreateMedicationSideEffect(medicationId: medicationID, body: body),
+            key: key
+        ) { [self] in
+            try await postSideEffect(medicationID: medicationID, body: body, idempotencyKey: key)
         }
     }
 
@@ -84,15 +78,12 @@ public actor MedicationTherapyLogRepository {
     /// DELETE a side-effect log row. Optimistic-write + Outbox-on-retriable.
     public func deleteSideEffect(medicationID: String, logID: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(
+            kind: .deleteMedicationSideEffect,
+            payload: OutboxQueue.Payloads.DeleteMedicationSideEffect(medicationId: medicationID, logId: logID),
+            key: key
+        ) { [self] in
             try await sendDeleteSideEffect(medicationID: medicationID, logID: logID, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                kind: .deleteMedicationSideEffect,
-                payload: OutboxQueue.Payloads.DeleteMedicationSideEffect(medicationId: medicationID, logId: logID),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -121,14 +112,14 @@ public actor MedicationTherapyLogRepository {
         _ = try await api.send(req)
     }
 
-    // MARK: - Inventory (SP4)
+    // MARK: - Inventory
 
     /// GET the inventory list for one medication (SWR read).
     public func inventory(medicationID: String) async throws -> [MedicationInventoryItemDTO] {
         try await inventoryList(medicationID: medicationID).items
     }
 
-    /// #25 / #115 · 1.3 — the same GET with the server's `summary` kept. One
+    /// The same GET with the server's `summary` kept. One
     /// request; the list callers that only want items use ``inventory(medicationID:)``.
     public func inventoryList(medicationID: String) async throws -> MedicationInventoryListDTO {
         let req: APIRequest<MedicationInventoryListDTO> = .get(
@@ -144,15 +135,12 @@ public actor MedicationTherapyLogRepository {
         body: MedicationInventoryCreate
     ) async throws -> MedicationInventoryItemDTO {
         let key = IdempotencyKey()
-        do {
-            return try await postInventory(medicationID: medicationID, body: body, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                kind: .createMedicationInventory,
-                payload: OutboxQueue.Payloads.CreateMedicationInventory(medicationId: medicationID, body: body),
-                key: key
-            )
-            throw err
+        return try await writeAhead(
+            kind: .createMedicationInventory,
+            payload: OutboxQueue.Payloads.CreateMedicationInventory(medicationId: medicationID, body: body),
+            key: key
+        ) { [self] in
+            try await postInventory(medicationID: medicationID, body: body, idempotencyKey: key)
         }
     }
 
@@ -173,15 +161,12 @@ public actor MedicationTherapyLogRepository {
         patch: MedicationInventoryPatch
     ) async throws -> MedicationInventoryItemDTO {
         let key = IdempotencyKey()
-        do {
-            return try await patchInventory(medicationID: medicationID, itemID: itemID, patch: patch, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                kind: .updateMedicationInventory,
-                payload: OutboxQueue.Payloads.UpdateMedicationInventory(medicationId: medicationID, itemId: itemID, patch: patch),
-                key: key
-            )
-            throw err
+        return try await writeAhead(
+            kind: .updateMedicationInventory,
+            payload: OutboxQueue.Payloads.UpdateMedicationInventory(medicationId: medicationID, itemId: itemID, patch: patch),
+            key: key
+        ) { [self] in
+            try await patchInventory(medicationID: medicationID, itemID: itemID, patch: patch, idempotencyKey: key)
         }
     }
 
@@ -203,15 +188,12 @@ public actor MedicationTherapyLogRepository {
     /// DELETE a pen/vial. Optimistic-write + Outbox-on-retriable.
     public func deleteInventoryItem(medicationID: String, itemID: String) async throws {
         let key = IdempotencyKey()
-        do {
+        try await writeAhead(
+            kind: .deleteMedicationInventory,
+            payload: OutboxQueue.Payloads.DeleteMedicationInventory(medicationId: medicationID, itemId: itemID),
+            key: key
+        ) { [self] in
             try await sendDeleteInventory(medicationID: medicationID, itemID: itemID, idempotencyKey: key)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            try await enqueue(
-                kind: .deleteMedicationInventory,
-                payload: OutboxQueue.Payloads.DeleteMedicationInventory(medicationId: medicationID, itemId: itemID),
-                key: key
-            )
-            throw err
         }
     }
 
@@ -256,29 +238,18 @@ public actor MedicationTherapyLogRepository {
 
     // MARK: - Outbox helper
 
-    /// Audit B-1 — persist a retriable failed write to the encrypted outbox
-    /// under its idempotency key. A failure here is **not** swallowed: the
-    /// network attempt already failed, so the write is on no server either, and
-    /// re-throwing the original retriable error would let the store keep showing
-    /// the entry as "queued, replays later" for something that is permanently
-    /// lost. Since build 274 that is a reachable state, not a theoretical one —
-    /// `OutboxQueue.WriteRefusal.noBackgroundExecutionTime` refuses the write
-    /// when iOS grants no background execution time. Throws
-    /// `HLError.notPersisted` instead (the signal `MeasurementsRepository` has
-    /// used since G-2) so the caller rolls its optimistic row back and surfaces
-    /// an honest "couldn't save". The cause is logged sanitized — never PHI.
-    private func enqueue(
+    /// Stores the write before it is sent and removes it once it has landed
+    /// (``OutboxQueue/writeAhead(_:now:send:)``). A send that fails with no
+    /// stored copy behind it surfaces as `HLError.notPersisted`, so the caller
+    /// rolls back instead of reporting the write as queued.
+    private func writeAhead<Result: Sendable>(
         kind: OutboxQueue.Operation.Kind,
         payload: some Encodable & Sendable,
-        key: IdempotencyKey
-    ) async throws {
-        do {
-            let data = try encoder.encode(payload)
-            try await outbox.enqueue(.init(kind: kind, payload: data, idempotencyKey: key.raw))
-        } catch {
-            let cause = LogSanitizer.redact(String(describing: error))
-            HLLog.outbox.error("Therapy-log outbox enqueue failed: \(cause)")
-            throw HLError.notPersisted(cause)
-        }
+        key: IdempotencyKey,
+        send: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        let data = try encoder.encode(payload)
+        let op = OutboxQueue.Operation(kind: kind, payload: data, idempotencyKey: key.raw)
+        return try await outbox.writeAhead(op, send: send)
     }
 }

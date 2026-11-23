@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **HK-NEW (1.5)** — the one-time dashboard card that explains the new Apple
+/// The one-time dashboard card that explains the new Apple
 /// Health types before iOS asks for them.
 ///
 /// Up to 1.4 a read type that joined later (RMSSD, waist) was asked on the next
@@ -61,7 +61,7 @@ struct HealthKitNewReadTypesCard: View {
     /// The explanation, naming exactly the types iOS will list, with the
     /// transparency page's names.
     static func body(for pending: [String]) -> String {
-        let names = pending.map { HealthAccessTypeNaming.displayName(for: $0) }
+        let names = HealthAccessTypeNaming.groupedDisplayNames(for: pending)
         return String(localized: "healthkit.newTypes.body \(names.formatted(.list(type: .and)))")
     }
 

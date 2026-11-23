@@ -10,7 +10,7 @@
     - value: "durationHM"
   ▿ (2 elements)
     - key: "formattedValue"
-    - value: "7h 30m"
+    - value: "7 Std. 30 Min."
   ▿ (2 elements)
     - key: "kind"
     - value: "sleep"

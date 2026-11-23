@@ -18,9 +18,10 @@ import SwiftUI
 ///
 /// New flow:
 ///
-/// 1. **Zero actionable intakes** — render an empty state ("no doses
-///    pending right now"). The operator gets clear "nothing to log"
-///    feedback rather than an unexplained empty Today list.
+/// 1. **Zero actionable intakes** — one quiet line in a short sheet, and
+///    the slots still to come today, so the sheet and Home's "1 still open"
+///    tell one story. Without any active medication the shared empty state
+///    offers the create flow.
 /// 2. **Exactly one actionable intake** — open straight on the confirm
 ///    screen for that intake (skip the picker step). One tap less for
 ///    the common case (most users have 1-2 pending meds at any moment).
@@ -49,20 +50,29 @@ struct MedicationQuickIntakeSheet: View {
     /// for `.failed`, so the host doesn't strictly need this hook for
     /// hard errors.
     var onQueued: () -> Void = {}
+    /// The height of the form sheet, set by a regular-width host. A form
+    /// sheet fitted to this scrolling page found no height to fit to and
+    /// stood as its bar alone; `nil` keeps the bottom sheet's detents.
+    var formHeight: CGFloat?
 
-    @State private var path: NavigationPath = .init()
-    /// H4 — true while the batch take-all is in flight (disables the button).
+    /// The due intake on the confirm page, if one is pushed.
+    @State private var pushedOption: IntakeOption?
+    /// Whether the one intake form is pushed.
+    @State private var showsFreeIntake = false
+    /// True while the batch take-all is in flight (disables the button).
     @State private var isBatchConfirming = false
-    /// H4 — populated with the batch tally to surface a result alert.
+    /// Height of the chooser's content; `0` until it measured itself.
+    @State private var chooserHeight: CGFloat = 0
+    /// Populated with the batch tally to surface a result alert.
     @State private var batchResult: MedicationsStore.BatchIntakeOutcome?
-    /// B6 — the as-needed medication whose ad-hoc write is in flight, so the
+    /// The as-needed medication whose ad-hoc write is in flight, so the
     /// row can say so and a second tap cannot double-record.
     @State private var recordingAsNeededID: String?
 
     /// What this sheet offers, resolved at render time so the list refreshes
     /// when the store reloads in the background.
     ///
-    /// **W-MED2:** reads `derivedTodayIntakes` so synthesised placeholders
+    /// Reads `derivedTodayIntakes` so synthesised placeholders
     /// surface as due rows even when the server has not yet materialised the
     /// intake event (the reminder worker only pre-creates RED-phase rows; the
     /// operator's pre-RED window previously rendered the "Keine offene
@@ -71,38 +81,48 @@ struct MedicationQuickIntakeSheet: View {
         MedicationQuickIntakeOptions.resolve(
             medications: store.medications,
             intakes: store.derivedTodayIntakes,
-            now: .now
+            now: .now,
+            // The account's zone, the one the card's "Jetzt fällig" reads.
+            timeZone: store.profileTimeZone
         )
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        // Close only: logging a dose is the confirm page's own step, not a
+        // save of this chooser.
+        // The pushed manual log is a form and needs the room to grow.
+        HLSheetScaffold(
+            "meds.quick.title",
+            size: formHeight.map { height in
+                Self.size(
+                    for: options,
+                    showsFreeIntake: showsFreeIntake || pushedOption != nil,
+                    formHeight: height,
+                    chooserHeight: chooserHeight
+                )
+            } ?? Self.sheetSize(
+                for: options,
+                chooserHeight: chooserHeight,
+                isPushed: showsFreeIntake || pushedOption != nil
+            )
+        ) {
             content
-                .navigationTitle(Text("meds.quick.title"))
-                .navigationBarTitleDisplayMode(.inline)
-                // v0.6.1 Y2 — Home-Compliance pattern: drop the
-                // 'Abbrechen' cancellationAction toolbar. Drag-down
-                // dismisses the chooser; the confirm-screen still keeps
-                // its own explicit cancel/confirm pair because that's a
-                // destructive commit, not the sheet chrome.
-                .navigationDestination(for: IntakeOption.self) { option in
+                .navigationDestination(item: $pushedOption) { option in
                     MedicationQuickIntakeConfirm(
                         option: option,
                         onCommitOutcome: handleOutcome,
                         onCancel: onDismiss
                     )
                 }
-                // Build 6.1 — free / back-dated logging, always reachable so the
-                // operator can log a dose even when nothing is due right now.
-                .navigationDestination(for: FreeIntakeRoute.self) { _ in
-                    MedicationFreeIntakeSheet(
-                        preselectedMedicationID: nil,
-                        onDone: handleOutcome
-                    )
+                // The one intake form (#191), always reachable so a dose can
+                // be logged even when nothing is due right now, back-dated,
+                // skipped, or with a deviating dose.
+                .navigationDestination(isPresented: $showsFreeIntake) {
+                    MedicationIntakeForm(onDone: handleOutcome)
                 }
         }
         .task {
-            // CU-24 — the empty state distinguishes "no medication exists" from
+            // The empty state distinguishes "no medication exists" from
             // "nothing due right now", so the medication list has to be
             // hydrated before either claim is painted. Cheap: a no-op whenever
             // the tab / dashboard already loaded it.
@@ -111,15 +131,7 @@ struct MedicationQuickIntakeSheet: View {
             }
             autoAdvanceIfSingle()
         }
-        // v0.5.5.1 — HIG Befund 4: half-sheet for the quick-intake
-        // confirm flow. The summary card + primary commit button fit
-        // comfortably in `.medium`; the operator keeps the dashboard
-        // context visible behind. `.large` stays available so longer
-        // chooser lists (multiple actionable intakes) can expand
-        // without scroll-cramping.
-        .hlSheetPresentation(.standard)
-        .presentationBackground(HLColor.surface)
-        // H4 — batch take-all result tally.
+        // Batch take-all result tally.
         .alert(
             Text("meds.quick.takeall.result.title"),
             isPresented: Binding(
@@ -146,17 +158,65 @@ struct MedicationQuickIntakeSheet: View {
     @ViewBuilder
     private var content: some View {
         let resolved = options
-        if resolved.isEmpty {
+        let emptyKind = MedicationLoggingEmptyState.resolve(
+            hasLoadedMedications: store.hasLoadedMedications,
+            hasActiveMedications: store.medications.contains(where: \.active)
+        )
+        if resolved.isEmpty, emptyKind != .nothingDue {
             emptyState
         } else {
             // For the single-option case the `.task` modifier auto-pushes
             // the confirm screen — the chooser stays mounted as a stable
             // fallback if the data refreshes between task-fire and push.
+            // With nothing due it says so in one line and names what is
+            // still open later today.
             chooserList(options: resolved)
         }
     }
 
-    /// CU-24 (GH #73) — the empty state now depends on ACCOUNT state, not on
+    /// Nothing to log is a short sheet: one line and the manual log fit in
+    /// half the screen and it does not grow into an empty page.
+    static func size(for options: MedicationQuickIntakeOptions) -> HLSheetSize {
+        options.isEmpty ? .compact : .standard
+    }
+
+    /// The chooser is as tall as its rows once it measured them; a pushed
+    /// page (the confirm step, the manual log) is a form and gets the room
+    /// to grow.
+    static func sheetSize(
+        for options: MedicationQuickIntakeOptions,
+        chooserHeight: CGFloat,
+        isPushed: Bool
+    ) -> HLSheetSize {
+        if isPushed { return .standard }
+        return .content(measuredHeight: chooserHeight, fallback: size(for: options))
+    }
+
+    /// The size with the free log and the host's form height. In a regular
+    /// window the chooser is as tall as its measured rows, never taller than
+    /// the host's height; a pushed page (the free log, the confirm step)
+    /// stands at the host's height, a short form, not at the page height
+    /// with half of it empty.
+    static func size(
+        for options: MedicationQuickIntakeOptions,
+        showsFreeIntake: Bool,
+        formHeight: CGFloat?,
+        chooserHeight: CGFloat = 0
+    ) -> HLSheetSize {
+        if let formHeight {
+            guard !showsFreeIntake, chooserHeight > 0 else { return .fitted(height: formHeight) }
+            return .fitted(height: min(formHeight, (chooserHeight + HLSheet.barAllowance).rounded(.up)))
+        }
+        return showsFreeIntake ? .standard : size(for: options)
+    }
+
+    /// The line when nothing is due: "nothing open" only when nothing is,
+    /// else that nothing is due yet, above the slots still to come.
+    static func emptyNoteKey(for options: MedicationQuickIntakeOptions) -> LocalizedStringKey {
+        options.later.isEmpty ? "meds.quick.empty.title" : "meds.quick.empty.notYet"
+    }
+
+    /// The empty state now depends on ACCOUNT state, not on
     /// which sheet the operator opened. With no active medication the sheet no
     /// longer says "schau später wieder rein" (nothing would ever become due)
     /// and no longer offers "manuell nachtragen" (a second dead end) — it offers
@@ -170,171 +230,150 @@ struct MedicationQuickIntakeSheet: View {
             ),
             // Build 6.1 — nothing is due, but the operator may still have taken
             // (or want to back-date) an intake.
-            onLogManually: { path.append(FreeIntakeRoute()) }
+            onLogManually: { showsFreeIntake = true }
         )
     }
 
     private func chooserList(options: MedicationQuickIntakeOptions) -> some View {
-        ScrollView {
-            // 1.4 B2 — the sheet's title asks the question; no line repeats it.
-            VStack(alignment: .leading, spacing: HLSpace.md) {
-                // H4 — "take all due" appears only when ≥2 doses are due. Each
+        // The page gives every card and button its side margin.
+        HLPage {
+            // The sheet's title asks the question; no line repeats it.
+            Group {
+                // A quiet line, not a card: in a card it read like a field.
+                if options.isEmpty {
+                    HLEmptyNote(Self.emptyNoteKey(for: options), alignment: .center)
+                        .padding(.vertical, HLSpace.sm)
+                }
+                // "take all due" appears only when ≥2 doses are due. Each
                 // dose still rides the single-intake path (own idempotency key).
                 let due = options.due
                 if due.count >= 2 {
                     HLButton(
-                        // W-I18N: already-formatted string carries a runtime
+                        // Already-formatted string carries a runtime
                         // count — paint verbatim, never re-resolve as a key.
-                        verbatim: String(
+                        Text(verbatim: String(
                             format: String(localized: "meds.quick.takeall.cta"),
                             due.count
-                        ),
-                        icon: "checkmark.circle.fill",
-                        variant: .restrained,
+                        )),
+                        systemImage: "checkmark.circle.fill",
+                        variant: .secondary,
                         isLoading: isBatchConfirming
                     ) {
                         Task { await confirmAll(due: due) }
                     }
-                    .padding(.horizontal, HLSpace.lg)
                     .accessibilityIdentifier("meds.quick.takeall")
                 }
                 if !due.isEmpty {
-                    HLCard(style: .standard) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(due.enumerated()), id: \.element.id) { idx, option in
-                                chooserRow(option: option)
-                                if idx < due.count - 1 {
-                                    Divider().background(HLColor.separator)
+                    HLCard {
+                        VStack(spacing: HLLayout.rowGap) {
+                            ForEach(Array(due.enumerated()), id: \.element.id) { _, option in
+                                // The note under its row, so "take all" shows it too.
+                                VStack(alignment: .leading, spacing: HLSpace.xxs) {
+                                    chooserRow(option: option)
+                                    if let note = option.medication.note {
+                                        MedicationNoteLine(note: note)
+                                    }
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, HLSpace.lg)
                 }
                 asNeededSection(options.asNeeded)
-                // Build 6.1 — free / back-dated logging for a dose that is NOT
-                // one of the pending slots above (an off-schedule take, or a
-                // dose taken earlier the operator wants to back-date).
+                laterSection(options.later)
+                // The one intake form for a dose that is NOT one of the
+                // pending slots above (an off-schedule take, a skip, or a dose
+                // taken earlier). Named like the form: "Log intake".
                 HLButton(
-                    String(localized: "med.freelog.open"),
-                    icon: "square.and.pencil",
-                    variant: .secondary,
-                    size: .regular
+                    "med.dose.form.title",
+                    systemImage: "square.and.pencil",
+                    variant: .secondary
                 ) {
-                    path.append(FreeIntakeRoute())
+                    showsFreeIntake = true
                 }
-                .padding(.horizontal, HLSpace.lg)
                 .accessibilityIdentifier("meds.quick.freelog")
             }
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.lg)
         }
-        .background(HLColor.background)
+        .hlSheetContentHeight($chooserHeight)
     }
 
+    /// A due dose. The row selects what the confirm page shows, so it carries
+    /// no chevron.
     private func chooserRow(option: IntakeOption) -> some View {
-        Button {
-            path.append(option)
+        HLRowButton {
+            pushedOption = option
         } label: {
-            HStack(spacing: HLSpace.md) {
-                Image(systemName: "pills.fill")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 36, height: 36)
-                    .background(HLSurface.tertiary)
-                    .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(option.medication.name)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    HStack(spacing: HLSpace.sm) {
-                        Text(option.medication.dose)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                        Text(option.scheduledTimeString)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
-                            .monospacedDigit()
-                    }
-                }
-                Spacer(minLength: 0)
-                HLDisclosureChevron()
-                    .accessibilityHidden(true)
+            HLRow(
+                title: Text(verbatim: option.medication.name),
+                detail: HLRowDetail.text([option.medication.dose, option.scheduledTimeString])
+            ) {
+                HLSettingsIconChip(symbol: "pills.fill", tint: HLText.secondary)
             }
-            .padding(.vertical, HLSpace.sm)
-            .padding(.horizontal, HLSpace.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("meds.quick.chooser.row.\(option.medication.id)")
         .accessibilityElement(children: .combine)
     }
 
-    /// **B6** — as-needed medications, on their own terms. NOT faked as due
+    /// Today's slots still to come: what Home counts as open, named with
+    /// their time. Not loggable before their time, so plain data rows.
+    @ViewBuilder
+    private func laterSection(_ later: [IntakeOption]) -> some View {
+        if !later.isEmpty {
+            HLSectionHeader("meds.quick.later.header")
+            HLCard(layout: .rows) {
+                ForEach(later) { option in
+                    HLRow(
+                        title: Text(verbatim: option.medication.name),
+                        detail: HLRowDetail.text([option.medication.dose]),
+                        value: Text(verbatim: option.scheduledTimeString)
+                    )
+                    .accessibilityIdentifier("meds.quick.later.row.\(option.medication.id)")
+                }
+            }
+        }
+    }
+
+    /// As-needed medications, on their own terms. NOT faked as due
     /// slots: each row records an ad-hoc intake at now through the free-intake
     /// path, which is what an as-needed dose is.
     @ViewBuilder
     private func asNeededSection(_ medications: [Medication]) -> some View {
         if !medications.isEmpty {
-            Text("meds.quick.asneeded.header")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .padding(.horizontal, HLSpace.lg)
-            HLCard(style: .standard) {
-                VStack(spacing: 0) {
-                    ForEach(Array(medications.enumerated()), id: \.element.id) { idx, med in
+            HLSectionHeader("meds.quick.asneeded.header")
+            HLCard {
+                VStack(spacing: HLLayout.rowGap) {
+                    ForEach(Array(medications.enumerated()), id: \.element.id) { _, med in
                         asNeededRow(medication: med)
-                        if idx < medications.count - 1 {
-                            Divider().background(HLColor.separator)
-                        }
                     }
                 }
             }
-            .padding(.horizontal, HLSpace.lg)
         }
     }
 
-    /// **B6** — one as-needed medication. Tapping it records an ad-hoc intake
+    /// One as-needed medication. Tapping it records an ad-hoc intake
     /// at now through the free-intake path (no slot, no confirm step: the
     /// operator opened Erfassen and picked the medication, which IS the
     /// confirmation). The dose it records is the medication's own; a deviating
     /// one is two gestures away on the card, or via "Manuell nachtragen" below.
     private func asNeededRow(medication: Medication) -> some View {
-        Button {
+        HLRowButton {
             Task { await recordAsNeeded(medication) }
         } label: {
-            HStack(spacing: HLSpace.md) {
-                Image(systemName: "hand.tap")
-                    .font(.hlIcon(HLIconSize.lg))
-                    .foregroundStyle(HLText.secondary)
-                    .frame(width: 36, height: 36)
-                    .background(HLSurface.tertiary)
-                    .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
-                VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                    Text(medication.name)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Text(medication.dose)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-                Spacer(minLength: 0)
+            HLRowLayout(
+                title: Text(verbatim: medication.name),
+                subtitle: HLRowDetail.text([medication.dose])
+            ) {
                 if recordingAsNeededID == medication.id {
-                    ProgressView().controlSize(.small)
+                    HLInlineProgress()
                 } else {
                     Image(systemName: "checkmark.circle")
                         .font(.hlIcon(HLIconSize.rowAction))
                         .foregroundStyle(HLText.secondary)
                         .accessibilityHidden(true)
                 }
+            } leading: {
+                HLSettingsIconChip(symbol: "hand.tap", tint: HLText.secondary)
             }
-            .padding(.vertical, HLSpace.sm)
-            .padding(.horizontal, HLSpace.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(recordingAsNeededID != nil)
         .accessibilityIdentifier("meds.quick.asneeded.row.\(medication.id)")
         .accessibilityElement(children: .combine)
@@ -363,11 +402,11 @@ struct MedicationQuickIntakeSheet: View {
     /// store re-emits a different shape before the push lands.
     private func autoAdvanceIfSingle() {
         let due = options.due
-        guard due.count == 1, path.isEmpty else { return }
-        path.append(due[0])
+        guard due.count == 1, pushedOption == nil, !showsFreeIntake else { return }
+        pushedOption = due[0]
     }
 
-    /// H4 — confirm every due dose, then surface the success/failure tally.
+    /// Confirm every due dose, then surface the success/failure tally.
     private func confirmAll(due: [IntakeOption]) async {
         guard !isBatchConfirming else { return }
         isBatchConfirming = true
@@ -411,12 +450,12 @@ struct MedicationQuickIntakeConfirm: View {
 
     @State private var isSaving = false
     @State private var failedError: HLError?
-    /// v0.11 — picked injection site (only meaningful for an injection med
+    /// Picked injection site (only meaningful for an injection med
     /// with tracking on). Optional — the dose records with or without it.
     @State private var selectedSite: InjectionSite?
     /// Recent sites for the rotation hint, newest-first. Loaded lazily.
     @State private var recentSites: [InjectionSite] = []
-    /// v0.5.5.1 — iOS 17+ haptic triggers. Replaces the
+    /// iOS 17+ haptic triggers. Replaces the
     /// `UIImpactFeedbackGenerator` + `UINotificationFeedbackGenerator`
     /// instantiations the `commit()` method previously called directly.
     /// `tapTrigger` increments on every confirm-tap (regardless of
@@ -427,45 +466,35 @@ struct MedicationQuickIntakeConfirm: View {
     @State private var lastErrorAt: Date?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: HLSpace.lg) {
-                summaryCard
-                if option.medication.injectionSiteCaptureEnabled {
-                    IntakeSitePickerSection(
-                        allowed: effectiveAllowedSites,
-                        recentSites: recentSites,
-                        selected: $selectedSite
-                    )
-                }
-                if let failedError {
-                    inlineError(failedError)
-                }
-                HLButton(
-                    String(localized: "meds.quick.commit"),
-                    icon: "checkmark.circle.fill",
-                    variant: .restrained,
-                    isLoading: isSaving
-                ) {
+        HLPage {
+            summaryCard
+            if option.medication.injectionSiteCaptureEnabled {
+                IntakeSitePickerSection(
+                    allowed: effectiveAllowedSites,
+                    recentSites: recentSites,
+                    selected: $selectedSite
+                )
+            }
+            // The step's own decision: log it, or step back. Not a
+            // save, so it stays with the content.
+            HLButtonPair {
+                HLButton("meds.quick.commit", systemImage: "checkmark.circle.fill", isLoading: isSaving) {
                     Task { await commit() }
                 }
                 .accessibilityIdentifier("meds.quick.commit")
-                HLButton(
-                    String(localized: "meds.quick.cancel"),
-                    variant: .secondary,
-                    size: .regular
-                ) {
+            } secondary: {
+                HLButton("meds.quick.cancel", variant: .secondary) {
                     onCancel()
                 }
                 .accessibilityIdentifier("meds.quick.confirm.cancel")
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.xl)
         }
-        .background(HLColor.background)
+        // A failed mark stays on the page so it can be tried again; the
+        // banner makes room above the summary instead of covering it.
+        .hlErrorBannerOverlay(error: failedError)
         .navigationTitle(Text("meds.quick.confirm.title"))
         .navigationBarTitleDisplayMode(.inline)
-        // v0.5.5.1 — three haptic-driving modifiers; each owns its own
+        // Three haptic-driving modifiers; each owns its own
         // trigger so the engine fires exactly once per state-flip.
         .sensoryFeedback(.selection, trigger: tapTrigger)
         .sensoryFeedback(.success, trigger: lastSavedAt)
@@ -485,87 +514,50 @@ struct MedicationQuickIntakeConfirm: View {
     }
 
     private var summaryCard: some View {
-        HLCard(style: .elevated) {
+        HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 HStack(spacing: HLSpace.md) {
-                    Image(systemName: "pills.fill")
-                        .font(.hlIcon(HLIconSize.hero))
-                        .foregroundStyle(HLText.secondary)
-                        .frame(width: 48, height: 48)
-                        .background(HLSurface.tertiary)
-                        .clipShape(RoundedRectangle(cornerRadius: HLRadius.sm, style: .continuous))
+                    HLSettingsIconChip(symbol: "pills.fill", tint: HLText.secondary)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
                         Text(option.medication.name)
-                            .font(.hlTitle3)
-                            .foregroundStyle(HLText.primary)
+                            .hlText(.objectName)
                         Text(option.medication.dose)
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                     }
                     Spacer(minLength: 0)
                 }
-                Divider()
-                HStack {
-                    Text("meds.quick.confirm.scheduled")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                    Spacer()
-                    Text(option.scheduledTimeString)
-                        .font(.hlMetric(.body))
-                        .foregroundStyle(HLText.primary)
-                        .monospacedDigit()
+                if let note = option.medication.note {
+                    MedicationNoteLine(note: note)
+                }
+                HLFactGroup {
+                    HLFactRow("meds.quick.confirm.scheduled", value: option.scheduledTimeString)
                 }
             }
         }
-    }
-
-    private func inlineError(_ error: HLError) -> some View {
-        HStack(spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(HLColor.statusBad)
-            // HLError surfaces operator-friendly copy via
-            // `userFacingDescription`; the generic fallback covers cases
-            // where the user-facing description collapses to an empty
-            // string (e.g. `.canceled`).
-            Text(displayMessage(for: error))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer()
-        }
-        .padding(HLSpace.md)
-        .background(
-            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                .fill(HLColor.statusBad.opacity(0.12))
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func displayMessage(for error: HLError) -> String {
-        let copy = error.userFacingDescription
-        return copy.isEmpty ? String(localized: "meds.quick.error.generic") : copy
     }
 
     private func commit() async {
         isSaving = true
         failedError = nil
         defer { isSaving = false }
-        // v0.5.5.1 — `.sensoryFeedback(.selection, trigger:)` on the body
+        // `.sensoryFeedback(.selection, trigger:)` on the body
         // emits the tap-landed haptic; the outcome arms either the
         // `.success` or `.error` modifier via `lastSavedAt` /
         // `lastErrorAt`. UIKit generators removed.
         tapTrigger &+= 1
-        // v0.11 — attach the chosen site only for an injection med with
+        // Attach the chosen site only for an injection med with
         // tracking on; the repo also guards (taken-only). The picker is
         // restricted to the effective set so a 422 is an edge case.
         let site = option.medication.injectionSiteCaptureEnabled ? selectedSite : nil
-        let outcome = await store.markIntakeQuick(
+        // Undoable like every in-app take (#188 (7)).
+        let outcome = await store.markIntakeQuickUndoable(
             intakeId: option.intake.id,
             status: .taken,
             injectionSite: site
         )
         if case let .failed(err) = outcome {
-            // v0.11 — a stale deny-list could yield a 422
+            // A stale deny-list could yield a 422
             // `injection_site.disallowed`; re-fetch the effective set + clear
             // the selection so the operator re-picks from the fresh set.
             if case let .server(status, code, _) = err,

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.1 — locks the subtle sync-caption state machine
+/// Locks the subtle sync-caption state machine
 /// (`SyncStatusCaption.resolve`). The caption is the discreet last-synced line
 /// at the bottom of the Dashboard + Insights scroll content; it must pick
 /// first-login-preparing over in-flight over the settled timestamp, and show
@@ -95,7 +95,7 @@ struct SyncStatusCaptionResolveTests {
         #expect(state == .hidden)
     }
 
-    // MARK: - b178 W-SYNCVIS — handshake phase machine
+    // MARK: - Handshake phase machine
 
     @Test("phase .syncing forces the in-flight line even after the GET landed")
     func phaseSyncingForcesInFlightLine() {

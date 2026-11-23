@@ -189,6 +189,9 @@
         // MARK: - Rendering
 
         /// Renders `view` 393 pt wide at its own height (or `height`).
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the window
+        /// joins the first connected scene right after it is made.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         static func render(_ view: some View, name: String, dark: Bool, height: CGFloat?) throws -> UIImage {
             let styled = view
                 .environment(\.colorScheme, dark ? .dark : .light)

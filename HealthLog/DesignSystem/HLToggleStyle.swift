@@ -50,7 +50,16 @@ import SwiftUI
 /// weißen Thumb in Light + Dark, unabhängig von der App-root-`.tint`) erhalten
 /// bleibt. Das Label-Layout (Label links, Switch rechts, elastischer Spacer)
 /// bleibt identisch.
+///
+/// **1.6:** Ein monochromer Ein-Zustand war von „aus“ kaum zu unterscheiden.
+/// „An“ zeigt jetzt das System-Grün, wie die Schalter in den iOS-
+/// Einstellungen: grün gegen den weißen Knopf ist in Hell und Dunkel klar
+/// sichtbar. Sonst bleibt die App monochrom; der Schalter ist die eine
+/// Stelle, an der die Farbe den Zustand trägt.
 struct HLToggleStyle: ToggleStyle {
+    /// Die Farbe der Spur im Zustand „an“.
+    static let onTint = Color(uiColor: .systemGreen)
+
     func makeBody(configuration: Configuration) -> some View {
         HStack {
             // Label-Slot: SwiftUI-Standard-Layout (Label links, Switch rechts,
@@ -60,15 +69,14 @@ struct HLToggleStyle: ToggleStyle {
             Spacer(minLength: 0)
             // Nativer Switch — volle Drag/Focus/A11y + system-eigenes
             // Reduce-Motion-Handling. `.labelsHidden()`, weil das Label oben
-            // bereits gerendert ist. `.tint(HLText.secondary)` hält den
-            // ON-Track mono und garantiert sichtbar gegen den weißen Thumb
-            // (REG-13), unabhängig von der App-root-`.tint(HLText.primary)`.
+            // bereits gerendert ist. Der eigene Tint setzt sich gegen die
+            // App-root-`.tint(HLText.primary)` durch.
             Toggle(isOn: configuration.$isOn) {
                 configuration.label
             }
             .labelsHidden()
             .toggleStyle(.switch)
-            .tint(HLText.secondary)
+            .tint(Self.onTint)
         }
     }
 }

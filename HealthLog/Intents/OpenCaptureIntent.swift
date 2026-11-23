@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.8.4 WWIDGET-3** — "Erfassen" control / Action-Button intent.
+/// "Erfassen" control / Action-Button intent.
 ///
 /// Bound to the Control Center / Lock-Screen / Action-Button "Erfassen"
 /// control (``CaptureControl``). Runs with `openAppWhenRun = true`, so a tap

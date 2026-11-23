@@ -12,16 +12,14 @@ import SwiftUI
 /// summary on `done` / clear error on `failed`. The upload + poll are driven by
 /// ``AppleHealthImportService`` (actor); this screen owns only UI state.
 ///
-/// **Why this surface matters (per R3 standalone-first user-journey):**
+/// **Why this surface matters:**
 /// existing iPhone users typically carry years of HealthKit data inside the
 /// `export.zip` archive the Health.app emits. The foreground HealthKit API only
 /// streams forward from "now", which would leave that history behind. Server-side
 /// XML parsing does the one-shot bulk import; iOS provides the file-picker +
 /// progress display + post-import stats.
 ///
-/// **Server-only:** the entry point in ``SettingsIntegrationsScreen`` is gated on
-/// `backend.hasServer`; standalone never reaches this screen. This view is
-/// defensive too — if it is ever opened without a container/server it renders a
+/// **Server-only:** this view is defensive — if it is ever opened without a container/server it renders a
 /// disabled CTA rather than crashing.
 ///
 /// **Visual contract (Theme-2.0):** hero icon paints `HLText.primary` (Tonal-Mono);
@@ -30,7 +28,7 @@ struct SettingsAppleHealthImportScreen: View {
     @Environment(\.appContainer) private var container
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// audit v0162 H2 — the upload/poll orchestration (+ the security-scoped
+    /// The upload/poll orchestration (+ the security-scoped
     /// resource handling and terminal mapping) lives in ``ExportStore`` now; this
     /// screen owns only the picker-presentation flag and renders the store's
     /// published ``ExportStore/importPhase``.
@@ -44,7 +42,7 @@ struct SettingsAppleHealthImportScreen: View {
     }
 
     var body: some View {
-        HLSettingsPage(title: "settings.applehealth_import.title") {
+        HLPage {
             heroCard
             privacyCard
         }
@@ -70,15 +68,14 @@ struct SettingsAppleHealthImportScreen: View {
     // MARK: - Hero card
 
     private var heroCard: some View {
-        HLSettingsCard(
-            icon: "tray.and.arrow.down.fill",
-            title: "settings.applehealth_import.hero_title",
+        HLCard(
+            "settings.applehealth_import.hero_title",
             // Audit-Gruppe 8 — „Jahre an Historie in einem Import." war die
             // dritte von vier Stufen derselben Ansage (Karten-Untertitel vor
             // dem Absprung → toter Seiten-Untertitel → hier → Explainer).
             // Heimat sind die erste und die letzte: der Untertitel auf der
             // Apple-Health-Seite orientiert vor dem Tippen, der Explainer im
-            // Kartenkörper trägt als einziger die Begründung. 1.4 B1: dessen
+            // Kartenkörper trägt als einziger die Begründung. Dessen
             // letzter Satz („der reguläre Sync deckt nur den Zeitraum ab jetzt
             // ab") ist gefallen; der reguläre Sync holt den älteren Verlauf
             // längst selbst nach (Karte „Verlauf aus Apple Health").
@@ -91,7 +88,9 @@ struct SettingsAppleHealthImportScreen: View {
     private var statusPill: some View {
         switch phase {
         case .idle:
-            HLStatusPill(.disconnected(label: String(localized: "settings.applehealth_import.pill_ready")))
+            // Ready is no fault and no question: a neutral pill with a check
+            // mark, not the question mark of an unknown state.
+            HLBadge(String(localized: "settings.applehealth_import.pill_ready"), icon: "checkmark.circle", tone: .neutral)
         case .uploading, .polling:
             HLStatusPill(.unknown(label: String(localized: "settings.applehealth_import.pill_running")))
         case .done:
@@ -145,9 +144,9 @@ struct SettingsAppleHealthImportScreen: View {
 
     private var ctaButton: some View {
         HLButton(
-            String(localized: "settings.applehealth_import.cta"),
-            icon: "tray.and.arrow.down.fill",
-            // R9 — „Import ausführen" ist die Commit-Aktion dieses Screens.
+            "settings.applehealth_import.cta",
+            systemImage: "tray.and.arrow.down.fill",
+            // „Import ausführen" ist die Commit-Aktion dieses Screens.
             variant: .primary
         ) {
             isPickerPresented = true
@@ -158,8 +157,8 @@ struct SettingsAppleHealthImportScreen: View {
 
     private var importAnotherButton: some View {
         HLButton(
-            String(localized: "settings.applehealth_import.import_another"),
-            icon: "arrow.clockwise",
+            "settings.applehealth_import.import_another",
+            systemImage: "arrow.clockwise",
             variant: .secondary
         ) {
             exportStore?.resetImport()
@@ -183,12 +182,10 @@ struct SettingsAppleHealthImportScreen: View {
                     ProgressView().controlSize(.small)
                 }
                 Text(label)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
             }
             if let percent {
                 ProgressView(value: Double(percent), total: 100)
-                    .tint(HLText.primary)
                     .accessibilityLabel(Text("settings.applehealth_import.progress_uploading"))
                     .accessibilityValue(Text(HLNumberFormat.percent(percent)))
             }
@@ -219,8 +216,7 @@ struct SettingsAppleHealthImportScreen: View {
 
             if let perType = status.result?.perType, !perType.isEmpty {
                 Text("settings.applehealth_import.summary_by_type")
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                 ForEach(perType.sorted(by: { $0.key < $1.key }), id: \.key) { key, stats in
                     summaryRow(
                         icon: "circle.fill",
@@ -248,13 +244,11 @@ struct SettingsAppleHealthImportScreen: View {
     private func ecgSummary(_ ecg: AppleHealthImportEcgStatsDTO) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.md) {
             Text("settings.applehealth_import.ecg_heading")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
 
             if (ecg.discovered ?? 0) == 0 {
                 Text("settings.applehealth_import.ecg_none")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 summaryRow(
@@ -273,7 +267,7 @@ struct SettingsAppleHealthImportScreen: View {
                     value: formattedCount(ecg.updated)
                 )
                 summaryRow(
-                    icon: "minus.circle",
+                    icon: "forward.circle",
                     label: String(localized: "settings.applehealth_import.ecg_skipped"),
                     value: formattedCount(ecg.skipped)
                 )
@@ -294,20 +288,8 @@ struct SettingsAppleHealthImportScreen: View {
     }
 
     private func summaryRow(icon: String, label: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(HLText.secondary)
-                .hlInfoIconColumn()
-                .accessibilityHidden(true)
-            Text(label)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
-            Spacer()
-            Text(value)
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .monospacedDigit()
+        HLRow(title: Text(verbatim: label), value: Text(verbatim: value)) {
+            HLRowGlyph(symbol: icon)
         }
     }
 
@@ -319,8 +301,7 @@ struct SettingsAppleHealthImportScreen: View {
                 .hlInfoIconColumn()
                 .accessibilityHidden(true)
             Text(reason)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -328,12 +309,9 @@ struct SettingsAppleHealthImportScreen: View {
     // MARK: - Privacy card
 
     private var privacyCard: some View {
-        // 1.4 B2-c — the four rows carry the data flow; the footer that
+        // The four rows carry the data flow; the footer that
         // repeated them ("parsing-only", "Stats") is gone.
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "settings.applehealth_import.privacy_title"
-        ) {
+        HLCard("settings.applehealth_import.privacy_title") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 HLIconTextRow(icon: "arrow.up.doc.fill", "settings.applehealth_import.privacy_upload")
                 HLIconTextRow(icon: "doc.text.magnifyingglass", "settings.applehealth_import.privacy_parse")

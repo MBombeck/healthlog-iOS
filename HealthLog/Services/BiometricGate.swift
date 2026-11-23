@@ -15,7 +15,7 @@ public enum BiometricGate {
 
     /// Grund, den der System-Dialog unter „Face ID"/„Code eingeben" zeigt.
     ///
-    /// J1 / F2 — war fest „HealthLog freischalten", der englische Build zeigte
+    /// War fest „HealthLog freischalten", der englische Build zeigte
     /// dem Reviewer also deutschen Text im System-Prompt. Beide Texte kommen
     /// jetzt aus dem String-Katalog (en + de).
     public static var localizedReason: String {

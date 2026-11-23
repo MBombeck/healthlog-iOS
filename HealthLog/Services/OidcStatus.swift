@@ -1,6 +1,6 @@
 import Foundation
 
-/// parity 2.9 — the pre-session answer from `GET /api/auth/oidc/status`, the
+/// The pre-session answer from `GET /api/auth/oidc/status`, the
 /// same probe the web login page reads before deciding which doors to render
 /// (`auth/login/page.tsx:83-100, 325-330`).
 ///

@@ -6,6 +6,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 resolver="$script_dir/resolve-gate-destination.sh"
 fixture='{
   "devices": {
+    "com.apple.CoreSimulator.SimRuntime.iOS-18-5": [
+      {
+        "state": "Booted",
+        "isAvailable": true,
+        "name": "iPhone Old Fixture",
+        "udid": "00000000-0000-0000-0000-000000000018",
+        "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Old-Fixture"
+      }
+    ],
     "com.apple.CoreSimulator.SimRuntime.iOS-26-0": [
       {
         "state": "Booted",
@@ -40,7 +49,7 @@ mkdir -p "$clean_project/project.xcworkspace/xcshareddata/swiftpm"
     PROJECT="$clean_project"
     source "$resolver"
     [[ "$GATE_DESTINATION" == "platform=iOS Simulator,id=00000000-0000-0000-0000-000000000001" ]]
-) || fail "tracked workspace metadata without project.pbxproj must use simctl before generation"
+) || fail "tracked workspace metadata without project.pbxproj must use simctl before generation and skip a booted runtime below iOS 26"
 
 (
     xcodebuild() { return 97; }
@@ -67,6 +76,31 @@ if (
 ); then
     fail "conflicting explicit destination fields must fail closed before project generation"
 fi
+
+old_only_log="$temporary_root/old-only.log"
+if (
+    xcodebuild() { return 97; }
+    fixture='{
+  "devices": {
+    "com.apple.CoreSimulator.SimRuntime.iOS-18-5": [
+      {
+        "state": "Booted",
+        "isAvailable": true,
+        "name": "iPhone Old Fixture",
+        "udid": "00000000-0000-0000-0000-000000000018",
+        "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Old-Fixture"
+      }
+    ]
+  }
+}'
+    unset GATE_DESTINATION
+    PROJECT="$clean_project"
+    source "$resolver"
+) 2>"$old_only_log"; then
+    fail "an inventory with only runtimes below iOS 26 must fail closed"
+fi
+grep -Fq "iOS 26 or later" "$old_only_log" ||
+    fail "the below-iOS-26 failure must name the iOS 26 floor"
 
 zero_project="$temporary_root/Zero.xcodeproj"
 mkdir "$zero_project"

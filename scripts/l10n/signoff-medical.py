@@ -2,9 +2,9 @@
 """Record a person's sign-off of the medical texts in one language (R2 3.3, Decision 16).
 
 A medical key (scripts/l10n/medical-keys.json) in any language but German is
-written with state `needs_review`, and the freeze pregates
-(`check-catalog-format.py --release`) stop while a required language still has
-one. This script is the sign-off step: it sets every medical value of the
+written with state `needs_review`, and the App Store gate
+(`check-catalog-format.py --release`, before a submission) stops while a
+required language still has one. This script is the sign-off step: it sets every medical value of the
 language that is still `needs_review` to `translated` and appends one line to
 scripts/l10n/medical-signoff.json with the name, the date, the number of values
 and a fingerprint of exactly the text that was approved.

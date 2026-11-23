@@ -120,7 +120,7 @@ struct WorkoutsRepositoryTests {
         let repo = try makeRepo()
         nonisolated(unsafe) var calls = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — only OUR route counts.
+            // The handler is process-global — only OUR route counts.
             if req.targets("/api/workouts") { calls += 1 }
             let body = Data(#"""
             {"data":{"workouts":[],"meta":{"total":0,"limit":50,"offset":0,"droppedDuplicates":0}},"error":null}
@@ -142,7 +142,7 @@ struct WorkoutsRepositoryTests {
         )
         nonisolated(unsafe) var phase = 0
         MockURLProtocol.install { req in
-            // CU-07: only OUR route advances the phase machine.
+            // Only OUR route advances the phase machine.
             if req.targets("/api/workouts") { phase += 1 }
             if phase == 1 {
                 let body = Data(#"""
@@ -191,7 +191,7 @@ struct WorkoutsRepositoryTests {
 
     @Test("workout(id:) — decodes rich HR detail envelope")
     func workoutDetailRichHR() async throws {
-        // v0.5.4-SP5 — pin the wire shape of the detail endpoint:
+        // Pin the wire shape of the detail endpoint:
         // minHr / stepCount / elevationM / canonicalId all flow through
         // to the DTO so the detail screen can render the HR chart +
         // stats grid.
@@ -247,7 +247,7 @@ struct WorkoutsRepositoryTests {
 
     @Test("workout(id:) — decodes GeoJSON LineString route geometry")
     func workoutDetailWithRoute() async throws {
-        // v0.5.4-SP5 — Apple-Health-sourced workouts ship a
+        // Apple-Health-sourced workouts ship a
         // `WorkoutRoute` row with the GPS GeoJSON LineString +
         // per-coordinate timestamps. The DTO must decode the geometry
         // verbatim so the map layer can render a polyline.
@@ -283,7 +283,7 @@ struct WorkoutsRepositoryTests {
 
     @Test("invalidateCache — wipes list + detail slots so next reads hit the wire")
     func invalidateCacheWipesSlots() async throws {
-        // V0.5.2 R2 / H1: logout must reach the per-repo actor cache so
+        // Logout must reach the per-repo actor cache so
         // the next user never sees the previous user's workouts.
         let repo = try makeRepo()
         nonisolated(unsafe) var calls = 0
@@ -299,7 +299,7 @@ struct WorkoutsRepositoryTests {
         },"error":null}
         """#.utf8)
         MockURLProtocol.install { req in
-            // CU-07: count only the two routes this test drives — the list and
+            // Count only the two routes this test drives — the list and
             // the `w1` detail — never a parallel suite's request.
             if req.targets("/api/workouts") || req.targets("/api/workouts/w1") { calls += 1 }
             let body = req.targets("/api/workouts/w1") ? detailBody : listBody

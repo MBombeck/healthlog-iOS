@@ -1,6 +1,6 @@
 import Foundation
 
-// SP4 (v0.12) — wire DTOs for the server-backed medication supply CRUD.
+// Wire DTOs for the server-backed medication supply CRUD.
 //
 // Server contract (READ verbatim, v1.16.12):
 //   - `src/app/api/medications/[id]/inventory/route.ts`
@@ -19,7 +19,7 @@ import Foundation
 //   - `src/lib/medications/inventory/service.ts` (serializeInventoryItem)
 //   - `src/lib/medications/inventory/state-machine.ts` (state enum)
 //
-// **v1.16.10 wire rename (C1):** the inventory endpoints "speak one wire
+// **v1.16.10 wire rename:** the inventory endpoints "speak one wire
 // dialect" — the request + response fields are `unitsTotal` / `unitsRemaining`
 // (they always counted UNITS, mapped to doses via `Medication.unitsPerDose`).
 // The pre-v1.16.10 names were `dosesTotal` / `dosesRemaining`; the server no
@@ -35,7 +35,7 @@ import Foundation
 // routes. iOS previously kept that detail level in local SwiftData only, which
 // made a pen registered on the web render without any detail on device.
 //
-// **v1.33.0 (B2) — the expiry clock is no longer blanket.** "30 days after
+// **v1.33.0 — the expiry clock is no longer blanket.** "30 days after
 // first use" now applies to `PEN` and `AMPOULE` only; `BLISTER` / `INHALER` /
 // `BOTTLE` / `OTHER` expire on the printed date alone, and the server
 // recomputes `expiresAt` from the container type. iOS holds NO expiry maths —
@@ -57,7 +57,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
     case inhaler = "INHALER"
     case bottle = "BOTTLE"
     case other = "OTHER"
-    /// **Audit B-4 — decode-only sentinel for a container form this build
+    /// **Decode-only sentinel for a container form this build
     /// cannot name.** `MedicationInventoryListDTO.items` has no lossy wrapper,
     /// so an added server form did not cost its own row: it threw inside
     /// `decodeIfPresent`, failed the WHOLE response as `HLError.decoding`, and
@@ -65,7 +65,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
     /// See `MedicationEnums+Unknown.swift`.
     case unknown = "__UNKNOWN__"
 
-    /// Audit B-4 — every form the SERVER can actually send: `allCases` minus the
+    /// Every form the SERVER can actually send: `allCases` minus the
     /// decode-only ``unknown`` sentinel. The register-container picker reads
     /// this, so the sentinel is never offered as something to choose.
     public static var serverCases: [MedicationContainerType] {
@@ -85,7 +85,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
         case .inhaler: "lungs"
         case .bottle: "waterbottle"
         case .other: "shippingbox"
-        // Audit B-4 — the generic box, same as `.other`: a form this build
+        // The generic box, same as `.other`: a form this build
         // cannot name is not known to be a pen, an ampoule or an inhaler, and
         // an icon that guessed would be the only thing on the row that lied.
         case .unknown: "shippingbox"
@@ -117,7 +117,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
         switch self {
         case .pen, .ampoule: true
         case .blister, .inhaler, .bottle, .other: false
-        // Audit B-4 — the conservative arm. The first-use clock shortens an
+        // The conservative arm. The first-use clock shortens an
         // expiry; claiming it for a form nobody has read would put a
         // "discard by" date on a container the server never dated. The printed
         // date alone is the weaker, true statement.
@@ -145,7 +145,7 @@ public enum MedicationContainerType: String, Codable, Sendable, Hashable, CaseIt
 /// Server cap on `unitsTotal` / `unitsRemaining` (v1.16.10 raised 100 → 1000).
 public let medicationInventoryUnitsCap = 1000
 
-/// **W-INVENTORY — ONE central sanity gate for every supply readout.**
+/// **ONE central sanity gate for every supply readout.**
 ///
 /// The b187 guard clamped a corrupt unit count to `[0, cap]` at decode, but
 /// that silently turned garbage into a confident-looking **`0`** ("0 doses") —
@@ -214,7 +214,7 @@ public enum InventorySanity {
 /// conversions cannot trap.
 let inventoryNonFiniteSentinel = InventorySanity.unitDisplayCeiling + 1
 
-/// **W-INVENTORY — boundary normaliser for a decoded inventory unit count.**
+/// **Boundary normaliser for a decoded inventory unit count.**
 ///
 /// The server is authoritative for supply counts. This does the MINIMUM needed
 /// to keep the in-memory model safe to compute on, and deliberately does **not**
@@ -327,7 +327,7 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
         self.updatedAt = updatedAt
     }
 
-    /// **Tolerant decode (C1).** The generic supply section renders for every
+    /// **Tolerant decode.** The generic supply section renders for every
     /// medication type, so a field drop/rename must degrade gracefully instead
     /// of failing the whole list decode. Only `id` + a unit count are hard
     /// requirements: `unitsTotal` reads the v1.16.10 key first, then falls back
@@ -352,7 +352,7 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
         //   - key absent (stale ≤v1.16.9 cache) → legacy `dosesTotal/Remaining`
         //     fallback, else (remaining only) mirror `unitsTotal`.
         //
-        // **W-INVENTORY.** A decoded NUMBER still routes through
+        // A decoded NUMBER still routes through
         // `sanitizeInventoryUnits`: a NaN/±infinity is normalised to a finite
         // reject-sentinel (a non-finite Double poisons every later sum / `Int()`
         // conversion), while a finite-but-corrupt value is preserved verbatim so
@@ -374,11 +374,11 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
             unitsRemaining = unitsTotal
         }
 
-        // Audit B-4 — `decodeIfPresent` swallows a MISSING key, never a throw
+        // `decodeIfPresent` swallows a MISSING key, never a throw
         // from the element decoder, so this line used to fail the whole list.
         // The tolerant `init(from:)` is what makes it survive.
         containerType = try c.decodeIfPresent(MedicationContainerType.self, forKey: .containerType)
-        // #52 — nullable on the wire; an absent key (pre-v1.31.0 server / stale
+        // Nullable on the wire; an absent key (pre-v1.31.0 server / stale
         // cache) and an explicit `null` both mean "no pen detail on this row".
         manufacturer = try c.decodeIfPresent(String.self, forKey: .manufacturer)
         doseStrength = try c.decodeIfPresent(String.self, forKey: .doseStrength)
@@ -391,7 +391,7 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
     }
 
-    /// Decode one nullable-units field (#31): JSON `null` → `nil` (UNKNOWN),
+    /// Decode one nullable-units field: JSON `null` → `nil` (UNKNOWN),
     /// a number → sanitised value, an absent key → legacy fallback (else `nil`).
     private static func decodeNullableUnits(
         from c: KeyedDecodingContainer<CodingKeys>,
@@ -415,7 +415,7 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
         try c.encode(userId, forKey: .userId)
         try c.encode(medicationId, forKey: .medicationId)
         try c.encode(state, forKey: .state)
-        // #31 — an UNKNOWN count round-trips as an explicit JSON `null` (the
+        // An UNKNOWN count round-trips as an explicit JSON `null` (the
         // server's own sentinel), never as a fabricated `0`.
         try c.encode(unitsTotal, forKey: .unitsTotal)
         try c.encode(unitsRemaining, forKey: .unitsRemaining)
@@ -445,7 +445,7 @@ public struct MedicationInventoryItemDTO: Codable, Sendable, Hashable, Identifia
 
 /// GET list envelope: `{ items, summary, meta: { total } }` inside `data`.
 ///
-/// **#25 / #115 · 1.3 — `summary` (server v1.19.0).** The server computes the
+/// **`summary` (server v1.19.0).** The server computes the
 /// Bestand headline through its one canonical supply helper
 /// (`MedicationSupplySummary` in `docs/api/openapi.yaml`). The app renders it
 /// and no longer sums containers itself, which also brings `expiredUnits` on
@@ -490,11 +490,11 @@ public struct MedicationInventoryListDTO: Codable, Sendable, Hashable {
 public struct MedicationInventoryCreate: Codable, Sendable, Hashable {
     public let unitsTotal: Double
     public let containerType: MedicationContainerType?
-    /// #52 — pen detail the create route persists since v1.31.0. Sending it is
+    /// Pen detail the create route persists since v1.31.0. Sending it is
     /// what makes a pen registered on iOS visible on the web (and vice versa);
     /// before that the detail lived only in on-device SwiftData.
     public let manufacturer: String?
-    /// #52 — see ``manufacturer``.
+    /// See ``manufacturer``.
     public let doseStrength: String?
     public let printedExpiry: Date?
     public let purchasedAt: Date?
@@ -543,7 +543,7 @@ public struct MedicationInventoryCreate: Codable, Sendable, Hashable {
 ///
 /// **Two columns are clearable, and for those an omitted key and an explicit
 /// `null` mean DIFFERENT things** — the same trap as the concurrency token:
-///   - `printedExpiry` (M-1): `.nullable().optional()` since v1.16.12.
+///   - `printedExpiry`: `.nullable().optional()` since v1.16.12.
 ///   - `markAsFirstUseAt`: accepts `null` to DELETE the first-use date since the
 ///     A7 shape change. Before that only a date was allowed, so iOS had no way
 ///     to undo a mis-tapped "als geöffnet markieren".

@@ -2,7 +2,7 @@ import Accessibility
 import Charts
 import SwiftUI
 
-/// v1.28 (GH iOS #45) — the medication-efficacy ("Wirkung") section on the
+/// v1.28 — the medication-efficacy ("Wirkung") section on the
 /// medication detail screen.
 ///
 /// **Association-only — a safety/trust surface.** This view relates a
@@ -36,33 +36,31 @@ struct MedicationEfficacySection: View {
     let onSelectTarget: (EfficacyTargetSelection) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HLSectionLabel("med.wirkung.title")
+        HLSectionHeader("med.wirkung.title", rank: .area)
 
-            // Wirkung is chart-and-number-forward (web parity, 2026-07-18): the
-            // two generic MDR prose blocks (med.wirkung.intro / .disclaimer) were
-            // removed — they read as a confusing text wall above the chart.
-            // 1.4 B2: nothing stands between the label and the cards any more.
-            // "Set a start date" is the comparison block's own sentence
-            // (`needStart`); the first-reading fallback rides in each card's
-            // foot. Verdict wording remains banned structurally by
-            // MedicationEfficacyCopyGuardTests.
-            if !efficacy.overrideOptions.isEmpty {
-                EfficacyRetargetControl(
-                    options: efficacy.overrideOptions,
-                    isOverride: efficacy.resolution.isOverride,
-                    onSelectTarget: onSelectTarget
-                )
-            }
+        // Wirkung is chart-and-number-forward (web parity, 2026-07-18): the
+        // two generic MDR prose blocks (med.wirkung.intro / .disclaimer) were
+        // removed — they read as a confusing text wall above the chart.
+        // Nothing stands between the label and the cards any more.
+        // "Set a start date" is the comparison block's own sentence
+        // (`needStart`); the first-reading fallback rides in each card's
+        // foot. Verdict wording remains banned structurally by
+        // MedicationEfficacyCopyGuardTests.
+        if !efficacy.overrideOptions.isEmpty {
+            EfficacyRetargetControl(
+                options: efficacy.overrideOptions,
+                isOverride: efficacy.resolution.isOverride,
+                onSelectTarget: onSelectTarget
+            )
+        }
 
-            ForEach(efficacy.targets) { target in
-                EfficacyTargetCard(
-                    target: target,
-                    markers: efficacy.markers,
-                    adherence: efficacy.adherence,
-                    minWeeksPerSide: efficacy.minWeeksPerSide
-                )
-            }
+        ForEach(efficacy.targets) { target in
+            EfficacyTargetCard(
+                target: target,
+                markers: efficacy.markers,
+                adherence: efficacy.adherence,
+                minWeeksPerSide: efficacy.minWeeksPerSide
+            )
         }
     }
 }
@@ -87,8 +85,7 @@ private struct EfficacyTargetCard: View {
                     EfficacyTargetChart(target: target, markers: markers)
                 } else {
                     Text("med.wirkung.noSeries")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, HLSpace.sm)
                 }
@@ -105,8 +102,7 @@ private struct EfficacyTargetCard: View {
 
                 if let foot = footNote {
                     Text(foot)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -115,22 +111,19 @@ private struct EfficacyTargetCard: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: HLSpace.sm) {
+            // The card head in the size of every card head; the section
+            // header above is the page's heading.
             Text(verbatim: target.label)
-                .font(.hlHeadline)
+                .font(HLRowTitle.font)
                 .foregroundStyle(HLText.primary)
             Spacer(minLength: HLSpace.sm)
             if target.primary {
-                Text("med.wirkung.primaryBadge")
-                    .font(.hlCaption2.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
-                    .padding(.horizontal, HLSpace.sm)
-                    .padding(.vertical, HLSpace.xxs)
-                    .background(HLSurface.tertiary, in: Capsule())
+                HLBadge(String(localized: "med.wirkung.primaryBadge"))
             }
         }
     }
 
-    /// 1.4 B2 / MED: one foot line, the level shift, the start fallback and the carry-over caveat (#149).
+    /// 1.4 B2 / MED: one foot line, the level shift, the start fallback and the carry-over caveat.
     private var footNote: String? {
         var parts: [String] = []
         if let shift = target.levelShift, shift.isNearStart, let at = shift.at {
@@ -146,7 +139,7 @@ private struct EfficacyTargetCard: View {
     private func levelShiftText(_ at: Date) -> String {
         String(
             format: String(localized: "med.wirkung.levelShift"),
-            at.formatted(.dateTime.day().month(.abbreviated).year())
+            HLDateFormat.date(at, style: .abbreviated)
         )
     }
 }
@@ -186,6 +179,9 @@ private struct EfficacyTargetChart: View {
         points.last?.t
     }
 
+    /// The reading under the finger while the chart is held (Z12).
+    @State private var selectedDate: Date?
+
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             chart
@@ -202,21 +198,25 @@ private struct EfficacyTargetChart: View {
             seriesMarks
             doseChangeMarks
             startMark
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { _ in
-                AxisGridLine().foregroundStyle(HLChartTints.series.opacity(HLChartGrid.lineOpacity))
-                AxisTick().foregroundStyle(HLText.tertiary)
-                AxisValueLabel().font(.hlCaption).foregroundStyle(HLText.secondary)
+            HLChartScrubber.marks(selectedDate: selectedDate, in: points, date: \.t, value: \.value) { point in
+                HLScrubCallout(
+                    title: HLDateFormat.date(point.t, style: .abbreviated),
+                    value: HLValueFormat.number(point.value, fractionDigits: 0 ... 2),
+                    unit: target.unit
+                )
             }
         }
-        // 1.4 B4 — the y range follows the readings (and the typical band)
+        // The shared axes: values left with the unit, the app's date axis
+        // over everything the chart draws on its time axis.
+        .hlChartAxes(dates: axisDates, unit: target.unit ?? "")
+        // The y range follows the readings (and the typical band)
         // instead of starting at zero, where the line lay flat along the top.
         .chartYScale(domain: yDomain)
-        // Bounded tick count (a date under every point was the overlapping
-        // wall the operator flagged); 1.4 B4 — the app's one date-axis rule,
-        // over everything the chart draws on its time axis.
-        .chartXAxis { ChartDateAxis.marks(for: axisDates) }
+        .hlChartScrub($selectedDate) { date in
+            HLChartScrubber.nearest(to: date, in: points, date: \.t).map {
+                "\(HLDateFormat.date($0.t, style: .abbreviated)), \(HLValueFormat.number($0.value, fractionDigits: 0 ... 2)) \(target.unit ?? "")"
+            }
+        }
         .accessibilityChartDescriptor(HLChartDescriptor(chartDescriptor))
     }
 
@@ -231,7 +231,7 @@ private struct EfficacyTargetChart: View {
             (
                 x: Double(idx),
                 y: point.value,
-                xLabel: point.t.formatted(.dateTime.day().month(.abbreviated).year())
+                xLabel: HLDateFormat.date(point.t, style: .abbreviated)
             )
         }
         let unit = target.unit ?? ""
@@ -244,7 +244,7 @@ private struct EfficacyTargetChart: View {
             seriesName: target.label,
             points: triples,
             yValueLabel: { value in
-                let formatted = value.formatted(.number.precision(.fractionLength(0 ... 2)))
+                let formatted = HLValueFormat.number(value, fractionDigits: 0 ... 2)
                 return "\(formatted)\(unitSuffix)"
             }
         )
@@ -252,28 +252,30 @@ private struct EfficacyTargetChart: View {
 
     // MARK: Marks
 
-    /// Population "typical range" — a calm graphite band, context only, NEVER a
-    /// goal line (the descriptive-only posture).
+    /// Population "typical range" as its two dashed edges, never a filled
+    /// area and never a goal line (Z15, the descriptive-only posture).
     @ChartContentBuilder
     private var referenceBandMark: some ChartContent {
         if let band = target.referenceBand {
-            RectangleMark(
-                yStart: .value(String(localized: "med.wirkung.legend.typicalRange"), band.low),
-                yEnd: .value(String(localized: "med.wirkung.legend.typicalRange"), band.high)
+            HLChartReferenceLines.band(
+                lower: band.low,
+                upper: band.high,
+                label: String(localized: "med.wirkung.legend.typicalRange"),
+                unit: target.unit ?? ""
             )
-            .foregroundStyle(HLChartTints.seriesLow.opacity(0.16))
         }
     }
 
-    /// Shaded pause bands — an open pause runs to the latest datum.
+    /// A pause as a pair of quiet rules at its start and end; an open pause
+    /// ends at the latest datum.
     @ChartContentBuilder
     private var pauseMarks: some ChartContent {
         ForEach(markers.pauses) { pause in
-            RectangleMark(
-                xStart: .value(String(localized: "med.wirkung.legend.pause"), pause.from),
-                xEnd: .value(String(localized: "med.wirkung.legend.pause"), pause.to ?? rightEdge ?? pause.from)
-            )
-            .foregroundStyle(HLText.primary.opacity(0.06))
+            ForEach([pause.from, pause.to ?? rightEdge ?? pause.from], id: \.self) { edge in
+                RuleMark(x: .value(String(localized: "med.wirkung.legend.pause"), edge))
+                    .foregroundStyle(HLChartTints.seriesLow)
+                    .lineStyle(StrokeStyle(lineWidth: HLChartGrid.thresholdWidth))
+            }
         }
     }
 
@@ -334,12 +336,12 @@ private struct EfficacyTargetChart: View {
                 EfficacyLegendEntry(titleKey: "med.wirkung.legend.doseChange", style: .dashed(HLChartTints.seriesMid))
             }
             if !markers.pauses.isEmpty {
-                EfficacyLegendEntry(titleKey: "med.wirkung.legend.pause", style: .band(HLText.primary.opacity(0.12)))
+                EfficacyLegendEntry(titleKey: "med.wirkung.legend.pause", style: .solid(HLChartTints.seriesLow))
             }
             if target.referenceBand != nil {
                 EfficacyLegendEntry(
                     titleKey: "med.wirkung.legend.typicalRange",
-                    style: .band(HLChartTints.seriesLow.opacity(0.22))
+                    style: .dashed(HLChartTints.thresholdHigh)
                 )
             }
             Spacer(minLength: 0)
@@ -374,7 +376,7 @@ private struct EfficacyLegendEntry: View {
         case let .solid(color):
             RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 14, height: 2)
         case let .dashed(color):
-            HStack(spacing: 2) {
+            HStack(spacing: HLSpace.xxs) {
                 RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 4, height: 2)
                 RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 4, height: 2)
             }
@@ -415,23 +417,20 @@ private struct EfficacyBeforeAfterCard: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xxs) {
             Text(summaryText(before: before, after: after, delta: delta))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.primary)
+                .hlText(.prose)
                 .fixedSize(horizontal: false, vertical: true)
             Text(countsText(before: before, after: after))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
         }
-        // 1.4 B4 — rows of the card, not a filled box inside it.
+        // Rows of the card, not a filled box inside it.
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var insufficient: some View {
-        // 1.4 B4 — a line of the card; the dashed frame around it was a box in
+        // A line of the card; the dashed frame around it was a box in
         // a box.
         Text(insufficientText)
-            .font(.hlSubhead)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.factLabel)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -475,7 +474,7 @@ private struct EfficacyBeforeAfterCard: View {
     }
 
     private func formatValue(_ value: Double) -> String {
-        let number = value.formatted(.number.precision(.fractionLength(0 ... 1)))
+        let number = HLValueFormat.number(value, fractionDigits: 0 ... 1)
         if let unit, !unit.isEmpty { return "\(number) \(unit)" }
         return number
     }
@@ -502,18 +501,16 @@ private struct EfficacyAdherenceReadout: View {
         HStack(alignment: .center, spacing: HLSpace.md) {
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text("med.wirkung.adherence.title")
-                    .font(.hlFootnote.weight(.semibold))
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.groupHeader)
                 Text(captionText)
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                     .monospacedDigit()
             }
             Spacer(minLength: HLSpace.sm)
-            HLSparkline(values: points.map(\.rate), tint: HLChartTints.seriesMid)
+            HLSparkline(values: points.map(\.rate))
                 .frame(width: 96, height: HLChartStyle.heightCompact)
         }
-        // 1.4 B4 — a row of the card, without its own fill.
+        // A row of the card, without its own fill.
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

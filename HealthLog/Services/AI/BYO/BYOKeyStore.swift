@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — per-provider secret store for the client-side BYO-key path.
+/// Per-provider secret store for the client-side BYO-key path.
 ///
 /// The API key is a secret, so it lives in the **Keychain** (PROJECT_GUIDE.md:
 /// UserDefaults is UI-prefs only). The store is a `Sendable` struct over the

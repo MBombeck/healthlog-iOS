@@ -23,7 +23,7 @@ public extension DashboardMetric {
     /// returns the em-dash placeholder when `latestValue == nil`. Replaces
     /// the older `displayValue` for callers that want format-style routing.
     func formattedPrimary() -> String {
-        // SWEEP (W-CRASHGUARD) — unsanitized server `latestValue`; `Int(...)`
+        // SWEEP — unsanitized server `latestValue`; `Int(...)`
         // below traps on non-finite AND on finite-but-out-of-`Int.range`. Reject
         // non-finite at the gate, and route every integer conversion through
         // `Int(safeServer:)` → em-dash placeholder on an unrepresentable value.
@@ -50,14 +50,14 @@ public extension DashboardMetric {
         }
     }
 
-    /// Unit-aware primary value (v0.11 N1, #115 P2). Every re-unitable family
+    /// Unit-aware primary value. Every re-unitable family
     /// (mass, blood pressure, glucose, temperature, waist, distance, speed)
     /// converts the canonical SI value into the account's unit through the one
     /// `MetricValueFormatter.account` path; everything else, and the identity
     /// branch of every family, renders in the descriptor's `FormatStyle`
     /// exactly as `formattedPrimary()` does.
     func formattedPrimary(units: UnitPreferences) -> String {
-        // SWEEP (H1-class) — same non-finite → `Int()` trap as above; unit
+        // SWEEP — same non-finite → `Int()` trap as above; unit
         // conversion preserves non-finite, so guard the gate + the BP `sec`.
         guard let latest = latestValue, latest.isFinite else { return "—" }
         switch kind.unitFamily {
@@ -81,7 +81,7 @@ public extension DashboardMetric {
         }
     }
 
-    /// Unit-aware suffix (v0.11 N1, #115 P2). The account's display unit for a
+    /// Unit-aware suffix. The account's display unit for a
     /// converted family; otherwise the descriptor's canonical `unitLabel`,
     /// resolved to a `String`.
     func unitSuffix(units: UnitPreferences) -> String {
@@ -89,7 +89,7 @@ public extension DashboardMetric {
     }
 }
 
-// MARK: - Unit families (v0.11 N1)
+// MARK: - Unit families
 
 public extension MetricKind {
     /// Which user-selectable display-unit family this metric belongs to, or
@@ -97,7 +97,7 @@ public extension MetricKind {
     /// Canonical server storage is SI: kg for the weight family, mmHg for
     /// blood-pressure, mg/dL for glucose.
     ///
-    /// **#115 P2** — the family set mirrors the server's display-transform
+    /// The family set mirrors the server's display-transform
     /// registry (`display-transform.ts`, v1.39.5): the whole mass set (the
     /// server converts fat/fat-free/lean/muscle mass and grip strength to lb,
     /// not just weight), absolute temperatures (affine °C → °F), the signed
@@ -105,7 +105,7 @@ public extension MetricKind {
     /// walking+running distance (m → mi) and walking speed (m/s → mph). The
     /// conversions themselves live in `UnitPreferences.transform(for:)`.
     ///
-    /// **1.4 B4** — two families that no account setting chooses, so every
+    /// Two families that no account setting chooses, so every
     /// surface that already reads the account unit shows them the same way:
     /// energy expenditure, which the server keeps in kJ (WHOOP's unit), reads
     /// in kcal like active energy everywhere else in the app (plan decision 4);
@@ -129,7 +129,7 @@ public extension MetricKind {
             .weight
         case .bloodPressure: .bloodPressure
         case .glucose: .glucose
-        case .bodyTemperature, .skinTemperature, .wristTemperature: .temperature
+        case .bodyTemperature, .skinTemperature, .wristTemperature, .indoorTemperature: .temperature
         case .bodyTemperatureDeviation: .temperatureDeviation
         case .waistCircumference: .circumference
         case .distanceWalkingRunning: .distance

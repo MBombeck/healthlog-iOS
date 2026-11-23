@@ -143,7 +143,7 @@ struct MetricKindDescriptorRegistryTests {
         #expect(formatted.contains("30"), "Sleep formatter dropped minutes: \(formatted)")
     }
 
-    // MARK: - W-CRASHGUARD — non-finite / out-of-range server values render the
+    // MARK: - Non-finite / out-of-range server values render the
 
     // em-dash placeholder instead of trapping `Int(...)`.
 
@@ -223,12 +223,12 @@ struct MetricKindDescriptorRegistryTests {
             // v0.11 W21 web-parity body-composition + cardio additions
             .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
             .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
-            // v0.11 reconcile (F3) — 9th W21 type
+            // v0.11 reconcile — 9th W21 type
             .fatMass,
-            // v0.13.1 IC — v1.10.0 additive HealthKit signals (all mono).
+            // v1.10.0 additive HealthKit signals (all mono).
             .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
             .breathingDisturbances, .cardioRecovery, .wristTemperature,
-            // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).
+            // v1.17.1 source-fixed render-only signals.
             .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation
         ]
         for kind in allCategoryKinds {
@@ -244,7 +244,7 @@ struct MetricKindDescriptorRegistryTests {
     }
 }
 
-// MARK: - W-B189 (#23) — v1.17.1 source-fixed render-only signals
+// MARK: - v1.17.1 source-fixed render-only signals
 
 /// Locks in the four v1.17.1 `MeasurementType` additions: they must decode from
 /// both the domain `MetricKind` raw value AND the server wire `type`, carry

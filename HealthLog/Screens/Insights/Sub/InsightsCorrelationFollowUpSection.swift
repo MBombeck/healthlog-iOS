@@ -47,7 +47,7 @@ struct InsightsCorrelationFollowUpSection<Relevance: View>: View {
         InsightsCorrelationsDiscoveryBlock.drillIns(for: pair)
     }
 
-    /// 1.4 B2 — what used to stack under every card lives here, behind
+    /// What used to stack under every card lives here, behind
     /// "Details": the paired-day count and r first (the transparency line),
     /// then the channels' own pages, the coach, the relevance statement. The
     /// card above keeps the citation; a pair without a page of its own simply
@@ -74,42 +74,22 @@ struct InsightsCorrelationFollowUpSection<Relevance: View>: View {
     }
 
     private func askCoachLink(action: @escaping (DiscoveredCorrelation) -> Void) -> some View {
-        Button {
+        HLLinkButton("Ask the coach about this", systemImage: "sparkles", alignment: .leading) {
             action(pair)
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "sparkles")
-                    .font(.hlIcon(HLIconSize.sm))
-                Text(String(localized: "Ask the coach about this"))
-                    .font(.hlFootnote)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
+    /// The channel's own page as a data row: the whole row opens it, no
+    /// chevron.
     private func metricLink(_ kind: MetricKind) -> some View {
-        Button {
+        HLRowButton {
             onSelectMetric?(kind)
         } label: {
-            HStack(spacing: HLSpace.sm) {
-                Text(verbatim: String(
-                    format: String(localized: "insights.correlations.detail.openMetric"),
-                    kind.displayName
-                ))
-                .font(.hlSubhead)
-                Spacer(minLength: HLSpace.sm)
-                Image(systemName: "chevron.right")
-                    .font(.hlIcon(HLIconSize.sm))
-            }
-            .foregroundStyle(HLText.primary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            HLRow(title: Text(verbatim: String(
+                format: String(localized: "insights.correlations.detail.openMetric"),
+                kind.displayName
+            )))
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("insights.correlations.detail.metric.\(kind.rawValue)")
     }
 }

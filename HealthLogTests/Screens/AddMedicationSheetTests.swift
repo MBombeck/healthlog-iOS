@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10 W-Meds-B — pure-logic coverage of the form validator + cadence
+/// Pure-logic coverage of the form validator + cadence
 /// encoder backing `AddMedicationSheet`. The view itself is exercised
 /// indirectly through `MedicationsStore.create`; these tests pin the rules
 /// that govern *what* the sheet sends.
@@ -82,7 +82,7 @@ struct AddMedicationSheetFormLogicTests {
     }
 }
 
-/// v0.10 W-Meds-B — the cadence encoder / validator / schedule builder. These
+/// The cadence encoder / validator / schedule builder. These
 /// pin parity with the web oracle (`encodeCadence` in `CadencePicker.tsx`) and
 /// the server cross-field invariants (`medication.ts` refines).
 @Suite("MedicationCadenceLogic — encode / validate / build")
@@ -159,7 +159,7 @@ struct MedicationCadenceLogicTests {
         #expect(v.rollingIntervalDays == 30)
     }
 
-    /// **09-14 — inverted.** The anchor clause is gone because the anchor is
+    /// **Inverted.** The anchor clause is gone because the anchor is
     /// gone: the published contract has no per-schedule anchor and the phase is
     /// counted from the medication's course start.
     @Test("cyclic encodes on/off weeks, no rrule/rolling, no anchor")
@@ -220,7 +220,7 @@ struct MedicationCadenceLogicTests {
         #expect(dtos[0].reminderGraceMinutes == 120)
     }
 
-    /// **09-14 — inverted.** The row used to carry `asNeeded: true`, a key the
+    /// **Inverted.** The row used to carry `asNeeded: true`, a key the
     /// accepted `MedicationScheduleInput` does not declare and Zod therefore
     /// stripped, leaving a cadence-less row the create route stamped
     /// `rrule = "FREQ=DAILY"` — a PRN medication became a daily plan.
@@ -254,7 +254,7 @@ struct MedicationCadenceLogicTests {
         #expect(write.schedules.count == 1)
     }
 
-    /// **09-14 — inverted.** The anchor assertion is replaced by the
+    /// **Inverted.** The anchor assertion is replaced by the
     /// discriminator assertion, which is the thing that actually decides whether
     /// the server stores a cyclic row at all: `cyclicOnWeeks` / `cyclicOffWeeks`
     /// are published as "ignored otherwise" unless `scheduleType` is CYCLIC.
@@ -281,7 +281,7 @@ struct MedicationCadenceLogicTests {
     /// (device-local, here Berlin/UTC+2) into `isoDay`. The old `isoDay` read UTC
     /// day-components of a local-midnight date, rolling 10 July back to 09 July.
     ///
-    /// **09-14 — this used to assert the skew through `cycleAnchor`.** That key
+    /// **This used to assert the skew through `cycleAnchor`.** That key
     /// is gone, but the defect it guarded is not: the same `isoDay` still writes
     /// the medication's `startsOn`, which is now the ONLY anchor the cyclic phase
     /// is counted from — so a one-day skew there shifts the on/off weeks exactly
@@ -347,7 +347,7 @@ struct MedicationCadenceLogicTests {
         #expect(!validate(.asNeeded, sub(), times: [], grace: 60))
     }
 
-    /// **09-14 — inverted.** The rule dropped its anchor clause, because the
+    /// **Inverted.** The rule dropped its anchor clause, because the
     /// form field it named no longer exists. It deliberately did NOT gain a
     /// `startsOn != nil` clause: the server falls back to the medication's
     /// creation day and iOS mirrors that fallback, so requiring a course start

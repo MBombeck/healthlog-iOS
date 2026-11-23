@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// A360-5 H-3 — schedule-time rows carry a STABLE identity (per-row UUID), not
+/// Schedule-time rows carry a STABLE identity (per-row UUID), not
 /// the mutable array offset. The Add/Edit medication sheets keyed `ForEach` on
 /// `id: \.offset`, so after removing a middle time SwiftUI re-used a row's view
 /// identity and the user's NEXT edit landed on the WRONG row.

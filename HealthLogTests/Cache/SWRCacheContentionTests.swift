@@ -127,7 +127,7 @@ final class OfflineReachability: ReachabilityProviding, @unchecked Sendable {
 
 // MARK: - The witness
 
-/// **Phase 21 (21-01) — the concurrency witness.**
+/// **The concurrency witness.**
 ///
 /// R3 is "alles unterhalb der Medikamente lädt Sekunden bis Minuten", and the
 /// structural cause that survived measurement is `SWRCache` (`:13-14`): a
@@ -193,7 +193,7 @@ struct SWRCacheContentionTests {
                 }
             }
         }
-        // T1 (1.4) — awaited, not slept: a fixed 750 ms window read "not
+        // Awaited, not slept: a fixed 750 ms window read "not
         // painted" on a loaded machine where B's own work was merely slow. The
         // claim is unchanged: B must paint while A is still parked, which is
         // what `!gate.hasLeft` after the paint proves. If B only paints once A
@@ -208,7 +208,7 @@ struct SWRCacheContentionTests {
         #expect(
             paintedWhileTheOtherKeyWasBlocked,
             """
-            EXPECTED_RED: R3 — the second key's first paint waited for the first key's decode. \
+            the second key's first paint waited for the first key's decode. \
             SWRCache.read decodes on the @ModelActor's serial executor, so every SWR-backed \
             surface queues behind every other surface's decode.
             """

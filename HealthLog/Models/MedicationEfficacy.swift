@@ -1,6 +1,6 @@
 import Foundation
 
-/// v1.28 (GH iOS #45) — the server-authoritative **medication-efficacy**
+/// v1.28 — the server-authoritative **medication-efficacy**
 /// ("Wirkung") payload for `GET /api/medications/{id}/efficacy`.
 ///
 /// **Association-only, server-computed, tolerant-decode.** Every figure — the

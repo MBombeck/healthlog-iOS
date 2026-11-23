@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **T3 / public #15** — a manually captured blood pressure (iPhone sheet,
+    /// A manually captured blood pressure (iPhone sheet,
     /// Watch quick capture, Siri) reached the server as the systolic row only.
     ///
     /// The pair goes out as two `POST /api/measurements`. Both carried the same
@@ -166,7 +166,7 @@
         func captureStoresPairAndMirrorsOnce() async throws {
             let (repo, server) = try await makeRepo()
             let hk = MockHealthKitWriter()
-            let store = MeasurementsStore(repo: repo, healthKit: hk, isStandalone: { false })
+            let store = MeasurementsStore(repo: repo, healthKit: hk)
 
             // The path `AppContainer+Watch` routes a wrist capture through.
             let outcome = await store.captureReturningOutcome(
@@ -194,7 +194,7 @@
             server.seed(MeasurementWireDTO(
                 id: "hk-dia", type: .bloodPressureDiastolic, value: 93, measuredAt: earlier, source: .appleHealth
             ))
-            let store = MeasurementsStore(repo: repo, healthKit: MockHealthKitWriter(), isStandalone: { false })
+            let store = MeasurementsStore(repo: repo, healthKit: MockHealthKitWriter())
 
             let outcome = await store.captureReturningOutcome(
                 kind: .bloodPressure,

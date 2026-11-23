@@ -49,7 +49,7 @@ struct SettingsAppleHealthImportScreenTests {
             "settings.applehealth_import.explainer",
             "settings.applehealth_import.cta",
             "settings.applehealth_import.cta_disabled_caption",
-            // v0.13 WP — `status_pill` ("Coming soon") deleted: the screen ships a
+            // `status_pill` ("Coming soon") deleted: the screen ships a
             // live HLStatusPill (pill_ready/running/done/failed), the dead stub
             // key is gone.
             "settings.applehealth_import.nav_subtitle",
@@ -72,7 +72,7 @@ struct SettingsAppleHealthImportScreenTests {
         }
     }
 
-    /// 1.4 B2-c — the footer that repeated the four rows ("parsing-only",
+    /// The footer that repeated the four rows ("parsing-only",
     /// "Stats") is gone; the contract lives in the rows and is pinned there:
     /// uploaded once, only read, never stored, the ZIP deleted afterwards.
     @Test("Privacy rows carry the verbatim server contract")

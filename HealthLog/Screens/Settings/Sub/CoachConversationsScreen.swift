@@ -10,10 +10,8 @@ import SwiftUI
 /// kept the conversation + its rolling summary. Browsing them here makes the
 /// coach's continuity visible across launches/devices, matching web.
 ///
-/// **Server-only surface.** Conversation history lives on the server, so the
-/// screen gates on `BackendAvailability.hasServer` (standalone → the calm
-/// `HLCloudDerivedPlaceholder`, never a dead list). When paired but the operator
-/// disabled the Coach surface, the store flips `isCoachDisabled` (from the typed
+/// **Server-only surface.** Conversation history lives on the server. When the
+/// operator disabled the Coach surface, the store flips `isCoachDisabled` (from the typed
 /// `HLError.aiUnavailable`) and we render the disabled-surface placeholder.
 ///
 /// **Read + forget (#30, v1.18.0).** Beyond re-hydration, a native swipe-to-delete
@@ -24,83 +22,28 @@ import SwiftUI
 ///
 /// Entry point: `Settings → Coach → Past conversations`.
 struct CoachConversationsScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(\.appContainer) private var container
 
     @State private var store: CoachConversationHistoryStore?
-    /// The conversation the user has swiped to delete, awaiting confirmation.
-    @State private var pendingDelete: CoachConversationSummaryDTO?
 
     var body: some View {
-        Group {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                List {
-                    HLCloudDerivedPlaceholder(
-                        variant: .inline,
-                        surfaceName: String(localized: "your past conversations"),
-                        onConnect: { authStore.beginServerPairing() }
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
+        connectedBody
+            // The page's canvas in every state, not pure black while empty.
+            .hlScreenBackground()
+            .navigationTitle("Past conversations")
+            .navigationBarTitleDisplayMode(.inline)
+            .hlAcknowledgeAlert(
+                "Couldn't delete conversation",
+                item: Binding(get: { store?.deleteError }, set: { if $0 == nil { store?.clearDeleteError() } })
+            ) { message in
+                Text(message)
             }
-        }
-        .navigationTitle("Past conversations")
-        .navigationBarTitleDisplayMode(.inline)
-        .hlConfirmDestructive(
-            Text("Delete this conversation?"),
-            presenting: $pendingDelete,
-            message: { _ in
-                Text("This removes it from your server on all devices. This can't be undone.")
-            },
-            confirm: Text("Delete"),
-            confirmIdentifier: "coachConversations.confirmDelete",
-            cancel: Text("Cancel"),
-            onCancel: { pendingDelete = nil },
-            action: { conversation in
-                let id = conversation.id
-                pendingDelete = nil
-                Task { await store?.deleteConversation(id: id) }
+            .task {
+                guard store == nil, let api = container?.api else { return }
+                let s = CoachConversationHistoryStore(repo: CoachConversationHistoryRepository(api: api))
+                store = s
+                await s.load()
             }
-        )
-        .alert(
-            Text("Couldn't delete conversation"),
-            isPresented: deleteErrorBinding,
-            presenting: store?.deleteError
-        ) { _ in
-            Button {
-                store?.clearDeleteError()
-            } label: {
-                Text("OK")
-            }
-        } message: { message in
-            Text(message)
-        }
-        .task {
-            guard backend.hasServer, store == nil, let api = container?.api else { return }
-            let s = CoachConversationHistoryStore(repo: CoachConversationHistoryRepository(api: api))
-            store = s
-            await s.load()
-        }
-    }
-
-    /// Drives the confirmation dialog from `pendingDelete` (set/clear only).
-    private var confirmDeleteBinding: Binding<Bool> {
-        Binding(
-            get: { pendingDelete != nil },
-            set: { if !$0 { pendingDelete = nil } }
-        )
-    }
-
-    /// Drives the failure alert from the store's `deleteError`.
-    private var deleteErrorBinding: Binding<Bool> {
-        Binding(
-            get: { store?.deleteError != nil },
-            set: { if !$0 { store?.clearDeleteError() } }
-        )
     }
 
     @ViewBuilder
@@ -117,13 +60,11 @@ struct CoachConversationsScreen: View {
     private func content(store: CoachConversationHistoryStore) -> some View {
         if store.isCoachDisabled {
             List {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "the coach")
-                )
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+                CoachUnavailableCard()
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
+            .hlPageMargins()
         } else if store.isLoading, !store.didLoad {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,74 +75,59 @@ struct CoachConversationsScreen: View {
         }
     }
 
-    /// Calm empty state — no conversations on the server yet.
+    /// Calm empty state — no conversations on the server yet. It scrolls,
+    /// so at large text sizes the sentence wraps in full instead of being cut.
     private var emptyState: some View {
-        HLEmptyState(
-            icon: "bubble.left.and.bubble.right",
-            title: "No conversations yet",
-            message: "When you chat with the coach, your conversations are kept so you can pick them back up here — on any device."
-        )
-        // 1.4 B2-c — the page margin; the sentence ran edge to edge.
-        .padding(.horizontal, HLSpace.xl)
-        .containerCentered()
+        ScrollView {
+            HLEmptyState(
+                icon: "bubble.left.and.bubble.right",
+                title: "No conversations yet",
+                message: "When you chat with the coach, your conversations are kept so you can pick them back up here — on any device."
+            )
+        }
     }
 
     private func conversationsList(store: CoachConversationHistoryStore) -> some View {
-        // 1.4 B2-c — no lead section: where conversations are kept is said
+        // No lead section: where conversations are kept is said
         // once, in the Coach settings' (i).
         List {
             Section {
                 ForEach(store.conversations) { conversation in
-                    NavigationLink {
-                        CoachConversationDetailView(store: store, conversation: conversation)
-                    } label: {
-                        conversationRow(conversation)
-                    }
-                    .accessibilityIdentifier("coachConversations.row.\(conversation.id)")
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            pendingDelete = conversation
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                    // A conversation is an entry, not a menu: the whole row
+                    // opens it, without a chevron.
+                    conversationRow(conversation)
+                        .hlRowLink(inList: true) {
+                            CoachConversationDetailView(store: store, conversation: conversation)
                         }
-                        .accessibilityLabel(Text("Delete conversation"))
-                        .accessibilityIdentifier("coachConversations.delete.\(conversation.id)")
-                    }
+                        .accessibilityIdentifier("coachConversations.row.\(conversation.id)")
+                        .hlSwipeDelete(.confirmed(
+                            title: "Delete this conversation?",
+                            message: "This removes it from your server on all devices. This can't be undone."
+                        ) {
+                            await store.deleteConversation(id: conversation.id)
+                        })
                 }
 
-                if store.canLoadMore {
-                    Button {
-                        Task { await store.loadMore() }
-                    } label: {
-                        if store.isLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Show more")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .accessibilityIdentifier("coachConversations.loadMore")
+                // The last row fetches the next page as it scrolls in.
+                HLLoadMoreRow(hasMore: store.canLoadMore, isLoading: store.isLoading, trigger: .onAppear) {
+                    Task { await store.loadMore() }
                 }
             }
+            .hlFormRowSurface()
         }
+        .hlPageMargins()
     }
 
     private func conversationRow(_ conversation: CoachConversationSummaryDTO) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xxs) {
-            Text(conversation.title.isEmpty ? String(localized: "Conversation") : conversation.title)
-                .font(.hlBody.weight(.semibold))
-                .foregroundStyle(HLText.primary)
-                .lineLimit(2)
-            Text(
+        HLRow(
+            title: Text(verbatim: conversation.title.isEmpty ? String(localized: "Conversation") : conversation.title),
+            detail: Text(
                 String(
                     localized: "\(conversation.messageCount) messages",
                     comment: "Coach conversation row subtitle: number of messages"
                 )
             )
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
-        }
+        )
         .accessibilityElement(children: .combine)
     }
 }
@@ -222,19 +148,12 @@ private struct CoachConversationDetailView: View {
                 transcript(detail)
             } else {
                 // No detail yet (e.g. load failed) — calm fallback, never a
-                // blank. 1.4 B2-c: a real retry instead of "please try again"
+                // blank. A real retry instead of "please try again"
                 // with nothing to tap.
-                HLEmptyState(
-                    icon: "exclamationmark.bubble",
-                    title: "Couldn't load this conversation"
-                ) {
-                    HLButton(String(localized: "async.list.error.retry"), variant: .secondary) {
-                        Task { await store.openConversation(id: conversation.id) }
-                    }
-                    .accessibilityIdentifier("coachConversations.detail.retry")
+                HLErrorState("Couldn't load this conversation") {
+                    await store.openConversation(id: conversation.id)
                 }
-                .padding(.horizontal, HLSpace.xl)
-                .containerCentered()
+                .padding(.horizontal, HLLayout.pageMargin)
             }
         }
         .navigationTitle(conversation.title.isEmpty ? String(localized: "Conversation") : conversation.title)
@@ -254,28 +173,18 @@ private struct CoachConversationDetailView: View {
                     messageBubble(message)
                 }
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.vertical, HLSpace.lg)
+            .padding(.horizontal, HLLayout.cardInset)
+            .padding(.vertical, HLLayout.cardInset)
         }
         .hlScreenBackground()
     }
 
     private func summaryCard(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.xs) {
-            Text("Earlier in this conversation")
-                .font(.hlCaption.weight(.semibold))
-                .foregroundStyle(HLText.secondary)
+        HLCard("Earlier in this conversation") {
             Text(summary)
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(HLSpace.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                .fill(HLSurface.secondary)
-        )
         .accessibilityElement(children: .combine)
     }
 

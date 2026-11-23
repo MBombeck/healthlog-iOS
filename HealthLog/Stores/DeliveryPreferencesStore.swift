@@ -59,6 +59,11 @@ public final class DeliveryPreferencesStore {
     /// predicate paths so the gate stays pure.
     private var serverDefaults: [String: MedicationDeliveryDefaultsDTO] = [:]
 
+    /// Whether this device plans local reminders at all (``ReminderDevicePolicy``).
+    /// `false` turns both predicates off, so no Live Activity and no alarm is
+    /// armed here. `nil` plans.
+    @ObservationIgnored public var localPlanningGate: (@MainActor () -> Bool)?
+
     public init(
         defaults: UserDefaults = .standard,
         provider: DeliveryDefaultsProviding = NoServerDeliveryDefaults()
@@ -75,7 +80,7 @@ public final class DeliveryPreferencesStore {
     public func effective(medicationId: String, channel: DeliveryChannel) -> DeliveryPreference {
         // The user's explicitly-remembered scope wins for display, so an
         // "Alle Geräte" pick that degraded to a local value under the server
-        // stub still reads back as "Alle Geräte" (HIGH-6).
+        // stub still reads back as "Alle Geräte".
         let rememberedScope = intendedScope(medicationId: medicationId, channel: channel)
         if let local = localOverride(medicationId: medicationId, channel: channel) {
             return DeliveryPreference(enabled: local, scope: rememberedScope ?? .thisDevice)
@@ -115,7 +120,7 @@ public final class DeliveryPreferencesStore {
         channel: DeliveryChannel
     ) async -> Bool {
         // Remember the user's *intended* scope so the picker reads it back
-        // verbatim on reopen, independent of how the value resolves (HIGH-6).
+        // verbatim on reopen, independent of how the value resolves.
         setIntendedScope(scope, medicationId: medicationId, channel: channel)
         switch scope {
         case .thisDevice:
@@ -220,6 +225,8 @@ public final class DeliveryPreferencesStore {
     /// defaults into plain value types so the returned closure captures no
     /// reference type.
     public func enabledPredicate(for channel: DeliveryChannel) -> @Sendable (String) -> Bool {
+        // A device that does not plan reminders arms no Live Activity and no alarm.
+        guard localPlanningGate?() ?? true else { return { _ in false } }
         let prefix = key(prefixFor: channel)
         let fallback = channel.hardcodedDefault
         let localSnapshot: [String: Bool] = defaults.dictionaryRepresentation()

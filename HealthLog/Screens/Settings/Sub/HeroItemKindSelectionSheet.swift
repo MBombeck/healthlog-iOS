@@ -23,7 +23,6 @@ struct HeroItemKindSelectionSheet: View {
     /// Called with the new set when the user saves. May be EMPTY — see above.
     let onSave: ([HeroItemKind]) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var selection: Set<HeroItemKind>
 
     init(initialSelection: [HeroItemKind], onSave: @escaping ([HeroItemKind]) -> Void) {
@@ -33,79 +32,41 @@ struct HeroItemKindSelectionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HLSpace.md) {
-                    // UI-Standard R3 — der einleitende Satz ist gefallen. Er
-                    // trug denselben Katalogschlüssel wie der Karten-Subtitle
-                    // auf „Aussehen", der dieses Sheet öffnet: der Nutzer las
-                    // ihn zweimal in derselben Interaktion. Die Heimat ist die
-                    // Karte *vor* der Entscheidung, nicht das Sheet danach.
-                    VStack(spacing: HLSpace.sm) {
-                        ForEach(HeroItemKind.allCases, id: \.self) { kind in
-                            row(for: kind)
-                        }
+        HLSheetScaffold(
+            "settings.dashboard.heroItems.sheetTitle",
+            size: .standard,
+            action: .save {
+                onSave(HeroItemKind.allCases.filter(selection.contains))
+                return true
+            },
+            isDirty: selection != Set(initialSelection)
+        ) {
+            HLPage {
+                // UI-Standard R3 — der einleitende Satz ist gefallen. Er
+                // trug denselben Katalogschlüssel wie der Karten-Subtitle
+                // auf „Aussehen", der dieses Sheet öffnet: der Nutzer las
+                // ihn zweimal in derselben Interaktion. Die Heimat ist die
+                // Karte *vor* der Entscheidung, nicht das Sheet danach.
+                HLCard(layout: .rows) {
+                    ForEach(HeroItemKind.allCases, id: \.self) { kind in
+                        row(for: kind)
                     }
+                }
 
-                    footnotes
-                }
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.vertical, HLSpace.lg)
-            }
-            .hlScreenBackground()
-            .hlScrollEdgeSoft()
-            // 1.4 B4 — short enough for the bar between Abbrechen and
-            // Fertig; "Highlights für heute" was cut.
-            .navigationTitle(Text("settings.dashboard.heroItems.sheetTitle"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Done")) {
-                        onSave(HeroItemKind.allCases.filter(selection.contains))
-                        dismiss()
-                    }
-                    .accessibilityIdentifier("settings.heroItems.done")
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
-                }
+                footnotes
             }
         }
     }
 
-    @ViewBuilder
     private func row(for kind: HeroItemKind) -> some View {
         let isSelected = selection.contains(kind)
-        Button {
+        return HLChoiceRow(title: Text(kind.label), isSelected: isSelected, mode: .multiple) {
             if isSelected {
                 selection.remove(kind)
             } else {
                 selection.insert(kind)
             }
-        } label: {
-            HLCard {
-                HStack(spacing: HLSpace.md) {
-                    Text(kind.label)
-                        .font(.hlSubhead.weight(.medium))
-                        .foregroundStyle(HLText.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: HLSpace.sm)
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.hlIcon(HLIconSize.md, weight: .semibold))
-                        .foregroundStyle(isSelected ? HLText.primary : HLText.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
-            }
         }
-        .buttonStyle(.plain)
-        .hlPressable()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(kind.label))
-        .accessibilityValue(Text(isSelected
-                ? String(localized: "Selected")
-                : String(localized: "Not selected")))
-        .accessibilityHint(Text(String(localized: "Double-tap to toggle")))
         .accessibilityIdentifier("settings.heroItems.\(kind.rawValue)")
     }
 
@@ -126,8 +87,7 @@ struct HeroItemKindSelectionSheet: View {
                 localized: "With nothing selected, Today shows no highlights at all.",
                 comment: "Today hero item picker — empty-selection note"
             ))
-            .font(.hlCaption)
-            .foregroundStyle(HLText.secondary)
+            .hlText(.rowSubtitle)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, HLSpace.sm)
             .accessibilityIdentifier("settings.heroItems.emptyNote")

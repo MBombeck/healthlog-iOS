@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **v0.8.4 WWIDGET-2 — widget-safe compliance ring.**
+/// **Widget-safe compliance ring.**
 ///
 /// The app's `HLRing` (DesignSystem) depends on app-target-only tokens
 /// (`HLChartTints`, `HLText`, `HLSurface`, `HLChartGrid`, `.hlMetric`,
@@ -28,6 +28,9 @@ struct WidgetRing: View {
     var value: String?
     /// Caption under the value, e.g. "heute". Optional.
     var caption: String?
+    /// The widget drawing the ring; decides whether the arc takes the tint
+    /// in tinted and clear rendering (``WidgetTintPolicy``).
+    var surface: WidgetSurface = .compliance
 
     /// Mirrors `HLRing.strokeRatio` / `HLRing.minStroke` so the stroke
     /// derivation matches the app ring 1:1.
@@ -55,8 +58,9 @@ struct WidgetRing: View {
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
+                    .widgetLayer(.ringProgress, in: surface)
 
-                VStack(spacing: 1) {
+                VStack(spacing: WidgetMetrics.lineSpacing / 2) {
                     if let value {
                         // Geometry-locked to the ring side (mirrors
                         // `HLRing`'s `side * fontRatio`): the centre value

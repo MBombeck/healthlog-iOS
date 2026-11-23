@@ -43,7 +43,7 @@ struct SourceFlipNoRawKeyTests {
         // Tab + navigation titles (collision-adjacent: Log/Erfassen, More/Mehr)
         ("Log", "Erfassen"),
         ("More", "Mehr"),
-        // 1.4 B4: "Security" left the catalogue with the title of the
+        // "Security" left the catalogue with the title of the
         // advanced screen's single-row card (its switch is its heading now).
         // Metric labels feeding LocalizedStringKey bridges
         ("Weight", "Gewicht"),
@@ -52,7 +52,7 @@ struct SourceFlipNoRawKeyTests {
         ("Oxygen saturation", "Sauerstoffsättigung"),
         // Sentences with umlauts / sharp-s
         ("This action cannot be undone.", "Diese Aktion kann nicht rückgängig gemacht werden."),
-        // 1.4 B2-c: "You can change this choice at any time in Settings." left
+        // "You can change this choice at any time in Settings." left
         // the catalogue with the AI consent sheet's third withdrawal line.
         // Format-specifier keys — the make-or-break derivation cases
         ("Type %@ to confirm.", "Tippe %@ um zu bestätigen."),
@@ -79,7 +79,7 @@ struct SourceFlipNoRawKeyTests {
         ("Later", "Später"),
         ("Add new passkey", "Neuen Passkey hinzufügen"),
         ("Severity", "Stärke"),
-        // 1.4 B4: "Open coach" left with the single-row card it led; the row
+        // "Open coach" left with the single-row card it led; the row
         // is labelled "Coach" with its chevron.
         // Notification action titles (operator hard ship-criterion — must read
         // English in EN, German in DE)
@@ -97,7 +97,6 @@ struct SourceFlipNoRawKeyTests {
         ("No data", "Keine Daten"),
         ("Briefing loading …", "Briefing lädt …"),
         ("Coach is not available right now.", "Coach ist gerade nicht verfügbar."),
-        ("Detail view could not be loaded", "Detailansicht konnte nicht geladen werden"),
         // Medical-classification labels
         ("High-normal", "Hoch-normal"),
         ("Hypertension grade 1", "Hypertonie Grad 1"),
@@ -115,7 +114,6 @@ struct SourceFlipNoRawKeyTests {
         ("Earned on %@", "Erreicht am %@"),
         ("%@ trend", "%@ Verlauf"),
         // Interpolation: mixed %@ + %lld, positional in de
-        ("Calculated from %lld measurements over %lld days.", "Berechnet aus %1$lld Messungen über %2$lld Tage."),
         ("Mean %lld %@, min %lld, max %lld", "Mittel %1$lld %2$@, Min %3$lld, Max %4$lld")
     ]
 

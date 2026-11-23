@@ -1,6 +1,6 @@
 import Foundation
 
-// v0.5.5.1 — extracted from `MeasurementListScreen.swift` so the screen
+// Extracted from `MeasurementListScreen.swift` so the screen
 // stays under the 600-line SwiftLint `file_length` baseline once the
 // v0.5.5.1 chip + search filter additions landed. Types + algorithms
 // are unchanged (same module, same module-internal access); only the
@@ -144,9 +144,9 @@ enum MeasurementBucketing {
         if calendar.isDateInToday(date) { return String(localized: "Today") }
         if calendar.isDateInYesterday(date) { return String(localized: "Yesterday") }
         if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
-            return date.formatted(.dateTime.weekday(.wide))
+            return HLDateFormat.weekday(date, calendar: calendar)
         }
-        // b215 — older buckets add the year when it isn't the current one so a
+        // Older buckets add the year when it isn't the current one so a
         // day header from a prior year ("Mo, 14. Juni") is never ambiguous.
         return HLDateFormat.appendingYearIfNeeded(
             date,
@@ -157,7 +157,7 @@ enum MeasurementBucketing {
     }
 
     /// Header shown above a weeklySummary section: the calendar week, "KW 41"
-    /// or "Week 41". 1.4 B4 — it used to add "(5 bis 11 Okt)": a hand-built
+    /// or "Week 41". It used to add "(5 bis 11 Okt)": a hand-built
     /// German range (no day points, and "KW" in English too) that repeated
     /// the dates the card below already names.
     static func weekHeader(start: Date, calendar: Calendar = .current) -> String {
@@ -180,7 +180,7 @@ enum MeasurementBucketing {
     }
 
     static func monthHeader(start: Date, calendar _: Calendar = .current) -> String {
-        start.formatted(.dateTime.month(.wide).year())
+        HLDateFormat.monthYear(start)
     }
 
     static func monthLabel(start: Date, now: Date = .now, calendar: Calendar = .current) -> String {
@@ -192,7 +192,7 @@ enum MeasurementBucketing {
         {
             return String(localized: "Last month")
         }
-        return start.formatted(.dateTime.month(.wide).year())
+        return HLDateFormat.monthYear(start, calendar: calendar)
     }
 
     /// "5. Okt. bis 11. Okt." / "Oct 5 to Oct 11": both ends in the locale's
@@ -205,12 +205,12 @@ enum MeasurementBucketing {
 }
 
 /// Pure aggregate stats over a Measurement bucket. `secondary*` are populated
-/// only when the bucket contains BP readings (diastolic). v0.5.5.1 — moved
+/// only when the bucket contains BP readings (diastolic). Moved
 /// here alongside `MeasurementBucketing` to keep the pure-data layer in one
 /// place.
 struct SummaryStats: Equatable {
     let count: Int
-    /// Audit B-4 — `nil` for a bucket of ``MetricKind/unknown`` rows, and only
+    /// `nil` for a bucket of ``MetricKind/unknown`` rows, and only
     /// for those. Every other bucket is one kind in one unit, so a mean is a
     /// statement about comparable readings; `.unknown` is a BUCKET, not a kind,
     /// and two rows in it may carry two different server types this build
@@ -253,5 +253,81 @@ struct SummaryStats: Equatable {
             secondaryMin: secondaries.min(),
             secondaryMax: secondaries.max()
         )
+    }
+}
+
+// MARK: - Cards of the history list
+
+/// One card of the history list. The readings of a week share a card under
+/// the week's name ("Diese Woche", "Letzte Woche", "2. bis 8. Nov."); week
+/// summaries of a month share one under the month, month summaries under the
+/// year. A day never gets a card of its own: the day stands in each row's
+/// title instead.
+struct MeasurementListGroup: Identifiable, Equatable {
+    enum Header: Equatable {
+        case week(start: Date)
+        case month(start: Date)
+        case year(start: Date)
+    }
+
+    let header: Header
+    let sections: [MeasurementSection]
+
+    var id: String {
+        sections.first.map { "group-\($0.id)" } ?? "group-empty"
+    }
+}
+
+extension MeasurementBucketing {
+    /// The cards for `sections` (newest first, as ``sections(for:now:calendar:)``
+    /// returns them): neighbours with the same header merge into one card.
+    static func groups(_ sections: [MeasurementSection], calendar: Calendar = .current) -> [MeasurementListGroup] {
+        var result: [MeasurementListGroup] = []
+        for section in sections {
+            let header = header(for: section, calendar: calendar)
+            if let last = result.last, last.header == header {
+                result[result.count - 1] = MeasurementListGroup(header: header, sections: last.sections + [section])
+            } else {
+                result.append(MeasurementListGroup(header: header, sections: [section]))
+            }
+        }
+        return result
+    }
+
+    /// Readings group by their week, week summaries by their month, month
+    /// summaries by their year.
+    static func header(for section: MeasurementSection, calendar: Calendar) -> MeasurementListGroup.Header {
+        switch section {
+        case let .day(date, _):
+            .week(start: calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date)
+        case let .weeklySummary(weekStart, _):
+            .month(start: calendar.dateInterval(of: .month, for: weekStart)?.start ?? weekStart)
+        case let .monthlySummary(monthStart, _):
+            .year(start: calendar.dateInterval(of: .year, for: monthStart)?.start ?? monthStart)
+        }
+    }
+
+    /// The words over a card.
+    static func title(of header: MeasurementListGroup.Header, now: Date = .now, calendar: Calendar = .current) -> String {
+        switch header {
+        case let .week(start): weekLabel(start: start, now: now, calendar: calendar)
+        case let .month(start): monthHeader(start: start, calendar: calendar)
+        case let .year(start): start.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).year())
+        }
+    }
+
+    /// The title of a reading's row in a week card: the day and the time,
+    /// "Heute, 07:30", "Donnerstag, 07:30", "Mo., 2. Nov., 07:30".
+    static func rowTitle(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        HLRowDetail.joined([dayLabel(date: date, now: now, calendar: calendar), HLTimeFormat.time(date)]) ?? ""
+    }
+
+    /// The title of a summary row: the calendar week ("KW 45") or the month.
+    static func summaryTitle(of section: MeasurementSection, now: Date = .now, calendar: Calendar = .current) -> String? {
+        switch section {
+        case .day: nil
+        case let .weeklySummary(start, _): weekHeader(start: start, calendar: calendar)
+        case let .monthlySummary(start, _): monthLabel(start: start, now: now, calendar: calendar)
+        }
     }
 }

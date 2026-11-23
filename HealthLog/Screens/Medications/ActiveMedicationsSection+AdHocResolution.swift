@@ -1,16 +1,28 @@
 import Foundation
 
 extension ActiveMedicationsSection {
-    /// **v0.14.2 H3 — `scheduledFor` for an ad-hoc Genommen/Übersprungen tap.**
+    /// **`scheduledFor` for an ad-hoc Genommen/Übersprungen tap.**
     ///
     /// When `resolveDispatchDose` finds no pending today-row, the tap falls
-    /// through to the ad-hoc synth POST. The old path keyed that POST on
-    /// `scheduledFor = .now`, which is correct for a **PRN** med but WRONG for a
-    /// scheduled non-PRN med marked on a weekly off-day / cyclic off-week: the
-    /// dose attaches to "now" instead of the real schedule slot → compliance
-    /// mis-attribution. This resolves the nearest DUE slot from the canonical
-    /// recurrence engine for scheduled meds (most-recent already-due occurrence
-    /// in a ±window, else the soonest upcoming), and keeps `now` for PRN.
+    /// through to the ad-hoc synth POST. A medication that doses today marks
+    /// today's slot: the latest one already due, else the next one today
+    /// (MED, #151: never yesterday's evening dose).
+    ///
+    /// **D3 #3 — a day without a slot books `now`.** This used to look back up
+    /// to 60 days for the last due slot. On the Saturday before a Sunday
+    /// GLP-1 dose the tap sent last Sunday 09:00 as `scheduledFor`, and the
+    /// synth path clamped `takenAt` onto it: the server either answered
+    /// "already taken" and stored nothing, or filled last week's slot with the
+    /// wrong time. Sunday's slot stayed open, reminder and alarm came, and a
+    /// second injection was a tap away. Without a slot today the tap now sends
+    /// `now` for both, and the server binds the take by its time (a Saturday
+    /// lies inside a weekly dose's band around Sunday).
+    ///
+    /// "Today" is the server's: `daySlots` are the open slots of today's
+    /// `dose-history` (``MedicationsStore/daySlots(medicationId:day:)``, the
+    /// read the intake form uses), so every cadence counts as the server
+    /// counts it. Only when that read failed (`nil`) does the local engine
+    /// decide, and only for today.
     ///
     /// `nonisolated static` so it shares the engine with `resolveDispatchDose`
     /// and the unit suite can drive it off the MainActor. Lives in its own file
@@ -18,56 +30,23 @@ extension ActiveMedicationsSection {
     nonisolated static func resolveAdHocScheduledFor(
         medication: Medication,
         now: Date,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
+        daySlots: [IntakeSlotAttribution.DaySlot]? = nil
     ) -> Date {
         // PRN / no-schedule (asNeeded or empty entries): the act IS the slot.
         let entries = medication.schedule.entries
         guard !entries.isEmpty,
               entries.contains(where: { $0.cadence != .asNeeded }) else { return now }
-
+        if let daySlots {
+            let instants = daySlots.map(\.instant)
+            return instants.filter { $0 <= now }.max() ?? instants.filter { $0 > now }.min() ?? now
+        }
         let context = MedicationRecurrenceEngine.Context(
             medication: medication,
             timeZone: timeZone,
             now: now
         )
-        // MED (#151, DST day 2026-10-25) — a medication that doses today
-        // marks today's slot: the latest one already due, else the next one
-        // today. The look-back below once reached back to YESTERDAY's 20:00
-        // when tapped before tonight's 20:00 (or after the web had taken it
-        // and the today list missed the row), and the server re-stamped
-        // yesterday's dose. Only a medication with no slot today looks back.
-        if let todaySlot = todaySlot(entries: entries, context: context, now: now, timeZone: timeZone) {
-            return todaySlot
-        }
-        // Look back up to 60 days for the most-recent already-due slot at/under
-        // `now`; that is the dose the user is acting on. Falls forward to the
-        // soonest upcoming occurrence only when nothing is yet due in the look-back.
-        let lookbackStart = now.addingTimeInterval(-60 * 86400)
-        var mostRecentDue: Date?
-        for entry in entries where entry.cadence != .asNeeded {
-            let due = MedicationRecurrenceEngine.occurrences(
-                in: lookbackStart ... now,
-                entry: entry,
-                context: context
-            )
-            .map(\.at)
-            .filter { $0 <= now }
-            .max()
-            if let due, due > (mostRecentDue ?? .distantPast) { mostRecentDue = due }
-        }
-        if let mostRecentDue { return mostRecentDue }
-
-        var soonestUpcoming: Date?
-        for entry in entries where entry.cadence != .asNeeded {
-            if let next = MedicationRecurrenceEngine.nextOccurrence(
-                after: now,
-                entry: entry,
-                context: context
-            )?.at, next < (soonestUpcoming ?? .distantFuture) {
-                soonestUpcoming = next
-            }
-        }
-        return soonestUpcoming ?? now
+        return todaySlot(entries: entries, context: context, now: now, timeZone: timeZone) ?? now
     }
 
     /// Today's slot for an ad-hoc tap (profile day, DST-safe calendar bounds):

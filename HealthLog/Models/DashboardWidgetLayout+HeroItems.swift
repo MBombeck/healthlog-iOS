@@ -6,7 +6,7 @@ import Foundation
 // doc-comment.
 
 public extension DashboardWidgetLayout {
-    /// **CU-34 — set which item kinds may appear in the Today hero rail.**
+    /// **Set which item kinds may appear in the Today hero rail.**
     ///
     /// Returns a layout that SENDS `enabledHeroItemKinds`, i.e. the one path
     /// that actually changes the server's stored choice; every other helper
@@ -26,7 +26,7 @@ public extension DashboardWidgetLayout {
     /// byte-equal to what the next GET echoes.
     func settingEnabledHeroItemKinds(_ kinds: [HeroItemKind]) -> DashboardWidgetLayout {
         let enabled = Set(kinds)
-        // #115 B6 — kinds this build cannot name stay enabled: the picker never
+        // Kinds this build cannot name stay enabled: the picker never
         // showed them, so saving it must not switch them off on the server.
         let unknownKept = unknownRawValues(enabledHeroItemKinds) { HeroItemKind(rawValue: $0) != nil }
         return DashboardWidgetLayout(

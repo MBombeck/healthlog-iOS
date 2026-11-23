@@ -31,7 +31,7 @@ struct ChartDetailStoreTests {
         #expect(ChartDetailStore.Range.month.rawValue == 30)
         #expect(ChartDetailStore.Range.sixMonths.rawValue == 180)
         #expect(ChartDetailStore.Range.year.rawValue == 365)
-        // v0.7.0 W-STEPS — `.all` rawValue doubles as the `series(days:)`
+        // `.all` rawValue doubles as the `series(days:)`
         // window; ~10y covers any realistic HK history.
         #expect(ChartDetailStore.Range.all.rawValue == 3650)
     }
@@ -91,7 +91,7 @@ struct ChartDetailStoreMedianTests {
     }
 }
 
-/// v0.7.0 W-API-RENDER — HeroStrip trend decoration derived from the
+/// HeroStrip trend decoration derived from the
 /// comprehensive digest's per-metric `MetricSummary`. The store dropped
 /// every slope + the year-ago baseline before this wave; these tests pin
 /// the pure derivation helpers the HeroStrip consumes.

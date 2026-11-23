@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0141 W-DATAPARITY (P3) — pins `DoctorReportService.downloadPDF` against the
+/// Pins `DoctorReportService.downloadPDF` against the
 /// *real* `APIClient` with a stubbed `URLSession` (`MockURLProtocol`) — never a
 /// mock server (PROJECT_GUIDE.md).
 ///
@@ -14,7 +14,7 @@ import Testing
 /// `POST /api/export/health-record` with `format: "pdf"` (strict
 /// `exportSelectionSchema`).
 ///
-/// **CU-11 — the second live break.** This call then sent `{format, range,
+/// **The second live break.** This call then sent `{format, range,
 /// locale}` with **no `selection`**, which the v1.32.39 schema makes mandatory,
 /// so every server render 422'd and the screen fell back for the wrong reason.
 /// The suite now pins the required `selection` on the wire. Covers:
@@ -105,7 +105,7 @@ struct DoctorReportServiceTests {
         let range = try #require(json["range"] as? [String: Any])
         #expect(range["days"] as? Int == 90)
 
-        // CU-11 — the required v2 selection, exactly `{ v, leaves }`.
+        // The required v2 selection, exactly `{ v, leaves }`.
         let selection = try #require(json["selection"] as? [String: Any])
         #expect(Set(selection.keys) == ["v", "leaves"])
         #expect(selection["v"] as? Int == 2)

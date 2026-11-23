@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-// #32 (W-ONBOARD-TOUR-PROGRESS) — locks the server-persisted onboarding-tour /
+// Locks the server-persisted onboarding-tour /
 // setup-completion state.
 //
 // Covers:
@@ -147,7 +147,7 @@ struct OnboardingTourStoreTests {
         defaults.set(true, forKey: OnboardingTourStore.cacheKey) // local says completed
         api.sendHandler = { _ in AuthMeOnboarding(onboardingTourCompleted: nil) } // older server
         let store = makeStore(api: api, defaults: defaults)
-        // 08-08 — nothing is seeded from the cache at construction any more. The
+        // Nothing is seeded from the cache at construction any more. The
         // old seed existed because an unresolved lookup was indistinguishable
         // from an incomplete one, so the store had to guess early; it now has a
         // fourth state for exactly that and guesses nowhere.
@@ -167,7 +167,7 @@ struct OnboardingTourStoreTests {
         api.sendHandler = { _ in throw HLError.unknown("offline") }
         let store = makeStore(api: api, defaults: defaults)
         await store.refresh()
-        // 08-08 — this case used to assert the opposite of what the Wave-0
+        // This case used to assert the opposite of what the Wave-0
         // contract requires, and the two cannot both hold: a legacy install-wide
         // `true` belongs to nobody in particular, so an unresolved lookup may
         // not spend it (`accountSwitchCannotReuseCompletion` is the same inputs
@@ -180,7 +180,7 @@ struct OnboardingTourStoreTests {
         #expect(defaults.object(forKey: OnboardingTourStore.cacheKey) as? Bool == true)
     }
 
-    // MARK: - 08-08: the cache is bound to an account
+    // MARK: - The cache is bound to an account
 
     @Test("refresh: an unresolved lookup keeps THIS owner's own cached completion")
     func unresolvedLookupKeepsOwnedCompletion() async throws {

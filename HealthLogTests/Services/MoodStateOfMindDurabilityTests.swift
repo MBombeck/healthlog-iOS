@@ -10,7 +10,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **Phase 07 / plan 07-05 — how a State-of-Mind page reaches its anchor.**
+    /// **How a State-of-Mind page reaches its anchor.**
     ///
     /// The Wave-0 RED (`MoodImportDurabilityTests/enqueueFailureHoldsAnchor`)
     /// states the rule. This suite states the mapping that feeds it: which
@@ -52,7 +52,7 @@ import Testing
             )
         }
 
-        /// #115 / 0.3 — the one refusal that is about the account, not the
+        /// The one refusal that is about the account, not the
         /// sample. The 279 importer classified it as final and committed past
         /// every mood logged in Apple Health while the module was off.
         @Test("403 module.disabled is not a final refusal — it holds the anchor")
@@ -198,7 +198,7 @@ import Testing
     }
 
     extension MoodStateOfMindDurabilityTests {
-        /// C4 — a cancelled mood POST (`URLError.cancelled`: an expiring
+        /// A cancelled mood POST (`URLError.cancelled`: an expiring
         /// background window, or a failed certificate pin, which URLSession
         /// reports the same way) was classified as a final refusal and the
         /// anchor moved past a mood that was neither stored nor queued.
@@ -241,6 +241,8 @@ import Testing
         let lease: HealthSyncAuthenticatedLease
         let outbox: OutboxQueue
         let importer: MoodStateOfMindImporter
+        /// The importer's defaults, for capability records in a test.
+        let defaults: UserDefaults
 
         init() throws {
             registry.activate(ownerID: "account-a")
@@ -254,7 +256,10 @@ import Testing
             try keychain.setString("bearer-a", forKey: KeychainKey.authToken)
             try keychain.setString("account-a", forKey: KeychainKey.userID)
             let baseURL = try #require(URL(string: "https://test.healthlog.local"))
-            let defaults = try #require(UserDefaults(suiteName: "mood-module-\(UUID().uuidString)"))
+            let suite = "mood-module-\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            // A second handle on the same suite: the importer takes its own.
+            self.defaults = try #require(UserDefaults(suiteName: suite))
             let environment = AppEnvironment(baseURL: baseURL, bundleID: "dev.healthlog.app", appVersion: "1.0.4", buildNumber: "1")
             let api = APIClient(environment: environment, keychain: keychain, sessionConfiguration: .mock())
             outbox = try OutboxQueue(inMemory: true, currentOwnerProvider: { "account-a" })

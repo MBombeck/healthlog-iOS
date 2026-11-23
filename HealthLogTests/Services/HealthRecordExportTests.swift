@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-11 — health-record export request contract (server v1.32.39).**
+/// **Health-record export request contract (server v1.32.39).**
 ///
 /// Pins `POST /api/export/health-record` against the *real* `APIClient` with a
 /// stubbed `URLSession` (`MockURLProtocol`) — never a mock server (PROJECT_GUIDE.md) —

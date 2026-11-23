@@ -1,6 +1,6 @@
 import Foundation
 
-/// **MED (1.5.0) — ending and starting a course, as the server allows it.**
+/// **Ending and starting a course, as the server allows it.**
 ///
 /// Server v1.46.0 (#1280) ends a running course at an instant
 /// (`POST /api/medications/{id}/courses/end`): the course's last day becomes

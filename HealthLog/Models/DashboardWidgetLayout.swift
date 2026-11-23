@@ -80,7 +80,7 @@ public struct DashboardWidgetLayout: Codable, Sendable, Equatable {
     /// leaves this `nil` so an unrelated tile save never resets the choice; only
     /// ``settingEnabledHeroItemKinds(_:)`` produces a layout that sends it.
     public let enabledHeroItemKinds: [String]?
-    /// **CU-20 (#69) — optimistic-concurrency token.** Echoed back as
+    /// **Optimistic-concurrency token.** Echoed back as
     /// `baseUpdatedAt` on the next PUT so a write from a stale read is rejected
     /// with `409 dashboard_layout_conflict` instead of silently clobbering
     /// whatever another session stored. Guards `User.updatedAt`
@@ -126,14 +126,14 @@ public struct DashboardWidgetLayout: Codable, Sendable, Equatable {
         selectedScoreRings = try c.decodeIfPresent([String].self, forKey: .selectedScoreRings)
         // Same tolerance: a server older than v1.27.27 omits the field → nil.
         heroRingOrder = try c.decodeIfPresent([String].self, forKey: .heroRingOrder)
-        // CU-34 — absent on a server older than v1.34.0. `nil` then means "this
+        // Absent on a server older than v1.34.0. `nil` then means "this
         // server does not filter the rail at all", which is why
         // ``resolvedEnabledHeroItemKinds`` resolves it to the FULL catalogue and
         // NOT to the empty set. A paired server always resolves the field on
         // GET, so a concrete array is the normal case; `[]` there is a real
         // "everything off" the user chose, never a decode artefact.
         enabledHeroItemKinds = try c.decodeIfPresent([String].self, forKey: .enabledHeroItemKinds)
-        // CU-20 — absent on a pre-v1.32.22 server; nil then means "no token
+        // Absent on a pre-v1.32.22 server; nil then means "no token
         // yet", i.e. the next write goes out unconditional.
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
     }
@@ -146,7 +146,7 @@ public struct DashboardWidgetLayout: Codable, Sendable, Equatable {
         // save never resets the server's stored ring selection.
         try c.encodeIfPresent(selectedScoreRings, forKey: .selectedScoreRings)
         try c.encodeIfPresent(heroRingOrder, forKey: .heroRingOrder)
-        // CU-34 — `encodeIfPresent`, deliberately: it omits the key on `nil`
+        // `encodeIfPresent`, deliberately: it omits the key on `nil`
         // ("keep what is stored") and emits `[]` on an empty array ("all kinds
         // off"). A plain `encode` would turn `nil` into an explicit `null`,
         // which the server's `z.array(...).optional()` rejects; `?? []` would
@@ -154,7 +154,7 @@ public struct DashboardWidgetLayout: Codable, Sendable, Equatable {
         // off". Both forms are asserted on the real request body in
         // `DashboardHeroItemKindsPutTests`.
         try c.encodeIfPresent(enabledHeroItemKinds, forKey: .enabledHeroItemKinds)
-        // CU-20 — `updatedAt` is READ-ONLY. The token travels on the write as
+        // `updatedAt` is READ-ONLY. The token travels on the write as
         // `baseUpdatedAt` (via `OptimisticWriteBody`), never echoed back under
         // its own key.
     }
@@ -195,7 +195,7 @@ public struct DashboardWidgetConfig: Codable, Sendable, Identifiable, Equatable,
 ///
 /// Server source: `src/lib/dashboard-layout.ts:17-38` (`DASHBOARD_WIDGET_IDS`).
 ///
-/// **v0.5.5.2 — non-metric widgets explicitly listed** (W-DATA-FLOW-AUDIT
+/// **Non-metric widgets explicitly listed** (W-DATA-FLOW-AUDIT
 /// HIGH #4). The server's widget catalogue includes several rows that
 /// surface as DEDICATED iOS cards elsewhere (MoodSummary, BPStatusCard,
 /// ComplianceRingCard) — they have no metric
@@ -220,7 +220,7 @@ public enum DashboardWidgetId {
     public static let oxygenSaturation = "oxygenSaturation"
     public static let achievements = "achievements"
     public static let vo2Max = "vo2Max"
-    /// **v0.5.5.2** — server includes `recentWorkouts` in the widget
+    /// Server includes `recentWorkouts` in the widget
     /// catalogue + emits `tileVisible: true` by default on demo
     /// accounts, but iOS has no workout surface yet. Tracked as an
     /// explicit non-mapping in `metricKind(forId:)` rather than
@@ -250,7 +250,7 @@ public enum DashboardWidgetId {
     public static let audioExposureEnvironment = "audioExposureEnvironment"
     /// Headphone playback-level exposure (dBA) widget id.
     public static let audioExposureHeadphone = "audioExposureHeadphone"
-    /// v0158 — v1.25 clinical measurement types. iOS-only widget ids (the server
+    /// v1.25 clinical measurement types. iOS-only widget ids (the server
     /// `DASHBOARD_WIDGET_IDS` may follow). Tile-visible by DEFAULT (`tileVisible:
     /// true`) per the "every MetricKind tile is visible by default" invariant; the
     /// empty-tile policy keeps a fresh dashboard uncluttered (an unrecorded metric
@@ -265,10 +265,10 @@ public enum DashboardWidgetId {
     /// Translates a server widget id to the matching iOS `MetricKind`,
     /// or returns `nil` for non-metric widgets.
     ///
-    /// **v0.5.5.2 — explicit non-metric branches** instead of the silent
+    /// **Explicit non-metric branches** instead of the silent
     /// `default: nil` fall-through:
     /// - `mood` → **Build 7 / item 7.3:** now a first-class metric tile
-    ///   (`.mood`). The summary route emits a `kind: "mood"` card (#51), so the
+    ///   (`.mood`). The summary route emits a `kind: "mood"` card, so the
     ///   grid renders it like any scalar tile; it also drives the Insights mood
     ///   surface + the StatistikMode briefing floor as before.
     /// - `medications` → `ComplianceRingCard` on the dashboard (outside
@@ -294,7 +294,7 @@ public enum DashboardWidgetId {
         case pulse: .pulse
         case bodyFat: .bodyFat
         // Build 7 / item 7.3 — mood graduated to a first-class metric tile when
-        // the summary route started emitting a `kind: "mood"` card (#51). It now
+        // the summary route started emitting a `kind: "mood"` card. It now
         // maps to `.mood` so the tile renders through the standard grid path,
         // respects the `mood` widget row's order/visibility, and appears in the
         // customisation screen (`hasHomeSurface`).
@@ -317,12 +317,12 @@ public enum DashboardWidgetId {
         case audioExposureHeadphone: .audioExposureHeadphone
         case bmi: .bmi
         case bodyTemperature: .bodyTemperature
-        // v0158 — v1.25 clinical measurement types.
+        // v1.25 clinical measurement types.
         case painNRS: .painNRS
         case gripStrength: .gripStrength
         case waistCircumference: .waistCircumference
         case waistToHeight: .waistToHeight
-        // v0.5.5.2 — non-metric widgets surface as dedicated cards
+        // Non-metric widgets surface as dedicated cards
         // outside the dashboard tile-strip. See doc-comment for the
         // per-widget surface mapping. `nil` is intentional + reviewed.
         // Build 7 / item 7.3 — `mood` LEFT this list: it now maps to `.mood`
@@ -360,34 +360,34 @@ public enum DashboardWidgetId {
         case .audioExposureEnvironment: audioExposureEnvironment
         case .audioExposureHeadphone: audioExposureHeadphone
         case .bmi: bmi
-        // v0.8.3 W-D — the four render-backlog activity aggregates surface via
+        // The four render-backlog activity aggregates surface via
         // the measurements list + chart-detail path, not the dashboard tile
         // grid. They have no `DashboardWidgetLayout` widget id (the reorder
         // grid owns that catalogue), so `nil` keeps them out of the grid +
         // its persisted layout. Follow-up: add grid widget ids in the reorder
         // wave if operator wants them as reorderable tiles (operator, 2026-05-29).
         case .activeEnergy, .flightsClimbed, .distanceWalkingRunning, .timeInDaylight: nil
-        // v0.11 W21 — server/Withings-sourced web-parity kinds surface via the
+        // Server/Withings-sourced web-parity kinds surface via the
         // measurements list + chart-detail path, not the dashboard reorder grid.
         // No widget id, so `nil` keeps them out of the grid + persisted layout.
         case .fatFreeMass, .leanBodyMass, .muscleMass, .skinTemperature,
              .pulseWaveVelocity, .vascularAge, .visceralFat, .walkingHeartRate,
              .fatMass: nil
-        // W28d — walking steadiness surfaces via the Insights strip + chart-
+        // Walking steadiness surfaces via the Insights strip + chart-
         // detail path, not the dashboard reorder grid; no widget id → `nil`.
         case .walkingSteadiness: nil
-        // v0.13.1 IC — v1.10.0 additive signals are Insights-only (display
+        // v1.10.0 additive signals are Insights-only (display
         // parity); they have no dashboard reorder-grid widget id → `nil`.
         case .falls, .sixMinuteWalk, .stairAscentSpeed, .stairDescentSpeed,
              .breathingDisturbances, .cardioRecovery, .wristTemperature: nil
-        // v0.14.6 — v1.12.8 WHOOP-native types are Insights/list-only; no
+        // v1.12.8 WHOOP-native types are Insights/list-only; no
         // dashboard reorder-grid widget id → `nil`.
         case .averageHeartRate, .maxHeartRate, .sleepDisturbanceCount: nil
-        // v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23) are
+        // v1.17.1 source-fixed render-only signals are
         // Insights/list-only (display parity); no dashboard reorder-grid widget
         // id → `nil`.
         case .ansCharge, .cardioLoad, .sleepScore, .bodyTemperatureDeviation: nil
-        // v0158 — v1.25 clinical measurement types. All four DO get a dashboard
+        // v1.25 clinical measurement types. All four DO get a dashboard
         // widget id so they are tile-capable + appear in the customisation
         // screen; they default to hidden (see `DashboardWidgetLayout.default`).
         case .painNRS: painNRS
@@ -402,8 +402,9 @@ public enum DashboardWidgetId {
              .dayStrain, .workoutStrain, .sleepPerformance, .sleepEfficiency,
              .sleepConsistency, .sleepNeed, .energyExpenditureKJ, .resilience, .exerciseMinutes, .standMinutes, .standHours,
              .irregularRhythmNotification, .highHeartRateEvent, .lowHeartRateEvent, .mindfulMinutes, .stateOfMindValence, .afibBurden,
-             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad: nil
-        // Audit B-4 — neither belongs on the dashboard grid: the audio-exposure
+             .walkingSteadinessEvent, .breathingDisturbanceEvent, .bodyBattery, .stressLevel, .trainingReadiness, .acuteTrainingLoad,
+             .bloodKetones, .basalEnergy, .indoorCO2, .indoorTemperature, .indoorHumidity: nil
+        // Neither belongs on the dashboard grid: the audio-exposure
         // event is a list/detail occurrence like its five siblings, and a kind
         // this build cannot name has nothing to persist a layout slot under.
         case .audioExposureEvent, .unknown: nil
@@ -448,7 +449,7 @@ public extension DashboardWidgetLayout {
     /// completes, and fallback when the server returns `null` for legacy
     /// users.
     ///
-    /// **v0.4.1 — defaults flipped to "tile-visible by default".** Pre-v0.4.1
+    /// **Defaults flipped to "tile-visible by default".** Pre-v0.4.1
     /// shipped seven MetricKinds (`sleep`, `steps`, `glucose`,
     /// `totalBodyWater`, `boneMass`, `oxygenSaturation`, `vo2Max`) with
     /// `tileVisible: false`. Combined with the layout-gate filter in
@@ -560,7 +561,7 @@ public extension DashboardWidgetLayout {
                 tileVisible: true,
                 order: 25
             ),
-            // v0158 — v1.25 clinical measurement types. `visible: false` keeps
+            // v1.25 clinical measurement types. `visible: false` keeps
             // them off the web-chart-row, but `tileVisible: true` holds the
             // established "every MetricKind tile is visible by DEFAULT" invariant
             // (DashboardWidgetLayoutDecodingTests) just like every HK-streamed
@@ -613,7 +614,7 @@ public extension DashboardWidgetLayout {
     /// (e.g. hidden tiles the partial visible-only order omits) keep their
     /// relative sequence after the listed entries.
     ///
-    /// A2 (v0.8.2 W1a) — `remaining` is seeded from the widgets sorted by
+    /// `remaining` is seeded from the widgets sorted by
     /// `order` (NOT the raw array order). The reorder is fed a partial,
     /// visible-only id list from the grid; the hidden rows fall into the
     /// unmatched tail. Sorting first guarantees the hidden rows keep their

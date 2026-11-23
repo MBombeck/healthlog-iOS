@@ -3,7 +3,7 @@ import Foundation
 import SnapshotTesting
 import Testing
 
-/// **v0.5.5.1** snapshot lock for the `MedicationQuickMarkButton` and
+/// Snapshot lock for the `MedicationQuickMarkButton` and
 /// `ActiveMedicationRow` presentation contracts. SwiftUI bodies are
 /// intentionally not introspected — instead we snapshot the pure-state
 /// descriptors that feed the view's render path. The button's body
@@ -52,7 +52,7 @@ struct MedicationsRowSnapshotTests {
             as: .lines,
             named: "quick-mark-not-scheduled-today"
         )
-        // W-UX2: phantom-44pt collapse — non-actionable states never
+        // Phantom-44pt collapse — non-actionable states never
         // widen past the 32pt visual chip.
         #expect(descriptor.visualSize == 32.0)
         #expect(descriptor.hitTarget == 32.0)
@@ -181,7 +181,7 @@ struct ActiveMedicationRowSnapshot {
     let displayState: ActiveMedicationDisplayState
 
     var scheduleSummary: String {
-        ActiveMedicationsSection.scheduleSummary(medication.schedule)
+        ActiveMedicationsSection.scheduleSummary(medication.schedule, locale: Locale(identifier: "de_DE"))
     }
 
     var badgeTitle: String? {

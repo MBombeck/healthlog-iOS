@@ -63,7 +63,7 @@
         func unknownTriggerWordIsUnknown() {
             let summary = HKServerSyncHealthSummary(verdict: .fresh, lastSyncTrigger: "watch_relay")
             #expect(summary.autonomy == .unknown)
-            // K1 — neutral statt roh: ein Server-Wort ist ein Bezeichner.
+            // Neutral statt roh: ein Server-Wort ist ein Bezeichner.
             #expect(summary.triggerLabel == String(localized: "settings.hkdiag.verdict_unknown"))
         }
 

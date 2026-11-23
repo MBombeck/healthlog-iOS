@@ -10,7 +10,7 @@
     struct HealthKitFrequencyTests {
         @Test("defaultReadTypes enthaelt mindestens 23 Server-supported Identifiers")
         func defaultReadTypesCount() {
-            // v0.5.2 F2: 18 + 4 mobility/body-composition (walkingSpeed,
+            // 18 + 4 mobility/body-composition (walkingSpeed,
             // walkingAsymmetryPercentage, walkingStepLength, bodyMassIndex)
             // + 1 Category + TimeInDaylight (iOS 17+) → ≥ 23 on iOS 18.
             #expect(HealthKitService.defaultReadTypes.count >= 23)

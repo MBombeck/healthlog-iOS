@@ -33,7 +33,7 @@ public extension MedicationsRepository {
     /// returns the EXISTING med (200, full envelope) rather than minting a
     /// duplicate. **That idempotency is the backstop, not the dedup mechanism**
     /// — the importer calls this only for concepts the server does not already
-    /// mirror or whose name/form changed (CU-10). Leaning on it alone is what
+    /// mirror or whose name/form changed. Leaning on it alone is what
     /// made a rotating `externalId` cost a live instance 23 phantom rows.
     ///
     /// Returns the server row projected into ``Medication``, with the
@@ -49,7 +49,7 @@ public extension MedicationsRepository {
     /// ``MedicationsRepository/unstableExternalIDErrorCode``: an honest failure,
     /// never a silent skip that would look like a successful mirror.
     ///
-    /// **Phase 07 / plan 07-05.** `idempotencyKey` is now a parameter. The
+    /// `idempotencyKey` is now a parameter. The
     /// mirror upsert used to mint a fresh key on every attempt, which made the
     /// replay window structurally unusable: two attempts at the same concept
     /// were two different operations as far as the server's dedup was concerned,
@@ -106,7 +106,7 @@ public extension MedicationsRepository {
     /// batch `422 medications.intake.bulk.apple_health_not_mirrored`, surfaced
     /// as ``HLError/server(status:code:message:)`` with that code.
     ///
-    /// **Phase 07 / plan 07-05.** `idempotencyKey` is a parameter so the caller
+    /// `idempotencyKey` is a parameter so the caller
     /// can *derive* it from the chunk's own dose UUIDs instead of minting one
     /// per attempt. A process that dies between this POST and its ledger write
     /// rebuilds the identical key on relaunch, so the replay window folds the
@@ -137,7 +137,7 @@ public extension MedicationsRepository {
 /// Request body wrapper for the bulk endpoint (1–500 entries).
 struct AppleHealthBulkIntakeBody: Codable {
     let entries: [MedicationsRepository.BulkIntakeEntry]
-    /// W3 (1.3) — optional top-level sibling of `entries`; `nil` is omitted
+    /// Optional top-level sibling of `entries`; `nil` is omitted
     /// (synthesised `encodeIfPresent`), so the body without a known trigger is
     /// byte-identical to the pre-1.3 one.
     var syncTrigger: SyncTrigger?

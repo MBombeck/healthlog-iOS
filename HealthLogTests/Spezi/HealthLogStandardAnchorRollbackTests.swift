@@ -5,7 +5,7 @@
     import Synchronization
     import Testing
 
-    /// Phase 07 Wave 2 — what replaced the held floor.
+    /// What replaced the held floor.
     ///
     /// **This suite is the restatement of `HealthLogStandard — H3 held-floor
     /// redelivery`.** That suite pinned the exact mechanism this plan removes: a
@@ -41,7 +41,7 @@
         /// API stub whose every batch POST throws — the network/server failure the
         /// old suite drove into `.keepAnchor`.
         ///
-        /// A2 (1.4, R3 S6) — a 503, not `.offline`: an offline page now holds
+        /// A 503, not `.offline`: an offline page now holds
         /// without a durable row (`HealthSampleBackfillAndHoldTests`), and this
         /// suite is about the failure that still writes one.
         private final class FailingAPI: APIClientProtocol, @unchecked Sendable {
@@ -129,15 +129,6 @@
             }
         }
 
-        private struct FlagStub: FeatureFlagsServicing {
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableDailyStats: false
-                default: flag.defaultValue
-                }
-            }
-        }
-
         private func makeUploader(api: APIClientProtocol) -> MeasurementBatchUploader {
             MeasurementBatchUploader(api: api, throttle: BatchSyncThrottle())
         }
@@ -173,8 +164,7 @@
         func failedPostHoldsUnderTheDurableRule() async {
             let standard = HealthLogStandard()
             await standard.attachUploader(
-                makeUploader(api: FailingAPI()),
-                featureFlags: FlagStub()
+                makeUploader(api: FailingAPI())
             )
 
             let outcome = await standard.consumePage(
@@ -203,7 +193,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: FailingAPI()),
-                featureFlags: FlagStub(),
                 retryQueue: retry
             )
 
@@ -230,7 +219,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: FailingAPI()),
-                featureFlags: FlagStub(),
                 retryQueue: retry
             )
 
@@ -251,7 +239,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: FailingAPI()),
-                featureFlags: FlagStub(),
                 retryQueue: RecordingRetryQueue(refusing: true)
             )
 
@@ -273,7 +260,6 @@
             let standard = HealthLogStandard()
             await standard.attachUploader(
                 makeUploader(api: SucceedingAPI()),
-                featureFlags: FlagStub(),
                 retryQueue: retry
             )
 
@@ -289,8 +275,7 @@
         func unwiredStandardIsTolerated() async {
             let standard = HealthLogStandard()
             await standard.attachUploader(
-                makeUploader(api: FailingAPI()),
-                featureFlags: FlagStub()
+                makeUploader(api: FailingAPI())
                 // no retryQueue, no admission
             )
             // Passes if the held page returns without crashing, and holds.

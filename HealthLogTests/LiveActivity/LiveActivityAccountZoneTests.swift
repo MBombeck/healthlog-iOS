@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **1.4 B4 — the Lock Screen grades the dose in the card's zone.**
+    /// **The Lock Screen grades the dose in the card's zone.**
     ///
     /// Since B4-c the medication card grades its dose window in the account
     /// zone the server keeps (`/me`, `MedicationsStore.profileTimeZone`). The

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.2 (#136) — picker kind-list logic: which kinds are shown, how they
+/// Picker kind-list logic: which kinds are shown, how they
 /// group, how they order.
 @Suite("MeasurementsPickerModel")
 struct MeasurementsPickerModelTests {
@@ -21,7 +21,7 @@ struct MeasurementsPickerModelTests {
 
     @Test("Flat/primary kinds fold into a leading headerless Core section")
     func flatKindsInCoreSection() {
-        // Parity Build 4 — the flat/pinned set shrank to the web five, so `pulse`
+        // The flat/pinned set shrank to the web five, so `pulse`
         // is no longer core (it moved into the `heart` group).
         let sections = MeasurementsPickerModel.sections(
             kindsWithData: [.weight, .bloodPressure, .sleep]
@@ -34,7 +34,7 @@ struct MeasurementsPickerModelTests {
 
     @Test("Grouped kinds land in their Insights category section")
     func groupedKindsInCategorySection() {
-        // Parity Build 4 — hrv → heart (was vitals), muscleMass → body.
+        // Hrv → heart (was vitals), muscleMass → body.
         let sections = MeasurementsPickerModel.sections(
             kindsWithData: [.hrv, .muscleMass]
         )

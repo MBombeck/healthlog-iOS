@@ -1,4 +1,4 @@
-// 20-01 — the R4 separation, as a machine-run measurement.
+// The R4 separation, as a machine-run measurement.
 //
 // R4 ("in den Insights fehlen die meisten Abschnitte") reduces to a single
 // fact, pinned in `InsightsEmptyAvailabilityCompositionTests`: `availableKinds`
@@ -233,7 +233,7 @@
                 layout: .default,
                 availableKinds: interrupted.availableKinds
                     .union(interrupted.recent.map(\.kind)),
-                availableSpecials: [.recovery, .workouts, .mood, .ecg]
+                availableSpecials: [.workouts, .mood, .ecg]
             )
             record("row4 composition-after-pull: \(composition.map(\.title).joined(separator: " · "))")
 

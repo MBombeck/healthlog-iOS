@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.14.3 E3 — locks the SWR-wrap on `MoodRepository.recent(days:)`.
+/// Locks the SWR-wrap on `MoodRepository.recent(days:)`.
 ///
 /// The Stimmung card lagged the web because `MoodRepository.recent` was a direct
 /// network fetch with no SWR cache — freshness was entirely driven by the store's
@@ -64,7 +64,7 @@ struct MoodRepositorySWRTests {
         }
         let first = try await repo.recent(days: 365)
         #expect(first.count == 1)
-        // The revalidation cache write is detached (W-PERF-SWR) — drain it so the
+        // The revalidation cache write is detached — drain it so the
         // warm read below sees the persisted row deterministically (no race).
         await swr.drainPendingWrites()
         // Second read inside the 60s `.moodEntries` TTL must serve cache.

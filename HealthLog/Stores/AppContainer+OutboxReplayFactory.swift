@@ -35,24 +35,26 @@ extension AppContainer {
         // audit-v0162 H1 (Opt 3) — shared degraded-server signal, fed by the
         // `/api/health` reachability probe. A 5xx/429 replay failure while the
         // server is known-degraded does NOT burn the write's retry budget.
-        serverHealth: ServerHealthSignal
+        serverHealth: ServerHealthSignal,
+        keychain: KeychainStoring,
+        refreshCoordinator: RefreshCoordinator
     ) -> OutboxReplayService {
         OutboxReplayService(
             outbox: outbox,
             measurementsRepo: measurementsRepo,
             moodRepo: moodRepo,
             medicationsRepo: medicationsRepo,
-            // v0.7.1 W-TARGETS-EDITOR — replay offline target-range edits.
+            // Replay offline target-range edits.
             userThresholdsRepo: userThresholdsRepo,
-            // v0.8.0 W10 — replay offline Insights layout edits.
+            // Replay offline Insights layout edits.
             insightsLayoutRepo: insightsLayoutRepo,
-            // v0.10.0 W10 M1 — mirror replayed offline mood create/update/delete
+            // Mirror replayed offline mood create/update/delete
             // into Apple Health (self-gated on the user's sync toggle), closing
             // the gap where an offline-logged mood never reached HKStateOfMind.
             // Closures (not a direct writer dep) because `OutboxReplayService`
             // also compiles into the widget extension, which doesn't link the
             // app-only `AnyHealthKitWriter`.
-            // A2-M4 — keep the mirror best-effort (must NOT block the server
+            // Keep the mirror best-effort (must NOT block the server
             // write) but make a failure loud-in-logs, not silent. A real HK
             // failure (e.g. authorization revoked mid-session) would otherwise
             // diverge server↔HealthKit with nothing observable at this seam.
@@ -78,22 +80,29 @@ extension AppContainer {
                     }
                 }
             },
-            therapyLogRepo: therapyLogRepo, // v0.12 SP3+SP4 — replay offline side-effect + inventory writes
-            cycleRepo: cycleRepo, // v0.14.8 — replay offline cycle day-log + period writes
+            therapyLogRepo: therapyLogRepo, // Replay offline side-effect + inventory writes
+            cycleRepo: cycleRepo, // Replay offline cycle day-log + period writes
             workoutsRepo: workoutsRepo, // audit C4.1 — replay enrolled workout batch uploads
-            coachAboutMeRepo: coachAboutMeRepo, // W-B187 COACH-3 — replay offline adopt/dismiss
+            coachAboutMeRepo: coachAboutMeRepo, // Replay offline adopt/dismiss
             labsRepo: labsRepo, // v1.18.6 PHI — replay offline lab + biomarker writes
             illnessRepo: illnessRepo, // v1.18.6 PHI — replay offline episode + day-log writes
             allergiesRepo: allergiesRepo, // v1.25 PHI — replay offline allergy writes
             familyHistoryRepo: familyHistoryRepo, // v1.25 PHI — replay offline family-history writes
             mentalHealthRepo: mentalHealthRepo, // v1.25 PHI — replay offline PHQ-9 / GAD-7 submits
             customMetricsRepo: customMetricsRepo, // replay offline custom-metric writes
-            nutrientReadRepo: nutrientReadRepo, // Build 7.6 (GH #48) — replay offline water quick-adds
+            nutrientReadRepo: nutrientReadRepo, // Build 7.6 — replay offline water quick-adds
             // audit-v0162 H1 (Opt 3) — degraded-server attempt-suppression.
             serverHealthDegraded: { await serverHealth.isKnownDegraded },
-            // W1 (1.3.0) — rows a timeout pushed over budget under 1.2.0 are
+            // Rows a timeout pushed over budget under 1.2.0 are
             // re-queued once after the update.
-            updatePathDefaults: { .standard }
+            updatePathDefaults: { .standard },
+            // Wakes the replay once a back-off has run out, so a failed write
+            // does not wait for the next foreground or network edge.
+            rerunSleep: { try await Task.sleep(for: .seconds($0)) },
+            // #6 — no pass without a bearer; an expired one is renewed first.
+            sessionGate: .live(keychain: keychain) {
+                _ = await refreshCoordinator.attemptRefresh()
+            }
         )
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.15.2 W-WATCH-COMPLICATIONS — watch-face complication glance mapping.**
+/// **Watch-face complication glance mapping.**
 ///
 /// The complications (`HealthScoreComplication`, `LatestMeasurementComplication`,
 /// and the next-dose ring) read plain-data glances off the `WatchSnapshot`, so

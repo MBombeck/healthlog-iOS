@@ -1,6 +1,6 @@
 import Foundation
 
-// #110 — the outbox replay against the server's rate limits.
+// The outbox replay against the server's rate limits.
 //
 // Server v1.39.0 put the per-record creates (measurements, mood entries,
 // medication intakes, labs, biomarkers, custom-metric entries, cycle day logs,
@@ -27,7 +27,7 @@ import Foundation
 //     until the named instant; the next trigger after it resumes where this
 //     one stopped.
 
-/// #110 — the replay's rate-limit memory. Lives as long as the service (one
+/// The replay's rate-limit memory. Lives as long as the service (one
 /// per process); a relaunch simply asks the server again.
 struct OutboxRateLimitState {
     /// No row is sent before this instant.
@@ -41,7 +41,7 @@ struct OutboxRateLimitState {
     var pausedThisPass: TimeInterval = 0
 }
 
-/// #110 — how the replay waits. Task-local so a test binds an instant,
+/// How the replay waits. Task-local so a test binds an instant,
 /// recording sleeper instead of waiting on the wall clock.
 enum OutboxReplayPause {
     @TaskLocal static var sleep: @Sendable (TimeInterval) async throws -> Void = { seconds in

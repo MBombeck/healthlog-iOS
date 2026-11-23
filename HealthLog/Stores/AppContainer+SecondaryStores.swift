@@ -38,27 +38,27 @@ extension AppContainer {
         moodStore: MoodStore,
         settingsStore: SettingsStore
     ) -> SecondaryStoresBundle {
-        let moduleGate = ModuleGate(repo: moduleGateRepo) // #30 — defaults all-on until /api/auth/me resolves the per-user map
+        let moduleGate = ModuleGate(repo: moduleGateRepo) // Defaults all-on until /api/auth/me resolves the per-user map
         return SecondaryStoresBundle(
             charts: ChartsStore(repo: measurementsRepo, swr: swr),
             doctorReport: DoctorReportStore(service: doctorReport),
             localDoctorReport: buildLocalDoctorReport(measurementsStore, medicationsStore, moodStore, settingsStore),
             disclaimerAck: DisclaimerAckStore(repo: disclaimerAckRepo),
-            // #32 — seeds from the local cache synchronously; reconciles to the server on launch (RootView).
+            // Seeds from the local cache synchronously; reconciles to the server on launch (RootView).
             onboardingTour: OnboardingTourStore(repo: onboardingTourRepo),
             // v1.18.6 — per-user diabetes opt-in (server resolves the ADA glucose bands).
             diabetes: DiabetesStore(repo: DiabetesRepository(api: apiClient)),
             injectionSitePrefs: InjectionSitePrefsStore(repo: injectionSitePrefsRepo),
             moduleGate: moduleGate,
-            // CCH-03 — the Coach nudge dot reads its own thin account-wide read-only service.
+            // The Coach nudge dot reads its own thin account-wide read-only service.
             coachNudge: CoachNudgeStore(service: CoachServerService(api: apiClient)),
-            // W-COACH-CADENCE (#30) — shares the app-wide reminders store so an
+            // Shares the app-wide reminders store so an
             // accepted (server-minted) reminder lands in the native list without
             // a second source of truth.
             coachCadence: CoachCadenceSuggestionsStore(
                 repo: CoachCadenceSuggestionsRepository(api: apiClient),
                 remindersStore: measurementRemindersStore,
-                // W-FOCUS-FILTER — production reads the live shared Focus-filter
+                // Production reads the live shared Focus-filter
                 // config so "pause coach nudges" suppresses the cards while a
                 // Focus is on.
                 focusFilterConfig: { FocusFilterConfigStore.current() }

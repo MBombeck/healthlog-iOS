@@ -100,10 +100,10 @@ public struct PersonalRecordDTO: Decodable, Sendable, Equatable, Identifiable {
     }
 }
 
-// MARK: - Account unit (#115 P2)
+// MARK: - Account unit
 
 public extension PersonalRecordDTO {
-    /// **#115 P2** — `GET /api/personal-records` hands back the stored row:
+    /// `GET /api/personal-records` hands back the stored row:
     /// canonical value, canonical unit ("kg", "°C", "mg/dL", "m"). The record
     /// surfaces printed both verbatim, so an imperial account read its best
     /// weight in kg next to a dashboard in lb. This is the record's transform
@@ -129,7 +129,7 @@ public extension PersonalRecordDTO {
         accountTransform(units).suffix ?? Self.localizedUnit(unit)
     }
 
-    /// 1.4 B4 — the server stamps a step record "steps"; printed verbatim it
+    /// The server stamps a step record "steps"; printed verbatim it
     /// read "12.999 steps" in German. A count unit takes the app's own word
     /// ("Schritte"); every measured unit ("kg", "bpm", "km") stays as sent.
     /// POLISH-B (SHOTS F-REC-1) — the same for "floors" ("27 floors").

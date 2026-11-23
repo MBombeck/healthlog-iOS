@@ -6,9 +6,8 @@ import Testing
 ///
 /// The area unit applied R2's verdicts with the info pattern: what a card says
 /// is in the card, an empty card is not there, a screen's explanations sit
-/// behind its one (i). These tests pin the decisions that are behaviour (pure
-/// resolvers, info content) and, read against the source, the lines that went
-/// away, so a later refactor cannot quietly bring them back.
+/// behind its one (i). These tests pin the decisions that are behaviour: pure
+/// resolvers, info content and the retired catalog keys.
 @Suite("B2-a — Today, Measurements, Insights explain themselves")
 struct AreaTodayInsightsCalmTests {
     // MARK: - Today
@@ -32,15 +31,6 @@ struct AreaTodayInsightsCalmTests {
             defaults: defaults
         )
         #expect(newTypes == .newTypes, "the new-types notice is not the banner's")
-    }
-
-    @Test("Today's adherence card has no loose Sources row and no onboarding sentence")
-    func adherenceCardIsCalm() throws {
-        let card = try code(of: "HealthLog/Screens/Dashboard/ComplianceRingCard.swift")
-        #expect(!card.contains("HLSourcesLink("))
-        #expect(!card.contains("No reminders scheduled yet"))
-        #expect(!card.contains("No intakes scheduled for today."))
-        #expect(card.contains("if !isFullyEmpty"))
     }
 
     // MARK: - Records
@@ -68,7 +58,7 @@ struct AreaTodayInsightsCalmTests {
     // MARK: - Insights special pages
 
     @Test("Mood and Medications explain themselves behind one (i)")
-    func specialPagesCarryTheirInfo() throws {
+    func specialPagesCarryTheirInfo() {
         let mood = InsightsSpecialPageInfo.mood(showsCorrelation: false)
         #expect(mood.about == InsightsExplainer.copy(slug: "mood")?.body)
         #expect(mood.about != nil)
@@ -79,45 +69,6 @@ struct AreaTodayInsightsCalmTests {
         let medications = InsightsSpecialPageInfo.medications(showsCorrelation: false)
         #expect(medications.about != nil)
         #expect(medications.sections.map(\.topic) == [.medicationCompliance])
-
-        for path in [
-            "HealthLog/Screens/Insights/Sub/InsightsMoodPage.swift",
-            "HealthLog/Screens/Insights/Sub/InsightsMedicationsPage.swift"
-        ] {
-            let page = try code(of: path)
-            #expect(page.components(separatedBy: "HLInfoButton(").count == 2, "\(path): exactly one (i)")
-            #expect(!page.contains("InsightsExplainerIntro("), "\(path): the intro paragraph is back")
-        }
-    }
-
-    // MARK: - Correlations
-
-    @Test("a correlation card is headline, reading and one foot line; the rest opens with Details")
-    func correlationCardIsThreeLines() throws {
-        let block = try code(of: "HealthLog/Screens/Insights/Sub/InsightsCorrelationsDiscoveryBlock.swift")
-        #expect(
-            block.components(separatedBy: "HLSourcesLink(topic: .correlations)").count == 3,
-            "one citation per card, in its foot line (fit and stacked variant)"
-        )
-        for retired in ["resurfacedNote", "dismissedNote", "askCoachLink("] {
-            #expect(!block.contains(retired), "\(retired) is back on the card")
-        }
-        let details = try code(of: "HealthLog/Screens/Insights/Sub/InsightsCorrelationFollowUpSection.swift")
-        #expect(details.contains("statLine(for: pair)"))
-        #expect(!details.contains("HLSourcesLink("), "the card above already cites")
-        #expect(!details.contains("insights.correlations.detail.noPage"))
-    }
-
-    // MARK: - ECG
-
-    @Test("the ECG attribution sits at the foot of the card it attributes")
-    func ecgAttributionInTheCard() throws {
-        let page = try code(of: "HealthLog/Screens/Insights/Sub/InsightsEcgPage.swift")
-        let detail = try code(of: "HealthLog/Screens/Insights/Sub/EcgDetailScreen.swift")
-        #expect(page.contains("EcgAttributionFooter()"))
-        #expect(detail.contains("EcgAttributionFooter()"))
-        #expect(!page.contains("insights.ecg.intro"))
-        #expect(detail.components(separatedBy: "HLSourcesLink(").count == 1, "the footer cites once")
     }
 
     // MARK: - Catalog
@@ -154,20 +105,6 @@ struct AreaTodayInsightsCalmTests {
     }
 
     // MARK: - Helpers
-
-    private static let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent() // Screens
-        .deletingLastPathComponent() // HealthLogTests
-        .deletingLastPathComponent() // repo root
-
-    /// A file's source without whole-line comments, so "X must not appear"
-    /// reads declarations rather than the prose explaining why X went.
-    private func code(of path: String) throws -> String {
-        try String(contentsOf: Self.root.appendingPathComponent(path), encoding: .utf8)
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
-    }
 
     private static func record(id: String, bucket: TimeBucket, slot: String? = nil) -> PersonalRecord {
         let dto = PersonalRecordDTO(

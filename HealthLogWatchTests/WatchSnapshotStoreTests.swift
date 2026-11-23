@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **H4 — first watch-target tests (audit-v0162).**
+/// **First watch-target tests.**
 ///
 /// `WatchSnapshotStore` is the watch app ⇄ complication bridge: the watch app
 /// writes the phone-pushed `WatchSnapshot` into a file the complication's

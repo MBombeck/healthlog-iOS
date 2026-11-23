@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// POLISH-C (F-AX-DATEROW) — the app-wide date picker style, set once at the
+/// The app-wide date picker style, set once at the
 /// root (`HealthLogApp`).
 ///
 /// A compact `DatePicker` puts its label beside the date button. At an

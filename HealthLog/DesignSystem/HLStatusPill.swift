@@ -1,26 +1,21 @@
 import SwiftUI
 
-/// 3-state status pill mirroring web `IntegrationStatusPill`
-/// (`src/components/settings/integration-status-pill.tsx:69-135`).
+/// The connection state of an integration or a configuration, at a glance.
 ///
-/// Used in Settings sub-screens (Integrationen, KI-Auswertungen, API, About)
-/// next to a card title to communicate connection state at a glance.
+/// It is a thin wrapper around ``HLBadge``: the state picks the symbol and
+/// the tone, the badge draws them, so a status pill and a badge of the same
+/// meaning look the same.
 ///
-/// **Visual contract:**
+/// - `.connected`: checkmark, success tone.
+/// - `.error`: triangle, critical tone.
+/// - `.disconnected`: slash, neutral tone.
+/// - `.unknown`: question mark, neutral tone.
+/// - `.warning`: clock, warning tone. A connection that works but is limited
+///   or delayed (`health.state` `limited` / `degraded`), which is neither
+///   healthy nor broken.
 ///
-/// - `.connected` — checkmark + label, `statusOK` fill at 15 % alpha,
-///   `statusOK` foreground (mirrors web's `text-dracula-green`).
-/// - `.error` — triangle + label, `statusBad` fill at 15 % alpha, `statusBad`
-///   foreground (mirrors web's `text-destructive`).
-/// - `.disconnected` — slash + label, neutral outline + `textSecondary`
-///   foreground (mirrors web's bordered outline state).
-/// - `.warning` — clock + label, `statusWarn` fill at 15 % alpha. #139: a
-///   connection that works but is limited or delayed (`health.state`
-///   `limited` / `degraded`), which is neither healthy nor broken.
-///
-/// Lives next to but distinct from `HLBadge`: the badge is a generic chip,
-/// the status pill is specifically the 3-state integration / configuration
-/// affordance used in Settings cards.
+/// In a card head it is a capsule; in a row or next to a value it takes
+/// `form: .text`.
 public struct HLStatusPill: View {
     public enum State: Equatable, Sendable {
         case connected(label: String)
@@ -31,9 +26,11 @@ public struct HLStatusPill: View {
     }
 
     private let state: State
+    private let form: HLBadge.Form
 
-    public init(_ state: State) {
+    public init(_ state: State, form: HLBadge.Form = .capsule) {
         self.state = state
+        self.form = form
     }
 
     /// Convenience: connected with a default localized label.
@@ -44,24 +41,10 @@ public struct HLStatusPill: View {
     public static let disconnected = HLStatusPill(.disconnected(label: String(localized: "Not connected")))
 
     public var body: some View {
-        HStack(spacing: HLSpace.xs) {
-            Image(systemName: symbol)
-                .font(.hlCaption2.weight(.semibold))
-            Text(label)
-                .font(.hlCaption)
-                .fontWeight(.semibold)
-        }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, HLSpace.sm)
-        .padding(.vertical, HLSpace.xs)
-        .background(background)
-        .overlay(border)
-        .clipShape(Capsule())
-        .accessibilityElement()
-        .accessibilityLabel(Text(label))
+        HLBadge(label, icon: symbol, tone: tone, form: form)
     }
 
-    private var label: String {
+    var label: String {
         switch state {
         case let .connected(label): label
         case let .error(label): label
@@ -71,7 +54,7 @@ public struct HLStatusPill: View {
         }
     }
 
-    private var symbol: String {
+    var symbol: String {
         switch state {
         case .connected: "checkmark.circle.fill"
         case .error: "exclamationmark.triangle.fill"
@@ -81,34 +64,12 @@ public struct HLStatusPill: View {
         }
     }
 
-    private var foreground: Color {
+    var tone: HLBadge.Tone {
         switch state {
-        case .connected: HLColor.statusOK
-        case .error: HLColor.statusBad
-        case .disconnected: HLText.secondary
-        case .unknown: HLText.tertiary
-        case .warning: HLColor.statusWarn
-        }
-    }
-
-    @ViewBuilder
-    private var background: some View {
-        switch state {
-        case .connected: Capsule().fill(HLColor.statusOK.opacity(0.15))
-        case .error: Capsule().fill(HLColor.statusBad.opacity(0.15))
-        case .disconnected: Capsule().fill(Color.clear)
-        case .unknown: Capsule().fill(HLText.tertiary.opacity(0.1))
-        case .warning: Capsule().fill(HLColor.statusWarn.opacity(0.15))
-        }
-    }
-
-    @ViewBuilder
-    private var border: some View {
-        switch state {
-        case .disconnected:
-            Capsule().stroke(HLColor.separator, lineWidth: 0.5)
-        default:
-            Capsule().stroke(Color.clear, lineWidth: 0)
+        case .connected: .success
+        case .error: .critical
+        case .disconnected, .unknown: .neutral
+        case .warning: .warning
         }
     }
 }
@@ -120,6 +81,7 @@ public struct HLStatusPill: View {
         HLStatusPill(.disconnected(label: "Nicht verbunden"))
         HLStatusPill(.unknown(label: "Wird geprüft …"))
         HLStatusPill(.warning(label: "Verzögert"))
+        HLStatusPill(.connected(label: "Verbunden"), form: .text)
     }
     .padding()
     .background(HLColor.background)

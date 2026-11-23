@@ -67,9 +67,7 @@ extension NewSurfacesAccessibilityAuditTests {
     }
 
     func tab(_ symbol: String) {
-        let button = app.tabBars.buttons.containing(.image, identifier: symbol).firstMatch
-        if button.waitForExistence(timeout: 10) {
-            button.tap()
+        if ShellNavigator.select(symbol: symbol, in: app, timeout: 10) {
             settle(2.5)
         }
     }
@@ -197,7 +195,7 @@ extension NewSurfacesAccessibilityAuditTests {
     ///   and of the glass layers);
     /// - *chrome*: on the navigation bar, the tab bar or, with
     ///   `bottomChrome`, the floating control above it: system bars, and a
-    ///   contrast taken through their glass measures the fold (Phase 8 K1);
+    ///   contrast taken through their glass measures the fold;
     /// - *outside*: on an older part of the same screen, which this audit
     ///   does not own.
     ///
@@ -300,8 +298,7 @@ extension NewSurfacesAccessibilityAuditTests {
         // The bar plus the scroll edge effect under it, which fades what
         // scrolls beneath (about 32 pt on iOS 26 and 27).
         let top = bar.exists && bar.frame.maxY < window.height / 2 ? bar.frame.maxY + 32 : 0
-        let tabs = app.tabBars.firstMatch
-        var bottom = (tabs.exists && tabs.frame.minY > window.height / 2 ? tabs.frame.minY : window.maxY) - bottomChrome
+        var bottom = ShellNavigator.bottomChromeMinY(in: app) - bottomChrome
         let keyboard = app.keyboards.firstMatch
         if keyboard.exists, keyboard.frame.minY > 0 { bottom = min(bottom, keyboard.frame.minY) }
         return (top, bottom)

@@ -1,23 +1,19 @@
 import SwiftUI
 
-/// Presentation helpers for the NEUTRAL lab reference-range status. Kept in the
+/// Presentation helpers for the lab reference-range status. Kept in the
 /// Labs screen module (not in `HLBadge`) so the shared badge primitive is
 /// untouched.
 ///
-/// **NEUTRAL CONTRACT (server §1 / CONTRACT FACTS).** `rangeStatus` is the
-/// singular server-computed verdict and must render calm + informative — NEVER
-/// an alarming red for an out-of-range value. Every case maps to a NON-critical
-/// `HLBadge.Tone`: `inRange` → `.success` (the only sanctioned signal colour,
-/// matching the existing "In range" badge), and `below`/`above`/`unknown` →
-/// `.info`/`.neutral`. There is deliberately NO `.critical`/`.warning` branch.
+/// `rangeStatus` is the singular server verdict and is rendered as-is, as
+/// quiet status text without a capsule. `inRange` reads green; a reading
+/// outside its range reads orange, because outside the range is where
+/// something may need doing; it is never the red of an alarm. `unknown` stays
+/// neutral.
 extension LabRangeStatus {
-    /// NEUTRAL badge tone. `inRange` reuses the calm green "In range" signal;
-    /// out-of-range stays `.info` (cyan, mono text scale) — informative, never
-    /// an alarm. `unknown` is fully neutral.
     var badgeTone: HLBadge.Tone {
         switch self {
         case .inRange: .success
-        case .below, .above: .info
+        case .below, .above: .warning
         case .unknown: .neutral
         }
     }
@@ -41,14 +37,21 @@ extension LabRangeStatus {
         case .unknown: String(localized: "labs.range.unknown")
         }
     }
+
+    /// The range as the quiet status text under a row value. A reading
+    /// without a range says nothing in a row; its page names the gap.
+    var rowStatus: HLRowStatus? {
+        guard self != .unknown else { return nil }
+        return HLRowStatus(localizedLabel, icon: badgeIcon, tone: badgeTone)
+    }
 }
 
-/// The neutral range badge used on list rows + detail. A thin wrapper over
-/// ``HLBadge`` that enforces the neutral tone mapping in one place.
+/// The range verdict as quiet text, the one form on every lab surface.
 struct LabRangeBadge: View {
     let status: LabRangeStatus
+    var form: HLBadge.Form = .text
 
     var body: some View {
-        HLBadge(status.localizedLabel, icon: status.badgeIcon, tone: status.badgeTone)
+        HLBadge(status.localizedLabel, icon: status.badgeIcon, tone: status.badgeTone, form: form)
     }
 }

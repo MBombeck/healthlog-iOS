@@ -65,7 +65,7 @@ enum HLPerfSignpost {
         /// (scenePhase-foreground revalidate budget).
         case scenePhaseRevalidate = "scenephase.revalidate"
 
-        // MARK: Phase 09 — measured before optimised
+        // MARK: Measured before optimised
 
         /// Building the Apple-Health multipart body, before any byte is sent.
         case appleImportPrepare = "apple-import.prepare"
@@ -155,7 +155,7 @@ enum HLPerfSignpost {
         signposter.endInterval(interval.rawValue, state)
     }
 
-    // MARK: - Phase 09 — balanced intervals
+    // MARK: - Balanced intervals
 
     /// Open a Phase-9 interval that will be closed by ``close(_:completed:)``.
     ///
@@ -208,26 +208,17 @@ enum HLPerfSignpost {
         return result
     }
 
-    // MARK: - Phase 09 — the foreground pass
+    // MARK: - The foreground pass
 
     //
-    // The two foreground intervals used to be opened together by a paired
-    // helper here, because until 09-06 the foreground was a loose set of sibling
-    // tasks and the only thing that could be said to have "settled" was the
-    // existing revalidation chain. Plan 09-06 moved `foreground.pass` onto
-    // `ForegroundCoordinator.run`, where it is opened once per pass and closed
-    // from a `defer` with an outcome, and left `scenephase.revalidate` on the
-    // HealthKit-stats → dashboard-summary leg, where it goes on measuring
-    // exactly the chain the PROJECT_GUIDE.md budget has always named. The two
-    // are therefore no longer co-extensive, which is what 09-01's evidence note
-    // said this plan would make true — and it matters: the pass is bounded by
-    // construction at 250 ms + 50 ms, so a `scenephase.revalidate` that shared
-    // its span would meet its own 300 ms budget by truncation rather than by
-    // being fast, which is a measurement that cannot fail.
-    //
-    // The paired helper was retired with the fan-out it existed for. The token
-    // form (`open`/`close`) and the plain form (`begin`/`end`) are what the
-    // coordinator and its legs use directly.
+    // `foreground.pass` is opened once per pass in `ForegroundCoordinator.run`
+    // and closed from a `defer` with an outcome. `scenephase.revalidate` stays
+    // on the HealthKit-stats → dashboard-summary leg, the chain the
+    // PROJECT_GUIDE.md budget names. The two must not share a span: the pass is
+    // bounded by construction at 250 ms + 50 ms, so a revalidation inside it
+    // would meet its own 300 ms budget by truncation, a measurement that cannot
+    // fail. The coordinator and its legs use the token form (`open`/`close`)
+    // and the plain form (`begin`/`end`) directly.
 
     // MARK: tap-to-detail — deferred begin/end across views
 
@@ -334,7 +325,7 @@ enum HLPerfSignpost {
 /// both. Attach to a root/tile/detail view to mark the budget moment without
 /// threading state through the view body.
 ///
-/// **Phase 09 / plan 09-05** generalised the payload from "an interval" to
+/// Generalised the payload from "an interval" to
 /// "an interval and/or a callback" rather than adding a second modifier with the
 /// same `@State`-guarded `onAppear` shape. There is one definition of "this view
 /// drew" in the app; a copy of it is a second definition that can drift.

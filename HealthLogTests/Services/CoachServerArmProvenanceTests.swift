@@ -18,12 +18,12 @@ import Testing
 ///     `.modelResponseFailed`, so the banner can render an actionable message.
 @Suite("Coach server arm — provenance seeding + typed error")
 struct CoachServerArmProvenanceTests {
-    // MARK: - C1: intended-arm seeding (provenance pill before first turn)
+    // MARK: - Intended-arm seeding (provenance pill before first turn)
 
     @MainActor
     @Test("seedIntendedArm flips usingServerFallback before the first turn (server arm)")
     func seedIntendedArmServer() {
-        // L-1 (v0153) — force the not-ready (no on-device AI) arm deterministically
+        // Force the not-ready (no on-device AI) arm deterministically
         // via the `forcedAvailability` test seam, so the assertions run on EVERY
         // host. The earlier `guard !service.isReady else { return }` silently
         // no-op'd the whole test on an AI-capable machine (the server arm only
@@ -48,7 +48,7 @@ struct CoachServerArmProvenanceTests {
     @MainActor
     @Test("seedIntendedArm leaves both flags false for the private on-device arm")
     func seedIntendedArmOnDevice() {
-        // L-1 — deterministic not-ready host (see `seedIntendedArmServer`).
+        // Deterministic not-ready host (see `seedIntendedArmServer`).
         let service = LocalLLMService(forcedAvailability: .unsupported)
 
         // No server / BYO wired → private on-device arm; no egress flags.
@@ -58,12 +58,12 @@ struct CoachServerArmProvenanceTests {
         #expect(store.usingBYO == false)
     }
 
-    // MARK: - C3: typed server-arm error preserved as .serverFailed
+    // MARK: - Typed server-arm error preserved as .serverFailed
 
     @MainActor
     @Test("server send maps a provider error frame to .serverFailed (not the flat .modelResponseFailed)")
     func serverSendPreservesTypedProviderError() async {
-        // L-1 — deterministic not-ready host so the server arm is exercised
+        // Deterministic not-ready host so the server arm is exercised
         // regardless of the test machine's on-device AI capability.
         let service = LocalLLMService(forcedAvailability: .unsupported)
 
@@ -93,7 +93,7 @@ struct CoachServerArmProvenanceTests {
     @MainActor
     @Test("server send maps an empty reply to .serverFailed wrapping CoachServerError.emptyReply")
     func serverSendPreservesEmptyReplyError() async {
-        // L-1 — deterministic not-ready host (see `serverSendPreservesTypedProviderError`).
+        // Deterministic not-ready host (see `serverSendPreservesTypedProviderError`).
         let service = LocalLLMService(forcedAvailability: .unsupported)
 
         let api = StubProvenanceAPIClient()

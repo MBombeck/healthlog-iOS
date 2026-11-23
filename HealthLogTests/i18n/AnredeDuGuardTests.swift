@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// Build-8 (b239) coherence guard — pins the **du-Anrede** convention across the
+/// Build-8 coherence guard — pins the **du-Anrede** convention across the
 /// whole German catalog.
 ///
 /// HealthLog addresses the user informally ("du"), matching the web client. A
@@ -140,7 +140,7 @@ struct AnredeDuGuardTests {
         )
     }
 
-    /// 1.5.0 (L10N-MH): the validated instruments left the catalogue for
+    /// The validated instruments left the catalogue for
     /// `Resources/Questionnaires/` (server wording, siezend by design), so the
     /// sweep no longer meets them. The exemption list stays as a tripwire: a
     /// key under it coming back means instrument text slipped into the

@@ -8,7 +8,7 @@
     import Testing
     import UIKit
 
-    /// **#154 (MIRROR, 1.5)** — the Apple Health card said "Connected" in
+    /// The Apple Health card said "Connected" in
     /// its pill and "Connect to Apple Health" on its primary button whenever a
     /// write type was missing. Now it offers one action per state.
     ///
@@ -102,7 +102,7 @@
 
         /// The connection card as the screen builds it, minus the live pill.
         private func card(_ action: Action) -> some View {
-            HLSettingsCard(icon: "heart.text.square.fill", title: "Apple Health") {
+            HLCard("Apple Health") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     caption
                     if action == .reviewWriteAccess {
@@ -120,9 +120,9 @@
             .padding(HLSpace.md)
         }
 
-        /// What 1.4.1 showed in the reported state (#154).
+        /// What 1.4.1 showed in the reported state.
         private var beforeCard: some View {
-            HLSettingsCard(icon: "heart.text.square.fill", title: "Apple Health") {
+            HLCard("Apple Health") {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     caption
                     notice
@@ -162,6 +162,8 @@
             }
         }
 
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the test keeps the shipped behaviour.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         private func render(_ view: some View, name: String, style: UIUserInterfaceStyle) throws -> UIImage {
             let size = CGSize(width: 393, height: 420)
             let host = UIHostingController(rootView: AnyView(view.frame(maxWidth: .infinity, alignment: .top)))

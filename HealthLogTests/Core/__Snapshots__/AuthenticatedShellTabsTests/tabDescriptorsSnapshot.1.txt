@@ -8,7 +8,7 @@
       - value: "home"
     ▿ (2 elements)
       - key: "symbol"
-      - value: "house.fill"
+      - value: "house"
     ▿ (2 elements)
       - key: "title"
       - value: "Home"
@@ -21,7 +21,7 @@
       - value: "meds"
     ▿ (2 elements)
       - key: "symbol"
-      - value: "pills.fill"
+      - value: "pills"
     ▿ (2 elements)
       - key: "title"
       - value: "Meds"
@@ -34,7 +34,7 @@
       - value: "measure"
     ▿ (2 elements)
       - key: "symbol"
-      - value: "plus.circle.fill"
+      - value: "plus.circle"
     ▿ (2 elements)
       - key: "title"
       - value: "Log"

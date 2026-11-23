@@ -17,7 +17,7 @@ import Foundation
 /// from disk on launch + revalidate in the background — the same SWR posture as
 /// `CorrelationsDiscoveryRepository`.
 ///
-/// **HONEST-ONLY.** The repository surfaces ONLY what the server returns. A
+/// The repository surfaces ONLY what the server returns. A
 /// payload that pre-dates v1.11.5 (no relations slices) decodes to an empty
 /// ``MoodRelationsResponse`` so the cards self-suppress; it never fabricates a
 /// correlation.
@@ -51,7 +51,7 @@ public actor MoodRelationsRepository {
     /// #126 P2 (server v1.42.0) — `GET /api/mood/insights?days=N`: `stability`
     /// (and since v1.43 `patterns`, #136) cut to the period the page shows
     /// (30, 90, 180 or 365; any other value is a 422 server-side, so it is
-    /// never sent). INT-Q: routed through its own SWR row per window
+    /// never sent). Routed through its own SWR row per window
     /// (``CacheKey/moodInsightsWindow(days:)``), never through `.moodInsights`,
     /// so one window can never serve another window's answer.
     public func stability(days: Int) async throws -> MoodRelationsResponse {

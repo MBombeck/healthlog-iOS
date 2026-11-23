@@ -146,7 +146,7 @@ public struct AccountAccessEntry: Codable, Sendable, Equatable {
         guard !raw.isEmpty else { return .none }
         // A repeated word is a malformed grant and stays refused.
         guard Set(raw).count == raw.count else { return .unavailable }
-        // #115 B6 — a section word this build does not know is IGNORED, not
+        // A section word this build does not know is IGNORED, not
         // fatal: the known sections stay usable and the unknown one is simply
         // not shown (nothing routes to it, `allowsWholeRecord` still needs
         // `.all`). Before, one new server word locked the delegate out of
@@ -319,7 +319,7 @@ public struct UserProfile: Codable, Sendable, Equatable {
     /// email under the display name without a second `AuthStore.user` round-trip.
     /// PATCH does not accept this field (email-change is a separate flow).
     public let email: String?
-    /// v0.8.0 W11 — self-hosted avatar URL (server v1.5.5). Relative path of
+    /// Self-hosted avatar URL (server v1.5.5). Relative path of
     /// the shape `/api/user/avatar/{userId}?v=<updatedAtMs>` when the user has
     /// uploaded a photo, `nil` otherwise. The `?v=` suffix is a cache-buster:
     /// a re-upload flips the timestamp so the client invalidates its cached
@@ -342,21 +342,21 @@ public struct UserProfile: Codable, Sendable, Equatable {
     /// to `false` client-side so the toggle reads "off" until the
     /// server confirms it's actually opted in.
     public let moodReminderEnabled: Bool?
-    /// v0.10.0 — extended patient-identity fields surfaced by both
+    /// Extended patient-identity fields surfaced by both
     /// `GET /api/user/profile` and `GET /api/auth/me` (server v1.7.0). The
     /// full legal name + insurer feed the Doctor-Report cover + the FHIR
     /// Patient resource; all three are optional on the wire (older servers
     /// omit the keys entirely) so the decode stays tolerant.
     public let fullName: String?
-    /// v0.10.0 — health insurer (Krankenkasse). Plaintext, optional.
+    /// Health insurer (Krankenkasse). Plaintext, optional.
     public let insurerName: String?
-    /// v0.10.0 — German insurance number (KVNR). Returned in plaintext
+    /// German insurance number (KVNR). Returned in plaintext
     /// (server decrypts on read, fail-soft to `nil` on a key-rotation gap).
     /// Sensitive PII — must **never** be logged. Lives in-memory only,
     /// alongside the rest of the in-memory profile; never persisted to
     /// UserDefaults or any local cache beyond the existing SWR profile path.
     public let insuranceNumber: String?
-    /// v0.11.0 — German Institutionskennzeichen (IKNR) of the health
+    /// German Institutionskennzeichen (IKNR) of the health
     /// insurer: the 9-digit machine-resolvable insurer id. Optional,
     /// nullable (empty→nil). Echoed on `GET /api/user/profile` and accepted
     /// on PATCH (server v1.8.6, field `insurerIkNumber`). Feeds the FHIR
@@ -370,7 +370,7 @@ public struct UserProfile: Codable, Sendable, Equatable {
     /// then keeps the device-locale (`AUTO`) hour cycle. Drives every rendered
     /// clock through ``HLTimeFormat``.
     public let timeFormat: String?
-    /// A360-1 H1 — date-format preference (`AUTO | DMY | MDY | YMD`), surfaced
+    /// Date-format preference (`AUTO | DMY | MDY | YMD`), surfaced
     /// by `GET /api/user/profile` (server `User.dateFormat`, default `AUTO`,
     /// migration 0192 / server v1.21.0). Optional / nil against servers that
     /// omit the key — the client then keeps the device-locale (`AUTO`) field

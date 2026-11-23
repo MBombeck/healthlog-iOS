@@ -2,7 +2,7 @@
     import ActivityKit
     import Foundation
 
-    /// **v0.8.4 WWIDGET-1 — owns the medication Live Activity lifecycle.**
+    /// **Owns the medication Live Activity lifecycle.**
     ///
     /// A single `@MainActor` controller that wraps ActivityKit's
     /// `Activity.request` / `update` / `end` for the medication-reminder
@@ -25,7 +25,7 @@
     /// Activity is running. The server contract is documented in
     /// `.planning/v084/WWIDGET-1-report.md`; no server work is required for
     /// the **local** lifecycle to function.
-    /// **b181 W-B181 — spy-able seam for the reconcile routine.**
+    /// **Spy-able seam for the reconcile routine.**
     ///
     /// The side-effecting surface the central reconcile
     /// (`AppContainer.reconcileMedicationLiveActivity`) drives. Abstracted
@@ -75,6 +75,13 @@
         /// cancelled on `deinit` / stop. Keyed by a stable label.
         private var tokenStreamTasks: [String: Task<Void, Never>] = [:]
 
+        /// #190 (20:09) — the server's dose window of a medication's slot
+        /// (`dueAt`, `overdueSince`, `missedAfter` on today's row). Set by the
+        /// container from the medication store; `nil` keeps the fallback.
+        var doseBand: (@MainActor (_ medicationId: String, _ slot: Date) -> ServerDoseState?)?
+        /// One scheduled local state change per running Activity.
+        private var transitionTasks: [String: Task<Void, Never>] = [:]
+
         init(tokenSink: PushTokenSink? = nil) {
             self.tokenSink = tokenSink
         }
@@ -91,10 +98,12 @@
         // MARK: - Start
 
         /// Start (or refresh) the Live Activity for a due dose. If an
-        /// Activity for the same `medicationId` is already running we
-        /// **update** it in place instead of stacking a duplicate — the
-        /// reconcile path can call this idempotently after every store
-        /// load.
+        /// Activity for the same `medicationId` **and the same slot** is
+        /// already running we **update** it in place instead of stacking a
+        /// duplicate — the reconcile path can call this idempotently after
+        /// every store load. A running Activity of the same medication for a
+        /// different slot is ended and replaced: its static attributes name
+        /// the old slot, and its "Taken" button would book that one.
         ///
         /// Returns the running Activity's id on success, `nil` when
         /// Activities are disabled or the request failed (logged).
@@ -112,16 +121,27 @@
                 return nil
             }
 
-            // Idempotent: an Activity already exists for this med → update.
-            if let existing = runningActivity(for: medicationId) {
+            let decision = MedicationLiveActivityPlan.slotDecision(
+                running: runningSlots(for: medicationId),
+                requestedSlot: scheduledFireDate
+            )
+            switch decision {
+            case let .reuse(id, endIDs):
+                await endActivities(ids: endIDs)
+                // Idempotent: an Activity already exists for this dose → update.
+                guard let existing = activity(id: id) else { return nil }
                 await update(
-                    medicationId: medicationId,
+                    activityID: id,
                     status: .pending,
                     countdownTarget: scheduledFireDate,
                     isOverdue: isOverdue
                 )
-                observeUpdateToken(for: existing)
+                // Only subscribe when nothing listens yet: re-subscribing on
+                // every reconcile would cancel and restart the stream each load.
+                if tokenStreamTasks[existing.id] == nil { observeUpdateToken(for: existing) }
                 return existing.id
+            case let .request(endIDs):
+                await endActivities(ids: endIDs)
             }
 
             // W-B188 (AUDIT-SEC-b187 High) — when the user opted in to hide
@@ -149,7 +169,7 @@
                 status: .pending,
                 countdownTarget: scheduledFireDate,
                 isOverdue: isOverdue,
-                // W-B187 — carry the user's resolved 12h/24h/auto preference (the
+                // Carry the user's resolved 12h/24h/auto preference (the
                 // SAME source the home-screen widget snapshot writer uses) so the
                 // Lock-Screen dose time renders through `HLTimeFormat`, never the
                 // raw device-locale clock. The widget process can't read the app's
@@ -162,15 +182,15 @@
                     attributes: attributes,
                     content: ActivityContent(
                         state: initialState,
-                        // Auto-stale a little after the dose is due so a
-                        // forgotten Activity dims rather than lingering as
-                        // a live countdown forever.
-                        staleDate: scheduledFireDate.addingTimeInterval(60 * 60)
+                        // #190 (20:09): stale at `missedAfter`; the hand-over at
+                        // the due time is the scheduled local change below.
+                        staleDate: staleDate(medicationId: medicationId, slot: scheduledFireDate)
                     ),
                     pushType: tokenSink == nil ? nil : .token
                 )
                 HLLog.notifications.info("LiveActivity started med=\(medicationId, privacy: .private)")
                 observeUpdateToken(for: activity)
+                scheduleTransition(activityID: activity.id, medicationId: medicationId, slot: scheduledFireDate)
                 return activity.id
             } catch {
                 HLLog.notifications.error("LiveActivity request failed: \(error.localizedDescription)")
@@ -180,20 +200,23 @@
 
         // MARK: - Update
 
-        /// Update the running Activity's status + countdown target. No-op
-        /// when no Activity is running for the medication.
-        func update(
-            medicationId: String,
+        /// Update one running Activity's status + countdown target. No-op
+        /// when that Activity is gone.
+        private func update(
+            activityID: String,
             status: MedicationActivityAttributes.ContentState.Status,
             countdownTarget: Date,
             isOverdue: Bool = false
         ) async {
-            guard let activity = runningActivity(for: medicationId) else { return }
+            guard let activity = activity(id: activityID) else { return }
+            let medicationId = activity.attributes.medicationId
+            let slot = activity.attributes.scheduledFireDate
+            let band = doseBand?(medicationId, slot)
             let state = MedicationActivityAttributes.ContentState(
                 status: status,
                 countdownTarget: countdownTarget,
-                isOverdue: isOverdue,
-                // W-B187 — re-resolve the current time-format preference on every
+                isOverdue: MedicationLiveActivityPlan.isOverdue(band: band, now: .now, fallback: isOverdue),
+                // Re-resolve the current time-format preference on every
                 // update so a mid-activity profile change (12h↔24h) propagates to
                 // the Lock-Screen dose time.
                 timeFormatRaw: HLTimeFormat.current().rawValue
@@ -201,7 +224,39 @@
             // Await inline on the MainActor: the non-`Sendable` `activity`
             // never crosses a `Task` (sending) boundary, which keeps Swift 6
             // strict-concurrency happy without `@unchecked`/`assumeIsolated`.
-            await activity.update(ActivityContent(state: state, staleDate: nil))
+            await activity.update(ActivityContent(
+                state: state,
+                staleDate: MedicationLiveActivityPlan.staleDate(countdownTarget: countdownTarget, now: .now, band: band)
+            ))
+            scheduleTransition(activityID: activityID, medicationId: medicationId, slot: slot)
+        }
+
+        private func staleDate(medicationId: String, slot: Date) -> Date {
+            MedicationLiveActivityPlan.staleDate(countdownTarget: slot, now: .now, band: doseBand?(medicationId, slot))
+        }
+
+        /// Re-renders the Activity at the next instant of its window (the due
+        /// time hands the countdown over, `overdueSince` turns it overdue),
+        /// while the process lives; a later reconcile or a push takes over
+        /// otherwise. One pending change per Activity.
+        private func scheduleTransition(activityID: String, medicationId: String, slot: Date) {
+            transitionTasks[activityID]?.cancel()
+            guard let next = MedicationLiveActivityPlan.nextTransition(band: doseBand?(medicationId, slot), now: .now) else {
+                transitionTasks[activityID] = nil
+                return
+            }
+            transitionTasks[activityID] = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(1, next.timeIntervalSinceNow)))
+                guard !Task.isCancelled, let self, let activity = activity(id: activityID) else { return }
+                let current = activity.content.state
+                guard current.status == .pending else { return }
+                await update(
+                    activityID: activityID,
+                    status: current.status,
+                    countdownTarget: current.countdownTarget,
+                    isOverdue: current.isOverdue
+                )
+            }
         }
 
         // MARK: - End
@@ -216,26 +271,38 @@
             countdownTarget: Date = .now,
             dismissalPolicy: ActivityUIDismissalPolicy = .default
         ) async {
-            guard let activity = runningActivity(for: medicationId) else { return }
-            tokenStreamTasks.removeValue(forKey: activity.id)?.cancel()
             let finalState = MedicationActivityAttributes.ContentState(
                 status: finalStatus,
                 countdownTarget: countdownTarget,
-                // W-B187 — the dismissal frame can render "Genommen um HH:mm", so
+                // The dismissal frame can render "Genommen um HH:mm", so
                 // carry the time-format preference here too.
                 timeFormatRaw: HLTimeFormat.current().rawValue
             )
-            await activity.end(
-                ActivityContent(state: finalState, staleDate: nil),
-                dismissalPolicy: dismissalPolicy
-            )
+            for slot in runningSlots(for: medicationId) where slot.isLive {
+                guard let activity = activity(id: slot.id) else { continue }
+                await forgetUpdateToken(activityID: activity.id)
+                await activity.end(
+                    ActivityContent(state: finalState, staleDate: nil),
+                    dismissalPolicy: dismissalPolicy
+                )
+            }
+        }
+
+        /// Ends the given Activities at once: they name a slot that is no
+        /// longer the dose to show, so no confirmation frame belongs to them.
+        private func endActivities(ids: [String]) async {
+            for id in ids {
+                guard let activity = activity(id: id) else { continue }
+                await forgetUpdateToken(activityID: activity.id)
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
         }
 
         /// End **all** running medication Activities (e.g. on sign-out /
         /// account switch so no stale dose leaks across users).
         func endAll(dismissalPolicy: ActivityUIDismissalPolicy = .immediate) async {
             for activity in Activity<MedicationActivityAttributes>.activities {
-                tokenStreamTasks.removeValue(forKey: activity.id)?.cancel()
+                await forgetUpdateToken(activityID: activity.id)
                 await activity.end(nil, dismissalPolicy: dismissalPolicy)
             }
         }
@@ -244,9 +311,7 @@
 
         /// Subscribe to push-to-start token updates and forward each to the
         /// sink. Call once on app launch (after notification authorisation)
-        /// so the server can later drive `pushToStart` payloads. iOS 17.2+;
-        /// on earlier OSes this is a silent no-op (we are on an iOS 18
-        /// floor, so it always runs).
+        /// so the server can later drive `pushToStart` payloads.
         func observePushToStartToken() {
             guard let tokenSink else { return }
             let key = "push-to-start"
@@ -260,20 +325,60 @@
         }
 
         /// Forward per-activity update tokens for a running Activity so the
-        /// server can target updates at that specific Activity.
+        /// server can target updates at that specific Activity. Each token is
+        /// reported with the Activity's id, medication and slot (#188 (2)), so
+        /// the sink keeps one token per Activity instead of one per medication.
         private func observeUpdateToken(for activity: Activity<MedicationActivityAttributes>) {
             guard let tokenSink else { return }
             tokenStreamTasks[activity.id]?.cancel()
-            let medicationId = activity.attributes.medicationId
-            // Extract the (Sendable) token stream up front so the task does
-            // not capture the non-`Sendable` `activity` value itself.
+            let owner = LiveActivityTokenOwner(
+                activityID: activity.id,
+                medicationId: activity.attributes.medicationId,
+                slot: activity.attributes.intakeScheduledFor
+            )
+            // Extract the (Sendable) values up front so the task does not
+            // capture the non-`Sendable` `activity` value itself.
             let tokenUpdates = activity.pushTokenUpdates
+            // Sends the token the Activity already has first: after a cold
+            // start the stream need not repeat it, and the server would keep
+            // the token of a gone Activity.
+            let current = activity.pushToken
             tokenStreamTasks[activity.id] = _Concurrency.Task {
+                if let current {
+                    await tokenSink.didReceiveActivityUpdateToken(Self.hex(current), owner: owner)
+                }
                 for await tokenData in tokenUpdates {
-                    let hex = tokenData.map { String(format: "%02x", $0) }.joined()
-                    await tokenSink.didReceiveActivityUpdateToken(hex, medicationId: medicationId)
+                    await tokenSink.didReceiveActivityUpdateToken(Self.hex(tokenData), owner: owner)
                 }
             }
+        }
+
+        private nonisolated static func hex(_ data: Data) -> String {
+            data.map { String(format: "%02x", $0) }.joined()
+        }
+
+        /// Stops listening for an Activity's token and drops it from the sink,
+        /// so an ended Activity's token is never the one the server gets.
+        private func forgetUpdateToken(activityID: String) async {
+            tokenStreamTasks.removeValue(forKey: activityID)?.cancel()
+            await tokenSink?.didEndActivity(activityID: activityID)
+        }
+
+        /// **#188 (2) — re-subscribe at launch.** An Activity that outlived the
+        /// process (started by this build or an older one) had no
+        /// `pushTokenUpdates` listener after a cold start, so its token never
+        /// reached the server again. Subscribes every live Activity and tells
+        /// the sink which ones still exist, which drops the tokens of the rest.
+        func resubscribeRunningActivities() async {
+            guard let tokenSink else { return }
+            var liveIDs: Set<String> = []
+            for activity in Activity<MedicationActivityAttributes>.activities
+                where activity.activityState == .active || activity.activityState == .stale
+            {
+                liveIDs.insert(activity.id)
+                if tokenStreamTasks[activity.id] == nil { observeUpdateToken(for: activity) }
+            }
+            await tokenSink.retainActivities(ids: liveIDs)
         }
 
         // MARK: - Lookup
@@ -284,12 +389,25 @@
         /// it without Swift 6 flagging "sending 'activity' risks data
         /// races" (the value never leaves a MainActor region because it was
         /// never in one). `Activity.activities` is itself `nonisolated`.
-        private nonisolated func runningActivity(
+        private nonisolated func activity(id: String) -> Activity<MedicationActivityAttributes>? {
+            Activity<MedicationActivityAttributes>.activities.first { $0.id == id }
+        }
+
+        /// The medication's Activities as plain values for the slot decision.
+        /// Only `.active` and `.stale` count as live: an ended Activity can stay
+        /// in `activities` while it fades and must not be reused for a new slot.
+        private nonisolated func runningSlots(
             for medicationId: String
-        ) -> Activity<MedicationActivityAttributes>? {
-            Activity<MedicationActivityAttributes>.activities.first {
-                $0.attributes.medicationId == medicationId
-            }
+        ) -> [MedicationLiveActivityPlan.RunningSlot] {
+            Activity<MedicationActivityAttributes>.activities
+                .filter { $0.attributes.medicationId == medicationId }
+                .map {
+                    MedicationLiveActivityPlan.RunningSlot(
+                        id: $0.id,
+                        slot: $0.attributes.intakeScheduledFor,
+                        isLive: $0.activityState == .active || $0.activityState == .stale
+                    )
+                }
         }
     }
 
@@ -302,6 +420,10 @@
         func didReceivePushToStartToken(_ tokenHex: String) async
         /// A per-activity update token (hex) for a running Activity. The
         /// server uses it to push `update` / `end` to that Activity.
-        func didReceiveActivityUpdateToken(_ tokenHex: String, medicationId: String) async
+        func didReceiveActivityUpdateToken(_ tokenHex: String, owner: LiveActivityTokenOwner) async
+        /// The Activity ended; its token must not be reported any more.
+        func didEndActivity(activityID: String) async
+        /// The Activities still running at launch; every other token goes.
+        func retainActivities(ids: Set<String>) async
     }
 #endif

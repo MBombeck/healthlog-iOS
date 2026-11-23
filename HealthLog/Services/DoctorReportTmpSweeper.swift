@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.7.0 W-SEC-M-1 — Doctor-report tmpdir residue sweeper.**
+/// **Doctor-report tmpdir residue sweeper.**
 ///
 /// Doctor-report PDFs (server-rendered + locally-rendered) and the
 /// co-emitted FHIR JSON Documents are written to
@@ -53,13 +53,13 @@ public enum DoctorReportTmpSweeper {
         "healthlog-report-",
         "healthlog-doctor-report-",
         "healthlog-fhir-",
-        // v0.11 W9 — per-domain CSV exports (`ExportService` → persisted in
+        // Per-domain CSV exports (`ExportService` → persisted in
         // `SettingsExportScreen`). Same PHI-residue concern: the CSVs carry the
         // full measurement / mood / medication-intake history.
         "healthlog-measurements-",
         "healthlog-mood-",
         "healthlog-medications-",
-        // v0.14.2 FW5-A — unified health-record export package
+        // Unified health-record export package
         // (`ExportService.downloadHealthRecordPackage` → persisted in
         // the unified sharing surface). The ZIP carries report.pdf + FHIR
         // bundle.json — the full clinical-handoff PHI shape, same residue

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **#115 1.5 — the compliance heatmap puts each server day in its own cell.**
+/// **The compliance heatmap puts each server day in its own cell.**
 ///
 /// The server answers `GET /api/medications/intake?scope=compliance` with one
 /// `{ date: "YYYY-MM-DD", scheduled, taken }` per day, keyed in the ACCOUNT

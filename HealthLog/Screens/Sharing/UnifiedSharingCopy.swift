@@ -41,6 +41,16 @@ enum UnifiedSharingCopy {
         }
     }
 
+    /// The glyph of a form's row.
+    static func formSymbol(_ form: UnifiedSharingStore.OutputForm) -> String {
+        switch form {
+        case .link: "link"
+        case .pdf: "doc.richtext"
+        case .zip: "archivebox"
+        case .fhir: "curlybraces"
+        }
+    }
+
     static func formBody(_ form: UnifiedSharingStore.OutputForm) -> LocalizedStringKey {
         switch form {
         case .link: "sharing.unified.form.link.body"
@@ -50,8 +60,10 @@ enum UnifiedSharingCopy {
         }
     }
 
-    static func actionTitle(_ form: UnifiedSharingStore.OutputForm) -> String.LocalizationValue {
+    /// `nil` before a form is chosen: the plain verb on a locked button.
+    static func actionTitle(_ form: UnifiedSharingStore.OutputForm?) -> String.LocalizationValue {
         switch form {
+        case nil: "Share"
         case .link: "sharing.unified.action.link"
         case .pdf: "sharing.unified.action.pdf"
         case .zip: "sharing.unified.action.zip"

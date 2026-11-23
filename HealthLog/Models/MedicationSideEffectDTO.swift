@@ -1,6 +1,6 @@
 import Foundation
 
-// SP3 (v0.12) — wire DTOs for the server-backed GLP-1 side-effect logbook.
+// Wire DTOs for the server-backed GLP-1 side-effect logbook.
 //
 // Server contract (READ verbatim):
 //   - `src/app/api/medications/[id]/side-effects/route.ts`

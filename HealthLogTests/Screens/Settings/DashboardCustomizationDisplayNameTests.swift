@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.x AUDIT-HOME M8 / HOME-12 — the dashboard customisation list must
+/// The dashboard customisation list must
 /// never render a raw server widget id to the user. A server that adds a new
 /// catalogue id (or re-emits a mapped-but-non-metric one) used to fall through
 /// `displayName(for:)`'s `default: return id` and print the literal id string

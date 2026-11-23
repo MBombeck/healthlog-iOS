@@ -111,9 +111,9 @@ struct MedicationsStoreMarkIntakeClampTests {
         #expect(store.todayIntakes.first?.status == .taken)
     }
 
-    // MARK: - W-DEDUP-INTAKE — Void `mark` delegates to `markIntakeQuick`
+    // MARK: - Void `mark` delegates to `markIntakeQuick`
 
-    /// W-DEDUP-INTAKE: the Void `mark(intake:status:)` is now a thin delegate
+    /// The Void `mark(intake:status:)` is now a thin delegate
     /// to `markIntakeQuick`. A non-retriable 422 must roll the optimistic
     /// patch back exactly like the outcome path does — proving the Void
     /// surface inherits the canonical rollback (the duplicated rollback logic
@@ -148,7 +148,7 @@ struct MedicationsStoreMarkIntakeClampTests {
         #expect(store.todayIntakes.first?.takenAt == nil)
     }
 
-    /// W-DEDUP-INTAKE: the Void `mark` and the outcome-returning
+    /// The Void `mark` and the outcome-returning
     /// `markIntakeQuick` must produce the IDENTICAL optimistic patch (status
     /// + clamped `takenAt`) for the same past-pending slot. Drives both paths
     /// against an identically-seeded store and compares the resulting row.

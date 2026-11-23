@@ -8,18 +8,26 @@ import SwiftUI
 /// state read-outs only.
 public struct PenInventoryView: View {
     @State private var store: PenInventoryStore
-    @State private var showingAdd: Bool = false
+    /// Opens the add sheet. The sheet lives on `GLP1DetailStack`, which stays
+    /// on screen when this section swaps between its add row and its full form.
+    private let onAdd: () -> Void
 
     /// Pre-fill seed for the manufacturer field when the catalog
     /// drug is resolved. `nil` when the user is logging a generic.
     public let catalogPrefill: PenInventoryPrefill?
 
-    /// 1.4 B2 — with no pen logged the section is one row in the GLP-1
+    /// With no pen logged the section is one row in the GLP-1
     /// stack's shared "add" card (``GLP1DetailStack``).
     private let showsAddRowOnly: Bool
 
-    public init(store: PenInventoryStore, catalogPrefill: PenInventoryPrefill? = nil, showsAddRowOnly: Bool = false) {
+    public init(
+        store: PenInventoryStore,
+        catalogPrefill: PenInventoryPrefill? = nil,
+        showsAddRowOnly: Bool = false,
+        onAdd: @escaping () -> Void
+    ) {
         _store = State(initialValue: store)
+        self.onAdd = onAdd
         self.catalogPrefill = catalogPrefill
         self.showsAddRowOnly = showsAddRowOnly
     }
@@ -27,50 +35,21 @@ public struct PenInventoryView: View {
     public var body: some View {
         Group {
             if showsAddRowOnly {
-                GLP1AddRow(title: "Add pen", systemImage: "tray") { showingAdd = true }
+                GLP1AddRow(title: "Add pen", systemImage: "tray", identifier: "glp1.add.pen") { onAdd() }
             } else {
-                VStack(alignment: .leading, spacing: HLSpace.sm) {
+                // The page's gap, so the header keeps its own room.
+                VStack(alignment: .leading, spacing: HLLayout.cardGap) {
                     header
                     content
                 }
             }
         }
-        .sheet(isPresented: $showingAdd) {
-            PenInventoryEditSheet(prefill: catalogPrefill) { manufacturer, dose, dispensedAt, firstUsedAt, notes in
-                Task {
-                    await store.add(
-                        manufacturer: manufacturer,
-                        doseStrength: dose,
-                        dispensedAt: dispensedAt,
-                        firstUsedAt: firstUsedAt,
-                        notes: notes
-                    )
-                }
-            }
-            .hlSheetPresentation(.form)
-        }
-        .task {
-            await store.load()
-        }
+        // Each row's delete asks first; the question hangs here, not on the menu.
+        .hlDeleteConfirmation()
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            HLSectionLabel("Pen stock")
-            Spacer()
-            Button {
-                showingAdd = true
-            } label: {
-                Label(
-                    String(localized: "Add pen"),
-                    systemImage: "plus.circle.fill"
-                )
-                .labelStyle(.iconOnly)
-                .font(.hlTitle3)
-                .foregroundStyle(.tint)
-            }
-            .accessibilityLabel(Text(String(localized: "Add pen")))
-        }
+        HLSectionHeader("Pen stock", rank: .area)
     }
 
     private var content: some View {
@@ -92,19 +71,16 @@ public struct PenInventoryView: View {
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
                         Text(String(localized: "Currently in use"))
-                            .font(.hlCaption)
-                            .foregroundStyle(HLText.tertiary)
-                        // #52 — a server row may carry only one of the two detail
+                            .hlText(.footnote)
+                        // A server row may carry only one of the two detail
                         // fields; render what exists instead of an empty line.
                         if !pen.manufacturer.isEmpty {
                             Text(pen.manufacturer)
-                                .font(.hlHeadline)
-                                .foregroundStyle(HLText.primary)
+                                .hlText(.objectName)
                         }
                         if !pen.doseStrength.isEmpty {
                             Text(pen.doseStrength)
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
+                                .hlText(.factLabel)
                         }
                     }
                     Spacer()
@@ -114,62 +90,65 @@ public struct PenInventoryView: View {
                         format: String(localized: "Started on %@"),
                         HLDateFormat.date(firstUsed, style: .abbreviated)
                     ))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
+                    .hlText(.footnote)
                 }
-                Button {
+                HLLinkButton("Mark as used up", systemImage: "checkmark.circle", alignment: .leading) {
                     Task { await store.markFinished(id: pen.id) }
-                } label: {
-                    Label(
-                        String(localized: "Mark as used up"),
-                        systemImage: "checkmark.circle"
-                    )
-                    .font(.hlSubhead)
-                    .foregroundStyle(.tint)
                 }
-                .buttonStyle(.plain)
                 .accessibilityHint(Text(String(localized: "Marks the active pen as used up.")))
             }
         }
     }
 
+    /// The counts as label and value; "In stock" is what the rows below call
+    /// an unopened pen.
     private var stockSummary: some View {
-        HStack(spacing: HLSpace.md) {
-            HLBadge(
-                String(format: String(localized: "%d unread"), store.unopenedCount),
-                icon: "tray.full",
-                tone: store.unopenedCount == 0 ? .warning : .neutral
-            )
-            HLBadge(
-                String(format: String(localized: "%d used up"), store.finishedPens.count),
-                icon: "tray.full.fill",
-                tone: .neutral
-            )
-            Spacer()
+        HLCard {
+            HLFactGroup {
+                HLFactRow(label: Text("In stock"), value: Text(store.unopenedCount, format: .number))
+                HLFactRow(label: Text("Used up"), value: Text(store.finishedPens.count, format: .number))
+            }
         }
     }
 
-    /// 1.4 B2 — the further pens, when there are any; no card saying there
-    /// are none.
-    @ViewBuilder
+    /// The further pens, when there are any (no row saying there are none),
+    /// and the row that adds one, with the plus in front (Z18).
     private var penListCard: some View {
         let nonActive = store.pens.filter { !$0.isActive }
-        if !nonActive.isEmpty {
-            HLCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(nonActive.enumerated()), id: \.element.id) { idx, pen in
-                        PenRow(pen: pen) {
-                            Task { await store.markFinished(id: pen.id) }
-                        } onDelete: {
-                            Task { await store.delete(id: pen.id) }
-                        }
-                        if idx < nonActive.count - 1 {
-                            Divider().background(HLColor.separator)
-                        }
+        return HLCard(layout: .rows) {
+            ForEach(nonActive, id: \.id) { pen in
+                PenRow(pen: pen) {
+                    Task { await store.markFinished(id: pen.id) }
+                } delete: {
+                    // A pen has no undo, so deleting it asks first.
+                    .confirmed(title: "glp1.pen.delete.confirm.title", message: "glp1.pen.delete.confirm.message") {
+                        await store.delete(id: pen.id)
                     }
                 }
             }
+            HLSettingsActionRow(title: "Add pen", presents: .create) { onAdd() }
+                .accessibilityIdentifier("glp1.pen.add")
         }
+    }
+
+    /// Title and detail line of a pen row. The brand names the pen; without
+    /// one the strength takes its place, so the title is never empty.
+    static func rowLines(
+        manufacturer: String,
+        doseStrength: String,
+        dispensedAt: Date,
+        notes: String?
+    ) -> (title: String, detail: String?) {
+        let received = String(
+            format: String(localized: "Received %@"),
+            HLDateFormat.date(dispensedAt, style: .abbreviated)
+        )
+        // The detail is one line; a note's line breaks would cut it short.
+        let note = notes?.replacingOccurrences(of: "\n", with: " ")
+        if manufacturer.isEmpty {
+            return (doseStrength, HLRowDetail.joined([received, note]))
+        }
+        return (manufacturer, HLRowDetail.joined([doseStrength, received, note]))
     }
 }
 
@@ -178,69 +157,26 @@ public struct PenInventoryView: View {
 private struct PenRow: View {
     let pen: PenInventoryEntrySnapshot
     let onMarkFinished: () -> Void
-    let onDelete: () -> Void
+    let delete: () -> HLDeleteAction
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                HStack(spacing: HLSpace.xs) {
-                    if !pen.manufacturer.isEmpty {
-                        Text(pen.manufacturer)
-                            .font(.hlHeadline)
-                            .foregroundStyle(HLText.primary)
-                    }
-                    statusBadge
-                }
-                if !pen.doseStrength.isEmpty {
-                    Text(pen.doseStrength)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                }
-                Text(String(
-                    format: String(localized: "Received %@"),
-                    HLDateFormat.date(pen.dispensedAt, style: .abbreviated)
-                ))
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
-                if let notes = pen.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer()
-            Menu {
-                if !pen.isFinished, !pen.isActive {
-                    Button {
-                        onMarkFinished()
-                    } label: {
-                        Label(
-                            String(localized: "Mark as used up"),
-                            systemImage: "checkmark.circle"
-                        )
-                    }
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Label(String(localized: "Delete"), systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(HLText.secondary)
-            }
-            .accessibilityLabel(Text(String(localized: "Pen actions")))
-        }
-        .padding(.vertical, HLSpace.sm)
-        .accessibilityElement(children: .combine)
+        let lines = PenInventoryView.rowLines(
+            manufacturer: pen.manufacturer,
+            doseStrength: pen.doseStrength,
+            dispensedAt: pen.dispensedAt,
+            notes: pen.notes
+        )
+        HLRow(title: Text(verbatim: lines.title), detail: lines.detail.map { Text(verbatim: $0) }, status: status)
+            .glp1RowActions(
+                markUsedUp: (pen.isFinished || pen.isActive) ? nil : onMarkFinished,
+                delete: delete()
+            )
     }
 
-    @ViewBuilder
-    private var statusBadge: some View {
-        if pen.isFinished {
-            HLBadge(String(localized: "Used up"), tone: .neutral)
-        } else {
-            HLBadge(String(localized: "In stock"), tone: .info)
-        }
+    private var status: HLRowStatus {
+        pen.isFinished
+            ? HLRowStatus(String(localized: "Used up"), tone: .neutral)
+            : HLRowStatus(String(localized: "In stock"), tone: .info)
     }
 }
 
@@ -262,53 +198,78 @@ public struct PenInventoryPrefill: Sendable {
 
 struct PenInventoryEditSheet: View {
     let prefill: PenInventoryPrefill?
-    let onSave: (String, String, Date, Date?, String?) -> Void
+    /// Saves the pen; `nil` means saved, otherwise the sheet stays open and
+    /// shows the failure.
+    let onSave: (String, String, Date, Date?, String?) async -> HLError?
 
-    @Environment(\.dismiss) private var dismiss
     @State private var manufacturer: String
     @State private var doseStrength: String
-    @State private var dispensedAt: Date = .now
+    @State private var dispensedAt: Date
     @State private var markActiveNow: Bool = false
     @State private var notes: String = ""
+    @State private var saveGate = FormSaveGate()
+    private let openedAt: Date
 
-    init(prefill: PenInventoryPrefill?, onSave: @escaping (String, String, Date, Date?, String?) -> Void) {
+    init(prefill: PenInventoryPrefill?, onSave: @escaping (String, String, Date, Date?, String?) async -> HLError?) {
         self.prefill = prefill
         self.onSave = onSave
+        let now = Date.now
+        openedAt = now
+        _dispensedAt = State(initialValue: now)
         _manufacturer = State(initialValue: prefill?.manufacturer ?? "")
         _doseStrength = State(initialValue: prefill?.doseStrength ?? "")
     }
 
+    private var isDirty: Bool {
+        manufacturer != (prefill?.manufacturer ?? "")
+            || doseStrength != (prefill?.doseStrength ?? "")
+            || !Calendar.current.isDate(dispensedAt, inSameDayAs: openedAt)
+            || markActiveNow
+            || !notes.isEmpty
+    }
+
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold(
+            "Log pen",
+            action: .add(isEnabled: isValid) { await save() },
+            isDirty: isDirty,
+            confirmIdentifier: "glp1.sheet.save"
+        ) {
             Form {
-                Section(String(localized: "med.inventory.container.pen")) {
+                Section {
                     TextField(String(localized: "Manufacturer / brand"), text: $manufacturer)
                     TextField(String(localized: "Dose strength"), text: $doseStrength)
+                } header: {
+                    HLSectionHeader("med.inventory.container.pen")
                 }
-                Section(String(localized: "Procured")) {
+                .hlFormRowSurface()
+                Section {
                     DatePicker(
-                        String(localized: "Date"),
                         selection: $dispensedAt,
                         displayedComponents: [.date]
-                    )
-                    Toggle(String(localized: "Get started now"), isOn: $markActiveNow)
+                    ) {
+                        HLRowTitle("Date")
+                    }
+                    Toggle(isOn: $markActiveNow) {
+                        HLRowTitle("Get started now")
+                    }
+                } header: {
+                    HLSectionHeader("Procured")
                 }
-                Section(String(localized: "Note")) {
+                .hlFormRowSurface()
+                Section {
                     TextField(String(localized: "Optional"), text: $notes, axis: .vertical)
                         .lineLimit(3 ... 6)
+                } header: {
+                    HLSectionHeader("Note")
+                }
+                .hlFormRowSurface()
+                if let error = saveGate.error {
+                    Section { HLFormErrorText(error.userFacingDescription) }
+                        .hlFormRowSurface()
                 }
             }
-            .navigationTitle(String(localized: "Log pen"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Save")) { save() }
-                        .disabled(!isValid)
-                }
-            }
+            .hlPageMargins()
         }
     }
 
@@ -317,17 +278,14 @@ struct PenInventoryEditSheet: View {
             && !doseStrength.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private func save() {
+    /// `true` once the entry went out and the sheet may close.
+    private func save() async -> Bool {
         let mfg = manufacturer.trimmingCharacters(in: .whitespacesAndNewlines)
         let dose = doseStrength.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(
-            mfg,
-            dose,
-            dispensedAt,
-            markActiveNow ? .now : nil,
-            cleanedNotes.isEmpty ? nil : cleanedNotes
-        )
-        dismiss()
+        let firstUsedAt: Date? = markActiveNow ? .now : nil
+        return await saveGate.submit {
+            await onSave(mfg, dose, dispensedAt, firstUsedAt, cleanedNotes.isEmpty ? nil : cleanedNotes)
+        }
     }
 }

@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// v0.10.0 W-Mood-A — zone-7 recent-entries preview (DESIGN-A §4).
+/// Zone-7 recent-entries preview.
 ///
-/// The last 7 entries as a calm list (flat rows on canvas, hairline dividers —
-/// NOT an inset-grouped table), each whole-row tappable → `EditMoodSheet`
+/// The last 7 entries as rows in one card, each whole-row tappable → `EditMoodSheet`
 /// (closes the swipe-only edit gap; R-Mood-1 §A). A "Show all" footer pushes
 /// the full history. No swipe affordances on the preview — destructive actions
 /// live in the full history.
@@ -20,32 +19,27 @@ struct MoodRecentSection: View {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                HLSectionLabel("Recent entries")
+                HLSectionHeader("Recent entries", rank: .area)
 
-                VStack(spacing: 0) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                        Button {
+                HLCard(layout: .rows) {
+                    ForEach(entries) { entry in
+                        HLRowButton {
                             onEdit(entry)
                         } label: {
                             MoodEntryRow(entry: entry)
-                                .padding(.vertical, HLSpace.sm)
-                                .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
                         .accessibilityHint(Text("Double-tap to edit"))
-                        if index < entries.count - 1 {
-                            Divider().overlay(HLColor.separator)
-                        }
                     }
                 }
 
                 if totalCount > entries.count {
-                    HLButton(String(localized: "Show all"), icon: "chevron.right", variant: .ghost, size: .regular) {
+                    HLLinkButton("Show all") {
                         onShowAll()
                     }
                     .accessibilityHint(Text("Opens the full history"))
                 }
             }
+            .moodSectionGap(after: HLSpace.sm)
         }
     }
 }

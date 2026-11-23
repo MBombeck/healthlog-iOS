@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-02 — a request whose body is a file, not a `Data`.**
+/// **A request whose body is a file, not a `Data`.**
 ///
 /// The Apple-Health import posts an archive that is routinely hundreds of
 /// megabytes and may be 1.5 GiB. Expressed as an ``APIRequest``, that body has

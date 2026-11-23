@@ -1,6 +1,6 @@
 import Foundation
 
-/// **RELATED (1.5.0, #141) — the single-medication read.**
+/// **The single-medication read.**
 ///
 /// `GET /api/medications/{id}` answers with the full `MedicationDetail`, which
 /// since server v1.43 carries `related` (lab results, documents, episodes, …

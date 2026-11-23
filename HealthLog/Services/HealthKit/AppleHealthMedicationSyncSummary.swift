@@ -1,6 +1,6 @@
 import Foundation
 
-// Phase 07 Wave 3 — split out of `AppleHealthMedicationImporter.swift`.
+// Split out of `AppleHealthMedicationImporter.swift`.
 //
 // The importer file crossed the 600-line gate when the date watermark was
 // replaced by per-dose progression. The sweep tally and the one user-facing
@@ -8,7 +8,7 @@ import Foundation
 // itself: they are what `MedicationHealthSyncStore` renders, not what the
 // importer does.
 
-/// **CU-10 — the one thing about a sweep the user has to be told.**
+/// **The one thing about a sweep the user has to be told.**
 ///
 /// Everything else the importer tallies is operator-grade detail for the log. A
 /// mirror that structurally cannot complete is not: the user turned a switch on
@@ -41,7 +41,7 @@ public struct AppleHealthMedicationSyncSummary: Sendable, Equatable {
     public var failedBatches: Int
     /// Times the server rejected a chunk with `apple_health_not_mirrored`.
     public var notMirroredRejections: Int
-    /// **CU-10** — concepts already mirrored (server-true, else registry) that
+    /// Concepts already mirrored (server-true, else registry) that
     /// were therefore NOT re-posted. On a steady-state sweep this is the whole
     /// medication list and `medicationsMirrored` is 0.
     public var medicationsSkippedKnown: Int
@@ -53,7 +53,7 @@ public struct AppleHealthMedicationSyncSummary: Sendable, Equatable {
     /// **CU-10 / v1.32.37** — dose entries the bulk route skipped with
     /// `reason: "unstable_external_id"`. The rest of the batch landed.
     public var dosesSkippedUnstableExternalID: Int
-    /// **W3 (1.3)** — importable doses a short wake left for the next sweep
+    /// Importable doses a short wake left for the next sweep
     /// because its one-chunk budget was spent. They stay pending in the dose
     /// ledger, so nothing is lost; the next sweep resumes at the oldest one.
     public var dosesDeferredToNextSweep: Int

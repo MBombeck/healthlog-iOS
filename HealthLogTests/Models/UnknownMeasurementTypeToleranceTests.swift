@@ -22,7 +22,7 @@ import Testing
 ///
 /// Real `APIClient` + `MockURLProtocol` so the whole read path runs (PROJECT_GUIDE.md
 /// anti-pattern: no mock-server). `.serialized` because the network assertion
-/// depends on the process-global `MockURLProtocol.handler` (audit-v0162 H2).
+/// depends on the process-global `MockURLProtocol.handler`.
 @Suite("Audit B-4 — unknown measurement values degrade instead of dropping", .serialized, .mockURLSession)
 struct UnknownMeasurementTypeToleranceTests {
     private func makeRepo() throws -> MeasurementsRepository {

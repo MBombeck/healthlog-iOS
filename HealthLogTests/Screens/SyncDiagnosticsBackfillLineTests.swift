@@ -117,6 +117,9 @@
 
         /// Renders `view` at its own height; writes `<name>-<lang>.png` into
         /// `$SYNCTRIG_RENDER_DIR` when set (never into the checkout).
+        /// The frame-based `UIWindow` init is deprecated from iOS 26; the window
+        /// joins the first connected scene right after it is made.
+        @diagnose(DeprecatedDeclaration, as: ignored)
         static func render(_ view: some View, name: String, dark: Bool, xxxl: Bool) throws -> UIImage {
             let styled = view
                 .environment(\.colorScheme, dark ? .dark : .light)
@@ -149,7 +152,10 @@
             return image
         }
 
-        @Test("before and after: the row grows by exactly the catch-up line, light, dark and XXXL")
+        /// The facts share the row's one detail line, so at the standard size
+        /// the catch-up adds no line; at an accessibility size the line wraps
+        /// and the row grows.
+        @Test("before and after: the catch-up joins the detail line, light, dark and XXXL")
         func pictures() throws {
             for (dark, xxxl, suffix) in [(false, false, "light"), (true, false, "dark"), (false, true, "xxxl")] {
                 let before = try Self.render(
@@ -160,7 +166,11 @@
                     Self.card(Self.stepsRow(withBackfill: true)),
                     name: "freshness-after-\(suffix)", dark: dark, xxxl: xxxl
                 )
-                #expect(after.size.height > before.size.height, "\(suffix): one more line")
+                if xxxl {
+                    #expect(after.size.height > before.size.height, "\(suffix): the detail wraps")
+                } else {
+                    #expect(after.size.height == before.size.height, "\(suffix): still two lines")
+                }
             }
         }
     }

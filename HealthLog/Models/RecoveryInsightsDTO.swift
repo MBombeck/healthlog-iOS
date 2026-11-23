@@ -9,7 +9,7 @@ import Foundation
 /// newest canonical reading, `average30` the server's `avg30`. The app derives
 /// nothing from them except which ones to show.
 ///
-/// **1.4 B3 — only what is current.** An item exists only when its type has a
+/// **Only what is current.** An item exists only when its type has a
 /// reading in the last 30 days (`avg30 != nil`), so a value from 2024 never
 /// stands on the page as if it were today's. An empty family is still a value:
 /// it carries the server's reason the page is empty (`recoveryEmpty`) and the

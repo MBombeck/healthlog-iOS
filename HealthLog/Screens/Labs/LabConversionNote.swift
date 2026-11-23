@@ -36,7 +36,7 @@ struct LabConversion: Equatable {
     /// "converted from 5.4 mmol/L", only for a reading the server converted.
     var convertedLine: String? {
         guard converted == true, let sourceValue else { return nil }
-        let value = sourceValue.formatted(.number.precision(.fractionLength(0 ... 4)))
+        let value = HLValueFormat.number(sourceValue, fractionDigits: 0 ... 4)
         let printed = LabUnit.appending(sourceUnit, to: value)
         return String(localized: "labs.conversion.from \(printed)")
     }
@@ -62,14 +62,13 @@ struct LabConversionNote: View {
     var body: some View {
         ForEach(conversion.lines, id: \.self) { line in
             Text(verbatim: line)
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-/// #126 3.5 — the unit a linked reading is sent with: the printed unit when
+/// The unit a linked reading is sent with: the printed unit when
 /// the person entered one that differs from the marker's, else none (the
 /// server then takes the marker's unit). Spelling is the server's business
 /// (`mmol/l` is forgiven there); only an identical unit is dropped here.

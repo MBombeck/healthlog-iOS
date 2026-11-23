@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 18 / 18-02 — the wire-invariance spine.**
+/// **The wire-invariance spine.**
 ///
 /// The consolidation's core risk is that a UI refactor quietly changes what the
 /// server receives. The guard is this file plus the fixtures beside it: the
@@ -25,14 +25,10 @@ import Testing
 /// (`MockURLProtocol`), exactly as the project doctrine requires, so the
 /// captured bytes are the bytes `URLSession` would have put on the wire.
 ///
-/// **The transcription is pinned, not trusted.** Two of the four call sites
-/// live inside SwiftUI `View`s (`CreateShareLinkSheet.submit()`,
-/// `HealthRecordExportScreen.run(_:)`), so a test cannot call them. This suite
-/// reproduces how they build their request and then pins the source of each
-/// against the exact construction it reproduced — a zero-result search here
-/// would mean the transcription had drifted, which is the failure the pin
-/// exists to catch (12-11: a search that can only ever pass proves nothing, so
-/// each pin also asserts a control substring that must be present).
+/// Two of the four original call sites lived inside SwiftUI `View`s
+/// (`CreateShareLinkSheet.submit()`, `HealthRecordExportScreen.run(_:)`), so
+/// this suite reproduces how they built their request. Both views are gone;
+/// `UnifiedSharingOutputsTests` holds the unified surface to these fixtures.
 @MainActor
 @Suite("SharingWireFixtures", .serialized, .mockURLSession)
 struct SharingWireFixtureTests {
@@ -114,8 +110,7 @@ struct SharingWireFixtureTests {
             recorder.record(req)
             return SharingWire.binaryOK(req, contentType: "application/zip", bytes: Data("PK".utf8))
         }
-        // Transcribed from `HealthRecordExportScreen.run(_:)`; the source pin
-        // below holds that transcription to the original.
+        // Transcribed from the former `HealthRecordExportScreen.run(_:)`.
         let request = HealthRecordExportRequest(
             format: .package,
             selection: Inputs.exportSelection,
@@ -156,44 +151,6 @@ struct SharingWireFixtureTests {
         try SharingWire.assertMatchesFixture(recorder.captured, named: "fhir")
     }
 
-    /// **The transcription pin retired with its subject (18-03).**
-    ///
-    /// Until 18-03 this case read `CreateShareLinkSheet.swift` and
-    /// `HealthRecordExportScreen.swift` and asserted they still built their
-    /// request the way the fixtures were captured — a control probe against the
-    /// risk that the transcription above had drifted from the live code. Both
-    /// files are now deleted, because the surfaces they hosted became two of the
-    /// four output forms on one screen. There is nothing left to drift from, and
-    /// a pin repointed at the new builders would only assert that the new code
-    /// agrees with itself, which is what `UnifiedSharingOutputsTests` already
-    /// proves against these very fixtures.
-    ///
-    /// What survives is the reason the pin can retire: the old call sites are
-    /// gone, and the fixtures they produced are still matched. Both halves are
-    /// asserted here so the retirement stays a fact rather than a memory.
-    @Test("the transcribed call sites are gone, and their fixtures are still the contract")
-    func transcribedCallSitesRetiredWithTheirFixturesIntact() throws {
-        for path in [
-            "HealthLog/Screens/Settings/Sub/CreateShareLinkSheet.swift",
-            "HealthLog/Screens/Settings/Sub/HealthRecordExportScreen.swift",
-            "HealthLog/Screens/Settings/Sub/SettingsFHIRExportScreen.swift",
-            "HealthLog/Screens/DoctorReport/DoctorReportScreen.swift"
-        ] {
-            #expect(
-                (try? SharingWire.source(path)) == nil,
-                "\(path) still exists — the transcription pin should not have retired"
-            )
-        }
-        // Control: the reader works, and the surface that replaced them is real.
-        let unified = try SharingWire.source("HealthLog/Screens/Sharing/UnifiedSharingScreen.swift")
-        #expect(unified.contains("struct UnifiedSharingScreen"))
-        // And the fixtures those call sites produced are still the contract.
-        for name in ["pdf", "zip", "link-empty", "link-full", "fhir"] {
-            let fixture = try SharingWire.loadFixture(name)
-            #expect(!fixture.path.isEmpty, "\(name) still records a request")
-        }
-    }
-
     // MARK: - Helpers
 
     private func captureLink(selection: ReportSelection, fixture: String) async throws {
@@ -204,7 +161,7 @@ struct SharingWireFixtureTests {
                 ? SharingWire.jsonOK(req, SharingWire.shareLinkResponseJSON)
                 : SharingWire.jsonOK(req, SharingWire.shareLinkListJSON)
         }
-        // Transcribed from `CreateShareLinkSheet.submit()`; pinned above.
+        // Transcribed from the former `CreateShareLinkSheet.submit()`.
         let body = CreateShareLinkBody(
             label: Inputs.linkLabel,
             rangeStart: ShareLinkDateFormat.string(from: Inputs.rangeStart),

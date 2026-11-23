@@ -21,6 +21,10 @@ enum MedicationReminderRedactor {
     /// server APNs contract.
     static let medicationCategory = "MEDICATION_REMINDER"
 
+    /// The low-supply push (`NotificationService.categoryMedicationLowStock`).
+    /// It names the medication as well, so the same switch covers it.
+    static let lowStockCategory = "MEDICATION_LOW_STOCK"
+
     /// Resolved lock-screen text (either passthrough or redacted).
     struct Content: Equatable {
         let title: String
@@ -28,10 +32,15 @@ enum MedicationReminderRedactor {
     }
 
     /// `true` when a push carrying `category` / `eventType` is a medication
-    /// reminder — the only category this NSE redacts. Every other push passes
-    /// through untouched.
+    /// reminder. With the low-supply push, the categories this NSE redacts;
+    /// every other push passes through untouched.
     static func isMedicationReminder(category: String?, eventType: String?) -> Bool {
         category == medicationCategory || eventType == medicationCategory
+    }
+
+    /// `true` for the low-supply push, by category or event type.
+    static func isLowStock(category: String?, eventType: String?) -> Bool {
+        category == lowStockCategory || eventType == lowStockCategory
     }
 
     /// Pure redaction decision.
@@ -44,6 +53,9 @@ enum MedicationReminderRedactor {
     ///   (medicationId / scheduleId / scheduledFor) intact — only the
     ///   human-readable PHI on the lock screen is replaced; the OS still shows
     ///   the delivery time.
+    /// - A low-supply push takes `lowStockPlaceholderTitle` / `…Body` when
+    ///   the caller has them, else the reminder placeholders: either way the
+    ///   name is gone.
     static func redactedContent(
         title: String,
         body: String,
@@ -51,13 +63,20 @@ enum MedicationReminderRedactor {
         eventType: String?,
         hideMedicationName: Bool,
         placeholderTitle: String,
-        placeholderBody: String
+        placeholderBody: String,
+        lowStockPlaceholderTitle: String? = nil,
+        lowStockPlaceholderBody: String? = nil
     ) -> Content {
-        guard hideMedicationName,
-              isMedicationReminder(category: category, eventType: eventType) else
-        {
-            return Content(title: title, body: body)
+        guard hideMedicationName else { return Content(title: title, body: body) }
+        if isMedicationReminder(category: category, eventType: eventType) {
+            return Content(title: placeholderTitle, body: placeholderBody)
         }
-        return Content(title: placeholderTitle, body: placeholderBody)
+        if isLowStock(category: category, eventType: eventType) {
+            return Content(
+                title: lowStockPlaceholderTitle ?? placeholderTitle,
+                body: lowStockPlaceholderBody ?? placeholderBody
+            )
+        }
+        return Content(title: title, body: body)
     }
 }

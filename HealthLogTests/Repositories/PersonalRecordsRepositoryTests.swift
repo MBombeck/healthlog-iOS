@@ -100,7 +100,7 @@ struct PersonalRecordsRepositoryTests {
 
     @Test("invalidateCache — wipes the per-filter slots so next reads hit the wire")
     func invalidateCacheWipesSlots() async throws {
-        // V0.5.2 R2 / H1: logout must reach the per-repo actor cache so
+        // Logout must reach the per-repo actor cache so
         // the next user never sees the previous user's PRs.
         let repo = PersonalRecordsRepository(api: makeAPI())
         nonisolated(unsafe) var calls = 0

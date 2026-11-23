@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 07 / plan 07-06 — the ECG teardown targets the account it captured.**
+/// **The ECG teardown targets the account it captured.**
 ///
 /// `resetAnchor()` used to pick its key from a live Keychain read at the moment
 /// it ran. Every caller reaches it from inside the logout cascade, which wipes

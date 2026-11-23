@@ -1,6 +1,6 @@
 import Foundation
 
-/// **W-COACH-CADENCE (#30) — one proactive coach cadence suggestion.**
+/// **One proactive coach cadence suggestion.**
 ///
 /// The coach surfaces a cadence suggestion **inline during a chat turn** as a
 /// discrete SSE `suggestion` frame (see

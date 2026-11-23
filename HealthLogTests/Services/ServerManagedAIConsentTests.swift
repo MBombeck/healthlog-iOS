@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B186 COACH-1 (#24) — server/admin-managed AI provider makes the Coach
+/// **Server/admin-managed AI provider makes the Coach
 /// visible + usable without a per-user provider.**
 ///
 /// Server v1.16.16 (#24) added `aiAvailable` + `managedBy` to
@@ -13,7 +13,7 @@ import Testing
 ///   - keep the Coach hidden ONLY when `aiAvailable == false`,
 ///   - behave EXACTLY as before on an older server that omits both fields.
 ///
-/// Server thread quote (#24): *"`aiAvailable: boolean` — true when ANY provider
+/// Server thread quote: *"`aiAvailable: boolean` — true when ANY provider
 /// can answer (personal key, self-hosted local model, OR the operator's
 /// server/admin-managed key). `managedBy: "user" | "local" | "server" | null` …
 /// Gate Coach visibility on `aiAvailable === true`. `managedBy === "server"` is
@@ -58,7 +58,6 @@ struct ServerManagedAIConsentTests {
 
         let reengage = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            hasServer: true,
             resolvedProvider: config.resolvedProvider,
             hasConsentForProvider: false,
             isServerManagedAvailable: config.usesProviderOpaqueAIConsent,
@@ -212,20 +211,18 @@ struct ServerManagedAIConsentTests {
     func reengageOfferedForServerManaged() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            hasServer: true,
             resolvedProvider: .unconfigured, // no per-user provider
             hasConsentForProvider: true, // .unconfigured short-circuits true — must NOT block
             isServerManagedAvailable: true,
             hasServerManagedConsent: false
         )
-        #expect(available) // #24 — admin-managed is now in scope (was a dead-end before)
+        #expect(available) // Admin-managed is now in scope (was a dead-end before)
     }
 
     @Test("once the server-managed scope is consented, the re-engage CTA disappears")
     func reengageHiddenAfterServerManagedConsent() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .online, // aiMode flipped after grant — affordance only for .none
-            hasServer: true,
             resolvedProvider: .unconfigured,
             hasConsentForProvider: true,
             isServerManagedAvailable: true,
@@ -240,7 +237,6 @@ struct ServerManagedAIConsentTests {
         // exactly as before COACH-1 (we never offer a path we can't fulfil).
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            hasServer: true,
             resolvedProvider: .unconfigured,
             hasConsentForProvider: true,
             isServerManagedAvailable: false,
@@ -253,7 +249,6 @@ struct ServerManagedAIConsentTests {
     func reengageHonorsExplicitUnavailability() {
         let available = InsightsScreen.isCoachReengageAvailable(
             aiMode: .none,
-            hasServer: true,
             resolvedProvider: .anthropic,
             hasConsentForProvider: false,
             isAIExplicitlyUnavailable: true

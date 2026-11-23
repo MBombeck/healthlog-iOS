@@ -89,7 +89,7 @@ public final class AIProviderStore {
     /// drafts, so a user editing while the revalidate lands doesn't lose
     /// their typing.
     public func load() async {
-        // 14-06 — `.empty` raises `isLoading` and only a terminal emission
+        // `.empty` raises `isLoading` and only a terminal emission
         // lowered it, so a cancelled stream stranded the flag for the life of
         // the process. The defer lowers the FLAG and publishes nothing else; a
         // flag still raised at exit means this load published nothing at all.
@@ -204,7 +204,7 @@ public final class AIProviderStore {
         // "clear the override" — explicit nil so the server resets the column.
         if draftProvider.supportsModelOverride {
             let trimmed = draftModel.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed != (config?.model ?? "") {
+            if trimmed != (config?.model(for: draftProvider) ?? "") {
                 patch.model = .some(trimmed.isEmpty ? nil : trimmed)
             }
         }
@@ -266,6 +266,17 @@ public final class AIProviderStore {
         }
     }
 
+    /// Picks the provider card. Each card edits its own model (#184): the
+    /// draft model follows to the picked card's saved model, so switching to
+    /// Local shows Local's model and not the cloud one.
+    public func selectProvider(_ provider: AIProvider) {
+        guard provider != draftProvider else { return }
+        draftProvider = provider
+        if let config {
+            draftModel = config.model(for: provider) ?? ""
+        }
+    }
+
     // MARK: - UI affordances
 
     /// Acknowledges the "Gespeichert" toast — caller clears it after the
@@ -286,7 +297,7 @@ public final class AIProviderStore {
         if draftProvider != config.resolvedProvider { return true }
         if draftProvider.supportsModelOverride {
             let trimmed = draftModel.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed != (config.model ?? "") { return true }
+            if trimmed != (config.model(for: draftProvider) ?? "") { return true }
         }
         if draftProvider.supportsBaseUrl {
             let trimmed = draftBaseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -325,7 +336,7 @@ public final class AIProviderStore {
         config?.activeKeyPreview
     }
 
-    /// v0.14.8 W3 (AUDIT-SECURITY-B175 M-1) — drop the previous user's
+    /// Drop the previous user's
     /// provider config + every draft on logout. `draftAPIKey` is the
     /// sensitive one: an un-saved typed key must never survive into the next
     /// user's session. The SWR-cached config row is dropped separately by
@@ -360,7 +371,7 @@ public final class AIProviderStore {
     /// clobbering in-flight drafts.
     private func applyDraftsFrom(_ fresh: AIProviderConfig) {
         draftProvider = fresh.resolvedProvider
-        draftModel = fresh.model ?? ""
+        draftModel = fresh.model(for: fresh.resolvedProvider) ?? ""
         draftBaseUrl = fresh.baseUrl ?? ""
         draftAPIKey = ""
     }

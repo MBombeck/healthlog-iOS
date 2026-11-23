@@ -39,21 +39,10 @@ import Foundation
     /// failing the Zod gate.
     ///
     /// **Anti-duplicate.** The importer applies the echo guard
-    /// (`HKMetadataKeyExternalUUID`) before calling ``ingestDTO(from:)`` — this
-    /// mapper is unconditional, so unit tests can assert the guard separately
-    /// via ``isOwnEcho(_:)``.
+    /// (`HKMetadataKeyExternalUUID`) before calling
+    /// ``ingestDisposition(from:series:)`` — this mapper is unconditional, so
+    /// unit tests can assert the guard separately via ``isOwnEcho(_:)``.
     enum WorkoutHealthKitMapping {
-        private struct BestEffortSeriesAdapter: WorkoutHeartRateSeriesSyncServicing {
-            let service: any HealthKitWorkoutDetailServicing
-
-            func heartRateSeriesOutcome(
-                from start: Date,
-                to end: Date
-            ) async -> WorkoutHeartRateSeriesOutcome {
-                await .samples(service.heartRateSeries(from: start, to: end))
-            }
-        }
-
         /// Lookup table from `HKWorkoutActivityType` to the server's sport-type
         /// enum string. A dictionary (rather than a giant `switch`) keeps the
         /// fold below the cyclomatic-complexity gate and makes the long tail
@@ -87,7 +76,7 @@ import Foundation
             .soccer: "soccer",
             .crossTraining: "crossTraining",
             .mixedCardio: "mixedCardio",
-            // 1.2 V5 — types that had a server bucket but folded to "other".
+            // Types that had a server bucket but folded to "other".
             // `badminton` is a literal of the server enum since v1.32.8 (the
             // list already titles it); the rest fold onto the bucket whose
             // activity they are, never onto a guess.
@@ -132,7 +121,7 @@ import Foundation
         /// app's own HK source. The importer skips these to honour the
         /// PROJECT_GUIDE.md anti-duplicate rule.
         ///
-        /// W-HK-RELIABILITY G-7: routes through ``HealthKitSampleOwnership`` so
+        /// Routes through ``HealthKitSampleOwnership`` so
         /// a third-party workout that happens to carry an externalUUID is no
         /// longer silently dropped (different source ⇒ imported).
         static func isOwnEcho(_ workout: HKWorkout) -> Bool {
@@ -158,22 +147,12 @@ import Foundation
         ///   spelling — not "HEALTHKIT").
         /// - `externalId`: the `HKWorkout` `uuid.uuidString`, the server's
         ///   dedup key.
-        /// - `samples` (GH #86): when a `series` source is handed in, the
+        /// - `samples`: when a `series` source is handed in, the
         ///   per-session HR curve for `[startDate, endDate]` is fetched and
         ///   attached; `nil` keeps the call series-free (and query-free). See
         ///   ``WorkoutHealthKitImporter/shouldAttachSeries(workoutCount:)`` for
         ///   when we spend that query and when the backfill sweep takes over.
         ///   That fetch is the ONLY reason this function is `async`.
-        static func ingestDTO(
-            from workout: HKWorkout,
-            series: (any HealthKitWorkoutDetailServicing)? = nil
-        ) async -> WorkoutIngestDTO? {
-            await ingestDisposition(
-                from: workout,
-                series: series.map(BestEffortSeriesAdapter.init(service:))
-            ).dto
-        }
-
         static func ingestDisposition(
             from workout: HKWorkout,
             series: (any WorkoutHeartRateSeriesSyncServicing)? = nil
@@ -194,6 +173,8 @@ import Foundation
                 .sumQuantity()?
                 .doubleValue(for: kcalUnit)
             let distanceM = distanceMeters(from: workout, meterUnit: meterUnit)
+            let ascended = (workout.metadata?[HKMetadataKeyElevationAscended] as? HKQuantity)?
+                .doubleValue(for: meterUnit)
 
             return await ingestDisposition(
                 activityType: workout.workoutActivityType,
@@ -205,9 +186,59 @@ import Foundation
                 maxHr: hrStats?.maximumQuantity()?.doubleValue(for: hrUnit),
                 minHr: hrStats?.minimumQuantity()?.doubleValue(for: hrUnit),
                 steps: stepStats?.sumQuantity()?.doubleValue(for: .count()),
+                elevationM: elevationMeters(ascended: ascended),
+                pauseDurationSec: pauseDurationSeconds(
+                    events: (workout.workoutEvents ?? []).map { ($0.type, $0.dateInterval.start) },
+                    start: workout.startDate,
+                    end: workout.endDate
+                ),
                 externalId: workout.uuid.uuidString,
                 series: series
             )
+        }
+
+        /// The server's band for `elevationM` (`createWorkoutSchema`: −500…10 000 m).
+        /// A value outside it would fail the whole batch, so it is left out.
+        static func elevationMeters(ascended: Double?) -> Double? {
+            guard let ascended, ascended.isFinite, (-500 ... 10000).contains(ascended) else { return nil }
+            return ascended
+        }
+
+        /// Seconds between each pause and the resume after it, manual and
+        /// automatic alike, clipped to the workout. A pause never resumed runs
+        /// to the end. `nil` when the workout has no pause event at all, so a
+        /// workout without the data is not claimed to have had no pause.
+        static func pauseDurationSeconds(
+            events: [(type: HKWorkoutEventType, date: Date)],
+            start: Date,
+            end: Date
+        ) -> Int? {
+            guard end > start else { return nil }
+            let ordered = events.sorted { $0.date < $1.date }
+            guard ordered.contains(where: { $0.type == .pause || $0.type == .motionPaused }) else { return nil }
+            var total: TimeInterval = 0
+            var pausedAt: Date?
+            for event in ordered {
+                let date = min(max(event.date, start), end)
+                switch event.type {
+                case .pause, .motionPaused:
+                    if pausedAt == nil { pausedAt = date }
+                case .resume, .motionResumed:
+                    if let since = pausedAt {
+                        total += date.timeIntervalSince(since)
+                        pausedAt = nil
+                    }
+                default:
+                    break
+                }
+            }
+            if let since = pausedAt {
+                total += end.timeIntervalSince(since)
+            }
+            let seconds = Int(total.rounded())
+            // The server takes 0…86 400; a longer workout cannot pause longer
+            // than it lasted, so the cap only guards against bad event data.
+            return min(max(seconds, 0), 86400)
         }
 
         static func ingestDisposition(
@@ -220,6 +251,8 @@ import Foundation
             maxHr: Double? = nil,
             minHr: Double? = nil,
             steps: Double? = nil,
+            elevationM: Double? = nil,
+            pauseDurationSec: Int? = nil,
             externalId: String?,
             series: (any WorkoutHeartRateSeriesSyncServicing)? = nil
         ) async -> WorkoutHealthKitMappingDisposition {
@@ -233,6 +266,8 @@ import Foundation
                 maxHr: maxHr,
                 minHr: minHr,
                 steps: steps,
+                elevationM: elevationM,
+                pauseDurationSec: pauseDurationSec,
                 externalId: externalId
             ) else {
                 return .skipped
@@ -252,6 +287,8 @@ import Foundation
                     maxHr: maxHr,
                     minHr: minHr,
                     steps: steps,
+                    elevationM: elevationM,
+                    pauseDurationSec: pauseDurationSec,
                     externalId: externalId,
                     samples: rows
                 ) else {
@@ -265,7 +302,7 @@ import Foundation
             }
         }
 
-        /// **GH #86** — fold the HK HR series into the server's `samples` wire
+        /// Fold the HK HR series into the server's `samples` wire
         /// rows. Pure: no smoothing, no interpolation, no bucketing — we pass
         /// on exactly what HealthKit measured, one row per sample, in the order
         /// the query returned them.
@@ -315,8 +352,9 @@ import Foundation
             return nil
         }
 
-        /// Pure DTO builder — the testable core of ``ingestDTO(from:)``. Takes the
-        /// already-extracted primitive values so it can be exercised without
+        /// Pure DTO builder — the testable core of
+        /// ``ingestDisposition(from:series:)``. Takes the already-extracted
+        /// primitive values so it can be exercised without
         /// constructing a live `HKWorkout` (which requires a store / builder).
         /// Applies the same invariants the server's Zod schema enforces:
         /// rejects a degenerate window (`end <= start`), clamps HR to `[20, 300]`,
@@ -331,6 +369,8 @@ import Foundation
             maxHr: Double?,
             minHr: Double?,
             steps: Double?,
+            elevationM: Double? = nil,
+            pauseDurationSec: Int? = nil,
             externalId: String?,
             samples: [WorkoutIngestDTO.Sample]? = nil
         ) -> WorkoutIngestDTO? {
@@ -349,7 +389,8 @@ import Foundation
                 maxHeartRate: clampHr(maxHr),
                 minHeartRate: clampHr(minHr),
                 stepCount: stepInt,
-                elevationM: nil,
+                elevationM: elevationMeters(ascended: elevationM),
+                pauseDurationSec: pauseDurationSec.map { min(max($0, 0), 86400) },
                 source: "APPLE_HEALTH",
                 externalId: externalId,
                 samples: samples

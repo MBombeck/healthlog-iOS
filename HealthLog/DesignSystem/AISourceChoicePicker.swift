@@ -1,24 +1,22 @@
 import SwiftUI
 
-/// Task #53 — the single, elegant AI-source choice component, shared 1:1
+/// The single, elegant AI-source choice component, shared 1:1
 /// between the onboarding step and Settings → Assistant. The user picks
 /// *whether* and *which* assistant to use. There is exactly ONE choice surface
 /// — selectable cards, each with a one-line description — no submenu sprawl.
 ///
-/// **v0.13 W3 — mode- + capability-aware.** The component no longer takes a flat
+/// **Capability-aware.** The component no longer takes a flat
 /// `[AIMode]`; it takes `[AISourceOption]` (computed by the host via
-/// ``AISourceOptions/offered(operatingMode:onDeviceAvailability:)``). Each card
+/// ``AISourceOptions/offered(onDeviceAvailability:)``). Each card
 /// is either `.available` (selectable) or `.disabledWithReason` (greyed,
 /// non-tappable, with a one-line reason + an optional recovery affordance such
-/// as a Settings deep-link). Cards that can never work on this device/mode are
-/// not in the list at all (hidden, not disabled — D4). `.byoKey` is offered in
-/// BOTH operating modes (mode-invariant) — it is client-side, needing no server.
+/// as a Settings deep-link). Cards that can never work on this device are
+/// not in the list at all (hidden, not disabled — D4).
 ///
 /// Design discipline (PROJECT_GUIDE.md Marathon + monochrome doctrine):
 /// - Monochrome content card, zero glass (glass is chrome only). The selected
 ///   card carries the only signal accent: a `.tint` check + ring.
-/// - Reduce-motion-gated press feedback (reuses the `ModeSelectionStep`
-///   `PathCard` press idiom so onboarding + Settings feel identical).
+/// - Reduce-motion-gated press feedback, identical in onboarding + Settings.
 /// - Dynamic-Type-safe: icon chips are fixed 44pt, all copy scales.
 /// - No hardcoded strings — every label/subtitle is an `AIMode` localized
 ///   accessor (xcstrings, EN source + DE); reasons come from `AISourceOption`.
@@ -50,7 +48,7 @@ struct AISourceChoicePicker: View {
                 )
             }
         }
-        // v0.14.7 C3 — pin the selection accent to the monochrome
+        // Pin the selection accent to the monochrome
         // `HLAccent.primary` token (same fix AIConsentSheet.swift:87 applies to
         // its CTA). The cards draw their selection ring + check + recovery chip
         // with `.tint`; without this pin that `.tint` inherited the ambient
@@ -75,6 +73,7 @@ private struct AISourceCard: View {
 
     @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var mode: AIMode {
         option.mode
@@ -95,7 +94,7 @@ private struct AISourceCard: View {
         Button(action: onSelect) {
             cardContent
         }
-        // 1.5 COACH-R — the press idiom comes from the button itself. A
+        // The press idiom comes from the button itself. A
         // zero-distance drag gesture on every card used to swallow the
         // scroll that starts on a card, so Settings, Assistant could not be
         // scrolled from its upper half and what sits below the cards stayed
@@ -110,20 +109,22 @@ private struct AISourceCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: HLSpace.sm) {
-            HStack(alignment: .top, spacing: HLSpace.md) {
-                iconChip
-                VStack(alignment: .leading, spacing: HLSpace.xs) {
-                    Text(mode.choiceTitle)
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                    Text(mode.choiceSubtitle)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+            if dynamicTypeSize.isAccessibilitySize {
+                // Symbol and selection above the words: beside the symbol the
+                // text kept half the card and broke into „Assis- / tent".
+                HStack(alignment: .top, spacing: HLSpace.md) {
+                    iconChip
+                    Spacer(minLength: HLSpace.sm)
+                    selectionSignal
                 }
-                Spacer(minLength: HLSpace.sm)
-                selectionSignal
+                choiceText
+            } else {
+                HStack(alignment: .top, spacing: HLSpace.md) {
+                    iconChip
+                    choiceText
+                    Spacer(minLength: HLSpace.sm)
+                    selectionSignal
+                }
             }
             if let reasonInfo {
                 reasonRow(reason: reasonInfo.reason, recovery: reasonInfo.recovery)
@@ -147,6 +148,19 @@ private struct AISourceCard: View {
         .hlAnimation(.spring(response: 0.18, dampingFraction: 0.85), value: pressed)
     }
 
+    private var choiceText: some View {
+        VStack(alignment: .leading, spacing: HLSpace.xs) {
+            Text(mode.choiceTitle)
+                .font(.hlHeadline)
+                .foregroundStyle(HLText.primary)
+            Text(mode.choiceSubtitle)
+                .font(.hlSubhead)
+                .foregroundStyle(HLText.secondary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// Selection signal — the only accent on the card. A check when chosen, a
     /// hollow circle when not. Suppressed on disabled cards (they can't be the
     /// current pick).
@@ -165,7 +179,7 @@ private struct AISourceCard: View {
     /// Reason + optional recovery affordance for a disabled card.
     private func reasonRow(reason: String, recovery: AISourceRecovery?) -> some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            // 1.4 B4 — the reason alone; the info symbol beside it looked
+            // The reason alone; the info symbol beside it looked
             // tappable and did nothing (R2 1.7, one (i) per screen).
             Text(reason)
                 .font(.hlCaption)
@@ -184,7 +198,9 @@ private struct AISourceCard: View {
                 .accessibilityIdentifier("aiSourceChoice.\(mode.rawValue).recover")
             }
         }
-        .padding(.leading, 44 + HLSpace.md) // align under the title, past the icon chip
+        // Under the title, past the icon chip; flush once the chip stands
+        // above the title.
+        .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : 44 + HLSpace.md)
     }
 
     private var iconChip: some View {

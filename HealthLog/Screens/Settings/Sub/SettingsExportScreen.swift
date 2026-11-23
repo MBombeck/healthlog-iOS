@@ -16,7 +16,7 @@ import SwiftUI
 ///
 /// So this screen now ships only the generic exports:
 ///   1. Full backup (JSON / CSV) — the weekly-auto-backup shape.
-///   2. Per-domain CSV — Measurements / Mood / Medications (v0.11 W9).
+///   2. Per-domain CSV — Measurements / Mood / Medications.
 ///
 /// **SET-V2-A (B.1 + C-2):** the full backup used to live one push deeper on a
 /// dedicated `ExportScreen` — a structural double-hop (the hub subtitle
@@ -26,17 +26,11 @@ import SwiftUI
 /// deleted; everything export lives on this ONE page.
 ///
 /// The per-domain CSVs are *server-rendered* (canonical column order, locale,
-/// audit columns). They have no byte-exact on-device twin, so each card gates on
-/// `BackendAvailability.hasServer`: paired → live download + share; standalone →
-/// the calm `HLCloudDerivedPlaceholder` (consistent with every other
-/// server-derived surface — never a dead button). The full on-device backup
+/// audit columns). They have no byte-exact on-device twin. The full on-device backup
 /// remains the offline data-portability path.
 struct SettingsExportScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
-
     var body: some View {
-        HLSettingsPage(title: "Export") {
+        HLPage {
             // W-B187 (Settings consolidation §A / B.1) — labelled entry into the
             // doctor-handover surface (`UnifiedSharingScreen`: PDF report · FHIR ·
             // clinician share-link · health-record ZIP). The hub was previously
@@ -47,11 +41,8 @@ struct SettingsExportScreen: View {
             shareWithDoctorCard
             FullBackupExportCard()
             // 7.9 web-parity — passphrase-encrypted backup (`POST
-            // /api/export/encrypted`, HLX1 archive). Server-only surface: paired
-            // → live; standalone has no server to encrypt against.
-            if backend.hasServer {
-                EncryptedBackupExportCard()
-            }
+            // /api/export/encrypted`, HLX1 archive).
+            EncryptedBackupExportCard()
             ImportDataCard()
             domainExportSection
         }
@@ -59,17 +50,16 @@ struct SettingsExportScreen: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// W-B187 — labelled card pushing the doctor-handover hub. Mirrors the
+    /// Labelled card pushing the doctor-handover hub. Mirrors the
     /// row chrome used across the Settings sub-screens (icon · title · subtitle ·
     /// "Open …" disclosure row) so it reads as a peer of the export cards below.
     private var shareWithDoctorCard: some View {
-        // 1.4 B4 — one row, one heading: the row carries title and subtitle.
-        HLSettingsCard {
-            // UI-Standard R8/R10 (U6) — handgebaute Chevron-Zeile → Primitive;
-            // das Chevron gehört dem `presents:`-Vertrag, nicht dem Aufrufer.
+        // One row, one heading: the row carries title and a one-line
+        // detail like the import row below.
+        HLCard(layout: .rows) {
             HLSettingsActionRow(
                 title: "settings.export.share_with_doctor.title",
-                subtitle: "settings.export.share_with_doctor.subtitle",
+                subtitle: "settings.export.share_with_doctor.rowSubtitle",
                 presents: .push
             ) {
                 UnifiedSharingScreen()
@@ -78,47 +68,38 @@ struct SettingsExportScreen: View {
         }
     }
 
-    /// v0.11 W9 — restored per-domain CSV exports (dropped under the AC18
+    /// Restored per-domain CSV exports (dropped under the AC18
     /// placeholder). One card per domain; each downloads the server's canonical
-    /// CSV and offers it via `ShareLink`. Adaptive: paired → live; standalone →
-    /// `HLCloudDerivedPlaceholder` (server-only surface, no dead button).
+    /// CSV and offers it via `ShareLink`.
     /// UI-Standard R2 (U6, Audit-Gruppe G9) — die drei Untertitel sagten
     /// dreimal, dass eine CSV eine Tabelle ist; jede Karte heißt bereits
     /// „… (CSV)". Ersatzlos gestrichen.
     @ViewBuilder
     private var domainExportSection: some View {
-        if backend.hasServer {
-            DomainCSVExportCard(
-                domain: .measurements,
-                icon: "waveform.path.ecg",
-                title: "Measurements (CSV)"
-            )
-            DomainCSVExportCard(
-                domain: .mood,
-                icon: "face.smiling",
-                title: "Mood (CSV)"
-            )
-            DomainCSVExportCard(
-                domain: .medications,
-                icon: "pills",
-                title: "Medications (CSV)"
-            )
-        } else {
-            HLCloudDerivedPlaceholder(
-                variant: .inline,
-                surfaceName: String(localized: "the per-area CSV exports"),
-                onConnect: { authStore.beginServerPairing() }
-            )
-        }
+        DomainCSVExportCard(
+            domain: .measurements,
+            icon: "waveform.path.ecg",
+            title: "Measurements (CSV)"
+        )
+        DomainCSVExportCard(
+            domain: .mood,
+            icon: "face.smiling",
+            title: "Mood (CSV)"
+        )
+        DomainCSVExportCard(
+            domain: .medications,
+            icon: "pills",
+            title: "Medications (CSV)"
+        )
     }
 }
 
 /// The full JSON/CSV backup — the former `ExportScreen` body inlined as a card
 /// (SET-V2-A / B.1). `GET /api/export?type=all` with the picked format (R2 / A4 —
 /// it was a `POST`, which the route never answered but with 405), a step-up
-/// proof when the server asks for one (R2 / A3), persist into the temp directory under
+/// proof when the server asks for one, persist into the temp directory under
 /// `.completeFileProtection`, then offer the file via `ShareLink`. The share
-/// row + error surfacing mirror `DomainCSVExportCard` below so the whole page
+/// button + error surfacing mirror `DomainCSVExportCard` below so the whole page
 /// speaks exactly one interaction language (Quality Doctrine §6).
 private struct FullBackupExportCard: View {
     @Environment(\.appContainer) private var container
@@ -140,7 +121,7 @@ private struct FullBackupExportCard: View {
             rawValue.uppercased()
         }
 
-        /// Bridge to the service-owned format (AUD-7 H3).
+        /// Bridge to the service-owned format.
         var serviceFormat: ExportService.BackupFormat {
             switch self {
             case .json: .json
@@ -150,29 +131,29 @@ private struct FullBackupExportCard: View {
     }
 
     var body: some View {
-        // 1.4 B2-c — the title says it: no subtitle, and no paragraph number
+        // The title says it: no subtitle, and no paragraph number
         // ("Art. 20") that gives nobody anything to do.
-        HLSettingsCard(
-            icon: "square.and.arrow.up.on.square.fill",
-            title: "Full backup (JSON / CSV)"
-        ) {
+        HLCard("Full backup (JSON / CSV)") {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                Picker("Format", selection: $format) {
+                HLAdaptiveSegmentedPicker(
+                    "Format",
+                    selection: $format,
+                    labels: ExportFormat.allCases.map { LocalizedStringKey($0.label) }
+                ) {
                     ForEach(ExportFormat.allCases) { f in
                         Text(f.label).tag(f)
                     }
                 }
-                .pickerStyle(.segmented)
 
-                // B3 (W-BUTTONS): the full-backup "Export erstellen" was a
+                // The full-backup "Export erstellen" was a
                 // `.large` full-fill CTA the operator called "creepy" / far too
-                // UI-Standard R9 (U6) — `.restrained` ist gefallen. Voll-Backup
+                // UI-Standard R9 — `.restrained` ist gefallen. Voll-Backup
                 // und verschlüsseltes Backup sind zwei gleichrangige
                 // Karten-Aktionen auf einem Screen; „höchstens ein `.primary`
                 // pro Screen" heißt hier: beide `.secondary`.
                 HLButton(
-                    String(localized: "export.create.button"),
-                    icon: "square.and.arrow.down",
+                    "export.create.button",
+                    systemImage: "square.and.arrow.down",
                     variant: .secondary,
                     isLoading: isWorking
                 ) {
@@ -183,28 +164,16 @@ private struct FullBackupExportCard: View {
 
                 if let exportURL {
                     ShareLink(item: exportURL) {
-                        HStack(spacing: HLSpace.md) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(HLColor.statusOK)
-                            Text("Share file")
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
-                            Spacer()
-                            // Trailing affordance glyph — fixed via HLIconSize.sm.
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.hlIcon(HLIconSize.sm))
-                                .foregroundStyle(HLText.tertiary)
-                        }
-                        .contentShape(Rectangle())
+                        HLButtonLabel("Share file", systemImage: "square.and.arrow.up", variant: .secondary)
                     }
-                    .buttonStyle(.plain)
+                    .hlPressable()
                     .accessibilityIdentifier("settings.export.full.share")
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.hlFootnote)
-                        .foregroundStyle(HLColor.statusBad)
+                        .foregroundStyle(StepUpRetry.messageTint(for: errorMessage))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -212,7 +181,7 @@ private struct FullBackupExportCard: View {
     }
 
     private func runExport() async {
-        // AUD-7 H3 / audit v0162 H2 — the `/api/export` service call + the
+        // The `/api/export` service call + the
         // complete-file-protection persist are owned by `ExportStore` now (the
         // former in-view `ExportService` construction + file write were the last
         // in-view layering seam). The card keeps only its inline UI state.
@@ -263,19 +232,20 @@ private struct EncryptedBackupExportCard: View {
     }
 
     var body: some View {
-        HLSettingsCard(
-            icon: "lock.doc.fill",
-            title: "export.encrypted.title",
+        HLCard(
+            "export.encrypted.title",
             subtitle: "export.encrypted.subtitle",
             footer: "export.encrypted.footer"
         ) {
             VStack(alignment: .leading, spacing: HLSpace.md) {
                 SecureField(String(localized: "export.encrypted.passphrase.placeholder"), text: $passphrase)
                     .hlSecretEntry()
+                    .hlFieldPlate()
                     .accessibilityIdentifier("export.encrypted.passphrase")
 
                 SecureField(String(localized: "export.encrypted.confirm.placeholder"), text: $confirmPassphrase)
                     .hlSecretEntry()
+                    .hlFieldPlate()
                     .accessibilityIdentifier("export.encrypted.confirm")
 
                 if !confirmPassphrase.isEmpty, !passphrasesMatch {
@@ -285,8 +255,8 @@ private struct EncryptedBackupExportCard: View {
                 }
 
                 HLButton(
-                    String(localized: "export.encrypted.button"),
-                    icon: "lock.fill",
+                    "export.encrypted.button",
+                    systemImage: "lock.fill",
                     variant: .secondary,
                     isLoading: isWorking
                 ) {
@@ -298,27 +268,16 @@ private struct EncryptedBackupExportCard: View {
 
                 if let exportURL {
                     ShareLink(item: exportURL) {
-                        HStack(spacing: HLSpace.md) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(HLColor.statusOK)
-                            Text("Share file")
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
-                            Spacer()
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.hlIcon(HLIconSize.sm))
-                                .foregroundStyle(HLText.tertiary)
-                        }
-                        .contentShape(Rectangle())
+                        HLButtonLabel("Share file", systemImage: "square.and.arrow.up", variant: .secondary)
                     }
-                    .buttonStyle(.plain)
+                    .hlPressable()
                     .accessibilityIdentifier("export.encrypted.share")
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.hlFootnote)
-                        .foregroundStyle(HLColor.statusBad)
+                        .foregroundStyle(StepUpRetry.messageTint(for: errorMessage))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -341,7 +300,7 @@ private struct EncryptedBackupExportCard: View {
             passphrase = ""
             confirmPassphrase = ""
         } catch let error as HLError {
-            // R2 / #115 A3 — an account with a second factor is asked for that
+            // An account with a second factor is asked for that
             // factor (or a passkey); the passphrase stays for the retry.
             errorMessage = stepUp.requestIfProofRefusal(error)
                 ? StepUpRetry.requiredMessage
@@ -357,8 +316,8 @@ private struct EncryptedBackupExportCard: View {
 /// data out" and "bring my data in" are the two halves of data portability.
 private struct ImportDataCard: View {
     var body: some View {
-        // 1.4 B4 — one row, one heading.
-        HLSettingsCard {
+        // One row, one heading.
+        HLCard(layout: .rows) {
             HLSettingsActionRow(title: "import.card.title", subtitle: "import.card.subtitle", presents: .push) {
                 ImportDataScreen()
             }
@@ -370,7 +329,7 @@ private struct ImportDataCard: View {
 /// One per-domain CSV export card. Encapsulates the download → persist → share
 /// lifecycle plus error/rate-limit surfacing, so the three domains share exactly
 /// one interaction language (Quality Doctrine §6: uniform, no bespoke per-card
-/// behaviour). Glass discipline: pure `HLSettingsCard` content — no glass.
+/// behaviour). Glass discipline: pure `HLCard` content — no glass.
 private struct DomainCSVExportCard: View {
     let domain: ExportService.Domain
     let icon: String
@@ -383,55 +342,37 @@ private struct DomainCSVExportCard: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        HLSettingsCard(icon: icon, title: title) {
+        HLCard(title) {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
-                Button {
+                HLRowButton {
                     Task { await run() }
                 } label: {
-                    HStack(spacing: HLSpace.md) {
-                        Text(isWorking ? "Preparing…" : "Download CSV")
-                            .font(.hlSubhead.weight(.semibold))
-                            .foregroundStyle(isWorking ? HLText.tertiary : HLText.primary)
-                        Spacer()
+                    HLRowLayout(
+                        title: isWorking ? "Preparing…" : "Download CSV",
+                        indicator: isWorking ? .hidden : .symbol("square.and.arrow.down")
+                    ) {
                         if isWorking {
                             ProgressView().controlSize(.small)
-                        } else {
-                            // Trailing affordance glyph — fixed via HLIconSize.sm.
-                            Image(systemName: "square.and.arrow.down")
-                                .font(.hlIcon(HLIconSize.sm))
-                                .foregroundStyle(HLText.tertiary)
                         }
+                    } leading: {
+                        EmptyView()
                     }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .disabled(isWorking)
                 .accessibilityIdentifier("settings.export.csv.\(domain.rawValue)")
 
                 if let exportURL {
                     ShareLink(item: exportURL) {
-                        HStack(spacing: HLSpace.md) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(HLColor.statusOK)
-                            Text("Share file")
-                                .font(.hlSubhead.weight(.semibold))
-                                .foregroundStyle(HLText.primary)
-                            Spacer()
-                            // Trailing affordance glyph — fixed via HLIconSize.sm.
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.hlIcon(HLIconSize.sm))
-                                .foregroundStyle(HLText.tertiary)
-                        }
-                        .contentShape(Rectangle())
+                        HLButtonLabel("Share file", systemImage: "square.and.arrow.up", variant: .secondary)
                     }
-                    .buttonStyle(.plain)
+                    .hlPressable()
                     .accessibilityIdentifier("settings.export.csv.\(domain.rawValue).share")
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.hlFootnote)
-                        .foregroundStyle(HLColor.statusBad)
+                        .foregroundStyle(StepUpRetry.messageTint(for: errorMessage))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -439,7 +380,7 @@ private struct DomainCSVExportCard: View {
     }
 
     private func run() async {
-        // audit v0162 H2 — the per-domain CSV service call + the complete-file-
+        // The per-domain CSV service call + the complete-file-
         // protection persist (server filename matches the `DoctorReportTmpSweeper`
         // owned-prefix list) are owned by `ExportStore`. The card keeps only its
         // inline UI state + error surfacing.

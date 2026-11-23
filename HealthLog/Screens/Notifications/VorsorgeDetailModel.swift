@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// **W-VORSORGE-DETAIL (b244) — the data model behind the Vorsorge reminder
+/// **The data model behind the Vorsorge reminder
 /// detail sheet.**
 ///
 /// Loads the honest chart substance for one preventive-care reminder, branching

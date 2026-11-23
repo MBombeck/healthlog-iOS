@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// #141 — the page behind a related row. It resolves the record from the
+/// The page behind a related row. It resolves the record from the
 /// list the app already holds (instant), else reads that one record, then shows
 /// the same detail screen its own list opens. While reading it shows a spinner;
 /// a record that is gone, a module that is off and a failed read each get their
@@ -40,7 +40,7 @@ struct RelatedRecordDestination: View {
                     medication: medication,
                     repo: container.medicationsRepo,
                     glp1LocalRepo: container.glp1LocalRepo,
-                    therapyLogRepo: container.syncModeStore.isPaired ? container.medicationTherapyLogRepo : nil,
+                    therapyLogRepo: container.medicationTherapyLogRepo,
                     profileTimeZoneProvider: container.medicationsStore.profileTimeZoneProvider
                 )
             }
@@ -54,7 +54,7 @@ struct RelatedRecordDestination: View {
         case .failed:
             placeholder {
                 HLEmptyState(icon: "exclamationmark.triangle", title: "related.open.failed.title") {
-                    HLButton("Retry", variant: .secondary) {
+                    HLButton(HLControlWord.retry.key, variant: .secondary) {
                         attempt += 1
                     }
                     .accessibilityIdentifier("related.open.retry")

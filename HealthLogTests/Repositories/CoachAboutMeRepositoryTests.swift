@@ -124,7 +124,7 @@ struct CoachAboutMeRepositoryTests {
         #expect(echo.conditions == "Hypertension")
     }
 
-    // MARK: - Clarifying-question loop (COACH-3)
+    // MARK: - Clarifying-question loop
 
     @Test("adopt POSTs question + answer + an Idempotency-Key and decodes the result")
     func adoptWireShape() async throws {
@@ -223,7 +223,7 @@ struct CoachAboutMeRepositoryTests {
     }
 }
 
-/// **COACH-3 — store-level loop semantics** against the real `APIClient` +
+/// **Store-level loop semantics** against the real `APIClient` +
 /// stubbed `URLSession`: adopt round-trips into the about-me fields (via the
 /// post-adopt re-GET), dismiss removes the question, remember appends context.
 @MainActor

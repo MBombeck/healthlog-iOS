@@ -87,11 +87,10 @@ public actor UserThresholdsRepository {
         _ patch: ThresholdsUpdatePayload,
         idempotencyKey: IdempotencyKey
     ) async throws -> UserThresholdsUpdateEchoDTO {
-        do {
-            return try await put(patch, idempotencyKey: idempotencyKey)
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            await enqueue(patch, idempotencyKey: idempotencyKey)
-            throw err
+        let payload = try encoder.encode(OutboxQueue.Payloads.UpdateThresholds(patch: patch))
+        let op = OutboxQueue.Operation(kind: .updateThresholds, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
+            try await put(patch, idempotencyKey: idempotencyKey)
         }
     }
 
@@ -127,20 +126,5 @@ public actor UserThresholdsRepository {
         // `fetch()` must re-pull so the effective map reflects the merge.
         invalidateCache()
         return echoed
-    }
-
-    private func enqueue(_ patch: ThresholdsUpdatePayload, idempotencyKey: IdempotencyKey) async {
-        do {
-            let payload = try encoder.encode(OutboxQueue.Payloads.UpdateThresholds(patch: patch))
-            try await outbox.enqueue(.init(
-                kind: .updateThresholds,
-                payload: payload,
-                idempotencyKey: idempotencyKey.raw
-            ))
-        } catch {
-            // Compounded failure (network + persistence) — log sanitized;
-            // the original retriable error still re-throws to the caller.
-            HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-        }
     }
 }

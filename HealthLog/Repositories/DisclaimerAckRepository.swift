@@ -1,9 +1,9 @@
 import Foundation
 
 /// Thin projection of the `GET /api/auth/me` payload — only the v1.18.6
-/// (DISC-02) `disclaimerAcknowledgedAt` field. Decoupled from `UserProfile`
+/// `disclaimerAcknowledgedAt` field. Decoupled from `UserProfile`
 /// so an unrelated `/me` schema change can't break the read, mirroring
-/// `AuthMeAvatar` / `AuthMeModules`.
+/// `AuthMeModules`.
 ///
 /// **Decode-tolerant:** a server that omits the key (prod ≤ v1.18.5) yields
 /// `nil` — treated downstream as "not yet acknowledged" so the one-time gate

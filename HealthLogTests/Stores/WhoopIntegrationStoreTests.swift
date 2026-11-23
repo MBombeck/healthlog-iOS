@@ -47,7 +47,6 @@ struct WhoopIntegrationStoreTests {
     @MainActor
     private final class Capture {
         var statusQueue: [WhoopStatus]
-        var credentials = WhoopCredentialsStatus(hasCredentials: false)
         var testResult = WhoopTestResult(ok: true, lastSyncedAt: nil, latencyMs: 42)
         var putBodies: [Data] = []
         var voidPaths: [String] = []
@@ -63,9 +62,6 @@ struct WhoopIntegrationStoreTests {
                 if let err = await self.takeSendError() { throw err }
                 if let r = req as? APIRequest<WhoopStatus> { _ = r
                     return await self.nextStatus()
-                }
-                if let r = req as? APIRequest<WhoopCredentialsStatus> { _ = r
-                    return await self.credentials
                 }
                 if let r = req as? APIRequest<WhoopTestResult> { _ = r
                     return await self.testResult
@@ -216,14 +212,8 @@ struct WhoopIntegrationStoreTests {
         #expect(decoded.tokenExpired == false)
     }
 
-    @Test("WhoopRepository decodes credentials + test shapes")
-    func decodeCredentialsAndTest() throws {
-        let creds = try JSONDecoder.hlDefault.decode(
-            WhoopCredentialsStatus.self,
-            from: Data(#"{ "hasCredentials": true }"#.utf8)
-        )
-        #expect(creds.hasCredentials == true)
-
+    @Test("WhoopRepository decodes the test shape")
+    func decodeTestShape() throws {
         let test = try JSONDecoder.hlDefault.decode(
             WhoopTestResult.self,
             from: Data(#"{ "ok": true, "lastSyncedAt": "2026-06-04T08:30:00.000Z", "latencyMs": 137 }"#.utf8)
@@ -270,7 +260,7 @@ struct WhoopIntegrationStoreTests {
         )
         await store.loadStatus()
         // The status pill must NOT claim "Connected" while the OAuth token is
-        // dead and nothing is flowing (A4 MEDIUM #1).
+        // dead and nothing is flowing.
         #expect(store.stage == .tokenExpired)
     }
 
@@ -419,15 +409,15 @@ struct WhoopIntegrationStoreTests {
         await connect.value
 
         if store.status != nil || store.isWorking {
-            Issue.record("EXPECTED_RED: late A WHOOP connect published into B")
+            Issue.record("late A WHOOP connect published into B")
         }
     }
 }
 
-/// #139 — kept in an extension so the suite body stays under the type-length
+/// Kept in an extension so the suite body stays under the type-length
 /// budget; same private helpers, same isolation.
 extension WhoopIntegrationStoreTests {
-    // MARK: - #139: the state comes from `health`
+    // MARK: - The state comes from `health`
 
     @Test("#139: health action_required + reconnect → .tokenExpired without the legacy flag")
     func healthReauthDrivesReconnect() async {

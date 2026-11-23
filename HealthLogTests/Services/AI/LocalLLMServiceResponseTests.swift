@@ -28,10 +28,11 @@ import Testing
 ///    skip too — the assets only exist on real hardware with Apple
 ///    Intelligence provisioned.
 ///
-/// In all three skip cases the test returns clean (no `Issue.record`,
-/// no thrown sentinel) so the suite reads "passed" on a kill-card host.
-/// Real-device + Xcode-Cloud runs on eligible hardware execute the
-/// live model call and assert the shape of the returned `CoachInsight`.
+/// No case skips. Without a model the test asserts the fail-closed
+/// contract (`respond` throws `.foundationModelsUnavailable`); on an
+/// asset-less host it accepts only the model manager's error; with a
+/// working model it asserts the shape of the returned `CoachInsight`. The
+/// branch taken is attached to the result bundle as `llm-branch`.
 ///
 /// **1.0.3 (App Review 1.4.1, R11).** The round-trip now runs against the
 /// composed prompt rather than a bare question — see the comment at the call
@@ -46,35 +47,13 @@ import Testing
 @MainActor
 @Suite("LocalLLMService — respond(prompt:) structured-output round-trip")
 struct LocalLLMServiceResponseTests {
-    @Test("respond returns a well-formed CoachInsight when the model is available")
+    @Test("respond returns a well-formed CoachInsight with a model and fails closed without one")
     func respondReturnsWellFormedInsight() async throws {
-        guard #available(iOS 26.0, *) else {
-            // Pre-iOS-26 sims / CI hosts cannot run the
-            // FoundationModels path at all — the public `respond(prompt:)`
-            // entry-point is `@available(iOS 26.0, *)`-gated, so we
-            // cannot even reference it from this scope without the
-            // guard. Early-return clean — Swift Testing has no
-            // first-class `#skip(...)` primitive yet, and a thrown
-            // sentinel would surface as a failure. The test name +
-            // this comment document why the slot stayed empty.
-            return
-        }
-
         let service = LocalLLMService()
-
-        // Branch the skip on the runtime availability snapshot. The
-        // `LocalLLMService.Availability` enum is documented to mirror
-        // Apple's `SystemLanguageModel.Availability`; only `.available`
-        // can serve a response. Any other case means the host
-        // (sim/CI) cannot exercise the live model path — return
-        // silently for the same reason as the iOS-floor guard above.
-        guard service.availability == .available else {
-            return
-        }
 
         // Live model call against the prompt production actually sends.
         //
-        // **1.0.3 (R11).** This used to hand the model a bare question
+        // This used to hand the model a bare question
         // ("Was bedeutet ein Blutdruck von 138/92?") and still get a
         // populated list back, because the schema field was
         // `suggestedActions` guided by "1-3 konkrete Handlungsvorschläge"
@@ -86,7 +65,7 @@ struct LocalLLMServiceResponseTests {
         // locale is pinned rather than inherited — the builder selects its
         // guardrail language from it.
         //
-        // **R29 — and against a snapshot with something in it.** The
+        // **And against a snapshot with something in it.** The
         // composed prompt was still being handed `.empty`, which is the one
         // state where the ask is close to unanswerable: asked to write
         // questions a person could take to their doctor, about no data at
@@ -102,25 +81,44 @@ struct LocalLLMServiceResponseTests {
             now: Self.fixtureNow,
             locale: Locale(identifier: "de_DE")
         )
+        // Every branch asserts something; none returns without a check.
+        guard service.availability == .available else {
+            // No usable model on this host: `respond` must fail closed with
+            // the one error the Coach maps to its kill-card.
+            Attachment.record("unavailable: \(service.availability)", named: "llm-branch")
+            let error = await #expect(throws: LocalLLMError.self) {
+                try await service.respond(prompt: prompt)
+            }
+            #expect(Self.isUnavailable(error), "respond without a model threw \(String(reflecting: error))")
+            return
+        }
+
         let insight: CoachInsight
         do {
             insight = try await service.respond(prompt: prompt)
         } catch LocalLLMError.foundationModelsUnavailable {
-            // Race: availability flipped between the snapshot above
-            // and the call (the service re-probes on every
-            // `respond(prompt:)` to stay honest with Settings
-            // toggles). Treat as a skip — the host genuinely can't
-            // serve the request right now.
+            // Availability flipped between the snapshot and the call (the
+            // service re-probes on every turn); the re-probe must agree.
+            Attachment.record("unavailable after re-probe", named: "llm-branch")
+            #expect(service.availability != .available, "respond refused while the service still reports a ready model")
             return
-        } catch LocalLLMError.modelResponseFailed {
-            // Simulator-without-model-assets path (case 3 in the
-            // suite-level doc above). `availability == .available`
-            // returns true but the model catalog has no underlying
-            // assets, so the call fails with a
-            // `ModelManagerServices.ModelManagerError`. We can't
-            // assert against a model we can't run — skip cleanly.
+        } catch let LocalLLMError.modelResponseFailed(underlying) {
+            // Two ways a live call may end without an insight, both closed:
+            // a host that reports the model but has no catalog assets fails
+            // with the model manager's error (case 3 above), and the live
+            // model may stop mid-answer, so its JSON cannot be decoded into
+            // the schema. Either way `respond` throws the one wrapped error
+            // and returns no half-filled insight. Any other failure is a
+            // real defect.
+            let described = String(reflecting: underlying)
+            Attachment.record("failed closed: \(described)", named: "llm-branch")
+            #expect(
+                Self.isMissingModelAssets(underlying) || Self.isGenerationOrDecodingFailure(underlying),
+                "unexpected generation failure: \(described)"
+            )
             return
         }
+        Attachment.record("live model", named: "llm-branch")
 
         #expect(insight.title.isEmpty == false, "title must not be empty")
         #expect(
@@ -131,7 +129,7 @@ struct LocalLLMServiceResponseTests {
             insight.talkingPoints.count >= 1,
             "must surface at least one talking point for the doctor visit"
         )
-        // R11 — the talking points are for a conversation, not a to-do list.
+        // The talking points are for a conversation, not a to-do list.
         // A live 3B model cannot be asserted into perfect phrasing, but the
         // imperative openers the old guide invited are checkable.
         for point in insight.talkingPoints {
@@ -143,7 +141,31 @@ struct LocalLLMServiceResponseTests {
         #expect(insight.talkingPoints.count <= 3, "the generation guide caps the list at 3")
     }
 
-    // MARK: - Fixtures (R29)
+    // MARK: - Branch checks
+
+    private static func isUnavailable(_ error: LocalLLMError?) -> Bool {
+        if case .foundationModelsUnavailable = error { true } else { false }
+    }
+
+    /// The asset-less simulator surfaces `ModelManagerServices.ModelManagerError`
+    /// somewhere in the wrapped error; matched by name because the type is
+    /// not public.
+    private static func isMissingModelAssets(_ error: any Error) -> Bool {
+        let names = [String(reflecting: type(of: error)), String(reflecting: error)]
+        return names.contains { $0.contains("ModelManager") }
+    }
+
+    /// A generation that ended without a usable answer: the framework's
+    /// `GenerationError` (decoding failure of an incomplete JSON answer, a
+    /// refusal, an exceeded context) or a plain decoding error. Matched by
+    /// name, so the test does not need to link FoundationModels.
+    private static func isGenerationOrDecodingFailure(_ error: any Error) -> Bool {
+        if error is DecodingError { return true }
+        let names = [String(reflecting: type(of: error)), String(reflecting: error)]
+        return names.contains { $0.contains("GenerationError") || $0.contains("DecodingError") || $0.contains("decodingFailure") }
+    }
+
+    // MARK: - Fixtures
 
     /// Pinned clock, so the composed prompt is a pure function of the fixture.
     private static let fixtureNow = Date(timeIntervalSince1970: 1_700_000_000)

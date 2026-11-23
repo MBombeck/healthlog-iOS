@@ -69,7 +69,7 @@ struct MetricDisplayTests {
     @Test("ready BP composite missing diastolic → em-dash + Noch keine Daten")
     func readyBPCompositeHalfLoaded() {
         // The dashboard summary endpoint can deliver only the systolic half
-        // while the diastolic peer is still in flight. PA4 #8 — the
+        // while the diastolic peer is still in flight. The
         // composite should render the placeholder until both peers land.
         let metric = makeMetric(kind: .bloodPressure, latest: 124, secondary: nil)
         let onlySys = HealthLog.Measurement(

@@ -6,7 +6,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.6.2.1 — F3 regression lock. The drill-down "Alle Messungen
+/// F3 regression lock. The drill-down "Alle Messungen
 /// anzeigen" calls `GET /api/measurements?limit=400`, decoded as
 /// `MeasurementListWireResponse`. Whenever the server's mixed-type page
 /// carries a row whose `type` is not present in `ServerMeasurementType`
@@ -87,7 +87,7 @@ struct MeasurementListWireResponseTolerantTests {
             MeasurementListWireResponse.self,
             from: Data(json.utf8)
         )
-        // Audit B-4 — all three rows survive. The two known ones decode as
+        // All three rows survive. The two known ones decode as
         // themselves, the genuinely-unknown one is carried on the `.unknown`
         // sentinel instead of being discarded with nothing said.
         #expect(response.measurements.count == 3)
@@ -161,7 +161,7 @@ struct MeasurementListWireResponseTolerantTests {
         #expect(domain["walk-ds"]?.primaryValue == 28.4)
     }
 
-    /// v0.14 — unit-driven sleep normalisation. If any LIST surface ever sends
+    /// Unit-driven sleep normalisation. If any LIST surface ever sends
     /// the per-night sleep total already in HOURS (`unit: "h"`, as the dashboard
     /// summary + series routes do), `toDomain()` must pass it through verbatim —
     /// NOT divide by 60 again (which would turn 7.2 h into 0.12 h). And a row
@@ -191,7 +191,7 @@ struct MeasurementListWireResponseTolerantTests {
         #expect(domain["sleep-none"]?.primaryValue == 7.2)
     }
 
-    /// **v0.14.2 M5 — sub-minute / unknown unit guard.** The prior `sleepHours`
+    /// **Sub-minute / unknown unit guard.** The prior `sleepHours`
     /// divided ANY non-hour token by 60, so a `ns`/`ms`/`s` row (the sleep DTO
     /// universe carries `ns`) would have produced billions of "hours". The
     /// switch is now exhaustive over the sub-hour units with their real factors;

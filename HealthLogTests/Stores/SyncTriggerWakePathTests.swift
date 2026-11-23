@@ -97,7 +97,7 @@
             let uploader = makeSharedContextUploader()
             let coordinator = BackgroundSyncCoordinator(healthKit: MockHealthKitWriter())
             let spy = BGTaskCompletionSpy()
-            // Plan 07-09 — der orchestrierte Pass ist das, was im Wake läuft;
+            // Der orchestrierte Pass ist das, was im Wake läuft;
             // hier steht er stellvertretend für „irgendein Upload während des
             // Wakes". Vorher stand der Outbox-Drain-Hook dafür, den der Wake
             // zusätzlich zum Pass aufrief.
@@ -160,6 +160,39 @@
             )
 
             #expect(recorder.all == ["push"])
+        }
+
+        @Test("A silent push that outlasts its budget answers .failed, tells the pass, and cancels it")
+        func pushPastItsBudgetIsCutOff() async throws {
+            let log = TriggerLog()
+            let coordinator = BackgroundSyncCoordinator(healthKit: nil)
+            coordinator.attachHealthSyncRoute { _, isExpired in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+                log.append(isExpired() ? "expired" : "live")
+                log.append("cancelled")
+                return [.outboxDrain]
+            }
+            let appRouter = AppRouter()
+            let deepLinks = DeepLinkRouter(router: appRouter, isAuthenticated: { true })
+            let service = try NotificationService(
+                api: makeAPI(),
+                environment: Self.env,
+                keychain: InMemoryKeychain(),
+                deepLinks: deepLinks,
+                backgroundSync: coordinator,
+                defaults: #require(UserDefaults(suiteName: "test.s2.pushbudget.\(UUID().uuidString)"))
+            )
+            service.silentPushBudget = .milliseconds(300)
+
+            let result = await service.didReceiveSilentNotification(
+                userInfo: RemoteNotificationUserInfo(["aps": ["content-available": 1]])
+            )
+
+            #expect(result == .failed)
+            #expect(await v1Settle { log.count == 2 })
+            #expect(log.values == ["expired", "cancelled"])
         }
 
         // MARK: - Vordergrund bleibt Vordergrund

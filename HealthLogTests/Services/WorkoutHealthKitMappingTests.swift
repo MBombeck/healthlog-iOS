@@ -43,7 +43,7 @@ import Testing
             #expect(WorkoutHealthKitMapping.sportType(for: .pilates) == "mindAndBody")
         }
 
-        /// 1.2 V5 — the types that used to fold to "other" although the server
+        /// The types that used to fold to "other" although the server
         /// has a bucket for them (production: generic workouts piling up as
         /// `other`). One case per mapped type.
         @Test(
@@ -189,11 +189,11 @@ import Testing
             #expect(started.hasSuffix("Z") || started.contains("+"))
             // Distance was nil → must be omitted, not encoded as null.
             #expect(first["totalDistanceM"] == nil)
-            // GH #86 — no series passed → the field is absent, never `[]`.
+            // No series passed → the field is absent, never `[]`.
             #expect(first["samples"] == nil)
         }
 
-        // MARK: - GH #86 — the per-session HR series
+        // MARK: - The per-session HR series
 
         @Test("hrSamples passes HealthKit through verbatim, only rounding to the schema's int bpm")
         func hrSamplesPassThrough() throws {

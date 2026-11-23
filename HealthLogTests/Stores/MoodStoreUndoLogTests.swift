@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// MEDS-QUICK-MARK-UNDO sibling (v0.11 W26) — quick mood-log undo.
+/// MEDS-QUICK-MARK-UNDO sibling — quick mood-log undo.
 ///
 /// Real APIClient over `MockURLProtocol` so the log POST + the undo DELETE
 /// exercise the real wire serialization (PROJECT_GUIDE.md: never a mock server on

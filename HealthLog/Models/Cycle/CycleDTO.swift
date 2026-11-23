@@ -406,12 +406,17 @@ public struct CycleCalendarProfile: Codable, Sendable, Equatable, Hashable {
 public struct CycleCalendarResponse: Codable, Sendable, Equatable {
     public let profile: CycleCalendarProfile?
     public let prediction: CyclePredictionDTO?
-    /// **Z1 (#72) — the resolved cycle verdict (server ≥ v1.35.2).** Non-optional
+    /// **The resolved cycle verdict (server ≥ v1.35.2).** Non-optional
     /// on the wire; optional here only so a self-hosted server that predates
     /// v1.35.2 still decodes. Where it is missing the app makes NO state claim
     /// rather than reconstructing one (see ``CycleVerdictDTO``).
     public let verdict: CycleVerdictDTO?
     public let days: [CalendarDayDTO]
+    /// **The forecast cycles (server v1.47.1).** `nil` on an older server,
+    /// which shows no "upcoming cycles" card; rendered as sent.
+    public let projection: [CycleProjectedCycle]?
+    /// Why `projection` holds what it holds; `nil` on an older server.
+    public let projectionState: CycleProjectionState?
     /// `meta.generatedAt` — when the SERVER built this envelope. Anchors the
     /// "as of" stamp on a stored verdict; the receive time would overstate
     /// freshness because the envelope can be served from the persistent cache.
@@ -427,6 +432,10 @@ public struct CycleCalendarResponse: Codable, Sendable, Equatable {
         prediction = try c.decodeIfPresent(CyclePredictionDTO.self, forKey: .prediction)
         verdict = try c.decodeIfPresent(CycleVerdictDTO.self, forKey: .verdict)
         days = try c.decodeIfPresent([CalendarDayDTO].self, forKey: .days) ?? []
+        // Tolerant: a projection this build cannot read drops the card, never
+        // the calendar.
+        projection = try? c.decodeIfPresent([CycleProjectedCycle].self, forKey: .projection)
+        projectionState = try? c.decodeIfPresent(CycleProjectionState.self, forKey: .projectionState)
         let meta = try? c.nestedContainer(keyedBy: MetaKeys.self, forKey: .meta)
         generatedAt = try meta?.decodeIfPresent(Date.self, forKey: .generatedAt)
     }
@@ -437,6 +446,8 @@ public struct CycleCalendarResponse: Codable, Sendable, Equatable {
         try c.encodeIfPresent(prediction, forKey: .prediction)
         try c.encodeIfPresent(verdict, forKey: .verdict)
         try c.encode(days, forKey: .days)
+        try c.encodeIfPresent(projection, forKey: .projection)
+        try c.encodeIfPresent(projectionState, forKey: .projectionState)
         if let generatedAt {
             var meta = c.nestedContainer(keyedBy: MetaKeys.self, forKey: .meta)
             try meta.encode(generatedAt, forKey: .generatedAt)
@@ -444,7 +455,7 @@ public struct CycleCalendarResponse: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case profile, prediction, verdict, days, meta
+        case profile, prediction, verdict, days, projection, projectionState, meta
     }
 }
 

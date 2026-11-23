@@ -14,7 +14,6 @@ struct MoodHistoryScreen: View {
     @State private var reloadID = UUID()
     @State private var activeRequestID: UUID?
     @State private var editing: MoodEntry?
-    @State private var deleteConfirmTarget: MoodEntry?
 
     private static let pageSize = 25
 
@@ -24,16 +23,9 @@ struct MoodHistoryScreen: View {
         let entries: [MoodEntry]
     }
 
-    private static let monthFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("MMMMyyyy")
-        return formatter
-    }()
-
     private var buckets: [MonthBucket] {
         let calendar = Calendar.current
-        let sorted = historyEntries.sorted { $0.recordedAt > $1.recordedAt }
+        let sorted = Self.visible(historyEntries).sorted { $0.recordedAt > $1.recordedAt }
         let grouped = Dictionary(grouping: sorted) { entry -> Date in
             let components = calendar.dateComponents([.year, .month], from: entry.recordedAt)
             return calendar.date(from: components) ?? calendar.startOfDay(for: entry.recordedAt)
@@ -43,10 +35,16 @@ struct MoodHistoryScreen: View {
             .map { date, entries in
                 MonthBucket(
                     id: date,
-                    title: Self.monthFormatter.string(from: date),
+                    title: HLDateFormat.monthYear(date),
                     entries: entries
                 )
             }
+    }
+
+    /// An entry dated after now (a clock or an import off by a day) does not
+    /// stand at the top of the history.
+    static func visible(_ entries: [MoodEntry], now: Date = .now) -> [MoodEntry] {
+        entries.filter { $0.recordedAt <= now }
     }
 
     private var hasMore: Bool {
@@ -59,57 +57,52 @@ struct MoodHistoryScreen: View {
             filterSection
 
             if let loadError, historyEntries.isEmpty {
-                // 1.4 B4 — the app's lockup with its secondary button, like the
-                // empty state below, instead of the system's.
                 Section {
-                    HLEmptyState(
-                        icon: "exclamationmark.triangle",
-                        title: Text("Could not load"),
-                        message: Text(loadError.userFacingDescription)
-                    ) {
-                        HLButton("Retry", variant: .secondary) { reloadID = UUID() }
+                    HLErrorState(LocalizedStringKey(loadError.userFacingDescription)) {
+                        reloadID = UUID()
                     }
                 }
+                .hlFormRowSurface()
             } else if isLoading, historyEntries.isEmpty {
-                Section {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                }
+                HLAsyncListSkeletonRows(rowCount: 4)
+                    .hlFormRowSurface()
             } else if historyEntries.isEmpty {
                 Section { emptyState }
+                    .hlFormRowSurface()
             } else {
                 ForEach(buckets) { bucket in
-                    Section(bucket.title) {
+                    Section {
                         ForEach(bucket.entries) { entry in
+                            // The store keeps the way back: the entry goes at
+                            // once and the undo hint appears.
                             MoodEntryRow(entry: entry)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        deleteConfirmTarget = entry
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    Button {
+                                .hlSwipeDelete(.undoable {
+                                    if await store.delete(entry) { reloadID = UUID() }
+                                }, also: {
+                                    Button(HLControlWord.edit.key, systemImage: "pencil") {
                                         editing = entry
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
                                     }
                                     .tint(.accentColor)
-                                }
+                                })
                         }
+                    } header: {
+                        HLSectionHeader(verbatim: bucket.title, rank: .group)
                     }
+                    .hlFormRowSurface()
                 }
                 if hasMore {
+                    // The last row loads the next page by itself, like every
+                    // other long list.
                     Section {
-                        Button("Load more") {
+                        HLLoadMoreRow(hasMore: hasMore, isLoading: isLoading, trigger: .onAppear) {
                             Task { await load(reset: false) }
                         }
-                        .disabled(isLoading)
-                        .frame(maxWidth: .infinity)
                     }
+                    .hlFormRowSurface()
                 }
             }
         }
-        .hlScreenBackground()
+        .hlPageMargins()
         .hlScrollEdgeSoft()
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
@@ -122,87 +115,66 @@ struct MoodHistoryScreen: View {
                 reloadID = UUID()
             }
         }
-        .hlConfirmDestructive(
-            Text("Delete entry?"),
-            isPresented: Binding(
-                get: { deleteConfirmTarget != nil },
-                set: { if !$0 { deleteConfirmTarget = nil } }
-            ),
-            message: Text("This action cannot be undone."),
-            confirm: Text("Delete"),
-            cancel: Text("Cancel"),
-            onCancel: { deleteConfirmTarget = nil },
-            action: {
-                guard let entry = deleteConfirmTarget else { return }
-                deleteConfirmTarget = nil
-                Task {
-                    if await store.delete(entry) {
-                        reloadID = UUID()
-                    }
-                }
-            }
-        )
     }
 
     private var filterSection: some View {
         Section {
-            Picker("Period", selection: periodBinding) {
-                Text("All time").tag(MoodHistoryPeriod.all)
-                Text("Last 7 days").tag(MoodHistoryPeriod.last7Days)
-                Text("Last 30 days").tag(MoodHistoryPeriod.last30Days)
-                Text("Last 90 days").tag(MoodHistoryPeriod.last90Days)
-                Text("Last year").tag(MoodHistoryPeriod.lastYear)
-                Text("Custom").tag(MoodHistoryPeriod.custom)
+            HLFormPicker("Period", selection: periodBinding, options: MoodHistoryPeriod.allCases) {
+                Text(Self.periodLabel($0))
             }
             if draftFilter.period == .custom {
-                DatePicker("From", selection: customFromBinding, displayedComponents: .date)
-                    .environment(\.timeZone, ProfileDay.timeZone)
-                DatePicker("To", selection: customToBinding, displayedComponents: .date)
-                    .environment(\.timeZone, ProfileDay.timeZone)
-            }
-            Picker("Mood", selection: moodBinding) {
-                Text("All moods").tag("")
-                // Audit B-4 — `serverCases`: the sentinel is not a level a
-                // person can filter FOR, and the server would reject it.
-                ForEach(ServerMoodLevel.serverCases, id: \.rawValue) { mood in
-                    Text(MoodCopy.levelLabel(mood.score)).tag(mood.rawValue)
+                DatePicker(selection: customFromBinding, displayedComponents: .date) {
+                    HLRowTitle("From")
                 }
-            }
-            Picker("Source", selection: $draftFilter.source) {
-                Text("All sources").tag(MoodEntrySource?.none)
-                ForEach(MoodEntrySource.allCases) { source in
-                    Text(sourceLabel(source)).tag(Optional(source))
+                .environment(\.timeZone, ProfileDay.timeZone)
+                DatePicker(selection: customToBinding, displayedComponents: .date) {
+                    HLRowTitle("To")
                 }
+                .environment(\.timeZone, ProfileDay.timeZone)
+            }
+            // `serverCases`: the sentinel is not a level a person can
+            // filter FOR, and the server would reject it.
+            HLFormPicker(
+                "Mood",
+                selection: moodBinding,
+                options: [""] + ServerMoodLevel.serverCases.map(\.rawValue)
+            ) { raw in
+                ServerMoodLevel(rawValue: raw).map { Text(MoodCopy.levelLabel($0.score)) } ?? Text("All moods")
+            }
+            HLFormPicker(
+                "Source",
+                selection: $draftFilter.source,
+                options: [MoodEntrySource?.none] + MoodEntrySource.allCases.map { MoodEntrySource?.some($0) }
+            ) { source in
+                source.map { Text(sourceLabel($0)) } ?? Text("All sources")
             }
             HStack {
                 if draftFilter != MoodHistoryFilter() {
-                    Button("Reset") {
+                    HLLinkButton("Reset", alignment: .leading) {
                         draftFilter.reset()
                         appliedFilter = draftFilter
                         reloadID = UUID()
                     }
+                    .fixedSize()
                 }
                 Spacer()
+                // The count names what it counts.
                 if let total = meta?.total {
-                    Text("\(total)")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                    Text("\(total) entries")
+                        .hlText(.rowSubtitle)
                 }
-                // 1.4 B4 — `.borderedProminent` filled the capsule with the
-                // app tint (near white) under white text, so "Anwenden" read
-                // as switched off. A plain, semibold text action in the
-                // primary ink; `.plain` keeps the row from firing it.
-                Button("Apply") {
+                // The quiet text action of the app; each link keeps its own
+                // tap inside the row.
+                HLLinkButton("Apply", alignment: .leading) {
                     appliedFilter = draftFilter
                     reloadID = UUID()
                 }
-                .buttonStyle(.plain)
-                .font(.hlBody.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+                .fixedSize()
             }
         } header: {
-            Text("Filters")
+            HLSectionHeader("Filters", rank: .group)
         }
+        .hlFormRowSurface()
     }
 
     private var moodBinding: Binding<String> {
@@ -218,7 +190,7 @@ struct MoodHistoryScreen: View {
             set: { period in
                 draftFilter.period = period
                 if period == .custom {
-                    // #115 B6 — the account's last 29 days, not the phone's.
+                    // The account's last 29 days, not the phone's.
                     let range = MoodHistoryFilter.defaultCustomRange()
                     if draftFilter.customFrom == nil { draftFilter.customFrom = range.from }
                     if draftFilter.customTo == nil { draftFilter.customTo = range.to }
@@ -245,6 +217,17 @@ struct MoodHistoryScreen: View {
 
     private static func pickerDate(_ key: String) -> Date {
         ProfileDay.startOfDay(forKey: key) ?? .now
+    }
+
+    private static func periodLabel(_ period: MoodHistoryPeriod) -> LocalizedStringKey {
+        switch period {
+        case .all: "All time"
+        case .last7Days: "Last 7 days"
+        case .last30Days: "Last 30 days"
+        case .last90Days: "Last 90 days"
+        case .lastYear: "Last year"
+        case .custom: "Custom"
+        }
     }
 
     private func sourceLabel(_ source: MoodEntrySource) -> LocalizedStringKey {
@@ -301,10 +284,10 @@ struct MoodHistoryScreen: View {
     }
 
     private var emptyState: some View {
-        // 1.4 B2 — "log your first mood" was wrong under an active filter;
+        // "log your first mood" was wrong under an active filter;
         // the title is true either way.
         HLEmptyState(icon: "face.smiling", title: Text("No entries"))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, HLSpace.xxl)
+            .padding(.vertical, HLLayout.sectionGapBefore)
     }
 }

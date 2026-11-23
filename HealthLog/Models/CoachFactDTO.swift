@@ -10,7 +10,7 @@ import Foundation
 //   - `DELETE /api/insights/coach/facts/{id}` → soft-delete one (idempotent).
 //   - `DELETE /api/insights/coach/facts`      → soft-delete all ("forget all").
 //
-// **Auth + gate (B4):** every handler is `requireAuth()` (cookie OR Bearer) then
+// **Auth + gate:** every handler is `requireAuth()` (cookie OR Bearer) then
 // `await requireAssistantSurface("coach")`. If the operator disabled the Coach
 // surface the gate throws `403 + errorCode: "assistant.disabled.coach"`, which
 // `APIClient` already maps to ``HLError/aiUnavailable(_:)`` — the

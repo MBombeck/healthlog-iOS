@@ -13,10 +13,14 @@ import SwiftUI
 /// Charts substrate so AXChartDescriptor, axis styling, marks, and animation
 /// stay coherent screen-to-screen.
 ///
-/// **API contract (preserve back-compat for Bravo's dashboard tiles + MoodScreen):**
-/// `init(values:mode:tint:smoothing:)` — `values` is the y-series (x is index),
-/// `mode` picks line/area/bar, `tint` drives the foreground color,
-/// `smoothing` requests `catmullRom` interpolation (vs straight segments).
+/// **API contract:** `init(values:mode:smoothing:)` — `values` is the y-series
+/// (x is index), `mode` picks line or bar, `smoothing` draws the same curve
+/// as the metric charts (monotone, which never overshoots a measured point)
+/// instead of straight segments. `minimumSpan` keeps a calm series calm:
+/// the value axis spans at least that much, the data centred in it. Every
+/// sparkline has the same tint, ``defaultTint``; the `tint:`
+/// argument only remains for call sites that have not switched yet, and the
+/// lint rule `hl_sparkline_own_tint` lists them.
 ///
 /// **Design notes:**
 /// - At sparkline scale (≤ ~80pt height) axis chrome would dominate — `.chartXAxis(.hidden)`
@@ -24,7 +28,7 @@ import SwiftUI
 /// - **Default mode is `.line`** (web-parity, R2 §Primitive #3). The web reference
 ///   uses pure `<Line strokeWidth={1.5}>` for sparklines; Apple Health and
 ///   Withings dashboard mini-charts mirror this restraint. The `.area` case has
-///   been removed in Theme-2.0 (T2-2) — Tonal-Mono restraint kills the area-
+///   been removed in Theme-2.0 — Tonal-Mono restraint kills the area-
 ///   gradient option permanently; pure line + bar are the only modes.
 /// - Animation: bars + line draw-in are spring-animated (`HLMotion.spring`) when
 ///   the values array changes — reduce-motion swaps to an instant transition via
@@ -41,17 +45,55 @@ public struct HLSparkline: View {
     private let mode: Mode
     private let tint: Color
     private let smoothing: Bool
+    private let minimumSpan: Double?
+
+    /// The one tint of every sparkline: a step quieter than a detail chart's
+    /// line, because a sparkline sits beside a number that carries the card.
+    public static var defaultTint: Color {
+        HLChartTints.seriesMid
+    }
+
+    /// The curve between two points, the one the metric charts draw. A
+    /// monotone curve stays between its neighbours, so it never shows a peak
+    /// or a dip that was not measured.
+    nonisolated static func interpolation(smoothing: Bool) -> InterpolationMethod {
+        smoothing ? .monotone : .linear
+    }
+
+    /// The value axis of a series: 5 % room above and below, at least
+    /// `minimumSpan` tall with the data in its middle, never below zero for
+    /// a series that is not. Pure, so the rule is tested without a chart.
+    nonisolated static func yDomain(values: [Double], minimumSpan: Double? = nil) -> ClosedRange<Double> {
+        let finite = values.filter(\.isFinite)
+        guard let lo = finite.min(), let hi = finite.max() else { return 0 ... 1 }
+        let pad = (hi - lo) * 0.05
+        var lower = lo - pad
+        var upper = hi + pad
+        let least = max(minimumSpan ?? 0, upper > lower ? 0 : 1)
+        if upper - lower < least {
+            let middle = (lo + hi) / 2
+            lower = middle - least / 2
+            upper = middle + least / 2
+            if lo >= 0, lower < 0 {
+                upper -= lower
+                lower = 0
+            }
+        }
+        return lower ... upper
+    }
 
     public init(
         values: [Double],
         mode: Mode = .line,
-        tint: Color = HLChartTints.series,
-        smoothing: Bool = true
+        tint: Color = HLSparkline.defaultTint,
+        smoothing: Bool = true,
+        minimumSpan: Double? = nil
     ) {
         self.values = values
         self.mode = mode
         self.tint = tint
         self.smoothing = smoothing
+        self.minimumSpan = minimumSpan
     }
 
     public var body: some View {
@@ -60,7 +102,7 @@ public struct HLSparkline: View {
             .chartYAxis(.hidden)
             // Snug y-domain — guard the degenerate min == max case so the line
             // doesn't collapse to the top/bottom edge. Adds 5% padding above + below.
-            .chartYScale(domain: yDomain)
+            .chartYScale(domain: Self.yDomain(values: values, minimumSpan: minimumSpan))
             .accessibilityElement()
             .accessibilityLabel(accessibilitySummary)
             .accessibilityChartDescriptor(HLChartDescriptor(makeAXDescriptor()))
@@ -84,7 +126,7 @@ public struct HLSparkline: View {
                     lineCap: .round,
                     lineJoin: .round
                 ))
-                .interpolationMethod(smoothing ? .catmullRom : .linear)
+                .interpolationMethod(Self.interpolation(smoothing: smoothing))
             }
         case .bar:
             ForEach(indexed) { entry in
@@ -135,15 +177,6 @@ public struct HLSparkline: View {
 
     private var indexed: [Indexed] {
         values.enumerated().map { Indexed(x: $0.offset, y: $0.element) }
-    }
-
-    /// Pad y-domain by 5% so the line never grazes the top/bottom edge.
-    /// Degenerate case (all-equal or single value) widens by ±0.5.
-    private var yDomain: ClosedRange<Double> {
-        guard let lo = values.min(), let hi = values.max() else { return 0 ... 1 }
-        guard hi > lo else { return lo - 0.5 ... lo + 0.5 }
-        let pad = (hi - lo) * 0.05
-        return (lo - pad) ... (hi + pad)
     }
 
     // MARK: - Accessibility

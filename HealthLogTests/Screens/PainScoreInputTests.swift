@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// v0158 — the 0–10 NRS pain picker clamp/validation contract. The server
+/// The 0–10 NRS pain picker clamp/validation contract. The server
 /// accepts any 0–10 float (`PAIN_NRS`), so pinning the INTEGER band is a
 /// client responsibility. App-target-only suite (mirrors `MeasureRecentKinds`)
 /// because `PainScoreInput` lives in the MeasureSheet (app target), not Core.

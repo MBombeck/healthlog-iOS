@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// DASHBOARD-BUG-FIX-2 — Client-derived tile fallback via per-kind series
+/// Client-derived tile fallback via per-kind series
 /// endpoint. Pins the contract:
 ///
 /// 1. When `/api/measurements?limit=400` returns a page that contains NO

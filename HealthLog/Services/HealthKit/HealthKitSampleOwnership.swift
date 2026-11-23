@@ -3,7 +3,7 @@ import Foundation
     import HealthKit
 #endif
 
-/// **W-HK-RELIABILITY G-7 — foreign-filter ownership.**
+/// **Foreign-filter ownership.**
 ///
 /// The HealthKit read pipeline must skip samples *we* wrote (the anti-echo
 /// guarantee: a sample HealthLog round-tripped into Apple Health must not be

@@ -1,6 +1,6 @@
 import XCTest
 
-/// **SUPP-EDIT (1.5.0, #131 P3) — the composition form, photographed.**
+/// **The composition form, photographed.**
 ///
 /// Opens "Vitamin D3" (`-uitest-area-meds -uitest-supp -uitest-supp-edit`,
 /// see `SuppEditFixtures`), shoots the link under the composition, the form

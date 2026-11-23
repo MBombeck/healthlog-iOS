@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **Parity Build 4 · 4.5 — the Insights-overview arrangement, at last.**
+/// **The Insights-overview arrangement, at last.**
 ///
 /// The iOS twin of the web `InsightsEditMode` section list
 /// (`insights-edit-mode.tsx:369-418`, embedded in Settings via
@@ -29,7 +29,7 @@ struct InsightsOverviewSectionsList: View {
     ///   later build). The row still rides the same `sections` array, so hiding
     ///   or moving it from the phone correctly rearranges the WEB overview.
     ///
-    /// 1.4 B2-c — these rows are not listed on iOS any more: a switch that
+    /// These rows are not listed on iOS any more: a switch that
     /// changes nothing on this phone needed a "shown on the web only" line to
     /// be honest, and the honest answer is not to offer it here. Their place in
     /// the shared `sections` array is kept on every reorder (see ``move``).
@@ -65,8 +65,7 @@ struct InsightsOverviewSectionsList: View {
             }
             .onMove(perform: move)
         } header: {
-            // R12 — Abschnitts-Header im List-Gerüst: System-Default.
-            Text(String(localized: "Overview sections"))
+            HLSectionHeader("Overview sections")
         }
         // UI-Standard R3 — der Abschnitts-Footer ist gefallen. Er sagte
         // dasselbe wie der Tabs-Footer eine Sektion darüber („zum Verschieben
@@ -77,9 +76,7 @@ struct InsightsOverviewSectionsList: View {
 
     private func row(for section: InsightsLayoutSection) -> some View {
         Toggle(isOn: binding(for: section.id)) {
-            Text(label(for: section.id))
-                .font(.hlSubhead.weight(.semibold))
-                .foregroundStyle(HLText.primary)
+            HLRowTitle(Text(label(for: section.id)))
         }
         .accessibilityIdentifier("settings.insights.section.\(section.id)")
     }

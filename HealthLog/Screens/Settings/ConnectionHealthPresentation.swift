@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// #139 — how the app shows a connection's ``ConnectionHealth``.
+/// How the app shows a connection's ``ConnectionHealth``.
 ///
 /// One pill per `state`, one sentence per `reason`, at most one button for
 /// `action`. Nothing here looks at the legacy status fields. Kept off the views
@@ -92,12 +92,12 @@ struct ConnectionHealthPresentation: Equatable {
     /// "Since 15 Oct 2026 at 08:00" for a degraded or action-required state.
     var sinceLine: String? {
         guard let since = health.since else { return nil }
-        let when = since.formatted(date: .abbreviated, time: .shortened)
+        let when = HLDateFormat.dateTime(since)
         return String(localized: "integration.health.since \(when)")
     }
 }
 
-/// #139 — the health line of an integration card: the sentence for `reason`,
+/// The health line of an integration card: the sentence for `reason`,
 /// when it started, what is withheld, and at most one button.
 struct ConnectionHealthSection: View {
     let health: ConnectionHealth
@@ -114,8 +114,7 @@ struct ConnectionHealthSection: View {
             VStack(alignment: .leading, spacing: HLSpace.sm) {
                 VStack(alignment: .leading, spacing: HLSpace.xxs) {
                     Text(verbatim: presentation.sentence)
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                     if let since = presentation.sinceLine {
                         Text(verbatim: since)
@@ -133,8 +132,8 @@ struct ConnectionHealthSection: View {
                 .accessibilityIdentifier("integration.health.detail")
                 if let action = presentation.action(supported: supportedActions) {
                     HLButton(
-                        ConnectionHealthPresentation.actionTitleKey(action),
-                        icon: action == .reconnect ? "link" : "play.circle",
+                        LocalizedStringKey(ConnectionHealthPresentation.actionTitleKey(action)),
+                        systemImage: action == .reconnect ? "link" : "play.circle",
                         variant: .primary,
                         isLoading: isWorking
                     ) {

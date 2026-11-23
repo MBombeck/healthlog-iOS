@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **W-FOCUS-FILTER (v0.15.2)** — the HealthLog *Focus filter* the user attaches
+/// The HealthLog *Focus filter* the user attaches
 /// to a system Focus (Sleep, Work, Personal Time, …) in **Settings → Focus →
 /// [a Focus] → Add Filter → HealthLog**.
 ///

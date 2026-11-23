@@ -1,15 +1,14 @@
 import Foundation
 
 public extension AppContainer {
-    /// W3 (v0.11 #22) — builds the per-metric assessment repo (Berlin-day daily
+    /// Builds the per-metric assessment repo (Berlin-day daily
     /// SWR cache) together with the daily Insights cache-warmer. Kept out of
     /// `AppContainer.init` so the composition-root file stays under its
     /// `file_length` budget.
     ///
     /// The warmer's `shouldWarm` gate is evaluated on the MainActor (it reads
-    /// `BackendAvailability`): the warm fires only when the Insights surface
-    /// exists (`canShowCloudInsights`) AND a request would plausibly land
-    /// (`isReachable`), so standalone / backend-down / offline never fire a
+    /// `BackendAvailability`): the warm fires only when a request would
+    /// plausibly land (`isReachable`), so backend-down / offline never fire a
     /// doomed fetch. `availability` is held weakly so the closure never extends
     /// the composition root's lifetime.
     @MainActor
@@ -32,14 +31,14 @@ public extension AppContainer {
             shouldWarm: { [weak availability] in
                 await MainActor.run {
                     guard let availability else { return false }
-                    return availability.canShowCloudInsights && availability.isReachable
+                    return availability.isReachable
                 }
             }
         )
         return (metricInsightsRepo, prefetch)
     }
 
-    /// The series kinds `prefetchTopMetricsSeries()` warms. 1.4 B4 — the list
+    /// The series kinds `prefetchTopMetricsSeries()` warms. The list
     /// used to be read from the Trends overlay's default selection; the overlay
     /// and its store are gone, but the Insights metric page still reads these
     /// 30-day series rows (`DashboardScreen` pre-warms the same key per tap),
@@ -59,7 +58,7 @@ public extension AppContainer {
     /// sockets at once.
     static let prefetchFanoutConcurrency = 4
 
-    /// W1-3 — fire-and-forget warm-up of the SWR cache for the chart series
+    /// Fire-and-forget warm-up of the SWR cache for the chart series
     /// users tap most often + the wide measurements page used for tile-state
     /// derivation. Called by `HealthLogApp` immediately after
     /// `authStore.bootstrap()` resolves. Non-blocking: bootstrap itself

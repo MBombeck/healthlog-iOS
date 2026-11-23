@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.14.1 — pure-resolver locks for the mood-relations card views. No SwiftUI
+/// Pure-resolver locks for the mood-relations card views. No SwiftUI
 /// render pass: these pin the signed-delta formatting, the metric channel
 /// label/symbol map, the direction captions, and the confidence band words so
 /// the honest, association-not-cause framing can never silently drift.

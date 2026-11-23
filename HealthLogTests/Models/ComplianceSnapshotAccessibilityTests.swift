@@ -24,7 +24,7 @@ struct ComplianceSnapshotAccessibilityTests {
         #expect(label.count > "4/6".count)
         // Whichever locale resolved, the compliance frame word is present.
         #expect(
-            // Build 8 — the DE frame word is now "Therapietreue"; EN stays "compliance".
+            // The DE frame word is now "Therapietreue"; EN stays "compliance".
             label.localizedCaseInsensitiveContains("Therapietreue")
                 || label.localizedCaseInsensitiveContains("compliance")
         )

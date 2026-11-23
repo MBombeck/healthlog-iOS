@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// v0.6.2.x bug-c10-ios-direct — main-actor store that holds today's
+/// Main-actor store that holds today's
 /// HealthKit-direct step total so the dashboard tile + chart-detail today-
 /// segment can paint a fresh number even when the server `stats:` row is
 /// frozen (the `/api/measurements/batch` route is insert-only on the
@@ -93,7 +93,7 @@ public final class LiveHealthKitTodayStore {
         // instead of blanking the tile on a transient HK glitch.
     }
 
-    /// v0.14.8 W3 (AUDIT-SECURITY-B175 M-1) — blank the cached today-total on
+    /// Blank the cached today-total on
     /// logout so the next user's dashboard never flashes the previous user's
     /// HK step count. Bumping the ticket drops any in-flight refresh that
     /// started pre-logout.

@@ -1,17 +1,15 @@
 import SwiftUI
 
-/// v0.5.5.6 POLISH-PR — Streak rail.
+/// Streak rail.
 ///
-/// Horizontal scroll of capsule pills, one per streak-class record
-/// (`PersonalRecordsStore.streakRecords`). Min capsule height 44pt
-/// (HIG-compliant tap target). Tap fires `onTap(record)` upstream so
-/// the screen can present detail or share.
+/// Horizontal scroll of tags, one per streak-class record
+/// (`PersonalRecordsStore.streakRecords`), each the shared `HLBadge` capsule
+/// inside a 44 pt tap target. Tap fires `onTap(record)` upstream so the
+/// screen can present detail or share.
 ///
-/// **Visual**: `Capsule` filled at `HLSurface.tertiary` with a
-/// kind-tinted leading icon. The current streak length lives in
-/// `record.base.value` (e.g. `12.0` from `StreakComputer`); the
-/// label format reads "X Tage" / "X Wochen" depending on magnitude
-/// so the rail stays scannable.
+/// The current streak length lives in `record.base.value` (e.g. `12.0` from
+/// `StreakComputer`); the tag reads "Schritte, 12 Tage" so the rail stays
+/// scannable.
 ///
 /// **Empty state**: when no streak records exist, the rail collapses
 /// to zero height (parent VStack hides it via `if !streaks.isEmpty`).
@@ -41,38 +39,15 @@ private struct StreakCapsule: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: HLSpace.xs) {
-                Image(systemName: "flame.fill")
-                    .font(.hlIcon(HLIconSize.rowAction))
-                    .foregroundStyle(tint)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(metricLabel)
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.primary)
-                        .lineLimit(1)
-                    Text(streakLabel)
-                        .font(.hlFootnote)
-                        .foregroundStyle(HLText.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, HLSpace.md)
-            .padding(.vertical, HLSpace.sm)
-            .frame(minHeight: 44)
-            .background(HLSurface.tertiary, in: Capsule(style: .continuous))
-            .overlay {
-                Capsule(style: .continuous)
-                    .stroke(tint.opacity(0.35), lineWidth: 1)
-            }
+            // The tag is the shared capsule; the frame around it keeps the
+            // tap target at the minimum size.
+            HLBadge(HLRowDetail.joined([metricLabel, streakLabel]) ?? streakLabel, icon: "flame.fill")
+                .frame(minHeight: HLHitTarget.minimum)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(HLPressableButtonStyle())
+        .buttonStyle(.hlRow)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(metricLabel): \(streakLabel)"))
-    }
-
-    private var tint: Color {
-        PersonalRecordKindTint.color(for: record.kind)
     }
 
     private var metricLabel: String {

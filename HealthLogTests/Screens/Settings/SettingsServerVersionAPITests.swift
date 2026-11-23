@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// v0.5.5.2 W-IMPL-SERVER-EDITOR — Settings → Server pulls the running
+/// Settings → Server pulls the running
 /// server build's `{ version, buildSha, builtAt }` via
 /// `APIClient.fetchServerVersion()` against `GET /api/version`. The
 /// server route (`src/app/api/version/route.ts`) wraps the payload in

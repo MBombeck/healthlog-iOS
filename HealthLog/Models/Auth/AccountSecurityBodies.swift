@@ -182,7 +182,7 @@ public enum SecurityStepUp {
         return isRequired(hl)
     }
 
-    // MARK: R2 / #115 A3 — the proof family
+    // MARK: The proof family
 
     /// The two prefixes of the server's "prove it is you" family:
     /// `auth.stepup.*` (what a Bearer caller gets, e.g. `auth.stepup.required`)
@@ -272,7 +272,7 @@ public enum MfaManagementOperation: String, Sendable, Equatable, CaseIterable {
         StepUpMethod.allCases.filter { !requiresFreshFactor || $0.satisfiesFreshFactor }
     }
 
-    /// R2 / #115 A3 — server v1.39.3 `requireMfaManagementAuth({
+    /// Server v1.39.3 `requireMfaManagementAuth({
     /// freshFactorIfEnrolled: true })`: ADDING a factor (TOTP setup, security-key
     /// registration options) on an account that already has a second factor
     /// wants the elevation from that factor or a passkey; a password elevation

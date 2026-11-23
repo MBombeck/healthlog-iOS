@@ -2,7 +2,7 @@
     import ActivityKit
     import Foundation
 
-    /// **v0.8.4 WWIDGET-1 — Live-Activity push-token sink.**
+    /// **Live-Activity push-token sink.**
     ///
     /// `MedicationLiveActivityController` forwards two kinds of ActivityKit
     /// push tokens here:
@@ -33,7 +33,7 @@
             HLLog.notifications.info(
                 "LiveActivity push-to-start token received len=\(tokenHex.count)"
             )
-            // W-B189 (#22): forward the current LA token to POST /api/devices.
+            // Forward the current LA token to POST /api/devices.
             // Re-register only on an actual token change so we never spam the
             // endpoint with an unchanged token (the register(...) dedup also
             // guards this — belt-and-suspenders).
@@ -42,33 +42,61 @@
             }
         }
 
-        func didReceiveActivityUpdateToken(_ tokenHex: String, medicationId: String) async {
-            let changed = liveActivityUpdateTokens[medicationId] != tokenHex
-            liveActivityUpdateTokens[medicationId] = tokenHex
+        func didReceiveActivityUpdateToken(_ tokenHex: String, owner: LiveActivityTokenOwner) async {
+            let changed = liveActivityUpdateTokens.upsert(tokenHex, owner: owner)
             HLLog.notifications.info(
-                "LiveActivity update token received med=\(medicationId, privacy: .private) len=\(tokenHex.count)"
+                "LiveActivity update token received med=\(owner.medicationId, privacy: .private) len=\(tokenHex.count)"
             )
-            // W-B189 (#22): the per-activity update token is the one that can
+            // The per-activity update token is the one that can
             // push to a *running* Activity, so forward it to POST /api/devices.
-            // Re-register only when this medication's token actually changed.
+            // Re-register only when this Activity's token actually changed.
             if changed {
                 await reRegisterForLiveActivityTokenChange()
             }
         }
 
-        /// W-B189 (#22) — the Live-Activity push token forwarded to the server
+        func didEndActivity(activityID: String) async {
+            guard liveActivityUpdateTokens.remove(activityID: activityID) else { return }
+            await reRegisterForLiveActivityTokenChange()
+        }
+
+        func retainActivities(ids: Set<String>) async {
+            guard liveActivityUpdateTokens.retain(activityIDs: ids) else { return }
+            await reRegisterForLiveActivityTokenChange()
+        }
+
+        /// The Live-Activity push token forwarded to the server
         /// on `POST /api/devices`. Prefers a per-activity **update** token (the
         /// only token that can push to a *running* Activity); the push-to-start
         /// token is a device-level fallback so the field is non-nil as soon as
-        /// ActivityKit has delivered anything. With at most one running
-        /// medication Live Activity in practice the update map holds a single
-        /// entry, so `.values.first` is the active dose's token; the push-to-
-        /// start token covers the no-running-Activity case.
+        /// ActivityKit has delivered anything.
+        ///
+        /// **#188 (2):** the update token is the one of a *running* Activity,
+        /// the earliest slot (``LiveActivityTokenRegistry/primaryToken``), never
+        /// an arbitrary `.values.first` of a map that kept ended Activities.
+        /// The per-Activity list rides next to it (``currentLiveActivityTokens``).
+        ///
+        /// A device that does not plan reminders (an iPad next to an active
+        /// iPhone, ``ReminderDevicePolicy``) sends none, so the server does not
+        /// start a second Live Activity there.
         var currentLiveActivityPushToken: String? {
-            liveActivityUpdateTokens.values.first ?? liveActivityPushToStartToken
+            guard plansLocalReminders() else { return nil }
+            return liveActivityUpdateTokens.primaryToken ?? liveActivityPushToStartToken
         }
 
-        /// W-B189 (#22) — re-issue `POST /api/devices` after a new Live-Activity
+        /// **#191 — every running Activity's token**, with its medication and
+        /// slot, for `POST /api/devices`. The list is the device's full current
+        /// set: the server replaces what it stored, an empty list clears it.
+        /// `nil` (field omitted, stored list unchanged) only while
+        /// ``MedicationCapability/liveActivityTokensPerActivity`` is shut. A
+        /// device that plans no reminders sends the empty list.
+        var currentLiveActivityTokens: [LiveActivityTokenWire]? {
+            guard LiveActivityPerActivityTokens.isAvailable() else { return nil }
+            guard plansLocalReminders() else { return [] }
+            return LiveActivityPerActivityTokens.wireEntries(liveActivityUpdateTokens)
+        }
+
+        /// Re-issue `POST /api/devices` after a new Live-Activity
         /// push token arrives at the sink, so the server holds the *current*
         /// token to push the running Activity. Reuses the cached APNs token; the
         /// `register(...)` dedup (now keyed on the LA token too) drops the call

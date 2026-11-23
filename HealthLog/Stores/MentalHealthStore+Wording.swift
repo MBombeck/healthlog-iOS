@@ -1,6 +1,6 @@
 import Foundation
 
-/// L10N-MH: which questionnaire text the form shows, and what the submit says
+/// Which questionnaire text the form shows, and what the submit says
 /// about it.
 ///
 /// The text is the reader's interface language (``AppLanguage``) from the
@@ -12,7 +12,7 @@ import Foundation
 /// server gets the 1.4 body.
 extension MentalHealthStore {
     /// First server whose screener body takes `englishOriginal` and whose rows
-    /// carry `wording` (#151).
+    /// carry `wording`.
     static let englishOriginalMinimumServerVersion = "1.46.0"
 
     /// The text the form shows for the running administration.

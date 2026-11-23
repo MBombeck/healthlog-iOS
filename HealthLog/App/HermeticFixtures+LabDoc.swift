@@ -1,7 +1,7 @@
 #if DEBUG
     import Foundation
 
-    /// **SHOTS (1.5.0) — the LAB-DOC surfaces, for the picture sweep.**
+    /// **The LAB-DOC surfaces, for the picture sweep.**
     ///
     /// Under `-uitest-lab-doc` the fixture server holds two lab markers, one
     /// of them without a unit (`"1"`, shown as a bare number and "No unit"),
@@ -23,6 +23,8 @@
             switch path {
             case "/api/labs":
                 return (200, Data(labsJSON.utf8))
+            case "/api/labs/overview":
+                return envelope(overviewJSON)
             case "/api/biomarkers":
                 return (200, Data(biomarkersJSON.utf8))
             case "/api/documents/inbound":
@@ -67,6 +69,28 @@
           \(lab("labdoc-crp-1", "labdoc-bm-crp", "inflammation", "hs-CRP", 2.1, "mg/L", 0, 3, "2026-10-21", "in-range"))
         ]}
         """
+
+        /// The overview the list reads: one entry per marker with its trend,
+        /// and the two categories the server resolved for them. The server
+        /// labels a catalog category in the viewer's language, so the fixture
+        /// does too; an English label in a German list was the fixture's.
+        static var overviewJSON: String {
+            let coagulation = String(localized: "labs.catalog.panel.coagulation")
+            let inflammation = String(localized: "labs.catalog.panel.inflammation")
+            return """
+            {"markers":[
+              {"key":"bm:labdoc-bm-inr","count":2,"trend":[1.1,1.3],
+               "latest":\(lab("labdoc-inr-2", "labdoc-bm-inr", "coagulation", "INR", 1.3, "1", 0.85, 1.15, "2026-10-21", "above"))},
+              {"key":"bm:labdoc-bm-crp","count":1,"trend":[2.1],
+               "latest":\(lab("labdoc-crp-1", "labdoc-bm-crp", "inflammation", "hs-CRP", 2.1, "mg/L", 0, 3, "2026-10-21", "in-range"))}
+            ],"categories":[
+              {"key":"coagulation","label":"\(coagulation)","markerKeys":["bm:labdoc-bm-inr"],
+               "counts":{"inRange":0,"below":0,"above":1,"unknown":0},"status":"above"},
+              {"key":"inflammation","label":"\(inflammation)","markerKeys":["bm:labdoc-bm-crp"],
+               "counts":{"inRange":1,"below":0,"above":0,"unknown":0},"status":"in-range"}
+            ],"grouped":true}
+            """
+        }
 
         private static func lab(
             _ id: String, _ marker: String, _ panel: String, _ analyte: String, _ value: Double,

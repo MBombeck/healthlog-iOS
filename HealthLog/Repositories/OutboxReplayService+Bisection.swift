@@ -1,6 +1,6 @@
 import Foundation
 
-// A2 (1.4, R3 S7) — a whole-batch 422 that names no row, halved.
+// A whole-batch 422 that names no row, halved.
 //
 // A server before v1.39.1 answers a schema failure on
 // `POST /api/measurements/batch` with a 422 and nothing else: no code, no
@@ -15,9 +15,16 @@ import Foundation
 // and the caller records them in the skip register like every other refusal:
 // listed in Sync Diagnostics, offered again with every new build.
 //
-// Two answers end it without a register entry, and the page parks as before:
-// no half landed at all (the server refuses everything, not one row), or the
-// halving spent ``OutboxReplayService/maxBisectionPosts`` requests first.
+// One answer ends it without a register entry, and the page parks as before:
+// no half landed at all (the server refuses everything, not one row).
+//
+// #14 — a halving that spends ``OutboxReplayService/maxBisectionPosts``
+// requests first keeps what it found: the halves that landed are delivered,
+// the rows refused alone go into the register, and the parts it had not got to
+// are queued again as rows of their own, which the next pass halves with a
+// budget of their own. Up to 1.6 the whole page parked marked "halved" and went
+// out whole on every pass from then on: two bad rows in different halves of
+// one page held the 498 others for good.
 
 extension OutboxReplayService {
     /// Requests one halving may spend after the refused page itself: enough
@@ -31,7 +38,10 @@ extension OutboxReplayService {
         /// Some halves landed. `response` is indexed like the page; the rows
         /// refused on their own are in it as `skipped`.
         case isolated(HealthKitBatchResponseDTO)
-        /// Nothing landed, or the budget ran out: not one bad row.
+        /// The budget ran out with parts still unsent: what landed and what
+        /// was refused alone, plus the index ranges of the unsent parts.
+        case partial(HealthKitBatchResponseDTO, remaining: [Range<Int>])
+        /// Nothing landed: not one bad row.
         case inconclusive
     }
 
@@ -46,7 +56,8 @@ extension OutboxReplayService {
     func replayHalving(
         _ entries: [HealthKitBatchEntryDTO],
         syncTrigger: SyncTrigger?,
-        owner: String
+        owner: String,
+        idempotencyKey: String
     ) async throws -> HealthKitBatchResponseDTO {
         let found: Halving
         do {
@@ -62,9 +73,21 @@ extension OutboxReplayService {
                 return answer
             }
         } catch is OutboxQueue.OwnerLeaseError {
-            throw HLError.network(.other("authenticated session changed"))
+            throw HLError.authenticatedSessionChanged
         } catch let error as MeasurementBatchAcceptanceError {
             throw HLError.network(.other(error.description))
+        }
+        if case let .partial(response, remaining) = found {
+            try await requeueUnsentParts(
+                remaining.map { Array(entries[$0]) },
+                syncTrigger: syncTrigger,
+                owner: owner,
+                idempotencyKey: idempotencyKey
+            )
+            // Counts only — no identifier, no value.
+            // swiftlint:disable:next hllog_public_privacy_interpolation
+            HLLog.outbox.info("HK page 422 — halving budget spent, \(remaining.count, privacy: .public) part(s) queued again")
+            return response
         }
         guard case let .isolated(response) = found else {
             // Counts only — no identifier, no value.
@@ -85,13 +108,21 @@ extension OutboxReplayService {
         _ entries: [HealthKitBatchEntryDTO],
         send: @Sendable ([HealthKitBatchEntryDTO]) async throws -> HealthKitBatchResponseDTO
     ) async throws -> Halving {
-        guard entries.count > 1 else { return .inconclusive }
+        // A one-row page refused as a whole is that row refused on its own;
+        // a rest a spent halving queued can be exactly that (#14).
+        guard entries.count > 1 else {
+            return entries.isEmpty ? .inconclusive : .isolated(merge([], refused: [0], total: 1))
+        }
         var pending = Array(halves(of: entries.indices).reversed())
         var landed: [(range: Range<Int>, response: HealthKitBatchResponseDTO)] = []
         var refused: [Int] = []
         var posts = 0
         while let range = pending.popLast() {
-            guard posts < Self.maxBisectionPosts else { return .inconclusive }
+            guard posts < Self.maxBisectionPosts else {
+                guard !landed.isEmpty else { return .inconclusive }
+                let remaining = (pending + [range]).sorted { $0.lowerBound < $1.lowerBound }
+                return .partial(merge(landed, refused: refused, total: entries.count), remaining: remaining)
+            }
             posts += 1
             let part = Array(entries[range])
             do {
@@ -115,6 +146,34 @@ extension OutboxReplayService {
         return .isolated(merge(landed, refused: refused, total: entries.count))
     }
 
+    /// #14 — the parts a spent halving did not reach, each as a row of its
+    /// own under the page's owner and trigger. The key is derived from the
+    /// page's and the part's position, so a pass that dies after some of them
+    /// were written finds those waiting and does not add them twice. Any part
+    /// that cannot be written keeps the page as it is (retryable).
+    func requeueUnsentParts(
+        _ parts: [[HealthKitBatchEntryDTO]],
+        syncTrigger: SyncTrigger?,
+        owner: String,
+        idempotencyKey: String
+    ) async throws {
+        for (offset, part) in parts.enumerated() where !part.isEmpty {
+            let key = "\(idempotencyKey).rest\(offset).\(part.count)"
+            if await outbox.hasLiveOperation(idempotencyKey: key) { continue }
+            do {
+                try await outbox.enqueueHealthKitBatch(
+                    part,
+                    encoder: .hlBatch,
+                    idempotencyKey: key,
+                    syncTrigger: syncTrigger,
+                    requiringCurrentOwner: owner
+                )
+            } catch {
+                throw HLError.network(.other("halving rest not queued"))
+            }
+        }
+    }
+
     static func halves(of range: Range<Int>) -> [Range<Int>] {
         let middle = range.lowerBound + range.count / 2
         return [range.lowerBound ..< middle, middle ..< range.upperBound]
@@ -127,7 +186,7 @@ extension OutboxReplayService {
         refused: [Int],
         total: Int
     ) -> HealthKitBatchResponseDTO {
-        let reason = HealthKitBatchRejection.unclassifiedReason(status: 422)
+        let reason = HealthKitBatchRejection.individuallyRefusedReason(status: 422)
         var entries: [HealthKitBatchResponseDTO.EntryResult] = []
         var skipped: [HealthKitBatchResponseDTO.SkippedEntry] = []
         for (range, response) in landed {

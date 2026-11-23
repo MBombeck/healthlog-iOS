@@ -65,7 +65,7 @@ enum HealthKitBackfillWindowStore {
     /// kompiliert und in HealthLogCore lebt. Drift-Test in
     /// `HealthKitBackfillWindowStoreTests` lockt die Konvention.
     ///
-    /// **M-6 hardening (v0.6.2):** the legacy implementation only stripped
+    /// **M-6 hardening:** the legacy implementation only stripped
     /// dots + trimmed whitespace, so a user-id containing `/` or `..` would
     /// have survived into the UserDefaults key (`hl.healthkit.backfillWindow.<token>`).
     /// We now apply a strict allowlist (`[A-Za-z0-9_-]`) + cap at 64 chars.

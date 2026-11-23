@@ -156,7 +156,7 @@ struct DeepLinkRouterAllowlistTests {
 
     @Test("Bare `medications` host with no ID → .medications (Meds list root, W0-2)")
     func bareMedications() throws {
-        // v0.12 W0-2 — the host-only form now resolves to the Meds list root
+        // The host-only form now resolves to the Meds list root
         // (`.medications`), not `.unknown` → Dashboard. The med-reminder no-id
         // fallback relies on this so a tap lands on the medications list.
         try #expect(DeepLinkRoute(url: url("healthlog://medications")) == .medications)
@@ -165,7 +165,7 @@ struct DeepLinkRouterAllowlistTests {
     @Test("Trailing-slash bare medications host → .medications (Meds list root, W0-2)")
     func emptyIDComponent() throws {
         // `healthlog://medications/` → URL has trailing slash; pathComponents =
-        // ["/"]; filter("/" != $0) = [] → host-only form. v0.12 W0-2: this is
+        // ["/"]; filter("/" != $0) = [] → host-only form. This is
         // now the Meds list root, same as the no-trailing-slash bare host.
         let parsedURL = try url("healthlog://medications/")
         #expect(DeepLinkRoute(url: parsedURL) == .medications)

@@ -3,7 +3,7 @@
     import HealthKit
 
     // The production HealthKit reads behind the collector's two query seams.
-    // Moved out of `AnchoredHealthSampleCollector.swift` in 1.3 (#127) when the
+    // Moved out of `AnchoredHealthSampleCollector.swift` in 1.3 when the
     // history read joined the anchored one.
 
     /// One bounded `HKAnchoredObjectQuery` per call. No update handler is
@@ -51,7 +51,7 @@
                     }
                     let collected = samples ?? []
                     let deletedCount = deleted?.count ?? 0
-                    // A5 (1.4, R3 S4) — the same UUID the read path sends as
+                    // The same UUID the read path sends as
                     // `externalId`; A6 — unless the sync identifier, the one key
                     // a deletion keeps, names a HealthLog copy of a server row.
                     let split = HealthKitCopySyncIdentity.split((deleted ?? []).map { (uuid: $0.uuid, metadata: $0.metadata) })
@@ -71,7 +71,7 @@
         }
     }
 
-    /// 1.3 (#127) — the history leg's read: one `HKSampleQuery` per page,
+    /// The history leg's read: one `HKSampleQuery` per page,
     /// newest start date first, inside the walk's current date window.
     struct HealthKitHistoryPageSource: HealthSampleHistoryQuerying {
         let store: HKHealthStore

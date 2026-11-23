@@ -1,6 +1,6 @@
 import XCTest
 
-/// **1.0.3 — the App Review 1.4.1 reviewer path, photographed.**
+/// **The App Review 1.4.1 reviewer path, photographed.**
 ///
 /// Apple rejected 1.0 under guideline 1.4.1 ("medical information without
 /// citations"). 1.0.3 answers with `HLSourcesLink` controls, `HLSourcesSheet`

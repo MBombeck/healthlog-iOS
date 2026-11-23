@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// **H2 (1.1.0) — a German placeholder shows a German number.**
+/// **A German placeholder shows a German number.**
 ///
 /// The QA sweep photographed "z. B. 1.0 mg" under the dose field of the German
 /// add-medication sheet. The field parses with the locale (`LocaleDecimalParser`),

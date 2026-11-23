@@ -5,7 +5,7 @@ import Foundation
 
 #if canImport(HealthKit)
 
-    /// **W-HK-RELIABILITY H-2 — honest anchor (de)serialization.**
+    /// **Honest anchor (de)serialization.**
     ///
     /// Four HK importers (`WorkoutHealthKitImporter`, `MoodStateOfMindImporter`,
     /// `CycleHealthKitImporter`, `HeartHealthEventImporter`) each persist an

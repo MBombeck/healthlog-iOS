@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// `@Observable` store over ``CoachConversationHistoryRepository`` for the
-/// "Past conversations" surface — the read-only re-hydration path (b182) that
+/// "Past conversations" surface — the read-only re-hydration path that
 /// makes server-retained Coach conversations browsable on iOS again, so the
 /// coach no longer *feels* forgetful across relaunch / cross-device.
 ///
@@ -13,7 +13,7 @@ import Observation
 /// the calm disabled-surface placeholder instead of an error banner — mirroring
 /// ``CoachFactsStore``. `error` carries a user-facing string for genuine failures.
 ///
-/// **Read + forget (#30).** Beyond re-hydration, ``deleteConversation(id:)``
+/// **Read + forget.** Beyond re-hydration, ``deleteConversation(id:)``
 /// forgets a conversation server-side with an *optimistic* remove: the row
 /// disappears immediately, and on a server failure (including a not-yet-deployed
 /// route, live ≤ v1.17.1) it is rolled back into its original position and

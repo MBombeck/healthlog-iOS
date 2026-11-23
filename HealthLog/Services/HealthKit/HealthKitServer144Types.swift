@@ -3,7 +3,7 @@ import Foundation
     import HealthKit
 #endif
 
-/// HK-NEW (1.5, #149, #126 3.10, public #13) — the six Apple Health
+/// The six Apple Health
 /// types the server maps since v1.44.0 (`apple-health-mapping.ts`, block
 /// "v1.44 — activity rings, mindfulness, State of Mind, AFib burden") and
 /// that HealthLog did not read before 1.5.
@@ -55,16 +55,16 @@ enum HealthKitServer144Types {
     static let cumulativeIdentifiers: Set<String> = [exerciseTime, standTime]
 
     /// The types a 1.4.1 installation has never been asked to read. State of
-    /// Mind is not one: it has been in the first sheet since 16-03 (E2).
+    /// Mind is not one: it has been in the first sheet since 16-03.
     static let lateReadIdentifiers: [String] = [exerciseTime, standTime, standHour, mindfulSession, afibBurden]
 
-    /// REG (1.5, public #13) — the one table of types whose run-time
+    /// The one table of types whose run-time
     /// identifier is not the name the server maps them under. The server
     /// keys `APPLE_HEALTH_TYPE_MAP` by the SDK constant's NAME and looks a row
     /// up by exactly that string (v1.47.0); any other spelling comes back as
     /// `unmappable_identifier`. The environmental audio exposure event kept
     /// the string of its pre-iOS-14 name, `…AudioExposureEvent`.
-    /// POLISH-B B6: the table itself lives in `Models`
+    /// The table itself lives in `Models`
     /// (``HealthKitBatchEntryDTO/serverWireNames``), so the outbox replay and
     /// the skip register's re-offer translate parked rows with it too.
     static let wireNames: [String: String] = HealthKitBatchEntryDTO.serverWireNames

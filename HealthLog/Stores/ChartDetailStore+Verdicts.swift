@@ -27,8 +27,52 @@ public extension ChartDetailStore {
     ///   not make up a figure the server declined to give.
     /// - An older server (no verdict fields at all): the page's own comparison
     ///   of the window's two halves, in neutral colour.
+    ///
+    /// **#176 (v1.48)** — for the week, the month and the year the server's
+    /// comparison with the previous window of the same length comes first
+    /// (`/api/analytics/range`, ``rangeTrend``): the month is the rule the
+    /// dashboard card's arrow follows, so the tile and the page agree. Its
+    /// direction is the server's `trend`, never the sign read here.
     var rangeChange: RangeChange? {
-        Self.rangeChange(series: series)
+        let current = rangeTrend?.windowDays == range.rawValue ? rangeTrend?.value : nil
+        return Self.rangeChange(series: series, rangeTrend: Self.usableRangeTrend(current, kind: kind))
+    }
+
+    /// The range read the page may use. Server 1.49.0 names its unit and is
+    /// always usable. An older answer is in the stored unit: fine for the
+    /// families the page converts itself, but glucose's stored mg/dL cannot
+    /// be told from the account's unit, so glucose keeps the series' change.
+    nonisolated static func usableRangeTrend(_ trend: AnalyticsRangeTrend?, kind: MetricKind) -> AnalyticsRangeTrend? {
+        guard let trend else { return nil }
+        if trend.isInAccountUnit { return trend }
+        return kind.unitFamily == .glucose ? nil : trend
+    }
+
+    nonisolated static func rangeChange(series: MeasurementSeries?, rangeTrend: AnalyticsRangeTrend?) -> RangeChange? {
+        if let shown = rangeTrend?.shownChange {
+            return RangeChange(
+                delta: shown.delta,
+                sentiment: agreeingSentiment(series?.change, trend: shown.trend),
+                basis: .priorWindow,
+                trend: shown.trend,
+                inAccountUnit: rangeTrend?.isInAccountUnit ?? false,
+                unit: rangeTrend?.unit
+            )
+        }
+        return rangeChange(series: series)
+    }
+
+    /// The series' verdict, kept only where its change points the way the
+    /// window comparison does: the server judged that direction for this
+    /// person, so the pill keeps the tile arrow's colour. A change the other
+    /// way says nothing about this one, and the pill stays grey.
+    nonisolated static func agreeingSentiment(_ change: SeriesChange?, trend: TrendIndicator) -> TrendSentiment? {
+        guard let change, change.delta.isFinite else { return nil }
+        switch trend {
+        case .up: return change.delta > 0 ? change.sentiment : nil
+        case .down: return change.delta < 0 ? change.sentiment : nil
+        case .flat, .unknown: return nil
+        }
     }
 
     nonisolated static func rangeChange(series: MeasurementSeries?) -> RangeChange? {
@@ -60,13 +104,53 @@ public struct RangeChange: Equatable, Sendable {
         case firstToLastDay
         /// An older server: the later half of the window against the earlier.
         case priorHalf
+        /// #176 (v1.48): the window's mean against the previous window of
+        /// the same length, as `/api/analytics/range` compares them.
+        case priorWindow
     }
 
-    /// In the series' unit (convert with ``ChartDetailStore/convertDelta(_:units:)``).
+    /// In the series' unit (convert with ``ChartDetailStore/displayDelta(of:units:)``),
+    /// or already in the account's unit when ``inAccountUnit``.
     public let delta: Double
     /// The server's verdict on this change; `nil` → neutral colour.
     public let sentiment: TrendSentiment?
     public let basis: Basis
+    /// The server's direction for this change (``Basis/priorWindow``); `nil`
+    /// where the sign of ``delta`` is the direction.
+    public let trend: TrendIndicator?
+    /// Server 1.49.0: the window comparison came in the account's unit and
+    /// is shown as sent.
+    public let inAccountUnit: Bool
+    /// The concrete unit the server sent with it (`kg`, `lb`, `mmol/L`,
+    /// `bpm`), shown as sent; `nil` before 1.49.0 or for the series' change.
+    public let unit: String?
+
+    public init(
+        delta: Double,
+        sentiment: TrendSentiment?,
+        basis: Basis,
+        trend: TrendIndicator? = nil,
+        inAccountUnit: Bool = false,
+        unit: String? = nil
+    ) {
+        self.delta = delta
+        self.sentiment = sentiment
+        self.basis = basis
+        self.trend = trend
+        self.inAccountUnit = inAccountUnit
+        self.unit = unit
+    }
+
+    /// The arrow: the server's `trend` when it sent one (`flat` is a dash,
+    /// even for a small non-zero delta), else the sign of the delta.
+    public var symbol: String {
+        switch trend {
+        case .up: "arrow.up"
+        case .down: "arrow.down"
+        case .flat: "minus"
+        case .unknown, .none: delta > 0 ? "arrow.up" : delta < 0 ? "arrow.down" : "minus"
+        }
+    }
 }
 
 extension MeasurementSeries {

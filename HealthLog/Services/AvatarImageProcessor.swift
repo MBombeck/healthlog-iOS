@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-/// **v0.8.0 W11 — client-side avatar downscale + recompression.**
+/// **Client-side avatar downscale + recompression.**
 ///
 /// The server caps avatar uploads at **2 MiB** and **2048×2048**
 /// (`/api/user/avatar`, server v1.5.5). A raw iPhone photo blows both limits

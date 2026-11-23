@@ -1,4 +1,4 @@
-// N1 — `notificationPrefs.medication.clientManaged` was never written.
+// `notificationPrefs.medication.clientManaged` was never written.
 //
 // `NotificationsRepository.setMedicationClientManaged` existed since CU-20 and
 // had no caller, so on an instance that can reach the App Store app over APNs

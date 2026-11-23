@@ -1,6 +1,6 @@
 import Foundation
 
-/// **1.3 (#128) — where an upgraded partition's history walk may stop.**
+/// **Where an upgraded partition's history walk may stop.**
 ///
 /// A 1.2.0 installation already delivered part of each type through its
 /// forward cursor. The server says how far per type and source
@@ -57,14 +57,16 @@ enum HealthSampleReplayFloor {
         "HKQuantityTypeIdentifierStairDescentSpeed": "STAIR_DESCENT_SPEED",
         "HKQuantityTypeIdentifierNumberOfTimesFallen": "FALL_COUNT",
         "HKQuantityTypeIdentifierTimeInDaylight": "TIME_IN_DAYLIGHT",
-        // HK-NEW (1.5) — server v1.44.
+        // Server v1.44.
         "HKQuantityTypeIdentifierAppleExerciseTime": "EXERCISE_MINUTES",
         "HKQuantityTypeIdentifierAppleStandTime": "STAND_MINUTES",
         "HKCategoryTypeIdentifierAppleStandHour": "STAND_HOURS",
         "HKCategoryTypeIdentifierMindfulSession": "MINDFUL_MINUTES",
         "HKDataTypeStateOfMind": "STATE_OF_MIND_VALENCE",
-        "HKQuantityTypeIdentifierAtrialFibrillationBurden": "AFIB_BURDEN"
-    ]
+        "HKQuantityTypeIdentifierAtrialFibrillationBurden": "AFIB_BURDEN",
+        // Server v1.47.1.
+        "HKQuantityTypeIdentifierBasalEnergyBurned": "BASAL_ENERGY_BURNED"
+    ].merging(AppleHealthIngestQuantityTypes.serverTypeByIdentifier) { current, _ in current }
 
     /// The replay floor for one type from the server's freshness list, or
     /// `nil` when the server has nothing for it (the walk then goes to the
@@ -73,6 +75,13 @@ enum HealthSampleReplayFloor {
         guard let server = serverType[typeIdentifier] else { return nil }
         let lastSeen = freshness.first { $0.type == server }?.lastSeenAt
         return HealthSampleSplitPolicy.replayFloor(lastSeenAt: lastSeen)
+    }
+
+    /// #10 — the oldest reading of one type the server holds, `nil` while it
+    /// does not say.
+    static func oldestReading(for typeIdentifier: String, freshness: [MetricFreshness]) -> Date? {
+        guard let server = serverType[typeIdentifier] else { return nil }
+        return freshness.first { $0.type == server }?.oldestSeenAt
     }
 
     /// Reads the server's answer for ``resolvePending``. `nil` means "ask
@@ -125,8 +134,10 @@ enum HealthSampleReplayFloor {
         var resolved = 0
         for key in pending {
             let floor = floor(for: key.typeIdentifier, freshness: freshness)
+            let oldest = oldestReading(for: key.typeIdentifier, freshness: freshness)
             let written = await cursors.updateSplit(for: key, requiring: lease) { state in
                 state.replayFloor = floor
+                state.serverOldestReading = oldest
                 state.replayFloorResolved = true
             }
             if written { resolved += 1 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// v0.11 W22-W2 — the **Einschätzung / Assessment** block of the web-mirror
+/// The **Einschätzung / Assessment** block of the web-mirror
 /// per-metric Insights page (`InsightsMetricScreen`). The iOS twin of the web
 /// `<InsightStatusCard>` (`src/components/insights/insight-status-card.tsx`),
 /// fed by the same server-generated `/api/insights/{metric}-status` envelope
@@ -29,7 +29,7 @@ struct AssessmentCard: View {
     /// True while the first `/api/insights/{metric}-status` fetch is in flight
     /// and no cached prose has painted yet — drives the skeleton (not a spinner).
     let isLoading: Bool
-    /// QoS-3 (A360-4) — true when the warm-poll exhausted its bounded window or
+    /// QoS-3 — true when the warm-poll exhausted its bounded window or
     /// stopped on a transient error while the assessment was still `preparing`,
     /// and no ready prose ever landed. Flips the indefinite "preparing" skeleton
     /// to a terminal "couldn't load — pull to refresh" caption so the user isn't
@@ -68,15 +68,10 @@ struct AssessmentCard: View {
 
     /// The web `Einschätzung` block header + content. The header self-suppresses
     /// with the content (it only renders inside a non-`.suppressed` arm).
+    @ViewBuilder
     private func section(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: HLSpace.sm) {
-            // I-0 Item 1 — `flush: true` drops the header's `HLSpace.xs` inset so
-            // the "Einschätzung" heading shares the left edge of the unpadded
-            // `AssessmentBody` prose below it (the prose carries no matching
-            // inset). The overview sections keep the default inset.
-            InsightsSectionHeader("insights.metric.assessment.title", flush: true)
-            content()
-        }
+        HLSectionHeader("insights.metric.assessment.title", rank: .area)
+        content()
     }
 
     // MARK: - State resolution
@@ -110,24 +105,24 @@ extension AssessmentCard {
         failed: Bool
     ) -> AssessmentCardState {
         if let assessment {
-            // 1.4 B2 — no provider: the page stays quiet (the overview and
+            // No provider: the page stays quiet (the overview and
             // Settings say it once), instead of a standing "not activated".
             if !assessment.hasProvider {
                 return .suppressed
             }
-            // Task #50 — ready prose wins (the server may serve last-good text
+            // Ready prose wins (the server may serve last-good text
             // with `revalidating:true`; paint it immediately, the screen keeps
             // polling for the upgrade).
             if assessment.hasReadyText, let text = assessment.text {
                 return .ready(text: text, cached: assessment.cached, updatedAt: assessment.updatedAt)
             }
-            // Task #50 — the metric has no readings: the server skipped the
+            // The metric has no readings: the server skipped the
             // provider (`insufficient:true`). Calm-suppress — a sparse metric
             // reads as a clean heading + chart, never a spinner-forever box.
             if assessment.insufficient {
                 return .suppressed
             }
-            // Task #50 — the server is warming the assessment out of band
+            // The server is warming the assessment out of band
             // (`preparing`/`revalidating`, no ready text yet). Mirror the web's
             // preparing skeleton; the screen polls until ready text lands.
             if assessment.isPreparing {
@@ -148,7 +143,7 @@ extension AssessmentCard {
 
 // MARK: - Assessment prose body
 
-/// #64 (v0.12 W5a, OPERATOR-REFINEMENTS #5) — the ready assessment now renders
+/// The ready assessment now renders
 /// as **inline flowing text**, NOT a boxed `HLCard`. The operator asked for the
 /// Einschätzung to read like the descriptive paragraph that sits under Puls —
 /// "das gibt dem Ganzen mehr Ruhe und mehr Rahmen": calmer, more editorial, less
@@ -181,7 +176,7 @@ private struct AssessmentBody: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(Text(String(localized: "AI finding: \(text)")))
 
-            // 1.4 B2 — provenance and sources share one line (1.4.1: the
+            // Provenance and sources share one line (1.4.1: the
             // assistant's sources stay visible next to its prose); a line too
             // narrow for both stacks them. The link stays its own control.
             ViewThatFits(in: .horizontal) {
@@ -203,7 +198,7 @@ private struct AssessmentBody: View {
     /// ("wo kommt das her, keine Ahnung"); we keep the plain attribution
     /// inline: "KI-Einschätzung, erstellt vor X", mirroring the briefing
     /// hero's `generatedPrefix`. The relative-time + cached glyph
-    /// self-suppress when absent. U5 (1.1.1): a comma joins label and
+    /// self-suppress when absent. A comma joins label and
     /// time (no middle dot); the cached glyph closes the line.
     private var provenance: some View {
         HStack(spacing: HLSpace.xxs) {
@@ -218,8 +213,7 @@ private struct AssessmentBody: View {
                     .accessibilityLabel(Text(String(localized: "Cached")))
             }
         }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.tertiary)
+        .hlText(.footnote)
         .lineLimit(1)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("insights.metric.assessment.generated")
@@ -233,7 +227,7 @@ private struct AssessmentBody: View {
 /// a bare spinner: the operator sees the shape the prose will fill.
 private struct AssessmentSkeleton: View {
     var body: some View {
-        // #64 — inline (no card) so the preparing state previews the SAME
+        // Inline (no card) so the preparing state previews the SAME
         // flowing-prose shape the ready assessment fills, not a boxed slab.
         VStack(alignment: .leading, spacing: HLSpace.sm) {
             ForEach(0 ..< 3, id: \.self) { index in

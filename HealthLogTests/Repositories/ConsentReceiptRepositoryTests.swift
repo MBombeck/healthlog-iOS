@@ -9,7 +9,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.14.10 W-INSIGHTSDATA — pins the server consent-receipt contract.
+/// Pins the server consent-receipt contract.
 ///
 /// #143 (server v1.43.2): a receipt is recorded only from an Accept tap and
 /// carries `confirm: true`; a 400 `consent.ai.confirmRequired` is not an error.

@@ -9,7 +9,7 @@ import Testing
 /// which both surface in the test module's name-lookup pass.
 private typealias DomainMeasurement = HealthLog.Measurement
 
-/// **REG-11 (v0.5.6) — tile-level resolution contract.** Locks the
+/// **Tile-level resolution contract.** Locks the
 /// precedence rules `HLDashboardTile.sparklineValues` uses to pick between
 /// the summary's pre-aggregated sparkline + the unified-data-state's raw
 /// samples. The five-time-recurring "BP / Puls / Körperfett tile zeigt
@@ -138,7 +138,7 @@ struct HLDashboardTileSparklineResolutionTests {
         #expect(resolved.count == 2)
     }
 
-    /// **REG-11 5th-attempt regression (v0.5.5.5).** Pre-fix the resolver
+    /// **REG-11 5th-attempt regression.** Pre-fix the resolver
     /// preferred any summary sparkline with `count >= 2`. So when the
     /// server emitted a sparse `[120, 122]` (two daily rollup buckets) but
     /// the wide-page fan-out had 22 fully-resolved BP samples, the tile
@@ -180,7 +180,7 @@ struct HLDashboardTileSparklineResolutionTests {
         )
     }
 
-    /// **REG-11 5th-attempt regression (v0.5.5.5).** Verifies the dataState
+    /// **REG-11 5th-attempt regression.** Verifies the dataState
     /// fall-through still fires when the summary is exactly one point —
     /// the canonical operator-reported case for low-frequency manual entry
     /// kinds (BP weekly, Pulse from a non-Watch user, BodyFat monthly).
@@ -202,7 +202,7 @@ struct HLDashboardTileSparklineResolutionTests {
         #expect(resolved.count == 4, "Single-point summary + ready dataState → dataState wins")
     }
 
-    /// **REG-11 5th-attempt regression (v0.5.5.5).** BodyFat-specific —
+    /// **REG-11 5th-attempt regression.** BodyFat-specific —
     /// matches the operator-reported "Körperfett tile renders empty" case
     /// when the server snapshot has a stale `[22.0]` single-point but the
     /// dataState has zero samples (truly no data). The resolver should

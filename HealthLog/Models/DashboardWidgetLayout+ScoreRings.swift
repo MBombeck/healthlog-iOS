@@ -16,7 +16,7 @@ public extension DashboardWidgetLayout {
         settingScoreRings(selected: ids, heroOrder: nil)
     }
 
-    /// **Parity Build 4 · 4.8 — set the selection AND/OR the hero ring order.**
+    /// **Set the selection AND/OR the hero ring order.**
     ///
     /// One helper for both fields because the ring editor commits them
     /// together: dropping a ring from the selection must also drop it from the
@@ -33,7 +33,7 @@ public extension DashboardWidgetLayout {
         let deduped = Array(
             selected.filter { seen.insert($0).inserted }.prefix(ScoreRingID.maxSelected)
         )
-        // #115 B6 — a ring id this build cannot name (a newer server's ring) is
+        // A ring id this build cannot name (a newer server's ring) is
         // carried back verbatim while the cap leaves room, instead of being
         // silently deselected by an edit that never showed it. The person's own
         // choice among the rings they can see comes first.

@@ -1,12 +1,12 @@
 import SwiftUI
 
-// v0.15 W-FRONTDOORS — split `MoreScreen.Layout` out of `MoreScreen.swift` to keep
+// Split `MoreScreen.Layout` out of `MoreScreen.swift` to keep
 // that file under the 600-line file_length budget (PROJECT_GUIDE.md discipline) after the
 // clinical-spine section + Vorsorge/Coach rows landed. Pure move: the descriptor
 // enum is unchanged; `MoreScreenLayoutTests` reads it from here unchanged.
 
 extension MoreScreen {
-    /// v0.5.1-F5 — Declarative layout descriptor for the Mehr tab.
+    /// Declarative layout descriptor for the Mehr tab.
     ///
     /// Centralising the row metadata + section titles here gives us a
     /// contract-test surface (`MoreScreenLayoutTests`) without dragging
@@ -19,40 +19,21 @@ extension MoreScreen {
     /// silent drift (e.g. a future Welle re-introducing a Benachrichtigungen
     /// row that duplicates the Settings path).
     enum Layout {
-        /// v0.14.1 (#134) — heading for the combined Persönliche Rekorde +
+        /// Heading for the combined Persönliche Rekorde +
         /// Erfolge + Workouts section. "Records & achievements" names the two
-        /// grouped surfaces the operator reads as one achievement story.
-        /// v0.14.8 W2 (Audit §3.c) — also hosts the Messwerte row since the
-        /// orphaned "Data & devices" section was dropped.
+        /// grouped surfaces the operator reads as one achievement story; the
+        /// section also hosts the Messwerte row.
         static let recordsSectionTitle = "Records & achievements"
 
-        /// v0.15 W-FRONTDOORS — heading for the clinical-spine section (Vorsorge ·
+        /// Heading for the clinical-spine section (Vorsorge ·
         /// Labs · Illness · Cycle · Coach), mirroring the web nav-model grouping.
         /// Sits above "Records & achievements" so the clinical front doors read as
         /// the primary features the web makes them, not records footnotes.
         static let clinicalSectionTitle = "Health & care"
 
-        // v0.14.8 W2 (Audit §3.c) — `dataDevicesSectionTitle` + `dataDevicesRows`
-        // removed: after Geräte (v0.14.10 §3) and Export (v0.14.7 C1) moved back
-        // to the Settings hub the section held only Messwerte under a heading
-        // that promised devices. The row folded into `recordsRows`.
-
-        // v0.14.8 (Task D) — `shareWithDoctorSectionTitle` removed: the "Mit dem
-        // Arzt teilen" LIST section was dropped in favour of the header share
-        // glyph. The destination (the unified sharing surface) is now reached via
-        // `shareToolbarAccessibility*` above.
-
-        // v0.14.8 W2 (Audit §3.c/§5) — the dead legacy descriptors
-        // `serverDataSectionTitle` / `serverDataRows` / `devicesRow` /
-        // `exportRow` were deleted: the v0.5.3-F3 "Activities & goals" section
-        // was superseded by the v0.14.1 (#134) reorg (`recordsRows`), Geräte
-        // lives in the Settings hub (`HubRow.devices`, v0.14.10 §3) and Export
-        // is back on the Settings hub too (`HubRow.export`, v0.14.7 C1) — none
-        // of them was rendered or deep-linked anymore.
-
         static let navigationTitle = "More"
 
-        /// v0.14.8 C5 — heading for the women-only cycle section (gated). Only
+        /// Heading for the women-only cycle section (gated). Only
         /// ever rendered when `CycleGate.isCycleTrackingAvailable`.
         static let cycleSectionTitle = "Cycle"
 
@@ -93,9 +74,9 @@ extension MoreScreen {
             }
         }
 
-        /// v0.11 IA — `moodRow` removed. The More→Stimmung entry was dropped
+        /// `moodRow` removed. The More→Stimmung entry was dropped
         /// when mood analysis/history moved into Insights.
-        /// R5-A1 (17-05) — der unter R5/U7 gefallene Untertitel („Badges &
+        /// Der unter R5/U7 gefallene Untertitel („Badges &
         /// Meilensteine") ist zurück, im neuen Register: Komma statt „&". Die
         /// Zeile führt jetzt auf, was hinter ihr liegt, statt den Titel zu
         /// wiederholen.
@@ -106,7 +87,7 @@ extension MoreScreen {
             subtitle: "Badges, milestones"
         )
 
-        /// v0.14.8 C5 — the gated cycle home row (mirror of web `/cycle`). The
+        /// The gated cycle home row (mirror of web `/cycle`). The
         /// `drop.fill` glyph matches the cycle capture surface so the row→screen
         /// transition reads continuous.
         static let cycleRow = Row(
@@ -120,9 +101,8 @@ extension MoreScreen {
         /// the web settings row. Distinct from ``cycleRow`` (the feature home): it
         /// navigates to the Apple-Health integration detail that hosts the
         /// server-synced cycle opt-in toggle, so the on/off control is discoverable
-        /// (incl. before opting in). Gated behind `FeatureFlag.cycleTracking`, like
-        /// the whole cycle surface. NOT part of the curated ``clinicalRows`` list.
-        /// R5-A1 (17-05) — der frühere Untertitel war eine Umformulierung des
+        /// (incl. before opting in). NOT part of the curated ``clinicalRows`` list.
+        /// Der frühere Untertitel war eine Umformulierung des
         /// Titels und fiel deshalb unter R5/U7 weg. Unter R5-A1 wird er nicht
         /// gestrichen, sondern umgeschrieben, bis er etwas trägt: die Zeile
         /// führt zur Apple-Health-Integrationsseite, auf der der server-synchrone
@@ -134,16 +114,16 @@ extension MoreScreen {
             subtitle: "Turn tracking on or off, Apple Health sync"
         )
 
-        /// v0.5.3-F3 — Web-Parity rows.
+        /// Web-Parity rows.
         static let workoutsRow = Row(
             id: "workouts",
             icon: "figure.run",
             title: "Workouts",
             subtitle: "Workouts from Apple Health"
         )
-        /// v0.11 W-A — `targetsRow` removed. The "Goals" destination retired
+        /// `targetsRow` removed. The "Goals" destination retired
         /// when targets folded into the per-metric chart detail (web parity).
-        /// R5-A1 (17-05) — unter R5/U7 fiel der Untertitel als Umformulierung
+        /// Unter R5/U7 fiel der Untertitel als Umformulierung
         /// weg; er ist zurück und benennt jetzt die drei Abschnitte des Screens
         /// (Bestwerte, Streaks, Meilensteine) statt den Titel zu wiederholen.
         static let personalRecordsRow = Row(
@@ -153,15 +133,25 @@ extension MoreScreen {
             subtitle: "Best values, streaks, milestones"
         )
 
-        /// v0.14.2 (#136) — Messwerte: metric-type picker →
+        /// Messwerte: metric-type picker →
         /// `MeasurementsPickerScreen`, which pushes the existing
         /// `MeasurementListScreen(kind:)` values table. `list.bullet.rectangle`
         /// reads as "a table of values", matching the destination's content.
         /// v0.14.8 W2 (Audit §3.c) — rendered in the Records & achievements
         /// section since the "Data & devices" section was dropped.
-        /// R5-A1 (17-05) — unter R5/U7 fiel der Untertitel als Umformulierung
+        /// Unter R5/U7 fiel der Untertitel als Umformulierung
         /// weg; er ist zurück und sagt, wie die Liste sortiert ist, was die
         /// Zeile vom „Messen"-Weg unterscheidet.
+        /// The timeline (server v1.42, `/timeline`): conditions, medications
+        /// and values on one time axis. Heads the records section, the one
+        /// place that shows the whole record at once.
+        static let timelineRow = Row(
+            id: "timeline",
+            icon: "calendar.day.timeline.left",
+            title: "timeline.title",
+            subtitle: "timeline.more.subtitle"
+        )
+
         static let measurementsRow = Row(
             id: "measurements",
             icon: "list.bullet.rectangle",
@@ -169,13 +159,13 @@ extension MoreScreen {
             subtitle: "Every reading, newest first"
         )
 
-        /// v1.18.1 (#30) — Lab results + biomarker catalog (mirror of the web
+        /// v1.18.1 — Lab results + biomarker catalog (mirror of the web
         /// labs surface). Gated behind the `labs` server module. `testtube.2`
         /// reads as "lab samples", matching the destination's content. Sits last
         /// in Records & achievements, next to Measurements (both browse health
         /// data). The biomarker catalog is reached from the LabsScreen toolbar,
         /// not a second row.
-        /// v0153 INV-D — title repointed at the canonical screen key
+        /// Title repointed at the canonical screen key
         /// `labs.list.title` (de "Laborwerte") so the More row no longer leaks
         /// the unregistered English literal; the subtitle is its own keyed
         /// string ("more.labs.subtitle").
@@ -186,11 +176,11 @@ extension MoreScreen {
             subtitle: "more.labs.subtitle"
         )
 
-        /// v1.18.3 (§1) — condition/illness journal (mirror of the web illness
+        /// v1.18.3 — condition/illness journal (mirror of the web illness
         /// surface). Default-ON (born-gating dropped); shown unless the user
         /// disabled the module (`isEnabled(.illness) != false`).
         /// `heart.text.square` reads as a health journal.
-        /// v0153 INV-D — title repointed at the canonical screen key
+        /// Title repointed at the canonical screen key
         /// `illness.journal.title` (de "Beschwerden-Tagebuch") so the More row
         /// no longer leaks the unregistered English literal; the subtitle is its
         /// own keyed string ("more.illness.subtitle").
@@ -207,6 +197,16 @@ extension MoreScreen {
             subtitle: "more.illness.subtitle"
         )
 
+        /// The seizure diary (server v1.48.0, #182 A4), next to the
+        /// illness journal. Opt-in server-side: the row stands only while the
+        /// module map names `seizures` and says on.
+        static let seizuresRow = Row(
+            id: "seizures",
+            icon: SeizureSymbols.module,
+            title: "seizures.title",
+            subtitle: "seizures.more.subtitle"
+        )
+
         /// Document vault ("Dokumente") front door — opt-in `inboundDocuments`
         /// module (server ships it OFF by default; gated `!= false`).
         /// `doc.text.magnifyingglass` reads as a searchable document store,
@@ -219,7 +219,7 @@ extension MoreScreen {
             subtitle: "more.documents.subtitle"
         )
 
-        /// Build 7.6 (GH #48) — nutrient read/display front door. Opt-in
+        /// Build 7.6 — nutrient read/display front door. Opt-in
         /// `nutrients` module (server ships it OFF by default; gated `!= false`).
         /// `leaf` reads as the diet/nutrition surface. Title/subtitle are keyed
         /// (de + en in `Localizable.xcstrings`).
@@ -230,7 +230,7 @@ extension MoreScreen {
             subtitle: "more.nutrients.subtitle"
         )
 
-        /// Build 7 Item 7.7 — environmental-context front door (mirror of the web
+        /// Environmental-context front door (mirror of the web
         /// `environment` module). Default-ON tracking module (server v1.29.1); a
         /// disabled account self-gates to the neutral disabled hint. `cloud.sun`
         /// reads as the weather/daylight surface. Title/subtitle are keyed
@@ -298,7 +298,7 @@ extension MoreScreen {
             subtitle: "more.mentalWellbeing.subtitle"
         )
 
-        /// v0.15 W-FRONTDOORS — Vorsorge / preventive-care front door (mirror of
+        /// Vorsorge / preventive-care front door (mirror of
         /// web `/vorsorge`). CORE (never module-gated). `stethoscope` matches the
         /// reminder list's card icon so the row→screen transition reads continuous.
         static let vorsorgeRow = Row(
@@ -317,17 +317,17 @@ extension MoreScreen {
             subtitle: "more.medicalSources.subtitle"
         )
 
-        // v0152 W-COACH-CLEANUP (C2) — the `coachRow` descriptor was removed with
+        // The `coachRow` descriptor was removed with
         // the More Coach row. The operator flagged the More-tab coach entry as a
         // stray surface that opened the coach against his External-AI pick; the
         // manual coach entry returns as an inline button on the Insights metric
         // pages (later update). Coach settings stay reachable under Settings → Coach.
 
         // v0.14.8 (Task D) — `shareWithDoctorRow` removed: the list entry was
-        // dropped in favour of the `MoreHeader` share glyph (left of the gear).
+        // dropped in favour of the share glyph in the tab header (left of the gear).
         // the sharing destination itself is unchanged by this row's removal.
 
-        /// v0.6.1.5 Y5 — Sicherheit-section rows. Sign-out drops the
+        /// Sicherheit-section rows. Sign-out drops the
         /// session locally (server data stays); Konto löschen wipes the
         /// account server-side via the DeleteAccountScreen sheet.
         static let signOutRow = Row(
@@ -343,20 +343,20 @@ extension MoreScreen {
             subtitle: "more.deleteAccount.subtitle"
         )
 
-        /// v0.14.1 (#134) — rows in the combined "Records & achievements"
+        /// Rows in the combined "Records & achievements"
         /// section, in render order: Persönliche Rekorde, Erfolge, Workouts.
         /// v0.14.8 W2 (Audit §3.c) — Messwerte appended when the orphaned
         /// "Data & devices" section was dropped.
-        /// v0.15 W-FRONTDOORS — Labs + Illness moved to `clinicalRows` (the
+        /// Labs + Illness moved to `clinicalRows` (the
         /// clinical-spine section), out of this records drawer.
-        static let recordsRows: [Row] = [personalRecordsRow, achievementsRow, workoutsRow, measurementsRow]
+        static let recordsRows: [Row] = [timelineRow, personalRecordsRow, achievementsRow, workoutsRow, measurementsRow]
 
-        /// v0.15 W-FRONTDOORS — rows in the clinical-spine "Health & care"
+        /// Rows in the clinical-spine "Health & care"
         /// section, in render order: Vorsorge (core), Labs, Illness, Cycle
         /// (gated). Pinned for the contract test against silent drift.
         /// `vorsorgeRow` is always present; the rest gate per module / eligibility,
         /// so the rendered subset is a superset filter of this list.
-        /// v0152 W-COACH-CLEANUP (C2) — the Coach row was removed (the operator
+        /// The Coach row was removed (the operator
         /// flagged the stray More coach entry); it is no longer a clinical-spine row.
         /// v1.25 W-RECORDS — Allergies + Family history appended to the clinical
         /// spine next to Labs / Illness (first-class structured records the web
@@ -373,11 +373,11 @@ extension MoreScreen {
         /// history STAY in the hub (they ARE static self-medical info), so their
         /// descriptors are still absent from this list.
         static let clinicalRows: [Row] = [
-            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, documentsRow,
+            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, seizuresRow, documentsRow,
             mentalWellbeingRow, cycleRow
         ]
 
-        /// **R5-A1 (17-05) — every row the Mehr tab actually renders, in render
+        /// **Every row the Mehr tab actually renders, in render
         /// order.** `recordsRows` and `clinicalRows` are section lists and do not
         /// add up to the tab: the cycle-settings, nutrition, environment, sign-out
         /// and delete-account rows are declared standalone, and the allergies /
@@ -388,9 +388,9 @@ extension MoreScreen {
         /// row added later without a subtitle fails `SettingsSubtitleTests` instead
         /// of quietly reintroducing the inconsistency the operator flagged.
         static let renderedRows: [Row] = [
-            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, documentsRow,
+            aboutMeRow, vorsorgeRow, medicalSourcesRow, labsRow, illnessRow, seizuresRow, documentsRow,
             mentalWellbeingRow, cycleRow, cycleSettingsRow, nutritionRow,
-            environmentRow, personalRecordsRow, achievementsRow, workoutsRow,
+            environmentRow, timelineRow, personalRecordsRow, achievementsRow, workoutsRow,
             measurementsRow, signOutRow, deleteAccountRow
         ]
 

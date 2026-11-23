@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **v0.8.0 W11 — UserProfile.avatarUrl decode.**
+/// **UserProfile.avatarUrl decode.**
 ///
 /// The self-hosted avatar URL rides on the profile payload. It must decode
 /// when present, surface `nil` on an explicit JSON null, and tolerate the key

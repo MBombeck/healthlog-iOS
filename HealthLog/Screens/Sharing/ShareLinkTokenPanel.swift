@@ -39,21 +39,18 @@ struct ShareLinkTokenPanel: View {
                 urlBox(url)
 
                 ShareLink(item: url) {
-                    actionRow(icon: "square.and.arrow.up", title: "Share link")
+                    HLButtonLabel("Share link", systemImage: "square.and.arrow.up")
                 }
                 .hlPressable()
                 .accessibilityIdentifier("shareLink.token.share")
 
-                Button {
+                HLButton(
+                    didCopy ? Text("Copied") : Text("Copy link"),
+                    systemImage: didCopy ? "checkmark.circle.fill" : "doc.on.doc",
+                    variant: .secondary
+                ) {
                     copy(url.absoluteString)
-                } label: {
-                    actionRow(
-                        icon: didCopy ? "checkmark.circle.fill" : "doc.on.doc",
-                        title: didCopy ? "Copied" : "Copy link",
-                        tint: didCopy ? HLColor.statusOK : nil
-                    )
                 }
-                .hlPressable()
                 .accessibilityIdentifier("shareLink.token.copy")
             }
 
@@ -86,28 +83,22 @@ struct ShareLinkTokenPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text(passphrase)
-                .font(.hlTitle3.monospaced())
-                .foregroundStyle(HLText.primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(HLSpace.md)
-                .background(
-                    RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                        .fill(HLSurface.secondary)
-                )
-                .accessibilityIdentifier("shareLink.passphrase.value")
-
-            Button {
-                copyPassphrase(passphrase)
-            } label: {
-                actionRow(
-                    icon: didCopyPassphrase ? "checkmark.circle.fill" : "doc.on.doc",
-                    title: didCopyPassphrase ? "share.passphrase.copied" : "share.passphrase.copy",
-                    tint: didCopyPassphrase ? HLColor.statusOK : nil
-                )
+            HLCard(style: .outline) {
+                Text(passphrase)
+                    .font(.hlTitle3.monospaced())
+                    .foregroundStyle(HLText.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .hlPressable()
+            .accessibilityIdentifier("shareLink.passphrase.value")
+
+            HLButton(
+                didCopyPassphrase ? Text("share.passphrase.copied") : Text("share.passphrase.copy"),
+                systemImage: didCopyPassphrase ? "checkmark.circle.fill" : "doc.on.doc",
+                variant: .secondary
+            ) {
+                copyPassphrase(passphrase)
+            }
             .accessibilityIdentifier("shareLink.passphrase.copy")
 
             if let qrUrl = store.freshQrUrl, !qrUrl.isEmpty {
@@ -123,11 +114,6 @@ struct ShareLinkTokenPanel: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(HLSpace.md)
-        .background(
-            RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                .fill(HLColor.statusOK.opacity(0.08))
-        )
     }
 
     private var header: some View {
@@ -136,8 +122,9 @@ struct ShareLinkTokenPanel: View {
                 .font(.hlIcon(HLIconSize.hero))
                 .foregroundStyle(HLColor.statusOK)
             if let label = store.freshLinkLabel {
+                // The link's name is the card head, in the card title face.
                 Text(label)
-                    .font(.hlTitle3.weight(.semibold))
+                    .font(.hlSubhead.weight(.semibold))
                     .foregroundStyle(HLText.primary)
             }
             Text("Send this link to your doctor. It opens a read-only view of your health record.")
@@ -156,46 +143,25 @@ struct ShareLinkTokenPanel: View {
     }
 
     private func urlBox(_ url: URL) -> some View {
-        Text(url.absoluteString)
-            .font(.hlFootnote.monospaced())
-            .foregroundStyle(HLText.primary)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HLSpace.md)
-            .background(
-                RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                    .fill(HLSurface.secondary)
-            )
-    }
-
-    private func actionRow(icon: String, title: LocalizedStringKey, tint: Color? = nil) -> some View {
-        HStack(spacing: HLSpace.md) {
-            Image(systemName: icon)
-                .font(.hlIcon(HLIconSize.sm))
-                .foregroundStyle(tint ?? HLText.primary)
-            Text(title)
-                .font(.hlSubhead.weight(.semibold))
+        HLCard(style: .outline) {
+            Text(url.absoluteString)
+                .font(.hlFootnote.monospaced())
                 .foregroundStyle(HLText.primary)
-            Spacer()
+                .textSelection(.enabled)
         }
-        .contentShape(Rectangle())
-        .padding(.vertical, HLSpace.sm)
     }
 
     private var warning: some View {
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(HLColor.statusWarn)
-            Text("This link is shown only once. We can't show it again — copy or share it now. You can always revoke it later.")
-                .font(.hlFootnote)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        HLCard(style: .outline) {
+            HStack(alignment: .top, spacing: HLSpace.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(HLColor.statusWarn)
+                Text("This link is shown only once. We can't show it again — copy or share it now. You can always revoke it later.")
+                    .font(.hlFootnote)
+                    .foregroundStyle(HLText.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(HLSpace.md)
-        .background(
-            RoundedRectangle(cornerRadius: HLRadius.card, style: .continuous)
-                .fill(HLColor.statusWarn.opacity(0.12))
-        )
     }
 
     private func copy(_ string: String) {

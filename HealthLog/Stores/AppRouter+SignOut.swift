@@ -13,6 +13,8 @@ extension AppRouter {
         medsPath = .init()
         insightsPath = .init()
         morePath = .init()
+        sectionPaths = [:]
         focusedVisitId = nil
+        timeline.reset()
     }
 }

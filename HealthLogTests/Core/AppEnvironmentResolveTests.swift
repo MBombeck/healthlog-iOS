@@ -236,7 +236,7 @@ struct AppEnvironmentResolveTests {
 
     // MARK: - currentBaseURL convenience
 
-    /// v0.5.5.2 W-IMPL-SERVER-EDITOR — Settings → Server reads the
+    /// Settings → Server reads the
     /// effective host through this accessor. Round-trips through the
     /// Keychain overlay so the user sees the same URL the next request
     /// will hit.

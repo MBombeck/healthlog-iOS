@@ -2,7 +2,7 @@
 //  DoctorReportToFHIRBundle+Codings.swift
 //  HealthLog (iOS-only — imports ModelsR4 via SpeziFHIR)
 //
-//  #115 R3 — the R4 vital-signs "magic" codes, byte-aligned with the server's
+//  The R4 vital-signs "magic" codes, byte-aligned with the server's
 //  v1.39.3 exporter (`src/lib/fhir/resources/common.ts`,
 //  `VITAL_SIGNS_MAGIC_CODE`). Kept out of `DoctorReportToFHIRBundle.swift`,
 //  whose length is frozen in the SwiftLint baseline.
@@ -32,8 +32,7 @@ extension MetricFHIRMapper {
 extension DoctorReportToFHIRBundle {
     /// The companion `Coding`s that ride after the specific code on a
     /// `CodeableConcept` (see ``MetricFHIRMapper/vitalSignsCompanionCode(for:)``).
-    /// Empty for every code that needs none. Shared by the bundle assembler and
-    /// `MeasurementToFHIRObservation`, so both emit the identical concept.
+    /// Empty for every code that needs none.
     static func companionCodings(for loinc: LOINCCode) -> [Coding] {
         guard let companion = MetricFHIRMapper.vitalSignsCompanionCode(for: loinc) else { return [] }
         let coding = Coding()

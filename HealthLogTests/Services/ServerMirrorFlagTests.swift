@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **MIRROR (1.5, #152, server #1272)** — the app writes exactly the rows
+    /// The app writes exactly the rows
     /// the server marks with `appleHealthMirror`, and falls back to its own
     /// source rule only where the key is missing.
     ///

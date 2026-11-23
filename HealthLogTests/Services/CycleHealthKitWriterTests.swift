@@ -9,7 +9,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **W-CYCLECRASH** — pins the writer's validated sample construction.
+    /// Pins the writer's validated sample construction.
     ///
     /// `HKCategorySample.init` is exactly where HealthKit raises an uncatchable
     /// `NSInvalidArgumentException` for (a) a menstrual-flow sample missing the

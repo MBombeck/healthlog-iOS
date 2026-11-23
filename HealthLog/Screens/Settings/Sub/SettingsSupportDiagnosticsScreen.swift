@@ -2,7 +2,7 @@ import SwiftUI
 #if canImport(UserNotifications) && canImport(UIKit)
     import UserNotifications
 
-    /// **Phase 08 Plan 15 — where engineering detail lives now.**
+    /// **Where engineering detail lives now.**
     ///
     /// The notification and Apple-Health diagnostics screens keep everything a
     /// user can act on: is the permission granted, does a test banner arrive,
@@ -44,9 +44,10 @@ import SwiftUI
         @State private var forceFreshInFlight: Bool = false
         @State private var forceFreshError: String?
         @State private var diagnostics = HKSyncDiagnostics.shared
+        @State private var metricReports: [AppMetricsReport] = []
 
         var body: some View {
-            HLSettingsPage(title: "settings.support.title") {
+            HLPage {
                 gateCard
                 if supportSession.isConfirmed {
                     switch topic {
@@ -58,17 +59,16 @@ import SwiftUI
                         wakeChannelsCard
                         anchorsCard
                     }
+                    // iOS's own field data of the last days (D5 #12), on both
+                    // topics: a background termination or a hang touches both.
+                    SupportMetricsCard(reports: metricReports)
                 }
             }
             .navigationTitle("settings.support.title")
             .navigationBarTitleDisplayMode(.inline)
-            // 1.4 B2-c — how to read the cards of this topic, behind the one
+            // How to read the cards of this topic, behind the one
             // (i) instead of under each card.
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    HLInfoButton(content: info, accessibilityIdentifier: "settings.support.info")
-                }
-            }
+            .hlPageActions([.info(info, identifier: "settings.support.info")])
             .task { await loadLocalSnapshot() }
             .onDisappear { endSession() }
         }
@@ -79,43 +79,31 @@ import SwiftUI
         /// long it lasts; the second is the act. Cancelling returns to `.locked`
         /// rather than to some half state.
         private var gateCard: some View {
-            HLSettingsCard(
-                icon: "lifepreserver",
-                title: "settings.support.gate_title",
+            HLCard(
+                "settings.support.gate_title",
                 subtitle: "settings.support.gate_body"
             ) {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
                     if supportSession.isAwaitingConfirmation {
                         Text("settings.support.gate_consequence")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.primary)
+                            .hlText(.prose)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("settings.supportDiagnostics.consequence")
-                        HStack(spacing: HLSpace.md) {
-                            Button("settings.support.gate_confirm") { supportSession.confirm() }
-                                .font(.hlSubhead.weight(.semibold))
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
+                        HLButtonPair {
+                            HLButton("settings.support.gate_confirm") { supportSession.confirm() }
                                 .accessibilityIdentifier("settings.supportDiagnostics.confirm")
-                            Button("settings.support.gate_cancel") { endSession() }
-                                .font(.hlSubhead)
-                                .foregroundStyle(HLText.secondary)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
+                        } secondary: {
+                            HLButton("settings.support.gate_cancel", variant: .secondary) { endSession() }
                                 .accessibilityIdentifier("settings.supportDiagnostics.cancel")
                         }
                     } else if supportSession.isConfirmed {
-                        Button("settings.support.gate_end") { endSession() }
-                            .font(.hlSubhead)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
+                        HLButton("settings.support.gate_end", variant: .secondary) { endSession() }
                             .accessibilityIdentifier("settings.supportDiagnostics.end")
                     } else {
-                        Button("settings.support.gate_start") { supportSession.requestConfirmation() }
-                            .font(.hlSubhead.weight(.semibold))
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                            .accessibilityIdentifier("settings.supportDiagnostics.start")
+                        HLButton("settings.support.gate_start") {
+                            supportSession.requestConfirmation()
+                        }
+                        .accessibilityIdentifier("settings.supportDiagnostics.start")
                     }
                 }
             }
@@ -124,70 +112,53 @@ import SwiftUI
         // MARK: - Notification detail
 
         private var registrationCard: some View {
-            HLSettingsCard(
-                icon: "antenna.radiowaves.left.and.right",
-                title: "APNs registration"
-            ) {
+            HLCard("APNs registration") {
                 let snap = lastRegistration
                 SupportDetailRow(
                     title: "Token prefix",
                     value: SupportDiagnosticsRedaction.fragment(snap?.tokenPrefix) ?? noValuePlaceholder,
                     accessibilityIdentifier: "notif.diagnostics.tokenPrefix"
                 )
-                Divider().opacity(0.5)
                 SupportDetailRow(
                     title: "Token suffix",
                     value: SupportDiagnosticsRedaction.tail(snap?.tokenSuffix) ?? noValuePlaceholder,
                     accessibilityIdentifier: "notif.diagnostics.tokenSuffix"
                 )
-                Divider().opacity(0.5)
                 SupportDetailRow(
                     title: "Environment",
                     value: snap?.environment ?? noValuePlaceholder,
                     accessibilityIdentifier: "notif.diagnostics.environment"
                 )
-                Divider().opacity(0.5)
                 SupportDetailRow(
                     title: "Last attempt",
                     value: snap?.lastRegistrationAttemptAt.map { Self.formatTimestamp($0) } ?? noValuePlaceholder,
                     accessibilityIdentifier: "notif.diagnostics.lastAttempt"
                 )
-                Divider().opacity(0.5)
                 SupportDetailRow(
                     title: "Server status",
                     value: snap?.lastRegistrationServerStatus.map(String.init) ?? noValuePlaceholder,
                     accessibilityIdentifier: "notif.diagnostics.serverStatus"
                 )
                 if let err = snap?.lastRegistrationError, !err.isEmpty {
-                    Divider().opacity(0.5)
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
                         Text("Last error")
-                            .font(.hlSubhead)
-                            .foregroundStyle(HLText.secondary)
+                            .hlText(.factLabel)
                         Text(err)
                             .font(.hlCaption)
                             .foregroundStyle(HLColor.statusBad)
                             .accessibilityIdentifier("notif.diagnostics.lastError")
                     }
                 }
-                Divider().opacity(0.5)
-                Button {
-                    Task { await forceFresh() }
-                } label: {
-                    HStack(spacing: HLSpace.xs) {
-                        if forceFreshInFlight {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                        Text("Re-register APNs token")
+                if forceFreshInFlight {
+                    HLInlineProgress("Re-register APNs token")
+                        .frame(minHeight: HLLinkButton.hitHeight)
+                } else {
+                    HLLinkButton("Re-register APNs token", systemImage: "arrow.clockwise", alignment: .leading) {
+                        Task { await forceFresh() }
                     }
-                    .font(.hlSubhead)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+                    .disabled(!(lastRegistration?.hasToken ?? false))
+                    .accessibilityIdentifier("notif.diagnostics.forceFresh")
                 }
-                .disabled(forceFreshInFlight || !(lastRegistration?.hasToken ?? false))
-                .accessibilityIdentifier("notif.diagnostics.forceFresh")
                 if let forceFreshError {
                     Text(forceFreshError)
                         .font(.hlCaption)
@@ -198,14 +169,9 @@ import SwiftUI
         }
 
         private var categoriesCard: some View {
-            HLSettingsCard(
-                icon: "rectangle.stack.fill",
-                title: "Buttons on the banner"
-            ) {
+            HLCard("Buttons on the banner") {
                 if categoryRows.isEmpty {
-                    Text("No banner actions registered — restart the app.")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                    HLEmptyNote("No banner actions registered — restart the app.")
                         .accessibilityIdentifier("meds.diagnostics.noCategories")
                 } else {
                     ForEach(categoryRows, id: \.identifier) { category in
@@ -216,11 +182,7 @@ import SwiftUI
                                     "meds.diagnostics.category.\(category.identifier)"
                                 )
                             Text(category.actionsLabel)
-                                .font(.hlCaption)
-                                .foregroundStyle(HLText.secondary)
-                        }
-                        if category.identifier != categoryRows.last?.identifier {
-                            Divider().opacity(0.5)
+                                .hlText(.rowSubtitle)
                         }
                     }
                 }
@@ -228,16 +190,11 @@ import SwiftUI
         }
 
         private var pendingIdentifiersCard: some View {
-            // 1.4 B2-c — no footer: why the list is cut short is a reason
+            // No footer: why the list is cut short is a reason
             // for the developer, not for the reader.
-            HLSettingsCard(
-                icon: "number",
-                title: "settings.support.pending_title"
-            ) {
+            HLCard("settings.support.pending_title") {
                 if pendingIdentifiers.isEmpty {
-                    Text("settings.support.pending_empty")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                    HLEmptyNote("settings.support.pending_empty")
                         .accessibilityIdentifier("settings.supportDiagnostics.pendingEmpty")
                 } else {
                     VStack(alignment: .leading, spacing: HLSpace.xxs) {
@@ -259,9 +216,8 @@ import SwiftUI
         /// BGProcessing" is a sentence for a log reader, not for the person
         /// asking whether their weight arrived.
         private var wakeChannelsCard: some View {
-            HLSettingsCard(
-                icon: "bolt.badge.clock",
-                title: "settings.hkdiag.wakes_title",
+            HLCard(
+                "settings.hkdiag.wakes_title",
                 subtitle: "settings.hkdiag.wakes_subtitle"
             ) {
                 VStack(alignment: .leading, spacing: HLSpace.md) {
@@ -292,23 +248,17 @@ import SwiftUI
         /// Per-kind anchor advances — the concrete proof an upload round-trip
         /// succeeded, and the number a support conversation actually needs.
         private var anchorsCard: some View {
-            HLSettingsCard(
-                icon: "arrow.trianglehead.2.clockwise",
-                title: "settings.support.anchors_title"
-            ) {
+            HLCard("settings.support.anchors_title") {
                 let rows = anchorRows
                 if rows.isEmpty {
-                    Text("settings.support.anchors_empty")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                    HLEmptyNote("settings.support.anchors_empty")
                         .accessibilityIdentifier("settings.supportDiagnostics.anchorsEmpty")
                 } else {
                     VStack(alignment: .leading, spacing: HLSpace.sm) {
                         ForEach(rows, id: \.title) { row in
                             HStack(alignment: .firstTextBaseline) {
                                 Text(row.title)
-                                    .font(.hlSubhead)
-                                    .foregroundStyle(HLText.primary)
+                                    .hlText(.prose)
                                 Spacer(minLength: HLSpace.md)
                                 Text(row.value)
                                     .font(.hlCaption.monospacedDigit())
@@ -354,6 +304,7 @@ import SwiftUI
         /// mirrors, so appearing here contacts no server.
         private func loadLocalSnapshot() async {
             lastRegistration = container?.notifications.lastRegistrationSnapshot
+            metricReports = AppMetricsLog.shared.reports()
             let center = UNUserNotificationCenter.current()
             let categories = await center.notificationCategories()
             let pending = await center.pendingNotificationRequests()
@@ -404,7 +355,7 @@ import SwiftUI
         }
 
         private static func formatTimestamp(_ date: Date) -> String {
-            date.formatted(.dateTime.day().month().hour().minute().second())
+            HLDateFormat.appendingYearIfNeeded(date, base: Date.FormatStyle().day().month().hour().minute().second())
         }
 
         /// A support conversation needs a handful of identifiers, not the whole
@@ -433,23 +384,13 @@ import SwiftUI
         let accessibilityIdentifier: String
 
         var body: some View {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                Spacer(minLength: HLSpace.sm)
-                Text(value)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier(accessibilityIdentifier)
+            HLSettingsStatRow(label: Text(title), value: value)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier(accessibilityIdentifier)
         }
     }
 
-    // MARK: - Info (1.4 B2-c)
+    // MARK: - Info
 
     extension SettingsSupportDiagnosticsScreen {
         /// The glossary of the topic's cards.
@@ -463,7 +404,7 @@ import SwiftUI
                     ),
                     HLInfoContent.Section(
                         title: String(localized: "Buttons on the banner"),
-                        paragraphs: [String(localized: "settings.support.info.categories")]
+                        paragraphs: [String(localized: "settings.support.info.categories.v2")]
                     )
                 ]
             case .appleHealth:

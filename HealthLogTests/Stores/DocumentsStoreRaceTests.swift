@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **Phase 08 Wave 0 — the document races and typed outcomes, as failing
+/// **The document races and typed outcomes, as failing
 /// contracts.**
 ///
 /// Lives beside ``DocumentsStoreTests`` rather than inside it: the suite's own
@@ -12,7 +12,7 @@ import Testing
 /// refuses a new warning. Swift Testing reports every case here under the same
 /// `Documents store` suite.
 extension DocumentsStoreTests {
-    // MARK: - Phase 08 Wave 0 — deterministic race + typed-outcome contracts
+    // MARK: - Deterministic race + typed-outcome contracts
 
     //
     // Every case below drives the REAL store over a scripted `APIClientProtocol`
@@ -79,7 +79,7 @@ extension DocumentsStoreTests {
             violations.append("a superseded request left a spinner running")
         }
         #expect(store.documents.map(\.id) == ["d-b"], "the newest document page must survive regardless")
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents older filter replaced the newest result")
+        #expect(violations.isEmpty, "documents older filter replaced the newest result")
     }
 
     // MARK: RED — stale pagination and stale write rollback
@@ -174,7 +174,7 @@ extension DocumentsStoreTests {
         if deleteStore.documents.map(\.id) != ["d-b"] {
             violations.append("a failed delete re-inserted \(deleteStore.documents.map(\.id)) into a different query")
         }
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents stale pagination or error published")
+        #expect(violations.isEmpty, "documents stale pagination or error published")
     }
 
     // MARK: RED — the store's own logout must fence its outstanding work
@@ -248,7 +248,7 @@ extension DocumentsStoreTests {
         }
 
         await Self.expectInvalidateThenClearAlreadyFences()
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents outstanding query published after logout")
+        #expect(violations.isEmpty, "documents outstanding query published after logout")
     }
 
     /// The preservation half of ``logoutInvalidatesOutstandingQuery()``: the
@@ -286,15 +286,11 @@ extension DocumentsStoreTests {
 
     // MARK: RED — writes must return what happened
 
-    /// `upload(_:)` returns `Void`, so the only way a caller can learn the
-    /// outcome is to read the store's sticky `lastUploadError` afterwards — and
-    /// the failures the repository re-throws untyped (`unauthorized`, the module
-    /// gate) never land there. `DocumentUploadSheet` reads exactly that property
-    /// and dismisses when it is nil, so those uploads close the sheet as if they
-    /// had worked. The same member drops every unreadable picked file with a bare
-    /// `continue`, so a pick of N files that yields nothing reports nothing.
+    /// An untyped refusal (`unauthorized`, the module gate) must come back from
+    /// `upload(_:)` as a failure, and an import outcome must count unreadable
+    /// picks, or the upload sheet dismisses as if the upload had worked.
     @Test("write outcomes report generic and unreadable failures to their caller")
-    func writeOutcomesReportGenericAndUnreadableFailures() async throws {
+    func writeOutcomesReportGenericAndUnreadableFailures() async {
         var violations: [String] = []
 
         let api = ScriptedDocumentsAPI()
@@ -312,39 +308,29 @@ extension DocumentsStoreTests {
             }
         }
         await store.load()
-        await store.upload(DocumentUploadDraft(data: Data([1, 2, 3]), filename: "f.pdf", mimeType: "application/pdf"))
+        let outcome = await store.upload(
+            DocumentUploadDraft(data: Data([1, 2, 3]), filename: "f.pdf", mimeType: "application/pdf")
+        )
+        if outcome.failure == nil {
+            violations.append("DocumentsStore.upload reported a refused upload as landed")
+        }
         if store.lastUploadError == nil {
             violations.append("an untyped upload failure never reached the upload surface")
         }
 
-        let writes = try Self.strippedSource("HealthLog/Stores/DocumentsStore+Writes.swift")
-        if let upload = Self.member(named: "func upload(_ draft: DocumentUploadDraft)", in: writes),
-           !upload.contains("-> Document")
-        {
-            violations.append("DocumentsStore.upload returns nothing, so its caller cannot see the outcome")
+        // A pick whose inputs were all unreadable is a visible failure, never a
+        // silent success the sheet would dismiss on.
+        let unreadablePick = DocumentImportOutcome(selected: 3, uploaded: 0, unreadable: 3, failures: [])
+        if unreadablePick.failedCount != 3 || unreadablePick.isComplete {
+            violations.append("an import of three unreadable files does not count them as failed")
         }
-
-        let sheet = try Self.strippedSource("HealthLog/Screens/Documents/DocumentUploadSheet.swift")
-        for member in ["private func handleFileImport(", "private func handlePhotos("] {
-            guard let body = Self.member(named: member, in: sheet) else {
-                violations.append("\(member) no longer exists — restate this contract")
-                continue
-            }
-            if body.contains("else { continue }") || body.contains("continue }") {
-                violations.append("\(member) drops an unreadable picked input without counting it")
-            }
-        }
-        if let uploadAll = Self.member(named: "private func uploadAll(", in: sheet) {
-            if uploadAll.contains("store.lastUploadError"), uploadAll.contains("dismiss()") {
-                violations.append("uploadAll dismisses on any failure that did not set lastUploadError")
-            }
-            if !uploadAll.contains("failed") {
-                violations.append("uploadAll reports no failed count for a multi-file pick")
-            }
+        let mixedPick = DocumentImportOutcome(selected: 2, uploaded: 1, unreadable: 0, failures: [.notAuthenticated])
+        if mixedPick.failedCount != 1 || mixedPick.isComplete {
+            violations.append("an import with a refused upload reads as complete")
         }
 
         #expect(store.documents.isEmpty, "a refused upload must not invent a row")
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents write failure was not returned visibly")
+        #expect(violations.isEmpty, "documents write failure was not returned visibly")
     }
 
     // MARK: RED — a partial bulk keeps the failures selected
@@ -399,7 +385,7 @@ extension DocumentsStoreTests {
             violations.append("a partial bulk delete left the selection as \(store.selection.sorted())")
         }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents partial bulk failure discarded failed selection")
+        #expect(violations.isEmpty, "documents partial bulk failure discarded failed selection")
     }
 
     // MARK: RED — module-disabled is scoped to the query that asked
@@ -467,7 +453,7 @@ extension DocumentsStoreTests {
             violations.append("the disabled surface kept \(gated.filter.activeCount) filter facets live")
         }
 
-        #expect(violations.isEmpty, "EXPECTED_RED: 08-02 documents disabled state leaked across query generations")
+        #expect(violations.isEmpty, "documents disabled state leaked across query generations")
     }
 
     // MARK: - Phase 08 scripted harness
@@ -507,53 +493,4 @@ extension DocumentsStoreTests {
         acceptedExtensions: [".pdf"],
         linkedEpisodes: [DocumentConditionLink(episodeId: "e-beta", name: "Beta")]
     )
-
-    /// Reads one declaration's own body, truncated at the first closing brace at
-    /// its indentation. 08-01 lost an assertion to a range that ran to the end of
-    /// the file and matched what it meant to exclude; this bounds it.
-    private static func member(named signature: String, in source: String) -> String? {
-        guard let start = source.range(of: signature) else { return nil }
-        let indent = String(
-            source[source.lineRange(for: start).lowerBound ..< start.lowerBound]
-        )
-        let rest = source[start.lowerBound...]
-        guard let close = rest.range(of: "\n\(indent)}") else { return String(rest) }
-        return String(rest[..<close.upperBound])
-    }
-
-    private static func strippedSource(_ relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let text = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        return Self.stripLineComments(from: Self.stripBlockComments(from: text))
-    }
-
-    private static func stripBlockComments(from source: String) -> String {
-        var out = ""
-        var rest = Substring(source)
-        while let open = rest.range(of: "/*") {
-            out += rest[..<open.lowerBound]
-            guard let close = rest.range(of: "*/", range: open.upperBound ..< rest.endIndex) else { return out }
-            rest = rest[close.upperBound...]
-        }
-        return out + rest
-    }
-
-    private static func stripLineComments(from source: String) -> String {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-            var quoted = false
-            var previous: Character = " "
-            for (offset, character) in line.enumerated() {
-                if character == "\"", previous != "\\" { quoted.toggle() }
-                if character == "/", previous == "/", !quoted {
-                    return String(line.prefix(max(0, offset - 1)))
-                }
-                previous = character
-            }
-            return String(line)
-        }
-        .joined(separator: "\n")
-    }
 }

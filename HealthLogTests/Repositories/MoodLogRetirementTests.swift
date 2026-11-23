@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// CU-14 — the moodLog bridge is retired; its provenance is not.
+/// The moodLog bridge is retired; its provenance is not.
 ///
 /// The server removed the integration in v1.32.33: the routes
 /// `/api/integrations/moodlog/*` and `/api/settings/moodlog` are gone,
@@ -134,7 +134,7 @@ struct MoodLogRetirementTests {
     }
 }
 
-/// CU-14 — an absent integration provider is a legal state.
+/// An absent integration provider is a legal state.
 ///
 /// The plan feared an `integrations[]` index break on
 /// `GET /api/integrations/status`. That route is not consumed anywhere in the
@@ -167,7 +167,7 @@ struct ProviderStatusAbsenceTests {
         #expect(decoded.health == nil)
     }
 
-    /// #139 — the needs-attention signal moved from the deprecated ledger
+    /// The needs-attention signal moved from the deprecated ledger
     /// `state` to `health`. The legacy word alone no longer says anything.
     @Test("a parked connection reads from health; the legacy state word alone does not")
     func parkedStateIsHonest() throws {

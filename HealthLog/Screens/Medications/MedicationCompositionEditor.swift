@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// SUPP-EDIT (1.5.0, #131 P3) — "Was eine Einheit enthält": the form that
+/// "Was eine Einheit enthält": the form that
 /// sets a supplement's composition per tablet or capsule.
 ///
 /// Pushed on the medication page's own navigation stack, not presented: the
@@ -14,8 +14,6 @@ struct MedicationCompositionEditor: View {
     let offersLabelPhoto: Bool
     let onSaved: () async -> Void
 
-    @Environment(\.dismiss) private var dismiss
-
     init(model: MedicationCompositionEditorModel, offersLabelPhoto: Bool, onSaved: @escaping () async -> Void) {
         _model = State(initialValue: model)
         self.offersLabelPhoto = offersLabelPhoto
@@ -28,52 +26,48 @@ struct MedicationCompositionEditor: View {
             case .loading:
                 Section {
                     // A real view, so the `.task` below has something to hang on.
-                    HStack { ProgressView() }
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                    HLInlineProgress()
+                        .frame(maxWidth: .infinity, minHeight: HLHitTarget.minimum)
                         .accessibilityLabel(Text("medications.composition.edit.loading"))
                 }
+                .hlFormRowSurface()
             case let .disabled(reason):
                 Section {
                     FeatureDisabledCard(variant: .inline, reason: reason)
                         .accessibilityIdentifier("medications.composition.edit.disabled")
                 }
+                .hlFormRowSurface()
             case .failed:
                 Section {
                     Text("medications.composition.edit.catalogFailed")
                         .foregroundStyle(HLText.secondary)
-                    Button("Retry") {
+                    Button(HLControlWord.retry.key) {
                         Task { await model.retryCatalog() }
                     }
                     .accessibilityIdentifier("medications.composition.edit.retry")
                 }
+                .hlFormRowSurface()
             case let .loaded(catalog):
                 if offersLabelPhoto { SupplementLabelCapture(model: model) }
                 if let proposal = model.proposal { proposalSection(proposal) }
                 rowsSection(catalog)
             }
         }
+        .hlPageMargins()
         .task { await model.loadCatalog() }
         .onDisappear { model.cancelRead() }
         .navigationTitle(Text("medications.composition.edit.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                if model.isSaving {
-                    ProgressView()
-                } else {
-                    Button("Save") {
-                        Task {
-                            if await model.save() {
-                                await onSaved()
-                                dismiss()
-                            }
-                        }
-                    }
-                    .disabled(!model.canSave)
-                    .accessibilityIdentifier("medications.composition.edit.save")
-                }
-            }
-        }
+        // A pushed edit page: the check mark in the bar of the stack it is in,
+        // the page goes back once the composition is saved and re-read.
+        .hlConfirmBar(
+            .save(isEnabled: model.canSave) {
+                guard await model.save() else { return false }
+                await onSaved()
+                return true
+            },
+            identifier: "medications.composition.edit.save"
+        )
     }
 
     // MARK: - Proposal
@@ -85,15 +79,13 @@ struct MedicationCompositionEditor: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let note = proposal.servingNote {
                 Text(String(localized: "medications.composition.label.servingNote \(note)"))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.rowSubtitle)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !proposal.unmatched.isEmpty {
                 VStack(alignment: .leading, spacing: HLSpace.xxs) {
                     Text("medications.composition.label.unmatched")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                     ForEach(Array(proposal.unmatched.enumerated()), id: \.offset) { _, text in
                         Text(verbatim: text)
                             .font(.hlCaption)
@@ -104,6 +96,7 @@ struct MedicationCompositionEditor: View {
                 .accessibilityIdentifier("medications.composition.label.unmatchedList")
             }
         }
+        .hlFormRowSurface()
         .accessibilityIdentifier("medications.composition.label.proposal")
     }
 
@@ -119,10 +112,8 @@ struct MedicationCompositionEditor: View {
                 MedicationCompositionRowEditor(model: model, row: row, catalog: catalog)
                     .accessibilityIdentifier("medications.composition.edit.row.\(index)")
             }
-            Button {
+            HLSettingsActionRow(title: "medications.composition.edit.addRow", presents: .create) {
                 model.addRow()
-            } label: {
-                Label("medications.composition.edit.addRow", systemImage: "plus")
             }
             .disabled(!model.canAddRow)
             .accessibilityIdentifier("medications.composition.edit.addRow")
@@ -132,11 +123,12 @@ struct MedicationCompositionEditor: View {
                     .accessibilityIdentifier("medications.composition.edit.error")
             }
         } header: {
-            Text("medications.composition.edit.rowsHeader")
+            HLSectionHeader("medications.composition.edit.rowsHeader")
         } footer: {
             Text("medications.composition.edit.footer")
                 .font(.hlCaption)
         }
+        .hlFormRowSurface()
     }
 }
 
@@ -158,9 +150,11 @@ struct MedicationCompositionRowEditor: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(alignment: .firstTextBaseline) {
-                    nutrientPicker
+                // The red minus stands first, as in the system's edit mode,
+                // so it never meets the picker's chevron.
+                HStack(spacing: HLSpace.sm) {
                     removeButton(showsTitle: false)
+                    nutrientPicker
                 }
             }
             let layout = dynamicTypeSize.isAccessibilitySize
@@ -176,6 +170,8 @@ struct MedicationCompositionRowEditor: View {
                 .accessibilityLabel(Text(String(localized: "medications.composition.edit.amountOf \(name)")))
                 unitPicker
             }
+            // The amount line starts under the nutrient, past the minus.
+            .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : HLHitTarget.minimum + HLSpace.sm)
             if dynamicTypeSize.isAccessibilitySize { removeButton(showsTitle: true) }
             if row.needsCheck {
                 Text("medications.composition.label.lowConfidence")
@@ -192,21 +188,18 @@ struct MedicationCompositionRowEditor: View {
         .padding(.vertical, HLSpace.xxs)
     }
 
+    /// Takes a line out of the unsaved draft; nothing stored is deleted
+    /// until the page is saved, and leaving it keeps the stored lines.
     private func removeButton(showsTitle: Bool) -> some View {
-        Button(role: .destructive) {
-            model.remove(row.id)
-        } label: {
+        let remove = HLDeleteAction.undoable { model.remove(row.id) }
+        return Group {
             if showsTitle {
-                Label(String(localized: "medications.composition.edit.removeRow \(name)"), systemImage: "minus.circle")
+                HLDeleteButton("medications.composition.edit.removeRow \(name)", form: .row, action: remove)
             } else {
-                Image(systemName: "minus.circle")
-                    .font(.hlIcon(HLIconSize.md))
+                HLDeleteButton("medications.composition.edit.removeRow \(name)", form: .remove, action: remove)
             }
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(HLColor.statusBad)
         .disabled(model.isBusy)
-        .accessibilityLabel(Text(String(localized: "medications.composition.edit.removeRow \(name)")))
     }
 
     private var entry: NutrientServerCatalogEntry? {
@@ -219,26 +212,22 @@ struct MedicationCompositionRowEditor: View {
 
     private var nutrientPicker: some View {
         let taken = model.takenCodes(except: row.id)
-        return Picker(
-            "medications.composition.edit.nutrient",
-            selection: Binding(get: { row.nutrient }, set: { model.choose(nutrient: $0, for: row.id) })
-        ) {
+        return Picker(selection: Binding(get: { row.nutrient }, set: { model.choose(nutrient: $0, for: row.id) })) {
             if row.nutrient.isEmpty {
                 Text("medications.composition.edit.choose").tag("")
             }
             ForEach(catalog.ingredientEntries.filter { !taken.contains($0.code) }) { option in
                 Text(verbatim: option.displayName).tag(option.code)
             }
+        } label: {
+            HLRowTitle("medications.composition.edit.nutrient")
         }
         .pickerStyle(.menu)
         .disabled(model.isBusy)
     }
 
     private var unitPicker: some View {
-        Picker(
-            "medications.composition.edit.unit",
-            selection: Binding(get: { row.unit }, set: { model.setUnit($0, for: row.id) })
-        ) {
+        Picker(selection: Binding(get: { row.unit }, set: { model.setUnit($0, for: row.id) })) {
             let units = entry?.offeredUnits ?? []
             if !units.contains(row.unit) {
                 Text(verbatim: row.unit.isEmpty ? "" : NutrientDisplay.ingredientUnitGlyph(row.unit)).tag(row.unit)
@@ -246,6 +235,8 @@ struct MedicationCompositionRowEditor: View {
             ForEach(units, id: \.self) { unit in
                 Text(verbatim: NutrientDisplay.ingredientUnitGlyph(unit)).tag(unit)
             }
+        } label: {
+            HLRowTitle("medications.composition.edit.unit")
         }
         .pickerStyle(.menu)
         .labelsHidden()

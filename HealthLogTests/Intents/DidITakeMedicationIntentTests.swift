@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B187 QOL-1** — coverage for the per-medication READ intent
+/// Coverage for the per-medication READ intent
 /// ("Did I take Lisinopril?").
 ///
 /// Two layers:

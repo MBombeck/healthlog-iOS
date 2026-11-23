@@ -37,7 +37,7 @@ struct DailyDigestSignalLineTests {
         """#
     }
 
-    // MARK: - signalLine (#121)
+    // MARK: - signalLine
 
     @Test("signalLine with only a delta renders the delta, not the topSignal headline")
     func deltaOnlyLine() throws {
@@ -148,7 +148,7 @@ struct DailyDigestSignalLineTests {
         #expect(again.lead == "Pulse is settling")
     }
 
-    // MARK: - Personal bands as delivered (#121)
+    // MARK: - Personal bands as delivered
 
     /// v1.40.3 gives personal bands a minimum width per metric, so `low`/`high`
     /// need not sit symmetrically around `center`. The app reads them as sent.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pure, view-free helpers behind the intraday-pulse day curve (P7).
+/// Pure, view-free helpers behind the intraday-pulse day curve.
 ///
 /// Everything here is deterministic value math over ``IntradayPulseDTO`` so the
 /// honesty rules the surface depends on — never interpolate across a gap, never
@@ -18,6 +18,9 @@ enum IntradayPulseMath {
         let clamped = Swift.max(0, minute)
         let hour = clamped / 60
         let rest = clamped % 60
+        // Wall time of the server's bucket with the axis edge as "24:00"; a
+        // clock helper would wrap it to midnight and shift the axis.
+        // swiftlint:disable:next hl_date_via_helper
         return String(format: "%02d:%02d", hour, rest)
     }
 
@@ -92,6 +95,8 @@ enum IntradayPulseMath {
     /// A `yyyy-MM-dd` calendar for `zone`. POSIX locale + Gregorian so the key
     /// never picks up a device calendar/locale quirk.
     private static func formatter(for zone: TimeZone) -> DateFormatter {
+        // A day key for the server, never shown on screen.
+        // swiftlint:disable:next hl_date_via_helper
         let formatter = DateFormatter()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone

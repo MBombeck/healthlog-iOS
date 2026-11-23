@@ -38,11 +38,11 @@ public final class DocumentChatStore {
     public enum ErrorState: Equatable, Sendable {
         case notIndexed
         case consentRequired
-        /// #115 · 0.2 — the operator switched reading documents off.
+        /// The operator switched reading documents off.
         case operatorDisabled
-        /// #115 · 0.2 — not admitted for this record.
+        /// Not admitted for this record.
         case recordNotPermitted
-        /// #115 · 0.2 — no provider can read documents.
+        /// No provider can read documents.
         case noProvider
         case limitReached
         case generic
@@ -202,7 +202,7 @@ public final class DocumentChatStore {
     }
 
     private func applyStreamError(_ error: Error) {
-        // #115 · 0.2 — one mapping for every failure shape: a typed stream
+        // One mapping for every failure shape: a typed stream
         // error, or a transport error the repository's open-mapping types
         // (429, `notIndexed`, consent, the v1.39 document-AI refusals).
         let typed = (error as? DocumentChatError)

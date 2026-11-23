@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **b182 (AUDIT-COACH-PARITY F1 + F2) — Coach re-engage + onboarding carry-through.**
+/// **Coach re-engage + onboarding carry-through.**
 ///
 /// Pins the `AIConsentStore` state machine that backs:
 ///   - **F1 re-engage:** a prior decline silences the shell auto-gate
@@ -22,7 +22,7 @@ struct CoachConsentReengageTests {
         return AIConsentStore(keychain: keychain, defaults: defaults)
     }
 
-    // MARK: - F1 — declined Coach has a path back
+    // MARK: - Declined Coach has a path back
 
     @Test("a decline silences the auto-gate but leaves aiMode .none (no surface)")
     func declineSilencesButStaysNone() throws {
@@ -60,7 +60,7 @@ struct CoachConsentReengageTests {
         #expect(store.revision > revBefore) // body re-renders
     }
 
-    // MARK: - F2 — onboarding online pick carries through to a grant
+    // MARK: - Onboarding online pick carries through to a grant
 
     @Test("onboarding online pick with a configured provider records an intent (stays .none)")
     func onboardingOnlinePickRecordsIntent() throws {

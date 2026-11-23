@@ -5,57 +5,13 @@ public extension MeasurementsRepository {
     /// Optimistic create. BP wird zu zwei Wire-Records aufgeteilt — beide teilen
     /// `externalId` (Domain-Measurement-ID), damit Server sie als Paar erkennen kann.
     func create(_ measurement: Measurement) async throws -> Measurement {
-        if isStandalone, let standalone {
-            // Standalone: persist to the local mirror so the lists read it back
-            // immediately. No network, no outbox. Returns the canonical row with
-            // the mirror's externalId swapped onto the domain id.
-            let systolic: Double?
-            let diastolic: Double?
-            switch measurement.value {
-            case let .bloodPressure(sys, dia):
-                systolic = sys
-                diastolic = dia
-            case .scalar:
-                systolic = nil
-                diastolic = nil
-            }
-            let snap = try await standalone.local.standaloneAddMeasurement(
-                kind: measurement.kind.rawValue,
-                value: measurement.value.primaryComponent,
-                unit: measurement.kind.unit,
-                systolic: systolic,
-                diastolic: diastolic,
-                recordedAt: measurement.recordedAt,
-                note: measurement.note
-            )
-            return snap.toDomainMeasurement()
-        }
         let idempotencyKey = IdempotencyKey()
-        do {
+        let payload = try encoder.encode(measurement)
+        let op = OutboxQueue.Operation(kind: .createMeasurement, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
             let saved = try await postMeasurement(measurement, idempotencyKey: idempotencyKey)
             await invalidateAfterWrite(kind: measurement.kind)
             return saved
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(measurement)
-            do {
-                try await outbox.enqueue(.init(
-                    kind: .createMeasurement,
-                    payload: payload,
-                    idempotencyKey: idempotencyKey.raw
-                ))
-            } catch {
-                // G-2 enqueue-failure honesty — the network failure AND the
-                // durable enqueue both failed (worst when the outbox degraded
-                // to the in-memory inert floor). Nothing is queued: surfacing
-                // the original retriable error would make the store keep the
-                // optimistic "saved/queued" state for a write that is now
-                // permanently lost. Throw `.notPersisted` so the caller rolls
-                // back / shows an honest "couldn't save". Secondary failure is
-                // logged sanitized for triage.
-                HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-                throw HLError.notPersisted(String(describing: err))
-            }
-            throw err
         }
     }
 
@@ -82,37 +38,16 @@ public extension MeasurementsRepository {
     /// invoking this method (so HK-mirror stays in lockstep with server).
     func delete(id: String) async throws {
         try Self.refuseSyntheticRowID(id)
-        if isStandalone, let standalone {
-            // The list's row id is the mirror's externalId (see
-            // `LocalMeasurementSnapshot.toDomainMeasurement`).
-            try await standalone.local.standaloneDeleteMeasurement(externalId: id)
-            return
-        }
         let idempotencyKey = IdempotencyKey()
-        do {
+        let payload = try encoder.encode(OutboxQueue.Payloads.DeleteMeasurement(id: id))
+        let op = OutboxQueue.Operation(kind: .deleteMeasurement, payload: payload, idempotencyKey: idempotencyKey.raw)
+        try await outbox.writeAhead(op) { [self] in
             try await deleteRequest(id: id, idempotencyKey: idempotencyKey)
             await invalidateAfterWriteAllKinds()
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(OutboxQueue.Payloads.DeleteMeasurement(id: id))
-            do {
-                try await outbox.enqueue(.init(
-                    kind: .deleteMeasurement,
-                    payload: payload,
-                    idempotencyKey: idempotencyKey.raw
-                ))
-            } catch {
-                // G-2 — durable enqueue failed; the delete is neither on the
-                // server nor queued. Signal honestly so the caller surfaces a
-                // "couldn't save" rather than a false "queued" for a delete
-                // that will silently reappear on next load.
-                HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-                throw HLError.notPersisted(String(describing: err))
-            }
-            throw err
         }
     }
 
-    /// #115 R3 — a `day:` / `hour:` / `sleep:` key is a bucket the server
+    /// A `day:` / `hour:` / `sleep:` key is a bucket the server
     /// synthesised, not a row (`Measurement+SyntheticRow.swift`): `PUT` and
     /// `DELETE` on it answer 404. The UI already offers no edit for such a row;
     /// this refuses it before the wire (and before the Outbox), so no path can
@@ -139,7 +74,7 @@ public extension MeasurementsRepository {
     /// `value`/`measuredAt`/`notes` fields), so the partial `MeasurementPatch`
     /// body is unchanged — only the verb differs. Mirrors `MoodRepository`.
     ///
-    /// **BP-pair semantics (T-1):** Wenn `kind == .bloodPressure` und der
+    /// **BP-pair semantics:** Wenn `kind == .bloodPressure` und der
     /// Patch beide Werte (`value` = systolic, `diastolic` = diastolic) trägt
     /// und der Caller den diastolischen Peer kennt (`diastolicId != nil`),
     /// fanoutet diese Methode in ZWEI PUT-Calls (sys-row + dia-row) mit
@@ -158,62 +93,24 @@ public extension MeasurementsRepository {
         diastolicId: String? = nil
     ) async throws -> Measurement {
         try Self.refuseSyntheticRowID(id)
-        if isStandalone, let standalone {
-            try await standalone.local.standaloneUpdateMeasurement(
-                externalId: id,
-                value: patch.value ?? 0,
-                unit: kind.unit,
-                systolic: kind == .bloodPressure ? patch.value : nil,
-                diastolic: kind == .bloodPressure ? patch.diastolic : nil,
-                recordedAt: patch.measuredAt ?? .now,
-                note: patch.notes
-            )
-            let updated = try await standalone.local.standaloneMeasurements(kind: kind.rawValue, limit: nil)
-                .first { $0.externalId == id }
-            return updated?.toDomainMeasurement() ?? Measurement(
-                id: id,
-                kind: kind,
-                recordedAt: patch.measuredAt ?? .now,
-                value: kind == .bloodPressure
-                    ? .bloodPressure(systolic: patch.value ?? 0, diastolic: patch.diastolic ?? 0)
-                    : .scalar(patch.value ?? 0),
-                note: patch.notes,
-                source: .manual,
-                externalUUID: id
-            )
-        }
         let idempotencyKey = IdempotencyKey()
-        do {
-            return try await patchRequest(
+        let payload = try encoder.encode(OutboxQueue.Payloads.UpdateMeasurement(
+            id: id,
+            patch: patch,
+            kind: kind,
+            diastolicId: diastolicId,
+            diastolicValue: patch.diastolic,
+            glucoseContext: patch.glucoseContext
+        ))
+        let op = OutboxQueue.Operation(kind: .updateMeasurement, payload: payload, idempotencyKey: idempotencyKey.raw)
+        return try await outbox.writeAhead(op) { [self] in
+            try await patchRequest(
                 id: id,
                 patch: patch,
                 kind: kind,
                 diastolicId: diastolicId,
                 idempotencyKey: idempotencyKey
             )
-        } catch let err as HLError where err.shouldPersistToOutbox {
-            let payload = try encoder.encode(OutboxQueue.Payloads.UpdateMeasurement(
-                id: id,
-                patch: patch,
-                kind: kind,
-                diastolicId: diastolicId,
-                diastolicValue: patch.diastolic,
-                glucoseContext: patch.glucoseContext
-            ))
-            do {
-                try await outbox.enqueue(.init(
-                    kind: .updateMeasurement,
-                    payload: payload,
-                    idempotencyKey: idempotencyKey.raw
-                ))
-            } catch {
-                // G-2 — durable enqueue failed; the edit is neither on the
-                // server nor queued. Signal `.notPersisted` so the caller rolls
-                // the optimistic patch back instead of claiming "queued".
-                HLLog.outbox.error("Outbox enqueue failed: \(LogSanitizer.redact(String(describing: error)))")
-                throw HLError.notPersisted(String(describing: err))
-            }
-            throw err
         }
     }
 
@@ -239,7 +136,8 @@ public extension MeasurementsRepository {
             measuredAt: patch.measuredAt,
             notes: patch.notes,
             diastolic: diastolicValue,
-            glucoseContext: glucoseContext
+            glucoseContext: patch.sendsGlucoseContext ? patch.glucoseContext : glucoseContext,
+            sendsGlucoseContext: patch.sendsGlucoseContext
         )
         return try await patchRequest(
             id: id,
@@ -368,20 +266,20 @@ public extension MeasurementsRepository {
             .measurementSeries(kind: kind, days: 90),
             .measurementSeries(kind: kind, days: 180),
             .measurementSeries(kind: kind, days: 365),
-            // audit-v0162 M-4 — the per-kind has-data availability slice (5min
+            // The per-kind has-data availability slice (5min
             // TTL) was absent from every invalidation set, so the FIRST-EVER
             // reading of a kind didn't surface its tab-strip pill for up to 5 min
             // — the exact symptom the key was created to fix. Drop it on write.
             .measurementAvailability,
             // v0.14.8 INV-home-compliance-slot — `.dashboardSummary` is
-            // profile-tz day-anchored. AUD-3 D-3: anchor on the SERVER-PROFILE
+            // profile-tz day-anchored. Anchor on the SERVER-PROFILE
             // day (the same zone `DashboardStore` reads with) so this
             // invalidation hits the exact row the dashboard serves — not the
             // device-tz day, which misses for TZ-mismatched users / near midnight.
             .dashboardSummary(day: MedicationDayKey.string(timeZone: profileTimeZone)),
             .healthScore
         ]
-        // audit-v0162 M-3 — the kind-scoped recent page (`.measurementsRecentKind`,
+        // The kind-scoped recent page (`.measurementsRecentKind`,
         // 45s TTL) backs each metric's chart-detail drill-down but was never
         // invalidated, so a freshly-logged BP/glucose reading was missing from
         // that page for up to 45 s. Drop the written kind's page(s).
@@ -389,7 +287,7 @@ public extension MeasurementsRepository {
         await swr.invalidate(keys)
     }
 
-    /// audit-v0162 M-3 — the `.measurementsRecentKind` keys a write of `kind`
+    /// The `.measurementsRecentKind` keys a write of `kind`
     /// must drop: the chart-detail limits (`recent(kind:)` uses 7 / 400 / 2000)
     /// in both the plain and `groupBy=day` cache-type shapes. The management-only
     /// `:src:` variants stay TTL-bounded (out of the chart-detail hot path).
@@ -414,9 +312,9 @@ public extension MeasurementsRepository {
         var keys: [CacheKey] = [
             .measurementsRecent(limit: 50),
             .measurementsRecent(limit: 400),
-            // AUD-3 D-3 — profile-TZ day-anchored (see invalidateAfterWrite).
+            // Profile-TZ day-anchored (see invalidateAfterWrite).
             .dashboardSummary(day: MedicationDayKey.string(timeZone: profileTimeZone)),
-            // audit-v0162 M-4 — availability slice (see invalidateAfterWrite).
+            // Availability slice (see invalidateAfterWrite).
             .measurementAvailability,
             .healthScore
         ]
@@ -429,7 +327,7 @@ public extension MeasurementsRepository {
                 .measurementSeries(kind: kind, days: 180),
                 .measurementSeries(kind: kind, days: 365)
             ])
-            // audit-v0162 M-3 — drop every kind's chart-detail page too (an
+            // Drop every kind's chart-detail page too (an
             // id-only / bulk / HK-reconcile delete carries no kind context).
             keys.append(contentsOf: Self.kindScopedRecentKeys(for: kind))
         }
@@ -452,7 +350,7 @@ public extension MeasurementsRepository {
                 )
             )
         }
-        // BP is two sequential POSTs to the same path. T3 / public #15 — the
+        // BP is two sequential POSTs to the same path. The
         // server's replay cache is keyed on (user, key, method, path), never on
         // the body, so a key shared by both halves made the diastolic POST
         // replay the systolic response and the diastolic row was never written.
@@ -472,7 +370,7 @@ public extension MeasurementsRepository {
         }
         // Aggregiere zurück zu Domain — für BP merge sys+dia auf demselben Timestamp.
         //
-        // S1 / public #11 — the returned id is the id the LIST will carry for
+        // The returned id is the id the LIST will carry for
         // this row, because the create-time Apple-Health write stamps it into
         // `HKMetadataKeyExternalUUID` and the server→Health mirror dedups on it.
         // For BP the list merges the pair under the SYSTOLIC id

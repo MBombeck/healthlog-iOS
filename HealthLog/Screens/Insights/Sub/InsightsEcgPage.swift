@@ -21,114 +21,109 @@ import SwiftUI
 /// uploaded yet — and to hand over the archive-import path that works today.
 ///
 /// **Lives inside the Insights pager.** Owns no `NavigationStack` (the
-/// container does). Its inner `ScrollView` reports its offset to
-/// `InsightsStripVisibility`; header anatomy is the shared `InsightsPageHeader`
-/// so the top region never jumps across the pager.
+/// container does). Header anatomy is the shared `HLTabHeader` so the top
+/// region never jumps across the pager.
 struct InsightsEcgPage: View {
     @Environment(EcgStore.self) private var store
-    /// The container's hide-on-scroll model — **OPTIONAL** for the same reason
-    /// `InsightsMetricScreen` reads it optionally: since the pulse-page
-    /// cross-link (P8 B-5) this page is ALSO pushed from stacks that carry no
-    /// Insights tab strip (e.g. the Dashboard drill-down into the pulse page).
-    /// Present in the pager → the offset report drives the strip; absent →
-    /// harmless no-op. Reading it non-optionally would trap there.
-    @Environment(InsightsStripVisibility.self) private var stripVisibility: InsightsStripVisibility?
-    /// CU-37 — the empty state routes to Settings → Apple-Health-Import. Read
-    /// OPTIONALLY for the same reason as `stripVisibility`: this page is pushed
+    /// The empty state routes to Settings → Apple-Health-Import. Read
+    /// OPTIONALLY: this page is pushed
     /// from several stacks (Insights pager, Dashboard pulse drill-down) and is
     /// constructed bare in tests and previews, where a non-optional read traps.
     @Environment(AppRouter.self) private var router: AppRouter?
-    /// The archive import is a SERVER endpoint — standalone has no route for it.
-    @Environment(BackendAvailability.self) private var backend: BackendAvailability?
-    /// GH #74 — container access for the device-local ECG upload switch. The
+    /// Container access for the device-local ECG upload switch. The
     /// `appContainer` environment key is already optional, so this page keeps
     /// building bare in tests and previews.
     @Environment(\.appContainer) private var container
 
     var body: some View {
-        Group {
-            if store.hasRecordings {
-                content
-            } else {
-                emptyState
+        content
+            .task {
+                if store.list == nil { await store.load() }
             }
-        }
-        .background(HLSurface.primary.ignoresSafeArea())
-        .task {
-            if store.list == nil { await store.load() }
-        }
     }
 
-    private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HLSpace.lg) {
-                // 1.4 B2 — title and list. The sub-line and the intro paragraph
-                // said three times what the attribution at the foot of the list
-                // says once.
-                InsightsPageHeader("insights.ecg.title", accessibilityIdentifierSuffix: "ecg")
+    /// In the Insights pager the head is pinned above the strip.
+    @Environment(\.insightsInPager) private var inPager
 
+    /// The page's head: pinned above the strip in the pager, at the top
+    /// of the content elsewhere.
+    private var pageHeader: some View {
+        HLTabHeader(
+            "insights.ecg.title",
+            titleIdentifier: "insights.page.header.title.ecg",
+            actions: [.info(InsightsSpecialPageInfo.ecg(), identifier: "insights.ecg.info")]
+        )
+    }
+
+    /// The page stands in every state, so the title does not jump when the
+    /// recordings arrive.
+    private var content: some View {
+        HLPage {
+            // Title and list. The attribution at the foot of the list says
+            // what a sub-line would repeat. No coach here: the page shows a
+            // device's result and must not invite a reading of the trace.
+            if !inPager {
+                pageHeader
+            }
+            HLStateContainer(phase) {
+                HLSkeleton(.rect, height: 120, cornerRadius: HLRadius.card)
+            } empty: {
+                emptyState
+            } content: {
                 recordingsList
 
                 if store.loadFailed {
                     Text("insights.ecg.loadError")
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HLSyncStatusFooter(screenLoading: store.isLoading)
             }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.lg)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            geometry.contentOffset.y
-        } action: { _, newOffset in
-            stripVisibility?.report(offset: newOffset)
-        }
-        .hlScrollEdgeSoft()
         .hlPullToRefresh { await store.refresh() }
+        // In the pager the head stands fixed at the top, over the strip.
+        .insightsPageHead(enabled: inPager) { pageHeader }
+    }
+
+    /// Recordings, the first read, or nothing on record. The empty state
+    /// stands in the free area like on every page of the pager.
+    private var phase: HLLoadPhase {
+        if store.hasRecordings { return .loaded }
+        if store.list == nil, store.isLoading { return .loading }
+        return .empty
     }
 
     private var recordingsList: some View {
-        HLCard {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(store.recordings.enumerated()), id: \.element.id) { index, recording in
-                    row(for: recording)
-                    if index < store.recordings.count - 1 {
-                        Divider().overlay(HLColor.separator)
-                    }
-                }
-                // 1.4 B2 — who produced these results, at the foot of the
-                // list it attributes, with its references.
-                EcgAttributionFooter()
-                    .padding(.top, HLSpace.sm)
+        HLCard(layout: .rows) {
+            ForEach(store.recordings, id: \.id) { recording in
+                row(for: recording)
             }
+            // Who produced these results, at the foot of the
+            // list it attributes, with its references.
+            EcgAttributionFooter()
+                .padding(.vertical, HLSpace.sm)
         }
         .accessibilityIdentifier("insights.ecg.list")
     }
 
     /// One recording row. Tappable ONLY when a waveform exists — a `ts-`
     /// fallback event carries a verdict but no signal, so its row is a plain
-    /// line rather than a push into an empty screen.
+    /// line rather than a push into an empty screen. A data row: the whole
+    /// row opens, without a chevron.
     @ViewBuilder
     private func row(for recording: EcgRecordingDTO) -> some View {
         if EcgPresentation.isOpenable(recording) {
-            NavigationLink {
-                EcgDetailScreen(recording: recording)
-            } label: {
-                EcgRecordingRow(recording: recording, showsChevron: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("insights.ecg.row.\(recording.id)")
+            EcgRecordingRow(recording: recording)
+                .hlRowLink { EcgDetailScreen(recording: recording) }
+                .accessibilityIdentifier("insights.ecg.row.\(recording.id)")
         } else {
-            EcgRecordingRow(recording: recording, showsChevron: false)
+            EcgRecordingRow(recording: recording)
                 .accessibilityIdentifier("insights.ecg.row.\(recording.id)")
         }
     }
 
-    /// Calm, **honest** empty state (CU-37).
+    /// Calm, **honest** empty state.
     ///
     /// The copy this replaced said recordings "sync from a compatible
     /// single-lead device" — which implied a transfer that did not exist. An
@@ -157,29 +152,34 @@ struct InsightsEcgPage: View {
     /// notice ``EcgDisclaimerBlock`` speaks about a shown device verdict, and
     /// there is none. Nothing on this branch interprets, classifies or judges
     /// anything; it only says what is and is not in the record.
+    ///
+    /// One lockup, like every empty page: symbol, title, the honest sentence,
+    /// then the ways in as buttons of one style, the first-hand reason (the
+    /// switched-off upload) above the archive. The archive's three steps
+    /// open on request under the buttons, quiet, without a card around them.
     private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: HLSpace.lg) {
-                HLEmptyState(
-                    icon: "waveform.path.ecg",
-                    title: "insights.ecg.empty.title",
-                    message: "insights.ecg.empty.body"
-                )
-
+        HLEmptyState(
+            icon: "waveform.path.ecg",
+            title: "insights.ecg.empty.title",
+            message: "insights.ecg.empty.body"
+        ) {
+            VStack(spacing: HLLayout.buttonGap) {
                 uploadOffNote
-
-                importPathCard
+                HLButton(
+                    "insights.ecg.empty.cta",
+                    systemImage: "tray.and.arrow.down.fill",
+                    variant: .secondary
+                ) {
+                    router?.requestAppleHealthImport()
+                }
+                .accessibilityIdentifier("insights.ecg.empty.importCta")
+                importSteps
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.xxl)
-            .padding(.bottom, HLSpace.xxxl)
         }
-        .refreshable { await store.refresh() }
         .accessibilityIdentifier("insights.ecg.empty")
     }
 
-    /// **GH #74 — the second reason this surface can be empty, and the only one
+    /// **The second reason this surface can be empty, and the only one
     /// the user can do something about.**
     ///
     /// Since server v1.35.3 there IS a live path from Apple Health to the
@@ -189,29 +189,19 @@ struct InsightsEcgPage: View {
     /// second one has an action behind it.
     ///
     /// **UI-Standard R2, category "Leerzustand": one line, and only when it is
-    /// true.** Switch on → the line is absent; there is nothing to say, and a
-    /// "the upload is on" reassurance would be exactly the kind of state
-    /// narration R2 forbids. Switch off → one sentence naming the condition,
-    /// plus the way to the switch rather than a sentence about where it is
-    /// (R4). No server → absent as well: the switch itself is hidden there,
-    /// and pointing at a control that does not exist would be a new dishonesty
-    /// in the place built to remove one.
+    /// true.** Switch on → the line is absent. Switch off → one sentence
+    /// naming the condition, plus the way to the switch (R4).
     @ViewBuilder
     private var uploadOffNote: some View {
-        if backend?.hasServer != false, container?.ecgHealthSyncStore.enabled == false {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
+        if container?.ecgHealthSyncStore.enabled == false {
+            VStack(spacing: HLLayout.buttonGap) {
                 Text("insights.ecg.empty.uploadOff")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                    .hlText(.factLabel)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                // UI-Standard R9: eine nachgeordnete Vollbreiten-Aktion ist
-                // `.secondary`. Nicht `.primary` — der abschliessende Griff
-                // dieser Fläche ist der Archiv-Import darunter, und zwei laute
-                // Knöpfe übereinander sagen dem Nutzer nicht, welcher zuerst.
                 HLButton(
-                    String(localized: "insights.ecg.empty.uploadOffCta"),
-                    icon: "heart.text.square",
+                    "insights.ecg.empty.uploadOffCta",
+                    systemImage: "heart.text.square",
                     variant: .secondary
                 ) {
                     router?.requestAppleHealthSettings()
@@ -222,46 +212,22 @@ struct InsightsEcgPage: View {
         }
     }
 
-    /// The route that works today, spelled out and walkable.
-    ///
-    /// The CTA is dropped without a server (standalone): the archive import is a
-    /// server endpoint, so naming a step that cannot run would recreate exactly
-    /// the dishonesty this empty state exists to remove. The steps themselves
-    /// stay — they are still true of where recordings come from.
-    ///
-    /// 1.4 B2 — the three steps open on request; the card shows its title and
-    /// the one action.
-    private var importPathCard: some View {
-        HLCard(style: .ghost) {
+    /// The archive route spelled out: three steps behind its title.
+    private var importSteps: some View {
+        DisclosureGroup {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: HLSpace.md) {
-                        pathStep(number: 1, text: "insights.ecg.empty.pathStep1")
-                        pathStep(number: 2, text: "insights.ecg.empty.pathStep2")
-                        pathStep(number: 3, text: "insights.ecg.empty.pathStep3")
-                    }
-                    .padding(.top, HLSpace.sm)
-                } label: {
-                    Text("insights.ecg.empty.pathTitle")
-                        .font(.hlHeadline)
-                        .foregroundStyle(HLText.primary)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                .tint(HLText.secondary)
-
-                if backend?.hasServer != false {
-                    HLButton(
-                        String(localized: "insights.ecg.empty.cta"),
-                        icon: "tray.and.arrow.down.fill",
-                        variant: .restrained
-                    ) {
-                        router?.requestAppleHealthImport()
-                    }
-                    .accessibilityIdentifier("insights.ecg.empty.importCta")
-                }
+                pathStep(number: 1, text: "insights.ecg.empty.pathStep1")
+                pathStep(number: 2, text: "insights.ecg.empty.pathStep2")
+                pathStep(number: 3, text: "insights.ecg.empty.pathStep3")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, HLSpace.sm)
+        } label: {
+            Text("insights.ecg.empty.pathTitle")
+                .font(.hlSubhead.weight(.semibold))
+                .foregroundStyle(HLText.secondary)
         }
+        .tint(HLText.secondary)
+        .padding(.top, HLSpace.xs)
         .accessibilityIdentifier("insights.ecg.empty.path")
     }
 
@@ -273,8 +239,7 @@ struct InsightsEcgPage: View {
                 .frame(width: 18, alignment: .center)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -284,34 +249,18 @@ struct InsightsEcgPage: View {
 
 // MARK: - Row
 
-/// One list row: when it was recorded, the DEVICE's result, and the device's
-/// average heart rate. Every value is rendered verbatim — nothing is recomputed.
+/// One list row: when it was recorded, the DEVICE's result under it, and the
+/// device's average heart rate on the right. Every value is rendered verbatim
+/// — nothing is recomputed.
 struct EcgRecordingRow: View {
     let recording: EcgRecordingDTO
-    var showsChevron: Bool = false
 
     var body: some View {
-        HStack(spacing: HLSpace.md) {
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
-                Text(HLDateFormat.dateTime(recording.recordedAt))
-                    .font(.hlHeadline)
-                    .foregroundStyle(HLText.primary)
-                Text(EcgPresentation.resultLabel(for: recording.verdict))
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
-                if recording.averageHeartRate != nil {
-                    Text(EcgPresentation.bpmValue(recording.averageHeartRate))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
-                }
-            }
-            Spacer(minLength: 0)
-            if showsChevron {
-                HLDisclosureChevron()
-            }
-        }
-        .padding(.vertical, HLSpace.sm)
-        .contentShape(Rectangle())
+        HLRow(
+            title: Text(verbatim: HLDateFormat.dateTime(recording.recordedAt)),
+            detail: Text(verbatim: EcgPresentation.resultLabel(for: recording.verdict)),
+            value: recording.averageHeartRate.map { Text(verbatim: EcgPresentation.bpmValue($0)) }
+        )
         .accessibilityElement(children: .combine)
     }
 }
@@ -326,13 +275,13 @@ struct EcgRecordingRow: View {
 /// keeps the surface an awareness view of the DEVICE's own certified result
 /// rather than a HealthLog reading of an ECG.
 ///
-/// **UI-Standard R17 (U1) — was hier gekürzt wurde und was nicht.** Der Satz
+/// **UI-Standard R17 — was hier gekürzt wurde und was nicht.** Der Satz
 /// trägt die ZUSCHREIBUNG („das Ergebnis stammt von deinem Aufzeichnungsgerät;
 /// HealthLog liest oder interpretiert EKG-Aufzeichnungen nicht"); der
 /// Pauschalteil „und stellt keine Diagnose" lebt am Ack-Sheet und in
 /// Einstellungen → Über diese App.
 ///
-/// **1.4 B2.** Was a ghost card of its own with an `info.circle` that opened
+/// Was a ghost card of its own with an `info.circle` that opened
 /// nothing; now one footnote and one "Quellen" inside the card it belongs to.
 ///
 /// **Achtung, Repo-Grenze:** der Wortlaut war bis hierher wortgleich mit dem
@@ -342,8 +291,7 @@ struct EcgAttributionFooter: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("insights.ecg.disclaimer")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.rowSubtitle)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("insights.ecg.disclaimer")

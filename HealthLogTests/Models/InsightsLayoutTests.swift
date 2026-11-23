@@ -7,7 +7,7 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// v0.8.0 W10 — pure reorder / visibility / reconcile math for the
+/// Pure reorder / visibility / reconcile math for the
 /// server-first Insights layout model. No network, no store: just the
 /// value-type transforms the optimistic write path depends on.
 @Suite("InsightsLayout — reorder / visibility / reconcile math")
@@ -45,7 +45,7 @@ struct InsightsLayoutTests {
         #expect(moved.orderedTiles.map(\.id) == ["c", "a", "b", "d"])
     }
 
-    /// A2 (v0.8.2 W1a) — the grid only ever feeds the VISIBLE tile ids to
+    /// The grid only ever feeds the VISIBLE tile ids to
     /// `reordering`; the hidden rows must keep their relative sequence in the
     /// unmatched tail so the AddTileSheet (sorted by order) stays stable.
     @Test("reordering of visible-subset keeps hidden rows' relative sequence")
@@ -72,7 +72,7 @@ struct InsightsLayoutTests {
         #expect(moved.orderedTiles.map(\.order) == [0, 1, 2, 3, 4])
     }
 
-    /// A2 — the hidden-tail sequence is preserved even when the stored array is
+    /// The hidden-tail sequence is preserved even when the stored array is
     /// NOT pre-sorted by `order` (a decoded server payload can arrive unsorted).
     @Test("reordering preserves hidden sequence for an unsorted source array")
     func reorderingHiddenSequenceUnsortedSource() {
@@ -174,15 +174,15 @@ struct InsightsLayoutTests {
         #expect(decoded == .default)
     }
 
-    // MARK: - v0.11 W28b — widened slug ↔ MetricKind coverage
+    // MARK: - Widened slug ↔ MetricKind coverage
 
-    /// W28b — the slugs that carry a chartable `MetricKind` MUST each resolve
+    /// The slugs that carry a chartable `MetricKind` MUST each resolve
     /// to a real enum case (anti-hallucination guard: a typo or an invented kind
     /// would surface here, not as a silent dead pill). The four non-chart slugs
     /// (`overview`, `workouts`, `mood`, `medications`) plus the one pending
     /// HK-registry slug (`audio-events`) are exempt.
     ///
-    /// W28d — `walking-steadiness` is no longer exempt: `appleWalkingSteadiness`
+    /// `walking-steadiness` is no longer exempt: `appleWalkingSteadiness`
     /// is a clean 0–100 % mobility quantity, now wired end-to-end (HK registry +
     /// `slugToKind`), so it is one of the 33 chartable slugs.
     @Test("every chartable widened slug maps to a real MetricKind")
@@ -193,7 +193,7 @@ struct InsightsLayoutTests {
             InsightsLayoutTileId.mood,
             InsightsLayoutTileId.medications,
             InsightsLayoutTileId.audioEvents,
-            // v0141 W-DATAPARITY (P4) — `nutrients` is server-known (so the layout
+            // `nutrients` is server-known (so the layout
             // PUT round-trips it) but has no chartable iOS `MetricKind` yet.
             InsightsLayoutTileId.nutrients
         ]
@@ -204,7 +204,7 @@ struct InsightsLayoutTests {
             // displayName comes from the kind descriptor — never empty.
             #expect(kind.map { !$0.displayName.isEmpty } ?? false)
         }
-        // Parity Build 4 / 4.1 — five slugs joined `serverKnownIds`: `steps`
+        // Five slugs joined `serverKnownIds`: `steps`
         // (a `SUB_PAGE_METRIC` key on the web since v1.12, previously an iOS-only
         // tail-append) plus the four v1.25 clinical slugs `pain` / `waist` /
         // `waist-to-height` / `grip-strength`, whose `MetricKind` + Dashboard tile
@@ -213,7 +213,7 @@ struct InsightsLayoutTests {
         // is a routed web page but not a `SUB_PAGE_METRIC` key, so the layout
         // route's `z.enum` would 422 the whole PUT body.
         // The 46 chartable slugs + 6 exempt = 52 server-known ids. v0141
-        // W-DATAPARITY (P4) added the non-chart `nutrients` slug (a v1.29
+        // W-DATAPARITY added the non-chart `nutrients` slug (a v1.29
         // `SUB_PAGE_METRIC` key), lifting the count from 51 → 52 and the exempt
         // set from 5 → 6.
         #expect(chartableSlugs.count == 46)
@@ -223,7 +223,7 @@ struct InsightsLayoutTests {
         #expect(!InsightsLayoutTileId.serverKnownIds.contains(InsightsLayoutTileId.recovery))
     }
 
-    /// v0141 W-DATAPARITY (P4) — a layout carrying the `nutrients` tile survives
+    /// A layout carrying the `nutrients` tile survives
     /// `filteringForServer()` (is NOT dropped from the PUT body), the regression
     /// mirror of the `steps`-survives fix. Before the fix `nutrients` was outside
     /// `serverKnownIds`, so every iOS layout PUT silently dropped the operator's

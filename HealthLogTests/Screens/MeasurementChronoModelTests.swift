@@ -6,7 +6,7 @@ import Testing
 /// the test module also resolves (same pattern as the sibling measurement tests).
 private typealias Measurement = HealthLog.Measurement
 
-/// v0.14.8 — chronological cross-category feed logic: chip strip composition,
+/// Chronological cross-category feed logic: chip strip composition,
 /// per-chip filtering, and newest-first time sort.
 @Suite("MeasurementChronoModel")
 struct MeasurementChronoModelTests {
@@ -98,7 +98,7 @@ struct MeasurementChronoModelTests {
         #expect(sorted.map(\.id) == ["c", "b", "a"])
     }
 
-    // MARK: - D1 (#34) high-frequency-vital collapse (display-only)
+    // MARK: - D1 high-frequency-vital collapse (display-only)
 
     /// Build N pulse samples inside the SAME clock-minute, distinct ids +
     /// sub-minute timestamps, all rounding to the same `scalar`.
@@ -235,7 +235,7 @@ struct MeasurementChronoModelTests {
     func formattedValue() {
         let weight = make(.weight, at: base, id: "w", scalar: 82.4)
         // Locale-independent: compose the expected scalar string the same way.
-        // A360-5 — weight now renders 1-dp (matching the dashboard); 82.4 is
+        // Weight now renders 1-dp (matching the dashboard); 82.4 is
         // unchanged. `.standard` = canonical units = no conversion.
         let expectedScalar = "\(82.4.formatted(.number.precision(.fractionLength(1)))) \(MetricKind.weight.unit)"
         #expect(MeasurementChronoModel.formattedValue(weight, units: .standard) == expectedScalar)

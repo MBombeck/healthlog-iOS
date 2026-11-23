@@ -69,7 +69,7 @@ struct AuthenticatedSessionCompositionTests {
 
         #expect(
             !oldLease.isCurrent,
-            "EXPECTED_RED: admission preceded invalidation and drain"
+            "admission preceded invalidation and drain"
         )
     }
 
@@ -96,7 +96,7 @@ struct AuthenticatedSessionCompositionTests {
 
 #if !SWIFT_PACKAGE
 
-    /// Plan 06-05 — the composed boundary hooks must act on the SAME shared
+    /// The composed boundary hooks must act on the SAME shared
     /// registry the container's stores and `AuthStore` consume, so the terminal
     /// teardown owner can invalidate/readmit through one production surface.
     @MainActor

@@ -4,7 +4,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — locks the recent-7 + "show all" gating and the
+/// Locks the recent-7 + "show all" gating and the
 /// tap-to-edit round-trip through `MoodStore.update` (optimistic + outbox-safe).
 @MainActor
 @Suite("Mood recent-7 + tap-to-edit round-trip")

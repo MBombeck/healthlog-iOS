@@ -8,8 +8,8 @@ import Foundation
 ///
 /// Only the flags this build acts on are read. `features.trackIntake` (always
 /// `true` from v1.42.0) lets the add sheet offer "track intake" on an account
-/// with no medication yet, where no served row could tell (#126 P2).
-/// `features.biomarkerMerge` (v1.43) gates merging lab markers (#130).
+/// with no medication yet, where no served row could tell.
+/// `features.biomarkerMerge` (v1.43) gates merging lab markers.
 /// `cumulativeHourBuckets` and `syncTriggerBackfill` (v1.43, #138) gate
 /// the hourly stats rows and the `backfill` trigger; ``ModuleGate`` hands
 /// them to ``KnownServerVersion`` (see `ServerFeatures+KnownServerVersion`).
@@ -26,23 +26,36 @@ public struct ServerFeatures: Decodable, Sendable, Equatable {
     public let syncTriggerBackfill: Bool
     /// The life-circumstance routes (`/api/anamnesis/life-circumstances`).
     public let lifeCircumstances: Bool
+    /// The Apple Health symptom batch, its built-in codes and its delete route.
+    public let appleHealthSymptoms: Bool
+    /// The five Apple Health delete-by-externalId routes and the mood source pair.
+    public let appleHealthDeletes: Bool
+    /// The macro codes on the nutrient batch.
+    public let nutrientMacros: Bool
 
     public init(
         trackIntake: Bool = false,
         biomarkerMerge: Bool = false,
         cumulativeHourBuckets: Bool = false,
         syncTriggerBackfill: Bool = false,
-        lifeCircumstances: Bool = false
+        lifeCircumstances: Bool = false,
+        appleHealthSymptoms: Bool = false,
+        appleHealthDeletes: Bool = false,
+        nutrientMacros: Bool = false
     ) {
         self.trackIntake = trackIntake
         self.biomarkerMerge = biomarkerMerge
         self.cumulativeHourBuckets = cumulativeHourBuckets
         self.syncTriggerBackfill = syncTriggerBackfill
         self.lifeCircumstances = lifeCircumstances
+        self.appleHealthSymptoms = appleHealthSymptoms
+        self.appleHealthDeletes = appleHealthDeletes
+        self.nutrientMacros = nutrientMacros
     }
 
     private enum CodingKeys: String, CodingKey {
         case trackIntake, biomarkerMerge, cumulativeHourBuckets, syncTriggerBackfill, lifeCircumstances
+        case appleHealthSymptoms, appleHealthDeletes, nutrientMacros
     }
 
     /// Each flag on its own: a mistyped one reads as `false`, never costs the
@@ -54,6 +67,9 @@ public struct ServerFeatures: Decodable, Sendable, Equatable {
         cumulativeHourBuckets = (try? c.decodeIfPresent(Bool.self, forKey: .cumulativeHourBuckets)) == true
         syncTriggerBackfill = (try? c.decodeIfPresent(Bool.self, forKey: .syncTriggerBackfill)) == true
         lifeCircumstances = (try? c.decodeIfPresent(Bool.self, forKey: .lifeCircumstances)) == true
+        appleHealthSymptoms = (try? c.decodeIfPresent(Bool.self, forKey: .appleHealthSymptoms)) == true
+        appleHealthDeletes = (try? c.decodeIfPresent(Bool.self, forKey: .appleHealthDeletes)) == true
+        nutrientMacros = (try? c.decodeIfPresent(Bool.self, forKey: .nutrientMacros)) == true
     }
 }
 

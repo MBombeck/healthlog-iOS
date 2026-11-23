@@ -15,10 +15,10 @@ extension SettingsStore {
     static let cycleServerEnabledKey = "hl.settings.cycleTracking.serverEnabled"
     /// **9.3** — one-time cycle opt-in migration flag (survives restarts).
     static let cycleOptInMigratedKey = "hl.settings.cycleTracking.migrated.v1"
-    /// #108 — the glucose-unit mirror (same key the property's `didSet` writes;
+    /// The glucose-unit mirror (same key the property's `didSet` writes;
     /// `Keys` is private to the main file).
     static let glucoseUnitDefaultsKey = "hl.settings.glucoseUnit"
-    /// #108 — one-time glucose-unit migration flag (survives restarts).
+    /// One-time glucose-unit migration flag (survives restarts).
     static let glucoseUnitMigratedKey = "hl.settings.glucoseUnit.migrated.v1"
 
     /// **Build 9 (Server-Prefs) — one `/api/auth/me` round-trip, two jobs.**
@@ -189,7 +189,7 @@ extension SettingsStore {
         }
     }
 
-    // MARK: - account time zone (#115 1.5)
+    // MARK: - account time zone
 
     /// The account zone resolved to a `TimeZone`: the `/api/auth/me` zone when
     /// one arrived, else the profile's, else `.current`.
@@ -243,7 +243,7 @@ extension SettingsStore {
         defaults.set(value, forKey: HLDateFormat.defaultsKey)
     }
 
-    // MARK: - glucoseUnit (#108)
+    // MARK: - glucoseUnit
 
     /// The `glucoseUnit` `didSet`: the app-scoped mirror, then everyone outside
     /// this store that shows or takes glucose in the account's unit (#115 B5 —
@@ -260,7 +260,7 @@ extension SettingsStore {
         glucoseUnit = value
     }
 
-    /// **#108 — the account's glucose unit.** `/me` sends the raw column
+    /// **The account's glucose unit.** `/me` sends the raw column
     /// (`null` = never set = mg/dL). The series endpoint converts into the
     /// resolved unit, so the app adopts exactly that resolution.
     ///
@@ -300,15 +300,13 @@ extension SettingsStore {
 
     /// **#108 explicit user pick.** Optimistic property + mirror, PATCH, adopt
     /// the echo; any failure reverts, so the tiles never show a unit the server
-    /// is not converting the series into. Without a server (standalone) the
-    /// pick is local only — there is no series to disagree with.
+    /// is not converting the series into.
     @discardableResult
     public func setGlucoseUnit(_ value: GlucoseUnit) async -> Bool {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return false }
         if glucoseUnit == value { return true }
         let previous = glucoseUnit
         adoptGlucoseUnit(value)
-        guard backend?.hasServer ?? true else { return true }
         switch await patchGlucoseUnit(value, sessionLease: sessionLease) {
         case let .stored(echoed):
             adoptGlucoseUnit(echoed)
@@ -365,15 +363,14 @@ extension SettingsStore {
     }
 
     /// **9.3 explicit user toggle** — optimistic local (the `CycleGate` cache),
-    /// then `PATCH /api/auth/me/cycle-prefs {enabled}` (deep-merge) in server mode,
-    /// revert on error. Standalone / no server → local only (prior behaviour).
+    /// then `PATCH /api/auth/me/cycle-prefs {enabled}` (deep-merge), revert on
+    /// error. Without a repo → local only.
     @discardableResult
     public func setCycleTrackingOptIn(_ enabled: Bool) async -> Bool {
         guard let sessionLease = captureAuthenticatedSessionLease() else { return false }
         let previous = cycleTrackingOptIn
         cycleTrackingOptIn = enabled
-        // Standalone (or no repo) → local-only, exactly as before Build 9.
-        guard backend?.hasServer ?? true, let cycleRepo else { return true }
+        guard let cycleRepo else { return true }
         error = nil
         do {
             try sessionLease.requireCurrent()

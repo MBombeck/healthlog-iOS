@@ -3,7 +3,7 @@
     import Foundation
 
     extension AppContainer {
-        /// **v0.8.4 WWIDGET-1 — drive the medication Live Activity from the
+        /// **Drive the medication Live Activity from the
         /// store.**
         ///
         /// Chains onto `MedicationsStore.onIntakesDidChange` (without
@@ -27,6 +27,12 @@
             // server can later start Live Activities remotely. No-op until
             // the OS delivers a token; harmless when Activities are off.
             controller.observePushToStartToken()
+            // #188 (2): an Activity that outlived the process has no token
+            // listener after a cold start. Subscribe the running ones again and
+            // drop the tokens of every Activity that is gone.
+            _Concurrency.Task { @MainActor [weak controller] in
+                await controller?.resubscribeRunningActivities()
+            }
 
             // Compose with any pre-existing closure (badge refresh) so both
             // fire — single-slot callback, so we capture + call through.
@@ -43,7 +49,7 @@
                 )
             }
 
-            // v0.14.1 — also reconcile on medication mutations (not only intake
+            // Also reconcile on medication mutations (not only intake
             // changes). Enabling a medication's per-med "Live-Aktivität" toggle
             // saves via `store.update(...)` → `onMedicationsDidChange`, which
             // previously did NOT touch the Live Activity, so the banner only
@@ -56,6 +62,10 @@
             medicationsStore.onMedicationsDidChange = { [weak controller, weak medicationsStore, weak deliveryPreferences] medications in
                 previousMeds?(medications)
                 guard let controller, let medicationsStore, let deliveryPreferences else { return }
+                // 1.7: a cached list painted before today's doses are confirmed
+                // must not start an Activity for a dose taken elsewhere; the
+                // settle fires `onIntakesDidChange`, which reconciles.
+                guard !medicationsStore.isDoseStateUnconfirmed else { return }
                 Self.reconcileMedicationLiveActivity(
                     controller: controller,
                     medications: medicationsStore.medications,
@@ -71,7 +81,7 @@
         /// dose's Activity as resolved (ending it shortly), and clears the
         /// Activity when nothing qualifies.
         ///
-        /// **1.4 B4 — `timeZone` is the account zone** (`/me`, the store's
+        /// **`timeZone` is the account zone** (`/me`, the store's
         /// `profileTimeZone`), the zone the medication card grades its window
         /// in. Read in the device zone, the Lock Screen could say "due" while
         /// the card, after travel or with a zone set on the web, said late.
@@ -204,7 +214,7 @@
                     medicationName: dose.medicationName,
                     doseText: dose.doseText,
                     scheduledFireDate: dose.scheduledFireDate,
-                    // W-B183 — carry the server-gated overdue verdict the
+                    // Carry the server-gated overdue verdict the
                     // pure plan computed (mirrors the in-app card) so the
                     // widget renders danger styling from the SAME truth, not
                     // its own `Date.now > countdownTarget`.
@@ -214,7 +224,7 @@
             }
         }
 
-        /// **v0.16.1 W-LA-BG** — wire the background Live-Activity reconcile hook.
+        /// Wire the background Live-Activity reconcile hook.
         ///
         /// On every guaranteed-sync `BGProcessingTask` wakeup (after the
         /// med-store reconcile force-loads the current intakes) this reconciles

@@ -53,10 +53,14 @@ public struct EcgSourceFetchResult: Sendable, Equatable {
     /// Opaque, archived query anchor. The coordinator persists it verbatim and
     /// never inspects it, so the seam stays free of HealthKit types.
     public let anchor: Data?
+    /// Recordings deleted in Apple Health since `anchor` (sample UUIDs), sent
+    /// to the ECG delete route before the anchor may pass them.
+    public let deletedIDs: [String]
 
-    public init(recordings: [EcgSourceRecording], anchor: Data?) {
+    public init(recordings: [EcgSourceRecording], anchor: Data?, deletedIDs: [String] = []) {
         self.recordings = recordings
         self.anchor = anchor
+        self.deletedIDs = deletedIDs
     }
 }
 

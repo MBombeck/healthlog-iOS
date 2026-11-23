@@ -106,7 +106,7 @@ final class PinningDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendab
         }
     }
 
-    /// GH-iOS #27 — URLSession copies every header field onto a followed
+    /// URLSession copies every header field onto a followed
     /// redirect. A proxy that bounces an unauthenticated request to its own
     /// login host (Cloudflare Access answers 302 to `*.cloudflareaccess.com`)
     /// would otherwise receive the bearer and the proxy secret. Cross-host
@@ -148,7 +148,7 @@ extension URLSession {
     }
 }
 
-// MARK: - Test hook (M-2)
+// MARK: - Test hook
 
 /// Internal escape-hatch so the `setEnvironment` post-auth guard test can
 /// exercise the rejection branch without aborting the Debug test runner via

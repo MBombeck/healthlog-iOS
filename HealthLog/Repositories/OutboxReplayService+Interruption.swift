@@ -1,6 +1,6 @@
 import Foundation
 
-// C4 — answers the replay used to delete although they are not a refusal.
+// Answers the replay used to delete although they are not a refusal.
 //
 // Until C4 every error that was neither `shouldPersistToOutbox` nor a decode
 // failure of our own payload reached `onNonRetriable`, and that removed the
@@ -46,7 +46,8 @@ extension OutboxReplayService {
     /// workout batches upsert, A5: a delete by `externalId` touches a row once),
     /// so a re-send is harmless at any age and the window does not apply.
     static let externalIdDedupedKinds: Set<OutboxQueue.Operation.Kind> = [
-        .syncHealthKitSample, .uploadWorkoutBatch, .deleteHealthKitSamples
+        .syncHealthKitSample, .uploadWorkoutBatch, .deleteHealthKitSamples,
+        .uploadAppleHealthSymptoms, .deleteAppleHealthRecords
     ]
 
     /// Kinds that carry nothing a refusal could lose: the record is either gone
@@ -55,7 +56,7 @@ extension OutboxReplayService {
         .deleteMeasurement, .bulkDeleteMeasurements, .deleteMood, .deleteMedication, .deleteIntake,
         .deleteMedicationSideEffect, .deleteMedicationInventory, .deleteCycleDayLog, .deleteLab,
         .deleteBiomarker, .deleteIllnessEpisode, .deleteAllergy, .deleteFamilyHistory,
-        .deleteCustomMetric, .deleteCustomMetricEntry, .deleteHealthKitSamples
+        .deleteCustomMetric, .deleteCustomMetricEntry, .deleteHealthKitSamples, .deleteAppleHealthRecords
     ]
 
     // MARK: - Cancellation
@@ -67,7 +68,7 @@ extension OutboxReplayService {
         if Task.isCancelled || error is CancellationError { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }
         switch error as? HLError {
-        // E1 — `APIClient` reports a write cut off on the wire (task still
+        // `APIClient` reports a write cut off on the wire (task still
         // running) as `.network(.writeCancelled)`; for the replay it is the same
         // interruption as `.canceled`.
         case .canceled?, .serverNotConfigured?, .network(.writeCancelled)?: return true
@@ -104,6 +105,9 @@ extension OutboxReplayService {
     /// has run out is dead-lettered here, before it could go out a second time
     /// as a new record. Everything else defers to ``isOnHoldThisPass(_:now:)``.
     func holdsThisPass(_ op: OutboxQueue.Operation, now: Date) async -> Bool {
+        // A row whose first send is still running belongs to that send, and a
+        // row that has gone since the snapshot was taken is nobody's.
+        guard await outbox.isReplayable(op.id) else { return true }
         if isDelivered(op) {
             await completeDelivery(op)
             return true

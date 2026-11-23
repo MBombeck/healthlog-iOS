@@ -1,6 +1,6 @@
 import Foundation
 
-/// #19 — folds one server page of `GET /api/workouts` into the rows a list
+/// Folds one server page of `GET /api/workouts` into the rows a list
 /// already holds, so a page never truncates the list and never duplicates a
 /// row.
 ///

@@ -7,7 +7,7 @@ import Testing
 
 #if canImport(HealthKit)
 
-    /// **#115 B6 — editing a cycle day replaces its Apple-Health mirror.**
+    /// **Editing a cycle day replaces its Apple-Health mirror.**
     ///
     /// The server upserts a day under the same row id, and the writer stamps
     /// that id into `HKMetadataKeyExternalUUID`. Before this fix every save only

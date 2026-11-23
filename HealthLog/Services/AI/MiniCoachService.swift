@@ -80,17 +80,16 @@ public struct MiniCoachContext: Sendable {
 ///   5. Scrubs the output via ``MDRSafetyFilter``.
 ///   6. Records the turn in ``MiniCoachHistory``.
 ///
-/// The whole pipeline is **triple-gated**:
+/// The whole pipeline is **double-gated**:
 ///   - `#if canImport(FoundationModels)` (compile)
-///   - `@available(iOS 26.0, *)` (OS)
 ///   - `SystemLanguageModel.default.availability` (runtime / Apple
 ///     Intelligence enabled)
 ///
-/// On iOS < 26 / non-Apple-Intelligence devices the service returns a
+/// On non-Apple-Intelligence devices the service returns a
 /// stub `.unsupported(_:)` outcome with the localized "Mini-Coach
 /// requires iOS 26+" copy.
 public actor MiniCoachService {
-    /// #115 · 0.2 — the server-resolved AI capabilities (`/api/auth/me` `ai`).
+    /// The server-resolved AI capabilities (`/api/auth/me` `ai`).
     /// This service runs only while `.coach` allows on-device work
     /// (`onDeviceAllowed`). The default is the legacy (pre-v1.39) reading; it
     /// never consults anything a previous build persisted.
@@ -145,11 +144,6 @@ public actor MiniCoachService {
         }
     }
 
-    /// Test introspection: how many turns the history actor has logged.
-    public func historyCompletedTurns() async -> Int {
-        await history.completedTurns()
-    }
-
     // MARK: - Allowed-turn pipeline
 
     private func runAllowedTurn(
@@ -168,17 +162,13 @@ public actor MiniCoachService {
         let snapshot = await history.snapshot()
 
         #if canImport(FoundationModels)
-            if #available(iOS 26.0, *) {
-                return await generateUsingFoundationModels(
-                    ask: ask,
-                    category: category,
-                    boundContext: boundContext,
-                    history: snapshot,
-                    locale: locale
-                )
-            } else {
-                return .unsupported(MiniCoachPrompt.unsupportedFallback(locale: locale))
-            }
+            return await generateUsingFoundationModels(
+                ask: ask,
+                category: category,
+                boundContext: boundContext,
+                history: snapshot,
+                locale: locale
+            )
         #else
             // Mark unused parameters used in the non-FM build to keep
             // strict-concurrency compilers happy.
@@ -188,7 +178,6 @@ public actor MiniCoachService {
     }
 
     #if canImport(FoundationModels)
-        @available(iOS 26.0, *)
         private func generateUsingFoundationModels(
             ask: String,
             category: MiniCoachPrompt.AllowedCategory,
@@ -234,7 +223,7 @@ public actor MiniCoachService {
                     await history.record(userAsk: ask, assistantReply: nil)
                     return .refusedBySafetyFilter(refusal)
                 }
-                // UI-Standard R15 (U1) — die Antwort geht unverändert heraus.
+                // UI-Standard R15 — die Antwort geht unverändert heraus.
                 // Bis hierher wurde ihr alle fünf Züge ein Pauschalsatz
                 // angehängt („Erinnerung: Ich kann nur Daten erklären …"), der
                 // wie Modellausgabe aussah, aber App-Text war. Die Zählung in

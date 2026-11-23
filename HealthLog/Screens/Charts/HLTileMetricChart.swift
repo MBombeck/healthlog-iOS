@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Task #36 — the **compact tile chart** that shares the SAME chart mechanic +
+/// The **compact tile chart** that shares the SAME chart mechanic +
 /// visual language as the Insights metric chart (`ChartCard` /
 /// `MetricChartContent`), shrunk to fit a Dashboard / Insights tile.
 ///
@@ -26,7 +26,7 @@ import SwiftUI
 /// - axes / gridlines (`.chartXAxis(.hidden)` / `.chartYAxis(.hidden)`) — axis
 ///   chrome dominates a 36 pt strip,
 /// - the scrub `chartXSelection` + floating callout,
-/// - horizontal pan + `HLFloatingPeriodControl`.
+/// - horizontal pan + `HLPeriodPicker`.
 ///
 /// Tapping the tile deep-links to `InsightsMetricScreen`, which hosts the full
 /// period control + scrub + axes — so the tile preview's STYLE + data-window
@@ -59,7 +59,7 @@ struct HLTileMetricChart: View {
         points = Self.syntheticPoints(kind: kind, values: values)
     }
 
-    /// 1.4 B3 — a dated line (the recovery trend cards): the x positions and
+    /// A dated line (the recovery trend cards): the x positions and
     /// the audio graph's dates are the readings' own, so a gap in the data
     /// stays a gap instead of being closed up.
     init(kind: MetricKind, points: [SeriesPoint]) {
@@ -71,7 +71,7 @@ struct HLTileMetricChart: View {
         if points.count < 2 {
             // Single-point / empty: reuse the canonical hairline so the
             // empty-vs-chart threshold stays identical to the legacy path.
-            HLSparkline(values: points.map(\.value), tint: HLChartTints.series)
+            HLSparkline(values: points.map(\.value))
         } else {
             Chart {
                 MetricChartContent.marks(
@@ -87,17 +87,17 @@ struct HLTileMetricChart: View {
                     // compliance line. `HLText.tertiary` is mid-grey in BOTH
                     // appearances → the tiles finally match.
                     emphasisTint: HLText.tertiary,
-                    // v0.14.1 §1: the Dashboard tile shows ONLY the trend line.
+                    // The Dashboard tile shows ONLY the trend line.
                     // Suppress the per-metric clinical threshold rules (BP 140/60,
                     // glucose 70/180, …) + the weight personal-baseline rule —
                     // those red/grey target/ideal lines read as noise at 36 pt.
                     // The Insights detail chart keeps them (default `true`).
                     includeThresholds: false,
-                    // v0.14.3 §A1 (FW-HOME): drop the per-measurement dot symbols
+                    // v0.14.3 §A1: drop the per-measurement dot symbols
                     // (BP sys/dia circles, glucose PointMarks) — they read "too
                     // intense" at tile scale. Line-only on every Home tile.
                     showsPoints: false,
-                    // v0.14.7 A1: every Home-tile line shares the unified
+                    // Every Home-tile line shares the unified
                     // `HLChartGrid.tileSeriesWidth` token, which is now pinned to
                     // the EXACT stroke the medication-compliance `HLSparkline`
                     // uses (`HLChartStyle.lineWidth` = 2.0) — see Tokens.swift. The
@@ -189,7 +189,7 @@ struct HLTileMetricChart: View {
 }
 
 #Preview("HLTileMetricChart — per-metric vocabulary") {
-    VStack(spacing: HLSpace.lg) {
+    VStack(spacing: HLLayout.cardGap) {
         // Weight — single line + personal-baseline rule (when ≥5 points).
         HLTileMetricChart(kind: .weight, values: [73.6, 73.4, 73.0, 72.9, 72.7, 72.5, 72.4])
             .frame(height: HLChartStyle.heightCompact)

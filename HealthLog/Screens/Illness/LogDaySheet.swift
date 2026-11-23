@@ -5,8 +5,7 @@ import SwiftUI
 /// functional impact (0–3), fever (°C), graded symptoms (1–3 severity), and a
 /// note.
 struct LogDaySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    /// #115 P2 — the fever is typed and shown in the account's unit (°F on an
+    /// The fever is typed and shown in the account's unit (°F on an
     /// imperial account) and saved as canonical `feverC`.
     @Environment(\.unitPreferences) private var units
 
@@ -15,7 +14,7 @@ struct LogDaySheet: View {
     var onSaved: (() -> Void)?
 
     @State private var date = Date.now
-    /// Parity 1.7 — **nullable**, defaulting to "not specified". A hard default
+    /// **Nullable**, defaulting to "not specified". A hard default
     /// of `0` made every untouched day-log assert "fully functional", which
     /// pollutes the server's `FUNCTIONAL_IMPACT` burden track (it drives
     /// `gapDriverType`). Web models it as `number | null` with the same blank
@@ -26,54 +25,58 @@ struct LogDaySheet: View {
     /// Selected symptoms → severity (1–3). Absence = not present.
     @State private var symptomSeverity: [String: Int] = [:]
     @State private var note = ""
-    @State private var isSaving = false
     @State private var isLoading = false
     @State private var saveError: String?
+    /// The form as it opened, for the discard guard.
+    @State private var baseline: [AnyHashable]?
 
     var body: some View {
-        NavigationStack {
+        HLSheetScaffold("illness.daylog.title", action: .save { await save() }, isDirty: isDirty) {
             Form {
-                // 1.4 B4 — a section of one row has no title of its own: the
-                // row is the heading ("Datum" over "Datum" said it twice).
-                Section {
-                    DatePicker("illness.daylog.date", selection: $date, displayedComponents: [.date])
-                        // #115 1.5 — pick days in the zone `dayKey` cuts in.
+                Group {
+                    // A section of one row has no title of its own: the
+                    // row is the heading ("Datum" over "Datum" said it twice).
+                    Section {
+                        DatePicker(selection: $date, displayedComponents: [.date]) {
+                            HLRowTitle("illness.daylog.date")
+                        }
+                        // Pick days in the zone `dayKey` cuts in.
                         .environment(\.timeZone, ProfileDay.timeZone)
                         .onChange(of: date) { _, _ in
                             Task { await prefill() }
                         }
-                }
-                impactSection
-                feverSection
-                symptomsSection
-                Section("illness.daylog.section.note") {
-                    TextField("illness.daylog.note", text: $note, axis: .vertical)
-                        .lineLimit(2 ... 5)
-                }
-                if let saveError {
-                    Section { HLFormErrorText(saveError) }
-                }
-            }
-            .navigationTitle(Text("illness.daylog.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("illness.action.cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("illness.action.save") {
-                        Task { await save() }
                     }
-                    .disabled(isSaving)
+                    impactSection
+                    feverSection
+                    symptomsSection
+                    Section("illness.daylog.section.note") {
+                        TextField("illness.daylog.note", text: $note, axis: .vertical)
+                            .lineLimit(2 ... 5)
+                    }
+                    if let saveError {
+                        Section { HLFormErrorText(saveError) }
+                    }
                 }
+                .hlFormRowSurface()
             }
+            .hlPageMargins()
             .task { await prefill() }
         }
     }
 
+    /// Every field the person can change, in one comparable value.
+    private var formFingerprint: [AnyHashable] {
+        [functionalImpact, hasFever, feverText, symptomSeverity, note]
+    }
+
+    private var isDirty: Bool {
+        guard let baseline else { return false }
+        return baseline != formFingerprint
+    }
+
     private var impactSection: some View {
         Section {
-            Picker("illness.daylog.impact", selection: $functionalImpact) {
+            Picker(selection: $functionalImpact) {
                 // The blank option is what makes "not specified" reachable —
                 // without it the Picker could never return to `nil` and the
                 // nullable state would be cosmetic.
@@ -81,6 +84,8 @@ struct LogDaySheet: View {
                 ForEach(0 ... 3, id: \.self) { level in
                     Text(impactLabel(level)).tag(Int?.some(level))
                 }
+            } label: {
+                HLRowTitle("illness.daylog.impact")
             }
             .pickerStyle(.menu)
         }
@@ -88,7 +93,9 @@ struct LogDaySheet: View {
 
     private var feverSection: some View {
         Section("illness.daylog.section.fever") {
-            Toggle("illness.daylog.hasFever", isOn: $hasFever)
+            Toggle(isOn: $hasFever) {
+                HLRowTitle("illness.daylog.hasFever")
+            }
             if hasFever {
                 HStack {
                     TextField("illness.daylog.feverC", text: $feverText)
@@ -116,28 +123,39 @@ struct LogDaySheet: View {
                     symptomSeverity[entry.key] = on ? (symptomSeverity[entry.key] ?? 1) : nil
                 }
             )) {
-                Label(LocalizedStringKey(entry.labelKey), systemImage: entry.icon)
+                Label {
+                    HLRowTitle(LocalizedStringKey(entry.labelKey))
+                } icon: {
+                    Image(systemName: entry.icon)
+                }
             }
             if isSelected {
-                Picker("illness.daylog.severity", selection: Binding(
-                    get: { symptomSeverity[entry.key] ?? 1 },
-                    set: { symptomSeverity[entry.key] = $0 }
-                )) {
+                HLAdaptiveSegmentedPicker(
+                    "illness.daylog.severity",
+                    selection: Binding(
+                        get: { symptomSeverity[entry.key] ?? 1 },
+                        set: { symptomSeverity[entry.key] = $0 }
+                    ),
+                    labels: (1 ... 3).map { LocalizedStringKey(severityLabel($0)) }
+                ) {
                     ForEach(1 ... 3, id: \.self) { level in
                         Text(severityLabel(level)).tag(level)
                     }
                 }
-                .pickerStyle(.segmented)
             }
         }
     }
 
     private func prefill() async {
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            // Picking another day loads that day, so the baseline follows it.
+            baseline = formFingerprint
+        }
         // `try?` flattens the throwing-optional return to a single optional.
         guard let log = try? await store.dayLog(episodeId: episodeId, date: dayKey()) else {
-            // Parity 1.7 — a day with NOTHING logged must reset the form. The
+            // A day with NOTHING logged must reset the form. The
             // early return used to leave the previously-loaded day's values in
             // place, and since the body is a full-value upsert that would write
             // one day's impact / fever / symptoms / note onto another day. Web
@@ -148,8 +166,7 @@ struct LogDaySheet: View {
         functionalImpact = log.functionalImpact
         if let fever = log.feverC {
             hasFever = true
-            feverText = units.displayValue(fever, kind: .bodyTemperature)
-                .formatted(.number.precision(.fractionLength(0 ... 1)))
+            feverText = HLValueFormat.number(units.displayValue(fever, kind: .bodyTemperature), fractionDigits: 0 ... 1)
         } else {
             hasFever = false
             feverText = ""
@@ -180,10 +197,9 @@ struct LogDaySheet: View {
         note = ""
     }
 
-    private func save() async {
-        isSaving = true
+    /// `true` when the sheet may close.
+    private func save() async -> Bool {
         saveError = nil
-        defer { isSaving = false }
         let trimmedNote = note.trimmingCharacters(in: .whitespaces)
         let symptoms = symptomSeverity
             .sorted { $0.key < $1.key }
@@ -203,17 +219,17 @@ struct LogDaySheet: View {
         )
         if await store.upsertDayLog(episodeId: episodeId, body) {
             onSaved?()
-            dismiss()
-        } else {
-            saveError = store.lastError ?? String(localized: "illness.save.failed")
+            return true
         }
+        saveError = store.lastError ?? String(localized: "illness.save.failed")
+        return false
     }
 
     private func dayKey() -> String {
         Self.dayKey(for: date)
     }
 
-    /// #115 1.5 — the day `date` names in the ACCOUNT zone, the zone the
+    /// The day `date` names in the ACCOUNT zone, the zone the
     /// server keys illness day logs in (`(episodeId, date)`). The date picker
     /// above runs in the same zone, so the key is the day the person picked;
     /// "today" is the account's today.

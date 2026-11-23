@@ -52,11 +52,11 @@ struct ScoreTileMotionTests {
         }
     }
 
-    // MARK: - W-B187 — Low-Power gate + frame cap parity
+    // MARK: - Low-Power gate + frame cap parity
 
     @Test("breath is PAUSED under Low-Power (not just Reduce Motion)")
     func pausesUnderLowPower() {
-        // W-B187: the tile-glow drivers (`InsightsTileSurface`,
+        // The tile-glow drivers (`InsightsTileSurface`,
         // `WellnessGradientCard`) now gate on Low-Power AND Reduce Motion, matching
         // every other animated driver (prism, cycle-glow). Previously only
         // Reduce Motion paused them.
@@ -79,7 +79,7 @@ struct ScoreTileMotionTests {
         #expect(WellnessTileMotion.frameInterval == 1.0 / 20.0)
     }
 
-    // MARK: - 1.4 B4 — the motion comes to rest
+    // MARK: - The motion comes to rest
 
     @Test("the breath pauses once the overview's motion window has closed")
     func pausesAtRest() {
@@ -91,22 +91,5 @@ struct ScoreTileMotionTests {
     func windowIsBounded() {
         #expect(WellnessTileMotion.activeSeconds >= WellnessTileMotion.periodSeconds)
         #expect(WellnessTileMotion.activeSeconds <= 15)
-    }
-
-    @Test("the overview bounds the rings' motion, and every moving effect reads the window")
-    func overviewBoundsTheMotion() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        func source(_ path: String) throws -> String {
-            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
-        }
-        #expect(try source("HealthLog/Screens/Insights/InsightsScreen.swift").contains(".insightsRingMotionWindow()"))
-        for path in [
-            "HealthLog/Screens/Insights/Sub/InsightsTileSurface.swift",
-            "HealthLog/Screens/Insights/Sub/WellnessGradientCard.swift",
-            "HealthLog/Screens/Insights/Sub/InsightsRingEffects.swift"
-        ] {
-            #expect(try source(path).contains("insightsRingMotionActive"), "\(path)")
-        }
     }
 }

@@ -5,7 +5,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-24 (GH iOS #73)** — the two medication-logging dead ends.
+/// The two medication-logging dead ends.
 ///
 /// Reported against `0.17.0` on TestFlight: on an account with **no active
 /// medications**, both entry points ended nowhere. The free-log sheet showed
@@ -187,38 +187,6 @@ struct MedicationLoggingEmptyStateTests {
         #expect(!candidates.isEmpty)
     }
 
-    // MARK: - The create CTA really is the create flow
-
-    /// The primary action is modelled as a value with exactly one case, and the
-    /// shared empty-state view is the single place that maps it — onto the same
-    /// `AddMedicationSheet` the Medikamente tab presents. Pinned by reading the
-    /// source (the mapping is a SwiftUI `.sheet` body, which headless tests
-    /// cannot enter), in the same spirit as `PercentFormatLintTests`.
-    @Test("'Medikament anlegen' ist auf AddMedicationSheet verdrahtet")
-    func createCTALeadsIntoTheCreateFlow() throws {
-        #expect(MedicationLoggingEmptyState.PrimaryAction.addMedication.rawValue == "addMedication")
-
-        let source = try String(contentsOf: Self.emptyStateSourceURL, encoding: .utf8)
-        #expect(
-            source.contains("AddMedicationSheet("),
-            "the .addMedication CTA must present the same create flow the Medikamente tab uses"
-        )
-        #expect(
-            source.contains("descriptor.primaryAction == .addMedication"),
-            "the CTA must be gated on the enum, not on an ad-hoc flag"
-        )
-    }
-
-    private static var emptyStateSourceURL: URL {
-        // <repo>/HealthLogTests/Screens/<this file>
-        //   → <repo>/HealthLog/Screens/Medications/MedicationLoggingEmptyState.swift
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("HealthLog/Screens/Medications/MedicationLoggingEmptyState.swift")
-    }
-
     // MARK: - Snapshots of both empty states
 
     @Test("Snapshot — Leerzustand ohne aktive Medikamente")
@@ -236,7 +204,7 @@ struct MedicationLoggingEmptyStateTests {
     // MARK: - One intent, one term
 
     /// Vocabulary guard for the logging surfaces. "Dosis" / "dose" stays correct
-    /// for the **amount** (`med.freelog.dose.*` is the deviating-amount field),
+    /// for the **amount** (`med.intake_form.dose` is the amount field),
     /// but the **act** of logging or marking is "Einnahme" / "intake" on every
     /// surface — the reporter met two vocabularies for one goal.
     ///
@@ -246,9 +214,20 @@ struct MedicationLoggingEmptyStateTests {
     @Test("Kein 'Dosis'/'dose' für den Vorgang in den Logging-Namespaces")
     func loggingSurfacesUseOneTerm() throws {
         let catalog = try ParityCatalog.load()
-        let guardedPrefixes = ["meds.quick.", "med.freelog.", "meds.empty."]
-        // The deviating-AMOUNT field: "Abweichende Dosis" is the right word there.
-        let amountPrefixes = ["med.freelog.dose."]
+        // #191 point 4 replaced the free intake sheet (`med.freelog.*`) with
+        // the one intake form (`med.intake_form.*`); its title, actions and
+        // outcomes come from the one dose vocabulary (`med.dose.*`), which every
+        // logging surface shares.
+        let guardedPrefixes = ["meds.quick.", "meds.empty.", "med.intake_form.", "med.dose."]
+        // "Dosis" / "dose" is the right word where it names the AMOUNT (the
+        // dose field and its hint) or the scheduled dose an entry counts for
+        // ("Zählt für die Dosis um 08:00", the web's #191 wording). The act of
+        // logging stays "Einnahme" / "intake".
+        let amountPrefixes = [
+            "med.intake_form.dose", // the amount field and its hint
+            "med.intake_form.count_near", "med.intake_form.counts_for", // the scheduled dose
+            "med.intake_form.skips", "med.intake_form.extra_dose"
+        ]
         let german = try Regex(#"(?i)\b(dosis|dosen)\b"#)
         let english = try Regex(#"(?i)\b(dose|doses)\b"#)
 

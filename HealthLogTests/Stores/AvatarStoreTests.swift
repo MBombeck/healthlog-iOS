@@ -5,7 +5,7 @@ import UIKit
 
 // swiftlint:disable force_unwrapping
 
-/// **v0.8.0 W11 — AvatarStore load / fallback / cache / logout.**
+/// **AvatarStore load / fallback / cache / logout.**
 ///
 /// Uses the real `APIClient` + `MockURLProtocol` (per the 0.2.0-audit rule:
 /// never a mock-server) so the load path exercises production request
@@ -73,7 +73,7 @@ struct AvatarStoreTests {
         let key = "/api/user/avatar/u1?v=success"
         nonisolated(unsafe) var requestCount = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — count only the avatar routes.
+            // The handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (
                 HTTPURLResponse(
@@ -97,7 +97,7 @@ struct AvatarStoreTests {
         cache.clearMemory()
     }
 
-    // MARK: - C4: stale-URL guard (post-upload refresh race)
+    // MARK: - Stale-URL guard (post-upload refresh race)
 
     /// A 1x1 PNG of a given colour so two uploads produce distinguishable bytes.
     private func solidPNG(_ color: UIColor) -> Data {
@@ -155,7 +155,7 @@ struct AvatarStoreTests {
         let key = "/api/user/avatar/u1?v=force"
         nonisolated(unsafe) var requestCount = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — count only the avatar routes.
+            // The handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (
                 HTTPURLResponse(
@@ -226,7 +226,7 @@ struct AvatarStoreTests {
         let store = makeStore(cache: cache)
         nonisolated(unsafe) var version = 0
         MockURLProtocol.install { req in
-            // CU-07: only the avatar collection route (the upload target)
+            // Only the avatar collection route (the upload target)
             // advances the version counter — never a parallel suite's request.
             if req.targets("/api/user/avatar") { version += 1 }
             let json = "{\"data\":{\"avatarUrl\":\"/api/user/avatar/u1?v=\(version)\",\"contentType\":\"image/jpeg\"}}"
@@ -267,9 +267,9 @@ struct AvatarStoreTests {
         #expect(cache.cachedBytes(forKey: "/api/user/avatar/u1?v=logout") == nil)
     }
 
-    // MARK: - #138: re-fetch on re-login
+    // MARK: - Re-fetch on re-login
 
-    /// **#138.** After logout the operator re-signs-in as the SAME user, so the
+    /// After logout the operator re-signs-in as the SAME user, so the
     /// server hands back the IDENTICAL `avatarUrl`. `clearOnLogout()` wiped the
     /// bytes + the `loadedKey` short-circuit, so a re-`load` of that same key
     /// must hit the network again (not stay blank). The DashboardHeader drives
@@ -285,7 +285,7 @@ struct AvatarStoreTests {
         let key = "/api/user/avatar/u1?v=reauth"
         nonisolated(unsafe) var requestCount = 0
         MockURLProtocol.install { req in
-            // CU-07: the handler is process-global — count only the avatar routes.
+            // The handler is process-global — count only the avatar routes.
             if req.targets(prefixedBy: "/api/user/avatar") { requestCount += 1 }
             return (
                 HTTPURLResponse(

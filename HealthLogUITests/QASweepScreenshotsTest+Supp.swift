@@ -1,6 +1,6 @@
 import XCTest
 
-/// **SUPP (1.5.0, #131) — a supplement's composition and the nutrient
+/// **A supplement's composition and the nutrient
 /// split, photographed.**
 ///
 /// Opens the supplement "Vitamin D3" (`-uitest-area-meds -uitest-supp`, see
@@ -58,12 +58,12 @@ extension QASweepScreenshotsTest {
     /// can arrive after the shared helper looked. Look a few times, by label
     /// in any language the sweep runs, in the app and in SpringBoard.
     ///
-    /// POLISH-A A7 — iOS 26.5 may raise no sheet at all, or one that is gone by
+    /// iOS 26.5 may raise no sheet at all, or one that is gone by
     /// the time the button is read again. The label is read before the tap
     /// (reading it after re-resolves a button that no longer exists and fails
     /// the test), and a list that is already reachable ends the search without
     /// any tap by position.
-    private func dismissHealthSheet() {
+    func dismissHealthSheet() {
         let refuse = NSPredicate(
             format: "label BEGINSWITH[c] %@ OR label BEGINSWITH[c] %@ OR label BEGINSWITH[c] %@",
             "Don", "Nicht", "Niet"

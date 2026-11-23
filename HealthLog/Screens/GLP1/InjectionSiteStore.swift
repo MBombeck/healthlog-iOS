@@ -1,25 +1,36 @@
 import Foundation
 import Observation
 
-/// Backing store for the injection-site picker section.
+/// Backing store for the injection-site section.
 ///
-/// Reads local `InjectionSiteEntry` rows from `GLP1LocalRepository`
-/// **plus** server-side per-intake injection sites from the
-/// `PaginatedIntakeEvent.injectionSite` field (passed in at load via
-/// `MedicationDetailStore`). The union feeds the rotation-suggestion
-/// algorithm so both data sources count toward the "least-used in
-/// window" calculation.
+/// **#169 (server 1.48.0): a site belongs to a dose.** The standalone "log a
+/// site" flow is gone. A site is set on the last recorded injection through
+/// `PUT …/intake/{eventId}` (``Glp1DoseChangeRepository/setInjectionSite(medicationID:intakeID:site:)``),
+/// and a site logged on the device by an older build is offered for the
+/// matching dose (``InjectionSiteOfferMatcher``) instead of being uploaded
+/// blindly; the person confirms each one.
+///
+/// History and the rotation suggestion read the server's per-dose sites
+/// (`PaginatedIntakeEvent.injectionSite`, passed in at load by
+/// `MedicationDetailStore`) plus the device-only rows that are still there.
 @MainActor
 @Observable
 public final class InjectionSiteStore {
     public let medicationID: String
     public private(set) var localSites: [InjectionSiteEntrySnapshot] = []
-    public private(set) var serverSites: [InjectionSiteRecord] = []
+    public private(set) var serverIntakes: [PaginatedIntakeEvent] = []
     public private(set) var error: HLError?
+    /// One plain sentence when the server refused a site for this
+    /// medication (422 `medications.intake.injection_site.disallowed`). Shown
+    /// in the section; such a write is never retried.
+    public private(set) var notice: String?
     public private(set) var isLoading: Bool = false
+    public private(set) var isSaving: Bool = false
 
     private let repo: GLP1LocalRepository
     private let historyLimit: Int
+    /// Offers the server refused in this session; they are not offered again.
+    private var refusedOffers: Set<String> = []
 
     public init(
         medicationID: String,
@@ -35,11 +46,7 @@ public final class InjectionSiteStore {
         isLoading = true
         error = nil
         defer { isLoading = false }
-        serverSites = serverIntakes.compactMap { intake in
-            guard let site = InjectionSite.parse(intake.injectionSite),
-                  let when = intake.takenAt ?? Optional(intake.scheduledFor) else { return nil }
-            return InjectionSiteRecord(when: when, site: site, source: .server)
-        }
+        self.serverIntakes = serverIntakes
         do {
             localSites = try await repo.sites(
                 medicationID: medicationID,
@@ -52,37 +59,119 @@ public final class InjectionSiteStore {
         }
     }
 
-    public func log(site: InjectionSite, injectedAt: Date = .now, note: String? = nil) async {
-        do {
-            let inserted = try await repo.addSite(
-                medicationID: medicationID,
-                injectedAt: injectedAt,
-                site: site,
-                note: note
-            )
-            localSites = mergeSortedDescending(existing: localSites, inserted: inserted)
-        } catch let err as HLError {
-            error = err
-        } catch {
-            self.error = .unknown(String(describing: error))
-        }
+    // MARK: - Site on a recorded dose
+
+    /// The newest dose that was taken. `nil` before the first one.
+    public var lastInjection: PaginatedIntakeEvent? {
+        serverIntakes
+            .filter { !$0.skipped && $0.takenAt != nil }
+            .max { ($0.takenAt ?? .distantPast) < ($1.takenAt ?? .distantPast) }
     }
 
-    public func delete(id: String) async {
+    /// The site recorded on the last dose, if any.
+    public var lastInjectionSite: InjectionSite? {
+        InjectionSite.parse(lastInjection?.injectionSite)
+    }
+
+    /// Whether a site can be set here: a server to write to and a dose to
+    /// write it on.
+    public var canSetSite: Bool {
+        repo.doseChangeServer != nil && lastInjection != nil
+    }
+
+    /// Sets (`site`) or clears (`nil`) the site of the last injection.
+    @discardableResult
+    public func setSiteOnLastInjection(_ site: InjectionSite?) async -> Bool {
+        guard let intake = lastInjection else { return false }
+        return await write(site: site, intakeID: intake.id)
+    }
+
+    /// Device-only sites that fit a recorded dose, for the person to confirm.
+    var offers: [InjectionSiteOfferMatcher.Offer] {
+        guard repo.doseChangeServer != nil else { return [] }
+        return InjectionSiteOfferMatcher.offers(
+            medicationID: medicationID,
+            localSites: localSites,
+            intakes: serverIntakes
+        )
+        .filter { !refusedOffers.contains($0.id) }
+    }
+
+    /// Puts a device-only site on its dose. Once the server has it, the
+    /// device copy goes.
+    @discardableResult
+    func apply(_ offer: InjectionSiteOfferMatcher.Offer) async -> Bool {
+        let written = await write(site: offer.site, intakeID: offer.intakeID)
+        if written {
+            try? await repo.deleteSite(id: offer.localID)
+            localSites.removeAll { $0.id == offer.localID }
+        } else if notice != nil {
+            refusedOffers.insert(offer.id)
+        }
+        return written
+    }
+
+    /// Deletes a device-only site. A failure lands in ``error`` for the banner.
+    @discardableResult
+    public func delete(id: String) async -> Bool {
+        error = nil
         do {
             try await repo.deleteSite(id: id)
             localSites.removeAll { $0.id == id }
-        } catch let err as HLError {
-            error = err
+            return true
         } catch {
-            self.error = .unknown(String(describing: error))
+            self.error = PenInventoryStore.hlError(error)
+            return false
         }
+    }
+
+    /// The one write. A refused site says so in ``notice`` and is not
+    /// retried; a write waiting in the outbox counts as done.
+    private func write(site: InjectionSite?, intakeID: String) async -> Bool {
+        guard let server = repo.doseChangeServer, !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        error = nil
+        notice = nil
+        do {
+            try await server.setInjectionSite(medicationID: medicationID, intakeID: intakeID, site: site)
+        } catch let err as HLError where err.isInjectionSiteDisallowed {
+            notice = Self.disallowedSentence
+            return false
+        } catch let err as HLError where err.shouldPersistToOutbox {
+            // Queued; it goes out with the next replay.
+        } catch {
+            self.error = PenInventoryStore.hlError(error)
+            return false
+        }
+        replaceSite(of: intakeID, with: site)
+        return true
+    }
+
+    private func replaceSite(of intakeID: String, with site: InjectionSite?) {
+        guard let index = serverIntakes.firstIndex(where: { $0.id == intakeID }) else { return }
+        let old = serverIntakes[index]
+        serverIntakes[index] = PaginatedIntakeEvent(
+            id: old.id,
+            takenAt: old.takenAt,
+            skipped: old.skipped,
+            scheduledFor: old.scheduledFor,
+            injectionSite: site?.serverRawValue,
+            autoRecorded: old.autoRecorded
+        )
+    }
+
+    static var disallowedSentence: String {
+        String(
+            localized: "glp1.site.disallowed",
+            defaultValue: "This medication doesn't allow that site, so it wasn't saved."
+        )
     }
 
     // MARK: - Derived data
 
-    /// Newest-first merged history across local + server records, capped
-    /// at `historyLimit`.
+    /// Newest-first history across the doses' sites and the device-only
+    /// rows, capped at `historyLimit`.
     public var mergedHistory: [InjectionSiteRecord] {
         var combined = localSites.compactMap { snapshot -> InjectionSiteRecord? in
             guard let site = snapshot.site else { return nil }
@@ -98,8 +187,20 @@ public final class InjectionSiteStore {
         return Array(combined.prefix(historyLimit))
     }
 
+    private var serverSites: [InjectionSiteRecord] {
+        serverIntakes.compactMap { intake in
+            guard let site = InjectionSite.parse(intake.injectionSite) else { return nil }
+            return InjectionSiteRecord(
+                id: "intake-\(intake.id)",
+                when: intake.takenAt ?? intake.scheduledFor,
+                site: site,
+                source: .server
+            )
+        }
+    }
+
     /// Most-recent site, regardless of source. Used as the "last used"
-    /// label on the picker.
+    /// label on the body map.
     public var lastUsedSite: InjectionSite? {
         mergedHistory.first?.site
     }
@@ -108,18 +209,6 @@ public final class InjectionSiteStore {
     /// `nil` for greenfield (no history).
     public var suggestedNextSite: InjectionSite? {
         InjectionSiteRotation.suggestNext(recent: mergedHistory.map(\.site))
-    }
-
-    // MARK: - Internals
-
-    private func mergeSortedDescending(
-        existing: [InjectionSiteEntrySnapshot],
-        inserted: InjectionSiteEntrySnapshot
-    ) -> [InjectionSiteEntrySnapshot] {
-        var merged = existing
-        merged.append(inserted)
-        merged.sort { $0.injectedAt > $1.injectedAt }
-        return merged
     }
 }
 

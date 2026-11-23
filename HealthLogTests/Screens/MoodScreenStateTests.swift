@@ -3,7 +3,7 @@ import Foundation
 import SnapshotTesting
 import Testing
 
-/// State-contract tests for the v0.4.1 Mood-screen restructure (B3 / M2-A4).
+/// State-contract tests for the v0.4.1 Mood-screen restructure.
 ///
 /// We snapshot **state**, not pixels, because:
 /// - SwiftUI image snapshots are fragile across SDK toolchains
@@ -21,14 +21,14 @@ struct MoodScreenStateTests {
 
     @Test("MoodCopy.scoreLabel — canonical 1..5 mapping")
     func scoreLabelMapping() {
-        // v0.6.1.15 Y10 — labels mirror the operator's mood-icon pack
+        // Labels mirror the operator's mood-icon pack
         // (Mood1…Mood5). v0.11 i18n: source keys flipped to EN
         // (Awful/Bad/Ok/Good/Great); the resolved values asserted here are
         // the DE translations from Localizable.xcstrings because the test
         // host runs under the German locale.
         #expect(MoodCopy.scoreLabel(1) == "Lausig")
         #expect(MoodCopy.scoreLabel(2) == "Schlecht")
-        #expect(MoodCopy.scoreLabel(3) == "Ok")
+        #expect(MoodCopy.scoreLabel(3) == "OK")
         #expect(MoodCopy.scoreLabel(4) == "Gut")
         #expect(MoodCopy.scoreLabel(5) == "Super")
     }
@@ -44,7 +44,7 @@ struct MoodScreenStateTests {
 
     @Test("MoodCopy.iconName — canonical 1..5 → PNG-Asset-Pack mapping (v0.14.2)")
     func iconNameMapping() {
-        // v0.14.2: die Edit-/Entry-Surfaces zeigen jetzt überall den
+        // Die Edit-/Entry-Surfaces zeigen jetzt überall den
         // kanonischen Mood-Icon-Pack (`Assets.xcassets/Mood/Mood1…Mood5`)
         // statt bunter Unicode-Emojis. `MoodCopy.iconName(for:)` ist die
         // einzige Quelle für den Asset-Namen — sowohl der Haupt-Picker
@@ -195,12 +195,12 @@ struct MoodScreenStateTests {
         }
     }
 
-    // v0.11 — the `HLEmojiChart.Entry` snapshot test was retired alongside the
+    // The `HLEmojiChart.Entry` snapshot test was retired alongside the
     // rival `HLEmojiChart` mood chart (AUDIT-FINAL §H3). The canonical mood
     // trend chart is now `MoodTrendChart` (richer 3-layer anatomy); there is no
     // second mood-chart entry type to pin.
 
-    // MARK: - MoodStore derived accessors (B3 §2)
+    // MARK: - MoodStore derived accessors
 
     @Test("MoodStore.todayEntry — returns today's most-recent entry")
     func todayEntryReturnsToday() throws {

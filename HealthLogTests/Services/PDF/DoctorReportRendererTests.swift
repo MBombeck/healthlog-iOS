@@ -142,7 +142,7 @@ struct DoctorReportRendererTests {
         #expect(pages.count == 6)
     }
 
-    /// POLISH-A F-PDF-1 — ten metrics used to print five and drop the rest.
+    /// Ten metrics used to print five and drop the rest.
     @Test("paginate puts every chart on a page: ten series are two chart pages of five, in order")
     @MainActor
     func paginateChartsOverflowToFurtherPages() async {
@@ -176,7 +176,7 @@ struct DoctorReportRendererTests {
     }
 
     #if canImport(UIKit)
-        /// POLISH-A F-PDF-2 — the chart axis marks whole days, about four of them.
+        /// The chart axis marks whole days, about four of them.
         @Test("the report chart axis steps in whole days: one day on a short window, about a quarter of a long one")
         func chartAxisDayStride() {
             func points(days: Double) -> [DoctorReportSpec.ChartsBlock.Point] {

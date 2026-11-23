@@ -89,7 +89,7 @@ public actor SessionsRepository {
     /// off a lost phone, since a native session is a `RefreshToken` and never
     /// appears in the `Session` list.
     ///
-    /// R2 / #115 A7 — from server v1.39.3 the same call also ends AI-assistant
+    /// From server v1.39.3 the same call also ends AI-assistant
     /// connections, API tokens and clinician share links; `keepShareLinks`
     /// sends `?keepShareLinks=1`, which spares the share links (an older server
     /// ignores the query). The answer carries what was ended and the accepted

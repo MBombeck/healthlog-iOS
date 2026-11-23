@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Phase 09 / plan 09-06 — what the production foreground pass is made of.**
+/// **What the production foreground pass is made of.**
 ///
 /// ``shape`` is the pass's *ordering contract*, stated as members only and
 /// independent of what any member does: each inner array is one leg, legs run
@@ -92,7 +92,7 @@ enum ForegroundPassPlan {
         shape.filter { $0.contains(member) }.count
     }
 
-    // MARK: - 14-05 (D-09-06-A) — the window accounting
+    // MARK: - The window accounting
 
     /// The members A7-M1's coarse 8-second throttle admits, and therefore the
     /// members its stamp is a claim ABOUT. Everything else in the pass is gated
@@ -148,7 +148,7 @@ enum ForegroundPassPlan {
         settings: SettingsStore,
         hkReadiness: HKReadinessStore
     ) -> ForegroundPlan {
-        // 14-05 (D-09-06-A) — the coarse gate is still read ONCE, here, and
+        // The coarse gate is still read ONCE, here, and
         // still stamps the window at build time so two foregrounds a few
         // milliseconds apart cannot both be admitted. What is new is that the
         // stamp it replaced comes back with it, so the pass can hand the window
@@ -160,7 +160,6 @@ enum ForegroundPassPlan {
             settings: settings,
             hkReadiness: hkReadiness,
             isAuthenticated: authStore.phase.isAuthenticatedAccount,
-            isStandalone: container.syncModeStore.isStandalone,
             hasPendingWebDeletion: authStore.hasPendingWebDeletion,
             runsCheapMembers: cheap.runs
         )
@@ -195,9 +194,8 @@ enum ForegroundPassPlan {
         let settings: SettingsStore
         let hkReadiness: HKReadinessStore
         let isAuthenticated: Bool
-        let isStandalone: Bool
         let hasPendingWebDeletion: Bool
-        /// A7-M1 — the coarse foreground throttle, consulted once so its six
+        /// The coarse foreground throttle, consulted once so its six
         /// members stay atomic per window.
         let runsCheapMembers: Bool
 
@@ -230,10 +228,8 @@ enum ForegroundPassPlan {
                 hasPendingWebDeletion
             case .healthKitReadiness, .moodRevalidate, .cycleGate:
                 runsCheapMembers
-            case .badgeRefresh, .moodReminder:
+            case .badgeRefresh, .moodReminder, .medicationLoad:
                 runsCheapMembers && isAuthenticated
-            case .medicationLoad:
-                runsCheapMembers && isAuthenticated && !isStandalone
             case .networkRevalidate, .outboxDrain, .healthKitStats, .dashboardSummary, .insightsWarm:
                 isAuthenticated
             }
@@ -264,7 +260,7 @@ enum ForegroundPassPlan {
 
         // MARK: The adapters, verbatim from `RootView`
 
-        /// Privacy H3 (audit-v0162) — MFA web-deletion return detection. A
+        /// Privacy H3 — MFA web-deletion return detection. A
         /// 401/404 on `/api/auth/me` means the account is gone, so the full
         /// `.accountDeleted` local wipe runs and no PHI survives. No-op unless
         /// `DeleteAccountScreen` armed the flag.
@@ -272,7 +268,7 @@ enum ForegroundPassPlan {
             { [authStore] _ in await authStore.reconcilePendingWebDeletion() }
         }
 
-        /// W-FOCUS-FILTER — the system calls the intent's `perform()` when a
+        /// The system calls the intent's `perform()` when a
         /// Focus turns ON, but only sets `current = nil` (no `perform`) when it
         /// turns OFF. This clears the persisted "active" config the moment the
         /// Focus stops reporting it, so routine reminders resume promptly.
@@ -282,8 +278,8 @@ enum ForegroundPassPlan {
             FocusFilterConfigStore.clear()
         }
 
-        /// v0.12 W8-8 — the coalesced network-touching foreground entry point
-        /// (module map, feature flags, coach nudge, slot gate, APNs
+        /// The coalesced network-touching foreground entry point
+        /// (module map, coach nudge, slot gate, APNs
         /// re-registration), self-gated inside an 8 s window.
         private var networkRevalidate: ForegroundWork {
             { [container] _ in await container.foregroundNetworkRevalidate(authenticated: true) }
@@ -299,10 +295,9 @@ enum ForegroundPassPlan {
         /// store so a dose taken on the WEB or a second device reaches the in-app
         /// dose list, the Live Activity and the widgets **before** the badge
         /// recompute reads `dueOrMissedCount`. That "before" is now a leg
-        /// ordering rather than a comment. Standalone has no server to
-        /// revalidate against.
+        /// ordering rather than a comment.
         ///
-        /// **14-06 — this goes through the store's own throttle now.** It used to
+        /// **This goes through the store's own throttle now.** It used to
         /// call `load(force: true)` directly, which walked around
         /// `loadOnForeground()` — the entry point the store documents for exactly
         /// this caller (`MedicationsStore.swift:163-171`) and whose comment says
@@ -319,11 +314,22 @@ enum ForegroundPassPlan {
         /// touched. 13-03's `[.dashboardSummary, .healthKitStats]` reversal is
         /// neither read nor written here. A genuine resume past the 3 s window
         /// still forces exactly as before.
+        ///
+        /// **#188 (1):** the pass starts the load but no longer owns it. The
+        /// store runs it in its own task, this step waits only until the
+        /// deadline cancels it, and the result still lands in `todayIntakes`
+        /// (and through `onIntakesDidChange` on the badge, the Live Activity and
+        /// the reminders) when the server answers after 250 ms.
         private var medicationLoad: ForegroundWork {
-            { [container] _ in await container.medicationsStore.loadOnForeground() }
+            { [container] _ in
+                // #191: compare `medications.lastUpdatedAt` on every
+                // foreground, in a task the deadline does not own.
+                await container.startMedicationFreshnessCheck()
+                await container.medicationsStore.loadOnForeground()
+            }
         }
 
-        /// v0.6.1.3 Y4.1 — recompute the App-Badge against the live
+        /// Recompute the App-Badge against the live
         /// `MedicationsStore.dueOrMissedCount`. Published through the session, so
         /// a pass whose account has already been superseded cannot put the
         /// previous user's dose count on the icon.
@@ -337,7 +343,7 @@ enum ForegroundPassPlan {
             }
         }
 
-        /// v0.10.0 W-Mood-B + AUDIT-G A1-B1 — cold-read the server-canonical
+        /// Cold-read the server-canonical
         /// mood-reminder hour, then re-arm or cancel the iOS-local evening
         /// reminder. Best-effort and fail-open: a failed read leaves the local
         /// mirror in place.
@@ -352,19 +358,19 @@ enum ForegroundPassPlan {
             }
         }
 
-        /// v0.14.3 E3 — revalidate the Stimmung card. The store's 60 s gate keeps
+        /// Revalidate the Stimmung card. The store's 60 s gate keeps
         /// it cheap and the `.moodEntries` SWR row serves cache-first.
         private var moodRevalidate: ForegroundWork {
             { [container] _ in await container.moodStore.revalidateIfStale() }
         }
 
-        /// v0.14.8 C4 — re-resolve the cycle gate and drive the C2 importer
-        /// lifecycle to match. Dormant behind `FeatureFlag.cycleTracking`.
+        /// Re-resolve the cycle gate and drive the C2 importer
+        /// lifecycle to match.
         private var cycleGateRefresh: ForegroundWork {
             { [container] _ in await container.cycleStore.refreshGateLifecycle() }
         }
 
-        /// A7-M2 — probe-gated foreground outbox re-drain. Stays a probe, never a
+        /// Probe-gated foreground outbox re-drain. Stays a probe, never a
         /// poll: an offline or captive foreground is a no-op.
         private var outboxDrain: ForegroundWork {
             { [container] _ in await container.foregroundDrainOutboxIfReachable() }
@@ -373,7 +379,7 @@ enum ForegroundPassPlan {
         /// The foreground HealthKit route — one `HealthSyncTrigger.foreground`
         /// pass per genuine foreground, self-throttled inside the container.
         /// Receiving is READING, so it gates on "has the auth sheet ever run",
-        /// never on the write-derived state (#66 follow-up). V1: this only
+        /// never on the write-derived state (#66 follow-up). This only
         /// starts the detached pass; it does not wait for it.
         private var healthKitStats: ForegroundWork {
             { [container, hkReadiness] _ in
@@ -383,24 +389,31 @@ enum ForegroundPassPlan {
             }
         }
 
-        /// W8-A1 — foreground dashboard-summary revalidation, TTL-gated inside
+        /// Foreground dashboard-summary revalidation, TTL-gated inside
         /// the store. Published through the session for the same reason the badge
         /// is: it is user-visible state.
         ///
-        /// 13-03 — first in its leg now, ahead of the HealthKit sweep. See the
+        /// First in its leg now, ahead of the HealthKit sweep. See the
         /// rationale on ``ForegroundPassPlan/shape``. What this buys inside a
         /// 250 ms budget, stated honestly: the SWR cache emission lands and the
         /// skeleton comes down, and the network revalidation *starts*. Whether
         /// that revalidation completes inside the bound is a budget question,
         /// and the truncated-pass half of it is D-09-06-A — Phase 14's, not
         /// this plan's.
+        ///
+        /// **#188 (1):** like the medication load, the refresh runs in its own
+        /// task, so the deadline stops the wait, not the refresh; the store's
+        /// session lease still fences an account switch.
         private var dashboardSummary: ForegroundWork {
             { [container] session in
-                await session.publish { await container.dashboardStore.refresh() }
+                await session.publish {
+                    let refresh = _Concurrency.Task { @MainActor in await container.dashboardStore.refresh() }
+                    await OwnedReloadWait.untilDoneOrCancelled(refresh)
+                }
             }
         }
 
-        /// W3 (v0.11 #22) — warm the daily Insights caches. `warmAndAwait()`
+        /// Warm the daily Insights caches. `warmAndAwait()`
         /// rather than `warm()`: the fire-and-forget variant spawns a task the
         /// pass could neither cancel nor drain, which is the shape this plan
         /// removes. The service's own re-entry guard and backend gate are
@@ -409,14 +422,14 @@ enum ForegroundPassPlan {
             { [container] _ in await container.insightsPrefetch.warmAndAwait() }
         }
 
-        /// AUD-8 H-1 — keep the persistent SWR cache bounded from a foreground
+        /// Keep the persistent SWR cache bounded from a foreground
         /// entry point. Throttled to once an hour and dispatched off the main
         /// actor inside the call.
         private var swrCacheSweep: ForegroundWork {
             { [container] _ in await container.sweepSWRCacheOnForeground() }
         }
 
-        /// v0.7.0 W-SEC-M-1 — sweep doctor-report PDF/FHIR residue older than
+        /// Sweep doctor-report PDF/FHIR residue older than
         /// 24 h from `temporaryDirectory`. The walk is a blocking file operation,
         /// so it keeps its utility-priority executor; the pass awaits it rather
         /// than abandoning it, and skips it outright once cancelled.
@@ -426,7 +439,7 @@ enum ForegroundPassPlan {
         }
     }
 
-    /// AUDIT-G A1-B1 (v0.11) — refresh the `MoodReminderPrefStore` mirror from
+    /// Refresh the `MoodReminderPrefStore` mirror from
     /// the server-canonical `GET /api/auth/me/notification-prefs` hour. Only
     /// writes when the server actually surfaced a value; a drifted/older server
     /// (`nil`) leaves the existing mirror untouched.

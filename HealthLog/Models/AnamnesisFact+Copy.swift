@@ -1,6 +1,6 @@
 import Foundation
 
-// **CU-32 — Beschriftungen der Anamnese-Fläche.**
+// **Beschriftungen der Anamnese-Fläche.**
 //
 // Reine Schlüssel-Ableitung, kein SwiftUI: die Oberfläche und die
 // Katalog-Tests greifen auf dieselben Konstanten zu, damit ein fehlender
@@ -72,7 +72,7 @@ public enum AnamnesisCopy {
     public static let validityRange = "anamnesis.validity.range"
 
     public static let historyTitle = "anamnesis.history.title"
-    // 1.4 B2-c — `anamnesis.history.empty` and `.footer` left with the empty
+    // `anamnesis.history.empty` and `.footer` left with the empty
     // history fold-out and its "nothing is overwritten" line.
 
     public static let actionRemove = "anamnesis.action.remove"

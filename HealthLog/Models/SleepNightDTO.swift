@@ -76,18 +76,24 @@ public struct SleepSession: Codable, Sendable, Equatable {
     /// heuristic to detect those legacy summary nights. The server flag is
     /// authoritative whenever present.
     public let reconstructed: Bool
-    /// Parity Build 4 · 4.7 — set when two writer buckets reported clearly
+    /// Set when two writer buckets reported clearly
     /// DIFFERENT asleep totals for this same session. Purely observational:
     /// the server still serves one canonical set of totals above (it picks a
     /// winner off the user's source ladder), and this field says so out loud
     /// instead of letting the app present a contested number as settled.
     /// `nil` on the ordinary path — one source, or a spread inside tolerance.
     public let sourceDiscrepancy: SleepSourceDiscrepancy?
+    /// #181 (server 1.49.0) — the IANA zone the night is read in when its rows
+    /// carry one that is not the profile zone (a night slept abroad); `nil`
+    /// otherwise and on an older server. The screen then shows the night's
+    /// clock times in that zone (``ReadingTimeZone``); `night` is already the
+    /// wake day there.
+    public let timeZone: String?
 
     private enum CodingKeys: String, CodingKey {
         case night, source, start, end
         case asleepMinutes, inBedMinutes, awakeMinutes, awakenings
-        case stages, segments, reconstructed, sourceDiscrepancy
+        case stages, segments, reconstructed, sourceDiscrepancy, timeZone
     }
 
     public init(
@@ -102,7 +108,8 @@ public struct SleepSession: Codable, Sendable, Equatable {
         stages: [SleepStage: Int],
         segments: [SleepSegment],
         reconstructed: Bool = false,
-        sourceDiscrepancy: SleepSourceDiscrepancy? = nil
+        sourceDiscrepancy: SleepSourceDiscrepancy? = nil,
+        timeZone: String? = nil
     ) {
         self.night = night
         self.source = source
@@ -116,6 +123,7 @@ public struct SleepSession: Codable, Sendable, Equatable {
         self.segments = segments
         self.reconstructed = reconstructed
         self.sourceDiscrepancy = sourceDiscrepancy
+        self.timeZone = timeZone
     }
 
     public init(from decoder: Decoder) throws {
@@ -124,7 +132,7 @@ public struct SleepSession: Codable, Sendable, Equatable {
         source = try c.decodeIfPresent(String.self, forKey: .source)
         start = try c.decode(Date.self, forKey: .start)
         end = try c.decode(Date.self, forKey: .end)
-        // W-SLEEP (v0.14.8) — the live route serialises every summary minute
+        // The live route serialises every summary minute
         // field UNROUNDED (`route.ts` only rounds `segments[].minutes`): the
         // iOS uploader sends `duration / 60.0` Doubles and the server sums
         // those floats straight into `asleepMinutes` / `inBedMinutes` /
@@ -151,7 +159,7 @@ public struct SleepSession: Codable, Sendable, Equatable {
         // that one segment instead of throwing the whole night away.
         let lossy = try c.decodeIfPresent([LossySegment].self, forKey: .segments) ?? []
         segments = lossy.compactMap(\.segment)
-        // W-B189 — tolerant: absent on older servers → false (measured/legacy;
+        // Tolerant: absent on older servers → false (measured/legacy;
         // the view's `isSummaryShaped` heuristic still catches legacy WHOOP).
         reconstructed = try c.decodeIfPresent(Bool.self, forKey: .reconstructed) ?? false
         // Additive + lossy: absent on older servers, `null` on the ordinary
@@ -161,6 +169,9 @@ public struct SleepSession: Codable, Sendable, Equatable {
             SleepSourceDiscrepancy.self,
             forKey: .sourceDiscrepancy
         )
+        // Additive (#181): absent on older servers, `null` in the profile
+        // zone; a non-string degrades to "no zone", never a lost night.
+        timeZone = try? c.decodeIfPresent(String.self, forKey: .timeZone)
     }
 
     /// Decodes an optionally-fractional minute count and rounds it to `Int` —
@@ -199,6 +210,7 @@ public struct SleepSession: Codable, Sendable, Equatable {
         try c.encode(segments, forKey: .segments)
         try c.encode(reconstructed, forKey: .reconstructed)
         try c.encodeIfPresent(sourceDiscrepancy, forKey: .sourceDiscrepancy)
+        try c.encodeIfPresent(timeZone, forKey: .timeZone)
     }
 }
 
@@ -306,7 +318,7 @@ public struct SleepSegment: Codable, Sendable, Equatable, Identifiable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // W-SLEEP (v0.14.8) — tolerant stage decode. A stage-less legacy /
+        // Tolerant stage decode. A stage-less legacy /
         // manual row reconstructs to `stage: null` on the wire; the server
         // treats stage-less rows as the night's bare ASLEEP signal
         // (`asleepMinutesOf` fallback), so render them as the coarse ASLEEP
@@ -340,7 +352,7 @@ public struct SleepSegment: Codable, Sendable, Equatable, Identifiable {
 /// shallow (`AWAKE`) to deep (`DEEP`); it drives the hypnogram's vertical lane
 /// position (DEEP at the bottom, Apple-Health convention) and the
 /// deep→shallow ordering of the distribution band. The per-phase HUE is a
-/// fixed muted-pastel CATEGORY color (W-SLEEPHYP) carried by the view layer
+/// fixed muted-pastel CATEGORY color carried by the view layer
 /// (`SleepHypnogramScreen.color(for:)`), not by depth — the four phases must be
 /// distinguishable at a glance, which a lightness-only ramp did not deliver.
 public enum SleepStage: String, Codable, Sendable, CaseIterable {

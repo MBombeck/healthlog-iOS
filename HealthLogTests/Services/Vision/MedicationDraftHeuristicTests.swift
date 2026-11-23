@@ -174,10 +174,20 @@ struct MedicationDraftHeuristicTests {
         #expect(MedicationDraftHeuristic.guessDoseForm(lines: ["Filmomhulde tabletten"], language: .nl) == "Filmomhulde tablet")
     }
 
+    @Test("guessDoseForm — a Spanish interface keeps the pack's Spanish dose form")
+    func spanishDoseForm() {
+        let lines = ["Metformina Sandoz", "850 mg", "Comprimidos recubiertos con película EFG"]
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: lines, language: .es) == "Comprimido")
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: ["Cápsulas duras"], language: .es) == "Cápsula")
+        #expect(MedicationDraftHeuristic.guessDoseForm(lines: ["Naproxeno 100 mg/5 ml jarabe"], language: .es) == "Jarabe")
+    }
+
     @Test("every interface language searches every dose-form lexicon", arguments: AppLanguage.allCases)
     func everyLanguageSearchesEveryLexicon(language: AppLanguage) {
         let lexicon = MedicationDraftHeuristic.doseFormLexicon(for: language)
-        let all = MedicationDraftHeuristic.doseFormKeywords + MedicationDraftHeuristic.dutchDoseFormKeywords
+        let all = MedicationDraftHeuristic.doseFormKeywords
+            + MedicationDraftHeuristic.dutchDoseFormKeywords
+            + MedicationDraftHeuristic.spanishDoseFormKeywords
         #expect(lexicon.count == all.count)
         #expect(Set(lexicon) == Set(all))
     }

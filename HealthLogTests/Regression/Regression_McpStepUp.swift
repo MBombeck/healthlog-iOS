@@ -9,7 +9,7 @@
     import Testing
 
     /// **REG (1.5) — SEC, #151: a connector (MCP) token is never created
-    /// without the second factor.** POLISH-C (C1, #163 B1): the store
+    /// without the second factor.** POLISH-C: the store
     /// mirrors the server's `elevation-if-enrolled` rule through its real
     /// resolver and a real ``AccountSecurityStore``. An account with a factor
     /// or a passkey sends no `POST /api/mcp/tokens` until a proof is

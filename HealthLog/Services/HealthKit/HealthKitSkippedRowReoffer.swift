@@ -1,6 +1,6 @@
 import Foundation
 
-/// **#113 / 0.3 — offering refused rows to the server again.**
+/// **Offering refused rows to the server again.**
 ///
 /// A refusal is deterministic for one server and one app mapping; both change
 /// over time. So the skip register's rows are offered again:
@@ -34,15 +34,21 @@ struct HealthKitSkippedRowReoffer: Sendable {
     func run(ownerID: String, build: String, force: Bool, at now: Date = Date()) async -> Summary {
         let due = force
             ? await register.measurementRows(ownerID: ownerID)
-            : await register.rowsDue(ownerID: ownerID, build: build)
+            : await Self.merged(
+                register.rowsDue(ownerID: ownerID, build: build),
+                register.unansweredRowsDue(ownerID: ownerID, at: now)
+            )
         guard !due.isEmpty else { return .nothingToOffer }
 
         let outcomes: [BatchUploadOutcome]
         do {
-            // POLISH-B B6 — rows refused under a name the server never mapped
+            // Rows refused under a name the server never mapped
             // (the noise event before REG) are offered under its name.
             outcomes = try await upload(due.compactMap(\.entry).map { $0.withServerWireName() })
         } catch {
+            // No verdict: unanswered rows wait longer before the next offer.
+            let unanswered = Set(due.filter(\.awaitsVerdict).map(\.id))
+            try? await register.noteOfferWithoutVerdict(ids: unanswered, ownerID: ownerID, at: now)
             return Summary(offered: due.count, stored: 0, stillRefused: 0, transportFailed: true)
         }
 
@@ -74,6 +80,14 @@ struct HealthKitSkippedRowReoffer: Sendable {
             HLLog.healthKit.error("skip register re-offer write failed — rows are offered again next pass")
         }
         return Summary(offered: due.count, stored: stored.count, stillRefused: refused.count, transportFailed: false)
+    }
+}
+
+extension HealthKitSkippedRowReoffer {
+    /// The build's due rows and the unanswered rows whose wait is over, each once.
+    static func merged(_ first: [HealthKitSkippedRow], _ second: [HealthKitSkippedRow]) -> [HealthKitSkippedRow] {
+        var seen = Set<String>()
+        return (first + second).filter { seen.insert($0.id).inserted }
     }
 }
 

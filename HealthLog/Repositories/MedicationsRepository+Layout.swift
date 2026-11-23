@@ -5,13 +5,12 @@ import Foundation
 /// actor body stays under the type-body-length budget.
 public extension MedicationsRepository {
     /// Fetch the resolved list layout (view + manual order, server defaults
-    /// merged in). Throws in standalone mode (no server) — callers treat any
-    /// failure as "no saved layout" and keep the default server order.
+    /// merged in). Callers treat any failure as "no saved layout" and keep
+    /// the default server order.
     func listLayout() async throws -> MedicationListLayout {
-        if isStandaloneActive { throw HLError.offline }
         let req: APIRequest<MedicationListLayout> = .get("/api/medications/layout")
         let layout = try await api.send(req)
-        // CU-20 — refresh the token the next PUT will echo as `baseUpdatedAt`.
+        // Refresh the token the next PUT will echo as `baseUpdatedAt`.
         listLayoutToken = layout.updatedAt
         return layout
     }
@@ -25,7 +24,7 @@ public extension MedicationsRepository {
     /// field is written, the other is kept server-side). Returns the resolved
     /// layout the server echoes.
     ///
-    /// **CU-20 (#69):** guarded by `baseUpdatedAt`. A stale token yields
+    /// Guarded by `baseUpdatedAt`. A stale token yields
     /// `409 medication_layout_conflict` with nothing written; the bounded retry
     /// re-GETs and re-sends. Bounded rather than looping because this GET sits
     /// behind a 300 s server-side cache invalidated only by this route's own
@@ -33,8 +32,7 @@ public extension MedicationsRepository {
     /// write can hand back the same stale token.
     @discardableResult
     func updateListLayout(_ patch: MedicationListLayoutPatch) async throws -> MedicationListLayout {
-        if isStandaloneActive { throw HLError.offline }
-        return try await withOptimisticConflictRetry(
+        try await withOptimisticConflictRetry(
             conflictCode: OptimisticConflictCode.medicationLayout,
             token: listLayoutToken
         ) { token in

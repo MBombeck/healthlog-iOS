@@ -1,6 +1,6 @@
 import Foundation
 
-// U1 (#16) — the one write path for `lastServerAcceptance`.
+// The one write path for `lastServerAcceptance`.
 //
 // Every recorder that hears the server accept Apple Health data calls this:
 // `recordObservation` (rows the server stored), `recordStatsAction` (a posted

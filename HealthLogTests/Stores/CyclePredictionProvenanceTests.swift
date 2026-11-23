@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **CU-25 (#72) — one authoritative prediction, with its origin on the record.**
+/// **One authoritative prediction, with its origin on the record.**
 ///
 /// The server DTO is canonical. The on-device engine survives ONLY as the
 /// offline / degraded fallback, and only under two conditions: it renders
@@ -39,12 +39,6 @@ struct CyclePredictionProvenanceTests {
         return SettingsStore(repo: repo, defaults: defaults)
     }
 
-    private func makeFlagsEnabled() async -> FeatureFlagsStore {
-        let store = FeatureFlagsStore()
-        store.setOverride(.cycleTracking, enabled: true)
-        return store
-    }
-
     private func makeFemaleSettings() async -> SettingsStore {
         let settings = makeSettings()
         let profileJSON = """
@@ -73,9 +67,8 @@ struct CyclePredictionProvenanceTests {
     /// An open-gate store whose calendar route answers with `predictionJSON`
     /// and whose cycles route answers with `cyclesJSON`.
     private func makeStore(predictionJSON: String, cyclesJSON: String) async throws -> CycleStore {
-        let flags = await makeFlagsEnabled()
         let settings = await makeFemaleSettings()
-        let gate = CycleGate(settings: settings, featureFlags: flags)
+        let gate = CycleGate(settings: settings)
         gate.refresh()
         #expect(gate.isCycleTrackingAvailable)
         let repo = try CycleRepository(api: makeClient(), outbox: OutboxQueue(inMemory: true))

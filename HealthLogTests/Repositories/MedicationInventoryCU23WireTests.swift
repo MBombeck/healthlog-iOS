@@ -8,15 +8,15 @@ import Testing
     @testable import HealthLog
 #endif
 
-/// **CU-23 — inventory wire behaviour, asserted on the body that actually goes out.**
+/// **Inventory wire behaviour, asserted on the body that actually goes out.**
 ///
 /// Real `APIClient` over `MockURLProtocol` (never a mock server), so the
 /// tri-state PATCH is verified against the bytes on the wire rather than against
 /// the Swift value that produced them:
-///   - `markAsFirstUseAt` accepts `null` to DELETE the opening date (A7). An
+///   - `markAsFirstUseAt` accepts `null` to DELETE the opening date. An
 ///     omitted key and an explicit `null` mean different things to the route,
 ///     which is exactly the trap `RecordPatchField` exists to close.
-///   - the same tri-state now drives `printedExpiry` (M-1), replacing the
+///   - the same tri-state now drives `printedExpiry`, replacing the
 ///     ad-hoc clear-flag.
 ///   - `PenInventoryStore.load()` replays the server rows (#52) into the pen
 ///     list, and skips rows that are not pen entries.
@@ -101,7 +101,7 @@ struct MedicationInventoryCU23WireTests {
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    // MARK: - A7 — markAsFirstUseAt: null clears the opening date
+    // MARK: - markAsFirstUseAt: null clears the opening date
 
     @Test("A7: .clear transmits an explicit JSON null for markAsFirstUseAt")
     func clearFirstUseSendsExplicitNull() async throws {
@@ -153,7 +153,7 @@ struct MedicationInventoryCU23WireTests {
         }
     }
 
-    // MARK: - #52 — the server rows are replayed into the pen list
+    // MARK: - The server rows are replayed into the pen list
 
     private var serverInventoryListJSON: String {
         #"""

@@ -26,8 +26,7 @@ import SwiftUI
 /// saves only when something was typed; "Later" advances untouched.
 ///
 /// **Server-only surface.** The about-me route lives on the server, so this
-/// step is reached on the server branch only (standalone has no
-/// server). The flow inserts it between the AI-source step and `done`.
+/// step needs a signed-in session. The flow inserts it between the AI-source step and `done`.
 struct AnamnesisStep: View {
     let onNext: () -> Void
     let onSkip: () -> Void
@@ -48,7 +47,7 @@ struct AnamnesisStep: View {
     /// audit 02 · M-5 — set when a save fails so the step surfaces the error
     /// instead of silently advancing as if the entry was persisted.
     @State private var saveFailed = false
-    /// 08-10 — how many allergy entries the server refused, out of how many were
+    /// How many allergy entries the server refused, out of how many were
     /// attempted. `nil` when nothing was attempted or everything landed. The
     /// allergy loop used to discard every result (`_ = await …create(…)`), so a
     /// half-written intake reported the same complete success as a whole one.
@@ -72,7 +71,9 @@ struct AnamnesisStep: View {
             .padding(.top, HLSpace.xxl)
         }
         .background(HLColor.background)
-        .safeAreaInset(edge: .bottom) {
+        // The pinned call to action rides the system's bottom bar, as on the
+        // welcome and Apple Health steps.
+        .hlBottomBar {
             VStack(spacing: HLSpace.sm) {
                 if let partialSave {
                     // Counts, never substances: the entries themselves are
@@ -105,14 +106,11 @@ struct AnamnesisStep: View {
                     Task { await saveThenContinue() }
                 }
                 .accessibilityIdentifier("onboarding.anamnesis.continue")
-                HLButton(String(localized: "Later"), variant: .ghost) {
+                HLLinkButton("Later") {
                     onSkip()
                 }
                 .accessibilityIdentifier("onboarding.anamnesis.skip")
             }
-            .padding(.horizontal, HLSpace.xl)
-            .padding(.bottom, HLSpace.xxxl)
-            .background(HLColor.background)
         }
         .task { await prepareStore() }
         .onAppear {
@@ -282,7 +280,7 @@ struct AnamnesisStep: View {
         }
     }
 
-    // MARK: - Save outcome (08-10)
+    // MARK: - Save outcome
 
     /// What one Continue actually achieved, per store.
     struct AllergySaveResult: Equatable {
@@ -339,7 +337,7 @@ struct AnamnesisStep: View {
             guard !seen.contains(key) else { continue }
             seen.insert(key)
             attempted += 1
-            // `create` answers `nil` on refusal. 08-10 — that answer is now
+            // `create` answers `nil` on refusal. That answer is now
             // kept. Awaiting each one in turn is deliberate: a `TaskGroup` here
             // would race the store's own de-duplication.
             if await allergiesStore.create(AllergyCreate(substance: substance)) == nil {

@@ -1,6 +1,6 @@
 import Foundation
 
-// SUPP (1.5.0, #131): the composition of a medication, usually a
+// The composition of a medication, usually a
 // supplement, read as the server delivers it (v1.43). `GET /api/medications/{id}`
 // carries `ingredients` (what one tablet or capsule contains, labelled in the
 // account language); the list rows carry only `hasIngredients`. Every taken

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// #160 / server #1313 — the explicit "No unit" switch next to a lab unit
+/// The explicit "No unit" switch next to a lab unit
 /// field (marker editor, manual entry, scan review row). On, the field is
 /// locked and the value goes out as the unity `"1"`; off again, the field
 /// shows what was typed before. Never offered next to a medication dose, and

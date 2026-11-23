@@ -9,7 +9,7 @@ import Testing
 /// Verifiziert, dass der `MeasurementBatchUploader` nach jedem erfolgreichen
 /// POST den `successNotifier` aufruft — der Hook hängt im AppContainer am
 /// `HKReadinessStore.noteSuccessfulSync` und treibt das "Zuletzt synchronisiert"-
-/// Surface in Settings → Apple Health (F7 §5).
+/// Surface in Settings → Apple Health.
 @Suite("MeasurementBatchUploader successNotifier")
 struct MeasurementBatchUploaderNotifierTests {
     private static let entries: [HealthKitBatchEntryDTO] = [
@@ -90,7 +90,7 @@ struct MeasurementBatchUploaderNotifierTests {
     }
 }
 
-// MARK: - #10 — the owner rides along
+// MARK: - The owner rides along
 
 extension MeasurementBatchUploaderNotifierTests {
     /// The receiver fences on the account that carried the POST, so the

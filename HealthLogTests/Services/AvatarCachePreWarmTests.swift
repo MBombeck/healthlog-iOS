@@ -1,7 +1,7 @@
 @testable import HealthLog
 import Testing
 
-/// **v0.6.2 W-SEC-A — Gravatar removed.**
+/// **Gravatar removed.**
 ///
 /// The pre-W-SEC-A `preWarm(email:)` ladder fetched the operator's
 /// Gravatar PNG off the critical path so the Dashboard could paint a

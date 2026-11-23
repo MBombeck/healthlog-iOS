@@ -40,7 +40,6 @@
                 case .events: return HealthKitService.eventReadTypes
                 case .writes: return Set(HealthKitService.defaultWriteTypes.map { $0 as HKObjectType })
                 case .medicationDoseEvents:
-                    guard #available(iOS 26.0, *) else { return [] }
                     return [HKObjectType.medicationDoseEventType()]
                 case .allSampleReads: return reads.filter { $0 is HKSampleType }
                 }

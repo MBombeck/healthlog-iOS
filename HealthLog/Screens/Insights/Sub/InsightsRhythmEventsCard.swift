@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// W5-2 (v0.12 W5b) — the **Device health notifications** card on the Insights
+/// The **Device health notifications** card on the Insights
 /// overview, the iOS twin of the web `RhythmEventsCard`
 /// (`src/components/insights/rhythm-events-card.tsx`).
 ///
@@ -23,8 +23,7 @@ import SwiftUI
 /// **Self-suppression.** When there are no events the whole card renders
 /// NOTHING (`EmptyView`) — never an empty / alarming shell. The data gate lives
 /// in `RhythmEventsStore.events` (empty on `hasEvents:false` / 404 / 422 /
-/// error). The call site additionally hides the card in standalone / no-server
-/// (this is a pure server read).
+/// error).
 ///
 /// **Monochrome + no glass.** Content card = `HLCard` over `HLSurface.secondary`,
 /// `HLText.*` only; color carries no signal here. Reduce-motion-gated entrance.
@@ -38,15 +37,12 @@ struct InsightsRhythmEventsCard: View {
         // Self-suppress: no events → nothing. Calm doctrine, web parity
         // (`if (!data.hasEvents) return null`).
         if !events.isEmpty {
-            VStack(alignment: .leading, spacing: HLSpace.sm) {
-                InsightsSectionHeader("Device health notifications")
+            VStack(alignment: .leading, spacing: HLLayout.cardGap) {
+                HLSectionHeader("Device health notifications", rank: .area)
                 HLCard {
                     VStack(alignment: .leading, spacing: HLSpace.md) {
                         ForEach(events) { event in
                             row(for: event)
-                            if event.id != events.last?.id {
-                                Divider().overlay(HLText.tertiary.opacity(0.3))
-                            }
                         }
                         disclaimer
                         // 1.0.3 (App Review 1.4.1) — the device maker's own
@@ -55,6 +51,7 @@ struct InsightsRhythmEventsCard: View {
                     }
                 }
             }
+            .hlContainerGap(HLLayout.cardGap)
             .frame(maxWidth: .infinity, alignment: .leading)
             .transition(reduceMotion ? .identity : .opacity)
             .accessibilityElement(children: .contain)
@@ -74,29 +71,27 @@ struct InsightsRhythmEventsCard: View {
         // attribution is the only honest signal of WHICH device decided — a
         // Withings-sourced AFib/ECG event must read "Withings", never blank.
         let sourceLabel = Self.sourceLabel(for: event.source, deviceType: event.deviceType)
-        HStack(alignment: .top, spacing: HLSpace.sm) {
-            Image(systemName: Self.symbol(for: event.type))
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: HLSpace.xxs) {
+        // The row's sizes (title 15 semibold, detail 12, symbol column),
+        // but the verdict keeps a line of its own and wraps: a device's
+        // verdict is shown whole, never cut at the line end.
+        HStack(alignment: .top, spacing: HLRowMetrics.gap) {
+            HLRowGlyph(symbol: Self.symbol(for: event.type))
+            VStack(alignment: .leading, spacing: HLRowMetrics.labelSpacing) {
                 Text(label)
-                    .font(.hlBody.weight(.medium))
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.rowTitle)
                 if let verdict {
                     // The device's verdict, verbatim. Framed as the device's
                     // decision ("Your device flagged …"), never HealthLog's.
                     Text(verdict)
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.rowSubtitle)
+                        .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("insights.rhythmEvents.verdict")
                 }
                 HStack(spacing: HLSpace.xs) {
-                    let when = event.occurredAt.formatted(.dateTime.day().month().year().hour().minute())
+                    let when = HLDateFormat.dateTime(event.occurredAt)
                     // Honest device attribution — "…, Withings" / "…, Apple
                     // Watch". Tertiary, caption-weight: it qualifies the
-                    // event without competing with the verdict. U5 (1.1.1):
+                    // event without competing with the verdict. U5:
                     // a comma joins the two, no middle dot.
                     Text(verbatim: sourceLabel == nil ? when : when + ",")
                     if let sourceLabel {
@@ -104,8 +99,7 @@ struct InsightsRhythmEventsCard: View {
                             .accessibilityIdentifier("insights.rhythmEvents.source")
                     }
                 }
-                .font(.hlCaption)
-                .foregroundStyle(HLText.tertiary)
+                .hlText(.footnote)
             }
             Spacer(minLength: 0)
         }
@@ -124,7 +118,7 @@ struct InsightsRhythmEventsCard: View {
 
     // MARK: - Disclaimer (permanent, non-dismissible)
 
-    /// 1.4 B2 — the card's foot, on the card's own edge: no inset box inside
+    /// The card's foot, on the card's own edge: no inset box inside
     /// the card and no `info.circle` that opened nothing. Permanent as before.
     private var disclaimer: some View {
         // VERBATIM copy contract — `insights.rhythmEvents.disclaimer`.
@@ -132,8 +126,7 @@ struct InsightsRhythmEventsCard: View {
             // swiftlint:disable:next line_length
             "These are alerts your device produced using its own built-in detection. They are shown here for your awareness only. This is not a medical assessment by HealthLog, and HealthLog does not diagnose any condition. If a notification concerns you, talk to your doctor."
         )
-        .font(.hlFootnote)
-        .foregroundStyle(HLText.secondary)
+        .hlText(.note)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("insights.rhythmEvents.disclaimer")

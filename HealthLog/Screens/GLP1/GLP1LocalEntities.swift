@@ -3,7 +3,7 @@ import SwiftData
 
 // Local-only SwiftData entities for the GLP-1 detail stack.
 //
-// **Scope (v0.5.x):** these entries live **on-device only**. The server
+// **Scope:** these entries live **on-device only**. The server
 // already authoritatively serves the *aggregate* views that overlap (dose
 // changes via `Glp1DetailsDTO.doseChanges`, pen-inventory totals via
 // `Glp1InventoryDTO`, and the per-intake injection-site via
@@ -53,9 +53,10 @@ public final class TitrationStepEntry {
     public var note: String?
     /// Wall-clock creation timestamp.
     public var createdAt: Date
-    /// Future server-sync marker. Always `nil` in v0.5.x.
+    /// #169 upload marker: the server step's id once uploaded, `nil` while
+    /// the step waits (every row a 1.7 build wrote).
     public var serverID: String?
-    /// Future server-sync marker. Always `nil` in v0.5.x.
+    /// #169: when the upload was confirmed.
     public var syncedAt: Date?
 
     public init(
@@ -141,7 +142,7 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     case appetiteLoss = "appetite_loss"
     case injectionSiteReaction = "injection_site_reaction"
     case headache
-    /// **Audit B-4 — sentinel for a server taxonomy entry this build cannot
+    /// **Sentinel for a server taxonomy entry this build cannot
     /// map.** The server's side-effect taxonomy has 21 entries and grows; the
     /// hydration path used to answer an unmapped one with `?? .nausea`, so a
     /// row the person had logged as some other symptom read back, in a
@@ -150,13 +151,13 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     /// picker and has no ``serverEntry``, so it can never be written.
     case unknown = "__unknown__"
 
-    /// Audit B-4 — the kinds the picker may offer: `allCases` minus the
+    /// The kinds the picker may offer: `allCases` minus the
     /// hydrate-only ``unknown`` sentinel.
     public static var pickerCases: [SideEffectKind] {
         allCases.filter { $0 != .unknown }
     }
 
-    /// v0.12 SP3 — maps the closed iOS picker kind onto the server's
+    /// Maps the closed iOS picker kind onto the server's
     /// authoritative side-effect `entry` taxonomy
     /// (`src/lib/medications/side-effects/taxonomy.ts`, 21 entries). The
     /// server derives `category` from this entry, so iOS sends only the entry.
@@ -164,7 +165,7 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     /// cognitive signal (`DIZZINESS`) so it still round-trips rather than
     /// being silently dropped; the free-text note preserves the literal label.
     ///
-    /// **Audit B-4 — `nil` for ``unknown``, and that is the write gate.** The
+    /// **`nil` for ``unknown``, and that is the write gate.** The
     /// `POST` body is built from this property, so an optional here is what
     /// makes the compiler refuse to invent a taxonomy entry.
     public var serverEntry: String? {
@@ -184,7 +185,7 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     /// Inverse of `serverEntry` for hydrating server rows back into the iOS
     /// picker model.
     ///
-    /// **Audit B-4 — an unmapped entry resolves to ``unknown``, never to `nil`
+    /// **An unmapped entry resolves to ``unknown``, never to `nil`
     /// and never to a named symptom.** The one caller coalesced the old `nil`
     /// with `?? .nausea`; returning a non-optional sentinel removes the place
     /// that coalescing could live.
@@ -203,7 +204,7 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// Audit B-4 — notes the first sighting of an unmapped taxonomy entry and
+    /// Notes the first sighting of an unmapped taxonomy entry and
     /// answers the sentinel. Split out so the `switch` above stays a table.
     private static func unknownEntry(_ raw: String) -> SideEffectKind {
         UnknownServerEnumLog.noteFirstSighting(
@@ -213,7 +214,7 @@ public enum SideEffectKind: String, CaseIterable, Sendable, Hashable {
     }
 }
 
-/// v0.12 SP3 — severity mapping between the iOS 0–3 logbook slider and the
+/// Severity mapping between the iOS 0–3 logbook slider and the
 /// server's 1–5 Likert scale (`createSideEffectSchema`, min 1 max 5).
 public enum SideEffectSeverityBridge {
     /// 0–3 (iOS) → 1–5 (server). 0/1→1 (mild), 2→3 (moderate), 3→5 (severe).
@@ -339,7 +340,7 @@ public final class InjectionSiteEntry {
 }
 
 // `InjectionSite` (+ `InjectionSiteEffectiveSet`) moved to
-// `Models/InjectionSite.swift` (v0.11) so the plattform-free Core /
+// `Models/InjectionSite.swift` so the plattform-free Core /
 // widget-extension targets can reference it from the medications repo +
 // wire bodies. The SwiftData entities here keep using it unchanged.
 

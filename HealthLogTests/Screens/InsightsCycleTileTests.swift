@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **W-B184 CYC-4 — Insights overview cycle tile.**
+/// **Insights overview cycle tile.**
 ///
 /// The cycle summary tile on the Insights overview surfaces the current phase +
 /// a next-period line, tappable through to the full ``CycleScreen``. Two
@@ -11,7 +11,7 @@ import Testing
 /// 1. **Availability gate.** The tile self-suppresses unless cycle tracking is
 ///    available (women-only resolution / opt-in) AND a current phase resolves —
 ///    that path is owned by ``CycleScreenModel/phase(_:)``, which reads the
-///    server verdict rather than deriving one (Z1 / #72), and is covered in
+///    server verdict rather than deriving one, and is covered in
 ///    `CycleScreenModelTests`. Here we assert the maturity branch.
 /// 2. **C1 still-learning gate (b183 `38560c9f`).** Below
 ///    ``CycleMaturity/minCyclesForFertility`` confirmed cycles (or while the

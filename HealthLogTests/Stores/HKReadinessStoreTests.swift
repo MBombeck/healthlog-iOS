@@ -350,7 +350,7 @@
                 keychain: keychain,
                 defaults: defaults
             )
-            // Plan 07-09 — the route takes the trigger it starts work for, and
+            // The route takes the trigger it starts work for, and
             // "Jetzt syncen" is `.manual`. It used to be a nameless hook that
             // enumerated importers.
             store.attachHealthSyncRoute { trigger in
@@ -517,7 +517,6 @@
             func attachUploader(_: MeasurementBatchUploader) async {}
             func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
             func setInitialBackfillCutoff(_: Date?) async {}
-            func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
         }
 
     #endif

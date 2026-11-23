@@ -4,7 +4,7 @@ import Observation
     import UIKit
 #endif
 
-/// **GH #47 — owns the "Sync medications with Apple Health" toggle (iOS 26+).**
+/// **Owns the "Sync medications with Apple Health" toggle (iOS 26+).**
 ///
 /// OFF by default. Device-local UI-pref (`UserDefaults`) the server does not
 /// know — the medication mirror is a purely client↔HealthKit concern. Flipping
@@ -12,9 +12,8 @@ import Observation
 /// dedicated request, deliberately kept OUT of the always-on onboarding HK
 /// sheet) and kicks a first import; flipping it off stops future sync.
 ///
-/// The whole surface is gated on iOS 26 + HealthKit availability
-/// (``isAvailable``). Below that the toggle is hidden and every method is a
-/// no-op, so nothing references the iOS-26-only reader on an older OS.
+/// The whole surface is gated on HealthKit availability (``isAvailable``).
+/// Without it the toggle is hidden and every method is a no-op.
 @MainActor
 @Observable
 public final class MedicationHealthSyncStore {
@@ -25,7 +24,7 @@ public final class MedicationHealthSyncStore {
     /// iOS 26 + HealthKit Medications available on this device. When false the
     /// toggle must not be offered.
     public private(set) var isAvailable: Bool
-    /// **CU-10** — the last sweep's user-facing obstruction, if any (mirror cap
+    /// The last sweep's user-facing obstruction, if any (mirror cap
     /// reached / unstable identifier). `nil` = the mirror is doing its job.
     /// Rendered as its own explanation under the toggle; a generic error banner
     /// would tell the user "something went wrong" for a condition that has a
@@ -36,7 +35,7 @@ public final class MedicationHealthSyncStore {
     private let keychain: KeychainStoring
     private let reader: AppleHealthMedicationReading?
     private let defaults: UserDefaults
-    /// **Phase 07 / plan 07-05** — the account every sweep is admitted under.
+    /// The account every sweep is admitted under.
     ///
     /// Bound after construction (the composition root owns the Phase-06 lease
     /// registry, and this store's initializer is `public` while the lease
@@ -49,20 +48,20 @@ public final class MedicationHealthSyncStore {
     /// by user id) so a re-login never inherits the prior user's mirror map.
     private var importer: AppleHealthMedicationImporter?
 
-    /// **W3 (1.3)** — the running dose-event observer, while the toggle is on.
+    /// The running dose-event observer, while the toggle is on.
     private var observation: (any AppleHealthDoseEventObservation)?
-    /// **R-A2 (1.4)** — true while an observer is being armed. Launch and the
+    /// True while an observer is being armed. Launch and the
     /// admission of the account both ask, and arming suspends, so without this
     /// the second caller would arm a second observer. Stopping the loser would
     /// switch off background delivery for the dose type altogether, which is
     /// one setting per app, not per query.
     private var isArmingObservation = false
-    /// **W3** — one sweep at a time. A dose observer, the foreground pass and a
+    /// One sweep at a time. A dose observer, the foreground pass and a
     /// background wake can all ask at once; the actor's reentrancy would
     /// otherwise interleave two sweeps over the same dose ledger. A request
     /// that lands mid-sweep becomes exactly one trailing re-run.
     private let sweepGate = SweepCoalescer(label: "medications")
-    /// **W3** — whether the process is in the background right now. A dose
+    /// Whether the process is in the background right now. A dose
     /// signal that arrives then is a background arrival and posts under
     /// `background`; in front, the context's own answer stands. Injectable
     /// because a unit test cannot move `UIApplication`.
@@ -116,7 +115,7 @@ public final class MedicationHealthSyncStore {
         await runSweep(incrementalOnly: incrementalOnly)
     }
 
-    /// **W3 (1.3, #126 1.5)** — arms the dose-event observer when the
+    /// Arms the dose-event observer when the
     /// toggle is on. Called on every launch with a signed-in account (the
     /// observer does not survive process death; R-A2 moved the call from
     /// `RootView` to the launch path) and when the toggle is switched on.

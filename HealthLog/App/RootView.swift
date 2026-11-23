@@ -11,7 +11,7 @@ struct RootView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(AppRouter.self) private var router
     @Environment(HKReadinessStore.self) private var hkReadiness
-    /// R1 — trägt die Frage vor allen anderen: kennt diese Installation
+    /// Trägt die Frage vor allen anderen: kennt diese Installation
     /// überhaupt eine Serveradresse? Siehe ``needsServerAddressGate``.
     @Environment(BackendAvailability.self) private var backendAvailability
     @Environment(DisclaimerAckStore.self) var disclaimerAck
@@ -24,18 +24,27 @@ struct RootView: View {
     // destination), matching the `authStore` / `disclaimerAck` precedent above.
     @Environment(\.appContainer) var container
     @Environment(\.scenePhase) private var scenePhase
+    /// The window's size class, handed to the sheets under it as the class of
+    /// the presenting window (``HLSheetSizing``).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var locked: Bool = false
-    /// J1 / F3 — decides when the lock is due (only a real background trip,
+    /// Decides when the lock is due (only a real background trip,
     /// never right after an in-process sign-in). See ``AppLockClock``.
     @State private var lockClock = AppLockClock()
     @State private var unlockInFlight: Bool = false
     @State private var didActivateHKBackground: Bool = false
-    /// 08-09 — the locked session's own sign-out, behind the same destructive
+    /// The locked session's own sign-out, behind the same destructive
     /// confirmation as Settings and the MFA gate. The lock screen is the one
     /// place a tap is most likely to be accidental (the phone is in a pocket,
     /// the user is aiming at Unlock), and it was the one place that signed out
     /// on contact.
     @State private var lockLogoutConfirmation = LogoutConfirmationState()
+
+    /// - Parameter initiallyLocked: ``AppLockClock/startsLocked(phase:lockEnabled:)``
+    ///   at the moment the window is created.
+    init(initiallyLocked: Bool = false) {
+        _locked = State(initialValue: initiallyLocked)
+    }
 
     var body: some View {
         #if DEBUG
@@ -46,6 +55,12 @@ struct RootView: View {
             // `@ViewBuilder` keeps the release root un-erased (no `AnyView`).
             if ProcessInfo.processInfo.arguments.contains("-cycle-ring-verify") {
                 CycleScreenRingHostPreview(colorScheme: .dark)
+            } else if ProcessInfo.processInfo.arguments.contains(HLBuildingBlockGallery.launchArgument) {
+                // The building blocks on one page, for the screenshot sweep.
+                HLBuildingBlockGallery()
+            } else if ProcessInfo.processInfo.arguments.contains(HLChartBlocksGallery.launchArgument) {
+                // The chart, header and glass blocks, for the screenshot sweep.
+                HLChartBlocksGallery()
             } else {
                 rootBody
             }
@@ -55,25 +70,25 @@ struct RootView: View {
     }
 
     private var rootBody: some View {
-        Group {
-            switch RootPrivacyShieldPolicy.resolve(
+        RootPrivacyComposition(
+            resolution: RootPrivacyShieldPolicy.resolve(
                 sceneIsActive: scenePhase == .active,
                 biometricLocked: locked
-            ) {
-            case let .protected(reason):
+            ),
+            shield: { reason in
                 RootPrivacyShield(
                     reason: reason,
                     onUnlock: { Task { await tryUnlock() } },
                     onSignOut: { lockLogoutConfirmation.request() }
                 )
                 .hlLogoutConfirmation($lockLogoutConfirmation) { await authStore.logout() }
-            case .unprotected:
+            },
+            content: {
                 ZStack {
                     unprotectedRootBody
-                    // RECONCILE-CELEBRATE — health feedback remains inside the
-                    // unprotected root branch. When either privacy boundary wins,
-                    // this entire subtree (including an already-open celebration)
-                    // is unmounted before the protected frame is composed.
+                    // Health feedback stays inside the content. When the
+                    // biometric lock wins, this subtree (an open celebration
+                    // included) is unmounted before the shield is composed.
                     if let record = celebration.current {
                         CelebrationOverlay(record: record) {
                             celebration.dismiss()
@@ -82,11 +97,10 @@ struct RootView: View {
                     }
                 }
             }
-        }
-        // The former `if scenePhase != .active { PrivacyCoverView() }` overlay
-        // is intentionally replaced by the structural branch above. Keeping the
-        // historical shape named here documents why the existing security
-        // contract now resolves to an even stronger terminal-root composition.
+        )
+        // An inactive or backgrounded scene keeps this tree; the scene's
+        // cover window hides it above every presentation (`HLSceneDelegate`).
+        .environment(\.hlPresentingSizeClass, horizontalSizeClass)
         .animation(.easeInOut(duration: 0.3), value: phaseKey)
         .animation(.easeInOut(duration: 0.2), value: scenePhase == .active)
         .animation(.easeInOut(duration: 0.3), value: needsServerAddressGate)
@@ -98,25 +112,25 @@ struct RootView: View {
             handle(scenePhase: newPhase)
         }
         .task(id: phaseKey) {
-            // 09-06 — an authentication change retires the foreground
+            // An authentication change retires the foreground
             // generation. A pass that started under the previous account is
             // cancelled and drained here, and anything of it that is merely
             // *late* is refused publication by the session it captured. This is
             // the only statement every authenticated-phase transition reaches.
             ForegroundCoordinator.shared.retire()
-            // SET-ROUTE — the stacks live in the container's router; a sign-out
+            // 1.7: today's doses first, before the profile and the rest.
+            container?.revalidateDoseStateOnOpen()
+            // The stacks live in the container's router; a sign-out
             // starts the next session at the root, not on the last page.
             if case .unauthenticated = authStore.phase { router.resetNavigationForSignOut() }
             await performInitialAuthIfNeeded()
             await loadProfileOnAuthenticationIfNeeded()
+            scheduleBackgroundWakesIfSignedIn()
             await activateHealthKitBackgroundIfReady()
-            await refreshPushRegistrationIfReady()
-            await refreshDisclaimerAckIfReady()
-            await refreshMfaEnrollmentIfReady()
-            await refreshOnboardingTourIfReady()
+            await refreshLaunchGatesIfReady()
             consumePendingDeepLinkIfAuthenticated()
             consumePendingCaptureRequestIfAuthenticated()
-            // R-A2 (1.4) — the dose and State-of-Mind observers are no longer
+            // The dose and State-of-Mind observers are no longer
             // armed here: `AppContainer.armOptInHealthObserversAtLaunch()`.
             await activateWorkoutHealthSyncIfReady()
             await activateEcgHealthSyncIfReady()
@@ -138,8 +152,8 @@ struct RootView: View {
                 // complete. Closes iOS issue #10 (B).
                 OnboardingFlow()
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
-            case .authenticated, .standalone:
-                // v1.18.6 (DISC-02) + G7 (AUDIT-ONBOARDING) — the one-time
+            case .authenticated:
+                // v1.18.6 + G7 — the one-time
                 // medical-disclaimer ack is a GATE in FRONT of the product, not a
                 // sheet over an already-mounted shell. Matching web ("acknowledge
                 // on Get-started, BEFORE the wizard proceeds"), an authenticated
@@ -154,7 +168,7 @@ struct RootView: View {
                 // not-acknowledged — a transient `/me` error leaves `hasLoaded`
                 // unchanged, so a network blip can NEVER lock the user out.
                 if needsServerAddressGate {
-                    // **R1 — die Adressfrage steht vor dem Produkt.**
+                    // **Die Adressfrage steht vor dem Produkt.**
                     //
                     // Eine angemeldete Installation ohne hinterlegte Adresse ist
                     // nicht „frisch", sondern übernommen: bis b248 brachte die
@@ -195,8 +209,6 @@ struct RootView: View {
                     )
                     .transition(.opacity)
                 } else {
-                    // Standalone shares the same shell — feature gating happens
-                    // inside individual screens via SyncModeStore.isStandalone.
                     AuthenticatedShell()
                         .transition(.opacity)
                 }
@@ -210,8 +222,7 @@ struct RootView: View {
     /// and a container exists; the observer doesn't survive process death, so we
     /// restart it on every launch. Idempotent (the importer no-ops a second
     /// start) and HK-permission-safe (the anchored query just returns nothing
-    /// when HK is unauthorised). Skips Standalone — there is no server to
-    /// upload to. The post-ingest hook revalidates the Workouts list so freshly
+    /// when HK is unauthorised). The post-ingest hook revalidates the Workouts list so freshly
     /// imported workouts surface without a manual pull-to-refresh.
     /// Background/cold-launch ownership is wired independently in
     /// `AppContainer.wireWorkoutBackgroundSync`; this remains the foreground
@@ -226,7 +237,7 @@ struct RootView: View {
         // HK or who already determined workout read. Must precede the importer
         // start so the first sweep can actually see history once granted.
         //
-        // W-B184 — when the migration actually ran for a returning user, force a
+        // When the migration actually ran for a returning user, force a
         // full workout re-sweep: a pre-b182 build may have advanced the workout
         // anchor over an empty (read-unauthorized) sweep, masking all history
         // permanently. Re-auth alone wouldn't recover it (an incremental sweep
@@ -243,14 +254,14 @@ struct RootView: View {
                 await workoutsStore.revalidateIfStale()
             }
         )
-        // W-HKREAD — start the always-on categorical-EVENT importer (heart-
+        // Start the always-on categorical-EVENT importer (heart-
         // rhythm + mobility + audio-exposure events). The uploader is attached
         // during AppContainer composition, well before this auth-gated path, so
         // the importer always has a live upload sink here.
         await healthKit.startEventImportIfNeeded(userID: userID)
     }
 
-    /// GH #74 — run one ECG sweep on the transition into `.authenticated`, when
+    /// Run one ECG sweep on the transition into `.authenticated`, when
     /// the device-local upload switch is on. There is no observer to restore:
     /// the ECG path deliberately holds no background subscription (see
     /// ``AppContainer/refreshHealthKitDailyStatsForToday(force:)``), so this
@@ -262,47 +273,57 @@ struct RootView: View {
         await container.ecgHealthSyncStore.activateIfEnabled()
     }
 
-    /// #142 — load the profile on the phase transition into `.authenticated` so
+    /// Load the profile on the phase transition into `.authenticated` so
     /// `profile.avatarUrl` (the `DashboardHeader` avatar dependency) resolves
-    /// right after an in-session re-login. Cold launch loads it via
-    /// `preWarmAvatarOnLaunch()`; a re-login flips the phase without re-running it
-    /// and `clearOnLogout()` wiped `profile`, blanking the avatar for minutes.
-    /// Idempotent: `profile == nil` skips cold launch (preWarm already loaded it).
+    /// right after an in-session re-login (`clearOnLogout()` wiped `profile`,
+    /// which blanked the avatar for minutes) and on a cold launch alike.
+    /// The one profile load of a launch: `preWarmAvatarOnLaunch()` no longer
+    /// loads the profile itself (D5 #2), so a cold launch loads it here, once.
     private func loadProfileOnAuthenticationIfNeeded() async {
         guard case .authenticated = authStore.phase,
               let container,
               settings.profile == nil else { return }
-        await settings.load()
-        // #30 — load the server module map alongside the profile so module-gated
+        // Load the server module map alongside the profile so module-gated
         // surfaces resolve on the same authentication tick. Fail-open inside the
         // gate (all modules on) so a network blip never hides a valid surface.
-        await container.moduleGate.load()
+        // The two are independent and share one `/api/auth/me` (D5 #2), so they
+        // run side by side instead of one after the other.
+        let settings = settings
+        let moduleGate = container.moduleGate
+        async let profile: Void = settings.load()
+        async let modules: Void = moduleGate.load()
+        _ = await (profile, modules)
         container.cycleGate.refresh() // server `cycle` flag may now win
         container.preWarmAvatarOnLaunch()
     }
 
-    /// #32 — reconcile the server-owned setup-completion state (the tour
-    /// marker plus the account's own evidence, off `/api/auth/me` — 25-03) on
-    /// the authentication tick. Server-authoritative: a completed answer from
-    /// another device or the web wins over a stale local cache, so a
-    /// reinstalled / second-device user is not re-dropped into setup.
-    /// 08-08 — owner-bound: this account's answer, cached under this account.
-    private func refreshOnboardingTourIfReady() async {
-        guard case .authenticated = authStore.phase,
-              let container else { return }
-        await container.onboardingTourStore.refresh(owner: authStore.authenticatedRouteOwner)
-    }
-
-    /// APNs-Token rotiert bei iCloud-Restore + selten beim System-Update. Beim
-    /// Cold-Start + jedem Foreground-Wechsel rufen wir
-    /// \`registerForRemoteNotificationsIfAuthorized()\`; ein unveränderter Token
-    /// wird via \`NotificationService.didRegister\` deduped (kein POST), nur eine
-    /// echte Änderung landet als neuer \`POST /api/devices\`.
-    private func refreshPushRegistrationIfReady() async {
-        guard case .authenticated = authStore.phase,
-              let container else { return }
+    /// The launch gates that read their own slice of `/api/auth/me`: push
+    /// registration, the disclaimer, the forced second factor and the setup
+    /// tour. None waits on another, so they run side by side (D5 #2): the
+    /// second-factor gate used to wait for every gate before it, and against a
+    /// slow server (20 s timeout per read) it resolved late enough to push an
+    /// already used shell aside. They share the client's one `/api/auth/me`
+    /// snapshot instead of four round trips.
+    ///
+    /// The setup tour is server-authoritative and owner-bound (25-03): a
+    /// completed answer from another device or the web wins over a stale
+    /// local cache, cached under this account. Push registration re-sends the
+    /// APNs token only when it changed (`NotificationService.didRegister`).
+    private func refreshLaunchGatesIfReady() async {
+        guard case .authenticated = authStore.phase, let container else { return }
+        let disclaimer = disclaimerAck
+        let mfa = mfaEnrollmentGate
+        let tour = container.onboardingTourStore
+        let owner = authStore.authenticatedRouteOwner
+        async let ack: Void = disclaimer.refresh()
+        async let enrolment: Void = mfa.refresh()
+        async let setup: Void = tour.refresh(owner: owner)
         #if canImport(UserNotifications) && canImport(UIKit)
-            await container.notifications.registerForRemoteNotificationsIfAuthorized()
+            let notifications = container.notifications
+            async let push: Void = notifications.registerForRemoteNotificationsIfAuthorized()
+            _ = await (ack, enrolment, setup, push)
+        #else
+            _ = await (ack, enrolment, setup)
         #endif
     }
 
@@ -315,7 +336,7 @@ struct RootView: View {
         router.consumePendingRoute()
     }
 
-    /// **v0.8.4 WWIDGET-3** — consume a one-shot "Erfassen" control marker.
+    /// Consume a one-shot "Erfassen" control marker.
     /// The `OpenCaptureIntent` (Control Center / Action Button) drops a marker
     /// into the shared App Group; here, on every foreground / launch tick, we
     /// pick it up and ask the router to surface the capture picker. One-shot +
@@ -327,7 +348,7 @@ struct RootView: View {
         let request = CaptureRequestStore().consume()
         guard let request else { return }
         guard case .authenticated = authStore.phase else { return }
-        // v0.10.0 W-Mood-B — the marker now carries the target surface so the
+        // The marker now carries the target surface so the
         // shared one-shot hand-off routes a capture tap to the capture picker
         // and a mood-control tap to the mood quick-entry sheet.
         switch request.surface {
@@ -348,7 +369,7 @@ struct RootView: View {
     /// Onboarding selbst ruft `activateHealthKitBackground()` direkt nach Consent — diese
     /// Methode hier ist nur für den Cold-Start-Pfad zuständig.
     ///
-    /// **v0.4.1 (F7) — Readiness statt body-mass-proxy:** Der pre-v0.4.1-Check
+    /// **Readiness statt body-mass-proxy:** Der pre-v0.4.1-Check
     /// las `authorizationStatus(for: HKQuantityType(.bodyMass)) == .sharingAuthorized`
     /// als Proxy für "User hat den HK-Sheet gesehen". Das war fragile (F1 §R2):
     /// User, die nur Reads gewährt + Body-Mass-Write abgelehnt haben (typisches
@@ -367,11 +388,10 @@ struct RootView: View {
         await hkReadiness.refresh()
         // Aktiviere BG-Deliveries, sobald der Auth-Sheet je lief — auch bei
         // `.denied` (nur WRITE abgelehnt: die READ-Streams fliessen trotzdem und
-        // MÜSSEN im Background gepullt werden). Dies ist die EINZIGE Stelle, die
-        // BGProcessing- + BGAppRefresh-Task erstmalig einreiht; ein write-
-        // abgeleitetes `.denied → skip` liess die betroffene Kohorte komplett
-        // ohne eingereihte Tasks zurück — kein Wecker, kein Pull (#66-Restlücke).
-        // `.notRequested` (Sheet nie gezeigt) bleibt der einzige Skip.
+        // MÜSSEN im Background gepullt werden). Die Wakes selbst reiht
+        // `scheduleBackgroundWakesIfSignedIn()` für jede Anmeldung ein; hier geht
+        // es nur noch um die HealthKit-Deliveries. `.notRequested` (Sheet nie
+        // gezeigt) bleibt der einzige Skip.
         let shouldReactivate = hkReadiness.hasEverRequestedAuthorization
         guard shouldReactivate else {
             // connectionLabel is an enum-derived status label — operator-grade.
@@ -387,7 +407,7 @@ struct RootView: View {
         // erinnert sich UserDefaults nicht — restore liefert nil und wir machen
         // Default-Verhalten.
         await container.restoreHealthKitBackfillWindow()
-        // **Phase 07 / plan 07-09** — this is the `coldActivation` trigger and it
+        // This is the `coldActivation` trigger and it
         // is now named as one. The trigger is spelled out rather than inferred:
         // the budget the pass runs under (four pages per type, a first history
         // import permitted) and the capability set it plans are both resolved
@@ -397,7 +417,21 @@ struct RootView: View {
         await container.activateHealthKitBackground(for: HealthSyncTrigger.coldActivation)
     }
 
-    /// **R1 — die Adressfrage steht vor dem Produkt.** `true`, wenn eine
+    /// Arms both background wakes for every signed-in person. Reminders, the
+    /// outbox and the widget and watch snapshots ride these wakes and need no
+    /// HealthKit, so the HealthKit activation below no longer owns the first
+    /// submit. A repeat submit is absorbed by the scheduler.
+    private func scheduleBackgroundWakesIfSignedIn() {
+        guard let container else { return }
+        switch authStore.phase {
+        case .authenticated:
+            container.backgroundSync.scheduleBackgroundWakes()
+        case .unknown, .unauthenticated, .authenticating:
+            break
+        }
+    }
+
+    /// **Die Adressfrage steht vor dem Produkt.** `true`, wenn eine
     /// angemeldete Installation keine Serveradresse (mehr) kennt.
     var needsServerAddressGate: Bool {
         Self.needsServerAddressGate(
@@ -408,11 +442,10 @@ struct RootView: View {
 
     /// Reine Form von ``needsServerAddressGate`` — ohne View-Baum testbar.
     ///
-    /// Nur `.authenticated` wird abgefangen. `.standalone` ist ausgenommen:
-    /// dort ist „keine Adresse" der bestimmungsgemäße Dauerzustand, kein
-    /// Befund. `.unauthenticated` / `.authenticating` sind ausgenommen, weil
-    /// dort ohnehin `OnboardingFlow` läuft, der die Adressfrage selbst
-    /// vorzieht (``OnboardingFlow/resolveStep(_:chosenMode:hasServerAddress:)``)
+    /// Nur `.authenticated` wird abgefangen. `.unauthenticated` /
+    /// `.authenticating` sind ausgenommen, weil dort ohnehin `OnboardingFlow`
+    /// läuft, der die Adressfrage selbst vorzieht
+    /// (``OnboardingFlow/resolveStep(_:hasServerAddress:phase:)``)
     /// — zwei Gates auf derselben Frage wären ein Sprung im Bild.
     nonisolated static func needsServerAddressGate(
         phase: AuthStore.Phase,
@@ -421,7 +454,7 @@ struct RootView: View {
         guard !hasServerAddress else { return false }
         switch phase {
         case .authenticated: return true
-        case .unknown, .unauthenticated, .authenticating, .standalone: return false
+        case .unknown, .unauthenticated, .authenticating: return false
         }
     }
 
@@ -431,7 +464,6 @@ struct RootView: View {
         case .unauthenticated: "unauth"
         case .authenticating: "authenticating"
         case .authenticated: "auth"
-        case .standalone: "standalone"
         }
     }
 
@@ -444,7 +476,7 @@ struct RootView: View {
         await tryUnlock()
     }
 
-    /// **09-06** — hand the foreground to its single owner.
+    /// Hand the foreground to its single owner.
     ///
     /// Synchronous, because this scene-phase handler is: a boundary that had to
     /// be awaited from here would get a fire-and-forget `Task` wrapped around
@@ -452,8 +484,8 @@ struct RootView: View {
     /// coordinator owns the one task, cancels and drains whichever pass preceded
     /// it, and closes `foreground.pass` on every exit.
     ///
-    /// The lease is the account this pass belongs to. `nil` for `.standalone`
-    /// and `.unknown`, where there is no server session to become stale against;
+    /// The lease is the account this pass belongs to. `nil` for `.unknown`,
+    /// where there is no server session to become stale against;
     /// a `nil` lease leaves the pass fenced by its own generation and by
     /// cancellation, which is the whole of what those phases can be stale on.
     private func startForegroundPass() {
@@ -476,10 +508,10 @@ struct RootView: View {
     private func handle(scenePhase newPhase: ScenePhase) {
         switch newPhase {
         case .background, .inactive:
-            // V1 — work that carries no trigger of its own is labelled by the
+            // Work that carries no trigger of its own is labelled by the
             // app state, so a late post after a wake is no longer `foreground`.
             if newPhase == .background { SyncTriggerContext.shared.noteApplicationState(backgrounded: true) }
-            // J1 / F3 — only `.background` starts the lock clock; `.inactive`
+            // Only `.background` starts the lock clock; `.inactive`
             // (a system dialog over the app, or the Face ID sheet itself) does
             // not. `lockBusy` keeps the lock's own sheet from re-arming it.
             _ = lockClock.scenePhaseChanged(
@@ -490,7 +522,7 @@ struct RootView: View {
                 lockBusy: locked || unlockInFlight
             )
         case .active:
-            // v0.8.4 WWIDGET-3 — a tap on the "Erfassen" control foregrounds
+            // A tap on the "Erfassen" control foregrounds
             // the app (scenePhase → .active) rather than changing phaseKey, so
             // the capture-marker consume must run here too, not only in the
             // phaseKey task. One-shot + stale-guarded, so a no-op when no
@@ -498,7 +530,10 @@ struct RootView: View {
             // scene handler's own statement rather than a pass member.
             consumePendingCaptureRequestIfAuthenticated()
             SyncTriggerContext.shared.noteApplicationState(backgrounded: false)
-            // 09-06 — everything else this tick used to fan out into a dozen
+            // 1.7: before the next frame, a stale dose state goes neutral and
+            // its reload starts, outside the ordered pass.
+            container?.revalidateDoseStateOnOpen()
+            // Everything else this tick used to fan out into a dozen
             // free-standing `Task { … }` siblings now runs as one bounded,
             // ordered, fenced pass. The coordinator opens and closes
             // `foreground.pass`, cancels and drains the previous pass, and

@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// P8 — the ECG trace geometry.
+/// The ECG trace geometry.
 ///
 /// The waveform is the one place iOS touches the raw signal at all, so the
 /// rules are narrow on purpose: normalise by the strip's own min/max, spread

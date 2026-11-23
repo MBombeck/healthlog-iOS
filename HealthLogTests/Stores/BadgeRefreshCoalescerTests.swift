@@ -3,7 +3,7 @@ import Testing
 #if canImport(UserNotifications) && canImport(UIKit)
     @testable import HealthLog
 
-    /// **v0.6.1.9 Y8 — BadgeRefreshCoalescer behaviour.**
+    /// **BadgeRefreshCoalescer behaviour.**
     ///
     /// AppContainer wires `MedicationsStore.onIntakesDidChange` through a
     /// single-slot `BadgeRefreshCoalescer` so a Genommen-tap burst (which
@@ -22,7 +22,7 @@ import Testing
             let coalescer = BadgeRefreshCoalescer()
             let counter = Counter()
             coalescer.schedule { await counter.bump() }
-            // T1 (1.4) — waits for the bump itself, bounded by time, not by
+            // Waits for the bump itself, bounded by time, not by
             // 16 yields a loaded machine can spend before the Task even ran.
             await phase09AwaitCondition { await counter.value >= 1 }
             await #expect(counter.value == 1)
@@ -46,7 +46,7 @@ import Testing
                     await counter.bump()
                 }
             }
-            // T1 (1.4) — the winner's bump is awaited (bounded by time), then
+            // The winner's bump is awaited (bounded by time), then
             // the replaced four get a window to bump wrongly before the count
             // is read. 32 yields could run out before the winner ran at all.
             await phase09AwaitCondition { await counter.value >= 1 }
@@ -64,7 +64,7 @@ import Testing
             let coalescer = BadgeRefreshCoalescer()
             let counter = Counter()
             coalescer.schedule { await counter.bump() }
-            // T1 (1.4) — each run is awaited before the next schedule, bounded
+            // Each run is awaited before the next schedule, bounded
             // by time; after 16 yields under load the second schedule could
             // cancel a first run that had not started yet.
             await phase09AwaitCondition { await counter.value >= 1 }

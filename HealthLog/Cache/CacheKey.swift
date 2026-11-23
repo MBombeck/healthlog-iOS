@@ -32,13 +32,13 @@ public enum CacheKey: Hashable, Sendable {
     case insightsCards
     case correlations
     case measurementsRecent(limit: Int)
-    /// v0.14 DATA — kind-scoped recent page (`GET /api/measurements?type=…`).
+    /// Kind-scoped recent page (`GET /api/measurements?type=…`).
     /// Distinct from `measurementsRecent` so a no-series / low-frequency kind's
     /// chart reads its OWN history instead of being pushed out of the global
     /// newest-N page by a high-frequency kind on a HealthKit power-user.
     case measurementsRecentKind(type: String, limit: Int)
     case measurementSeries(kind: MetricKind, days: Int)
-    /// v0.13.1 IC — per-kind has-data availability slice
+    /// Per-kind has-data availability slice
     /// (`GET /api/analytics?slice=summaries`). Carries an all-time
     /// `count` per server `MeasurementType`, the same per-kind signal the
     /// web tab-strip gates its pills on. Distinct from `measurementsRecent`
@@ -71,18 +71,18 @@ public enum CacheKey: Hashable, Sendable {
     /// `MedicationsStore.complianceDaysWindow` aliases this constant.
     static let complianceWindowDays = 182
     case moodEntries(days: Int)
-    /// v0.14.1 — the mood "relations" slices (`GET /api/mood/insights`,
+    /// The mood "relations" slices (`GET /api/mood/insights`,
     /// server v1.11.5): tag-influence + the "better days" board. The server
     /// caches the aggregate ~60s; this row mirrors that so the Mood-page cards
     /// paint cache-first on launch + revalidate in the background.
     case moodInsights
-    /// INT-Q (1.3, #126 P2 + #136) — the same route cut to a period
+    /// The same route cut to a period
     /// (`GET /api/mood/insights?days=N`, N in 30/90/180/365). Since v1.43 the
     /// server cuts `stability` AND `patterns` to that window, so each window
     /// is its own row: a 30-day view must never paint the year's patterns
     /// from the cache. `.moodInsights` stays the unwindowed (365-day) row.
     case moodInsightsWindow(days: Int)
-    /// #115 · 1.3 — the canonical daily mood series (`GET /api/mood/analytics`):
+    /// The canonical daily mood series (`GET /api/mood/analytics`):
     /// one mean per profile-zone day plus the server's summary slopes. The
     /// Mood analysis draws its day means from this row instead of bucketing
     /// entries on the device calendar.
@@ -104,13 +104,13 @@ public enum CacheKey: Hashable, Sendable {
     /// `CacheKey.dailyBriefing(day: BerlinDayKey.string())`.
     case dailyBriefing(day: String)
     case dashboardWidgetLayout
-    /// W3 (v0.11 #22) — per-metric **daily** assessment / "Einschätzung"
+    /// Per-metric **daily** assessment / "Einschätzung"
     /// (`GET /api/insights/{slug}-status`). Server regenerates ~1×/day keyed
     /// by Berlin calendar day; `day` is the `BerlinDayKey.string` discriminator
     /// so the row structurally misses + refetches when the Berlin day rolls
     /// over (see `BerlinDayKey`). `locale` keeps the de/en prose separate.
     case insightStatus(kind: MetricKind, locale: String, day: String)
-    /// W3 (v0.11 #22) — persistent SWR cache for `GET /api/insights/targets`
+    /// Persistent SWR cache for `GET /api/insights/targets`
     /// (the single payload backing every metric's "Ziel" block). Mirrors the
     /// server 60s `cached()` wrapper so the per-metric screen paints the Ziel
     /// from disk on first frame and revalidates in the background.
@@ -120,13 +120,13 @@ public enum CacheKey: Hashable, Sendable {
     /// PA5 Bottleneck #2 fix; mirrors `.userProfile` semantics
     /// (per-user, server-owned, changes infrequently).
     case aiProviderConfig
-    /// v0.12 W5b — device-flagged categorical events
+    /// Device-flagged categorical events
     /// (`GET /api/insights/rhythm-events`). The timeline shifts at most a few
     /// times a year, so a Berlin-day-anchored daily key paints the
     /// RhythmEvents overview card cache-first on launch + revalidates in the
     /// background; `day` flips the row to a structural miss when the day rolls.
     case rhythmEvents(day: String)
-    /// v0.12 W5b — a single server-derived metric
+    /// A single server-derived metric
     /// (`GET /api/insights/derived?metric=<ID>`). The compute is recomputed
     /// ~daily server-side, so a Berlin-day-anchored key per metric paints the
     /// derived overview block cache-first + revalidates. `metric` is the
@@ -138,21 +138,21 @@ public enum CacheKey: Hashable, Sendable {
     /// is the sorted CSV of requested ids so the same grid hits one key;
     /// Berlin-day-anchored like the single-metric key.
     case derivedBatch(token: String, day: String)
-    /// I-3 (v0.14) — the period-retrospective narrative
+    /// The period-retrospective narrative
     /// (`GET /api/insights/narrative?period=week|month`). The server warms it at
     /// most ~once per period, so a Berlin-day-anchored key per period+locale
     /// paints the retrospective card cache-first on launch + revalidates; `day`
     /// flips the row to a structural miss when the day rolls. `period` is the
     /// lowercase `NarrativeDTO.Period.rawValue`; `locale` keeps de/en prose apart.
     case insightsNarrative(period: String, locale: String, day: String)
-    /// W-B189 (#23) — the recovery family, built from
-    /// `GET /api/analytics?slice=summaries`. 1.4 B3: it carries each type's
+    /// The recovery family, built from
+    /// `GET /api/analytics?slice=summaries`. It carries each type's
     /// `latest` and `avg30`, which move during the day, so the row is fresh
     /// for five minutes like the availability slice; `day` still flips it to
     /// a structural miss at the Berlin-day rollover. The raw key carries `v2`
     /// so a family cached by 1.3 (no averages) is never served to 1.4.
     case insightsRecovery(day: String)
-    /// v1.25 (GH iOS #38) — the three read-only "clinical signals" awareness
+    /// v1.25 — the three read-only "clinical signals" awareness
     /// reads. Each is pure server compute recomputed ~once per Berlin day, so a
     /// Berlin-day-anchored key paints the host card cache-first on launch +
     /// revalidates; `day` flips the row to a structural miss when the day rolls
@@ -160,7 +160,7 @@ public enum CacheKey: Hashable, Sendable {
     ///   - health-status:       `GET /api/insights/health-status`
     ///   - breathing-screening: `GET /api/insights/breathing-screening`
     ///   - labs-changes:        `GET /api/insights/labs-changes`
-    /// v0141 W-PARITY (P8) — the ECG recording METADATA list
+    /// The ECG recording METADATA list
     /// (`GET /api/insights/ecg`, server v1.28.50). The list changes at most a
     /// handful of times a year (a new strip per device recording), so a
     /// Berlin-day-anchored key paints the ECG surface cache-first on launch +
@@ -179,10 +179,10 @@ public enum CacheKey: Hashable, Sendable {
     /// `.dashboardSummary`). `from`/`to` carry the requested window so a narrow
     /// drill-down never collides with the default −90…+180 window.
     case cycleCalendar(from: String, to: String, day: String)
-    /// v0.14.8 — the cycle history + stats (`GET /api/cycle/cycles?limit`).
+    /// The cycle history + stats (`GET /api/cycle/cycles?limit`).
     /// Changes only when a cycle closes; 5min TTL mirrors near-static lists.
     case cycleCycles(limit: Int)
-    /// v0.14.8 — the full cycle profile (`GET /api/cycle/profile`). Per-user,
+    /// The full cycle profile (`GET /api/cycle/profile`). Per-user,
     /// server-owned, changes infrequently — mirrors `.userProfile` semantics.
     case cycleProfile
     /// Active per-user custom cycle symptom catalogue.
@@ -190,7 +190,7 @@ public enum CacheKey: Hashable, Sendable {
     /// Server-computed, FDR-guarded cycle insights. The store loads this lazily
     /// once per screen lifetime; a 5-minute cache additionally protects remounts.
     case cycleInsights
-    /// **Z1 (#72) — the last server-resolved cycle verdict + the moment the
+    /// **The last server-resolved cycle verdict + the moment the
     /// server computed it.** Deliberately NOT day-anchored, unlike
     /// `.cycleCalendar`: the whole point is that it survives the midnight
     /// rollover so an offline device can show the last known assessment WITH its
@@ -205,26 +205,26 @@ public enum CacheKey: Hashable, Sendable {
     /// 60s TTL mirrors the medications list so the manage screen paints from
     /// disk on a warm bounce + revalidates. Optimistic writes write-through.
     case measurementReminders
-    /// QOL-OFF-2 — the unfiltered labs list page (`GET /api/labs`, the store's
+    /// The unfiltered labs list page (`GET /api/labs`, the store's
     /// canonical `limit=500` read). Cache-first so the Labs screen is READABLE
     /// on a cold offline launch (was network-only — an offline start rendered
     /// the empty "add your first…" state). Near-static (changes only on an
     /// explicit lab create/edit/delete/restore); a 60s TTL mirrors the meds
     /// list. `LabsRepository` invalidates it on every successful write.
     case labsResults
-    /// QOL-OFF-2 — the biomarker catalog (`GET /api/biomarkers`). Per-user,
+    /// The biomarker catalog (`GET /api/biomarkers`). Per-user,
     /// changes only on an explicit catalog edit; a 5min TTL mirrors
     /// `.userProfile`. Invalidated by `LabsRepository` on a biomarker write.
     case biomarkers
-    /// QOL-OFF-2 — the structured-records ALLERGY list (`GET /api/allergies`,
+    /// The structured-records ALLERGY list (`GET /api/allergies`,
     /// the store's default all-non-deleted read). Cache-first for offline
     /// readability; 60s TTL. `AllergiesRepository` invalidates it on write.
     case allergies
-    /// QOL-OFF-2 — the FAMILY-HISTORY list (`GET /api/family-history`).
+    /// The FAMILY-HISTORY list (`GET /api/family-history`).
     /// Cache-first for offline readability; 60s TTL. `FamilyHistoryRepository`
     /// invalidates it on write.
     case familyHistory
-    /// QOL-OFF-2 — the opt-in mental-health screener history
+    /// The opt-in mental-health screener history
     /// (`GET /api/mental-health/assessments` — derived DTOs only, never the raw
     /// item answers). Cache-first so the PHQ-9 / GAD-7 history is READABLE
     /// offline; append-only, so `MentalHealthRepository` invalidates it on
@@ -313,7 +313,7 @@ public extension CacheKey {
     var staleAfter: TimeInterval {
         switch self {
         case .userProfile: 5 * 60
-        // W8-B1 — short TTL on the hot keys so a quick background→foreground
+        // Short TTL on the hot keys so a quick background→foreground
         // bounce serves fully from cache (no redundant auto-revalidation
         // inside the window). Pull-to-refresh bypasses this via the
         // `forceRevalidate` SWR path, so explicit refresh still hits the
@@ -350,7 +350,7 @@ public extension CacheKey {
         // Widget layout changes infrequently (user-driven via the
         // customisation screen). 5min mirrors the userProfile TTL.
         case .dashboardWidgetLayout: 5 * 60
-        // W3 — the assessment is regenerated by the server only once per
+        // The assessment is regenerated by the server only once per
         // Berlin day, and the Berlin-day discriminator baked into the key
         // (see `BerlinDayKey`) already forces a structural cache-miss +
         // refetch the instant the day rolls over. So the daily ROLLOVER is
@@ -367,7 +367,7 @@ public extension CacheKey {
         // AI provider config: changes only when user explicitly edits
         // (provider/key/model/baseUrl). 5min TTL mirrors `.userProfile`.
         case .aiProviderConfig: 5 * 60
-        // W5b — both server-derived insights surfaces are recomputed ~once per
+        // Both server-derived insights surfaces are recomputed ~once per
         // Berlin day; the Berlin-day discriminator baked into each key already
         // forces the structural miss + refetch on day-rollover. A 24h ceiling
         // keeps `staleAfter` deterministic and can never out-live the day-key
@@ -375,19 +375,19 @@ public extension CacheKey {
         case .rhythmEvents: 24 * 60 * 60
         case .derivedMetric: 24 * 60 * 60
         case .derivedBatch: 24 * 60 * 60
-        // I-3 — the narrative is warmed at most ~once per period server-side; the
+        // The narrative is warmed at most ~once per period server-side; the
         // Berlin-day discriminator baked into the key forces the structural miss
         // + refetch on day rollover. A 24h ceiling keeps `staleAfter`
         // deterministic (same model as `.derivedMetric` / `.insightStatus`).
         case .insightsNarrative: 24 * 60 * 60
-        // 1.4 B3 — the recovery family carries `latest` / `avg30`, which move
+        // The recovery family carries `latest` / `avg30`, which move
         // as readings arrive, so it is fresh for five minutes like
         // `.measurementAvailability` (see the case doc).
         case .insightsRecovery: 5 * 60
         // v1.25 clinical signals — recomputed ~once per Berlin day server-side;
         // the Berlin-day discriminator baked into each key forces the structural
         // miss + refetch on day rollover (same model as `.insightsRecovery`).
-        // P8 — the ECG list is near-static; the Berlin-day discriminator in the
+        // The ECG list is near-static; the Berlin-day discriminator in the
         // key forces the structural miss + refetch on day rollover (same model
         // as `.insightsRecovery`).
         case .insightsEcg: 24 * 60 * 60
@@ -407,10 +407,10 @@ public extension CacheKey {
         // ladder — this TTL only keeps the maintenance sweep from treating the
         // row as immortal. Its real bound is `CycleVerdictSnapshot.horizon`.
         case .cycleVerdict: 24 * 60 * 60
-        // W-REMINDERS — near-static reminder list; 60s mirrors the meds list so
+        // Near-static reminder list; 60s mirrors the meds list so
         // a warm bounce serves from disk + revalidates.
         case .measurementReminders: 60
-        // QOL-OFF-2 — near-static PHI lists; 60s mirrors the meds/reminders
+        // Near-static PHI lists; 60s mirrors the meds/reminders
         // lists so a warm bounce serves from disk + revalidates. Each repo
         // invalidates its key on a successful write so a mutation is never
         // masked by a fresh-enough cached row. The biomarker CATALOG changes

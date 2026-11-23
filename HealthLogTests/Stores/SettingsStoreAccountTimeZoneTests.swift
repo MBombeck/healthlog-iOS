@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **#115 1.5 — the account zone comes from `/api/auth/me`.**
+/// **The account zone comes from `/api/auth/me`.**
 ///
 /// From v1.39 `/me` sends the zone the server cuts this account's days in:
 /// `isValidTimezone(user.timezone) ? user.timezone : resolveServerDefaultTimezone()`

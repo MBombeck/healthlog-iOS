@@ -26,7 +26,7 @@ import Testing
 /// Real `APIClient` + `MockURLProtocol` for the integration arm (PROJECT_GUIDE.md
 /// anti-pattern: no mock-server), so a schema drift would actually break it. The
 /// suite is `.serialized` because the network assertion depends on the
-/// process-global `MockURLProtocol.handler` (audit-v0162 H2).
+/// process-global `MockURLProtocol.handler`.
 @Suite("AUDIO_EXPOSURE_EVENT", .serialized, .mockURLSession)
 struct AudioExposureEventDropTests {
     // MARK: - Unit: the kind it maps to
@@ -88,7 +88,7 @@ struct AudioExposureEventDropTests {
             (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, payload)
         }
 
-        // Audit B-4 — both rows survive. The page never rejected; what changed
+        // Both rows survive. The page never rejected; what changed
         // is that the audio row is no longer thrown away on the way in.
         let all = try await repo.recent(limit: 100)
         #expect(all.count == 2, "Both rows must survive; the audio-event row is no longer discarded.")

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **1.5 LAB-LINES** — what sits directly under the metric chart beyond the
+/// What sits directly under the metric chart beyond the
 /// chart itself, all of it rare and therefore behind "Erweitert":
 ///
 /// - **Laborwert einblenden** (#158, server #1299, v1.46.3): one lab
@@ -16,7 +16,6 @@ struct InsightsChartExtras: View {
     let kind: MetricKind
     let store: ChartDetailStore
 
-    @Environment(BackendAvailability.self) private var backend
     @Environment(\.appContainer) private var appContainer
     /// The version the last `/api/version` probe recorded, observed so the
     /// options appear as soon as the foreground probe lands.
@@ -27,23 +26,22 @@ struct InsightsChartExtras: View {
 
     // MARK: - Gates (pure, testable)
 
-    /// The lab row: a paired server that has `labSeries` (1.46.3, unknown is
+    /// The lab row: a server that has `labSeries` (1.46.3, unknown is
     /// no) and the `timeline` module switched on. The module is opt-in, so a
     /// map without the key is off too.
-    nonisolated static func labOverlayAvailable(hasServer: Bool, serverVersion: String?, timelineModule: Bool?) -> Bool {
-        guard hasServer, timelineModule == true, let serverVersion else { return false }
+    nonisolated static func labOverlayAvailable(serverVersion: String?, timelineModule: Bool?) -> Bool {
+        guard timelineModule == true, let serverVersion else { return false }
         return ServerVersionInfo(version: serverVersion).isAtLeast(TimelineRepository.minimumServerVersion)
     }
 
-    /// The part-of-day row: the blood pressure page of a paired 1.47 server.
-    nonisolated static func partOfDayAvailable(kind: MetricKind, hasServer: Bool, serverVersion: String?) -> Bool {
-        guard kind == .bloodPressure, hasServer, let serverVersion else { return false }
+    /// The part-of-day row: the blood pressure page of a 1.47 server.
+    nonisolated static func partOfDayAvailable(kind: MetricKind, serverVersion: String?) -> Bool {
+        guard kind == .bloodPressure, let serverVersion else { return false }
         return ServerVersionInfo(version: serverVersion).isAtLeast(BloodPressureTimeOfDayRepository.minimumServerVersion)
     }
 
     private var labAvailable: Bool {
         Self.labOverlayAvailable(
-            hasServer: backend.canShowCloudInsights,
             serverVersion: serverVersion,
             // The gate lives on the container (it is not in the environment).
             timelineModule: appContainer?.moduleGate.modules?["timeline"]
@@ -52,7 +50,7 @@ struct InsightsChartExtras: View {
 
     /// From a week up only: a single day has no daily means to narrow.
     private var partAvailable: Bool {
-        Self.partOfDayAvailable(kind: kind, hasServer: backend.canShowCloudInsights, serverVersion: serverVersion)
+        Self.partOfDayAvailable(kind: kind, serverVersion: serverVersion)
             && ChartDetailStore.partOfDayApplies(kind: kind, range: store.range)
             && !store.partOfDayChart.isUnsupported
     }
@@ -106,10 +104,9 @@ struct InsightsChartExtras: View {
             HLCard {
                 VStack(alignment: .leading, spacing: HLSpace.sm) {
                     Text("insights.labOverlay.error")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                         .fixedSize(horizontal: false, vertical: true)
-                    HLButton("Retry", variant: .secondary) { labAttempt += 1 }
+                    HLButton(HLControlWord.retry.key, variant: .secondary) { labAttempt += 1 }
                         .accessibilityIdentifier("insights.labOverlay.retry")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,24 +125,10 @@ struct InsightsChartExtras: View {
     // MARK: - "Erweitert"
 
     private var advancedLink: some View {
-        Button {
+        HLLinkButton("Advanced", isExpanded: expanded) {
             withHLAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-        } label: {
-            HStack(spacing: HLSpace.xs) {
-                Text("Advanced")
-                    .font(.hlSubhead.weight(.semibold))
-                Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                    .font(.hlIcon(HLIconSize.sm))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(HLText.secondary)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("insights.metric.advanced")
-        .accessibilityValue(expanded ? Text("Expanded") : Text("Collapsed"))
     }
 
     private var options: some View {
@@ -170,15 +153,13 @@ struct InsightsChartExtras: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: HLSpace.sm) {
                 Text(title)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                 Spacer(minLength: HLSpace.sm)
                 trailing()
             }
             VStack(alignment: .leading, spacing: HLSpace.xxs) {
                 Text(title)
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.primary)
+                    .hlText(.prose)
                 trailing()
             }
         }
@@ -209,19 +190,17 @@ struct InsightsChartExtras: View {
                 ProgressView()
                     .accessibilityLabel(Text("Loading"))
             case .failed:
-                Button {
+                // The app's text action, not a tinted system button.
+                HLLinkButton(HLControlWord.retry.key, systemImage: "arrow.clockwise", alignment: .leading) {
                     labModel.retryChoices()
                     Task { await labModel.loadChoices() }
-                } label: {
-                    Text("Retry")
-                        .font(.hlSubhead.weight(.semibold))
                 }
+                .fixedSize()
                 .accessibilityIdentifier("insights.labOverlay.choice.retry")
             case let .loaded(markers):
                 if markers.isEmpty {
                     Text("insights.labOverlay.noMarkers")
-                        .font(.hlSubhead)
-                        .foregroundStyle(HLText.secondary)
+                        .hlText(.factLabel)
                 } else {
                     labPicker(labModel, markers: markers)
                 }
@@ -287,8 +266,7 @@ extension InsightsMetricScreen {
     /// Reads `coach-read` once per page. Any failure leaves the card without
     /// the line, as in 1.4: it is a sentence about the chart, not the chart.
     func loadCoachRead() async {
-        guard backend.canShowCloudInsights,
-              let metric = CoachReadRepository.metric(for: kind),
+        guard let metric = CoachReadRepository.metric(for: kind),
               let api = appContainer?.api else { return }
         coachRead = try? await CoachReadRepository(api: api).fetch(metric: metric)
     }

@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **POLISH-B B6** — one table for the server's names, read by the importer
+/// One table for the server's names, read by the importer
 /// (`HealthKitServer144Types.wireNames`) and by the replay paths
 /// (`HealthKitBatchEntryDTO.serverWireNames`).
 @Suite("POLISH-B B6 — one table of server names")

@@ -66,8 +66,9 @@ struct MeasurementUploadAuthenticationLease: Sendable {
 public actor MeasurementBatchUploader {
     public static let maxEntriesPerBatch = 500
 
-    private let api: APIClientProtocol
-    private let throttle: BatchSyncThrottle
+    /// Internal for the ingest-v2 extension (symptoms, deletions).
+    let api: APIClientProtocol
+    let throttle: BatchSyncThrottle
     private let encoder: JSONEncoder
     private let clock: @Sendable () -> Date
     private let authenticationSnapshot: (@Sendable () -> MeasurementUploadAuthenticationSnapshot)?
@@ -85,7 +86,7 @@ public actor MeasurementBatchUploader {
     /// damit `HKReadinessStore` die "Zuletzt synchronisiert"-Zeit in
     /// Settings → Apple Health bewegt (F7-Plan §5).
     ///
-    /// **#10 — bis 1.1.0 (284) setzte das niemand außer den Tests.** Die Anzeige
+    /// **Bis 1.1.0 (284) setzte das niemand außer den Tests.** Die Anzeige
     /// stand deshalb dauerhaft auf "Not synced yet", und `isConnected` konnte den
     /// Abgelehnt-Fehlalarm für Nur-Lese-Nutzer nie unterdrücken. Der Slot ist
     /// seitdem ein `Mutex` statt Actor-Zustand, damit der Composition-Root ihn
@@ -94,7 +95,7 @@ public actor MeasurementBatchUploader {
     /// losgelassenen `Task` zu laufen.
     private let successNotifierSlot = Mutex<SuccessNotifier?>(nil)
 
-    // MARK: - F8 hotfix Backoff-State (v0.4.1.1)
+    // MARK: - Backoff state
 
     /// Sliding-Window-Failure-Counter: Timestamps der letzten Failures.
     /// Wird beim ersten Success komplett geleert.
@@ -135,14 +136,14 @@ public actor MeasurementBatchUploader {
         successNotifierSlot.withLock { $0 = notifier }
     }
 
-    /// A2 (1.4) — the `syncTrigger` a batch posted right now carries. A page
+    /// The `syncTrigger` a batch posted right now carries. A page
     /// parked in the outbox keeps it, so its replay reports the wake that read
     /// the rows instead of no trigger at all.
     nonisolated var wireSyncTrigger: SyncTrigger {
         syncTrigger.wireValue
     }
 
-    /// SYNC-TRIG (1.5) — the same, for a batch the caller marked as a history
+    /// The same, for a batch the caller marked as a history
     /// catch-up (``upload(_:requiring:asBackfill:)``).
     nonisolated func wireSyncTrigger(asBackfill: Bool) -> SyncTrigger {
         syncTrigger.wireValue(backfill: asBackfill)
@@ -189,7 +190,7 @@ public actor MeasurementBatchUploader {
         )
     }
 
-    /// - Parameter asBackfill: SYNC-TRIG (1.5, #138) — the mark for a
+    /// - Parameter asBackfill: SYNC-TRIG — the mark for a
     ///   history catch-up. It belongs to this call and its chunks only;
     ///   anything the upload hands off (the success stamp, a sweep someone
     ///   starts from there) runs unmarked.
@@ -201,7 +202,7 @@ public actor MeasurementBatchUploader {
     ) async throws -> [BatchUploadOutcome] {
         guard !entries.isEmpty else { return [] }
         try authLease?.validate()
-        // F8 hotfix: kurzer Pre-Flight-Check — wenn wir gerade in einem
+        // Kurzer Pre-Flight-Check — wenn wir gerade in einem
         // Backoff-Block stehen, gar nicht erst die Server-Call ausloesen.
         try checkBackoff()
 
@@ -215,7 +216,7 @@ public actor MeasurementBatchUploader {
                 do {
                     response = try await post(chunk, requiring: authLease, asBackfill: asBackfill)
                 } catch let invalid as MeasurementBatchInvalid {
-                    // E1 — v1.39.1 named the entries it refused: they go into
+                    // v1.39.1 named the entries it refused: they go into
                     // the skip register, the rest goes out once more on its own.
                     response = try await invalid.split(chunk, ownerID: authLease?.ownerUserID) { rest in
                         try await throttle.acquire()
@@ -230,7 +231,7 @@ public actor MeasurementBatchUploader {
                 // Notifier feuert pro erfolgreichem Chunk: der "Zuletzt synchroni-
                 // siert"-Surface soll Live-Updates während eines grossen Backfills
                 // zeigen, nicht erst nach 1200 Samples.
-                // #10 — mit dem Lease-Eigentümer, damit der Empfänger einen
+                // Mit dem Lease-Eigentümer, damit der Empfänger einen
                 // Upload des vorigen Kontos nach Abmelden/Kontowechsel verwirft.
                 if let notifier = successNotifierSlot.withLock({ $0 }) {
                     await notifier(clock(), authLease?.ownerUserID)
@@ -256,9 +257,9 @@ public actor MeasurementBatchUploader {
         // `SyncTriggerContext` trägt das Fenster, das der auslösende Pfad
         // (BGProcessing / BGAppRefresh / Silent-Push / HK-Background-
         // Delivery) um seine Arbeit gelegt hat; ohne offenes Fenster ist der
-        // Sweep per Restmenge ein Vordergrund-Pull. V1: `wireValue` sendet
+        // Sweep per Restmenge ein Vordergrund-Pull. `wireValue` sendet
         // `manual` nur an einen Server, der den Wert kennt (v1.42+).
-        // SYNC-TRIG: a history catch-up says so here, from the call's mark.
+        // A history catch-up says so here, from the call's mark.
         let payload = HealthKitBatchPayload(entries: chunk, syncTrigger: syncTrigger.wireValue(backfill: asBackfill))
         let base: APIRequest<HealthKitBatchResponseDTO> = try .post(
             "/api/measurements/batch",
@@ -295,7 +296,7 @@ public actor MeasurementBatchUploader {
         value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    // MARK: - F8 hotfix Backoff (v0.4.1.1)
+    // MARK: - Backoff
 
     /// Pre-Flight-Check — wirft `BatchBackoffError.throttled` wenn die Uploader
     /// noch in einem Backoff-Block steht.

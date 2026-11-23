@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — OpenAI Chat Completions adapter
+/// OpenAI Chat Completions adapter
 /// (`POST https://api.openai.com/v1/chat/completions`).
 ///
 /// Auth via `Authorization: Bearer <key>` — header only, never the URL. The

@@ -41,6 +41,16 @@ public final class IllnessStore {
     /// loading / unavailable.
     public private(set) var correlation: IllnessCorrelationDTO?
     public private(set) var insights: IllnessInsightsDTO?
+    /// The insights request is running; the screen shows its loading state
+    /// until the first answer.
+    public private(set) var isLoadingInsights = false
+    /// At least one insights request has finished, either way.
+    public private(set) var hasLoadedInsights = false
+    /// Why the last insights request failed, `nil` after a good one. The
+    /// summary already shown stays.
+    public private(set) var insightsError: HLError?
+    /// Counts insights requests, so an older answer cannot overwrite a newer one.
+    private var insightsRequest = 0
     public private(set) var dayLogTimelineState: IllnessDayLogTimelineState = .empty
 
     public private(set) var isLoading = false
@@ -106,16 +116,42 @@ public final class IllnessStore {
         windowDays: Int? = nil,
         includeRecoveryGap: Bool = false
     ) async {
+        // `.task` and pull-to-refresh can overlap; only the newest request
+        // writes its outcome and ends the loading state.
+        insightsRequest &+= 1
+        let request = insightsRequest
+        isLoadingInsights = true
+        let outcome: Result<IllnessInsightsDTO, Error>
         do {
-            insights = try await repository.insights(
+            outcome = try await .success(repository.insights(
                 windowDays: windowDays,
                 includeRecoveryGap: includeRecoveryGap
-            )
+            ))
         } catch {
+            outcome = .failure(error)
+        }
+        guard request == insightsRequest else { return }
+        isLoadingInsights = false
+        switch outcome {
+        case let .success(value):
+            insights = value
+            insightsError = nil
+            hasLoadedInsights = true
+        case let .failure(error):
+            // A cancelled request (the screen went away) says nothing about the
+            // server and leaves the state as it was.
+            if error is CancellationError || (error as? HLError) == .canceled { return }
+            hasLoadedInsights = true
             if IllnessRepository.isIllnessDisabled(error) {
                 applyError(error)
-            } else {
+            } else if case let HLError.server(status, _, _) = error, status == 404 {
+                // A server without the insights route has nothing to show,
+                // which is the calm empty state, not a failure.
                 insights = nil
+                insightsError = nil
+            } else {
+                // A failed refresh keeps the summary already on screen.
+                insightsError = (error as? HLError) ?? .unknown(String(describing: error))
             }
         }
     }
@@ -328,7 +364,7 @@ public final class IllnessStore {
 
     // MARK: - Private
 
-    /// Audit B-1 — the visible error is localized copy, not a Swift description.
+    /// The visible error is localized copy, not a Swift description.
     /// `String(describing:)` printed the enum case (`notPersisted("…")`) onto a
     /// user-facing surface; the sanitized description belongs in the log line,
     /// where triage reads it. `HLError.userFacingText(for:)` resolves the

@@ -1,7 +1,7 @@
 import SwiftUI
 
 public extension View {
-    /// POLISH-C (C3) — a secure field that is not a sign-in: an access
+    /// A secure field that is not a sign-in: an access
     /// header value, an API key, a channel token, an export passphrase.
     ///
     /// iOS treats every filled secure field that leaves the window as a

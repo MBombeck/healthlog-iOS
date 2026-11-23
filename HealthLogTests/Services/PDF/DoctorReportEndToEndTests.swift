@@ -76,7 +76,7 @@ struct DoctorReportEndToEndTests {
                 schedule: MedicationSchedule(times: [TimeOfDay(hour: 8, minute: 0), TimeOfDay(hour: 20, minute: 0)])
             )
         ]
-        // #115 1.2 — adherence is the server's `GET /api/medications/compliance` rows.
+        // Adherence is the server's `GET /api/medications/compliance` rows.
         let window = { (taken: Int, missed: Int) in
             ComplianceWindowResult(
                 totalExpected: taken + missed, taken: taken, skipped: 0, missed: missed,

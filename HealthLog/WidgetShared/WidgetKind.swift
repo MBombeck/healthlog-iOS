@@ -1,6 +1,6 @@
 import Foundation
 
-/// **v0.8.4 WWIDGET-2 — stable widget `kind` identifiers.**
+/// **Stable widget `kind` identifiers.**
 ///
 /// Shared by the app (which reloads timelines by kind via
 /// `WidgetCenter.shared.reloadTimelines(ofKind:)`) and the extension
@@ -15,20 +15,20 @@ public enum WidgetKind {
     /// Today's-adherence compliance-ring widget (small / accessoryCircular).
     public static let compliance = "dev.healthlog.app.widgets.compliance"
 
-    /// **v0.8.4 WWIDGET-3** — the "Erfassen" Control Center / Action-Button
+    /// The "Erfassen" Control Center / Action-Button
     /// control that opens the app's capture flow (``OpenCaptureIntent``).
     public static let captureControl = "dev.healthlog.app.widgets.control.capture"
 
-    /// **v0.8.4 WWIDGET-3** — the "Nächste Dosis – Genommen" control that
+    /// The "Nächste Dosis – Genommen" control that
     /// one-tap marks the next due dose taken (``MarkNextDoseTakenIntent``).
     public static let markNextDoseControl = "dev.healthlog.app.widgets.control.next-dose-taken"
 
-    /// **v0.10.0 W-Mood-B** — the "Stimmung erfassen" Control Center /
+    /// The "Stimmung erfassen" Control Center /
     /// Action-Button control that opens the app's mood quick-entry sheet
     /// (``LogMoodControlIntent``).
     public static let logMoodControl = "dev.healthlog.app.widgets.control.log-mood"
 
-    /// **v0.10.0 W-Mood-B** — the interactive Home / Lock-Screen mood widget
+    /// The interactive Home / Lock-Screen mood widget
     /// (recent mood glance + a tap-a-face quick-log row).
     public static let mood = "dev.healthlog.app.widgets.mood"
 

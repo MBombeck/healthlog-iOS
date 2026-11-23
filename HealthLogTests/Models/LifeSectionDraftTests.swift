@@ -3,7 +3,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **LIFE (1.5.0, #132)** — one section save becomes exactly the writes it
+/// One section save becomes exactly the writes it
 /// needs: POST for a first answer, PATCH for a change, DELETE for "no answer",
 /// nothing for what did not change. Follow-up answers count only where they
 /// apply, and an answer this build cannot read is never written over.

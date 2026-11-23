@@ -107,6 +107,43 @@ FAKE_TEST_COUNT=9 FAKE_SUITES=FooTests run_gate census-bare-target -- test -only
 # A build action has no result bundle and must not be censused.
 FAKE_TEST_COUNT=0 run_gate census-build-exempt -- build
 
+# One suffix is one DerivedData: `build-for-testing` and the test runs behind
+# it share the build, and a label keeps each run's result bundle its own.
+run_gate shared-dd -- build-for-testing -configuration Debug
+! rg -F 'xcresult-hl-shared-dd' "$trace" >/dev/null
+FAKE_TEST_COUNT=4 FAKE_SUITES=FooTests run_gate shared-dd --result-label unit -- \
+    test-without-building -only-testing:HealthLogTests/FooTests
+rg -F '<test-without-building>' "$trace" | rg -F '<-derivedDataPath> </tmp/dd-hl-shared-dd>' |
+    rg -F '<-resultBundlePath> </tmp/xcresult-hl-shared-dd-unit.xcresult>' >/dev/null
+FAKE_TEST_COUNT=2 FAKE_SUITES=BarUITests run_gate shared-dd --result-label ui -- \
+    test-without-building -only-testing:HealthLogUITests/BarUITests
+rg -F '<-resultBundlePath> </tmp/xcresult-hl-shared-dd-ui.xcresult>' "$trace" >/dev/null
+# The census guards a run that did not build just as it guards one that did.
+if FAKE_TEST_COUNT=0 run_gate shared-dd --result-label unit -- \
+    test-without-building -only-testing:HealthLogTests/FooTests >/dev/null 2>&1; then
+    echo 'expected zero-test rejection for test-without-building' >&2
+    exit 1
+fi
+if FAKE_TEST_COUNT=3 FAKE_SUITES=FooTests run_gate shared-dd --result-label unit -- \
+    test-without-building -only-testing:HealthLogTests/FooTests \
+    -only-testing:HealthLogTests/BarTests >/dev/null 2>&1; then
+    echo 'expected mixed-selector rejection for test-without-building' >&2
+    exit 1
+fi
+if run_gate shared-dd --result-label unit -- build >/dev/null 2>&1; then
+    echo 'expected a result label on a build action to be refused' >&2
+    exit 1
+fi
+if run_gate shared-dd --result-label 'unit/../x' -- test >/dev/null 2>&1; then
+    echo 'expected unsafe result label rejection' >&2
+    exit 1
+fi
+
+# The time spent queueing is reported on its own line, for callers that time
+# their steps.
+run_gate waited-line -- build 2>&1 >/dev/null |
+    rg -x 'run-serialized-xcode-gate: waited=[0-9]+s for the lock' >/dev/null
+
 run_gate physical-one --physical-device 00008110-ABCDEF1234567890 -- build
 rg -F '<-destination> <platform=iOS,id=00008110-ABCDEF1234567890>' "$trace" >/dev/null
 ! rg -F 'platform=iOS Simulator' "$trace" | tail -1 | rg -F 'physical-one' >/dev/null

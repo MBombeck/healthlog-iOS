@@ -29,7 +29,7 @@ struct IntakeSitePickerSection: View {
     var body: some View {
         HLCard {
             VStack(alignment: .leading, spacing: HLSpace.md) {
-                HLSectionLabel("Injektionsstelle")
+                HLCardLabel("Injektionsstelle")
 
                 if let suggested {
                     HStack(spacing: HLSpace.xs) {
@@ -39,57 +39,34 @@ struct IntakeSitePickerSection: View {
                             format: String(localized: "Vorschlag laut Rotationsplan: %@"),
                             suggested.localizedLabel
                         ))
-                        .font(.hlCaption)
-                        .foregroundStyle(HLText.tertiary)
+                        .hlText(.footnote)
                     }
                 }
 
-                LazyVGrid(
-                    columns: [GridItem(.flexible()), GridItem(.flexible())],
-                    spacing: HLSpace.sm
-                ) {
+                HLFlowLayout {
                     ForEach(allowed, id: \.self) { site in
-                        tile(for: site)
+                        chip(for: site)
                     }
                 }
             }
         }
     }
 
-    private func tile(for site: InjectionSite) -> some View {
-        Button {
+    /// The suggested site carries the rotation symbol, so the hint above
+    /// points at a chip and not only at a name.
+    private func chip(for site: InjectionSite) -> some View {
+        HLChip(
+            verbatim: site.localizedLabel,
+            systemImage: suggested == site ? "arrow.triangle.2.circlepath" : nil,
+            isSelected: selected == site
+        ) {
             // Toggle — a second tap clears (site is optional).
             selected = selected == site ? nil : site
-        } label: {
-            Text(site.localizedLabel)
-                .font(.hlSubhead)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, HLSpace.md)
-                .background(background(for: site))
-                .foregroundStyle(HLText.primary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: HLRadius.md)
-                        .stroke(
-                            selected == site ? HLText.primary : HLColor.separator,
-                            lineWidth: selected == site ? 2 : 1
-                        )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: HLRadius.md))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(site.localizedLabel))
-        .accessibilityAddTraits(selected == site ? [.isSelected] : [])
         .accessibilityHint(Text(
             suggested == site
                 ? String(localized: "Empfohlene Stelle laut Rotationsplan")
                 : String(localized: "Double-tap to select")
         ))
-    }
-
-    private func background(for site: InjectionSite) -> Color {
-        if selected == site { return HLText.primary.opacity(HLOpacity.surfaceTintStrong) }
-        if suggested == site { return HLSurface.tertiary }
-        return HLColor.backgroundEleva
     }
 }

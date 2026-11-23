@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// I-0 Item 4 — the iOS twin of the web per-metric **explainer** ("Was ist X?" /
+/// The iOS twin of the web per-metric **explainer** ("Was ist X?" /
 /// "Grundlage"). The web sub-page scaffold (`healthkit-metric-page.tsx`) opens a
 /// static explainer from the client i18n keys `insights.subPage.explainer.<slug>`
 /// `{Title,Body}` (`messages/{de,en}.json`, 45 metrics); these were ported
@@ -11,8 +11,8 @@ import SwiftUI
 /// no server call. `resolve(for:)` self-suppresses (`nil`) when a metric has no
 /// web explainer (`bodyFat`, `steps`, …): we never invent copy.
 ///
-/// This is the foundation the per-metric intro (I-1) and the "Grundlage" sheet
-/// card (I-2) build on — both read `InsightsExplainer.copy(slug:)`.
+/// This is the foundation the per-metric intro and the "Grundlage" sheet
+/// card build on — both read `InsightsExplainer.copy(slug:)`.
 enum InsightsExplainer {
     /// One resolved explainer: the localized title + body for a metric.
     struct Copy: Equatable {
@@ -45,7 +45,7 @@ enum InsightsExplainer {
         .sleep: "sleep",
         .restingHeartRate: "restingHr",
         .hrv: "hrv",
-        // 1.4 B4 — iOS copy, no web twin: the HRV page shows RMSSD for
+        // iOS copy, no web twin: the HRV page shows RMSSD for
         // wearables that report only RMSSD, and its (i) needs its own words.
         .hrvRMSSD: "hrvRmssd",
         .spo2: "oxygenSaturation",
@@ -109,25 +109,5 @@ enum InsightsExplainer {
         let value = String(localized: String.LocalizationValue(key))
         guard value != key, !value.isEmpty else { return nil }
         return value
-    }
-}
-
-/// I-0 Item 3/4 — the per-page **intro** paragraph: the explainer body as calm
-/// secondary body prose, self-suppressing when absent. Used by the mood +
-/// medications special pages. 1.4 B2: the metric pages moved this paragraph
-/// behind their (i) (`InsightsMetricInfo`); the special pages follow in their
-/// area unit.
-struct InsightsExplainerIntro: View {
-    let slug: String
-
-    var body: some View {
-        if let copy = InsightsExplainer.copy(slug: slug) {
-            Text(copy.body)
-                .font(.hlBody)
-                .foregroundStyle(HLText.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("insights.explainer.intro.\(slug)")
-        }
     }
 }

@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// 1.5 FIX-DATA (#151) — `route.sampleTimestamps` holds a bare ISO instant
+/// `route.sampleTimestamps` holds a bare ISO instant
 /// per point (older tracks) or `{ t, speedMs?, hr? }` (the workout batch and the
 /// Apple Health export since server 1.46). Until 1.5 the field was `[Date]`, and
 /// one imported track made `GET /api/workouts/{id}` fail as a whole.

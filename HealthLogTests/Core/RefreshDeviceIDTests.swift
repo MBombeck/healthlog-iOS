@@ -1,4 +1,4 @@
-// R2 / #115 A6 — a refresh never leaves without `X-Device-Id`.
+// A refresh never leaves without `X-Device-Id`.
 //
 // Server v1.39.3 (`src/app/api/auth/refresh/route.ts` +
 // `src/lib/auth/refresh-token.ts` at tag v1.39.6): a refresh token that is bound

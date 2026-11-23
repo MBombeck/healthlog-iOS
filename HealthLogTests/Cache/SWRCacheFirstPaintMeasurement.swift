@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 import Testing
 
-/// **Phase 21 (21-01) — the measurement.**
+/// **The measurement.**
 ///
 /// The structural claim behind this phase is strong, and this milestone exists
 /// because three plausible claims turned out to be wrong. So the claim gets a

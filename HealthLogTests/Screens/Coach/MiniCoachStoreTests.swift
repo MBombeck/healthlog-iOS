@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// Primary test suite for the Mini-Coach UI store (C4).
+/// Primary test suite for the Mini-Coach UI store.
 ///
 /// Covers the in-session contract:
 ///   - 8-pair (16 entry) message cap matches the actor-side

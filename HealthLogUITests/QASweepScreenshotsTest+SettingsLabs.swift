@@ -14,11 +14,8 @@ extension QASweepScreenshotsTest {
     /// The first half of the Settings walk (hub to integrations). Split from
     /// the second half so neither runs into the 900 s test allowance.
     func test_17a_settingsArea() {
-        guard !isXXL else { return }
         boot()
-        tab("ellipsis")
-        guard tap(app.buttons["more.toolbar.gear"], "settings gear") else { return }
-        settle(2)
+        guard openSettings() else { return }
         walkToEnd("14-hub")
         visit("settings.hub.account", "14-account") {
             self.visit("settings.account.profileRow", "14-account-profile")
@@ -47,7 +44,6 @@ extension QASweepScreenshotsTest {
 
     /// The second half of the Settings walk (devices to about).
     func test_17a2_settingsAreaRest() {
-        guard !isXXL else { return }
         boot()
         tab("ellipsis")
         guard tap(app.buttons["more.toolbar.gear"], "settings gear") else { return }
@@ -80,33 +76,31 @@ extension QASweepScreenshotsTest {
     }
 
     func test_17b_recordsArea() {
-        guard !isXXL else { return }
         boot(extra: ["-uitest-citations"])
-        tab("ellipsis")
-        visit("more.row.labs", "14-labs") {
-            let first = self.app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'labs.byType.item'")).firstMatch
-            if first.waitForExistence(timeout: 4), first.isHittable {
-                first.tap()
-                self.settle(3)
-                self.walkToEnd("14-labs-biomarker")
-                self.infoSheet("14-labs-biomarker", identifier: "biomarker.detail.info")
-                self.goBack()
-            } else {
+        openMore()
+        visitArea("labs", "14-labs") {
+            guard let opening = self.openLabMarker() else {
                 self.note("labs: no biomarker row")
+                return
             }
+            self.walkToEnd("14-labs-biomarker")
+            self.infoSheet("14-labs-biomarker", identifier: "biomarker.detail.info")
+            // Beside the table nothing was pushed; the bar's first button
+            // there is the list's menu, not a way back.
+            if opening == .pushed { self.goBack() }
         }
-        visit("more.row.documents", "14-documents")
+        visitArea("documents", "14-documents")
         visit("more.row.about_me", "14-aboutme") {
             self.visit("aboutMe.row.anamnesis", "14-anamnesis")
             self.visit("aboutMe.injectionSitesRow", "14-injectionsites")
         }
         visit("more.row.allergies", "14-allergies")
         visit("more.row.family_history", "14-familyhistory")
-        visit("more.row.measurements", "14-measurements") {
+        visitArea("measurements", "14-measurements") {
             self.visit("measurements.picker.customMetrics", "14-custommetrics")
         }
         scrollUpToTop()
-        if tap(app.buttons["more.toolbar.share"], "share glyph") {
+        if openMore(), tap(app.buttons["more.toolbar.share"], "share glyph") {
             settle(4)
             walkToEnd("14-share")
             infoSheet("14-share")
@@ -116,7 +110,6 @@ extension QASweepScreenshotsTest {
     }
 
     func test_17c_coach() {
-        guard !isXXL else { return }
         boot()
         openDeepLink("healthlog://coach")
         settle(5)
@@ -134,7 +127,7 @@ extension QASweepScreenshotsTest {
         dismissSheet()
     }
 
-    /// **1.4 B4-b — the Dynamic Type pass.** Today and the Settings pages
+    /// **The Dynamic Type pass.** Today and the Settings pages
     /// this unit reworked, at the large text sizes: by default XXL (the
     /// largest standard size) and AX-XXXL (the largest accessibility size),
     /// each a fresh launch, pictures prefixed `18-xxl-` and `18-ax5-`.
@@ -142,7 +135,10 @@ extension QASweepScreenshotsTest {
     /// narrows the set. Runs only with `HL_SWEEP_DT=1`, so the area walks
     /// above do not pay for it.
     func test_18_dynamicTypeTodaySettings() {
-        guard env["HL_SWEEP_DT"] == "1" else { return }
+        guard env["HL_SWEEP_DT"] == "1" else {
+            expectsNoPicture = true
+            return
+        }
         let sizes = (env["HL_SWEEP_DT_SIZES"] ?? "UICTContentSizeCategoryXXL,UICTContentSizeCategoryAccessibilityXXXL")
             .split(separator: ",").map(String.init)
         for size in sizes {
@@ -170,10 +166,104 @@ extension QASweepScreenshotsTest {
         }
     }
 
+    // MARK: - Account and Apple Health walks of `test_06_settings`
+
+    func profileWalk() {
+        guard let profile = probe("settings.account.profileRow") else {
+            note("Account: profile row missing")
+            return
+        }
+        profile.tap()
+        settle(3)
+        shot("06-profile-top")
+        // Units sit at the end of the form — walk down to them.
+        for step in 1 ... 5 {
+            scrollDown()
+            shot("06-profile-scroll\(step)")
+        }
+        goBack()
+        settle(1)
+    }
+
+    /// About > Licenses (1.7): the list, then the first package's full text.
+    func licensesWalk() {
+        guard let licenses = probe("settings.about.licensesLink") else {
+            note("About: licenses row missing")
+            return
+        }
+        licenses.tap()
+        settle(2.5)
+        shotPair("06-licenses")
+        scrollUpToTop()
+        if let package = probe("settings.licenses.package.fhirmodels") {
+            package.tap()
+            settle(2.5)
+            shotPair("06-license-detail")
+            goBack()
+            settle(1)
+        } else {
+            note("Licenses: first package row missing")
+        }
+        goBack()
+        settle(1)
+    }
+
+    func appleHealthWalk() {
+        guard let appleHealth = probe("settings.integrations.appleHealthRow") else {
+            note("Integrations: Apple Health row missing")
+            return
+        }
+        appleHealth.tap()
+        settle(3)
+        shotPair("06-applehealth")
+        scrollUpToTop()
+        if let diag = probe("settings.integrations.hkDiagnosticsRow") {
+            diag.tap()
+            settle(3)
+            shotPair("06-sync-diagnostics")
+            for step in 2 ... 4 {
+                scrollDown()
+                shot("06-sync-diagnostics-scroll\(step)")
+            }
+            // The walk ended past the refusal card; `probe` only scrolls down.
+            scrollUpToTop()
+            if let list = probe("settings.hkdiag.skippedList") {
+                list.tap()
+                settle(2)
+                shotPair("06-sync-diagnostics-rejected")
+                goBack()
+            } else {
+                note("Sync diagnostics: no rejection list (register empty)")
+            }
+            goBack()
+        } else {
+            note("Apple Health: diagnostics row missing")
+        }
+        goBack()
+        settle(1)
+    }
+
     // MARK: - Walk primitives
 
     /// Opens the row `identifier` (scrolling to it), photographs the screen to
     /// its end and its info sheet, runs `then` on it, and goes back.
+    /// Like `visit` for a More row, but for an area that is a sidebar tab in
+    /// a regular window: opened there, walked, and More opened again for the
+    /// rows that follow.
+    private func visitArea(_ row: String, _ name: String, then: (() -> Void)? = nil) {
+        guard sectionTitle(forMoreRow: row) != nil, AdaptiveShell.isRegular(app) else {
+            visit("more.row.\(row)", name, then: then)
+            return
+        }
+        guard openArea(row) else { return }
+        walkToEnd(name)
+        infoSheet(name)
+        if let then {
+            then()
+        }
+        openMore()
+    }
+
     private func visit(_ identifier: String, _ name: String, then: (() -> Void)? = nil) {
         scrollUpToTop()
         guard let row = deepProbe(identifier) else {
@@ -189,32 +279,6 @@ extension QASweepScreenshotsTest {
         }
         goBack()
         settle(1)
-    }
-
-    /// `scrollDown`, started in the page's left margin (outside any card).
-    private func marginScroll() {
-        let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.015, dy: 0.72))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.015, dy: 0.32))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 600, thenHoldForDuration: 0.3)
-        settle(1.2)
-    }
-
-    /// Like `probe`, but far enough for the longest settings screens.
-    private func deepProbe(_ identifier: String) -> XCUIElement? {
-        let target = element(identifier)
-        for step in 0 ..< 16 {
-            if target.exists, target.isHittable { return target }
-            // A drag that starts on a large button (the assistant source
-            // picker) does not scroll; every other try drags along the
-            // page's left margin, outside the cards.
-            if step.isMultiple(of: 2) {
-                scrollDown()
-            } else {
-                marginScroll()
-            }
-        }
-        return target.exists && target.isHittable ? target : nil
     }
 
     /// The screen from where it stands down to its end: one shot, then one per

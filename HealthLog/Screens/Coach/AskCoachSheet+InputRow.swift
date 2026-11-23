@@ -4,31 +4,19 @@ import SwiftUI
 #endif
 
 #if canImport(SpeziChat)
-    /// Bottom input row of the AskCoach composer — `TextField` + send button.
-    /// We own the submit path so the LLM dispatch flows through
-    /// `store.send(...)` once, with no SpeziChat double-dispatch guard.
+    /// The AskCoach composer: one quiet container with the field in front and
+    /// the mic and the send button behind it, as in Messages. We own the
+    /// submit path so the LLM dispatch flows through `store.send(...)` once.
     ///
-    /// **iOS-26 morph (W27 / QOL-AUDIT H2):** the field + send button are
-    /// wrapped in `HLGlassEffectContainer` and share a `@Namespace`, so they
-    /// read as ONE fluid-glass system. The signature iOS-26 behaviour: the
-    /// send button *emerges / merges* out of the input capsule when the draft
-    /// becomes sendable, and dissolves back into it when the field empties —
-    /// the container fuses the two glass shapes during the transition. The
-    /// morph is `accessibilityReduceMotion`-gated (instant on/off when motion
-    /// is disabled). Monochrome doctrine: the glass is the chrome; the send
-    /// button is chrome too — its active state is the monochrome
-    /// `HLAccent.primary` (the only sanctioned purple in Coach is the coin
-    /// gradient, never this composer control). On iOS
-    /// 18-25 the container / IDs are no-ops and we fall back to the prior
-    /// `.thinMaterial` row with a `HLSurface.tertiary` field + always-present
-    /// (disabled-when-empty) send button — no behaviour change either way.
+    /// The mic and the send button are circles of one size
+    /// (``CoachComposerDisc``). Send only stands there while there is
+    /// something to send; without text the mic takes the edge.
     struct CoachInputRow: View {
         @Binding var draft: String
         var focused: FocusState<Bool>.Binding
         let isResponding: Bool
         let onSubmit: () -> Void
 
-        @Namespace private var glassNS
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @Environment(\.openURL) private var openURL
         @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -37,121 +25,129 @@ import SwiftUI
         /// the field; transcribes into `$draft`, never auto-sends.
         @State private var dictation = CoachDictationModel()
 
-        var body: some View {
-            HLGlassEffectContainer(spacing: HLSpace.sm) {
-                HStack(alignment: .bottom, spacing: HLSpace.sm) {
-                    // Mic sits left of the field. Hidden when the device has no
-                    // recognizer at all; disabled-and-routes-to-Settings when the
-                    // user denied permission.
-                    if dictation.availability != .unsupported {
-                        micButton
-                    }
-                    field
-                    // On iOS 26 the button is conditional so it morphs in / out
-                    // of the shared glass system; on the fallback it is always
-                    // present (disabled when empty) to keep the layout stable.
-                    if showSendButton {
-                        sendButton
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .padding(.horizontal, HLSpace.lg)
-            .padding(.top, HLSpace.sm)
-            .padding(.bottom, HLSpace.xxs)
-            .background(rowBackground)
-            // Build 273 — a persistent, visible statement under the composer
-            // that the answers are generated, fallible and not medical advice
-            // (App Review 1.2 / 5.1.1); the first-launch disclaimer alone is a
-            // screen the reviewer may never reopen.
-            //
-            // A11Y (1.5) — at the accessibility sizes the line under the field
-            // was cut ("Antw…"), and at full height it took the room the plan
-            // proposal needs above the keyboard. There it stands whole as the
-            // first line of the transcript instead (`CoachTranscriptView`).
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !dynamicTypeSize.isAccessibilitySize {
-                    CoachAIGeneratedNote()
-                        .padding(.horizontal, HLSpace.lg)
-                        .padding(.bottom, HLSpace.xs)
-                }
-            }
-            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: canSend)
-            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: dictation.isRecording)
-            // Stop a live session if the coach starts responding (the field is
-            // disabled then) so we never keep the mic hot across a send.
-            .onChange(of: isResponding) { _, responding in
-                if responding { dictation.stop() }
-            }
-        }
+        /// How long a dictation hint stays without a new tap or keystroke.
+        private static let hintLifetime: Duration = .seconds(8)
 
-        // MARK: - Mic / dictation
-
-        /// F2 (v0153) — the mic glyph reflects state: a live session shows the
-        /// waveform; a denied permission shows the slashed mic (a disabled
-        /// affordance that routes to Settings on tap); otherwise the plain mic.
-        private var micGlyph: String {
-            if dictation.isRecording { return "waveform" }
-            if dictation.availability == .denied { return "mic.slash.fill" }
-            return "mic.fill"
-        }
-
-        /// F2 (v0153) — denied permission reads as a disabled/tertiary tint so
-        /// the slashed mic clearly looks unavailable (it still routes to
-        /// Settings on tap — that affordance is preserved in `micButton`).
-        private var micTint: Color {
-            if dictation.isRecording { return HLAccent.primary }
-            if dictation.availability == .denied { return HLText.tertiary }
-            return HLText.secondary
-        }
-
-        private var micButton: some View {
-            Button {
-                switch dictation.availability {
-                case .denied:
-                    // Permission was refused — route to Settings rather than
-                    // silently no-op on tap.
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        openURL(url)
-                    }
-                case .available, .unsupported:
-                    dictation.toggle(into: $draft)
-                }
-            } label: {
-                Image(systemName: micGlyph)
-                    // CO3 (v0154 walkthrough): `HLIconSize.lg` (20pt). C4 (b199)
-                    // raised both composer glyphs to `hero` (28pt) to "match
-                    // optical weight", but 28pt + glass padding made the pucks
-                    // taller than the single-line field — the mic read oversized.
-                    // 20pt ("toolbar / prominent inline affordances") lands the
-                    // glass circle ≈ the field capsule height; mic == send stays
-                    // 1:1 (siblings in the same glass system, `MicChrome` mirrors
-                    // `SendChrome`).
-                    .font(.hlIcon(HLIconSize.lg))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(micTint)
-                    .symbolEffect(
-                        .variableColor.iterative,
-                        options: reduceMotion ? .nonRepeating : .repeating,
-                        isActive: dictation.isRecording
-                    )
-                    .modifier(MicChrome())
-            }
-            .hlGlassEffectID("composer-mic", in: glassNS)
-            .disabled(isResponding)
-            .sensoryFeedback(.impact(weight: .light), trigger: dictation.isRecording)
-            .accessibilityLabel(
-                dictation.isRecording
-                    ? String(localized: "Stop dictation")
-                    : String(localized: "Dictate your question")
+        /// The field's font at the current text size, for where the centre of
+        /// its last line sits above the baseline.
+        private var bodyFont: UIFont {
+            UIFont.preferredFont(
+                forTextStyle: .body,
+                compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
             )
+        }
+
+        private var showsSend: Bool {
+            CoachComposerRules.showsSend(draft: draft, isResponding: isResponding)
+        }
+
+        var body: some View {
+            container
+                .padding(.horizontal, HLLayout.pageMargin)
+                .padding(.top, HLSpace.xs)
+                .padding(.bottom, HLSpace.sm)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: dictation.hint)
+                .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22), value: showsSend)
+                // Stop a live session if the coach starts responding (the field is
+                // disabled then) so we never keep the mic hot across a send.
+                .onChange(of: isResponding) { _, responding in
+                    if responding { dictation.stop() }
+                }
+                .onChange(of: draft) { _, _ in
+                    if !dictation.isActive { dictation.clearHint() }
+                }
+                .onChange(of: focused.wrappedValue) { _, isFocused in
+                    if isFocused { dictation.clearHint() }
+                }
+                .onChange(of: dictation.hint) { _, hint in
+                    if let hint { AccessibilityNotification.Announcement(hint.text).post() }
+                }
+                .task(id: dictation.hint) {
+                    guard dictation.hint != nil else { return }
+                    try? await Task.sleep(for: Self.hintLifetime)
+                    if !Task.isCancelled { dictation.clearHint() }
+                }
+        }
+
+        // MARK: - Container
+
+        /// One row in one rounded rect: the field in front, the mic and send
+        /// behind it. A dictation hint takes its own line above the row,
+        /// inside the same surface.
+        private var container: some View {
+            let shape = RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
+            let font = bodyFont
+            let line = CoachComposerMetrics.Line(
+                isEmpty: draft.isEmpty,
+                ascender: font.ascender,
+                descender: font.descender,
+                lineHeight: font.lineHeight
+            )
+            return VStack(alignment: .leading, spacing: 0) {
+                if let hint = dictation.hint {
+                    CoachDictationHintLine(hint: hint)
+                        .padding(.horizontal, HLSpace.lg)
+                        .padding(.top, HLSpace.md)
+                        .transition(.opacity)
+                }
+                // The circles' centre meets the centre of the field's last
+                // line: one line sits on their middle, more lines grow
+                // upwards and the circles stay at the last one, as in
+                // Messages.
+                HStack(alignment: .composerLine, spacing: HLSpace.xs) {
+                    field
+                        .alignmentGuide(.composerLine) { [line] dimensions in
+                            line.lastLineCentre(
+                                height: dimensions.height,
+                                centre: dimensions[VerticalAlignment.center],
+                                lastBaseline: dimensions[.lastTextBaseline]
+                            )
+                        }
+                    buttons
+                }
+                .padding(.leading, HLSpace.lg)
+                // The tap area reaches `HLSpace.xs` past the circle on every
+                // side, so the circle stands `CoachComposerMetrics.discInset`
+                // from the top, the bottom and the trailing edge.
+                .padding([.top, .bottom, .trailing], CoachComposerMetrics.discInset - HLSpace.xs)
+            }
+            .background {
+                shape.fill(HLSurface.secondary)
+                shape.strokeBorder(HLColor.separator, lineWidth: HLCardSurface.hairlineWidth)
+            }
+            .contentShape(shape)
+            // The transcript gives way first: at the accessibility sizes a
+            // hint and three lines of text would otherwise be squeezed.
+            .fixedSize(horizontal: false, vertical: true)
+            // A tap on the empty part of the container goes to the field, as
+            // it would on one big text box.
+            .onTapGesture { focused.wrappedValue = true }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("coach.composer")
+        }
+
+        /// The mic and send side by side. The tap areas touch, so the circles
+        /// stand `2 × HLSpace.xs` apart.
+        private var buttons: some View {
+            HStack(spacing: 0) {
+                if dictation.availability != .unsupported {
+                    micButton
+                }
+                if showsSend {
+                    sendButton
+                        .transition(
+                            reduceMotion
+                                ? .opacity
+                                : .scale(scale: 0.6).combined(with: .opacity)
+                        )
+                }
+            }
         }
 
         // MARK: - Field
 
         /// Placeholder swaps to a "Listening…" cue while a dictation session is
-        /// live so the user gets clear feedback the mic is actively transcribing
-        /// (QA-b198 Design-L5).
+        /// live so the user gets clear feedback the mic is transcribing.
         private var fieldPrompt: String {
             dictation.isRecording
                 ? String(localized: "coach.composer.listening")
@@ -164,155 +160,259 @@ import SwiftUI
                 text: $draft,
                 axis: .vertical
             )
-            .lineLimit(1 ... 5)
+            // At the accessibility sizes six lines and a hint left no room
+            // above the keyboard; three lines still show what was dictated.
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 ... 3 : 1 ... 6)
             .textFieldStyle(.plain)
             .font(.hlBody)
             .foregroundStyle(HLText.primary)
-            .padding(.horizontal, HLSpace.md)
-            .padding(.vertical, HLSpace.sm)
-            .modifier(FieldChrome())
-            .hlGlassEffectID("composer-field", in: glassNS)
             .focused(focused)
             .disabled(isResponding)
             .submitLabel(.send)
             .onSubmit(onSubmit)
+            .accessibilityIdentifier("coach.composer.field")
         }
 
-        // MARK: - Send button
+        // MARK: - Mic
+
+        /// A live session shows the waveform, a refused permission the slashed
+        /// mic (routes to Settings on tap), otherwise the plain mic.
+        private var micGlyph: String {
+            if dictation.isRecording { return "waveform" }
+            if dictation.availability == .denied { return "mic.slash.fill" }
+            return "mic.fill"
+        }
+
+        private var micButton: some View {
+            Button {
+                switch dictation.availability {
+                case .denied:
+                    // Permission was refused: route to Settings rather than
+                    // silently no-op on tap.
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
+                    }
+                case .available, .unsupported:
+                    dictation.toggle(into: $draft)
+                }
+            } label: {
+                CoachComposerDisc(
+                    systemImage: micGlyph,
+                    style: CoachComposerRules.micStyle(isActive: dictation.isActive)
+                )
+                .modifier(CoachMicPulse(isOn: dictation.isActive && !reduceMotion))
+            }
+            .buttonStyle(.plain)
+            .disabled(isResponding)
+            .sensoryFeedback(.impact(weight: .light), trigger: dictation.isActive)
+            .accessibilityLabel(
+                dictation.isActive
+                    ? String(localized: "Stop dictation")
+                    : String(localized: "Dictate your question")
+            )
+            .accessibilityIdentifier("coach.composer.mic")
+        }
+
+        // MARK: - Send
 
         private var sendButton: some View {
             Button(action: onSubmit) {
-                Image(systemName: "arrow.up.circle.fill")
-                    // CO3 (v0154 walkthrough): `HLIconSize.lg` (20pt), symmetric
-                    // with the mic. Chrome control with a deliberate hit-target
-                    // size, not body copy — must not grow with Dynamic Type and
-                    // reflow the row.
-                    .font(.hlIcon(HLIconSize.lg))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(canSend ? HLAccent.primary : HLText.secondary)
-                    // v0.14.x Q — bounce the send glyph the instant the coach
-                    // starts responding (the discrete `isResponding` false→true
-                    // edge = "message sent"). Keyed on `isResponding` so it
-                    // fires once per send, not on every body pass; reduce-motion
-                    // gated (the send still works, just without the flourish).
-                    .symbolEffect(.bounce, value: reduceMotion ? false : isResponding)
-                    .modifier(SendChrome())
+                CoachComposerDisc(systemImage: "arrow.up", style: CoachComposerRules.sendStyle)
             }
-            .hlGlassEffectID("composer-send", in: glassNS)
-            .disabled(!canSend)
-            // M2 (QOL-AUDIT): light impact confirms a sent message. Keyed on
-            // the `isResponding` false→true edge so it fires once per send,
-            // not on every body pass (matches the `.symbolEffect` trigger).
+            .buttonStyle(.plain)
+            .disabled(!CoachComposerRules.canSend(draft: draft, isResponding: isResponding))
+            // Light impact confirms a sent message, once per send.
             .sensoryFeedback(.impact(weight: .light), trigger: isResponding) { _, responding in
                 responding
             }
             .accessibilityLabel(String(localized: "Send question"))
+            .accessibilityIdentifier("coach.composer.send")
+        }
+    }
+
+    /// Where the field and the circles meet in the row.
+    enum CoachComposerMetrics {
+        /// Space between a circle and the container's top, bottom and
+        /// trailing edge.
+        static let discInset: CGFloat = HLSpace.sm
+
+        /// How far the middle of a line's glyph box sits above its baseline
+        /// (`descender` is negative, as UIKit gives it).
+        nonisolated static func lineCentreAboveBaseline(ascender: CGFloat, descender: CGFloat) -> CGFloat {
+            (ascender + descender) / 2
         }
 
-        // MARK: - Conditional / fallback plumbing
+        /// The field's font and state, enough to find its last line.
+        nonisolated struct Line: Equatable, Sendable {
+            let isEmpty: Bool
+            let ascender: CGFloat
+            let descender: CGFloat
+            let lineHeight: CGFloat
 
-        /// On iOS 26 the send button only exists while sendable, so the glass
-        /// container can morph it in / out of the field. On iOS 18-25 it stays
-        /// mounted (disabled when empty) — the IDs are no-ops there, so a
-        /// conditional would just pop without the fluid union.
-        private var showSendButton: Bool {
-            if #available(iOS 26.0, *) {
-                canSend
-            } else {
-                true
-            }
-        }
-
-        /// iOS 26 fields carry their own glass chrome, so the row backing is
-        /// transparent and only the glass shapes float. iOS 18-25 keeps the
-        /// prior row, now painted by `HLMaterialBackground` so Reduce
-        /// Transparency swaps the translucency for the opaque fill instead of
-        /// leaving a see-through composer.
-        ///
-        /// The transparent iOS-26 branch is safe under the preference because
-        /// nothing translucent sits behind it: the composer is a stacked
-        /// sibling of the transcript, not a float over it, and the sheet paints
-        /// `.presentationBackground(HLColor.surface)`. Both facts are asserted
-        /// by `Phase8MaterialCallSiteTests`, so this backing cannot quietly
-        /// become wrong under a later layout change.
-        @ViewBuilder
-        private var rowBackground: some View {
-            if #available(iOS 26.0, *) {
-                Color.clear
-            } else {
-                HLMaterialBackground(.thinMaterial)
-            }
-        }
-
-        private var canSend: Bool {
-            !isResponding
-                && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-
-        /// Field background: glass capsule on iOS 26, `HLSurface.tertiary`
-        /// rounded-rect on the fallback.
-        ///
-        /// The `fallback:` is named rather than defaulted: 08-04's doctrine is
-        /// that Reduce Transparency gets the *same* surface iOS 18-25 has always
-        /// shipped, so the opaque answer here has to be `HLSurface.tertiary` —
-        /// the helper's `HLColor.backgroundEleva` default would invent a third
-        /// appearance for the one cell nobody looks at.
-        private struct FieldChrome: ViewModifier {
-            func body(content: Content) -> some View {
-                if #available(iOS 26.0, *) {
-                    content.hlGlassEffect(
-                        in: RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous),
-                        fallback: HLSurface.tertiary
-                    )
-                } else {
-                    content
-                        .background(HLSurface.tertiary)
-                        .clipShape(
-                            RoundedRectangle(cornerRadius: HLRadius.md, style: .continuous)
-                        )
-                }
-            }
-        }
-
-        /// Mic glyph chrome: mirrors `SendChrome` so the dictation control reads
-        /// as part of the same fluid-glass system on iOS 26 and a plain glyph on
-        /// the fallback.
-        ///
-        /// `fallback: .clear` is the iOS 18-25 appearance restated: the glyph
-        /// carries no backplate there, so the preference must not conjure one.
-        private struct MicChrome: ViewModifier {
-            func body(content: Content) -> some View {
-                if #available(iOS 26.0, *) {
-                    content
-                        .padding(HLSpace.xs)
-                        .hlGlassEffect(in: Circle(), interactive: true, fallback: .clear)
-                } else {
-                    content
-                }
-            }
-        }
-
-        /// Send glyph chrome: interactive glass circle on iOS 26 (so it
-        /// fuses with the field as one system + responds to touch), plain
-        /// glyph on the fallback. `fallback: .clear` for the same reason
-        /// `MicChrome` names it — the two are one system and must resolve alike.
-        private struct SendChrome: ViewModifier {
-            func body(content: Content) -> some View {
-                if #available(iOS 26.0, *) {
-                    content
-                        .padding(HLSpace.xs)
-                        .hlGlassEffect(in: Circle(), interactive: true, fallback: .clear)
-                } else {
-                    content
-                }
+            /// The centre of the field's last visible line. An empty field
+            /// shows its prompt, which gives no baseline; its one line sits on
+            /// the middle. A field scrolled past its line limit reports the
+            /// baseline of a line further up, so the bottom line is taken
+            /// from the frame.
+            func lastLineCentre(height: CGFloat, centre: CGFloat, lastBaseline: CGFloat) -> CGFloat {
+                if isEmpty { return centre }
+                let baseline = height - lastBaseline > lineHeight ? height + descender : lastBaseline
+                return baseline - CoachComposerMetrics.lineCentreAboveBaseline(ascender: ascender, descender: descender)
             }
         }
     }
 
+    extension VerticalAlignment {
+        /// The centre of the field's last line and of the composer's circles.
+        private enum ComposerLine: AlignmentID {
+            static func defaultValue(in context: ViewDimensions) -> CGFloat {
+                context[VerticalAlignment.center]
+            }
+        }
+
+        static let composerLine = VerticalAlignment(ComposerLine.self)
+    }
+
+    /// The rules of the composer's buttons, apart from the view so they can
+    /// be tested.
+    enum CoachComposerRules {
+        static func canSend(draft: String, isResponding: Bool) -> Bool {
+            !isResponding && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        /// Send stands in the row while there is text, and stays (dimmed) while
+        /// the coach answers the question it just sent.
+        static func showsSend(draft: String, isResponding: Bool) -> Bool {
+            isResponding || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        static func micStyle(isActive: Bool) -> CoachComposerDisc.Style {
+            isActive ? .accent : .quiet
+        }
+
+        static let sendStyle: CoachComposerDisc.Style = .accent
+    }
+
+    /// The one shape both composer buttons share: a 36 pt circle in a 44 pt
+    /// tap area, with one glyph size and weight. A disabled button keeps its
+    /// circle and draws it dimmed, so the row never changes its rhythm.
+    struct CoachComposerDisc: View {
+        enum Style: Equatable {
+            /// A quiet circle in the system fill with the primary ink: the
+            /// mic at rest.
+            case quiet
+            /// The accent circle with the contrast ink: send, a starting or
+            /// live mic.
+            case accent
+        }
+
+        /// The visible circle inside the 44 pt tap area.
+        static let diameter: CGFloat = HLHitTarget.minimum - 2 * HLSpace.xs
+
+        let systemImage: String
+        let style: Style
+
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            Image(systemName: systemImage)
+                .font(.hlIcon(HLIconSize.lg, weight: .semibold))
+                .foregroundStyle(ink)
+                .frame(width: Self.diameter, height: Self.diameter)
+                .background { disc }
+                .frame(width: HLHitTarget.minimum, height: HLHitTarget.minimum)
+                .contentShape(Circle())
+        }
+
+        private var ink: Color {
+            switch (style, isEnabled) {
+            case (.accent, true): HLSurface.primary
+            case (.quiet, true): HLText.primary
+            case (_, false): HLText.tertiary
+            }
+        }
+
+        /// The quiet circle is the system fill for small controls laid on the
+        /// container surface: a recessed surface token reads as almost nothing
+        /// on the container in dark (1.15:1), this one as a clear circle in
+        /// both appearances. Drawn on the container's own surface so it stays
+        /// opaque and looks the same wherever the row sits.
+        @ViewBuilder private var disc: some View {
+            switch (style, isEnabled) {
+            case (.accent, true):
+                Circle().fill(HLAccent.primary)
+            case (.quiet, _), (.accent, false):
+                ZStack {
+                    Circle().fill(HLSurface.secondary)
+                    Circle().fill(Self.quietFill)
+                }
+            }
+        }
+
+        private static let quietFill = Color(uiColor: .secondarySystemFill)
+    }
+
+    /// A slow breath on the live mic, so a running dictation is seen without
+    /// a busy animation. Off with Reduce Motion.
+    private struct CoachMicPulse: ViewModifier {
+        let isOn: Bool
+
+        func body(content: Content) -> some View {
+            if isOn {
+                content.phaseAnimator([false, true]) { view, exhaled in
+                    // Only the strength breathes; the circle keeps its size
+                    // next to send.
+                    view.opacity(exhaled ? 0.8 : 1)
+                } animation: { _ in
+                    .easeInOut(duration: 0.9)
+                }
+            } else {
+                content
+            }
+        }
+    }
+
+    /// The mask over the transcript: fully drawn, with a short fade at the
+    /// bottom edge where it meets the composer. Only the alpha counts.
+    struct CoachTranscriptFade: View {
+        var body: some View {
+            VStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(
+                    colors: [HLSurface.primary, HLSurface.primary.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: HLSpace.lg)
+            }
+        }
+    }
+
+    /// Why the last tap on the mic did not start a dictation: one quiet line
+    /// inside the composer, above the field and the buttons, read out once by
+    /// VoiceOver.
+    struct CoachDictationHintLine: View {
+        let hint: CoachDictationHint
+
+        var body: some View {
+            Text(verbatim: hint.text)
+                .font(.hlFootnote)
+                .foregroundStyle(HLText.secondary)
+                // Grows only to the largest standard size, so the line and
+                // the composer still fit above the keyboard at the
+                // accessibility sizes; VoiceOver reads it out in full.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("coach.dictation.hint")
+        }
+    }
+
     /// The standing statement that the Coach's answers are generated,
-    /// fallible and not medical advice (build 273, App Review 1.2 / 5.1.1).
-    /// Under the composer at the ordinary sizes, the transcript's first line
-    /// at the accessibility sizes (A11Y, 1.5).
+    /// fallible and not medical advice (build 273, App Review 1.2 / 5.1.1,
+    /// 1.4.1). It stands under the welcome of a new conversation and goes
+    /// once the first message is in the transcript; past that, the AI consent
+    /// sheet and the first-launch disclaimer carry the medical framing.
     struct CoachAIGeneratedNote: View {
         var body: some View {
             Text("coach.aiGeneratedNote")

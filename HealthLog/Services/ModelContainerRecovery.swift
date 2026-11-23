@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// Shared non-trapping floor for the SwiftData `makeWithRecovery()` ladders
-/// (`OutboxQueue`, `SWRCache`, `LocalRepository`, `GLP1LocalRepository`,
+/// (`OutboxQueue`, `SWRCache`, `GLP1LocalRepository`,
 /// `CoachChatStore`).
 ///
 /// Audit M2: those recovery paths previously closed with `try!` on the
@@ -71,7 +71,7 @@ enum ModelContainerRecovery {
     /// Open a persistent store, or degrade for this process without
     /// destroying it when the failure is transient.
     ///
-    /// 1.2: the SWR cache, the standalone store, the GLP-1 store and the coach
+    /// 1.2: the SWR cache, the GLP-1 store and the coach
     /// chat store used to delete their whole directory on ANY open failure and
     /// retry. A background launch before the first unlock cannot open a
     /// `completeUntilFirstUserAuthentication` store, so that ladder could wipe
@@ -121,7 +121,7 @@ enum ModelContainerRecovery {
         try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
     }
 
-    // MARK: - W-INTEGRITY-WRITEPATH G-9 — corrupt-vs-unavailable classification
+    // MARK: - Corrupt-vs-unavailable classification
 
     /// Why a persistent store open failed, for the recovery ladder to decide
     /// between *fail-soft* (retry later, **destroy nothing**) and *move-aside*

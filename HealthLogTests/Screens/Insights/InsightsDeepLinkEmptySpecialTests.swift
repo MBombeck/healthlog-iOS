@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// 1.4 C1 — a deep link to a data-gated special page (mood / medications /
+/// A deep link to a data-gated special page (mood / medications /
 /// ECG) on an account without that data.
 ///
 /// The sweep walk `test_14` opened `healthlog://insights/mood` and `/ecg` right
@@ -36,10 +36,10 @@ struct InsightsDeepLinkEmptySpecialTests {
         kinds: Set<MetricKind>,
         specials: Set<InsightsSpecialPage>
     ) -> [InsightsTabSelection] {
-        InsightsTabSelection.ordered(layout: layout, availableKinds: kinds, availableSpecials: specials)
+        InsightsTabSelection.ordered(layout: layout, availableKinds: kinds, availableSpecials: specials, recoveryKinds: [.recoveryScore])
     }
 
-    private let specials: Set<InsightsSpecialPage> = [.recovery, .medications, .workouts]
+    private let specials: Set<InsightsSpecialPage> = [.medications, .workouts]
 
     /// The order the pager froze when Insights first opened on a special page,
     /// before the measurement kinds hydrated.

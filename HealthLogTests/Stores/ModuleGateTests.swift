@@ -308,7 +308,7 @@ struct ModulesPatchDTOEncodingTests {
 struct SettingsModulesOfferedSetTests {
     @Test("Offered set excludes the delegated cycle/coach keys")
     func excludesNonToggleable() {
-        // Build 2 / 2.6: `medications` graduated from the always-on CORE set to a
+        // `medications` graduated from the always-on CORE set to a
         // real toggle (server v1.18.1 D3), so it now BELONGS in the offered set.
         // Only cycle + coach stay out — the server 422s a direct PATCH for those;
         // they are driven by their own prefs endpoints.
@@ -346,7 +346,7 @@ struct ModuleGateSetEnabledTests {
         // also reject these keys (verified via isUserToggleable contract).
         #expect(ModuleKey.cycle.isUserToggleable == false)
         #expect(ModuleKey.coach.isUserToggleable == false)
-        // Build 2 / 2.6: medications graduated CORE → real toggle server-side
+        // Medications graduated CORE → real toggle server-side
         // (registry D3 / web v1.18.1). It is offered like any other key now.
         #expect(ModuleKey.medications.isUserToggleable == true)
         #expect(ModuleKey.illness.isUserToggleable == true)

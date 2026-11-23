@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable force_unwrapping
 
-/// **N2 — die Lücke, durch die die Nährstoffe nie gefragt wurden.**
+/// **Die Lücke, durch die die Nährstoffe nie gefragt wurden.**
 ///
 /// Bis N2 stand `requestNutrientAuthorizationIfNeeded()` an genau einer Stelle:
 /// im Moment, in dem jemand den `nutrients`-Schalter umlegt
@@ -305,7 +305,6 @@ private final class SpyNutrientHealthKitWriter: AnyHealthKitWriter, @unchecked S
     func attachUploader(_: MeasurementBatchUploader) async {}
     func attachDeletionReconciler(_: MeasurementDeletionReconciler) async {}
     func setInitialBackfillCutoff(_: Date?) async {}
-    func attachFeatureFlags(_: (any FeatureFlagsServicing)?) async {}
     func stopWorkoutImportObserver() async {}
     func resetWorkoutImportObserver() async {}
 }

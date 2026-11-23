@@ -4,7 +4,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **HK-NEW (1.5) — loop guard for State of Mind.**
+    /// **Loop guard for State of Mind.**
     ///
     /// A mood logged in HealthLog is mirrored into Apple Health as a State of
     /// Mind sample. The next sync must not send that sample back up as

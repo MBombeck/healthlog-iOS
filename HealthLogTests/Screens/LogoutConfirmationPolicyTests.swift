@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 
-/// **Phase 08 Plan 09 — the logout confirmation contract, without a view tree.**
+/// **The logout confirmation contract, without a view tree.**
 ///
 /// `Phase8AccessibilityUITests.testLogoutConfirmationPreservesSessionOnCancel`
 /// asks the product question on a rendered German screen: does a sign-out tap

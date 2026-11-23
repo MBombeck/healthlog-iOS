@@ -32,21 +32,18 @@ public extension MeasurementsStore {
         ) == .success
     }
 
-    /// Outcome-returning variant of ``capture(kind:value:note:glucoseContext:)``.
-    /// Single source of truth for the optimistic-insert / repo-call / HK-mirror
-    /// / rollback dance; `capture` is the Bool-returning façade. The watch
-    /// companion routes its quick-capture through here so it can ack the wrist
-    /// with the honest saved / will-sync / not-saved state (mirrors
-    /// `MoodStore.logReturningOutcome`).
-    func captureReturningOutcome(
-        kind: MetricKind,
+    /// The one write path behind the outcome and the saved-row variants:
+    /// optimistic insert, repo call, HK mirror, rollback. Declared first so
+    /// its effects keep the frozen inventory's `captureReturningOutcome#1`.
+    private func captureReturningOutcome(
+        committing kind: MetricKind,
         value: MeasurementValue,
         note: String?,
-        glucoseContext: GlucoseContext? = nil,
-        recordedAt: Date = .now
-    ) async -> MedicationsStore.WriteOutcome {
-        guard let lease = captureAuthenticatedSessionLease() else { return .failed(.canceled) }
-        // T-2: glucose-context only meaningful when kind == .glucose. We
+        glucoseContext: GlucoseContext?,
+        recordedAt: Date
+    ) async -> (outcome: MedicationsStore.WriteOutcome, saved: Measurement?) {
+        guard let lease = captureAuthenticatedSessionLease() else { return (.failed(.canceled), nil) }
+        // Glucose-context only meaningful when kind == .glucose. We
         // accept the param unconditionally so call-sites don't need a
         // kind-switch, but discard it for non-glucose so a future widening
         // of the picker UI (e.g. weight-context) can't accidentally
@@ -63,7 +60,7 @@ public extension MeasurementsStore {
             source: .manual,
             glucoseContext: effectiveContext
         )
-        // audit-v0162 H-3 — bump so an in-flight `.fresh` (fetched before this
+        // Bump so an in-flight `.fresh` (fetched before this
         // capture) can't drop the just-inserted optimistic row.
         bumpMutationGeneration()
         // Item 1.4b — `recent` is newest-first. A backdated capture must land at
@@ -74,7 +71,7 @@ public extension MeasurementsStore {
             try lease.requireCurrent()
             let saved = try await repo.create(local)
             try lease.requireCurrent()
-            // A360-5 H-1 — survive a concurrent `load()` that replaced `recent`
+            // Survive a concurrent `load()` that replaced `recent`
             // during the `await repo.create`. If the optimistic temp row is
             // gone, the server-saved row would otherwise vanish from the cache
             // (it exists on the server but not the list until a full reload).
@@ -92,39 +89,26 @@ public extension MeasurementsStore {
             // Spiegel an HealthKit (Anti-Duplikat via ExternalUUID). HK ist ein
             // sekundärer Mirror — ein Fehler darf den Server-Write nicht
             // zurückrollen, aber wird geloggt (kein Silent-Swallow, PROJECT_GUIDE.md).
-            //
-            // v0.14 RISK-1 (dedup option B): im Standalone-/Offline-Modus den
-            // HK-Mirror-Write UNTERDRÜCKEN. Die manuelle Messung wird beim
-            // späteren Pair als `MANUAL` hochgeladen; schrieben wir sie auch nach
-            // HK, läse der HK-Observer sie beim Pair erneut als `APPLE_HEALTH`
-            // ein → Duplikat derselben physischen Messung. Ohne Mirror bleibt
-            // genau eine Zeile (der MANUAL-Upload). Im paired Modus spiegelt der
-            // manuelle Write WIE BISHER nach HK (Anti-Duplikat-Logik unberührt).
-            if isStandalone?() == true {
+            do {
+                try lease.requireCurrent()
+                try await healthKit?.write(saved)
+                try lease.requireCurrent()
+            } catch {
+                guard authenticatedEffectIsCurrent(lease) else { return (.failed(.canceled), nil) }
                 HLLog.healthKit
-                    .debug("HK-Mirror write (measurement) im Standalone-Modus übersprungen (Dedup Option B)")
-            } else {
-                do {
-                    try lease.requireCurrent()
-                    try await healthKit?.write(saved)
-                    try lease.requireCurrent()
-                } catch {
-                    guard authenticatedEffectIsCurrent(lease) else { return .failed(.canceled) }
-                    HLLog.healthKit
-                        .warning("HK-Mirror write (measurement) fehlgeschlagen: \(error.localizedDescription, privacy: .public)")
-                }
+                    .warning("HK-Mirror write (measurement) fehlgeschlagen: \(error.localizedDescription, privacy: .public)")
             }
-            guard authenticatedEffectIsCurrent(lease) else { return .failed(.canceled) }
-            // RECONCILE-CELEBRATE: PR-detection runs against the snapshot
+            guard authenticatedEffectIsCurrent(lease) else { return (.failed(.canceled), nil) }
+            // PR-detection runs against the snapshot
             // BEFORE this commit landed (so we compare against the prior
             // bucket leader, not against ourselves). Fires off the main
             // thread of the capture call so a slow celebration scheduler
             // can never block the commit-return path; the coordinator
             // itself is @MainActor so the publish hops back implicitly.
             detectAndPublishPersonalRecord(for: saved)
-            return .success
+            return (.success, saved)
         } catch let err as HLError {
-            guard authenticatedEffectIsCurrent(lease) else { return .failed(.canceled) }
+            guard authenticatedEffectIsCurrent(lease) else { return (.failed(.canceled), nil) }
             error = err
             // Hat der Repository die Outbox enqueued (retriable ODER ein
             // transient-refresh 401 → `shouldPersistToOutbox`), bleibt der
@@ -134,18 +118,52 @@ public extension MeasurementsStore {
             // enqueued — kein Rollback, sonst "ich hab's geloggt, jetzt weg".
             if !err.shouldPersistToOutbox {
                 recent.removeAll { $0.id == local.id }
-                return .failed(err)
+                return (.failed(err), nil)
             }
             // Durably enqueued in the Outbox — the local row stands and will
             // replay; report `.queued` so the watch shows "will sync."
-            return .queued
+            return (.queued, nil)
         } catch {
-            guard authenticatedEffectIsCurrent(lease) else { return .failed(.canceled) }
+            guard authenticatedEffectIsCurrent(lease) else { return (.failed(.canceled), nil) }
             let wrapped = HLError.unknown(String(describing: error))
             self.error = wrapped
             recent.removeAll { $0.id == local.id }
-            return .failed(wrapped)
+            return (.failed(wrapped), nil)
         }
+    }
+
+    /// Outcome-returning variant of ``capture(kind:value:note:glucoseContext:)``.
+    /// Single source of truth for the optimistic-insert / repo-call / HK-mirror
+    /// / rollback dance; `capture` is the Bool-returning façade. The watch
+    /// companion routes its quick-capture through here so it can ack the wrist
+    /// with the honest saved / will-sync / not-saved state (mirrors
+    /// `MoodStore.logReturningOutcome`).
+    func captureReturningOutcome(
+        kind: MetricKind,
+        value: MeasurementValue,
+        note: String?,
+        glucoseContext: GlucoseContext? = nil,
+        recordedAt: Date = .now
+    ) async -> MedicationsStore.WriteOutcome {
+        await captureReturningOutcome(
+            committing: kind, value: value, note: note, glucoseContext: glucoseContext, recordedAt: recordedAt
+        ).outcome
+    }
+
+    /// #191 QoL — the capture sheet's variant: the server's row on `.success`,
+    /// so the receipt can offer Undo for exactly that row. `nil` for a queued
+    /// or failed write (a queued row has no server id to delete yet).
+    func captureReturningSaved(
+        kind: MetricKind,
+        value: MeasurementValue,
+        note: String?,
+        glucoseContext: GlucoseContext? = nil,
+        recordedAt: Date = .now
+    ) async -> Measurement? {
+        let result = await captureReturningOutcome(
+            committing: kind, value: value, note: note, glucoseContext: glucoseContext, recordedAt: recordedAt
+        )
+        return result.outcome == .success ? result.saved : nil
     }
 
     /// Insert into the newest-first ``recent`` list at the position `recordedAt`

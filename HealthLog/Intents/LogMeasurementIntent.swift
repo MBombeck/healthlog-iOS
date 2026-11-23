@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// **v0.15 W-SIRI — the generic "log a measurement" Siri / Shortcuts intent.**
+/// **The generic "log a measurement" Siri / Shortcuts intent.**
 ///
 /// The shipped write intents are per-metric (`LogBloodPressureIntent`,
 /// `LogBloodGlucoseIntent`, `LogMoodIntent`). Those stay — blood pressure
@@ -57,7 +57,7 @@ struct LogMeasurementIntent: AppIntent {
             return .result(dialog: IntentCopy.signInRequired)
         }
 
-        // #115 B5 / P2 — glucose, weight and temperature are spoken in the
+        // Glucose, weight and temperature are spoken in the
         // account's unit and stored canonical (mg/dL, kg, °C); every other
         // kind is already canonical.
         let units = deps.units()
@@ -102,7 +102,7 @@ struct LogMeasurementIntent: AppIntent {
     }
 }
 
-/// **v0.15 W-SIRI** — the scalar metric kinds the generic log intent offers
+/// The scalar metric kinds the generic log intent offers
 /// to Siri / Shortcuts. A curated subset of ``MetricKind``: the metrics a
 /// user realistically logs by hand and that carry a single scalar value.
 ///
@@ -175,7 +175,7 @@ enum MeasurableKindAppEnum: String, AppEnum, CaseIterable {
         }
     }
 
-    /// #115 B5 / P2 — the spoken value in the unit the repository writes:
+    /// The spoken value in the unit the repository writes:
     /// glucose from the account's unit into mg/dL (the B5 arithmetic), weight
     /// from lb into kg and temperature from °F into °C on an imperial account
     /// (the central transform, inverted). Every other kind unchanged.
@@ -188,7 +188,7 @@ enum MeasurableKindAppEnum: String, AppEnum, CaseIterable {
     }
 
     /// The unit spoken back in the confirmation — the unit the value was said
-    /// in: the account's for glucose (#115 B5), weight and temperature (P2),
+    /// in: the account's for glucose, weight and temperature,
     /// the server-canonical base unit for the rest (bpm / % / br/min).
     func spokenUnit(units: UnitPreferences) -> LocalizedStringResource {
         let glucoseUnit = units.glucose

@@ -19,9 +19,8 @@
     ///
     /// 1. Foreign sample reaches the uploader (happy path).
     /// 2. Own sample (`HKMetadataKeyExternalUUID` set) is dropped.
-    /// 3. `enableDailyStats` ON ⇒ stepCount is dropped (HK-STATS gate).
-    /// 4. `enableDailyStats` OFF ⇒ stepCount flows.
-    /// 5. A delivery arriving before composition waits for the uploader and is
+    /// 3. stepCount is dropped (HK-STATS gate: the statistics path sends it).
+    /// 4. A delivery arriving before composition waits for the uploader and is
     ///    forwarded after attachment instead of being silently consumed.
     @Suite("HealthLogStandard — forwarding behaviour")
     struct HealthLogStandardForwardingTests {
@@ -70,22 +69,6 @@
 
             func download(_: APIRequest<Data>) async throws -> (Data, HTTPURLResponse) {
                 throw HLError.unknown("test stub: download not implemented")
-            }
-        }
-
-        /// Minimal `FeatureFlagsServicing` honoring a single static flag
-        /// override. Mirrors `LiveFeatureFlagsService` but with a fixed
-        /// state for the test horizon.
-        private struct FlagStub: FeatureFlagsServicing {
-            let dailyStatsEnabled: Bool
-
-            func isEnabled(_ flag: FeatureFlag) -> Bool {
-                switch flag {
-                case .enableDailyStats:
-                    dailyStatsEnabled
-                default:
-                    flag.defaultValue
-                }
             }
         }
 
@@ -156,22 +139,6 @@
 
         // MARK: - Tests
 
-        @Test("foreign stepCount sample reaches uploader when dailyStats is OFF")
-        func foreignStepCountFlows() async throws {
-            let api = CapturingAPI()
-            let uploader = makeUploader(api: api)
-            let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
-
-            let sample = makeQuantitySample(identifier: .stepCount, value: 500)
-            await standard.handleNewSamples([sample], ofType: SampleType.stepCount)
-
-            #expect(api.entryCount == 1)
-            let entry = try #require(api.batches.first?.entries.first)
-            #expect(entry.hkIdentifier == HKQuantityTypeIdentifier.stepCount.rawValue)
-            #expect(entry.value == 500)
-        }
-
         @Test("G-7: a THIRD-PARTY sample carrying an externalUUID is forwarded (not silently dropped)")
         func thirdPartyUUIDSampleIsForwarded() async {
             // Pre-G-7 this asserted entryCount == 0 ("any externalUUID ⇒
@@ -185,20 +152,20 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
-            let thirdParty = makeQuantitySample(identifier: .stepCount, value: 200, externalUUID: "abc-123")
-            await standard.handleNewSamples([thirdParty], ofType: SampleType.stepCount)
+            let thirdParty = makeQuantitySample(identifier: .bodyMass, value: 72, externalUUID: "abc-123")
+            await standard.handleNewSamples([thirdParty], ofType: SampleType.bodyMass)
 
             #expect(api.entryCount == 1)
         }
 
-        @Test("dailyStats ON drops stepCount from per-sample path (HK-STATS gate)")
+        @Test("stepCount is dropped from the per-sample path (HK-STATS gate)")
         func dailyStatsGateDropsStepCount() async {
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: true))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .stepCount, value: 500)
             await standard.handleNewSamples([sample], ofType: SampleType.stepCount)
@@ -208,12 +175,12 @@
             #expect(api.entryCount == 0)
         }
 
-        @Test("dailyStats ON drops activeEnergyBurned from per-sample path too")
+        @Test("activeEnergyBurned is dropped from the per-sample path too")
         func dailyStatsGateDropsActiveEnergy() async {
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: true))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .activeEnergyBurned, value: 42)
             await standard.handleNewSamples([sample], ofType: SampleType.activeEnergyBurned)
@@ -234,7 +201,7 @@
             try await Task.sleep(for: .milliseconds(50))
             #expect(api.entryCount == 0)
 
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
             await delivery.value
 
             #expect(api.entryCount == 1)
@@ -247,7 +214,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .heartRate, value: 72)
             await standard.handleNewSamples([sample], ofType: SampleType.heartRate)
@@ -264,7 +231,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .heartRateVariabilitySDNN, value: 42)
             await standard.handleNewSamples([sample], ofType: SampleType.heartRateVariabilitySDNN)
@@ -283,10 +250,10 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             // HK stores SpO2 as a 0..1 fraction and the wire carries it raw;
-            // the server scales it to percent (#113).
+            // the server scales it to percent.
             let sample = makeQuantitySample(identifier: .oxygenSaturation, value: 0.97)
             await standard.handleNewSamples([sample], ofType: SampleType.bloodOxygen)
 
@@ -302,7 +269,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .bodyTemperature, value: 36.8)
             await standard.handleNewSamples([sample], ofType: SampleType.bodyTemperature)
@@ -319,7 +286,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .restingHeartRate, value: 58)
             await standard.handleNewSamples([sample], ofType: SampleType.restingHeartRate)
@@ -338,7 +305,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .bodyMass, value: 82.4)
             await standard.handleNewSamples([sample], ofType: SampleType.bodyMass)
@@ -355,10 +322,10 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             // HK stores body-fat as a 0..1 fraction and the wire carries it
-            // raw; the server scales it to percent (#113).
+            // raw; the server scales it to percent.
             let sample = makeQuantitySample(identifier: .bodyFatPercentage, value: 0.21)
             await standard.handleNewSamples([sample], ofType: SampleType.bodyFatPercentage)
 
@@ -374,7 +341,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .bodyMassIndex, value: 24.3)
             await standard.handleNewSamples([sample], ofType: SampleType.bodyMassIndex)
@@ -393,7 +360,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .walkingSpeed, value: 1.25)
             await standard.handleNewSamples([sample], ofType: SampleType.walkingSpeed)
@@ -410,7 +377,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             // W-SERVER-SYNC (server v1.5.5): HK stores asymmetry as a 0..1
             // fraction and the converter now sends it RAW (scale: 1), like
@@ -434,7 +401,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .walkingStepLength, value: 0.72)
             await standard.handleNewSamples([sample], ofType: SampleType.walkingStepLength)
@@ -453,7 +420,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .bloodPressureSystolic, value: 124)
             await standard.handleNewSamples([sample], ofType: SampleType.bloodPressureSystolic)
@@ -470,7 +437,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             let sample = makeQuantitySample(identifier: .bloodPressureDiastolic, value: 81)
             await standard.handleNewSamples([sample], ofType: SampleType.bloodPressureDiastolic)
@@ -514,7 +481,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             // 60-min REM sample. `HKCategoryValueSleepAnalysis.asleepREM`
             // is rawValue 5 on iOS 16+.
@@ -537,7 +504,7 @@
             let api = CapturingAPI()
             let uploader = makeUploader(api: api)
             let standard = HealthLogStandard()
-            await standard.attachUploader(uploader, featureFlags: FlagStub(dailyStatsEnabled: false))
+            await standard.attachUploader(uploader)
 
             // Four stages — Awake / Core / Deep / REM — Apple's
             // raw values 2, 3, 4, 5 on iOS 16+.

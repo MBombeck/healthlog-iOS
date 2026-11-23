@@ -3,7 +3,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// W-B184 — the **canonical WHOOP-style pull-to-refresh** for `ScrollView`-based
+/// The **canonical WHOOP-style pull-to-refresh** for `ScrollView`-based
 /// screens. This REPLACES stock `.refreshable` on the flagship scroll screens:
 /// where the system control only exposes its un-stylable spinner, this primitive
 /// owns the overscroll gesture and paints HealthLog's own monochrome story —
@@ -84,9 +84,15 @@ struct HLPullToRefreshModifier: ViewModifier {
             // Native iOS-18 scroll-geometry stream. `contentOffset.y +
             // contentInsets.top` is 0 at rest, positive scrolled UP, and
             // NEGATIVE when overscrolled DOWN (the pull). We negate it so
-            // `pullDistance` reads as a positive pull magnitude.
+            // `pullDistance` reads as a positive pull magnitude. Clamped at
+            // zero: scrolled down into the page the value stays 0, so the
+            // action (and a state write) runs only while pulling, not on
+            // every frame of an ordinary scroll.
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                -(geometry.contentOffset.y + geometry.contentInsets.top)
+                HLPullToRefreshModifier.pullDistance(
+                    contentOffsetY: geometry.contentOffset.y,
+                    topInset: geometry.contentInsets.top
+                )
             } action: { _, newValue in
                 handlePull(newValue)
             }
@@ -107,6 +113,12 @@ struct HLPullToRefreshModifier: ViewModifier {
     }
 
     // MARK: - Gesture handling
+
+    /// How far the page is pulled down past its top: 0 at rest and while
+    /// scrolled into the page, positive while overscrolled at the top.
+    nonisolated static func pullDistance(contentOffsetY: CGFloat, topInset: CGFloat) -> CGFloat {
+        max(0, -(contentOffsetY + topInset))
+    }
 
     private func handlePull(_ distance: CGFloat) {
         pullDistance = distance
@@ -243,5 +255,46 @@ extension View {
     ///   `syncStateStore.handshake()`).
     func hlPullToRefresh(action: @escaping @MainActor () async -> Void) -> some View {
         modifier(HLPullToRefreshModifier(action: action))
+            .hlRefreshCommand(action)
+    }
+}
+
+/// Where a refresh is pulled: the scroll container of the page.
+enum HLRefreshHost: Equatable, Sendable {
+    /// A `ScrollView` page (cards on the app background).
+    case scrollView
+    /// A `List` or `Form` page.
+    case list
+
+    /// How the pull is drawn on this host.
+    enum Mechanism: Equatable, Sendable {
+        /// The app's own glyph, check mark and haptic (``HLPullToRefreshModifier``).
+        case appGlyph
+        /// The system's `.refreshable`; an overlay is fragile over a list's
+        /// recycled rows.
+        case system
+    }
+
+    var mechanism: Mechanism {
+        switch self {
+        case .scrollView: .appGlyph
+        case .list: .system
+        }
+    }
+}
+
+extension View {
+    /// **The one pull-to-refresh.** The page says what it scrolls in, the
+    /// block picks the drawing: the app's own glyph on a `ScrollView`, the
+    /// system's on a `List` or `Form`. The work is the same either way.
+    @ViewBuilder
+    func hlRefresh(in host: HLRefreshHost, action: @escaping @MainActor () async -> Void) -> some View {
+        switch host.mechanism {
+        case .appGlyph:
+            hlPullToRefresh(action: action)
+        case .system:
+            refreshable { await action() }
+                .hlRefreshCommand(action)
+        }
     }
 }

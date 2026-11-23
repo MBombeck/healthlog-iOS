@@ -2,7 +2,7 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// **08-07 — About may state the build it is, and nothing else.**
+/// **About may state the build it is, and nothing else.**
 ///
 /// The defect this suite pins down shipped for eleven releases: About composed
 /// the displayed version as `CFBundleShortVersionString + "." +
@@ -125,7 +125,7 @@ struct AppBuildMetadataTests {
     /// is checked for DE **and** EN in the same pass, because a fallback that
     /// renders its key is not a localized fallback.
     ///
-    /// 1.4 B2-c — the Updates card is gone as a whole (it held no function,
+    /// The Updates card is gone as a whole (it held no function,
     /// only "updates come from the App Store, this app does not check"), and
     /// its replacement line went with it; the currency claim stays out.
     @Test("no currency claim survives in the catalogue, and the unknown fallback is translated")

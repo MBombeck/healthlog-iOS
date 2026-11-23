@@ -64,7 +64,7 @@ struct CertificatePinnerTests {
         // TEST fixture. Re-capture a fresh long-lived leaf to move the window.
         SecTrustSetVerifyDate(trust, Self.fixtureVerifyDate as CFDate)
         if anchorToSelf {
-            // v0.12 W1 — `validate(trust:)` now runs `SecTrustEvaluateWithError`
+            // `validate(trust:)` now runs `SecTrustEvaluateWithError`
             // BEFORE the SPKI-match loop (security finding W1-3). Das Fixture
             // ist selbst signiert und kettet damit gegen keinen System-Anker,
             // so a bare single-leaf trust would never evaluate.

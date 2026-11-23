@@ -20,7 +20,7 @@ public actor InsightsTargetsRepository {
     private let api: APIClientProtocol
     private let cacheTTL: TimeInterval
     private let clock: @Sendable () -> Date
-    /// W3 (v0.11 #22) — optional persistent SWR cache. When wired,
+    /// Optional persistent SWR cache. When wired,
     /// ``fetch()`` paints from the on-disk `CachedSnapshot` first (so the
     /// per-metric "Ziel" block survives an app restart and paints cache-first
     /// on launch) and revalidates in the background. `nil` (default) keeps the
@@ -46,7 +46,7 @@ public actor InsightsTargetsRepository {
     /// or absent → network. Network fails with stale present → return
     /// stale. Network fails with no cache → throw.
     ///
-    /// W3 — when a `SWRCoordinator` is wired the read routes through the
+    /// When a `SWRCoordinator` is wired the read routes through the
     /// persistent `.insightsTargets` SWR ladder (cache-first on disk, single-
     /// flighted revalidation) so a launch/foreground prefetch warms the same
     /// row the per-metric screen reads. The in-memory TTL still short-circuits

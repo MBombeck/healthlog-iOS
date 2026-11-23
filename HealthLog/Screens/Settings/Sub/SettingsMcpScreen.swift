@@ -14,12 +14,7 @@ import SwiftUI
 /// Card order is deliberate: connections sit ABOVE minting. The question a
 /// worried user arrives with is "who can read my record right now, and how do I
 /// stop them" — not "how do I add another one".
-///
-/// Server-only surface; standalone mode gets the calm placeholder rather than
-/// dead buttons.
 struct SettingsMcpScreen: View {
-    @Environment(BackendAvailability.self) private var backend
-    @Environment(AuthStore.self) private var authStore
     @Environment(AccountSecurityStore.self) private var security
     @Environment(\.appContainer) private var container
 
@@ -29,28 +24,15 @@ struct SettingsMcpScreen: View {
     @State private var showModuleError = false
 
     var body: some View {
-        HLSettingsPage(title: "MCP connector") {
-            if backend.hasServer {
-                connectedBody
-            } else {
-                HLCloudDerivedPlaceholder(
-                    variant: .inline,
-                    surfaceName: String(localized: "the MCP connector"),
-                    onConnect: { authStore.beginServerPairing() }
-                )
-            }
+        HLPage {
+            connectedBody
         }
         .navigationTitle("MCP connector")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(
-            String(localized: "Could not update modules. Please try again."),
-            isPresented: $showModuleError
-        ) {
-            Button(String(localized: "OK"), role: .cancel) {}
-        }
+        .hlAcknowledgeAlert("Could not update modules. Please try again.", isPresented: $showModuleError)
         .task {
-            guard backend.hasServer, store == nil, let api = container?.api else { return }
-            // POLISH-C (C1) — the proof follows the account's factors, not
+            guard store == nil, let api = container?.api else { return }
+            // The proof follows the account's factors, not
             // the server version (#163 B1, `elevation-if-enrolled`).
             let security = security
             let s = McpStore(repo: McpRepository(api: api)) { await McpStore.resolveProofUpFront(security: security) }
@@ -97,11 +79,8 @@ struct SettingsMcpScreen: View {
         // zustandsabhängiger Text schlägt statischen). Der „standardmäßig aus"-
         // Hinweis trägt nichts, was der Aus-Zustand des Schalters nicht selbst
         // zeigt (R2, Voreinstellungs-Ansage).
-        return HLSettingsCard(
-            icon: "powerplug",
-            title: "Connector status"
-        ) {
-            // 1.4 B2-c — one description for both states: what turning the
+        return HLCard("Connector status") {
+            // One description for both states: what turning the
             // switch on does. The off-state "answers 404" line is gone.
             HLSettingsToggleRow(
                 title: "Enable MCP connector",
@@ -119,11 +98,8 @@ struct SettingsMcpScreen: View {
                 Text("Endpoint")
                     .font(.hlCaption.weight(.semibold))
                     .foregroundStyle(HLText.tertiary)
-                Text(endpointText)
-                    .font(.hlFootnote.monospaced())
-                    .foregroundStyle(HLText.primary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Typed into another app: breaks at slashes and dots only.
+                HLIdentifierText(endpointText, style: .footnote, monospaced: true)
                     .accessibilityIdentifier("settings.mcp.endpoint")
             }
         }
@@ -149,13 +125,10 @@ struct SettingsMcpScreen: View {
     @ViewBuilder
     private func errorCard(store: McpStore) -> some View {
         if let error = store.error {
-            HLSettingsCard(
-                icon: "exclamationmark.triangle",
-                title: "Something went wrong"
-            ) {
+            HLCard("Something went wrong") {
                 Text(error)
                     .font(.hlFootnote)
-                    .foregroundStyle(HLColor.statusBad)
+                    .foregroundStyle(StepUpRetry.messageTint(for: error))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings.mcp.error")
             }
@@ -165,19 +138,14 @@ struct SettingsMcpScreen: View {
     // MARK: - Live connections (the revocation-critical card)
 
     private func connectionsCard(store: McpStore) -> some View {
-        // R19 — der Widerrufs-Hinweis steht im Bestätigungsdialog der
-        // Revoke-Zeile (siehe `McpConnectionRow`). 1.4 B2-c: der Untertitel,
+        // Der Widerrufs-Hinweis steht im Bestätigungsdialog der
+        // Revoke-Zeile (siehe `McpConnectionRow`). Der Untertitel,
         // der den Titel umschrieb, ist weg.
-        HLSettingsCard(
-            icon: "link",
-            title: "Connected assistants"
-        ) {
+        HLCard("Connected assistants") {
             if store.isLoading, store.connections.isEmpty {
                 loadingRow
             } else if store.connections.isEmpty {
-                Text("No assistant is connected.")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("No assistant is connected.")
                     .accessibilityIdentifier("settings.mcp.connections.empty")
             } else {
                 VStack(spacing: HLSpace.md) {
@@ -186,7 +154,7 @@ struct SettingsMcpScreen: View {
                             connection: connection,
                             isRevoking: store.revoking.contains(connection.id)
                         ) {
-                            Task { await store.revokeConnection(id: connection.id) }
+                            await store.revokeConnection(id: connection.id)
                         }
                     }
                 }
@@ -197,10 +165,9 @@ struct SettingsMcpScreen: View {
     // MARK: - Connector tokens
 
     private func tokensCard(store: McpStore) -> some View {
-        HLSettingsCard(
-            icon: "key",
-            title: "Connector tokens",
-            // R19 — „nur einmal sichtbar" hatte vier Fassungen (hier, plus
+        HLCard(
+            "Connector tokens",
+            // „nur einmal sichtbar" hatte vier Fassungen (hier, plus
             // Kartentitel, Seiten-Subtitle und Karten-Subtitle des
             // Reveal-Sheets). Heimat ist das Reveal-Sheet, wo das Geheimnis
             // tatsächlich steht; dort genügt EINE Fassung, und die trägt jetzt
@@ -210,9 +177,7 @@ struct SettingsMcpScreen: View {
             if store.isLoading, store.tokens.isEmpty {
                 loadingRow
             } else if store.activeTokens.isEmpty {
-                Text("No connector tokens.")
-                    .font(.hlSubhead)
-                    .foregroundStyle(HLText.secondary)
+                HLEmptyNote("No connector tokens.")
                     .accessibilityIdentifier("settings.mcp.tokens.empty")
             } else {
                 VStack(spacing: HLSpace.md) {
@@ -222,13 +187,13 @@ struct SettingsMcpScreen: View {
                             isRevoking: store.revoking.contains(token.id),
                             revokeIdentifier: "settings.mcp.tokens.revoke"
                         ) {
-                            Task { await store.revokeToken(id: token.id) }
+                            await store.revokeToken(id: token.id)
                         }
                     }
                 }
             }
 
-            // 1.4 B2-c — the canonical create row, and only while the
+            // The canonical create row, and only while the
             // connector is on: a dimmed row plus "switch the module on first"
             // under it is gone; the switch is the card above.
             if isModuleOn {
@@ -259,17 +224,13 @@ struct SettingsMcpScreen: View {
     }
 
     /// What a connected assistant can read, and that it is read-only unless
-    /// more is granted. 1.4 B2-c: the row and the footer that said this in two
+    /// more is granted. The row and the footer that said this in two
     /// sentences (one with "Lese-Token") are one sentence; the write scope is
-    /// chosen in the mint sheet, the revoke effect lives in its dialogs (R19).
+    /// chosen in the mint sheet, the revoke effect lives in its dialogs.
     private var infoCard: some View {
-        HLSettingsCard(
-            icon: "lock.shield",
-            title: "What an assistant can see"
-        ) {
+        HLCard("What an assistant can see") {
             Text("settings.mcp.scope.body")
-                .font(.hlSubhead)
-                .foregroundStyle(HLText.secondary)
+                .hlText(.factLabel)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -280,62 +241,36 @@ struct SettingsMcpScreen: View {
 private struct McpConnectionRow: View {
     let connection: McpConnectionDTO
     let isRevoking: Bool
-    let onRevoke: () -> Void
+    let onRevoke: @MainActor () async -> Void
 
-    @State private var confirmRevoke = false
-
+    /// Name, then scope and last use in one line; write access is the row's
+    /// status. Revoking stays its own row under it.
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                // `displayName` is third-party text from OAuth registration —
-                // rendered as plain data, never interpreted.
-                Text(verbatim: connection.displayName)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                if isRevoking {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(role: .destructive) {
-                        confirmRevoke = true
-                    } label: {
-                        Text("Revoke")
-                            .font(.hlFootnote.weight(.semibold))
-                            .foregroundStyle(HLColor.statusBad)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("settings.mcp.connections.revoke")
-                }
-            }
+            // `displayName` is third-party text from OAuth registration —
+            // rendered as plain data, never interpreted.
+            HLRow(
+                title: Text(verbatim: connection.displayName),
+                detail: HLRowDetail.text([scopeText, lastUsedText]),
+                status: connection.grantsWrite
+                    ? HLRowStatus(String(localized: "Can also write"), icon: "square.and.pencil", tone: .warning)
+                    : nil
+            )
 
-            if connection.grantsWrite {
-                Label("Can also write", systemImage: "square.and.pencil")
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLColor.statusWarn)
+            // Revoking ends access and deletes no entry: the ladder asks with
+            // the action's own words. The question also carries the refresh
+            // consequence, at the place where the revoke is triggered.
+            if isRevoking {
+                ProgressView().controlSize(.small)
+            } else {
+                HLDeleteButton(
+                    "Revoke",
+                    form: .row,
+                    action: SettingsRevokeAction.connection(perform: onRevoke)
+                )
+                .accessibilityIdentifier("settings.mcp.connections.revoke")
             }
-
-            HStack(spacing: HLSpace.md) {
-                Label(scopeText, systemImage: "key")
-                Label(lastUsedText, systemImage: "clock")
-            }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
         }
-        .padding(.vertical, HLSpace.xs)
-        .hlConfirmDestructive(
-            Text("Disconnect this assistant?"),
-            isPresented: $confirmRevoke,
-            // R19 — Heimat des Widerrufs-Hinweises. Die Refresh-Rechte standen
-            // vorher nur im Karten-Footer darüber; sie gehören dorthin, wo der
-            // Widerruf ausgelöst wird.
-            message: Text(
-                "It loses access to your health record immediately, including any refresh it holds. You can connect it again later."
-            ),
-            confirm: Text("Disconnect"),
-            cancel: Text("Cancel"),
-            action: onRevoke
-        )
     }
 
     private var scopeText: String {
@@ -347,7 +282,7 @@ private struct McpConnectionRow: View {
         guard let date = connection.lastUsedAt else {
             return String(localized: "Never used")
         }
-        return HLDateFormat.date(date, style: .abbreviated)
+        return String(localized: "passkey.lastUsed \(HLDateFormat.date(date, style: .abbreviated))")
     }
 }
 
@@ -357,75 +292,105 @@ struct ApiTokenRow: View {
     let token: ApiTokenDTO
     let isRevoking: Bool
     let revokeIdentifier: String
-    let onRevoke: () -> Void
+    let onRevoke: @MainActor () async -> Void
 
-    @State private var confirmRevoke = false
-
+    /// Name, then rights, creation and last use in one line; a revoked or
+    /// expired token, or write access, is the row's status.
     var body: some View {
         VStack(alignment: .leading, spacing: HLSpace.xs) {
-            HStack {
-                Text(verbatim: token.displayName)
-                    .font(.hlSubhead.weight(.semibold))
-                    .foregroundStyle(HLText.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                if isRevoking {
-                    ProgressView().controlSize(.small)
-                } else if token.isLive() {
-                    Button(role: .destructive) {
-                        confirmRevoke = true
-                    } label: {
-                        Text("Revoke")
-                            .font(.hlFootnote.weight(.semibold))
-                            .foregroundStyle(HLColor.statusBad)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier(revokeIdentifier)
-                } else {
-                    Text(token.revoked ? "Revoked" : "Expired")
-                        .font(.hlCaption.weight(.semibold))
-                        .foregroundStyle(HLText.tertiary)
-                }
-            }
+            HLRow(
+                title: Text(verbatim: token.displayName),
+                detail: HLRowDetail.text([
+                    token.permissions.isEmpty ? nil : token.permissions.joined(separator: ", "),
+                    createdText,
+                    lastUsedText
+                ]),
+                status: status
+            )
 
-            if token.grantsWrite, token.isLive() {
-                Label("Can also write", systemImage: "square.and.pencil")
-                    .font(.hlCaption.weight(.semibold))
-                    .foregroundStyle(HLColor.statusWarn)
+            // Revoking ends a credential and deletes no entry: the ladder
+            // asks with the action's own words.
+            if isRevoking {
+                ProgressView().controlSize(.small)
+            } else if token.isLive() {
+                HLDeleteButton(
+                    "Revoke",
+                    form: .row,
+                    action: SettingsRevokeAction.token(perform: onRevoke)
+                )
+                .accessibilityIdentifier(revokeIdentifier)
             }
-
-            if !token.permissions.isEmpty {
-                Text(verbatim: token.permissions.joined(separator: ", "))
-                    .font(.hlCaption)
-                    .foregroundStyle(HLText.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: HLSpace.md) {
-                Label(createdText, systemImage: "calendar")
-                Label(lastUsedText, systemImage: "clock")
-            }
-            .font(.hlCaption)
-            .foregroundStyle(HLText.tertiary)
         }
-        .padding(.vertical, HLSpace.xs)
-        .hlConfirmDestructive(
-            Text("Revoke this token?"),
-            isPresented: $confirmRevoke,
-            message: Text("Anything using this token stops working immediately. This can't be undone."),
-            confirm: Text("Revoke token"),
-            cancel: Text("Cancel"),
-            action: onRevoke
-        )
+    }
+
+    private var status: HLRowStatus? {
+        if !token.isLive() {
+            return HLRowStatus(token.revoked ? String(localized: "Revoked") : String(localized: "Expired"))
+        }
+        if token.grantsWrite {
+            return HLRowStatus(String(localized: "Can also write"), icon: "square.and.pencil", tone: .warning)
+        }
+        return nil
     }
 
     private var createdText: String {
         guard let date = token.createdAt else { return String(localized: "Created recently") }
-        return HLDateFormat.date(date, style: .abbreviated)
+        return String(localized: "passkey.created \(HLDateFormat.date(date, style: .abbreviated))")
     }
 
     private var lastUsedText: String {
         guard let date = token.lastUsedAt else { return String(localized: "Never used") }
-        return HLDateFormat.date(date, style: .abbreviated)
+        return String(localized: "passkey.lastUsed \(HLDateFormat.date(date, style: .abbreviated))")
+    }
+}
+
+// MARK: - Revoke questions
+
+/// The red actions in Settings that end access without deleting an entry: a
+/// browser session, an assistant's connection, a token, a share link. Each
+/// asks first and answers with its own word and sign instead of "Delete".
+enum SettingsRevokeAction {
+    static let symbol = "xmark.circle"
+
+    static func session(perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(
+            title: "sessions.revoke.confirmTitle",
+            message: "sessions.revoke.confirmBody",
+            word: "sessions.revoke.confirmAction",
+            symbol: symbol,
+            perform: perform
+        )
+    }
+
+    /// The question also carries the refresh consequence, at the place where
+    /// the revoke is triggered.
+    static func connection(perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(
+            title: "Disconnect this assistant?",
+            message: "It loses access to your health record immediately, including any refresh it holds. You can connect it again later.",
+            word: "Disconnect",
+            symbol: symbol,
+            perform: perform
+        )
+    }
+
+    static func token(perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(
+            title: "Revoke this token?",
+            message: "Anything using this token stops working immediately. This can't be undone.",
+            word: "Revoke token",
+            symbol: symbol,
+            perform: perform
+        )
+    }
+
+    static func shareLink(perform: @escaping @MainActor () async -> Void) -> HLDeleteAction {
+        .confirmed(
+            title: "Revoke this share link?",
+            message: "The doctor will lose access immediately. This can't be undone.",
+            word: "Revoke link",
+            symbol: symbol,
+            perform: perform
+        )
     }
 }

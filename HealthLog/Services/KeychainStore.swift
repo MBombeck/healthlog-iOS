@@ -8,6 +8,28 @@ public protocol KeychainStoring: Sendable {
     func getData(forKey key: String) -> Data?
     func remove(forKey key: String) throws
     func removeAll() throws
+    /// Like `getData`, but tells "there is no such item" apart from "the
+    /// keychain could not answer right now". Callers that would create or
+    /// discard something on a missing item must ask this way.
+    func readData(forKey key: String) -> KeychainRead
+}
+
+/// The answer to one keychain read.
+public enum KeychainRead: Sendable, Equatable {
+    case found(Data)
+    /// The keychain answered: no item under this key.
+    case missing
+    /// The keychain did not answer (locked before first unlock, interaction
+    /// not allowed, a daemon hiccup). Says nothing about whether the item exists.
+    case unavailable(OSStatus)
+}
+
+public extension KeychainStoring {
+    /// In-memory and test stores have no failure mode of their own: absent
+    /// means missing.
+    func readData(forKey key: String) -> KeychainRead {
+        getData(forKey: key).map(KeychainRead.found) ?? .missing
+    }
 }
 
 public struct KeychainStore: KeychainStoring, Sendable {
@@ -39,29 +61,48 @@ public struct KeychainStore: KeychainStoring, Sendable {
         return String(data: data, encoding: .utf8)
     }
 
+    /// Upsert, in place (D5 #7). This used to delete and then add: between
+    /// the two calls every concurrent reader (the APIClient building a request,
+    /// `AuthService.isAuthenticated` at launch, a widget intent) saw no item,
+    /// and a process killed in that window lost the session. An existing item
+    /// is now updated where it stands; only a missing one is added.
     public func setData(_ data: Data, forKey key: String) throws {
-        var query = baseQuery(key: key)
-        query[kSecValueData as String] = data
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        SecItemDelete(query as CFDictionary) // upsert semantics
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let query = baseQuery(key: key)
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            let addition = query.merging(attributes) { _, new in new }
+            status = SecItemAdd(addition as CFDictionary, nil)
+        }
         guard status == errSecSuccess else {
             throw KeychainError.osStatus(status)
         }
     }
 
     public func getData(forKey key: String) -> Data? {
+        guard case let .found(data) = readData(forKey: key) else { return nil }
+        return data
+    }
+
+    public func readData(forKey key: String) -> KeychainRead {
         var query = baseQuery(key: key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data else {
-            return nil
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data else { return .unavailable(errSecDecode) }
+            return .found(data)
+        case errSecItemNotFound:
+            return .missing
+        default:
+            return .unavailable(status)
         }
-        return data
     }
 
     public func remove(forKey key: String) throws {
@@ -118,7 +159,7 @@ public enum KeychainKey {
     /// distinguish restored Keychain state from a fresh trust decision without
     /// retaining the host itself as readable product or configuration data.
     public static let serverURLExplicitHostFingerprint = "auth.serverURL.explicitHostFingerprint"
-    /// GH-iOS #27 — JSON list of extra headers for a server behind a
+    /// JSON list of extra headers for a server behind a
     /// zero-trust proxy (`ServerAccessHeaders`). Per install like `serverURL`,
     /// because onboarding's first probe already needs them.
     public static let serverAccessHeaders = "auth.serverAccessHeaders"
@@ -143,7 +184,7 @@ public enum KeychainKey {
     /// `KeychainStore` mit `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
     /// persistiert — kein iCloud-Sync, sonst kollidieren zwei Geräte.
     public static let deviceID = "auth.deviceID"
-    /// AES-GCM key for the outbox payload cipher (W-SEC-A, v0.6.2). Mirrored
+    /// AES-GCM key for the outbox payload cipher. Mirrored
     /// here so the logout + account-deletion paths can wipe it alongside the
     /// auth bundle. The key itself is also referenced as
     /// `OutboxPayloadCipher.defaultKeyAccount` — drift between the two would

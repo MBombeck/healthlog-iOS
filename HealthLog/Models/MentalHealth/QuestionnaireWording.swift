@@ -1,6 +1,6 @@
 import Foundation
 
-// 1.5.0 (L10N-MH) — the questionnaire text, copied from the server.
+// The questionnaire text, copied from the server.
 //
 // The PHQ-9, GAD-7, WHO-5 and SCI items, stems, answer labels and the PHQ-9
 // follow-up question are validated instruments: a changed word changes what

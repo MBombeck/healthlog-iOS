@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Audit B-8 — the reminders follow the device into its new time zone.**
+/// **The reminders follow the device into its new time zone.**
 ///
 /// A medication reminder is projected with the zone that was current when it was
 /// registered: `NotificationService+Registration` pins `comps.timeZone` into the
@@ -16,7 +16,7 @@ import Foundation
 /// entry point every other trigger uses, so the pinned instants are re-projected
 /// against the zone the user is actually in.
 public extension MedicationsStore {
-    /// Audit B-8 — observe `NSSystemTimeZoneDidChange` and reconcile the
+    /// Observe `NSSystemTimeZoneDidChange` and reconcile the
     /// reminders once per genuine zone change.
     ///
     /// The system posts this notification for events that leave the resolved
@@ -40,7 +40,7 @@ public extension MedicationsStore {
         currentTimeZone: @escaping @Sendable @MainActor () -> TimeZone = { .current }
     ) -> any NSObjectProtocol {
         let memo = SystemTimeZoneMemo(currentTimeZone())
-        // 1.0.4 (INT-A) — delivered on the main queue. A post from the main
+        // Delivered on the main queue. A post from the main
         // thread runs the handler inline, in the run loop the change arrived
         // in; a post from any other thread is handed to the main queue by the
         // notification centre itself. The handler therefore never needs a
@@ -61,7 +61,7 @@ public extension MedicationsStore {
     }
 }
 
-/// Audit B-8 — the zone the last reminder reconcile ran for. Owned by the
+/// The zone the last reminder reconcile ran for. Owned by the
 /// observation closure (the notification centre retains it), so the store keeps
 /// no stored state for a concern only the observer has.
 @MainActor

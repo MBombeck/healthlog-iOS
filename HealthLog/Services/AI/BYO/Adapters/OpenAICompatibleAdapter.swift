@@ -1,6 +1,6 @@
 import Foundation
 
-/// v0.13 W2 — generic OpenAI-compatible adapter for any `/v1/chat/completions`
+/// Generic OpenAI-compatible adapter for any `/v1/chat/completions`
 /// endpoint reachable directly from the device (self-hosted gateways,
 /// OpenRouter, an https Ollama/LM-Studio front, …).
 ///
@@ -38,7 +38,7 @@ public struct OpenAICompatibleAdapter: LLMProvider {
     }
 
     /// Validates the user-supplied base URL: present + `https://`. Rejecting
-    /// here (before the request is built) is the https-only gate (D9) — a clear
+    /// here (before the request is built) is the https-only gate — a clear
     /// typed error the W3 entry card can surface inline.
     static func validatedBase(_ baseURL: URL?) throws -> URL {
         guard let baseURL else {

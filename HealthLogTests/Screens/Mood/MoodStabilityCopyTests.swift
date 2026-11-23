@@ -2,9 +2,9 @@ import Foundation
 @testable import HealthLog
 import Testing
 
-/// v0.10.0 W-Mood-A — lock that every stability band maps to a distinct,
-/// non-empty label (DESIGN-B §3.3), and that only the low band flags the gauge
-/// marker. #115 1.3 — the bands are the server's four. 1.4 B2 — the sentence
+/// Lock that every stability band maps to a distinct,
+/// non-empty label, and that only the low band flags the gauge
+/// marker. The bands are the server's four. The sentence
 /// per band is gone; the card's one line is the label plus the server window.
 @Suite("Mood stability copy + flag")
 struct MoodStabilityCopyTests {

@@ -7,7 +7,7 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
     public let userId: String?
     public let type: ServerMeasurementType
     public let value: Double
-    /// **v0.14 — explicit canonical unit token from the server (`MeasurementResource.unit`,
+    /// **Explicit canonical unit token from the server (`MeasurementResource.unit`,
     /// `openapi.yaml`).** The server states the row's unit explicitly so the client never
     /// has to guess. For `SLEEP_DURATION` on the `/api/measurements` LIST path the server
     /// emits the per-NIGHT time-asleep total in `unit: "minutes"` (`getUnitForType`
@@ -31,8 +31,10 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
     public let updatedAt: Date?
     /// #146 (v1.43.7) — night and naps of a sleep row, see ``SleepNightSplit``.
     public internal(set) var sleepSplit: SleepNightSplit?
-    /// MIRROR (1.5, #152) — `appleHealthMirror` by key presence (`MeasurementDTO+MirrorFlag.swift`).
+    /// `appleHealthMirror` by key presence (`MeasurementDTO+MirrorFlag.swift`).
     public internal(set) var appleHealthMirror: Bool?
+    /// #181 — the reading's own IANA zone (`MeasurementDTO+ReadingZone.swift`).
+    public internal(set) var timeZone: String?
 
     public init(
         id: String,
@@ -67,7 +69,7 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
         case glucoseContext, externalId, createdAt, updatedAt
     }
 
-    /// **CU-18 — tolerant `glucoseContext`-Decode.** `GlucoseContext` ist ein geschlossenes
+    /// **Tolerant `glucoseContext`-Decode.** `GlucoseContext` ist ein geschlossenes
     /// Vier-Fall-Enum ohne Unbekannt-Fall (bewusst: es speist die Picker über `CaseIterable`, ein
     /// Sammelfall würde dort als Auswahl auftauchen). Ein neues Server-Literal warf deshalb MITTEN im
     /// `MeasurementWireDTO`-Decode: auf der Listenroute fing `TolerantMeasurementWire` das ab und
@@ -95,6 +97,7 @@ public struct MeasurementWireDTO: Codable, Sendable, Identifiable {
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         sleepSplit = type == .sleepDuration ? SleepNightSplit(sleepRowFrom: decoder) : nil
         appleHealthMirror = Self.decodeAppleHealthMirror(from: decoder)
+        timeZone = Self.decodeReadingZone(from: decoder)
     }
 
     /// Reads `glucoseContext` as a raw string and maps it onto the closed enum.
@@ -147,7 +150,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// (`activity`-Bucket). Per-sample row — HK aktualisiert den Wert nur
     /// nach validem Outdoor-Workout.
     case vo2Max = "VO2_MAX"
-    /// **v0.8.3 W-D — render-backlog Aktivitäts-Aggregate.** Diese vier
+    /// **Render-backlog Aktivitäts-Aggregate.** Diese vier
     /// HK-Typen sammelt + uploadet die App seit v1.4.23 und der Server
     /// persistiert sie als rohe `MeasurementType`-Rows — sie waren nur
     /// nie display-seitig verdrahtet. Mit dem `MetricKind`-Pendant decodet
@@ -161,7 +164,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     case flightsClimbed = "FLIGHTS_CLIMBED"
     case walkingRunningDistance = "WALKING_RUNNING_DISTANCE"
     case timeInDaylight = "TIME_IN_DAYLIGHT"
-    /// **v0.8.4 W-WALK — Gait-Aggregate, jetzt server-persistiert.** Der
+    /// **Gait-Aggregate, jetzt server-persistiert.** Der
     /// Server (v1.6.0) mappt `HKQuantityTypeIdentifierWalkingSpeed` →
     /// `WALKING_SPEED` (m/s) und `HKQuantityTypeIdentifierWalkingStepLength`
     /// → `WALKING_STEP_LENGTH` (m) in `apple-health-mapping.ts` + Batch-
@@ -176,7 +179,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// bleibt false, Detail rendert aus Listen-Page + HK-Cache.
     case walkingSpeed = "WALKING_SPEED"
     case walkingStepLength = "WALKING_STEP_LENGTH"
-    /// **v0.11 W21 — web-parity body-composition + cardio additions.** The
+    /// **Web-parity body-composition + cardio additions.** The
     /// server has persisted + validated these eight `MeasurementType`s for a
     /// while (Withings sync for the body-composition + arterial metrics, see
     /// `src/lib/validations/measurement.ts` + `src/lib/withings/`), but iOS had
@@ -197,7 +200,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     case visceralFat = "VISCERAL_FAT"
     case walkingHeartRateAverage = "WALKING_HEART_RATE_AVERAGE"
     case fatMass = "FAT_MASS"
-    /// **v0.13.1 IC — v1.10.0 web-parity additive HealthKit signals.** The
+    /// **v1.10.0 web-parity additive HealthKit signals.** The
     /// server persists + validates these seven `MeasurementType`s (Apple Health
     /// → server ingest, `apple-health-mapping.ts`, since v1.10.0), but iOS had
     /// no `ServerMeasurementType` / `MetricKind` pendant — so a `GET
@@ -213,7 +216,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     case stairAscentSpeed = "STAIR_ASCENT_SPEED"
     case stairDescentSpeed = "STAIR_DESCENT_SPEED"
     case breathingDisturbances = "BREATHING_DISTURBANCES"
-    /// **v0.14.6 — v1.12.8 WHOOP-native read-types (migration 0125).** Without
+    /// **v1.12.8 WHOOP-native read-types (migration 0125).** Without
     /// these wire cases the tolerant list decoder silently dropped every
     /// `AVERAGE_HEART_RATE` / `MAX_HEART_RATE` / `SLEEP_DISTURBANCE_COUNT` row —
     /// invisible on iOS while visible on web (same data-loss class as the WHOOP
@@ -221,7 +224,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     case averageHeartRate = "AVERAGE_HEART_RATE"
     case maxHeartRate = "MAX_HEART_RATE"
     case sleepDisturbanceCount = "SLEEP_DISTURBANCE_COUNT"
-    /// **v0.14.1 W-B189 — v1.17.1 source-fixed render-only signals (#23).** The
+    /// **v1.17.1 source-fixed render-only signals.** The
     /// server stores + emits these four `MeasurementType`s LIVE since v1.17.1
     /// (Polar ANS-charge / cardio-load, Oura/Polar/Fitbit sleep-score, Oura
     /// body-temperature DEVIATION). Without these wire cases the tolerant list
@@ -261,7 +264,7 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     case audioExposureHeadphone = "AUDIO_EXPOSURE_HEADPHONE"
     case walkingAsymmetry = "WALKING_ASYMMETRY"
     case walkingDoubleSupport = "WALKING_DOUBLE_SUPPORT"
-    /// **v0158 — v1.25 clinical measurement types.** Four net-new server
+    /// **v1.25 clinical measurement types.** Four net-new server
     /// `MeasurementType`s (`src/lib/validations/measurement.ts` L134-137 +
     /// unit map L376-379 + sane bands L580-587). `PAIN_NRS` (score, 0–10, LOINC
     /// 72514-3) and `WAIST_CIRCUMFERENCE` (cm, 30–250, LOINC 8280-0) are manual
@@ -343,14 +346,14 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// `BREATHING_DISTURBANCES` count that already had a case.
     case breathingDisturbanceEvent = "BREATHING_DISTURBANCE_EVENT"
 
-    // MARK: - #162 — Garmin types (server v1.47.0), read-only ingest
+    // MARK: - Garmin types (server v1.47.0), read-only ingest
 
     case bodyBattery = "BODY_BATTERY"
     case stressLevel = "STRESS_LEVEL"
     case trainingReadiness = "TRAINING_READINESS"
     case acuteTrainingLoad = "ACUTE_TRAINING_LOAD"
 
-    // MARK: - HK-NEW (1.5) — Apple Health types the server maps since v1.44.0
+    // MARK: - Apple Health types the server maps since v1.44.0
 
     /// Exercise ring minutes, a day total (`minutes`).
     case exerciseMinutes = "EXERCISE_MINUTES"
@@ -365,9 +368,17 @@ public enum ServerMeasurementType: String, Codable, Sendable, CaseIterable {
     /// AFib burden in percent of the week (`%`), privacy-sensitive.
     case afibBurden = "AFIB_BURDEN"
 
-    // MARK: - Audit B-4 — the arm for a type the server adds after this build
+    // MARK: - Read-only types: blood ketones, resting energy, room climate
 
-    /// Audit B-4 — a `MeasurementType` this build does not know.
+    case bloodKetones = "BLOOD_KETONES"
+    case basalEnergyBurned = "BASAL_ENERGY_BURNED"
+    case indoorCO2 = "INDOOR_CO2"
+    case indoorTemperature = "INDOOR_TEMPERATURE"
+    case indoorHumidity = "INDOOR_HUMIDITY"
+
+    // MARK: - The arm for a type the server adds after this build
+
+    /// A `MeasurementType` this build does not know.
     ///
     /// The raw value is a token the server's SCREAMING_SNAKE vocabulary cannot
     /// produce, so nothing on the wire ever decodes *into* it by name; only the
@@ -403,7 +414,7 @@ public extension ServerMeasurementType {
         case .totalBodyWater: .bodyWater
         case .boneMass: .boneMass
         case .walkingSteadiness: .walkingSteadiness
-        // Audit B-4 — the audio-exposure EVENT has its own kind. The `nil` seam
+        // The audio-exposure EVENT has its own kind. The `nil` seam
         // that replaced the older `.sleep` lie was honest about the axis but
         // still cost the row: `toDomain()` dropped every one of them, silently.
         // Its five sibling category events all carry a kind (Build 3 / item
@@ -448,7 +459,7 @@ public extension ServerMeasurementType {
         case .audioExposureHeadphone: .audioExposureHeadphone
         case .walkingAsymmetry: .walkingAsymmetry
         case .walkingDoubleSupport: .walkingDoubleSupport
-        // v0158 — v1.25 clinical measurement types.
+        // v1.25 clinical measurement types.
         case .painNRS: .painNRS
         case .gripStrength: .gripStrength
         case .waistCircumference: .waistCircumference
@@ -479,19 +490,24 @@ public extension ServerMeasurementType {
         case .lowHeartRateEvent: .lowHeartRateEvent
         case .walkingSteadinessEvent: .walkingSteadinessEvent
         case .breathingDisturbanceEvent: .breathingDisturbanceEvent
-        // #162 — Garmin, one kind each (BODY_BATTERY is not recovery, STRESS_LEVEL is not STRESS_SCORE).
+        // Garmin, one kind each (BODY_BATTERY is not recovery, STRESS_LEVEL is not STRESS_SCORE).
         case .bodyBattery: .bodyBattery
         case .stressLevel: .stressLevel
         case .trainingReadiness: .trainingReadiness
         case .acuteTrainingLoad: .acuteTrainingLoad
-        // HK-NEW (1.5) — server v1.44, one kind each.
+        // Server v1.44, one kind each.
         case .exerciseMinutes: .exerciseMinutes
         case .standMinutes: .standMinutes
         case .standHours: .standHours
         case .mindfulMinutes: .mindfulMinutes
         case .stateOfMindValence: .stateOfMindValence
         case .afibBurden: .afibBurden
-        // Audit B-4 — a type this build does not know keeps its row on the
+        case .bloodKetones: .bloodKetones
+        case .basalEnergyBurned: .basalEnergy
+        case .indoorCO2: .indoorCO2
+        case .indoorTemperature: .indoorTemperature
+        case .indoorHumidity: .indoorHumidity
+        // A type this build does not know keeps its row on the
         // generic kind. `nil` stays reachable for a future server type that
         // genuinely has no domain representation; nothing takes it today.
         case .unknown: .unknown
@@ -528,7 +544,7 @@ public extension MeasurementWireDTO {
         } else if type == .bloodPressureDiastolic {
             .bloodPressure(systolic: 0, diastolic: value)
         } else if type == .sleepDuration {
-            // v0.14 — read the server's EXPLICIT `unit`, no hardcoded ÷60. The
+            // Read the server's EXPLICIT `unit`, no hardcoded ÷60. The
             // LIST collapses `SLEEP_DURATION` to one row per wake day in
             // `unit: "minutes"`; since v1.43.7 its `value` is the day's whole
             // time asleep, the main night plus its naps (#146; the night
@@ -539,7 +555,7 @@ public extension MeasurementWireDTO {
             // list shape).
             .scalar(Self.sleepHours(from: value, unit: unit))
         } else if type == .bloodGlucose {
-            // W-B183 — DEFENSIVE glucose unit-at-source guard ahead of server v1.17. `MetricKind.glucose.unit`
+            // DEFENSIVE glucose unit-at-source guard ahead of server v1.17. `MetricKind.glucose.unit`
             // hardcodes "mg/dL" and every glucose surface interprets the domain scalar AS mg/dL. Today's production
             // (server ≤ v1.16.x) sends glucose WITHOUT a `unit` token, so the absent-unit path MUST stay a verbatim
             // passthrough. When v1.17 starts stamping per-value units we normalise mmol/L → mg/dL (×18.0182) so the
@@ -558,26 +574,27 @@ public extension MeasurementWireDTO {
             note: notes,
             source: source.flatMap { $0.toDomain() } ?? .manual,
             externalUUID: externalId,
-            // T-2: hydrate glucose-context from the server wire so chart-
+            // Hydrate glucose-context from the server wire so chart-
             // groupers + edit-sheets can read it off the Domain model
             // without round-tripping the wire DTO. Only meaningful when
             // `type == .bloodGlucose`; server already keeps it `nil` on
             // every other row.
             //
-            // CU-18: verbatim pass-through — auch auf einer `BLOOD_GLUCOSE`-
+            // Verbatim pass-through — auch auf einer `BLOOD_GLUCOSE`-
             // Zeile bleibt `nil` `nil` (Server-Migration 0274 erlaubt das).
             // Kein Default, kein "wahrscheinlich nüchtern".
             glucoseContext: glucoseContext
         )
         measurement.sleepSplit = sleepSplit
         measurement.appleHealthMirror = appleHealthMirror
+        measurement.timeZone = timeZone
         return measurement
     }
 
     /// Normalises a server `SLEEP_DURATION` value into the app's HOURS display
     /// unit, driven by the row's EXPLICIT `unit` token (v0.14 / v1.11.5).
     ///
-    /// **v0.14.2 M5 — exhaustive over KNOWN sleep units; safe default.** The
+    /// **Exhaustive over KNOWN sleep units; safe default.** The
     /// prior version divided ANY non-hour token by 60, so a `"ns"`/`"ms"`/`"s"`
     /// row (the sleep DTO universe also carries `"ns"` — `SleepNightDTO.asleepns`
     /// + the server `getUnitForType` history) would have produced a wildly wrong
@@ -609,7 +626,7 @@ public extension MeasurementWireDTO {
         }
     }
 
-    /// **W-B183 — DEFENSIVE glucose unit normaliser, ahead of server v1.17
+    /// **DEFENSIVE glucose unit normaliser, ahead of server v1.17
     /// unit-at-source.** Normalises a server `BLOOD_GLUCOSE` value into the
     /// app's canonical mg/dL domain, driven by the row's EXPLICIT `unit` token.
     ///
@@ -709,13 +726,14 @@ public enum MeasurementAggregator {
                     note: sys.notes ?? dia.notes,
                     source: sys.source?.toDomain() ?? .manual,
                     externalUUID: sys.externalId,
-                    // T-1: carry both peer ids so edit-paths can fan-out a
+                    // Carry both peer ids so edit-paths can fan-out a
                     // paired PATCH that updates BOTH server rows. Without
                     // this the diastolic peer silently keeps its old value
                     // on every BP edit (per AC10 audit finding).
                     bloodPressureDiastolicId: dia.id
                 )
                 reading.appleHealthMirror = MeasurementWireDTO.pairedAppleHealthMirror(sys, dia)
+                reading.timeZone = sys.timeZone ?? dia.timeZone
                 bps.append(reading)
             } else if let only = pair.sys ?? pair.dia, let measurement = only.toDomain() {
                 // `only` is always a BP wire row, whose `metricKind` is non-nil,

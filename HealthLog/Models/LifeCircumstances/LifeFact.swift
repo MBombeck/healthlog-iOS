@@ -1,6 +1,6 @@
 import Foundation
 
-/// **LIFE (1.5.0, #132)** — the fact kinds the life-circumstances read
+/// The fact kinds the life-circumstances read
 /// route serves: the six new object kinds and the two closed string kinds that
 /// live in a section (smoking status in tobacco, shift work in work).
 ///

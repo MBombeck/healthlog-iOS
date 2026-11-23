@@ -2,7 +2,7 @@
     import AlarmKit
     import Foundation
 
-    /// **v0.9.0 W3 — AlarmKit metadata for the critical-med alarm.**
+    /// **AlarmKit metadata for the critical-med alarm.**
     ///
     /// Crosses the process boundary into the widget extension (it drives the
     /// breakthrough-alert presentation + any Live-Activity rendering of the
@@ -12,7 +12,6 @@
     ///
     /// `AlarmMetadata` requires `Decodable & Encodable & Hashable & Sendable`
     /// (verified against the iOS 26.5 SDK `AlarmKit.swiftinterface`).
-    @available(iOS 26.0, *)
     struct MedAlarmMetadata: AlarmMetadata {
         let medicationId: String
         let medicationName: String

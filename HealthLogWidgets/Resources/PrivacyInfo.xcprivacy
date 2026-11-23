@@ -12,9 +12,8 @@
     Rationale (audit v0.16.2 H3 — the earlier "no Required-Reason API" claim was
     stale once the shared Services set grew):
     - The widget appex compiles `Services/AIConsentStore.swift`
-      (`private let defaults: UserDefaults`, `.standard` read/write) and
-      `Services/FeatureFlagsService.swift` (`UserDefaultsFeatureFlagsService`)
-      from the project.yml HealthLogWidgets source set, so the binary links the
+      (`private let defaults: UserDefaults`, `.standard` read/write) from the
+      project.yml HealthLogWidgets source set, so the binary links the
       UserDefaults Required-Reason API → NSPrivacyAccessedAPICategoryUserDefaults
       / CA92.1 is declared (same reason as the host app manifest). Leaving it
       empty is the under-declaration / rejection-risk direction.
@@ -54,10 +53,13 @@
     <array>
         <!--
         UserDefaults — the appex links UserDefaults via the compiled
-        AIConsentStore (BYO-consent flags) + UserDefaultsFeatureFlagsService.
+        AIConsentStore (BYO-consent flags).
         Reason CA92.1: "Access info about the user from the same app, with no
         need for it to be available across the network or to other apps".
         Mirrors the host-app manifest's UserDefaults declaration.
+        Reason 1C8F.1: "Access info from the same App Group": the extension
+        reads the shared App-Group suite the app writes (`LockScreenPrivacy`
+        and the widget-side App-Group stores).
         -->
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
@@ -65,15 +67,16 @@
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
                 <string>CA92.1</string>
+                <string>1C8F.1</string>
             </array>
         </dict>
         <!--
         FileTimestamp — the appex links the API through the compiled
         `DoctorReportTmpSweeper`, which reads a temp export's modification date
-        inside the app's own container before deleting it. DDA9.1 ("access file
-        timestamps of files inside the app container") is that call site's exact
-        reason; C617.1 mirrors the host-app manifest, which declares the same
-        pair for the shared Services set. Same category, same file paths, two
+        inside the app's own container before deleting it. C617.1 ("access
+        timestamps of files inside the app container") is that call site's
+        exact reason; DDA9.1 ("display file timestamps") mirrors the host-app
+        manifest, which declares the same pair for the shared Services set. Same category, same file paths, two
         binaries.
         -->
         <dict>

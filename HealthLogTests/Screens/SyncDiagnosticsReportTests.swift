@@ -6,7 +6,7 @@
     @testable import HealthLog
     import Testing
 
-    /// **W5 (1.3.0, #126 1.4) — "Bericht kopieren".**
+    /// **"Bericht kopieren".**
     ///
     /// The report is what a tester pastes into a public issue, so the test
     /// that matters most is what it leaves out: the fixture carries a reading

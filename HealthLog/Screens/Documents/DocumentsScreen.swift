@@ -15,12 +15,16 @@ struct DocumentsScreen: View {
     @Environment(\.appContainer) private var container
 
     @State private var store: DocumentsStore?
+    /// The document whose preview stands beside the list. Screen state, not a
+    /// second navigation stack: it survives a change of width and resolves to
+    /// nothing once the document is gone from the list.
+    @State private var paneSelection = HLPaneSelection<String>()
     @State private var searchText = ""
     @State private var selectionMode = false
     @State private var showUpload = false
     @State private var isEnabled = true
     @State private var searchDebounce: Task<Void, Never>?
-    /// Wave 4.6 — the bounded post-upload poll (see ``pollWhileProcessing()``).
+    /// The bounded post-upload poll (see ``pollWhileProcessing()``).
     @State private var processingPoll: Task<Void, Never>?
     /// Pre-linked episode when the vault is opened from an illness episode card.
     let preselectedEpisodeId: String?
@@ -38,7 +42,9 @@ struct DocumentsScreen: View {
                             DocumentUploadSheet(store: store, preselectedEpisodeId: preselectedEpisodeId)
                         }
                     }
-                    .overlay(alignment: .bottom) { bulkBar }
+                    // Asks for the bulk bar's delete; it hangs around the
+                    // toolbar so the button in the bottom bar reaches it.
+                    .hlDeleteConfirmation()
             } else if let reason = moduleOffReason {
                 // **Audit A-7 —** the module is off for a reason that is not the
                 // viewer's own switch (`not_granted` / `unavailable` / a state
@@ -47,13 +53,14 @@ struct DocumentsScreen: View {
                 // place and nothing offers a flip.
                 FeatureDisabledCard(variant: .hero, reason: reason)
                     .padding()
+                    .hlCenteredOnReadableWidth()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
                 DocumentsOptInView { await enableAndReload() }
             }
         }
-        .navigationTitle(Text("documents.list.title"))
-        .navigationBarTitleDisplayMode(.inline)
+        // Inline when pushed; as a sidebar tab the list heads itself.
+        .hlSectionRootTitle(Text("documents.list.title"), headsItself: isModuleAvailable && !phase.isError)
         .task { await onAppear() }
         .onDisappear {
             processingPoll?.cancel()
@@ -68,11 +75,18 @@ struct DocumentsScreen: View {
     /// while the content switched on the second, so a `403` landing mid-flight
     /// swapped the list for the enable-CTA and left search, multi-select and
     /// upload live over it — every one of them pointing at a module that is off.
+    /// The guardian of a managed profile gets the profile's own reading
+    /// switch above the list (server v1.48.0).
+    private var isGuardianOfManagedProfile: Bool {
+        guard let authStore = container?.authStore, case let .authenticated(user) = authStore.phase else { return false }
+        return ManagedProfileContext.isGuardian(user.accountAccess)
+    }
+
     private var isModuleAvailable: Bool {
         isEnabled && store?.isDisabled != true
     }
 
-    /// **Audit A-7 — the server's sentence when the module is off for a reason
+    /// **The server's sentence when the module is off for a reason
     /// that is not the viewer's own switch**, `nil` when the opt-in CTA still
     /// applies (`disabled`, or no verdict from the server at all).
     private var moduleOffReason: String? {
@@ -90,21 +104,61 @@ struct DocumentsScreen: View {
     /// multi-select and upload ended up live over the enable-CTA.
     private var enabledBody: some View {
         listBody
-            .toolbar { toolbar }
-            .searchable(text: $searchText, prompt: Text("documents.filter.searchPlaceholder"))
+            .navigationDestination(for: DocumentRoute.self) { route in
+                if let store {
+                    DocumentDetailScreen(store: store, documentId: route.document.id, initialDocument: route.document)
+                }
+            }
+            .hlPageActions(pageActions)
+            .toolbar { bulkBar }
+            // While selecting, the tab bar gives way to the bottom bar that
+            // carries the bulk actions; it would otherwise cover it.
+            .toolbar(selectionMode ? .hidden : .visible, for: .tabBar)
+            .searchable(text: $searchText, prompt: Text("documents.filter.searchPrompt"))
             .onChange(of: searchText) { _, newValue in debounceSearch(newValue) }
     }
 
     // MARK: - List body
 
     private var listBody: some View {
-        HLAsyncListScreen(
-            phase: phase,
-            refresh: { await store?.load() },
-            loading: { loadingRows },
-            empty: { emptyRows },
-            content: { if let store { loadedRows(store: store) } }
-        )
+        // The pane stays while a new filter or search replaces the rows (the
+        // phase then reads loading); it leaves only with the last row.
+        HLListDetail(detailAvailable: store.map { !$0.documents.isEmpty } ?? false) { layout in
+            HLAsyncListScreen(
+                phase: phase,
+                refresh: { await store?.load() },
+                loading: {
+                    SectionRootHeader("documents.list.title", inList: true)
+                    loadingRows
+                },
+                empty: {
+                    SectionRootHeader("documents.list.title", inList: true)
+                    emptyRows
+                },
+                content: {
+                    SectionRootHeader("documents.list.title", inList: true)
+                    if let store { loadedRows(store: store, layout: layout) }
+                }
+            )
+            .hlPageMargins()
+        } detail: {
+            detailPane
+        }
+    }
+
+    /// The selected document's preview beside the list, a quiet note while
+    /// none is selected or the selected one was deleted.
+    @ViewBuilder
+    private var detailPane: some View {
+        if let store, let id = paneSelection.resolved(in: store.documents.map(\.id)),
+           let document = store.documents.first(where: { $0.id == id })
+        {
+            DocumentPane(store: store, document: document)
+                // One preview per document: its bytes load once for it.
+                .id(document.id)
+        } else {
+            DocumentPanePlaceholder()
+        }
     }
 
     /// `.loaded` used to be returned whenever the snapshot was non-empty, with
@@ -142,26 +196,36 @@ struct DocumentsScreen: View {
     }
 
     @ViewBuilder
-    private func loadedRows(store: DocumentsStore) -> some View {
+    private func loadedRows(store: DocumentsStore, layout: HLListDetailLayout.Resolution) -> some View {
+        let paneID = paneSelection.highlighted(isSideBySide: layout.isSideBySide, in: store.documents.map(\.id))
         if let message = store.lastError {
             Section { outcomeBanner(message, store: store) }
+                .hlFormRowSurface()
         }
         if let usage = store.usage {
             Section { DocumentUsageBar(usage: usage) }
+                .hlFormRowSurface()
+        }
+        if let container, isGuardianOfManagedProfile {
+            ManagedProfileDocumentSettingsSection(repository: RecordSettingsRepository(api: container.api))
         }
         if store.filter.isActive {
             Section {
                 activeFilterRow(store: store)
             }
+            .hlFormRowSurface()
         }
         Section {
             ForEach(store.documents) { document in
-                documentRow(document, store: store)
+                documentRow(document, store: store, layout: layout, paneID: paneID)
             }
-            if store.nextCursor != nil {
-                loadMoreRow(store: store)
+            // The last row loads the next page by itself.
+            HLLoadMoreRow(hasMore: store.nextCursor != nil, isLoading: store.isLoadingMore, trigger: .onAppear) {
+                Task { await store.loadMore() }
             }
+            .listRowSeparator(.hidden)
         }
+        .hlFormRowSurface()
         recentlyDeletedSection(store: store)
         Section {} footer: {
             HLSyncStatusFooter(screenLoading: store.isLoading)
@@ -169,41 +233,37 @@ struct DocumentsScreen: View {
     }
 
     @ViewBuilder
-    private func documentRow(_ document: InboundDocument, store: DocumentsStore) -> some View {
+    private func documentRow(
+        _ document: InboundDocument,
+        store: DocumentsStore,
+        layout: HLListDetailLayout.Resolution,
+        paneID: String?
+    ) -> some View {
         let row = DocumentCardRow(
             document: document,
             selectionMode: selectionMode,
             isSelected: store.isSelected(document.id),
-            isHighlighted: store.highlightedDocumentId == document.id
+            isHighlighted: store.highlightedDocumentId == document.id,
+            isPaneSelected: !selectionMode && paneID == document.id
         )
         if selectionMode {
-            Button { store.toggleSelection(document.id) } label: { row }
-                .buttonStyle(.plain)
+            HLRowButton { store.toggleSelection(document.id) } label: { row }
+        } else if layout.isSideBySide {
+            // Beside the preview a tap selects; the page opens from the pane.
+            HLRowButton { paneSelection.select(document.id) } label: { row }
+                .accessibilityAddTraits(paneID == document.id ? .isSelected : [])
+                .hlSwipeDelete(.confirmed(title: "documents.detail.deleteConfirm.title") {
+                    await deleteRow(document, store: store)
+                })
         } else {
-            NavigationLink {
-                DocumentDetailScreen(store: store, documentId: document.id, initialDocument: document)
-            } label: { row }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        Task { await deleteRow(document, store: store) }
-                    } label: {
-                        Label("documents.bulk.delete", systemImage: "trash")
-                    }
-                }
+            // A data row: the whole row opens the document, without a chevron.
+            row
+                .hlRowLink(inList: true, value: DocumentRoute(document: document))
+                // A document takes its links and summary along: asked first.
+                .hlSwipeDelete(.confirmed(title: "documents.detail.deleteConfirm.title") {
+                    await deleteRow(document, store: store)
+                })
         }
-    }
-
-    private func loadMoreRow(store: DocumentsStore) -> some View {
-        HStack {
-            Spacer()
-            ProgressView().controlSize(.small)
-            Text("documents.timeline.loadingMore")
-                .font(.hlCaption)
-                .foregroundStyle(HLText.secondary)
-            Spacer()
-        }
-        .listRowSeparator(.hidden)
-        .task { await store.loadMore() }
     }
 
     /// The current operation's outcome, on the loaded surface.
@@ -222,8 +282,8 @@ struct DocumentsScreen: View {
                 .font(.hlCaption)
                 .foregroundStyle(HLText.primary)
             Spacer(minLength: HLSpace.sm)
-            Button("documents.outcome.dismiss") { store.acknowledgeOutcome() }
-                .font(.hlCaption)
+            HLLinkButton("documents.outcome.dismiss", alignment: .leading) { store.acknowledgeOutcome() }
+                .fixedSize()
         }
         .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
         .accessibilityElement(children: .combine)
@@ -239,13 +299,13 @@ struct DocumentsScreen: View {
             Image(systemName: "line.3.horizontal.decrease.circle.fill")
             Text("documents.filter.activeLabel")
             Spacer()
-            Button("documents.filter.clear") {
+            HLLinkButton("documents.filter.clear", alignment: .leading) {
                 Task { await store.clearFilter() }
             }
+            .fixedSize()
         }
-        .font(.hlCaption)
-        .foregroundStyle(HLText.secondary)
-        // Audit-01 C2 — 16pt gutter (`HLSpace.lg`) like every sibling tab; the
+        .hlText(.rowSubtitle)
+        // 16pt gutter (`HLSpace.lg`) like every sibling tab; the
         // former `.md` (12pt) left the whole Documents content 4pt off-grid.
         .listRowInsets(EdgeInsets(top: HLSpace.xs, leading: HLSpace.lg, bottom: HLSpace.xs, trailing: HLSpace.lg))
         .accessibilityElement(children: .combine)
@@ -258,29 +318,29 @@ struct DocumentsScreen: View {
             HLEmptyState(
                 icon: filtered ? "line.3.horizontal.decrease.circle" : "folder",
                 title: LocalizedStringKey(filtered ? "documents.empty.noMatchesTitle" : "documents.empty.title"),
-                // 1.4 B2-c — a filtered empty list says its title and offers
+                // A filtered empty list says its title and offers
                 // the reset; the sentence that repeated the title is gone.
+                // Without a filter the one action uploads the first document
+                // where the eye already is; the plus in the bar stays.
                 message: filtered ? nil : LocalizedStringKey("documents.empty.description")
             ) {
                 if filtered {
-                    HLButton("documents.filter.clear", icon: "xmark", variant: .secondary) {
+                    HLButton("documents.filter.clear", systemImage: "xmark", variant: .secondary) {
                         Task { await store?.clearFilter() }
                     }
                 } else {
-                    HLButton("documents.empty.action", icon: "arrow.up.doc", variant: .secondary) {
-                        showUpload = true
-                    }
+                    HLButton("documents.empty.add", systemImage: "plus", variant: .secondary) { showUpload = true }
+                        .accessibilityIdentifier("documents.empty.add")
                 }
             }
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+            .hlFreeAreaListRow()
         }
         if let store { recentlyDeletedSection(store: store) }
     }
 
-    /// #151 — the centred link to Recently deleted, only while the server
+    /// The centred link to Recently deleted, only while the server
     /// counts a deleted document (never before v1.46.0, never in a shared record).
-    /// POLISH-A A3 — it sits in a section footer, like the "Advanced" text
+    /// It sits in a section footer, like the "Advanced" text
     /// links: as a list row the `NavigationLink` drew the system chevron at the
     /// trailing edge beside the centred text.
     @ViewBuilder
@@ -290,25 +350,42 @@ struct DocumentsScreen: View {
         }
     }
 
-    // MARK: - Bulk bar
+    // MARK: - Toolbar
 
-    @ViewBuilder
-    private var bulkBar: some View {
-        if let store, selectionMode, !store.selection.isEmpty {
-            DocumentBulkBar(store: store, conditionChips: store.conditionChips)
-                // Audit-01 C2 — 16pt gutter, matching the sibling tabs.
-                .padding(.horizontal, HLSpace.lg)
-                .padding(.bottom, HLSpace.sm)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+    private func toggleSelectionMode() {
+        withAnimation {
+            selectionMode.toggle()
+            if !selectionMode { store?.clearSelection() }
         }
     }
 
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        if let store, !selectionMode {
-            ToolbarItem(placement: .topBarTrailing) {
+    /// Two symbols in the bar, so the inline title stays centred like on
+    /// every other pushed page: the list menu (selecting, then the filter)
+    /// and adding outermost. While selecting, a single check mark ends it.
+    private var pageActions: HLTabHeaderActions {
+        if selectionMode {
+            return [
+                HLTabHeaderAction(
+                    role: .select,
+                    systemImage: "checkmark",
+                    label: "documents.selection.done",
+                    identifier: "documents.toolbar.select",
+                    isSelected: false,
+                    kind: .button(toggleSelectionMode)
+                )
+            ]
+        }
+        var items: [HLTabHeaderAction] = []
+        if let store {
+            items.append(.filter(
+                label: "documents.filter.groupLabel",
+                identifier: "documents.toolbar.filter",
+                isSelected: store.filter.isActive
+            ) {
+                Section {
+                    Button("documents.selection.select", systemImage: "checklist", action: toggleSelectionMode)
+                        .accessibilityIdentifier("documents.toolbar.select")
+                }
                 DocumentFilterMenu(
                     filter: store.filter,
                     conditionChips: store.conditionChips,
@@ -316,30 +393,20 @@ struct DocumentsScreen: View {
                     apply: { next in Task { await store.applyFilter(next) } },
                     clear: { Task { await store.clearFilter() } }
                 )
-            }
+            })
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                withAnimation {
-                    selectionMode.toggle()
-                    if !selectionMode { store?.clearSelection() }
-                }
-            } label: {
-                if selectionMode {
-                    Text("documents.selection.done")
-                } else {
-                    Label("documents.selection.select", systemImage: "checklist")
-                }
+        items.append(.add(label: "documents.pageUpload", identifier: "documents.toolbar.upload") { showUpload = true })
+        return HLTabHeaderActions(items)
+    }
+
+    /// The bulk actions while documents are selected, in the system bottom
+    /// bar.
+    @ToolbarContentBuilder
+    private var bulkBar: some ToolbarContent {
+        if let store, selectionMode, !store.selection.isEmpty {
+            ToolbarItemGroup(placement: .bottomBar) {
+                DocumentBulkBar(store: store, conditionChips: store.conditionChips)
             }
-            .accessibilityIdentifier("documents.toolbar.select")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showUpload = true
-            } label: {
-                Label("documents.pageUpload", systemImage: "arrow.up.doc")
-            }
-            .accessibilityIdentifier("documents.toolbar.upload")
         }
     }
 
@@ -361,7 +428,7 @@ struct DocumentsScreen: View {
         startProcessingPollIfNeeded()
     }
 
-    // MARK: - Bounded processing poll (Wave 4.6)
+    // MARK: - Bounded processing poll
 
     /// Hard cap on the post-upload poll — 15 attempts × 4 s ≈ 1 min of watching,
     /// well inside the 3-minute processing window. Bounded on BOTH ends: the
@@ -432,7 +499,7 @@ struct DocumentsOptInView: View {
             title: "documents.optIn.title",
             message: "documents.optIn.description"
         ) {
-            HLButton("documents.optIn.action", icon: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
+            HLButton("documents.optIn.action", systemImage: "checkmark.circle", variant: .secondary, isLoading: isEnabling) {
                 Task {
                     isEnabling = true
                     await onEnable()
@@ -441,5 +508,6 @@ struct DocumentsOptInView: View {
             }
             .accessibilityIdentifier("documents.optIn.enable")
         }
+        .hlCenteredOnReadableWidth()
     }
 }

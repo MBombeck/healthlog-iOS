@@ -42,7 +42,7 @@ struct CycleCalendarGrid: View {
 
     private var weekdayHeader: some View {
         HStack(spacing: HLSpace.xs) {
-            // 1.4 B4 — by position: in German two days share "D" and two "S".
+            // By position: in German two days share "D" and two "S".
             ForEach(Array(Self.weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
                     .font(.hlCaption)
@@ -140,7 +140,7 @@ struct CycleCalendarGrid: View {
         if dto.hasSymptoms {
             parts.append(String(localized: "cycle.calendar.a11y.symptoms"))
         }
-        // v1.39.1 (#1032) — intercourse has its own marker, and every other
+        // v1.39.1 — intercourse has its own marker, and every other
         // entry the day log holds is named, so VoiceOver reads what the
         // markers under the number show.
         if dto.sexualActivity {
@@ -150,7 +150,7 @@ struct CycleCalendarGrid: View {
         return parts.joined(separator: ", ")
     }
 
-    /// **v1.39.1 (#1032)** — the entries a day holds beyond period, symptoms,
+    /// **v1.39.1** — the entries a day holds beyond period, symptoms,
     /// intercourse and the predictions, each named for VoiceOver. Non-empty
     /// lights the "other entries" ring, so a day with only a test, a
     /// temperature or a note logged no longer looks like an empty day. Mirrors
@@ -174,10 +174,10 @@ struct CycleCalendarGrid: View {
     }
 
     static func dayKey(_ date: Date) -> String {
-        dayFormatter.string(from: date)
+        ProfileDay.key(for: date, timeZone: .current)
     }
 
-    /// 1.4 B4 — in the reader's language. A bare Gregorian calendar has no
+    /// In the reader's language. A bare Gregorian calendar has no
     /// locale and answered "M T W T F S S" on a German phone.
     static var weekdaySymbols: [String] {
         weekdaySymbols(locale: .autoupdatingCurrent)
@@ -191,15 +191,6 @@ struct CycleCalendarGrid: View {
         // Rotate so Monday leads.
         return Array(symbols[1...] + symbols[...0])
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
 }
 
 // MARK: - Day cell
@@ -252,7 +243,7 @@ private struct CycleDayCell: View {
 
     /// Symptoms surface as a hollow grey diamond below the number — a different
     /// SHAPE (not a dot), so it never blends into the round period/fertile markers
-    /// and stays distinct under colour-blindness. v1.39.1 (#1032): intercourse
+    /// and stays distinct under colour-blindness. v1.39.1: intercourse
     /// adds a FILLED mauve diamond and any other logged entry a hollow grey ring,
     /// each drawn by the shared swatch so the legend shows the same mark.
     @ViewBuilder
@@ -293,10 +284,10 @@ struct CycleMarkerSwatch: View {
         case fertile
         case ovulation
         case symptoms
-        /// v1.39.1 (#1032) — intercourse logged: a FILLED diamond, apart from
+        /// v1.39.1 — intercourse logged: a FILLED diamond, apart from
         /// the hollow symptom diamond by fill and hue.
         case intercourse
-        /// v1.39.1 (#1032) — anything else logged that day: a hollow ring.
+        /// v1.39.1 — anything else logged that day: a hollow ring.
         case otherEntries
         case today
     }
