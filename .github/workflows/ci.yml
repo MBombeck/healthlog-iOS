@@ -25,23 +25,28 @@ jobs:
   build-test:
     # 1.5 CI-FORK: pull requests from forks never run on the Mac mini. They
     # get a GitHub-hosted macOS runner (free for public repos), which installs
-    # the pinned Xcode and tools itself (the "hosted runner" steps below). The
-    # runner mini-public additionally rejects fork jobs in its job-started
-    # hook, because a fork can edit this file. The same condition decides
+    # the pinned Xcode and tools itself (the "hosted runner" steps below).
+    # 2026-11: the public mirror runs every job there; it has no own runner
+    # any more (a public repo never gets one), so only the private dev repo
+    # uses the Mac mini (mini-dev). Label xcode-27: GitHub's macOS image with
+    # Xcode 27.2 (public preview); macos-26 stops at Xcode 26.6. The same
+    # condition decides
     # HEALTHLOG_RUNNER; the contract test keeps the two in step.
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'macos-26' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
+    runs-on: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 'xcode-27' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
     env:
-      HEALTHLOG_RUNNER: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'hosted' || 'mini' }}
-      # Two runners (dev + public mirror) share one machine lock; a run may
-      # legitimately wait for the other's test step or for a release freeze.
+      HEALTHLOG_RUNNER: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 'hosted' || 'mini' }}
+      # CI on the Mac mini shares one machine lock with the release
+      # producer; a run may legitimately wait for a release freeze.
       HEALTHLOG_XCODE_GATE_WAIT_SECONDS: "7200"
     # C1 (audit v0.16.2): a cold build that compiles mlx-swift's C++/Metal
     # core does not fit 25 min without a warm DerivedData cache; give the
     # cold-cache path headroom. 2026-09-08: the suite is 8,600 tests now — a
     # cold run measured 15 min build + 44 min tests and was cancelled at the
     # 60-minute limit with 7,790 tests green; 120 leaves room for the SPM
-    # core build after the tests.
-    timeout-minutes: 120
+    # core build after the tests. 2026-11-23: the hosted xcode-27 runner
+    # (public repo, forks) is about 2.5x slower: 23 min build + 48 min tests,
+    # then the Release link gate ran past the 120-minute limit; it gets 240.
+    timeout-minutes: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 240 || 120 }}
 
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +63,14 @@ jobs:
             exit 1
           fi
           sudo xcode-select -s "$app/Contents/Developer"
+
+      # Hosted runner only: the Mac mini and the release producer run in
+      # Europe/Berlin, GitHub's macOS image in UTC. Some unit tests fall back to
+      # Calendar.current (MeasurementListDateRangeTests "composes with the
+      # other filters" failed in UTC), so the hosted path uses the same zone.
+      - name: Set time zone (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        run: sudo systemsetup -settimezone Europe/Berlin >/dev/null && date
 
       # Hosted runner only: the release gates' exact tool versions, from the
       # upstream release archives, each checked against a pinned SHA-256.

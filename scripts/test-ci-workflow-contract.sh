@@ -24,17 +24,19 @@ check_workflow() {
       workflow = YAML.safe_load(File.read(workflow_path), aliases: false)
       job = workflow.fetch("jobs").fetch("build-test")
 
-      # 1.5 CI-FORK — two runner paths. Fork pull requests run on GitHub-hosted
-      # macos-26, everything else on the Mac mini; one condition decides both
-      # runs-on and HEALTHLOG_RUNNER, so the hosted-only steps cannot drift
-      # from the runner choice.
+      # 1.5 CI-FORK — two runner paths. Fork pull requests and every run of
+      # the public mirror run on GitHub-hosted xcode-27 (a public repo never
+      # gets an own runner), everything else on the Mac mini; one condition
+      # decides both runs-on and HEALTHLOG_RUNNER, so the hosted-only steps
+      # cannot drift from the runner choice.
       fork_condition = "github.event_name == '"'"'pull_request'"'"' && github.event.pull_request.head.repo.full_name != github.repository"
+      hosted_condition = "!github.event.repository.private || (#{fork_condition})"
       runs_on = job.fetch("runs-on").to_s
-      expected_runs_on = "${{ (#{fork_condition}) && '"'"'macos-26'"'"' || fromJSON('"'"'[\"self-hosted\", \"macOS\", \"healthlog-mini\"]'"'"') }}"
-      abort("runs-on must pick macos-26 for forks and the Mac mini otherwise, found #{runs_on.inspect}") unless runs_on == expected_runs_on
-      expected_runner_env = "${{ (#{fork_condition}) && '"'"'hosted'"'"' || '"'"'mini'"'"' }}"
+      expected_runs_on = "${{ (#{hosted_condition}) && '"'"'xcode-27'"'"' || fromJSON('"'"'[\"self-hosted\", \"macOS\", \"healthlog-mini\"]'"'"') }}"
+      abort("runs-on must pick xcode-27 for the public repo and forks and the Mac mini otherwise, found #{runs_on.inspect}") unless runs_on == expected_runs_on
+      expected_runner_env = "${{ (#{hosted_condition}) && '"'"'hosted'"'"' || '"'"'mini'"'"' }}"
       runner_env = job.fetch("env", {}).fetch("HEALTHLOG_RUNNER", nil).to_s
-      abort("HEALTHLOG_RUNNER must use the runs-on fork condition, found #{runner_env.inspect}") unless runner_env == expected_runner_env
+      abort("HEALTHLOG_RUNNER must use the runs-on condition, found #{runner_env.inspect}") unless runner_env == expected_runner_env
 
       hosted_if = "env.HEALTHLOG_RUNNER == '"'"'hosted'"'"'"
       {
@@ -250,19 +252,25 @@ if check_workflow "$fixture_dir/catalog-self-test-late.yml" >/dev/null 2>&1; the
     fail "contract accepted the catalog format self-test after the live gate"
 fi
 
-# 1.5 CI-FORK — both runner paths. A fork landing on the Mac mini, everything
-# landing on the hosted runner, an unpinned tool download and a hosted path
-# without the Xcode selection must all be rejected.
+# 1.5 CI-FORK — both runner paths. A fork or the public mirror landing on the
+# Mac mini, everything landing on the hosted runner, an unpinned tool download
+# and a hosted path without the Xcode selection must all be rejected.
 awk '{ if ($0 ~ /^    runs-on: /) print "    runs-on: [self-hosted, macOS, healthlog-mini]"; else print }' \
     "$WORKFLOW_PATH" >"$fixture_dir/forks-on-mini.yml"
 if check_workflow "$fixture_dir/forks-on-mini.yml" >/dev/null 2>&1; then
     fail "contract accepted fork pull requests on the self-hosted runner"
 fi
 
-awk '{ if ($0 ~ /^    runs-on: /) print "    runs-on: macos-26"; else print }' \
+awk '{ if ($0 ~ /^    runs-on: /) print "    runs-on: xcode-27"; else print }' \
     "$WORKFLOW_PATH" >"$fixture_dir/all-hosted.yml"
 if check_workflow "$fixture_dir/all-hosted.yml" >/dev/null 2>&1; then
-    fail "contract accepted own branches on the hosted runner"
+    fail "contract accepted private own branches on the hosted runner"
+fi
+
+awk '{ gsub(/!github\.event\.repository\.private \|\| /, ""); print }' \
+    "$WORKFLOW_PATH" >"$fixture_dir/public-on-mini.yml"
+if check_workflow "$fixture_dir/public-on-mini.yml" >/dev/null 2>&1; then
+    fail "contract accepted the public mirror on the self-hosted runner"
 fi
 
 awk '{ if ($0 ~ /^      HEALTHLOG_RUNNER: /) print "      HEALTHLOG_RUNNER: hosted"; else print }' \
