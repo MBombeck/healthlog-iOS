@@ -62,6 +62,14 @@ jobs:
           fi
           sudo xcode-select -s "$app/Contents/Developer"
 
+      # Hosted runner only: the Mac mini and the release producer run in
+      # Europe/Berlin, GitHub's macOS image in UTC. Some unit tests fall back to
+      # Calendar.current (MeasurementListDateRangeTests "composes with the
+      # other filters" failed in UTC), so the hosted path uses the same zone.
+      - name: Set time zone (hosted runner)
+        if: env.HEALTHLOG_RUNNER == 'hosted'
+        run: sudo systemsetup -settimezone Europe/Berlin >/dev/null && date
+
       # Hosted runner only: the release gates' exact tool versions, from the
       # upstream release archives, each checked against a pinned SHA-256.
       - name: Install pinned tooling (hosted runner)
