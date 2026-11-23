@@ -28,9 +28,11 @@ jobs:
     # the pinned Xcode and tools itself (the "hosted runner" steps below).
     # 2026-11: the public mirror runs every job there; it has no own runner
     # any more (a public repo never gets one), so only the private dev repo
-    # uses the Mac mini (mini-dev). The same condition decides
+    # uses the Mac mini (mini-dev). Label xcode-27: GitHub's macOS image with
+    # Xcode 27.2 (public preview); macos-26 stops at Xcode 26.6. The same
+    # condition decides
     # HEALTHLOG_RUNNER; the contract test keeps the two in step.
-    runs-on: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 'macos-26' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
+    runs-on: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 'xcode-27' || fromJSON('["self-hosted", "macOS", "healthlog-mini"]') }}
     env:
       HEALTHLOG_RUNNER: ${{ (!github.event.repository.private || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && 'hosted' || 'mini' }}
       # CI on the Mac mini shares one machine lock with the release
